@@ -139,10 +139,12 @@ public sealed class WorkflowDispatchRedriveTests
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, (await fixture.Store.FindAsync(fixture.DeadLetter.OutboxItemId))!.Status);
     }
 
-    [Fact]
-    public async Task Wrong_intent_kind_is_not_eligible_even_when_all_deterministic_ids_match()
+    [Theory]
+    [InlineData("Unsupported.Intent")]
+    [InlineData("Elsa.Activities.Primitives.PublishStimulus")]
+    public async Task Wrong_intent_kind_is_not_eligible_even_when_all_deterministic_ids_match(string intentKind)
     {
-        var fixture = await CreateFailureAsync(intentKind: "Unsupported.Intent");
+        var fixture = await CreateFailureAsync(intentKind: intentKind);
 
         var result = await fixture.RedriveStore.RedriveAsync(new(fixture.Identity.DispatchId, "request-1", RedriveAt));
 

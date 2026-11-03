@@ -20,6 +20,7 @@ public static class HttpAuthSchemes
     public const string ApiKey = "api-key";
     public const string Basic = "basic";
     public const string Bearer = "bearer";
+    public const string OAuth2 = "oauth2";
 }
 
 public static class ConnectionOwners

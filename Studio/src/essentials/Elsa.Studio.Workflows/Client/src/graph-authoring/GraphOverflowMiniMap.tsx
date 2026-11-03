@@ -1,4 +1,5 @@
-import { MiniMap, useNodes, useStore } from "@xyflow/react";
+import { useRef } from "react";
+import { MiniMap, useStore } from "@xyflow/react";
 import { shouldShowGraphMinimap } from "./graphMinimap";
 
 /**
@@ -6,9 +7,13 @@ import { shouldShowGraphMinimap } from "./graphMinimap";
  * Newcomer graphs (a start node and a couple of activities) keep the corner free.
  */
 export function GraphOverflowMiniMap() {
-  const nodes = useNodes();
-  const width = useStore(state => state.width);
-  const height = useStore(state => state.height);
-  if (!shouldShowGraphMinimap(nodes, { width, height })) return null;
+  const shown = useRef(false);
+  const visible = useStore(state => shouldShowGraphMinimap(
+    state.nodes,
+    { width: state.width, height: state.height },
+    shown.current
+  ));
+  shown.current = visible;
+  if (!visible) return null;
   return <MiniMap pannable zoomable />;
 }

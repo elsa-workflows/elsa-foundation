@@ -15,13 +15,8 @@
   --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 14px;
   container-type: inline-size;
   container-name: feature-management;
-}
-
-.feature-management-header {
-  align-items: center;
 }
 
 .feature-management-inspector-heading button,
@@ -311,6 +306,12 @@
 
 .feature-management-bulk-actions label {
   flex: 0 0 auto;
+}
+
+.feature-management-bulk-actions > label > input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
 }
 
 .feature-management-bulk-actions span {

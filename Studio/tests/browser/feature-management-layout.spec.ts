@@ -103,3 +103,34 @@ test("Feature Management selection counts and actions reflow without clipping", 
     });
   }
 });
+
+test("Feature Management keeps Clear under the native pointer after selection", async ({ page }) => {
+  for (const viewportWidth of [320, 360]) {
+    await page.setViewportSize({ width: viewportWidth, height: 1000 });
+    await page.goto("/feature-management.html");
+
+    for (const host of ["Server", "Studio"]) {
+      await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: host }).click();
+      const visibleCount = host === "Studio" ? 2 : 114;
+      const row = page.locator(".feature-management-bulk-actions");
+      await expect(row).toContainText(`0/${visibleCount} visible`);
+
+      const clear = row.getByRole("button", { name: "Clear selected features" });
+      await expect(clear).toBeDisabled();
+      await row.getByRole("checkbox", { name: "Select visible features" }).focus();
+      await page.keyboard.press("Space");
+      await expect(row).toContainText(`${visibleCount}/${visibleCount} visible`);
+      await expect(clear).toBeEnabled();
+
+      await row.locator('label > input[type="checkbox"]').focus();
+      const button = await clear.boundingBox();
+      if (!button) throw new Error("The Clear button must have a visible box.");
+      const x = button.x + button.width / 2;
+      const y = button.y + button.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.up();
+      await expect(row).toContainText("0 selected");
+    }
+  }
+});

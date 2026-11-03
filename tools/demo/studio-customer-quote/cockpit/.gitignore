@@ -1,8 +1,0 @@
-/state/
-__pycache__/
-*.py[cod]
-.env
-.env.*
-keys.json
-*.key
-*.pem

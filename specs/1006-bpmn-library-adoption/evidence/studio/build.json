@@ -1,0 +1,26 @@
+{
+  "studioSourceRevision": "90feccfedfa5d4c32a25bf2fc00da0ab6666d9b7",
+  "backendSourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "backendConfigurationVariant": "Only the owned Studio return origin http://localhost:5092 added to the disposable shell configuration; consistent localhost names used for browser authentication.",
+  "backendShellsSha256": "2abefc4fe7b47d33c27cb55a7fdd3067f69d9219462cc2d091d703e9fb84d41b",
+  "studioShellsSha256": "a1cd3856b955815e4785d98a62fe8ed1a30b13a993cce4d4f8d6593714c2c101",
+  "binaries": {
+    "Elsa.Studio.Web.dll": "0aea5611555b86e33bb71e18cc81186db267f6bd1299e14ba176d5a42b9f5626",
+    "Elsa.Studio.Workflows.dll": "d05fe869c54727ec29625879007c672d02f223d4ee4cbba7b96d0bb22dc602d7"
+  },
+  "sourceBuild": "Frozen pnpm11.9.0 install; full workspace frontend build; Release Studio.Web build after assets.",
+  "workflowsStudioUnitTests": {
+    "files": 183,
+    "passed": 2493,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browser": "Codex browser plugin, normal authentication and UI actions; no route mocks or private state injection.",
+  "servedWorkflowsEntry": {
+    "manifestId": "Elsa.Studio.Workflows",
+    "version": "1.0.0",
+    "entry": "/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.js?v=1.0.0",
+    "sha256": "c21cd5ef609dd0f0c46b3ce2215c6b637000b8db3441623e48dfd11356ef011b",
+    "matchesSourceBuild": true
+  }
+}

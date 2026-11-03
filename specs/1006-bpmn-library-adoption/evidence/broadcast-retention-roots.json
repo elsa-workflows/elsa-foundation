@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 cohort retention roots and guarded reference cleanup; task remains open",
+  "sourceParentCommit": "f947d3f33acd15fca0d0ce81c871eb685accb03c",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": "8fc230a99d85931dbafd25746537f63ca594ecade2dadf9e1ec3eea60874a18b",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableReferenceGarbageCollector.cs": "58cdb89acacdd3339718b7cbc2ed3362fb0913cf3d79bcb21e52f1b1bbf1f6fe",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "907a631ef14f66b413a2284ed271c63321e4315db4605d7cd50bd61ed8baa500",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "d9216c66a55721224086e7c07240da0ee8f35ff217b9b9c9557f4e1fd8913af8",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "50c991fe5379bd8428b1830ec084b45aacb3d25cba5ded2094000bda24b97ef9",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "12006eb7049be682267a20aba3ded89e926004320f89312becc15f8f1cdc3604",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "e1e96de7eb4ea1931a10b6b571293faeec677728df3c13669218eada14dbcb76",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "2564efc8472c3aa76edad2292d7182fff6cb5545ca62a4affc30515076c7985e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableStore.cs": "5af3b87bdb7dc11cab03e6747175a2220c2900812ee7bf757a4002102ecb6338",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "c605310bb300231e6953fc0335d6762c2d73211089060c0feb9465633318f35f",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/InMemoryWorkflowExecutionStateStore.cs": "6c8952e0559513eaa42c1bfa7978e31ad0cf8a09fc0f73df29bd095905b09071",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "6d096304a6ba54cef17d2abec72165663100d8f93ca383a0649bd101a0382be6",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "f670894378f97ec134a88ac0883d08427f34daa38d12ee5fac4ab56ca3909d77",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "264df21d926300b773c352dd687c98863a05bb99b3572506c764d39671995797",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "864fce96e6f2632089ee76c18d751ca76c34561dac8de8e5a2fd867b94685b1d",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.cs": "cf08ddde5111e8b505464a3555c9ace9ac2233186d7180359facf867d5712df4",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "b6d91748e61ee68f41aa25fd717129954777a1f68c5852967acfe82c2fc87d85",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliveryStartAuthorityTests.cs": "529ce27e721a1c338e492b3ea23c6a845db28b59c14af07de5c2874c87f9aabd",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorTests.cs": "4c9f1d13664f65213f065fdced938b11a48d490768587be4a82baa8f445d44e9",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/StimulusDeliveryRetentionException.cs": "722400018b9f5e9e1078be504eadde79fae4840b13792c82c635cb92c7b42731",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "15f7b0d4c3143e791bb05954862cd156b6fadc5c55f3116908f87253c16001fa"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2854,
+      "failed": 0,
+      "skipped": 0,
+      "listed": 2843,
+      "deferredTheoryExpansion": {
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4
+      },
+      "newCases": 3
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1168,
+      "failed": 0,
+      "skipped": 0,
+      "listed": 1168,
+      "newCases": 38
+    },
+    {
+      "focusedExistingAndNewProviderCases": 137,
+      "earlierFocusedRunBeforeTwoRetiredAgainCases": 135,
+      "newGCRootLeaseInterleavings": 4
+    },
+    {
+      "coreApiAdditions": 7,
+      "coreApiRemovals": 0
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "mutations": [
+    {
+      "name": "release-delivered-pin-before-target-tombstone",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 609 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-target-sticky-retirement",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 678 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "allow-owed-publisher-deletion",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 571 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "treat-final-and-cancelled-as-resolved",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     4, Passed:     4, Skipped:     0, Total:     8, Duration: 721 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "change-saved-start-dedup-target-key",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     8, Passed:     0, Skipped:     0, Total:     8, Duration: 716 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "truncate-source-root-traversal",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 925 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-guarded-final-runtime-root-recheck",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 799 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-native-memory-reference-guard",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     9, Skipped:     0, Total:    12, Duration: 820 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-native-EF-reference-guard",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:    10, Skipped:     0, Total:    12, Duration: 836 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-reference-delete-coordination-revision-fence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 588 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-EF-reference-snapshot",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    11, Skipped:     0, Total:    12, Duration: 811 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-memory-reference-snapshot",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    11, Skipped:     0, Total:    12, Duration: 846 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "turn-retention-outage-into-empty-roots",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 613 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "legacy-provider-invents-empty-roots",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 13 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean; final source hashes, mutations, whole/listed counts and limits verified",
+    "standards": "clean; final source hashes, mutations, whole/listed counts and limits verified",
+    "acceptance": "clean; final source hashes, mutations, whole/listed counts and limits verified",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Saved starts and publisher activation remain disabled. This is not race-complete provider cohort installation.",
+    "GC/root-lease interleavings wrap existing InstallAsync in the real full-set manager in finite provider fixtures; automatic provider lease admission and ownership-row fencing remain open.",
+    "EF physical reference-delete rollback control injects a constructed same-transaction coordination revision conflict; SQLite excludes a real peer write at that point.",
+    "The additive GC composition conservatively retains activity templates and references without a native artifact guard. Ordinary constructors retain their prior behavior. Capability flag means root-query participation only.",
+    "Memory guarded source deletion requires its native artifact store; unsupported provider/decorator combinations refuse and retain material.",
+    "Actual host/fresh-provider recovery, final current Studio, full PR/required checks and resulting-main verification remain open."
+  ]
+}

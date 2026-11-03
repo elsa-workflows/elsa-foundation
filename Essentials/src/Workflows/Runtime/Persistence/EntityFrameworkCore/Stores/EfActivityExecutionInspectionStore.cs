@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// are refused. Owned read transactions finish before projection decoding. Lock or serialization failures surface
 /// through the persistence boundary without retrying the page or changing its exact-count invariant.
 /// </remarks>
-public sealed class EfActivityExecutionInspectionStore(
+public sealed partial class EfActivityExecutionInspectionStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter

@@ -1,0 +1,11 @@
+{
+  "name": "observation-reader-omits-reverse-replay-order",
+  "sourceSha256": "03894ef0b9049f853993bcd4fca0935f08596ff1fa6724b726487d7fa5164369",
+  "scope": "Private compiled observation-tool variant only; never a positive host or runtime.",
+  "sourceRestored": true,
+  "compileSucceeded": true,
+  "reversedReplayIncorrectlyAccepted": true,
+  "independentControlFailedAsExpected": true,
+  "buildLogSha256": "222f8cb1bf1f6acd614b6e360fe09ccfd67ec85a44525c01bea20d9c7291a9de",
+  "controlLogSha256": "dc93e0d0a34ca32a0e822717fc3fbbbce7cbf8b80994a650cd0c929eb990d6d3"
+}

@@ -1,4 +1,8 @@
-using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Studio.Tests;
@@ -8,12 +12,31 @@ namespace Elsa.Studio.Tests;
 /// host management key. The key stays a server-side-only Studio setting the management bridge uses; it must not appear
 /// in the browser runtime config — by value or by field — even when it is configured.
 /// </summary>
-public sealed class StudioRuntimeScriptTests
+public sealed class StudioRuntimeScriptTests : IAsyncLifetime
 {
     private const string ManagementKey = "s3cr3t-management-key";
 
     // Rendered from the fully-configured surface (management key included) shared by the leak/surface guards below.
-    private readonly string _script = StudioRuntimeScript.Render(BuildConfiguration());
+    private string _script = null!;
+
+    public async Task InitializeAsync() => _script = await RenderAsync(BuildConfiguration());
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    private static async Task<string> RenderAsync(IConfiguration configuration)
+    {
+        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = AppContext.BaseDirectory });
+        builder.WebHost.UseTestServer();
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddConfiguration(configuration);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Default:Features:StudioApi"] = "true" });
+        builder.AddElsaStudio(options => options.ShellsFile = null);
+        await using var app = builder.Build();
+        app.UseElsaStudio();
+        app.MapElsaStudio();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        return await client.GetStringAsync("/studio-runtime.js");
+    }
 
     private static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
@@ -22,6 +45,11 @@ public sealed class StudioRuntimeScriptTests
                 ["Studio:BackendBaseUrl"] = "https://backend.example/",
                 ["Studio:BackendServerBaseUrl"] = "http://elsa-server:8080",
                 ["Studio:HostId"] = "studio-primary",
+                ["Studio:Branding:ProductName"] = "Northstar",
+                ["Studio:Branding:LogoUrl"] = "/brand.svg",
+                ["Studio:Branding:PrivateKey"] = "must-not-serialize",
+                ["Studio:Appearance:WorkspaceStyle"] = "linen",
+                ["Studio:Appearance:PaletteId"] = "drift",
                 ["Studio:Dashboard:DefaultRefreshIntervalMinutes"] = "15",
                 ["Studio:Dashboard:WidgetTimeoutSeconds"] = "12",
                 ["Studio:Dashboard:PinnedWidgetIds:0"] = "attention.queue",
@@ -51,7 +79,7 @@ public sealed class StudioRuntimeScriptTests
     public void RuntimeScriptStillEmitsTheNonSecretConfigurationSurface()
     {
         // The removal is surgical: the non-secret surface the shell depends on is unchanged.
-        Assert.Contains(StudioRuntimeScript.GlobalName, _script);
+        Assert.Contains("window.__ELSA_STUDIO_RUNTIME__", _script);
         Assert.Contains("backendBaseUrl", _script);
         Assert.Contains("https://backend.example/", _script);
         Assert.DoesNotContain("http://elsa-server:8080", _script);
@@ -66,13 +94,24 @@ public sealed class StudioRuntimeScriptTests
     }
 
     [Fact]
-    public void RuntimeScriptUsesStableDashboardDefaultsWhenConfigurationIsAbsent()
+    public async Task RuntimeScriptUsesStableDashboardDefaultsWhenConfigurationIsAbsent()
     {
-        var script = StudioRuntimeScript.Render(new ConfigurationBuilder().Build());
+        var script = await RenderAsync(new ConfigurationBuilder().Build());
 
         Assert.Contains("\"hostId\":\"default\"", script);
         Assert.Contains("\"defaultRefreshIntervalMs\":300000", script);
         Assert.Contains("\"widgetTimeoutMs\":10000", script);
         Assert.Contains("\"pinnedWidgetIds\":[]", script);
+    }
+
+    [Fact]
+    public void RuntimeScriptAllowListsPublicBrandAndDefaultSettings()
+    {
+        Assert.Contains("\"productName\":\"Northstar\"", _script);
+        Assert.Contains("\"logoUrl\":\"/brand.svg\"", _script);
+        Assert.Contains("\"workspaceStyle\":\"linen\"", _script);
+        Assert.Contains("\"paletteId\":\"drift\"", _script);
+        Assert.DoesNotContain("must-not-serialize", _script);
+        Assert.DoesNotContain("privateKey", _script);
     }
 }

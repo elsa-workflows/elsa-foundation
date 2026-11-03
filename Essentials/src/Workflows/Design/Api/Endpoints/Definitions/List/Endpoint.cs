@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -26,6 +27,12 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionListView> HandleAsync(ListDefinitions request, CancellationToken cancellationToken)
     {
+        // Legacy clients must not silently turn a stale scoped URL into the entire library.
+        if (HttpContext is { } context && !WorkflowLibraryAccess.OrganizationEnabled(context))
+            WorkflowLibraryAccess.RequireUnconstrained(context, context.Request.Query.Keys.Any(key =>
+            key.Equals("folderId", StringComparison.OrdinalIgnoreCase) || key.Equals("unfiled", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("includeDescendants", StringComparison.OrdinalIgnoreCase) || key.Equals("tagFilters", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("favoritesOnly", StringComparison.OrdinalIgnoreCase)));
         var filter = new WorkflowDefinitionFilter
         {
             Id = request.Id,

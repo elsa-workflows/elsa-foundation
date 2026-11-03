@@ -35,9 +35,20 @@ internal sealed class FakeRuntimeFeatureCatalog : IRuntimeFeatureCatalog
             DateTimeOffset.UtcNow);
     }
 
+    public IRuntimeFeatureCatalogSnapshot CurrentSnapshot => new Projection(
+        _snapshot.FeatureDescriptors.Select(descriptor => new RuntimeFeatureDescriptor { Id = descriptor.Id, DisplayName = descriptor.Id }).ToArray());
+
+    private sealed record Projection(IReadOnlyList<RuntimeFeatureDescriptor> FeatureDescriptors) : IRuntimeFeatureCatalogSnapshot
+    {
+        public long Generation => 1;
+        public DateTimeOffset RefreshedAt => DateTimeOffset.UnixEpoch;
+    }
+
+    public Task EnsureInitializedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
     public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(_snapshot);
 
-    public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(_snapshot);
+    public Task<IRuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(CurrentSnapshot);
 }

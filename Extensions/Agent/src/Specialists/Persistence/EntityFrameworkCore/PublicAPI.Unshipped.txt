@@ -1,0 +1,71 @@
+#nullable enable
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.ConnectionName.get -> string?
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.ConnectionName.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.Pooling.get -> bool
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.Pooling.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.Provider.get -> string!
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.Provider.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.Schema.get -> string?
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions.SpecialistsEntityFrameworkCoreOptions() -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsDbContext
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsDbContext.SpecialistsDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.Pooling.get -> bool
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.Pooling.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.Schema.set -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.SpecialistsEntityFrameworkCoreFeature() -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsModelBuilderExtensions
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsMySqlDbContext
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsMySqlDbContext.SpecialistsMySqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsMySqlDbContext!>! options) -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsPostgreSqlDbContext
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsPostgreSqlDbContext.SpecialistsPostgreSqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsPostgreSqlDbContext!>! options) -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqlServerDbContext
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqlServerDbContext.SpecialistsSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqlServerDbContext!>! options) -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqliteDbContext
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqliteDbContext.SpecialistsSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqliteDbContext!>! options) -> void
+abstract Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsDbContext.ConfigureProvider(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+const Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryModuleName = "ElsaAgentSpecialists" -> string!
+const Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsMySqlDbContext.ExpectedProviderName = "MySql.EntityFrameworkCore" -> string!
+const Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsPostgreSqlDbContext.ExpectedProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL" -> string!
+const Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqlServerDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.SqlServer" -> string!
+const Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqliteDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.Sqlite" -> string!
+override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+static Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration.AddSpecialistTurnStore<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration.AddSpecialistsEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName.get -> string!
+static Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsModelBuilderExtensions.AddSpecialistsModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+static readonly Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
+virtual Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.MySql.Initial
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.MySql.Initial.Initial() -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.PostgreSql.Initial
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.PostgreSql.Initial.Initial() -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.SqlServer.Initial
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.SqlServer.Initial.Initial() -> void
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.Sqlite.Initial
+Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.Sqlite.Initial.Initial() -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.MySql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.MySql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.MySql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.PostgreSql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.PostgreSql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.PostgreSql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.SqlServer.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.SqlServer.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.SqlServer.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void

@@ -201,7 +201,8 @@ function createPublicationContext(baseUrl: string, outcome: string, recordCall: 
             key: "http:GET:/orders",
             cardinality: "exclusive",
             publicationId: "publication-existing",
-            slotName: "default"
+            slotName: "default",
+            descriptor: "GET /orders/{id}"
           }] : [],
           targetSlotOwner: null
         });

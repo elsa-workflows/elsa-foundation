@@ -30,12 +30,17 @@ import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary,
 // budget, "Applying…" until the run shows the change, refusals and HTTP errors as messages, and a reload that resumes
 // without submitting again.
 
+const RETRY_CLOCK = "2026-10-22T10:00:00Z";
+const FUTURE_RETRY_NOT_BEFORE = "2026-10-23T10:42:30Z";
+const DUE_RETRY_NOT_BEFORE = "2026-10-21T10:42:30Z";
+
 let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
   // React schedules its work with setImmediate here; only the polling clock is faked.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  vi.setSystemTime(new Date(RETRY_CLOCK));
   if (typeof globalThis.CSS === "undefined") vi.stubGlobal("CSS", { escape: (value: string) => value });
   sessionStorage.clear();
   container = document.createElement("div");
@@ -269,16 +274,15 @@ describe("useOperatorActions", () => {
     flushSync(() => root.render(<ScheduledHarness />));
     await flush();
 
-    expect(actions?.guidanceForIncident(incident)).toMatchObject({ retryNotBefore: "2026-10-23T10:42:30Z", retryDue: false });
+    expect(actions?.guidanceForIncident(incident)).toMatchObject({ retryNotBefore: FUTURE_RETRY_NOT_BEFORE, retryDue: false });
     const unrelated = { ...incident, activityExecutionId: "different-execution" };
     expect(actions?.guidanceForIncident(unrelated).retryNotBefore).toBeUndefined();
   });
 
   it.each([
-    ["future", "2026-10-23T10:42:30Z", "An automatic retry is scheduled"],
-    ["due", "2026-10-21T10:42:30Z", "An automatic retry is due"]
+    ["future", FUTURE_RETRY_NOT_BEFORE, "An automatic retry is scheduled"],
+    ["due", DUE_RETRY_NOT_BEFORE, "An automatic retry is due"]
   ])("hides duplicate incident controls in the actual details dialog when the exact retry is %s", async (_state, notBefore, expectedGuidance) => {
-    vi.setSystemTime(new Date("2026-10-22T10:00:00Z"));
     const backend = fakeBackend({});
     const incident = journalIncidents()[1];
     const source = scheduledJournalView(notBefore);
@@ -1686,7 +1690,7 @@ function journalStateVersion(source: CompensationJournalSource | undefined): num
   return (source.view as { stateVersion?: number } | undefined)?.stateVersion;
 }
 
-function scheduledJournalView(notBefore = "2026-10-23T10:42:30Z"): CompensationJournalSource {
+function scheduledJournalView(notBefore = FUTURE_RETRY_NOT_BEFORE): CompensationJournalSource {
   const view = journalView();
   return {
     ...view,

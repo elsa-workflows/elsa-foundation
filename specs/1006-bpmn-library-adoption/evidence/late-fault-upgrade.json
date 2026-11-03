@@ -1,0 +1,21 @@
+{
+  "preIncrementSourceRevision": "a9bec3250",
+  "testSourceSha256": "5ef3d9100c7e657dcda28dce1c7424ab5d15d8be97dc99184584fdadde3fbf0e",
+  "captureBaseRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "capturePatchSha256": "1b4332b7fc97d0920ca2697dfacf172cfbe83556a697fb3916863d0ba327bf06",
+  "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+  "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+  "wholeRuntimeEf": {
+    "passed": 1018,
+    "failed": 0,
+    "skipped": 0
+  },
+  "targetedRecoveryRefusalReplayCases": 13,
+  "mutation": "Suppress only late-fault absorption: both actual late-fault cases red; restored whole suite green",
+  "limits": [
+    "T017 MI/listener remaining fault/replay",
+    "Not combined-outcome acknowledgement-loss proof",
+    "Not live binary rollback qualification",
+    "Not final complete-PR review"
+  ]
+}

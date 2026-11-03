@@ -2,14 +2,23 @@ import { describe, expect, it } from "vitest";
 import {
   appendElsa3ReusableImportAnalysis,
   groupElsa3ReusableImportItems,
+  importPublicationStatus,
+  importPublicationStatusLabel,
+  importReceiptApplyMessage,
+  importReceiptOutcomeLabel,
   isElsa3ReusableImportItemSelectable,
+  isPublishedImportStatus,
+  publicationForSource,
   startElsa3ReusableImportAnalysis,
-  summarizeElsa3ReusableImportSelection
+  summarizeElsa3ReusableImportSelection,
+  summarizeImportPublications
 } from "../elsa3ReusableImportModel";
 import type {
   Elsa3MigrationDiagnostic,
   Elsa3ReusableImportAnalysisPage,
-  Elsa3ReusableImportItem
+  Elsa3ReusableImportItem,
+  Elsa3ReusableImportPublication,
+  Elsa3ReusableImportReceipt
 } from "../elsa3ReusableImportTypes";
 
 describe("Elsa 3 reusable import model", () => {
@@ -83,7 +92,91 @@ describe("Elsa 3 reusable import model", () => {
       rewrites: 1
     });
   });
+
+  it("reads publication status names and distinguishes none published from partly published", () => {
+    expect(importPublicationStatus(0)).toBe("Published");
+    expect(importPublicationStatus(2)).toBe("Refused");
+    expect(importPublicationStatus("NotPublishedDependency")).toBe("NotPublishedDependency");
+    expect(isPublishedImportStatus(1)).toBe(true);
+    expect(isPublishedImportStatus("Refused")).toBe(false);
+
+    const nonePublished: Elsa3ReusableImportPublication[] = [
+      { activityDefinitionVersionId: "activity-dependency-v1", sourceVersionId: "dependency-v1", status: 2, errorCode: "activity.version.bump-insufficient" },
+      { activityDefinitionVersionId: "activity-owner-v1", sourceVersionId: "owner-v1", status: "NotPublishedDependency", blockedBy: "activity-dependency-v1" }
+    ];
+    const partlyPublished: Elsa3ReusableImportPublication[] = [
+      { activityDefinitionVersionId: "activity-dependency-v1", sourceVersionId: "dependency-v1", status: "Published" },
+      { activityDefinitionVersionId: "activity-owner-v1", sourceVersionId: "owner-v1", status: "NotPublishedDependency", blockedBy: "activity-dependency-v1" }
+    ];
+    expect(summarizeImportPublications(nonePublished)).toEqual({
+      total: 2,
+      published: 0,
+      unpublished: 2,
+      outcome: "nonePublished"
+    });
+    expect(summarizeImportPublications(partlyPublished)).toEqual({
+      total: 2,
+      published: 1,
+      unpublished: 1,
+      outcome: "partlyPublished"
+    });
+    expect(publicationForSource(nonePublished, "owner-v1")?.blockedBy).toBe("activity-dependency-v1");
+    expect(importReceiptOutcomeLabel(receipt("Applied", nonePublished))).toBe("Not published");
+    expect(importReceiptOutcomeLabel(receipt("Applied", partlyPublished))).toBe("Partly published");
+    expect(importReceiptApplyMessage(receipt("Applied", nonePublished))).toContain("None of the imported reusable versions were published.");
+    expect(importReceiptApplyMessage(receipt("Applied", nonePublished))).not.toContain("are published");
+    expect(importReceiptApplyMessage(receipt("Applied", partlyPublished))).toContain("1 of 2 imported reusable versions are published.");
+    expect(importReceiptApplyMessage(receipt("Applied", partlyPublished))).not.toContain("None of the imported reusable versions were published.");
+    expect(importReceiptApplyMessage(receipt("AlreadyImported"))).toBe(
+      "Already imported. The durable receipt is identical and no second mutation was made."
+    );
+  });
+
+  it.each([
+    [0, "Published", "Published"],
+    [1, "AlreadyPublished", "Already published"],
+    [2, "Refused", "Publishing refused"],
+    [3, "NotPublishedDependency", "Not published: depends on an unpublished version"],
+    [4, "NotPublished", "Not published"],
+    ["Published", "Published", "Published"],
+    ["AlreadyPublished", "AlreadyPublished", "Already published"],
+    ["Refused", "Refused", "Publishing refused"],
+    ["NotPublishedDependency", "NotPublishedDependency", "Not published: depends on an unpublished version"],
+    ["NotPublished", "NotPublished", "Not published"]
+  ] as const)("maps publication status %j to a readable label", (status, name, label) => {
+    expect(importPublicationStatus(status)).toBe(name);
+    expect(importPublicationStatusLabel(status)).toBe(label);
+    expect(isPublishedImportStatus(status)).toBe(name === "Published" || name === "AlreadyPublished");
+  });
+
+  it("humanizes unknown publication statuses instead of showing the raw enum", () => {
+    expect(importPublicationStatus(9)).toBe("Status9");
+    expect(importPublicationStatusLabel(9)).toBe("Status 9");
+    expect(importPublicationStatus("QueuedForRetry")).toBe("QueuedForRetry");
+    expect(importPublicationStatusLabel("QueuedForRetry")).toBe("Queued For Retry");
+    expect(importPublicationStatusLabel("HTTPBlocked")).toBe("HTTP Blocked");
+    expect(isPublishedImportStatus("QueuedForRetry")).toBe(false);
+    expect(isPublishedImportStatus(9)).toBe(false);
+  });
 });
+
+function receipt(
+  status: "Applied" | "AlreadyImported",
+  publications: Elsa3ReusableImportPublication[] = []
+): Elsa3ReusableImportReceipt {
+  return {
+    receiptId: "receipt",
+    collectionHandle: "collection",
+    planId: "plan",
+    idempotencyKey: "operation",
+    selectionFingerprint: "sha256:selection",
+    accessScope: { tenantId: "tenant", userId: "user", tenantScope: "tenant:tenant" },
+    status,
+    completedAt: "2026-07-19T00:00:00Z",
+    sources: [],
+    publications
+  };
+}
 
 function page(offset: number, items: Elsa3ReusableImportItem[], nextOffset: number | null): Elsa3ReusableImportAnalysisPage {
   return {

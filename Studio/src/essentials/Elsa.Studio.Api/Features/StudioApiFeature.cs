@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Events;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
 using Microsoft.AspNetCore.Routing;
@@ -16,7 +17,8 @@ namespace Elsa.Studio.Api.Features;
 [ShellFeature(
     name: "StudioApi",
     DisplayName = "Elsa Studio API",
-    Description = "Aggregates Studio module manifests and exposes the module discovery endpoint."
+    Description = "Aggregates Studio module manifests and exposes the module discovery endpoint.",
+    DependsOn = new object[] { typeof(EventsFeature) }
 )]
 public sealed class StudioApiFeature : IWebShellFeature
 {
@@ -24,6 +26,11 @@ public sealed class StudioApiFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // CShells excludes root scheme/policy providers. Recreate standard shell-local infrastructure;
+        // the root's scheme/policy configuration still flows in, while handlers remain scoped.
+        services.AddAuthenticationCore();
+        services.AddAuthorization();
+
         services.AddElsaStudioApi(options =>
         {
             // Only propagate versions the shell feature explicitly overrode. StudioApiOptions defaults

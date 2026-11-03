@@ -1,0 +1,199 @@
+using System.Text.Json;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.AspNetCore.Http;
+
+namespace Acme.Home.Weaver;
+
+// Fixture-only scheduling: the original service, key, write, condition and cancellation reach native CAS unchanged.
+internal sealed class WidgetRendezvousPreferences(
+    IStudioPreferenceService native, WidgetWriteRendezvous gate, IHttpContextAccessor http) : IStudioPreferenceService
+{
+    public ValueTask<StudioPreferenceDocument?> FindAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default) =>
+        native.FindAsync(key, cancellationToken);
+    public ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default) =>
+        native.DeleteAsync(key, cancellationToken);
+    public async ValueTask<StudioPreferenceDocument> WriteAsync(StudioPreferenceKey key, StudioPreferenceWrite write,
+        StudioPreferenceWriteCondition condition, CancellationToken cancellationToken = default)
+    {
+        await gate.ArriveAsync(key, condition, http.HttpContext?.TraceIdentifier, cancellationToken);
+        return await native.WriteAsync(key, write, condition, cancellationToken);
+    }
+}
+
+internal sealed class WidgetWriteRendezvous : IDisposable
+{
+    private const int MaximumControlBytes = 16 * 1024;
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private readonly object sync = new();
+    private readonly string controlFile, receiptFile, hostId;
+    private readonly TimeProvider time;
+    private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly List<Arrival> arrivals = [];
+    private readonly List<CancellationToken> arrivalTokens = [];
+    private Control? selected;
+    private byte[]? selectedBytes;
+    private ITimer? timer;
+    private DateTimeOffset deadline;
+    private bool claimed, disposed;
+
+    private WidgetWriteRendezvous(string controlFile, string receiptFile, string hostId, TimeProvider time)
+    {
+        this.controlFile = controlFile; this.receiptFile = receiptFile; this.hostId = hostId; this.time = time;
+        CheckPath(controlFile); CheckPath(receiptFile); CheckPath(controlFile + ".claimed");
+        if (controlFile == receiptFile || controlFile + ".claimed" == receiptFile)
+            throw new InvalidOperationException("Rendezvous control and receipt paths must be distinct.");
+    }
+
+    internal static WidgetWriteRendezvous? Configure(string controlFile, string receiptFile, string hostId, TimeProvider? time = null)
+    {
+        if (controlFile.Length == 0 && receiptFile.Length == 0) return null;
+        return new(controlFile, receiptFile, hostId, time ?? TimeProvider.System);
+    }
+
+    internal async Task ArriveAsync(StudioPreferenceKey key, StudioPreferenceWriteCondition condition, string? traceIdentifier, CancellationToken ct)
+    {
+        lock (sync)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            // An absent control is inert until this instance selects a matching epoch. Find/Delete never inspect it.
+            if (selected is null)
+            {
+                CheckPath(controlFile);
+                if (!File.Exists(controlFile)) return;
+                var (control, bytes) = ReadControl();
+                if (!Matches(control, key, condition)) return;
+                ct.ThrowIfCancellationRequested();
+                selected = control; selectedBytes = bytes;
+            }
+            if (!Matches(selected, key, condition)) return;
+            if (released.Task.IsCompleted) throw new InvalidOperationException("The selected write rendezvous epoch has already ended.");
+            try
+            {
+                var (_, bytes) = ReadControl();
+                if (!bytes.AsSpan().SequenceEqual(selectedBytes)) throw new InvalidOperationException("The selected rendezvous control changed or disappeared.");
+                ct.ThrowIfCancellationRequested();
+                if (string.IsNullOrWhiteSpace(traceIdentifier) || traceIdentifier.Length > 256 || arrivals.Any(item => item.HttpTraceIdentifier == traceIdentifier))
+                    throw new InvalidOperationException("Rendezvous arrivals require distinct actual HTTP trace identifiers.");
+                if (arrivals.Count == 0)
+                {
+                    if (File.Exists(receiptFile)) throw new InvalidOperationException("A retained rendezvous receipt cannot be overwritten or rearmed.");
+                    using var claim = CreatePrivate(controlFile + ".claimed");
+                    JsonSerializer.Serialize(claim, new { selected.Epoch }, Json);
+                    claim.Flush(true);
+                    claimed = true;
+                    deadline = time.GetUtcNow().AddMilliseconds(selected.TimeoutMilliseconds);
+                }
+                if (time.GetUtcNow() >= deadline) throw new TimeoutException("The selected write rendezvous expired.");
+                arrivals.Add(new(traceIdentifier, key, condition, time.GetUtcNow()));
+                arrivalTokens.Add(ct);
+                if (arrivalTokens.Any(token => token.IsCancellationRequested)) throw new OperationCanceledException("A rendezvous arrival was cancelled.");
+                WriteReceipt(arrivals.Count == 2 ? "released" : "waiting", null);
+                if (arrivalTokens.Any(token => token.IsCancellationRequested)) throw new OperationCanceledException("A rendezvous arrival was cancelled.");
+                var remaining = deadline - time.GetUtcNow();
+                if (remaining <= TimeSpan.Zero) throw new TimeoutException("The selected write rendezvous expired.");
+                if (arrivals.Count == 2)
+                {
+                    released.TrySetResult(); timer?.Dispose();
+                }
+                else timer = time.CreateTimer(_ => Fail(new TimeoutException("The selected write rendezvous expired.")), null,
+                    remaining, Timeout.InfiniteTimeSpan);
+            }
+            catch (Exception error) { FailLocked(error); }
+        }
+        using var cancellation = ct.Register(() => Fail(new OperationCanceledException("A rendezvous arrival was cancelled.", ct)));
+        await released.Task;
+        ct.ThrowIfCancellationRequested();
+    }
+
+    private static bool Matches(Control control, StudioPreferenceKey key, StudioPreferenceWriteCondition condition) =>
+        control.Key == key && condition.Kind == StudioPreferenceWriteConditionKind.RevisionMatches && condition.Revision == control.Revision;
+
+    private (Control Control, byte[] Bytes) ReadControl()
+    {
+        CheckPath(controlFile);
+        using var input = File.OpenRead(controlFile);
+        if (input.Length is <= 0 or > MaximumControlBytes) throw new InvalidOperationException("Rendezvous control size is invalid.");
+        var bytes = new byte[(int)input.Length]; input.ReadExactly(bytes);
+        using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 });
+        var root = document.RootElement;
+        ExactFields(root, "schemaVersion", "epoch", "key", "revision", "timeoutMilliseconds");
+        var owner = root.GetProperty("key"); ExactFields(owner, "subjectId", "tenantId", "studioHostId", "namespace");
+        var key = new StudioPreferenceKey(Text(owner, "subjectId"), Text(owner, "tenantId"), Text(owner, "studioHostId"), Text(owner, "namespace"));
+        var epoch = Text(root, "epoch"); var revision = Text(root, "revision"); var timeout = root.GetProperty("timeoutMilliseconds").GetInt32();
+        if (root.GetProperty("schemaVersion").GetInt32() != 1 || !Guid.TryParseExact(epoch, "D", out _) ||
+            key.SubjectId == StudioHomeLayout.DefaultSubjectId || key.StudioHostId != hostId || key.Namespace != StudioPreferenceNamespaces.HomeLayout ||
+            timeout is < 1 or > 30_000)
+            throw new InvalidOperationException("Rendezvous control scope, epoch, schema or timeout is invalid.");
+        return (new(epoch, key, revision, timeout), bytes);
+    }
+
+    private static string Text(JsonElement value, string property)
+    {
+        var text = value.GetProperty(property).GetString();
+        return !string.IsNullOrWhiteSpace(text) && text.Length <= 256 ? text : throw new InvalidOperationException("Rendezvous identity is invalid.");
+    }
+    private static void ExactFields(JsonElement value, params string[] expected)
+    {
+        if (value.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("Rendezvous control must be an object.");
+        var names = value.EnumerateObject().Select(item => item.Name).ToArray();
+        if (names.Length != expected.Length || !names.ToHashSet(StringComparer.Ordinal).SetEquals(expected))
+            throw new InvalidOperationException("Rendezvous control fields are invalid or duplicated.");
+    }
+
+    private static void CheckPath(string path)
+    {
+        if (!Path.IsPathFullyQualified(path) || Path.GetFullPath(path) != path || Directory.Exists(path))
+            throw new InvalidOperationException("Rendezvous paths must be explicit absolute file paths.");
+        var parent = new DirectoryInfo(Path.GetDirectoryName(path)!);
+        if (!parent.Exists || parent.LinkTarget is not null || new FileInfo(path).LinkTarget is not null)
+            throw new InvalidOperationException("Rendezvous paths require an existing private directory and no symbolic links.");
+        // This private-file diagnostic profile is qualified on POSIX hosts, not against Windows ACLs.
+        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("The write rendezvous requires the qualified POSIX private-file profile.");
+        const UnixFileMode foreign = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+        if ((File.GetUnixFileMode(parent.FullName) & foreign) != 0 || (File.Exists(path) && (File.GetUnixFileMode(path) & foreign) != 0))
+            throw new InvalidOperationException("Rendezvous paths must be private to the current owner.");
+    }
+
+    private static FileStream CreatePrivate(string path)
+    {
+        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("The write rendezvous requires the qualified POSIX private-file profile.");
+        return new(path, new FileStreamOptions
+            { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read, UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite });
+    }
+
+    private void WriteReceipt(string status, string? failure)
+    {
+        CheckPath(receiptFile);
+        var temporary = receiptFile + "." + Guid.NewGuid().ToString("N");
+        try
+        {
+            using (var output = CreatePrivate(temporary))
+            {
+                JsonSerializer.Serialize(output, new { schemaVersion = 1, epoch = selected!.Epoch, key = selected.Key, revision = selected.Revision,
+                    status, failure, arrivals, releasedCount = status == "released" ? 2 : 0 }, Json);
+                output.Flush(true);
+            }
+            File.Move(temporary, receiptFile, overwrite: true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private void Fail(Exception error) { lock (sync) FailLocked(error); }
+    private void FailLocked(Exception error)
+    {
+        if (released.Task.IsCompleted) return;
+        try { if (claimed) WriteReceipt("failed", error.GetType().Name); }
+        catch (Exception receiptError) { error = new IOException("The failed rendezvous receipt could not be retained.", new AggregateException(error, receiptError)); }
+        released.TrySetException(error); timer?.Dispose();
+    }
+    public void Dispose()
+    {
+        lock (sync) { disposed = true; FailLocked(new OperationCanceledException("The rendezvous owner stopped.")); timer?.Dispose(); }
+    }
+
+    private sealed record Control(string Epoch, StudioPreferenceKey Key, string Revision, int TimeoutMilliseconds);
+    private sealed record Arrival(string HttpTraceIdentifier, StudioPreferenceKey Key, StudioPreferenceWriteCondition Condition, DateTimeOffset At);
+}

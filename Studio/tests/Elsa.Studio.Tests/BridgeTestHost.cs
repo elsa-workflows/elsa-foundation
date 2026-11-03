@@ -1,5 +1,5 @@
 using Elsa.Studio.Api.Options;
-using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -11,8 +11,7 @@ namespace Elsa.Studio.Tests;
 
 /// <summary>
 /// The slim TestServer builder every Studio management-bridge test host starts from: the host's bridge infrastructure
-/// (<see cref="StudioBridgeAuth"/> gate + <see cref="StudioBackendManagementBridgeServiceCollectionExtensions"/>
-/// options) configured with the given backend coordinates, auth switch, and any extra configuration (e.g. CShells shell
+/// (public Hosting registration and Api backend options) configured with the given backend coordinates, auth switch, and any extra configuration (e.g. CShells shell
 /// settings). Callers add their own client routing and endpoint mapping.
 /// </summary>
 internal static class BridgeTestHost
@@ -25,14 +24,16 @@ internal static class BridgeTestHost
         string? managementKey = ManagementKey,
         bool authEnabled = false,
         string? backendServerBaseUrl = null,
-        IDictionary<string, string?>? extraSettings = null)
+        IDictionary<string, string?>? extraSettings = null,
+        Action<StudioBuilder>? configureStudio = null)
     {
         var settings = new Dictionary<string, string?>(extraSettings ?? new Dictionary<string, string?>())
         {
             [StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] = backendBaseUrl,
             [StudioBackendManagementOptions.BackendServerBaseUrlConfigurationKey] = backendServerBaseUrl,
             [StudioBackendManagementOptions.ManagementApiKeyConfigurationKey] = managementKey,
-            ["Studio:Auth:Enabled"] = authEnabled ? "true" : "false"
+            ["Studio:Auth:Enabled"] = authEnabled ? "true" : "false",
+            ["CShells:Shells:Default:Features:StudioApi"] = "true"
         };
 
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
@@ -42,8 +43,8 @@ internal static class BridgeTestHost
         });
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings);
-        builder.Services.AddStudioBridgeAuth(builder.Configuration);
-        builder.Services.AddStudioBackendManagementBridge(builder.Configuration);
+        var studio = builder.AddElsaStudio(options => options.ShellsFile = null);
+        configureStudio?.Invoke(studio);
         return builder;
     }
 }

@@ -1,4 +1,3 @@
-using System.Reflection;
 using CShells.Features;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
@@ -36,34 +35,4 @@ public sealed class ConnectionsStudioModuleTests
         return services.BuildServiceProvider();
     }
 
-    private sealed class FakeRuntimeFeatureCatalog : IRuntimeFeatureCatalog
-    {
-        private readonly RuntimeFeatureCatalogSnapshot _snapshot;
-
-        public FakeRuntimeFeatureCatalog(params Type[] featureTypes)
-        {
-            var descriptors = featureTypes
-                .Select(type =>
-                {
-                    var shellFeatureAttr = type.GetCustomAttributesData()
-                        .FirstOrDefault(a => a.AttributeType.Name == "ShellFeatureAttribute");
-                    var featureName = shellFeatureAttr?.ConstructorArguments.FirstOrDefault().Value as string ?? type.Name;
-                    return new ShellFeatureDescriptor { Id = featureName, StartupType = type };
-                })
-                .ToArray();
-
-            _snapshot = new RuntimeFeatureCatalogSnapshot(
-                1,
-                Array.Empty<Assembly>(),
-                descriptors,
-                new Dictionary<string, ShellFeatureDescriptor>(),
-                DateTimeOffset.UtcNow);
-        }
-
-        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(_snapshot);
-
-        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(_snapshot);
-    }
 }

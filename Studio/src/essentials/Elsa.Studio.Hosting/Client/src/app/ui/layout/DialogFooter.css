@@ -1,0 +1,32 @@
+/* Public StudioDialogFooter recipes. Imported from DialogFooter.tsx so designer
+   and fixture entries that never load page.css still right-align Cancel + confirm. */
+.studio-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--studio-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.studio-dialog-footer-leading {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--studio-space-2);
+}
+
+.studio-dialog-footer-actions {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--studio-space-2);
+  min-width: 0;
+  margin-left: auto;
+}

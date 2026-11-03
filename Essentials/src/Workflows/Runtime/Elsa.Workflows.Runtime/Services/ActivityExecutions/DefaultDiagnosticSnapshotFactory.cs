@@ -55,7 +55,7 @@ public static class DefaultDiagnosticSnapshotFactory
             JsonValueKind.Null => new DiagnosticSnapshot("null") { TypeName = typeName },
             JsonValueKind.True => new DiagnosticSnapshot("scalar") { TypeName = typeName ?? "Boolean", Value = true },
             JsonValueKind.False => new DiagnosticSnapshot("scalar") { TypeName = typeName ?? "Boolean", Value = false },
-            JsonValueKind.Number => new DiagnosticSnapshot("number") { TypeName = typeName ?? "Number", Value = value.TryGetInt64(out var integer) ? integer : value.GetDouble() },
+            JsonValueKind.Number => new DiagnosticSnapshot("number") { TypeName = typeName ?? "Number", Value = value },
             JsonValueKind.String => CaptureString(value.GetString() ?? "", typeName, limits),
             JsonValueKind.Object => CaptureObject(value, typeName, depth, limits, budget),
             JsonValueKind.Array => CaptureArray(value, typeName, depth, limits, budget),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  graphMinimapHideThreshold,
   graphNodeBounds,
   graphOverflowsViewport,
   shouldShowGraphMinimap,
@@ -76,5 +77,22 @@ describe("shouldShowGraphMinimap", () => {
 
   it("stays hidden with no nodes", () => {
     expect(shouldShowGraphMinimap([], laptopPane)).toBe(false);
+  });
+
+  it("keeps a just-shown minimap until the graph shrinks below the hide threshold", () => {
+    const justOver = [
+      node("a", 0, 0),
+      node("b", laptopPane.width - 179, 0)
+    ];
+    expect(shouldShowGraphMinimap(justOver, laptopPane)).toBe(true);
+    const withinHysteresis = [
+      node("a", 0, 0, { width: laptopPane.width * graphMinimapHideThreshold, height: 80 })
+    ];
+    expect(shouldShowGraphMinimap(withinHysteresis, laptopPane, true)).toBe(true);
+    const clearlyFitting = [
+      node("a", 0, 0, { width: laptopPane.width * 0.9, height: 80 })
+    ];
+    expect(shouldShowGraphMinimap(clearlyFitting, laptopPane, true)).toBe(false);
+    expect(shouldShowGraphMinimap(clearlyFitting, laptopPane)).toBe(false);
   });
 });

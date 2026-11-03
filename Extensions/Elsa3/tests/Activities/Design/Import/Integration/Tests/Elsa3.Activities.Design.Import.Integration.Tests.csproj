@@ -42,7 +42,7 @@
     <!-- RunJavaScript, whose result a graph body node reads (spec 246 D-8 probe). -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
@@ -66,6 +66,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../../../../Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
     <!-- The EF activation switch publishes through the recurring-schedule projection this feature prepares. -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />

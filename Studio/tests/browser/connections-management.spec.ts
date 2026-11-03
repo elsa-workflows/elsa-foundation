@@ -35,7 +35,7 @@ for (const width of [320, 768, 1024, 1440]) {
     await expect(details).toHaveCount(0);
     await expect(opener).toBeFocused();
 
-    const createOpener = page.getByRole("button", { name: "New connection", exact: true });
+    const createOpener = page.getByRole("button", { name: "Create connection", exact: true });
     await createOpener.click();
     const create = page.getByRole("dialog", { name: "Create connection", exact: true });
     await expect(create.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
@@ -47,6 +47,40 @@ for (const width of [320, 768, 1024, 1440]) {
     await expect(createOpener).toBeFocused();
   });
 }
+
+test("creating a Connection preserves the accepted search and leaves absent results unselected", async ({ page }) => {
+  const listQueries: string[] = [];
+  const created = { ...connection, name: "billing-api", displayName: "Billing API" };
+  await page.route("**/connections?*", route => {
+    const query = new URL(route.request().url()).searchParams.get("search") ?? "";
+    listQueries.push(query);
+    return route.fulfill({ json: { items: query === "customer" ? [connection] : [] } });
+  });
+  await page.route("**/connections/descriptors", route => route.fulfill({ json: descriptors }));
+  await page.route("**/connections", route => route.request().method() === "POST"
+    ? route.fulfill({ json: created })
+    : route.continue());
+  await page.goto("/?mode=connections");
+
+  const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
+  await expect.poll(() => listQueries).toEqual([""]);
+  await search.fill("customer");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect.poll(() => listQueries).toEqual(["", "customer"]);
+  await expect(page.getByRole("button", { name: "Details for Customer API", exact: true })).toBeVisible();
+
+  await search.fill("draft-only");
+  await page.getByRole("button", { name: "Create connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  await dialog.getByLabel("Name", { exact: true }).fill(created.name);
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(search).toHaveValue("customer");
+  await expect.poll(() => listQueries).toEqual(["", "customer", "customer"]);
+  await expect(page.getByRole("status")).toContainText("Connection 'billing-api' created.");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
 
 
 // Mirrors the built-in HTTP/API-key descriptor; the fixture renders the real page/dialog.
@@ -85,11 +119,11 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
       const draft = route.request().postDataJSON();
       creates.push(draft);
       return rejectCreate
-        ? route.fulfill({ status: 400, json: { title: "Fixture connection create failed." } })
+        ? route.fulfill({ status: 400, json: { title: "Fixture connection create failed.", errors: { "settings.headerName": ["Choose a valid header name."] } } })
         : route.fulfill({ json: { ...connection, name: draft.name, authScheme: "api-key", settings: draft.settings } });
     });
     await page.goto(`/?mode=connections&theme=${theme}`);
-    const opener = page.getByRole("button", { name: "New connection", exact: true });
+    const opener = page.getByRole("button", { name: "Create connection", exact: true });
     await opener.click();
     const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
     const more = dialog.getByRole("button", { name: /^More options/ });
@@ -145,7 +179,8 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await create.click();
     const alert = dialog.getByRole("alert");
     await expect(alert).toContainText("Fixture connection create failed.");
-    await expect(alert).toBeFocused();
+    await expect(header).toBeFocused();
+    await expect(header).toHaveAttribute("aria-invalid", "true");
     await expect(more).toHaveAttribute("aria-expanded", "true");
     await header.fill("X-API-Key");
     await expect(header).toBeFocused();
@@ -161,9 +196,10 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await expect(query).toHaveValue("api_key");
     await placement.selectOption("header");
     await page.addScriptTag({ content: axe.source });
+    await page.screenshot({ path: testInfo.outputPath("before-axe.png") });
     const violations = await page.evaluate(async () => {
-      const result = await (window as Window & { axe: typeof axe }).axe.run(document.querySelector('[role="dialog"]')!);
-      return result.violations.map(item => ({ id: item.id, targets: item.nodes.map(node => node.target) }));
+      const result = await window.axe.run(document.querySelector('[role="dialog"]')!);
+      return result.violations.map(item => ({ id: item.id, targets: item.nodes.map(node => ({ target: node.target, summary: node.failureSummary })) }));
     });
     expect(violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -213,7 +249,7 @@ test("API-key creation explains denied Secret metadata and recovers without read
     ? route.fulfill({ status: 403, json: { title: "Forbidden" } })
     : route.fulfill({ json: { items: [{ name: "customer-api", displayName: "Customer API key", typeName: "text", status: "active" }] } }));
   await page.goto("/?mode=connections&theme=light");
-  const opener = page.getByRole("button", { name: "New connection", exact: true });
+  const opener = page.getByRole("button", { name: "Create connection", exact: true });
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
   await expect(dialog.getByRole("alert")).toContainText("Access to existing Secrets is denied.");
@@ -237,3 +273,47 @@ test("API-key creation explains denied Secret metadata and recovers without read
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+for (const width of [320, 1440]) {
+  test(`invalid connection names and server rejections identify Name at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    let attempts = 0;
+    await page.route("**/connections?*", route => route.fulfill({ json: { items: [] } }));
+    await page.route("**/connections/descriptors", route => route.fulfill({ json: apiKeyDescriptors }));
+    await page.route("**/secrets/picker", route => route.fulfill({ json: { items: [
+      { name: "customer-api", typeName: "text", status: "active" }
+    ] } }));
+    await page.route("**/connections", route => ++attempts === 1
+      ? route.fulfill({ status: 400, json: { error: "This name is no longer accepted. Choose another name.", errors: { name: ["Choose another name."] } } })
+      : route.fulfill({ status: 201, json: { ...connection, name: route.request().postDataJSON().name } }));
+    await page.goto("/?mode=connections&theme=light");
+    await page.getByRole("button", { name: "Create connection", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+    const name = dialog.getByLabel("Name", { exact: true });
+    const create = dialog.getByRole("button", { name: "Create", exact: true });
+    const more = dialog.getByRole("button", { name: /^More options/ });
+    await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+    await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
+    await name.fill("Backend API");
+    await expect(name).toHaveAttribute("aria-invalid", "true");
+    await expect(name).toHaveAccessibleDescription(/Spaces are not allowed/);
+    await expect(create).toBeDisabled();
+    expect(attempts).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath("invalid-name.png") });
+    await name.fill("backend-api");
+    await create.click();
+    await expect(name).toBeFocused();
+    await expect(name).toHaveAccessibleDescription(/Choose another name/);
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(more).not.toContainText("Error");
+    await expect(dialog.getByRole("alert")).toContainText("Choose another name.");
+    await expect(dialog.getByLabel("Existing Secret for API key", { exact: true })).toHaveValue("customer-api");
+    await expect(dialog.getByLabel("Base URL", { exact: true })).toHaveValue("https://api.example");
+    await page.addScriptTag({ content: axe.source });
+    expect(await page.evaluate(async () => (await window.axe.run(document.querySelector('[role="dialog"]')!)).violations.map(item => item.id))).toEqual([]);
+    await name.fill("corrected-api");
+    await create.click();
+    await expect(dialog).toHaveCount(0);
+    expect(attempts).toBe(2);
+  });
+}

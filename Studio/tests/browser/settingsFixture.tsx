@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences, type ThemeModePreference } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import { SettingsRoute } from "../../src/apps/Elsa.Studio.Web/Client/src/app/settings/SettingsRoute";
-import type { StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import { SettingsRoute } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/SettingsRoute";
+import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const appearance = (searchParams.get("appearance") ?? "light") as ThemeModePreference | "dark";

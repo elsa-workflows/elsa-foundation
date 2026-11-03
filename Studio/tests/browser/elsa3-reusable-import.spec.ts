@@ -1,4 +1,6 @@
 import { expect, test, type Route } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 
 const importRoot = "/migration/elsa3/reusable-activities";
 
@@ -172,6 +174,72 @@ test("Elsa 3 collection upload is raw, bounded, and cancellable without acceptin
   await expect(page.getByText("Handle accepted")).toHaveCount(0);
 });
 
+test("captures Classic light receipt screenshots when asked", async ({ page }) => {
+  test.skip(!process.env.IMPORT_RECEIPT_SCREENSHOTS, "Screenshot capture is opt-in.");
+  const screenshotDir = resolve(process.env.IMPORT_RECEIPT_SCREENSHOT_DIR ?? "/opt/cursor/artifacts/3303");
+  const filename = process.env.IMPORT_RECEIPT_SCREENSHOT_NAME ?? "receipt-classic-light.png";
+  await mkdir(screenshotDir, { recursive: true });
+  await page.route(`**${importRoot}/**`, async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/analysis")) {
+      return json(route, {
+        collectionHandle: "collection",
+        planId: "plan",
+        offset: 0,
+        limit: 100,
+        processed: 2,
+        total: 2,
+        processedDiagnostics: 0,
+        totalDiagnostics: 0,
+        isComplete: true,
+        nextOffset: null,
+        items: [
+          sourceItem("dependency", "dependency-v1", true),
+          sourceItem("owner", "owner-v1", true, {
+            dependencies: [{
+              ownerSourceVersionId: "owner-v1",
+              targetSourceDefinitionId: "dependency",
+              targetSourceVersionId: "dependency-v1",
+              targetActivityDefinitionVersionId: "activity-dependency-v1",
+              nodeId: "reuse-node"
+            }]
+          })
+        ],
+        diagnostics: []
+      });
+    }
+    if (url.pathname.endsWith("/selection")) {
+      return json(route, {
+        collectionHandle: "collection",
+        planId: "plan",
+        requestedSourceVersionIds: ["owner-v1"],
+        expandedSourceVersionIds: ["dependency-v1", "owner-v1"],
+        addedDependencySourceVersionIds: ["dependency-v1"],
+        isReady: true,
+        diagnostics: []
+      });
+    }
+    if (url.pathname.endsWith("/apply")) {
+      return json(route, publicationReceipt());
+    }
+    return route.abort();
+  });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/workflows/activity-definitions/import-elsa3?theme=classic");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "light");
+  await page.getByPlaceholder("Authorized collection handle").fill("collection");
+  await page.getByRole("button", { name: "Analyze immutable collection" }).click();
+  await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
+  await page.getByRole("button", { name: "Review exact import" }).click();
+  await page.getByRole("button", { name: "Apply reviewed import" }).click();
+  const receipt = page.getByRole("region", { name: "Durable import receipt" })
+    .or(page.locator("section").filter({ has: page.getByRole("heading", { name: "Durable import receipt" }) }));
+  await expect(receipt).toBeVisible();
+  await receipt.screenshot({ path: resolve(screenshotDir, filename) });
+});
+
 test("Elsa 3 expired handles require a fresh collection without retaining an analysis plan", async ({ page }) => {
   await page.route(`**${importRoot}/collections/expired/analysis?*`, route => json(route, {
     title: "Elsa 3 import collection expired",
@@ -303,6 +371,57 @@ function diagnostic(code: string, overrides: Record<string, unknown> = {}) {
     cycle: [],
     isError: true,
     ...overrides
+  };
+}
+
+function publicationReceipt() {
+  return {
+    ...importReceipt("Applied"),
+    sources: [
+      {
+        sourceDefinitionId: "dependency",
+        sourceVersionId: "dependency-v1",
+        workflowDefinitionId: "wrapper-dependency",
+        workflowVersionId: "wrapper-dependency-v1",
+        workflowDisposition: 0,
+        workflowNavigationIdentity: "/design/workflows/definitions/wrapper-dependency/versions/wrapper-dependency-v1",
+        activityDefinitionId: "activity-dependency",
+        activityDefinitionVersionId: "activity-dependency-v1",
+        activityDefinitionDisposition: 0,
+        activityVersionDisposition: 0,
+        activityDefinitionNavigationIdentity: "/design/activities/definitions/activity-dependency",
+        activityVersionNavigationIdentity: "/design/activities/versions/activity-dependency-v1"
+      },
+      {
+        sourceDefinitionId: "owner",
+        sourceVersionId: "owner-v1",
+        workflowDefinitionId: "wrapper-owner",
+        workflowVersionId: "wrapper-owner-v1",
+        workflowDisposition: 0,
+        workflowNavigationIdentity: "/design/workflows/definitions/wrapper-owner/versions/wrapper-owner-v1",
+        activityDefinitionId: "activity-owner",
+        activityDefinitionVersionId: "activity-owner-v1",
+        activityDefinitionDisposition: 0,
+        activityVersionDisposition: 0,
+        activityDefinitionNavigationIdentity: "/design/activities/definitions/activity-owner",
+        activityVersionNavigationIdentity: "/design/activities/versions/activity-owner-v1"
+      }
+    ],
+    publications: [
+      { activityDefinitionVersionId: "activity-dependency-v1", sourceVersionId: "dependency-v1", status: "AlreadyPublished" },
+      {
+        activityDefinitionVersionId: "activity-owner-v1",
+        sourceVersionId: "owner-v1",
+        status: "NotPublishedDependency",
+        errorCode: "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
+        blockedBy: "activity-dependency-v1",
+        diagnostics: [{
+          code: "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
+          message: "Version 'activity-owner-v1' was not published because the version it uses was not published.",
+          remediation: "Resolve the blocked dependency, then re-upload the export and apply it under a new idempotency key."
+        }]
+      }
+    ]
   };
 }
 

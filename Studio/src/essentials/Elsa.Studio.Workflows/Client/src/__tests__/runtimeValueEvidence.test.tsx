@@ -1,10 +1,23 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RuntimeValueEvidenceContent } from "../workflow-editor/RuntimeValueEvidence";
+import { RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider, runtimeValuePayloadKey } from "../workflow-editor/RuntimeValueEvidence";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityExecutionInspectionValueSnapshot } from "../workflowTypes";
 
 describe("RuntimeValueEvidenceContent presentation defaults", () => {
+  it("renders a prepared captured value immediately while preserving sensitive-value protection", () => {
+    const snapshot = { evidenceId: "value", captureMode: "Payload", accessState: "resolutionAvailable", isSensitive: false } as ActivityExecutionInspectionValueSnapshot;
+    const scope = { context: {} as StudioEndpointContext, workflowExecutionId: "run", activityExecutionId: "activity",
+      preparedValues: new Map([[runtimeValuePayloadKey(snapshot), { status: "ready" as const, payload: "Confirmed destination value" }]]) };
+    const markup = (sensitive: boolean) => renderToStaticMarkup(<RuntimeValueEvidenceResolutionProvider scope={scope}>
+      <RuntimeValueEvidenceContent snapshot={{ ...snapshot, isSensitive: sensitive }} />
+    </RuntimeValueEvidenceResolutionProvider>);
+    expect(markup(false)).toContain("Confirmed destination value");
+    expect(markup(false)).not.toContain("Resolving captured value");
+    expect(markup(true)).not.toContain("Confirmed destination value");
+    expect(markup(true)).toContain("Show captured value");
+  });
   it("keeps shared diagnostic object roots expanded unless compact Activity presentation is requested", () => {
     const snapshot: ActivityExecutionInspectionValueSnapshot = {
       evidenceId: "evidence-1",

@@ -88,6 +88,18 @@ internal static class RuntimeActivityExecutionProviderSmoke
                 summarySecond.Items.Single().ActivityExecutionId,
                 summaryThird.Items.Single().ActivityExecutionId
             }.OrderBy(id => id, StringComparer.Ordinal));
+            var browserPage = await inspection.BrowseAsync(new ActivityExecutionBrowseQuery(workflow, 1,
+                parentActivityExecutionId: "root", ancestorActivityExecutionId: "root"));
+            Assert.Equal(2, browserPage.TotalCount);
+            Assert.Equal(2, Assert.Single(browserPage.Items).Position);
+            Assert.Equal("child-b", browserPage.Items[0].Execution.ActivityExecutionId);
+            var browserAnchor = await inspection.BrowseAsync(new ActivityExecutionBrowseQuery(workflow, 1,
+                executableNodeId: childProjection.ExecutableNodeId, ancestorActivityExecutionId: "root", anchorActivityExecutionId: "child"));
+            Assert.Equal("child", Assert.Single(browserAnchor.Items).Execution.ActivityExecutionId);
+            Assert.Equal(1, browserAnchor.TotalCount);
+            var absentAnchor = await inspection.BrowseAsync(new ActivityExecutionBrowseQuery(workflow,
+                executableNodeId: childProjection.ExecutableNodeId, anchorActivityExecutionId: "child-b"));
+            Assert.Empty(absentAnchor.Items);
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection));
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(childProjection));
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(siblingProjection));

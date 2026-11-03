@@ -21,16 +21,14 @@ public static class ActivityOperationKeyResolver
     public static string ResolveOperationKey(ActivityExecutionState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return ReadAssigned(state, RuntimeMetadataKeys.OperationKey)
-               ?? NonBlank((state.Attempt ?? state.Provenance.Attempt)?.FirstAttemptActivityExecutionId)
-               ?? state.InvocationId;
+        return state.OperationKey;
     }
 
     /// <summary>Resolves the target operation key, which exists only when a structural parent assigned one.</summary>
     public static string? ResolveTargetOperationKey(ActivityExecutionState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return ReadAssigned(state, RuntimeMetadataKeys.TargetOperationKey);
+        return state.TargetOperationKey;
     }
 
     /// <summary>Returns <paramref name="context"/> carrying the keys resolved from <paramref name="state"/>.</summary>
@@ -42,8 +40,4 @@ public static class ActivityOperationKeyResolver
             : context.WithOperationKeys(ResolveOperationKey(state), ResolveTargetOperationKey(state));
     }
 
-    private static string? ReadAssigned(ActivityExecutionState state, string key) =>
-        NonBlank(state.Provenance.Metadata.GetValueOrDefault(key)) ?? NonBlank(state.Metadata.GetValueOrDefault(key));
-
-    private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }

@@ -48,11 +48,21 @@ export function graphNodeBounds(nodes: readonly GraphMinimapNode[]): GraphBox | 
   return { width: maxX - minX, height: maxY - minY };
 }
 
+/** Hide the minimap only after the graph shrinks below this fraction of the pane. */
+export const graphMinimapHideThreshold = 0.95;
+
 /** Designer minimap is for graphs that do not fit the pane at their natural size. */
 export function shouldShowGraphMinimap(
   nodes: readonly GraphMinimapNode[],
-  viewport: GraphViewportBox
+  viewport: GraphViewportBox,
+  currentlyShown = false
 ): boolean {
   const bounds = graphNodeBounds(nodes);
-  return bounds !== null && graphOverflowsViewport(bounds, viewport);
+  if (bounds === null) return false;
+  if (!(viewport.width > 0 && viewport.height > 0)) return false;
+  if (currentlyShown) {
+    return bounds.width >= viewport.width * graphMinimapHideThreshold
+      || bounds.height >= viewport.height * graphMinimapHideThreshold;
+  }
+  return graphOverflowsViewport(bounds, viewport);
 }

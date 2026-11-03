@@ -33,6 +33,28 @@ public sealed class ConnectionsApiTests
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
+    [Theory]
+    [InlineData("Backend API")]
+    [InlineData("api/key")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Create_InvalidName_ReturnsFieldError_AndAllowsCorrection(string name)
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var rejected = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody(name, "invalid-name-secret-sentinel")));
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        var payload = await rejected.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("error").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("errors").GetProperty("name")[0].GetString()));
+        Assert.DoesNotContain("invalid-name-secret-sentinel", await rejected.Content.ReadAsStringAsync());
+
+        using var corrected = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("  Backend.API-1_test  ")));
+        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+        var metadata = await corrected.Content.ReadFromJsonAsync<ConnectionMetadata>(Json);
+        Assert.Equal("backend.api-1_test", metadata!.Name);
+    }
+
     [Fact]
     public async Task Create_MapsUnknownOwnerTo400_AndDuplicateNameTo409()
     {
@@ -142,6 +164,30 @@ public sealed class ConnectionsApiTests
             secretFields = new { token = (object?)null }
         }));
         Assert.Equal(HttpStatusCode.BadRequest, nullUpdateField.StatusCode);
+    }
+
+    [Fact]
+    public async Task OAuthAuthorize_WithoutIdentity_IsRefused()
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Post, "/connections/any/oauth/authorize"));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task OAuthAuthorize_ForADifferentTenant_IsRefused()
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("tenant-bound")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var response = await client.SendAsync(Authed(
+            HttpMethod.Post,
+            "/connections/tenant-bound/oauth/authorize",
+            tenantId: "tenant-b"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -322,12 +368,14 @@ public sealed class ConnectionsApiTests
         secretFields = new { token = new { value = token } }
     };
 
-    private static HttpRequestMessage Authed(HttpMethod method, string path, object? body = null, string? permissions = null)
+    private static HttpRequestMessage Authed(HttpMethod method, string path, object? body = null, string? permissions = null, string? tenantId = null)
     {
         var request = new HttpRequestMessage(method, path);
         request.Headers.Add("X-Test-Identity", "admin");
         if (!string.IsNullOrWhiteSpace(permissions))
             request.Headers.Add("X-Test-Permissions", permissions);
+        if (!string.IsNullOrWhiteSpace(tenantId))
+            request.Headers.Add("X-Test-Tenant", tenantId);
         if (body is not null)
             request.Content = JsonContent.Create(body);
         return request;
@@ -404,11 +452,14 @@ public sealed class ConnectionsApiTests
             var permissions = Request.Headers.TryGetValue("X-Test-Permissions", out var requested) && !string.IsNullOrWhiteSpace(requested)
                 ? requested.ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 : [PermissionKey.Wildcard];
+            var tenantId = Request.Headers.TryGetValue("X-Test-Tenant", out var tenant) && !string.IsNullOrWhiteSpace(tenant)
+                ? tenant.ToString()
+                : "tenant-a";
             var claims = permissions
                 .Select(permission => new Claim(IdentityClaimTypes.Permission, permission))
                 .Append(new Claim(IdentityClaimTypes.Normalized, "v1"))
                 .Append(new Claim(IdentityClaimTypes.Provider, "test"))
-                .Append(new Claim(IdentityClaimTypes.TenantId, "tenant-a"));
+                .Append(new Claim(IdentityClaimTypes.TenantId, tenantId));
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
         }

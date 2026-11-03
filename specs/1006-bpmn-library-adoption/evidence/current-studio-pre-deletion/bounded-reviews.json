@@ -1,0 +1,23 @@
+{
+  "sourceParentCommit": "6e2172c0766b20f1ce1b10311a938d3b372ac81f",
+  "scope": "Current pre-deletion live Studio source/artifact witness, not final post-deletion/full-PR approval.",
+  "reviews": [
+    {
+      "lens": "correctness",
+      "agent": "/root/round4_correctness",
+      "actionableFindings": []
+    },
+    {
+      "lens": "standards",
+      "agent": "/root/round4_standards",
+      "actionableFindings": []
+    },
+    {
+      "lens": "acceptance",
+      "agent": "/root/round4_acceptance",
+      "actionableFindings": []
+    }
+  ],
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6
+}

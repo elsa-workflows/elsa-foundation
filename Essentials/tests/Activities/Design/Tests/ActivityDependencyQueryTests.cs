@@ -183,6 +183,28 @@ public sealed class ActivityDependencyQueryTests
         Assert.DoesNotContain("descriptor", json, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task A_missing_projection_is_unavailable_and_cannot_be_mistaken_for_zero_usages()
+    {
+        var stores = new InMemoryReusableActivityStores();
+        SeedVersion(stores, "root");
+        var reader = Reader(stores, projection: new UnavailableProjectionStore());
+
+        var failure = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            reader.ReadAsync("root", "inbound", false, "versions,drafts", null, 10, default));
+
+        Assert.Equal(503, failure.StatusCode);
+        Assert.Equal("activity.dependency.unavailable", failure.ErrorCode);
+        Assert.Equal("retry", failure.Recovery?.Relation);
+        Assert.Empty(failure.Diagnostics);
+    }
+
+    private sealed class UnavailableProjectionStore : IActivityDependencyProjectionStore
+    {
+        public Task<ActivityDependencyProjectionSlice> ReadAsync(ActivityDependencyProjectionReadRequest request, CancellationToken cancellationToken = default) =>
+            throw new ActivityDependencyProjectionUnavailableException();
+    }
+
     private static ActivityDependencyReader Reader(
         InMemoryReusableActivityStores stores,
         string? tenantId = "tenant-a",

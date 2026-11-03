@@ -28,7 +28,9 @@ internal sealed class DefaultConnectionGrantWriter(ISecretManager secretManager,
         {
             ["access_token"] = request.AccessToken,
             ["refresh_token"] = request.RefreshToken,
-            ["expires_at"] = request.ExpiresAt.ToString("O")
+            ["expires_at"] = request.ExpiresAt?.ToString("O"),
+            ["token_type"] = request.TokenType,
+            ["scope"] = request.Scope
         });
 
         try

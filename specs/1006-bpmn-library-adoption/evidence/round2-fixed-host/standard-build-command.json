@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "9190df9647078994726e3089b48d8e723daacc00",
+  "arguments": [
+    "dotnet",
+    "build",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+    "-c",
+    "Release",
+    "--artifacts-path",
+    "/tmp/elsa-2735-review/round2-fixed-standard-build",
+    "-p:RestoreLockedMode=true",
+    "-p:SourceRevisionId=9190df9647078994726e3089b48d8e723daacc00",
+    "-m:2",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false"
+  ],
+  "profile": "standard host after complete-PR round2 correction"
+}

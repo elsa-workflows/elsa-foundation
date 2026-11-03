@@ -1,0 +1,11 @@
+# Qualification guide
+
+Use disposable owned Workbench/Studio hosts, ports and databases; preserve existing user hosts/stores. Build only affected projects through the machine wrapper. Record exact SHAs, provider/scope/identity and commands on the PR. No row is passed by a source review alone.
+
+1. Create tenant-local author, two Finance participants, outsider, supervisor and a second tenant. Grant only the required permissions. Create/publish a common-field purchase-response form and author a workflow with Create User Task, Finance assignment, prefill and Approve/Reject/Request More Info ports. Publish and run.
+2. Sign in as each participant. Find eligible group work; race claims through two independent clients, verify one winner. Release/reclaim, submit invalid values and observe unchanged task/wait, then approve. Verify exact response and only the Approve branch.
+3. Repeat each action/direct assignment and custom HTTP-client path. Reassign as supervisor; old claim loses authority. Revoke group and permission after sign-in and verify current denial. Exercise cross-tenant, forged actor/group, absent and terminal task requests.
+4. Restart while open, then force an interruption after accepted-response persistence and before dispatch, after queue acceptance, and before final journal acknowledgement. Rebuild/start on the same frozen store and verify recovery produces one canonical completion. Race cancellation, stale versions and repeated/conflicting completion IDs. Prove missing bookmark is not enough for completion/cancellation.
+5. Modify the reusable form/actions after a task is open; its snapshot stays unchanged. Qualify a supplied external form integration and missing/duplicate-provider refusals. Bind the same published native task worker in BPMN and verify the action/response travels through the existing child-result contract.
+6. Run whole affected test projects with listed/executed counts, causal negative controls, architecture guard/map/tier/reference checks, module typecheck/test/build and browser/keyboard/narrow-layout journeys. Qualify supported providers and package/custom-host composition.
+7. Complete draft review, required reviewed-head CI, permitted merge, then rebuild and repeat decisive journeys on resulting main. Reconcile all acceptance rows and Program milestones before closure.

@@ -1,0 +1,41 @@
+{
+  "preIncrementSourceRevision": "e12fc389e92349c261ae97eecd949e13e5800370",
+  "sourceSha256": {
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs": "dcd01c2df19e4f71ca25a7e3b2794cd6bebb168dc5637e0852864de177a2401d",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md": "f79bc12424cfbdd1cbc28c1cce0c195a27649f84d69633f8d19a01ebec7dfefe",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Models/DispatchWorkflowResult.cs": "01978e8b4240b23ddef381d53871991f1dfa48bcc1ee38bd63fa6788ac523117",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "3447a1ada0c8bda49adb92482eb2ce13495a485a5f01bb28397a5e61d8bd7bc4",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/WorkflowControlBoundaryException.cs": "33d80e9f435d3b5ef6bd138918bc5da49e402a379657292e9b105aefbf2f88e7",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs": "091d44a8b8c91609e185bdb07fad751cae40d52b5f77da041c5c0147a1355ef1",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeStructuralStateProjector.cs": "b63120e351decbc948d32a4cd8fed5d8c76b7d661315e8d1ace4408741954606",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "0f98c8fa9dde077fd7a079b95a567d3643283a451512cf4c2a27aed68a3fb2d6",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "fd33cb7d076f5d44956e84101591ab3b882db02bbc1a791cfff15757d366c0b2",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowRuntimeTestFixture.cs": "57a9af7f567a339d3d5cd53028bd6ed3be81aca4790298a57b1d6b700f7cbd7c",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlBoundaryTests.cs": "eae4162322ef5367968adf24166ba0b765e2bb6ca4ce3a719d9a4bd97d2fec57",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlProducerTests.cs": "b0d6d603c84a29c754426cc5a79ec6e7b5a7a3e0bc9b8e2e46fa5de83c868f80",
+    "Essentials/tests/Workflows/Runtime/Tests/Alterations/AlterationCheckpointTests.cs": "8f1777be6feaf666fc45e448b6c798a8d206509f34cc6b46ab2ebc9a66c7c8bd",
+    "Essentials/tests/Workflows/Runtime/Tests/BackgroundActivityWorkLifecycleTests.cs": "92cc8572d409f5e14867bd81cd8d624d52b59d57f0c3e2ebf165db93266bc703",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeStructuralControlProjectionTests.cs": "76b8fccc9397d5ad4c35be3202139b21628eda51cfe3b7205b6a133366d87838"
+  },
+  "tests": {
+    "producer": 11,
+    "contract": 19,
+    "projectionAlterationBackground": 18,
+    "dispatchWorkflowWhole": 285,
+    "workflowsRuntimeWhole": 2624,
+    "failed": 0,
+    "skipped": 0
+  },
+  "controls": [
+    "Removing mandatory fresh terminal barrier after nonterminal emission: exactly2 targeted cases fail; restored11 producer cases pass",
+    "Actual root fault commits authored terminal batch before real workflow cancellation; exact fault and whole batch retained",
+    "Whole state-change copying retains background work and alterations"
+  ],
+  "limits": [
+    "Producer staging and barriers only",
+    "Constructed cancellation-result transport is a wire check, not actual outbox delivery",
+    "Workflow fault observers held only in actual root-fault/cancel ordering control",
+    "No ordered inbox or BPMN called-control delivery yet",
+    "Not final complete-PR review"
+  ]
+}

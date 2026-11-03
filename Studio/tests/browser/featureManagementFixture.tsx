@@ -1,9 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { FeatureManagementPage, register } from "../../../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/module";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 function createFeature(id: string, enabled = false) {
   return {

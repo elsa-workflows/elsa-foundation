@@ -6,13 +6,17 @@ import {
   publicationBlockedMessage,
   publicationChangesFor,
   publicationChannelOccupancy,
+  publicationConflictKeyDetail,
+  publicationConflictLabel,
   publicationIntentForChannel,
   publicationPreflightMatchesIntent,
+  uniquePublicationConflicts,
   type PublicationChangeCount,
   type PublicationChannelOccupancy,
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
+import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { useDialogFocus } from "./useDialogFocus";
 import "./publicationReview.css";
 
@@ -258,8 +262,21 @@ export function PublicationReviewDialog({
                     <strong>These triggers are already in use</strong>
                     <ul>
                       {[...new Set(reviewedPreflight.conflicts.map(conflict => conflict.slotName))].map(channel => {
-                        const count = new Set(reviewedPreflight.conflicts.filter(conflict => conflict.slotName === channel).map(conflict => conflict.key)).size;
-                        return <li key={channel}>{count} {count === 1 ? "trigger conflicts" : "triggers conflict"} with channel <strong>{channel}</strong>.</li>;
+                        const channelConflicts = uniquePublicationConflicts(
+                          reviewedPreflight.conflicts.filter(conflict => conflict.slotName === channel));
+                        return (
+                          <li key={channel}>
+                            {channelConflicts.length} {channelConflicts.length === 1 ? "trigger conflicts" : "triggers conflict"} with channel <strong>{channel}</strong>.
+                            <ul>
+                              {channelConflicts.map(conflict => (
+                                <li key={conflict.key}>
+                                  <div>{publicationConflictLabel(conflict)}</div>
+                                  <small className="wf-publication-selection">{publicationConflictKeyDetail(conflict)}</small>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        );
                       })}
                     </ul>
                   </div>
@@ -440,7 +457,8 @@ export function PublicationReviewDialog({
                   {reviewedPreflight?.conflicts.length ? <div className="wf-publication-claims">
                     <strong>Trigger conflict identifiers</strong>
                     <ul>{reviewedPreflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>
-                      <code>{conflict.key}</code> · channel {conflict.slotName} · publication <code>{conflict.publicationId}</code>
+                      {publicationConflictLabel(conflict)} · <code>{publicationConflictKeyDetail(conflict)}</code>
+                      {" "}· channel {conflict.slotName} · publication <code>{conflict.publicationId}</code>
                     </li>)}</ul>
                   </div> : null}
                 </details>
@@ -448,33 +466,16 @@ export function PublicationReviewDialog({
             )}
           </div>
 
-          <footer className="wf-dialog-actions wf-publication-footer">
-            <button
-              type="button"
-              className={review.phase === "success" ? "wf-primary-action" : undefined}
-              onClick={onCancel}
-              disabled={busy}
-            >
-              {review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}
-            </button>
-            {review.phase === "success" ? (
-              <button type="button" onClick={onOpenPublishedExecutable}>
-                View published workflow
-              </button>
-            ) : review.phase === "partialFailure" ? (
-              <button type="submit" disabled={submitDisabled}>
-                Retry publication
-              </button>
-            ) : review.phase === "savedFailure" ? (
-              review.validationErrors.length === 0
-                ? <button type="submit" disabled={submitDisabled}>Retry publication</button>
-                : null
-            ) : (
-              <button type="submit" disabled={submitDisabled}>
-                {busy && review.phase === "publishing" ? "Publishing…" : "Publish"}
-              </button>
-            )}
-          </footer>
+          <StudioDialogFooter
+            className="wf-publication-footer wf-dialog-actions"
+            cancelLabel={review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}
+            onCancel={onCancel}
+            cancelDisabled={busy}
+            confirmLabel={publicationConfirmLabel(review, busy)}
+            confirmDisabled={review.phase === "success" ? undefined : submitDisabled}
+            confirmType={review.phase === "success" ? "button" : "submit"}
+            onConfirm={review.phase === "success" ? () => onOpenPublishedExecutable() : undefined}
+          />
         </form>
       </section>
     </div>
@@ -576,6 +577,13 @@ function compactChangeSummary(changes: PublicationReviewState["changes"], trigge
     const count = value.added + value.changed + value.removed;
     return count ? [`${count} ${count === 1 ? single : plural}`] : [];
   }).join(" · ") || (triggersChecked ? "No structural changes." : "No activity, input or output changes.");
+}
+
+function publicationConfirmLabel(review: PublicationReviewState, busy: boolean) {
+  if (review.phase === "success") return "View published workflow";
+  if (review.phase === "partialFailure") return "Retry publication";
+  if (review.phase === "savedFailure") return review.validationErrors.length === 0 ? "Retry publication" : undefined;
+  return busy && review.phase === "publishing" ? "Publishing…" : "Publish";
 }
 
 function publicationStatusMessage(

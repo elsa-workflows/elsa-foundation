@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded committed source-completion/provider-return loss; actual redrive and broader qualification remain open",
+  "sourceParentCommit": "6152c6872d931c70a277fa16742876af1461555a",
+  "filesSha256": {
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "252dac8357335e39b42dcc2a1a57a27a991d4ab73bbb5ab4c88d58acc61bb6b6",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "319f8dd171298ea97b3748c87197fd68d98d160dd7209d86ba60d56410542cf5",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "df21a2e0a60440845c4b472d428c781ea6889339994e6cd261c8cb6921402bf4",
+    "e2e-tests/bpmn/inspect_broadcast_recovery.py": "3fc492cdc5a91a3bc935a46fe913a85996fcabb84634fd0b7f6e7fca1552dfc1",
+    "e2e-tests/bpmn/test_inspect_broadcast_recovery.py": "ffca9612579a2f7a7778a8c6837673e4c735f56cb6a033653b94d95727d9611f",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "8571399aec0ccee0d4978318344d57655033e3aa4c0f104837f86d96722d364f"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-committed-ack-host.json": "54489146c095de814854c222e34432b6dbbccda7fb7f3dd4ab90647c732f8185",
+    "broadcast-committed-ack-after-fanout.json": "b1c916130440fcb089f0d72eb25224e7a62582076e21baead5ef8b3c5a403ec7",
+    "broadcast-committed-ack-after-start.json": "b72c89356ed9c20983cfd10ed7b11a6b72d783026b227fecdac5e7cd81de4bc8"
+  },
+  "sourceBindingsCheckedPerCase": 1379,
+  "checks": [
+    {
+      "name": "actual committed source completion before provider return loss",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual pre-ACK and partial-start regressions",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "checked source and publisher discovery controls",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "owned process controls",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual cleanup failure controls",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "separate locked probe/standard/reader builds",
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "committedAck": {
+    "diagnosticEvent": "EF.TransactionCommitted",
+    "actualContextAndEncodedSourceFilter": true,
+    "separateLiveCheckedDeliveredBeforeKill": true,
+    "completeCheckedSourceProjectionAndCanonicalPayloadHashUnchanged": true,
+    "rowRevisionBeforeAndAfter": 5,
+    "storageSchemaVersion": "2.0.0",
+    "originalSourceFenceBeforeAndAfter": 1,
+    "successorClaimExpected": false,
+    "noSuccessorClaimFabricated": true,
+    "observedPastOriginalDeadlinePlusSeconds": 2,
+    "realDistinctPostDeadlinePublisherProcessed": true,
+    "controlSourceEmptyWitnessVersion": 1,
+    "recipientFullCheckedAndApiRecordsUnchanged": true,
+    "onlyAdditionalWorkflowIsControlPublisher": true,
+    "actualPreDispatchRenewalQualified": false,
+    "redriveQualified": false
+  },
+  "verificationIterations": [
+    "initial observer/diagnostic queries incorrectly compared raw logical IDs with encoded EF projections; two positive reader controls failed and no cut fired, fixed with public EfRelationalIdentity codec",
+    "SavedChanges prototype correctly failed earliest independent live Delivered guard because actual CompleteClaimAsync saves inside explicit transaction before Commit",
+    "scoped disposable exact-context TransactionCommitted observer then passed actual live commit, crash/restart and post-deadline operating-host control"
+  ],
+  "supportingQualification": {
+    "deliveredCommit": "fc5948641590f4f74d79e234a2a3f8f91f5b81d6",
+    "receipt": "broadcast-competing-proposal-recovery.json",
+    "architecturePassed": 590,
+    "ServerLockedRestoreAndMapCheckPassed": true,
+    "inheritedNotRerun": true,
+    "reason": "test-only feature/observer/scenario changes; no production or project graph changes"
+  },
+  "reviews": {
+    "type": "three independent component source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "remainingGates": [
+    "actual redrive and pre-dispatch renewed claims, remaining T051 scopes/same-artifact/retention/GC/republish proof",
+    "remaining T045/native-composite, actual historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards, full-PR review, required exact-head checks/protected merge/resulting-main",
+    "separate ADR0063 and independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

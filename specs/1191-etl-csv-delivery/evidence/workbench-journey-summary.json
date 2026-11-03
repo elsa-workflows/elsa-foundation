@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "spec": "1191-etl-csv-delivery",
+  "sourceRevision": "eb418a835600e7aa98221b32f41bb593b9d2ac06",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "10af4fa883182edc4814ce780f8feb5f50ae28ba29757ce63045a90930639410",
+  "cases": {
+    "clean": {
+      "definition": "csv-clean-7a8c17f7",
+      "selection": "etl1:csv-clean-7a8c17f7:1:e7fa387611c14bd3885339a225d1262f52507b121243d86be175b1c44f5fd3bc",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 4,
+        "acceptedRecords": 4,
+        "rejectedRecords": 0,
+        "filteredRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "terminalDiagnostic": null,
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "csv",
+        "errorKind": "csv",
+        "acceptedMainEffects": 4,
+        "acceptedErrorEffects": 0
+      },
+      "sourceInput": {
+        "bindingRevision": "v1",
+        "expectedSha256": "38961744b7b29d542a659cce31c2f60df8b64c0dd82b85b62666d12402d4b338",
+        "snapshotSha256": "38961744b7b29d542a659cce31c2f60df8b64c0dd82b85b62666d12402d4b338",
+        "snapshotByteLength": 112
+      },
+      "partitions": [
+        {
+          "ordinal": 0,
+          "file": {
+            "startOrdinal": 1,
+            "endOrdinalExclusive": 3,
+            "nextOrdinal": 3
+          },
+          "claimed": false
+        },
+        {
+          "ordinal": 1,
+          "file": {
+            "startOrdinal": 3,
+            "endOrdinalExclusive": 5,
+            "nextOrdinal": 5
+          },
+          "claimed": true
+        }
+      ],
+      "mainCsv": {
+        "files": 4,
+        "rows": [
+          [
+            "1",
+            "Ada, \"the first\""
+          ],
+          [
+            "2",
+            "Bram"
+          ],
+          [
+            "3",
+            " Cleo"
+          ],
+          [
+            "4",
+            "Dee\nLine"
+          ]
+        ],
+        "jsonlFiles": 0
+      },
+      "errorCsv": {
+        "files": 0,
+        "rows": [],
+        "jsonlFiles": 0
+      },
+      "hostPathInInspection": false
+    },
+    "dirty": {
+      "definition": "csv-dirty-97b624e0",
+      "selection": "etl1:csv-dirty-97b624e0:1:0ec22338d051b405431cade7c1a8c6d60bc24de3b034c908493cbd0bf29ddb64",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-business-error",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "businessError",
+        "sourceRecordCount": 7,
+        "acceptedRecords": 2,
+        "rejectedRecords": 5,
+        "filteredRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "terminalDiagnostic": {
+        "code": "etl.rows-rejected",
+        "recordOrdinal": null,
+        "field": null
+      },
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "csv",
+        "errorKind": "csv",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 5
+      },
+      "sourceInput": {
+        "bindingRevision": "v1",
+        "expectedSha256": "1fb8fb63d5685c9712bc5392d32220de81e8b4ab7e1d725e5be0b0620a4290cb",
+        "snapshotSha256": "1fb8fb63d5685c9712bc5392d32220de81e8b4ab7e1d725e5be0b0620a4290cb",
+        "snapshotByteLength": 119
+      },
+      "partitions": [
+        {
+          "ordinal": 0,
+          "file": {
+            "startOrdinal": 1,
+            "endOrdinalExclusive": 5,
+            "nextOrdinal": 5
+          },
+          "claimed": false
+        },
+        {
+          "ordinal": 1,
+          "file": {
+            "startOrdinal": 5,
+            "endOrdinalExclusive": 8,
+            "nextOrdinal": 8
+          },
+          "claimed": true
+        }
+      ],
+      "mainCsv": {
+        "files": 2,
+        "rows": [
+          [
+            "1",
+            "Ada"
+          ],
+          [
+            "7",
+            "Eve"
+          ]
+        ],
+        "jsonlFiles": 0
+      },
+      "errorCsv": {
+        "files": 5,
+        "rows": [
+          [
+            "2",
+            "etl.jsonl.record-invalid",
+            ""
+          ],
+          [
+            "3",
+            "etl.jsonl.record-not-object",
+            ""
+          ],
+          [
+            "4",
+            "etl.invalid-value",
+            "id"
+          ],
+          [
+            "5",
+            "etl.required-value-missing",
+            "id"
+          ],
+          [
+            "6",
+            "etl.jsonl.record-invalid",
+            ""
+          ]
+        ],
+        "jsonlFiles": 0
+      },
+      "hostPathInInspection": false
+    }
+  },
+  "catalogSources": [
+    [
+      "clean-source",
+      "csv"
+    ],
+    [
+      "dirty-source",
+      "csv"
+    ]
+  ],
+  "checks": {
+    "catalogListsSourceFilesAsCsv": true,
+    "cleanWorkflowCompletedThroughDone": true,
+    "cleanRunSucceededWithExactCsvRows": true,
+    "cleanInspectionShowsCsvOutputsAndTwoFinishedRanges": true,
+    "dirtyWorkflowTookBusinessErrorPort": true,
+    "dirtyRunRoutedEachBadLine": true,
+    "noAccountingLeft": true,
+    "noHostPathInInspection": true
+  },
+  "passed": true
+}

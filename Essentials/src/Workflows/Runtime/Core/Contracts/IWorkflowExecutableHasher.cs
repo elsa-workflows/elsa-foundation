@@ -24,6 +24,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// claimed id would let a corrupted file <em>become</em> that id's content on a fresh engine.
 /// </para>
 /// <para>
+/// New hashes use the current canonical schema. <see cref="MatchesHash"/> may also verify retained artifacts
+/// against historical schemas using their original coverage, without changing their identities or bodies.
+/// </para>
+/// <para>
 /// This is a <b>replacement contract</b>: exactly one hasher is meaningful per engine, and
 /// two implementations would mean two definitions of identity.
 /// </para>
@@ -41,6 +45,19 @@ public interface IWorkflowExecutableHasher
         PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
         IncidentStrategyReference? incidentStrategy = null);
+
+    /// <summary>
+    /// Verifies the declared hash using a canonical schema this implementation supports. The default
+    /// verifies the current schema; a hasher that evolves its rendering may also recognize historical schemas.
+    /// Verification never changes an artifact's identity or payload.
+    /// </summary>
+    bool MatchesHash(WorkflowExecutable executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        return executable.InputContract is { } contract && StringComparer.Ordinal.Equals(
+            ComputeHash(executable.RootActivity, contract, executable.Dependencies, executable.PersistenceMode,
+                executable.WorkflowVariables, executable.IncidentStrategy), executable.Identity.ArtifactHash);
+    }
 
     /// <summary>Derives the content-addressed artifact id from a computed hash.</summary>
     string CreateArtifactId(string artifactIdPrefix, string artifactHash);

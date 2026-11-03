@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageType>Template</PackageType>
+    <PackageId>Elsa.Integrations.Templates</PackageId>
+    <Title>Elsa connector templates</Title>
+    <Description>dotnet new template for an Elsa 4 connector package (elsa-connector). Preview pin; not contract-stable until GA (ADR 0080 D4).</Description>
+    <PackageTags>elsa;integrations;connector;template</PackageTags>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <IsPackable>true</IsPackable>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\templates\elsa-connector\**\*" PackagePath="content\elsa-connector" />
+  </ItemGroup>
+
+</Project>

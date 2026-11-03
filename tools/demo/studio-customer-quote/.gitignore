@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-evidence/
-state/
-output/
-.venv/
-.env
-keys.json
-*.log

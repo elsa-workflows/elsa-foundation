@@ -57,7 +57,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await page.addScriptTag({ content: axe.source });
     const violations = await page.evaluate(async () => {
       const root = document.querySelector(".connection-picker-editor")!;
-      const result = await (window as Window & { axe: typeof axe }).axe.run(root);
+      const result = await window.axe.run(root);
       return result.violations.map(item => ({ id: item.id, targets: item.nodes.map(node => node.target) }));
     });
     expect(violations).toEqual([]);

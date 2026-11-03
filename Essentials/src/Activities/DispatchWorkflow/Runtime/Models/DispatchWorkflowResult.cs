@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -38,11 +39,28 @@ public sealed class DispatchWorkflowResult
         WorkflowDispatchStatus status,
         IReadOnlyCollection<DispatchWorkflowOutput>? outputs = null,
         IReadOnlyDictionary<string, string>? diagnosticMetadata = null)
+        : this(childWorkflowExecutionId, status, outputs, diagnosticMetadata, control: null)
+    {
+    }
+
+    [JsonConstructor]
+    public DispatchWorkflowResult(
+        string childWorkflowExecutionId,
+        WorkflowDispatchStatus status,
+        IReadOnlyCollection<DispatchWorkflowOutput>? outputs,
+        IReadOnlyDictionary<string, string>? diagnosticMetadata,
+        RuntimeChildControlTransport? control)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(childWorkflowExecutionId);
 
         if (status is WorkflowDispatchStatus.Pending or WorkflowDispatchStatus.Started)
             throw new ArgumentOutOfRangeException(nameof(status), status, "A DispatchWorkflow result requires a terminal child status.");
+        // Root authored control can commit before a later workflow cancellation wins. Keep both facts;
+        // start-delivery failure has no admitted root and therefore cannot carry root control.
+        if (control is not null && (!control.Batch.IsTerminal ||
+            !StringComparer.Ordinal.Equals(control.Batch.ChildWorkflowExecutionId, childWorkflowExecutionId.Trim()) ||
+            status == WorkflowDispatchStatus.DispatchFailed))
+            throw new ArgumentException("DispatchWorkflow control must match the exact terminal child result.", nameof(control));
 
         var outputSnapshot = (outputs ?? []).ToArray();
         if (status != WorkflowDispatchStatus.Completed && outputSnapshot.Length != 0)
@@ -72,12 +90,17 @@ public sealed class DispatchWorkflowResult
         Status = status;
         Outputs = Array.AsReadOnly(outputSnapshot);
         DiagnosticMetadata = new ReadOnlyDictionary<string, string>(diagnosticSnapshot);
+        Control = control;
     }
 
     public string ChildWorkflowExecutionId { get; }
     public WorkflowDispatchStatus Status { get; }
     public IReadOnlyCollection<DispatchWorkflowOutput> Outputs { get; }
     public IReadOnlyDictionary<string, string> DiagnosticMetadata { get; }
+
+    /// <summary>Authored control carried separately from fixed safe diagnostics; absent on legacy and ordinary results.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlTransport? Control { get; }
 
     internal static bool SupportsParentResume(WorkflowDispatchStatus status) =>
         status is WorkflowDispatchStatus.Completed or WorkflowDispatchStatus.Faulted or WorkflowDispatchStatus.Cancelled or WorkflowDispatchStatus.DispatchFailed;

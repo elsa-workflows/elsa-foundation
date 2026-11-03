@@ -57,7 +57,7 @@ export function WorkflowTestDrivePanel({
   const [loadError, setLoadError] = useState("");
   const [testRunSetupUnavailable, setTestRunSetupUnavailable] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [selectedOptionId, setSelectedOptionId] = useState(() => setupState?.selectedOptionId ?? "");
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(() => setupState?.selectedOptionId ?? null);
   const [selectedModeId, setSelectedModeId] = useState(() => setupState?.selectedModeId ?? "");
   const selectedOptionIdRef = useRef(selectedOptionId);
   const selectedModeIdRef = useRef(selectedModeId);
@@ -107,11 +107,13 @@ export function WorkflowTestDrivePanel({
       setInputContract(result.inputContract ?? null);
       setOptionDiagnostics(Array.isArray(result.diagnostics) ? result.diagnostics : []);
       const retainedOption = nextOptions.find(option => option.optionId === selectedOptionIdRef.current);
-      if (!retainedOption) {
-        setSelectedOptionId("");
-        setSelectedModeId("");
-        setStimulusDraft(defaultStimulusDraft());
-      } else if (!retainedOption.modes.some(mode => mode.modeId === selectedModeIdRef.current)) {
+      if (!retainedOption && selectedOptionIdRef.current !== "") {
+        const option = nextOptions[0];
+        const mode = option?.modes.find(candidate => candidate.isDefault) ?? option?.modes[0];
+        setSelectedOptionId(option?.optionId ?? "");
+        setSelectedModeId(mode?.modeId ?? "");
+        setStimulusDraft(defaultStimulusDraft(option, mode));
+      } else if (retainedOption && !retainedOption.modes.some(mode => mode.modeId === selectedModeIdRef.current)) {
         const mode = retainedOption.modes.find(candidate => candidate.isDefault) ?? retainedOption.modes[0];
         setSelectedModeId(mode?.modeId ?? "");
         setStimulusDraft(defaultStimulusDraft(retainedOption, mode));

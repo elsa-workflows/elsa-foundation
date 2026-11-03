@@ -1,3 +1,5 @@
+using Elsa.Workflows.Testing;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Workflows.Publishing.Handlers;
@@ -229,11 +231,11 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_artifact_hash()
+    public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_verifies_historical_hashes()
     {
-        // These values were captured before the sensitivity declaration existed. #2515
-        // intentionally updates the structured artifact hashes to include the effective side-effect profile;
-        // the contract fingerprint remains unchanged for both input variants.
+        // Sensitivity declarations preserve these contract fingerprints. #2515 added the side-effect
+        // profile to behavioral identity; #3331 emits hash schema v2 for complete input contracts.
+        // Keep fixed current identities and verify the previously published v1 identities as well.
         var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
         var literal = await SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
@@ -241,8 +243,20 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.Equal("sha256:d4c0e91ccccf8bfd0650d563b933c2dc24fa6acf5db71de7614cd82adecd3cb5", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
         Assert.Equal(unbound.RootActivity.ActivityContract.SchemaFingerprint, literal.RootActivity.ActivityContract!.SchemaFingerprint);
-        Assert.Equal("sha256:0e1f299d066b2d136264598e6b1725ba9a28e974807cd7db0df8a7330b4a67ff", unbound.Identity.ArtifactHash);
-        Assert.Equal("sha256:7b4d6b3a6d8b5c00b228dcb91f73de2f775839f9adc14beddd0b3639d96adf0d", literal.Identity.ArtifactHash);
+        Assert.Equal("sha256:b31b6d3f70def126b45fc884773d951c46657b8d8d7b1bb77ff09ae35aa992f7", unbound.Identity.ArtifactHash);
+        Assert.Equal("sha256:bedaa44ae2dcda6b439f9b2475ed8a82f9984d701addd4225d444e625603236d", literal.Identity.ArtifactHash);
+        AssertLegacyHash(unbound, "sha256:0e1f299d066b2d136264598e6b1725ba9a28e974807cd7db0df8a7330b4a67ff");
+        AssertLegacyHash(literal, "sha256:7b4d6b3a6d8b5c00b228dcb91f73de2f775839f9adc14beddd0b3639d96adf0d");
+
+        static void AssertLegacyHash(WorkflowExecutable executable, string hash)
+        {
+            var hasher = new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher();
+            var identity = executable.Identity;
+            var historicalIdentity = new WorkflowExecutableIdentity(hasher.CreateArtifactId("artifact-", hash), identity.DefinitionId,
+                identity.DefinitionVersionId, identity.ArtifactVersion, hash);
+            Assert.True(hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(executable, executable.RootActivity,
+                declaredIdentity: historicalIdentity)));
+        }
     }
 
     [Fact]
@@ -2260,6 +2274,52 @@ public sealed class WorkflowExecutableCompilerTests
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 
+    [Theory]
+    [InlineData(typeof(ChildControlProbe), true)]
+    [InlineData(typeof(ChildFaultHandlingProbe), false)]
+    public async Task Child_control_protocol_is_compiled_only_from_an_explicit_structural_declaration(Type activityType, bool declared)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]), _activityStructureService, registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(declared ? "test.control" : null, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerKey));
+        Assert.Equal(declared ? "1" : null, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerVersion));
+    }
+
+    [Fact]
+    public async Task A_control_declaration_without_the_structural_consumer_marker_cannot_be_published()
+    {
+        var activityType = typeof(InvalidChildControlProbe);
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]), _activityStructureService, registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(async () =>
+            await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)));
+        Assert.Contains("control", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class ChildControlProbe : IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildControlConsumer
+    {
+        public ChildControlProbe() => throw new InvalidOperationException("Publishing must not activate the declared consumer.");
+        public ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context) => throw new NotSupportedException();
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) =>
+            throw new NotSupportedException();
+    }
+
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class InvalidChildControlProbe : IActivityResult<ActivityUnit>;
+
     private sealed class ChildFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler
     {
         public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
@@ -2642,6 +2702,19 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Json_storage_variables_compile_as_inline_workflow_state_including_defaults()
+    {
+        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new TypeReference("String"), "elsa.json", new ArgumentValue("hello", "Literal"));
+        var executable = await Compiler(WorkflowVersion(Node("write-one", Text("hello")), variables: [variable]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var declaration = Assert.Single(executable.WorkflowVariables);
+        Assert.Equal(DurableValueStorage.Inline, declaration.Policy.Storage);
+        Assert.Equal(DurableValueStorage.Inline, declaration.InitialBinding!.EffectivePolicy.Storage);
+        Assert.Equal("hello", declaration.InitialBinding.Literal!.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
     public async Task Set_intrinsic_targeting_a_declared_workflow_variable_compiles()
     {
         var message = new Elsa.Expressions.Core.Models.VariableDefinition(
@@ -2680,6 +2753,168 @@ public sealed class WorkflowExecutableCompilerTests
             Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
             executable.NodesById["set-1"].IntrinsicVariable?.DeclaringScopeId);
     }
+
+    [Theory]
+    [InlineData("Literal", "Elsa.Any")]
+    [InlineData("JavaScript", "Elsa.Any")]
+    [InlineData("Variable", "Elsa.Any")]
+    [InlineData("Literal", "Int64")]
+    public async Task Set_compiles_against_the_selected_variable_declaration(string syntax, string authoredAlias)
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition(
+            "counter", "Counter", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal"));
+        object value = syntax switch
+        {
+            "JavaScript" => "getVariable('Counter') + 1",
+            "Variable" => "counter",
+            _ => 7
+        };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", value, syntax, authoredAlias: authoredAlias);
+        var compiler = Compiler(WorkflowVersion(SequenceNode("root", [set]), variables: [counter]));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal("Int32", binding.TargetType.Alias);
+        if (syntax == "Literal")
+            Assert.Equal(7, binding.Literal!.InlineValue!.Value.GetInt32());
+        if (syntax == "JavaScript")
+            Assert.Equal("Int32", binding.Expression!.ResultType!.Id);
+    }
+
+    [Theory]
+    [InlineData("workflow", "Int32")]
+    [InlineData("container", "Boolean")]
+    public async Task Set_resolves_its_declaring_scope_when_variable_keys_and_names_are_shadowed(string scope, string expectedAlias)
+    {
+        var workflowCounter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var localCounter = workflowCounter with { Type = new TypeReference("Boolean") };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", "true", "JavaScript", scope);
+        var root = SequenceNode("container", [set], [localCounter]);
+
+        var executable = await Compiler(WorkflowVersion(root, variables: [workflowCounter]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal(expectedAlias, binding.TargetType.Alias);
+        Assert.Equal(scope, executable.NodesById["set-counter"].IntrinsicVariable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task Set_uses_the_selected_variables_collection_shape()
+    {
+        var numbers = new Elsa.Expressions.Core.Models.VariableDefinition("numbers", "Numbers", new TypeReference("Int32", CollectionKind.Array), null, null);
+        var set = DynamicSetIntrinsicNode("set-numbers", "numbers", new[] { 1, 2 }, "Literal");
+
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]), variables: [numbers]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.NodesById["set-numbers"].InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal(CollectionKind.Array, binding.TargetType.CollectionKind);
+        Assert.Equal(new[] { 1, 2 }, binding.Literal!.InlineValue!.Value.EnumerateArray().Select(item => item.GetInt32()));
+    }
+
+    [Fact]
+    public async Task Set_refuses_an_invalid_literal_at_publication_instead_of_publishing_a_poisoned_assignment()
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", "not a number", "Literal");
+        var compiler = Compiler(WorkflowVersion(SequenceNode("root", [set]), variables: [counter]));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("set-counter", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Int32", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Variable")]
+    [InlineData("WorkflowRequest")]
+    public async Task Set_refuses_a_statically_incompatible_source_contract(string syntax)
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var source = counter with { ReferenceKey = "source", Name = "Source", Type = new TypeReference("String") };
+        object reference = syntax == "Variable" ? "source" : new { memberKey = "source" };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", reference, syntax);
+        var compiler = Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference("String"), true)], variables: [counter, source]));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("set-counter", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Int32", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("String", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Variable")]
+    [InlineData("WorkflowRequest")]
+    public async Task Set_pins_safe_numeric_widening_from_a_referenced_source(string syntax)
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int64"), null, null);
+        var source = counter with { ReferenceKey = "source", Name = "Source", Type = new TypeReference("Int32") };
+        object reference = syntax == "Variable" ? "source" : new { memberKey = "source" };
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", reference, syntax);
+
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference("Int32"), true)], variables: [counter, source]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
+        Assert.NotNull(plan);
+        Assert.Equal("Int32", plan.SourceType.Alias);
+        Assert.Equal("Int64", plan.TargetType.Alias);
+        Assert.Equal(ValueConversionOperation.NumericWidening, plan.Operation);
+    }
+
+    [Fact]
+    public async Task Set_defers_projected_request_type_validation_to_runtime()
+    {
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
+        var set = DynamicSetIntrinsicNode("set-counter", "counter", new { memberKey = "source", path = "count" }, "WorkflowRequest");
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference("Elsa.Any"), true)], variables: [counter]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
+        Assert.Null(plan);
+        Assert.Equal("Int32", executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].TargetType.Alias);
+    }
+
+    [Theory]
+    [InlineData("Guid")]
+    [InlineData("DateTime")]
+    [InlineData("TimeSpan")]
+    [InlineData("Object")]
+    public async Task Set_preserves_matching_request_contracts_for_registered_non_numeric_types(string alias)
+    {
+        var target = new Elsa.Expressions.Core.Models.VariableDefinition("target", "Target", new TypeReference(alias), null, null);
+        var set = DynamicSetIntrinsicNode("set-target", "target", new { memberKey = "source" }, "WorkflowRequest");
+        var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
+            inputs: [WorkflowInput("source", new TypeReference(alias), true)], variables: [target]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var plan = executable.NodesById["set-target"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
+        Assert.NotNull(plan);
+        Assert.Equal(ValueConversionOperation.Identity, plan.Operation);
+        Assert.Equal(alias, plan.TargetType.Alias);
+    }
+
+    private static ActivityNode DynamicSetIntrinsicNode(
+        string nodeId,
+        string variableKey,
+        object value,
+        string syntax,
+        string scope = "workflow",
+        string authoredAlias = "Elsa.Any") =>
+        new(nodeId, "elsa.intrinsic.set@1",
+            [new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(JsonSerializer.SerializeToElement(value), syntax), null, null, null, null)], [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set,
+                new TypeReference(authoredAlias), new Elsa.Expressions.Core.Models.VariableReference(variableKey, scope))
+        };
 
     private static ActivityNode SetIntrinsicNode(
         string nodeId,

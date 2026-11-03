@@ -95,7 +95,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     /// version factory (<c>IActivityDefinitionHasher</c>). Under Model X, subsequent reconciliation
     /// passes that observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
     /// against this stored value to detect source-side breakage. The single sanctioned in-place
-    /// rewrite is the reconciler's tier-only refresh (<c>IRefreshActivityDefinitionVersionCommand</c>),
+    /// rewrite is the reconciler's input-presentation refresh (<c>IRefreshActivityDefinitionVersionCommand</c>),
     /// which also rewrites <see cref="InputsSource"/>.
     /// </summary>
     public string? Hash { get; set; }

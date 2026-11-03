@@ -47,6 +47,39 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Resolved_revision_matches_its_snapshot_while_later_resolution_observes_a_save()
+    {
+        await CreateConnectionAsync("versioned");
+        var repository = _scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        var before = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(before > 0);
+        Assert.Equal(before, original.Version);
+        Assert.False(string.IsNullOrWhiteSpace(original.IncarnationId));
+
+        await _manager.UpdateAsync(Tenant, "versioned", new UpdateConnectionRequest { DisplayName = "Updated" });
+        var after = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var current = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(after > before);
+        Assert.Equal(after, current.Version);
+        Assert.Equal(before, original.Version);
+        Assert.Equal(original.IncarnationId, current.IncarnationId);
+    }
+
+    [Fact]
+    public async Task Delete_and_recreate_of_the_same_name_has_a_distinct_creation_identity_even_when_versions_repeat()
+    {
+        await CreateConnectionAsync("recreated");
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        await _manager.DeleteAsync(Tenant, "recreated");
+        await CreateConnectionAsync("recreated");
+        await using var replacement = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        Assert.Equal(original.Version, replacement.Version);
+        Assert.False(string.IsNullOrWhiteSpace(replacement.IncarnationId));
+        Assert.NotEqual(original.IncarnationId, replacement.IncarnationId);
+    }
+
+    [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
     {
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
@@ -545,6 +578,30 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
         });
         Assert.Equal(GrantWriteStatus.Missing, missing.Status);
+
+        var createdWithoutExpiry = await _secrets.CreateAsync(Tenant, new CreateSecretRequest
+        {
+            Name = "oauth-grant-shape",
+            Value = "{}",
+            TypeName = SecretTypeNames.Text
+        });
+        var written = await writer.TryCompareAndSwapAsync(new GrantWriteRequest
+        {
+            TenantId = Tenant,
+            ConnectionName = "oauth",
+            GrantSecretName = "oauth-grant-shape",
+            ExpectedSecretVersion = createdWithoutExpiry.CurrentVersion!.Value,
+            AccessToken = "kept",
+            RefreshToken = "refresh-kept",
+            TokenType = "Bearer",
+            Scope = "read"
+        });
+        Assert.Equal(GrantWriteStatus.Written, written.Status);
+        var payload = await _scope.ServiceProvider.GetRequiredService<ISecretValueResolver>()
+            .ResolveAsync(Tenant, new SecretReference("oauth-grant-shape"));
+        Assert.Contains("\"token_type\":\"Bearer\"", payload.Value, StringComparison.Ordinal);
+        Assert.Contains("\"scope\":\"read\"", payload.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("1970-01-01", payload.Value, StringComparison.Ordinal);
     }
 
     [Fact]

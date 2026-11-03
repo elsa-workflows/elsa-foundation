@@ -1,26 +1,11 @@
 # Elsa.Activities.Switch
 
-Multi-way control-flow `Switch` composite activity module. The activity evaluates a `Value` string input
-and schedules the branch of the first case whose declared match value equals it, through per-case named
-child slots (`Switch.Case[{match}]`) and the runtime composite-activity seam. When no case matches it
-schedules the `Switch.Default` branch. It completes with the matched case's match value as its outcome,
-or `Default` when no case matched.
+Switch 4.1 / structure schema 2.0.0 evaluates ordered Boolean case conditions through the normal typed input pipeline. The first true case runs its branch and yields its human-authored label, such as `Approved`; if none matches, `Default` runs. A selected empty branch completes with its case outcome. A cleared/unbound predicate is false. An evaluated expression error records the normal blocking input-failure incident; later conditions after a selected case are never evaluated.
 
-An unbound or null `Value` takes the `Default` branch: case match values are non-nullable strings and
-selection compares them ordinally against the value, so a null value never equals any declared case. A
-selected branch that is empty (or an absent default) finalizes the composite directly with the matching
-outcome without scheduling a child.
+In Studio, select Switch, open **Slots**, add a case, and choose the condition's expression syntax with the standard input control. Labels, conditions and branch activities are separate. Move up/down changes case priority. Stable case IDs keep expression documents and open branch navigation attached during reorder/rename. Workflow authoring uses the persisted typed context after autosave. Activity Definition graphs reuse their existing syntax and scoped-variable controls; their ordinary-input server-language-service limitation also applies to case inputs.
 
-Case match values must be unique, enforced at three layers. `SwitchDuplicateCaseValidator`
-(`IDraftValidator`) surfaces duplicates as a design-time `ValidationError` so authors see them in the
-designer; recording the error does not block saving the Draft, but the promotion gate refuses to publish a
-Draft that carries validation errors, so a duplicate-case `Switch` can be authored and saved yet never
-compiled into an executable artefact. `SwitchStructureHandler.CompileExecutableStructure` and the runtime
-`SwitchNavigator` keep their own duplicate guards (a `WorkflowExecutableCompilationException` and a runtime
-exception respectively) as backstops for paths that bypass Draft validation. All three layers share the
-ordinal duplicate rule in `SwitchCaseRules`.
+Existing schema 1.0.0 workflows and artifacts retain ordinal `Value` string matching. **Upgrade to case conditions** changes the source version/schema in one document mutation while preserving matches, Value, descendants and unknown payload members. Each retained case continues matching Value until **Use condition** is selected. Value is evaluated only if a legacy case is reached and omitted from compilation when all cases are predicates. Activation-only Secret Value bindings must be replaced before upgrading; direct Secret predicates are refused.
 
-The runtime activity class (`Activities/Switch.cs`) references only the runtime contract surface. The
-design-side `SwitchStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
-module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references
-`Elsa.Workflows.Design.*` (Elsa §E2.2).
+Case labels remain unique across both schemas. `SwitchDuplicateCaseValidator` reports malformed identities, unsupported bindings and duplicate labels; publishing and runtime guards provide independent backstops. Each branch retains its runtime slot `Switch.Case[{match}]`; author-facing surfaces display the label. `Default` and `Break` remain fixed outcomes.
+
+The structure handler projects normal Boolean input definitions and states. Publishing produces ordinary typed input bindings/contracts; the Switch-owned keyed policy materializes only consumed inputs before the Running checkpoint. The immutable snapshot pins selection for redelivery/recovery. Activation supplies that snapshot through `IRuntimeStructureInputConsumer`, and Switch selects without reevaluating expressions. Runtime remains independent of Design models (Elsa §E2.2). See [extension points](EXTENSION_POINTS.md).

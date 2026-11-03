@@ -313,11 +313,77 @@ public sealed class WorkflowDrainContinuationSettlementTests
         Assert.Equal(Milliseconds(10), _polls);
     }
 
+    /// <summary>
+    /// #3647. A yielded segment flushes its continuation undelivered. Only the actor's yield re-drive hands it to the queue
+    /// before its first segment, and not while another Cancel already waits, which the drainer would yield to at once.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Only_a_yield_redrive_with_no_cancel_waiting_delivers_flushed_continuations_before_its_first_segment(bool redrive, bool cancelWaiting)
+    {
+        await _store.AddPendingForTestingAsync(_drainer.Continuation(0, Start));
+        _drainer.Continuations = 0;
+        RuntimePostCommitOutboxStatus? atFirstSegment = null;
+        _drainer.BeforeDrain = drainCount =>
+        {
+            if (drainCount == 1)
+                atFirstSegment = _store.FindAsync(HopDrainer.ContinuationId(0)).AsTask().GetAwaiter().GetResult()?.Status;
+        };
+        var controls = new DrainControlContext();
+        var control = new DrainControl();
+        using var waiting = cancelWaiting ? control.Wait() : null;
+        using var frame = controls.Push(Wfid, control);
+
+        var result = await RunAsync(envelope: Envelope(redrive ? InProcessWorkflowExecutionActorProvider.YieldRedriveSource : null), drainControls: controls);
+
+        Assert.Equal(
+            redrive && !cancelWaiting ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.Pending,
+            atFirstSegment);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Contains(result.Items, item => item.WorkItemId == "work-bookmark-0");
+    }
+
+    /// <summary>
+    /// A re-drive's delivery stops at the first batch that failed an item, rather than delivering later steps past it, and
+    /// the drain ends as a failed delivery while that item waits for its retry.
+    /// </summary>
+    [Fact]
+    public async Task A_yield_redrive_stops_delivering_flushed_continuations_at_a_failed_batch()
+    {
+        _drainer.RetryPolicy = Retrying;
+        _drainer.Continuations = 0;
+        for (var index = 0; index < 3; index++)
+            await _store.AddPendingForTestingAsync(_drainer.Continuation(index, Start));
+        var failing = new FailOnceDispatcher(new RuntimeSchedulerPostCommitIntentDispatcher(_queue), "intent-work-bookmark-0");
+        string[]? dispatchedBeforeFirstSegment = null;
+        _drainer.BeforeDrain = drainCount =>
+        {
+            if (drainCount == 1)
+                dispatchedBeforeFirstSegment = failing.Dispatches.Keys.Order(StringComparer.Ordinal).ToArray();
+        };
+
+        var result = await RunAsync(
+            new WorkflowDrainOrchestratorOptions(outboxDeliveryBatchSize: 2),
+            dispatcher: failing,
+            envelope: Envelope(InProcessWorkflowExecutionActorProvider.YieldRedriveSource),
+            drainControls: new DrainControlContext());
+
+        // The first batch failed bookmark-0 and delivered bookmark-1; bookmark-2 waited for the drain's own delivery step.
+        Assert.Equal(["intent-work-bookmark-0", "intent-work-bookmark-1"], dispatchedBeforeFirstSegment);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed, result.StopReason);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, (await FindContinuationAsync(0)).Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await FindContinuationAsync(2)).Status);
+    }
+
     private Task<RuntimeSchedulerDrainResult> RunAsync(
         WorkflowDrainOrchestratorOptions? options = null,
         int? maxWorkItems = null,
         CancellationToken cancellationToken = default,
-        IRuntimePostCommitIntentDispatcher? dispatcher = null)
+        IRuntimePostCommitIntentDispatcher? dispatcher = null,
+        WorkflowExecutionCommandEnvelope? envelope = null,
+        DrainControlContext? drainControls = null)
     {
         var orchestrator = new WorkflowDrainOrchestrator(
             _drainer,
@@ -345,8 +411,11 @@ public sealed class WorkflowDrainContinuationSettlementTests
             coalescingScopeFactory: NonFoldingDrainScopeFactory.Instance,
             liveDrainDeliveryAccessor: _liveDrain,
             persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver,
-            timeProvider: _clock);
-        return DriveAsync(orchestrator.DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(Wfid, maxWorkItems), cancellationToken).AsTask());
+            timeProvider: _clock)
+        {
+            DrainControls = drainControls
+        };
+        return DriveAsync(orchestrator.DrainAsync(envelope ?? Envelope(), new RuntimeSchedulerDrainRequest(Wfid, maxWorkItems), cancellationToken).AsTask());
     }
 
     // Fires every poll the drain parks on as soon as it parks, moving the clock by exactly that poll's delay. The first timer
@@ -422,9 +491,12 @@ public sealed class WorkflowDrainContinuationSettlementTests
             Start - TimeSpan.FromSeconds(1),
             Start - TimeSpan.FromSeconds(1));
 
-    private static WorkflowExecutionCommandEnvelope Envelope()
+    private static WorkflowExecutionCommandEnvelope Envelope(string? source = null)
     {
         using var document = JsonDocument.Parse("""{"kind":"run"}""");
+        var metadata = source is null
+            ? new Dictionary<string, string>()
+            : new Dictionary<string, string> { ["source"] = source };
         return new(
             envelopeId: "envelope-drain",
             workflowExecutionId: Wfid,
@@ -434,7 +506,7 @@ public sealed class WorkflowDrainContinuationSettlementTests
                 Kind: WorkflowExecutionCommandKind.RunSchedulerWork,
                 EnqueuedAt: Start,
                 Payload: document.RootElement.Clone(),
-                Metadata: new Dictionary<string, string>()),
+                Metadata: metadata),
             idempotencyKey: $"{Wfid}:command-drain",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Start,

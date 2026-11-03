@@ -94,6 +94,35 @@ test.describe("customizable Home", () => {
     }
   });
 
+  test("gates only Needs attention by authenticated runtime read and preserves design actions", async ({ page }) => {
+    await page.goto("/?mode=home&runtimeAccess=denied&drafts=multiple&keep=one#home-anchor");
+    const tasks = page.getByRole("region", { name: "Workflow tasks" });
+    await expect(tasks.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(tasks.getByRole("link", { name: "Needs attention" })).toHaveCount(0);
+    await expect(tasks.locator(".home-task-card[aria-disabled='true']")).toContainText("Requires access to read workflow runs.");
+    const continueButton = tasks.getByRole("button", { name: /Continue editing/ });
+    await expect(continueButton).toBeEnabled();
+    await continueButton.focus();
+    await page.keyboard.press("Enter");
+    const chooser = page.getByRole("dialog", { name: "Continue editing" });
+    await expect(chooser).toContainText("2 current drafts.");
+    await expect(chooser.getByRole("list", { name: "Current workflow drafts" }).getByRole("link")).toHaveCount(2);
+    await page.keyboard.press("Escape");
+    await expect(continueButton).toBeFocused();
+    await expectNoSeriousAxeViolations(page);
+
+    await page.goto("/?mode=home&runtimeAccess=allowed&keep=one#home-anchor");
+    const attention = page.getByRole("region", { name: "Workflow tasks" }).getByRole("link", { name: "Needs attention" });
+    await expect(attention).toHaveAttribute("href", "/workflows/instances?mode=home&runtimeAccess=allowed&keep=one&incidentHealth=active#home-anchor");
+    await attention.focus();
+    await page.keyboard.press("Enter");
+    const location = new URL(page.url());
+    expect(location.pathname).toBe("/workflows/instances");
+    expect(location.searchParams.get("incidentHealth")).toBe("active");
+    expect(location.searchParams.get("keep")).toBe("one");
+    expect(location.hash).toBe("#home-anchor");
+  });
+
   test("navigates Create once and keeps Browse as the ordinary definitions route", async ({ page }) => {
     await page.goto("/?mode=home&keep=one#home-anchor");
     await page.getByRole("link", { name: "Create workflow" }).click();

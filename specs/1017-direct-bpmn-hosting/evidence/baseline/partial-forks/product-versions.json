@@ -1,0 +1,68 @@
+{
+  "sourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+  "metadataOnly": true,
+  "actualProductVersions": [
+    {
+      "name": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "d52e6ff05b5dd82ea701e0f16fe59e393f864a30f4e272fe79684d16e18f5961"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "31aa3921531011039189ba7f5e9c754ab0bfa6b79cd036440a598bd7f77100c5"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Interchange.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "0ede67c84f4bc0cccb8e151a6f240cf00075a9f1aa60a9ea604592988bffcc7a"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "275c49c79b8a70b3156fe560c4b84f1637a71076abf10203cd2632da7eca3416"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "05c404d1127db94416a4b0e4c65c86d4bc04bcaa61e05552c7b95cbc63fe208c"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "7d5feaf136ca5386851f7a9ad3c1238f7ad6649586295746518caca9c2a1adf7"
+    },
+    {
+      "name": "Elsa.Activities.Runtime.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "eac5caba4f7967eccfb245f68adbb0db98eb377dd4ce845663098d2d6e3f8792"
+    },
+    {
+      "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "74a48d6a23466fe4d8b48ffc4c3c219746f79144a9b6b3cc150059acd119168d"
+    },
+    {
+      "name": "Elsa.Serialization.SystemText.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "f07f6cb1f907e974f6e2fe69a85ebe9f9239b49f7e240c17f44cbe15bd19b79a"
+    }
+  ],
+  "releasedLibraryProducts": [
+    {
+      "name": "Bpmn.Model.dll",
+      "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "name": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "name": "Bpmn.Interchange.dll",
+      "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+    }
+  ]
+}

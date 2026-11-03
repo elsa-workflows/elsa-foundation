@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ActivityPropertiesPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
-import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { createEndpointContext, type StudioActivityDescriptor, type StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { ConnectionPickerEditor } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor";
 import type { ActivityNode } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";

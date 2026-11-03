@@ -78,7 +78,9 @@ describe("definition display names", () => {
     const names = await loadDefinitionDisplayNames({} as StudioEndpointContext, ids);
 
     expect(getDefinition).toHaveBeenCalledTimes(20);
+    expect(definitionNameLookupConcurrency).toBe(6);
     expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(6);
     expect(maxInFlight).toBeLessThanOrEqual(definitionNameLookupConcurrency);
     expect(names.size).toBe(120);
     expect(names.get("def-1")).toBe("Listed def-1");
@@ -87,7 +89,7 @@ describe("definition display names", () => {
     expect(names.get("def-120")).toBe("Looked up def-120");
   });
 
-  it("keeps listed names and skips failed per-id reads when the list call itself fails", async () => {
+  it("falls back to capped per-id reads and skips failed or blank names when the list call fails", async () => {
     const ids = Array.from({ length: 110 }, (_, index) => `def-${index + 1}`);
     vi.mocked(listDefinitions).mockRejectedValue(new Error("Design is unavailable"));
 
@@ -106,12 +108,32 @@ describe("definition display names", () => {
     const names = await loadDefinitionDisplayNames({} as StudioEndpointContext, ids);
 
     expect(getDefinition).toHaveBeenCalledTimes(110);
+    expect(definitionNameLookupConcurrency).toBe(6);
     expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(6);
     expect(maxInFlight).toBeLessThanOrEqual(definitionNameLookupConcurrency);
     expect(names.get("def-1")).toBe("Looked up def-1");
     expect(names.get("def-3")).toBeUndefined();
     expect(names.get("def-4")).toBeUndefined();
     expect(names.size).toBe(108);
+  });
+
+  it("does not fall through to per-id reads when the caller aborts the list call", async () => {
+    const controller = new AbortController();
+    vi.mocked(listDefinitions).mockImplementation(async (_context, _request, signal) => {
+      controller.abort();
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      return { definitions: [], page: 1, pageSize: 100, totalCount: 0 };
+    });
+
+    const names = await loadDefinitionDisplayNames(
+      {} as StudioEndpointContext,
+      ["def-1", "def-2"],
+      controller.signal
+    );
+
+    expect(names.size).toBe(0);
+    expect(getDefinition).not.toHaveBeenCalled();
   });
 });
 

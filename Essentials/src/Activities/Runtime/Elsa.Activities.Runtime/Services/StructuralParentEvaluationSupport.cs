@@ -323,7 +323,8 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<IncidentState>? incidentChanges = null)
+        IReadOnlyCollection<IncidentState>? incidentChanges = null,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -401,7 +402,7 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     /// <summary>
@@ -452,7 +453,8 @@ internal static class StructuralParentEvaluationSupport
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         CancellationToken cancellationToken,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>? additionalActivityExecutions = null,
-        IReadOnlyCollection<RuntimeSchedulerWorkItem>? ancestorNotifications = null)
+        IReadOnlyCollection<RuntimeSchedulerWorkItem>? ancestorNotifications = null,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -515,7 +517,7 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     internal sealed record SubtreeCancellationCommitChanges(

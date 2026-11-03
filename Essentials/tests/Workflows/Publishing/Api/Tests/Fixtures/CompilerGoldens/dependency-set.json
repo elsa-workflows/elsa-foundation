@@ -18,8 +18,8 @@
     }
   ],
   "identity": {
-    "artifactHash": "sha256:89fce9aee4e2c569c9a8a9af1b0c522bb5f70ebad7098785d1974893d8060870",
-    "artifactId": "artifact-89fce9aee4e2",
+    "artifactHash": "sha256:6ef7ee911dfbba310fc1ef1584739aff4d34625ffde48467cc869da050bf98d1",
+    "artifactId": "artifact-6ef7ee911dfb",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"

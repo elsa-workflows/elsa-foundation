@@ -4,6 +4,8 @@ Index of every ADR in this folder. Generated from each file's H1 and status line
 The early Extension Builder series carries its own `EB-` prefix and is closed; every ADR number is unique.
 A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/` before choosing.
 
+An ADR proposed from an [initiative](../contributing/initiatives.md) follows its [agreement rule](../contributing/initiatives.md#how-work-flows): the author prepares the acceptance status, the required humans agree the final commit, and the coordinator records that commit on the board. A status line or bot approval alone is not agreement. Other ADRs keep their existing practice.
+
 | Number | Title | Status |
 |---|---|---|
 | 0001 | [Checkpoint-Gated Activity Execution Inspection](0001-checkpoint-gated-activity-execution-inspection.md) | Accepted |
@@ -52,7 +54,7 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0060 | [Execution evidence ordering is workflow-local and causal](0060-execution-evidence-ordering-is-workflow-local-and-causal.md) | Proposed |
 | 0061 | [Baseline execution evidence records committed semantic transitions](0061-baseline-execution-evidence-records-committed-semantic-transitions.md) | Proposed |
 | 0062 | [Execution Evidence starts in memory and adds Groundwork durability](0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md) | Proposed |
-| 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Proposed |
+| 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Accepted |
 | 0064 | [Flowchart Infers Joins From Propagated Dead Paths](0064-flowchart-infers-joins-from-propagated-dead-paths.md) | Proposed |
 | 0065 | [Groundwork Persistence Targets Are Named and Lanes Bind to Them](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) | Superseded |
 | 0066 | [Reusable-Activity Publication Orders Its Writes Instead of Requiring One Transaction](0066-reusable-activity-publication-orders-writes-instead-of-one-transaction.md) | Accepted |
@@ -79,6 +81,7 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0087 | [ETL owns its execution domain](0087-etl-owns-its-execution-domain.md) | Accepted |
 | 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
 | 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Proposed |
+| 0090 | [Activities Change Variables As A Unit Of Work Committed With The Step](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) | Proposed |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |

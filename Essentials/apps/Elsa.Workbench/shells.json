@@ -5,6 +5,8 @@
         "Name": "default",
         "Features": {
           "ActivitiesBpmn": {},
+          "ActivitiesBpmnDesign": {},
+          "ActivitiesBpmnInterchange": {},
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesDispatchWorkflowRuntime": {},
@@ -65,6 +67,7 @@
             "IsDevelopmentOrDemo": true
           },
           "FoundationWorkflowsAgent": {},
+          "FoundationWorkflowsRuntimeAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
@@ -164,6 +167,15 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
+          "SpecialistsReview": {},
+          "SpecialistsReviewApi": {},
+          "SpecialistsDesign": {},
+          "SpecialistsApi": {},
+          "AnthropicSpecialists": {},
+          "AzureOpenAISpecialists": {},
+          "BackgroundActivities": {},
+          "SpecialistsRuntime": {},
+          "SpecialistsEntityFrameworkCore": {},
           "Connections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityExecutionAttempt,
   ActivityStateView,
   ActivityExecutionHierarchyPage,
   ActivityExecutionLayout,
@@ -20,6 +21,7 @@ import type {
 } from "../workflowTypes";
 import { capabilityIds, getApiCapability, hasCapabilityLink, resolveCapabilityLink } from "./capabilities";
 import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
+import { mapWorkflowInstanceDetails } from "../workflowInstanceInspection";
 
 export const runtimeKeys = {
   all: ["workflow-runtime"] as const,
@@ -314,13 +316,13 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
   } satisfies WorkflowInstanceListPage;
 }
 
-export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
+export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-instance",
     { workflowExecutionId });
-  return context.http.getJson<WorkflowInstanceDetails>(path);
+  return mapWorkflowInstanceDetails(await (signal ? context.http.getJson<WorkflowInstanceDetails>(path, { signal }) : context.http.getJson<WorkflowInstanceDetails>(path)));
 }
 
 export async function getActivityExecutionInspection(
@@ -366,6 +368,48 @@ export async function getActivityStateView(
 
 export function supportsActivityExecutionInspection(context: StudioEndpointContext) {
   return hasCapabilityLink(context, capabilityIds.runtime, "activity-execution");
+}
+
+export interface ActivityExecutionBrowseEntry {
+  iterationPosition?: number | null;
+  attempt?: Pick<ActivityExecutionAttempt, "attemptNumber"> & Partial<ActivityExecutionAttempt> | null;
+  execution: import("../workflowTypes").ActivityExecutionStateSummary & { executionSequence: number };
+  position: number;
+  previousActivityExecutionId: string | null;
+  nextActivityExecutionId: string | null;
+}
+
+export interface ActivityExecutionBrowsePage {
+  items: ActivityExecutionBrowseEntry[];
+  totalCount: number;
+  previousCursor: string | null;
+  nextCursor: string | null;
+}
+
+export interface ActivityExecutionBrowseRequest {
+  executableNodeId?: string;
+  parentActivityExecutionId?: string;
+  ancestorActivityExecutionId?: string;
+  anchorActivityExecutionId?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export function supportsActivityExecutionBrowsing(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "activity-executions");
+}
+
+export async function browseActivityExecutions(context: StudioEndpointContext, workflowExecutionId: string,
+  request: ActivityExecutionBrowseRequest = {}, signal?: AbortSignal): Promise<ActivityExecutionBrowsePage> {
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "activity-executions", { workflowExecutionId });
+  const parameters = new URLSearchParams({ limit: String(request.limit ?? 50) });
+  for (const [key, value] of Object.entries(request)) if (value !== undefined) parameters.set(key, String(value));
+  const page = await context.http.getJson<ActivityExecutionBrowsePage>(`${path}?${parameters}`, { signal });
+  return { ...page, items: page.items.map(item => ({ ...item, execution: {
+    ...item.execution,
+    parentActivityExecutionId: item.execution.provenance?.parentActivityExecutionId,
+    iterationId: item.execution.provenance?.iterationId
+  } })) };
 }
 
 export interface ActivityExecutionDescendantsRequest {

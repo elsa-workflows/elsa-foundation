@@ -1,0 +1,26 @@
+{
+  "sourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "controls": [
+    {
+      "control": "retired",
+      "exitCode": 1,
+      "failure": "AssertionError: Expected one actual recommended publication for Elsa.Activities.Bpmn.Activities.BpmnProcess, found 0"
+    },
+    {
+      "control": "missing",
+      "exitCode": 1,
+      "failure": "AssertionError: Expected one actual recommended publication for Elsa.Activities.Bpmn.Activities.BpmnProcess, found 0"
+    },
+    {
+      "control": "foreign-tenant",
+      "exitCode": 1,
+      "failure": "AssertionError: Expected one actual recommended publication for Elsa.Activities.Bpmn.Activities.BpmnProcess, found 0"
+    },
+    {
+      "control": "contract-change",
+      "exitCode": 1,
+      "failure": "AssertionError: Actual persisted published BPMN authoring contract differs from the frozen fingerprint; see receipt"
+    }
+  ],
+  "originalOracleSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92"
+}

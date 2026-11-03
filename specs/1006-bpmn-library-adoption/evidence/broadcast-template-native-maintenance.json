@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 native atomic template/reference maintenance; EF and qualified default composition remain open",
+  "sourceParentCommit": "48d15bc1c256f1ee470766bf87686d1847815f64",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "dee8c090fae0720703e750453b58e80464dfa5db2f5af2a7ba43bfe86caa1365",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "2fe5ff544aaa64721e69e90bf2c05a80e69bcb215472c18ee9ed2a7d5b4ca968",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "2e7829f10ad0c062b6e9dad98ceb3d671fa9dced0318c6f9523f0241a8d7d3bf",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryExecutableActivityTemplateStore.cs": "04da2db22efe9ad65c6cf6c360f994e0278a6a7491f66dc76dbf6d54f146b37c",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "185bcc2ad60490cfb973fb494c240351ad5b9f1d916dfaa03442dae327667909",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableStore.cs": "b81f1175d5c18955b89c07cf0cf6df2f0ce10b9e478294935e95664ddeae069e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "8c58da46ff1e9911c88566cae3b81b8fe76c30cfdc09715f15706c681cbc9a9b",
+    "specs/1006-bpmn-library-adoption/tasks.md": "941a48b3f9aec251475faab3397527f7bac783d8b724c366a78604374fc22fed",
+    "Essentials/tests/Workflows/Runtime/Tests/ExecutableActivityTemplateMaintenanceTests.cs": "7b1467806b5fddd371ae660873998acb7dbadc2a90849f17d971ae4aeaff9d22",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryTemplateRetentionTests.cs": "2895a660b290636a10544643a31048d86018f045f2962d115558f37b59ec5a24",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "30a8b6a3d34d594344dca611b8b929342e110a4722f9dab81044f1a8091a125c",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "a466b28459accfd49f0a04e2d057ef4f1b4977203475f4b6e478912da91a8e2c",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeCoreCompositionRootTests.cs": "cfa008d089eb8a9e6250c0573fb1f58e82ff3fce68280ec6cc29db2470e53bea",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "eb10cef37b06ccd60c489f815df2dc769b82674c44b79fb6e974906750700382",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableReferenceGarbageCollector.cs": "58cdb89acacdd3339718b7cbc2ed3362fb0913cf3d79bcb21e52f1b1bbf1f6fe"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2926,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 31,
+      "newScope": "native memory maintenance"
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1318,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 1,
+      "newScope": "native memory cohort/GC bridge inside the existing provider test project"
+    }
+  ],
+  "newNativeControls": 31,
+  "newNativeCohortGcBridge": 1,
+  "targetedCoreImplementationShape": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "generatedMapsCheck": "passed",
+  "discovery": {
+    "runtime": {
+      "listed": 2915,
+      "uniqueDisplayNames": 2911,
+      "executed": 2926,
+      "deferredTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "unmapped": []
+    },
+    "ef": {
+      "listed": 1318,
+      "uniqueDisplayNames": 1316,
+      "executed": 1318,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "blank-source-id-validation-removed",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 28,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "physical-workflow-dependencies-ignored",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 28,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-closed-edges-ignored",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 29,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-direct-edges-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-metadata-edges-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-nested-node-edges-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "remaining-source-references-ignored",
+      "exitCode": 1,
+      "failed": 5,
+      "passed": 26,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "reference-snapshot-cas-removed",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "template-recreation-snapshot-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "exact-dependency-admission-removed",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 28,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "expired-proposal-admitted",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "retired-winner-adopted",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "selected-artifact-binding-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "selected-reference-binding-ignored",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 29,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "cohort-template-reference-maintenance-disabled",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "greedy-singleton-constructor-restored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "coreApiAdditions": 4,
+  "coreApiRemovals": 0,
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviewFixes": [
+    "Validate nonblank source reference ID before writing template material; malformed-reference controls assert no ID/hash/reference and a valid twin.",
+    "Preserve raw parent-first inert staging; exact dependency validation belongs to the new atomic publication port.",
+    "Private bound constructor and explicit CreateForMaintenance factory preserve singleton/scoped DI lifetime compatibility; existing scoped-persistence composition control went red then green.",
+    "Retired replacement control isolates full reference snapshot-CAS rather than only liveness."
+  ],
+  "reviews": {
+    "correctness": "final source and receipt clean",
+    "standards": "final source/API/catalog and receipt clean",
+    "acceptance": "final source/control scope and receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "New maintenance controls and cohort/GC bridge use actual native-memory stores only. Passing the whole Runtime EF project does not qualify new EF template coordination; its one new case uses Harness.Create(false).",
+    "These deterministic stale-discovery/write/collection orderings and actual native gates are not an injected concurrent peer write inside a held gate, a fresh durable process, upgraded-host recovery or Studio/production qualification.",
+    "Raw low-level template saves remain inert staging. Production publication/draft-test writers have not adopted the new atomic port; existing expired/retired references refuse rather than receiving an unreviewed renewal policy.",
+    "Ordinary default GC stays on its original constructor and reports cohort-retention support false. EF material/reference coordination, production writers and qualified default composition remain unfinished T049 work; publisher activation remains disabled.",
+    "T050 exact-bookmark/immutable-input/schema activation, T051 actual host recovery, T045/other stories, duplicate-semantics deletion/guards, final current host/Studio, full-PR reviews/exact-head checks/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance remains open; Orleans/task-runner deferred."
+  ],
+  "remoteParentChecks": {
+    "head": "48d15bc1c256f1ee470766bf87686d1847815f64",
+    "run": 40380644671,
+    "buildAndTest": "success",
+    "architecture": "success",
+    "generatedMaps": "success",
+    "fullTier": "not run: draft",
+    "gitGuardianIncident": "38996611 unresolved public source-digest finding; no bypass",
+    "boundary": "Prior pushed template-reachability head only; the new native maintenance source requires its own remote checks."
+  }
+}

@@ -26,7 +26,7 @@ function calls(css: string, fn: RegExp) {
 // layered stacks by contract, even where the host's neutral fallback is a flat colour: a material
 // theme supplies its own recipe for any rung it restyles. Any token that is a gradient or image
 // today counts too.
-const hostTokens = declarations(read(new URL("../../../../../apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css", import.meta.url)))
+const hostTokens = declarations(read(new URL("../../../../../essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css", import.meta.url)))
   .filter(({ name }) => name.startsWith("--studio-material-"));
 const imageTokens = new Set(hostTokens
   .filter(({ name, value }) => /-bg(-strong|-soft)?$/.test(name) || /gradient\(|url\(/.test(value))

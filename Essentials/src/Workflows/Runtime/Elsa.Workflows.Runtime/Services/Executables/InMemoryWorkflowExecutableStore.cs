@@ -197,6 +197,45 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         }
     }
 
+    internal T ExecuteUnderRootWriteLeases<T>(IReadOnlyList<WorkflowExecutableRootWriteLease> leases,
+        TimeProvider clock, Func<T> write, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(leases); ArgumentNullException.ThrowIfNull(clock); ArgumentNullException.ThrowIfNull(write);
+        if (leases.Count == 0 || leases.Select(lease => lease.ArtifactId).Distinct(StringComparer.Ordinal).Count() != leases.Count)
+            throw new ArgumentException("An atomic executable fence requires distinct actual grants.", nameof(leases));
+        lock (_gate)
+        {
+            foreach (var lease in leases)
+            {
+                RecoverExpiredState(lease.ArtifactId, clock.GetUtcNow());
+                if (!_executables.ContainsKey(lease.ArtifactId) || _deletionGuards.ContainsKey(lease.ArtifactId) ||
+                    !_rootWriteLeases.TryGetValue(lease.ArtifactId, out var held) ||
+                    !held.TryGetValue(lease.LeaseId, out var current) || current.Lease != lease)
+                    throw new Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableRootWriteLeaseLostException(lease.ArtifactId, lease.LeaseId);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return write(); // Synchronous durable publication only: no await or external recipient effect under the gate.
+        }
+    }
+
+    internal bool ExecuteUnderDeletionGuard(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, Func<bool> write)
+    {
+        lock (_gate)
+        {
+            RecoverExpiredState(guard.ArtifactId, now);
+            if (!_deletionGuards.TryGetValue(guard.ArtifactId, out var current) || current.Guard != guard ||
+                _rootWriteLeases.ContainsKey(guard.ArtifactId)) return false;
+            return write(); // Reference mutation shares the artifact gate with lease acquire/expiry and guard replacement.
+        }
+    }
+
+    internal T ExecuteUnderMaterialGate<T>(Func<IReadOnlyCollection<WorkflowExecutable>, T> operation)
+    {
+        lock (_gate)
+            return operation(_executables.Values.ToArray());
+    }
+
     public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);

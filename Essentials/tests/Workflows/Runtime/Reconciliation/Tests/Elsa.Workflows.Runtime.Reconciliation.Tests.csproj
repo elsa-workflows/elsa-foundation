@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\..\..\Tasks\Testing\Elsa.Tasks.Testing.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../../../Fixtures/LegacyWorkflowHashFixture.cs" Link="Fixtures/LegacyWorkflowHashFixture.cs" />
+    <EmbeddedResource Include="../../../Fixtures/legacy-set-v1.json" LogicalName="legacy-set-v1.json" />
+  </ItemGroup>
+
 </Project>

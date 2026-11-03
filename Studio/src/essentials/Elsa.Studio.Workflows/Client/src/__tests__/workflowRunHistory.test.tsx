@@ -29,6 +29,43 @@ afterEach(() => {
 });
 
 describe("workflow run history", () => {
+  it("keeps the execution ID primary and discloses copyable secondary IDs without opening the row", async () => {
+    const exactRun = {
+      ...page("workflow-execution-0123456789abcdef0123456789abcdef").items[0],
+      artifactId: "workflow-artifact-exact",
+      definitionId: "workflow-definition-exact",
+      definitionVersionId: "workflow-definition-version-exact"
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : page(exactRun.workflowExecutionId, { items: [exactRun] }));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    previousClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const navigate = vi.fn();
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.querySelector(".wf-run-primary-identifier .studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Execution ID: ${exactRun.workflowExecutionId}`));
+    const row = container.querySelector<HTMLElement>(".wf-instance-grid .wf-grid-row")!;
+    const disclosure = row.querySelector<HTMLButtonElement>(".wf-run-secondary-identifiers button[aria-haspopup=dialog]")!;
+    const copyExecutionId = row.querySelector<HTMLButtonElement>('button[aria-label="Copy Execution ID"]')!;
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    for (const key of ["Enter", " "]) {
+      flushSync(() => disclosure.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+      flushSync(() => copyExecutionId.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+    }
+    expect(navigate).not.toHaveBeenCalled();
+
+    click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.textContent).toContain("Artifact ID");
+    expect(document.body.textContent).toContain(exactRun.artifactId);
+    expect(document.body.textContent).toContain(exactRun.definitionId);
+    expect(document.body.textContent).toContain(exactRun.definitionVersionId);
+    const copyIconPath = copyExecutionId.querySelector("svg path")!;
+    flushSync(() => copyIconPath.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(exactRun.workflowExecutionId));
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it("canonicalizes only an exact same-origin Runs return location", () => {
     const origin = window.location.origin;
     expect(parseRunHistoryReturnTo("/workflows/instances?status=Running&pageSize=50&cursor=opaque&ignored=yes", origin))
@@ -106,7 +143,7 @@ describe("workflow run history", () => {
     expect(button(container, "Copy Workflow definition ID")).toBeTruthy();
     expect(input(container, "Workflow run artifact").value).toBe("artifact-1");
     expect(container.textContent).toContain("Showing 1 of 42 matching runs");
-    expect(container.textContent).toContain("Current health unavailable");
+    expect(container.querySelector(".wf-run-health-indicator .wf-visually-hidden")?.textContent).toBe("Current health unavailable");
     expect(getJson).toHaveBeenCalledWith(
       "/runtime/workflows/instances/page?definitionId=definition-1&artifactId=artifact-1&take=10");
 
@@ -221,6 +258,10 @@ describe("workflow run history", () => {
     const container = render(context(getJson), navigate);
 
     await waitFor(() => expect(container.querySelector(".wf-run-inspect")?.textContent).toContain("Order fulfillment"));
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-run-secondary-identifiers button[aria-haspopup=dialog]")!;
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
     const expectedValues = [
       ["Copy Execution ID", "execution-1"],
       ["Copy Artifact ID", "artifact-1"],
@@ -228,7 +269,10 @@ describe("workflow run history", () => {
       ["Copy Definition version ID", "version-1"]
     ] as const;
     for (const [label, exactValue] of expectedValues) {
-      click(button(container, label));
+      const copyButton = button(label === "Copy Execution ID" ? container : document.body, label);
+      if (label === "Copy Execution ID") {
+        flushSync(() => copyButton.querySelector("svg path")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+      } else click(copyButton);
       await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(exactValue));
     }
 
@@ -306,7 +350,7 @@ describe("workflow run history", () => {
 
     await waitFor(() => expect(container.textContent).toContain("blocking-run"));
     expect(container.textContent).toContain("Needs intervention");
-    expect(container.textContent).toContain("4 incidents");
+    expect(container.querySelector('[title="1 activities · 4 incidents"]')).not.toBeNull();
     expect(container.querySelector(".wf-grid-row")?.getAttribute("aria-label"))
       .toContain("Faulted · Retrying · 2 active · 1 blocking · Needs intervention");
     expect(getJson.mock.calls.map(([url]) => url)).toContain("/runtime/workflows/instances/health?incidentHealth=blocking&take=25");
@@ -361,7 +405,7 @@ describe("workflow run history", () => {
 
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
     expect(container.querySelector("input[aria-label='Select all workflow runs on this page']")).toBeNull();
-    expect(container.querySelector("button[aria-label^='Delete workflow run']")).toBeNull();
+    expect(container.querySelector("button[aria-label^='Actions for workflow run']")).toBeNull();
     expect(buttonByTextOptional(container, "Delete selected")).toBeNull();
     expect(deleteJson).not.toHaveBeenCalled();
   });
@@ -536,7 +580,8 @@ describe("workflow run history", () => {
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
     click(button(container, "Next workflow run page"));
     await waitFor(() => expect(container.textContent).toContain("execution-2"));
-    click(button(container, "Delete workflow run execution-2"));
+    click(button(container, "Actions for workflow run execution-2"));
+    click(buttonByText(document.body, "Delete"));
 
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
     expect(getJson.mock.calls.map(([url]) => url).filter(url => url.includes("cursor=next-cursor"))).toHaveLength(2);
@@ -552,8 +597,12 @@ describe("workflow run history", () => {
     confirmRuns.mockResolvedValue(true);
 
     await waitFor(() => expect(container.textContent).toContain("old-run"));
-    click(button(container, "Delete workflow run old-run"));
+    const deleteAction = button(container, "Actions for workflow run old-run");
+    click(deleteAction);
+    click(buttonByText(document.body, "Delete"));
     await waitFor(() => expect(oldDeleteJson).toHaveBeenCalledTimes(1));
+    click(deleteAction);
+    expect(buttonByText(document.body, "Delete").disabled).toBe(true);
 
     const nextGetJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : page("new-run"));
     rerender(context(nextGetJson), navigate);

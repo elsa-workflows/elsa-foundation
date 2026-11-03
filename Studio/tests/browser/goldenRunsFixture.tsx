@@ -1,10 +1,11 @@
+import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { WorkflowInstanceDetailsWorkbench, WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import type { IncidentStateSummary, WorkflowInstanceSummary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 type FixtureRoute = { workflowExecutionId: string | null; returnTo: string | null };
@@ -51,6 +52,13 @@ function createRuns(): WorkflowInstanceSummary[] {
       blockingIncidentCount: blocking ? 1 : 0
     };
   });
+}
+
+function runInspectionFacts(workflowExecutionId: string) {
+  if (workflowExecutionId === "run-13") return {};
+  if (workflowExecutionId === "run-01") return { persistenceMode: "Durable", inspectionGranularity: "activity-level" };
+  if (workflowExecutionId === "run-12") return { persistenceMode: "Balanced", inspectionGranularity: "boundary-level" };
+  return { persistenceMode: "Ephemeral", inspectionGranularity: "boundary-level" };
 }
 
 function createIncidents(instance: WorkflowInstanceSummary): IncidentStateSummary[] {
@@ -167,7 +175,7 @@ function Fixture() {
             const workflowExecutionId = decodeURIComponent(path.split("/").at(-1)!);
             const instance = runs.find(run => run.workflowExecutionId === workflowExecutionId);
             if (!instance) throw new Error(`Unknown fixture run ${workflowExecutionId}`);
-            return { instance, activities: [], incidents: createIncidents(instance) };
+            return { instance, activities: [], incidents: createIncidents(instance), ...runInspectionFacts(workflowExecutionId) };
           }
 
           if (path.startsWith("/runtime/workflows/executables/")) {
@@ -227,11 +235,8 @@ function Fixture() {
   };
 
   const ai = { promptActions: { list: () => [] } } as unknown as StudioAiContributionApi;
-  return <ThemeProvider><main className={`wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
-    <header className="wf-page-header">
-      <div><span className="wf-kicker">Workflow management</span><h2>{route.workflowExecutionId ? "Run" : "Runs"}</h2></div>
-      {route.workflowExecutionId ? <div className="wf-page-context"><span>Workflow Instance ID</span><code>{route.workflowExecutionId}</code></div> : null}
-    </header>
+  const page = <ThemeProvider><main className={`studio-page wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
+    {route.workflowExecutionId ? <StudioPageHeader title="Run" headingLevel={2} actions={<div className="wf-page-context"><span>Workflow Instance ID</span><code>{route.workflowExecutionId}</code></div>} /> : null}
     {route.workflowExecutionId ? <WorkflowInstanceDetailsWorkbench
       context={context}
       ai={ai}
@@ -240,6 +245,9 @@ function Fixture() {
       navigate={navigate}
     /> : <WorkflowInstances context={context} navigate={navigate} />}
   </main></ThemeProvider>;
+
+  return <div className={new URLSearchParams(window.location.search).get("workbench-shell") === "1" ? "content" : undefined}
+    style={{ height: "100dvh" }}>{page}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<Fixture />);

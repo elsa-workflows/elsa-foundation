@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ConnectionCreateDialog, resolveApiKeyPlacement } from "../ConnectionCreateDialog";
 import { ConnectionsPage } from "../ConnectionsPage";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "../connectionTypes";
@@ -16,6 +16,79 @@ afterEach(() => {
 });
 
 describe("connection credential creation", () => {
+  it.each(["Backend API", "api/key", "café", "a".repeat(129), "   "])("explains and blocks invalid connection name %j", async name => {
+    const { container, calls } = renderApiKeyDialog();
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    chooseSecret(container, "API key", "payments.api");
+    changeText(container, "Base URL", "https://api.example");
+    changeText(container, "Name", name);
+    const input = control<HTMLInputElement>(container, "Name");
+    flushSync(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(input.getAttribute("aria-describedby")!.split(" ").at(-1)!)?.textContent).toMatch(/required|128|Spaces are not allowed/);
+    expect(button(container, "Create").disabled).toBe(true);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(calls.some(call => call.url === "/connections")).toBe(false);
+    expect(input.value).toBe(name);
+    changeText(container, "Name", "  Backend.API-1_test  ");
+    expect(button(container, "Create").disabled).toBe(false);
+    clickButton(container, "Create");
+    await waitFor(() => calls.some(call => call.url === "/connections"));
+    expect(calls.find(call => call.url === "/connections")?.body).toMatchObject({ name: "Backend.API-1_test" });
+  });
+
+  it.each(["name", "settings.allowedHosts", "settings.queryName"])("associates server %s errors and preserves inputs for correction", async field => {
+    let attempts = 0;
+    const postJson = vi.fn(async (url: string) => {
+      if (url === "/secrets/picker") return pickerResponse();
+      if (++attempts === 1) throw new StudioHttpError(400, "Correct the highlighted field.", { [field]: ["Use a valid value."] });
+      return createdConnection();
+    });
+    const { container } = renderDialog({ context: endpointContext(postJson), descriptors: apiKeyDescriptors });
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "retained.connection");
+    chooseSecret(container, "API key", "payments.api");
+    changeText(container, "Base URL", "https://api.example");
+    clickButton(container, "Create");
+    const label = field === "name" ? "Name" : field === "settings.queryName" ? "Query name" : "Allowed hosts";
+    await waitFor(() => container.textContent?.includes("Use a valid value.") === true);
+    expect(control(container, label).getAttribute("aria-invalid")).toBe("true");
+    await waitFor(() => document.activeElement === control(container, label));
+    expect(container.querySelector(".studio-advanced-section button")?.getAttribute("aria-expanded")).toBe(field === "name" ? "false" : "true");
+    expect(container.querySelector(".studio-advanced-section")?.textContent?.includes("Error")).toBe(field !== "name");
+    expect(control<HTMLInputElement>(container, "Name").value).toBe("retained.connection");
+    expect(control<HTMLSelectElement>(container, "Existing Secret for API key").value).toBe("payments.api");
+    expect(control<HTMLInputElement>(container, "Base URL").value).toBe("https://api.example");
+    expect(container.textContent).not.toContain(rawSecretValue);
+    const correction = control<HTMLInputElement>(container, label);
+    changeText(container, label, field === "name" ? "corrected.connection" : "api.example");
+    expect(control(container, label)).toBe(correction);
+    if (field === "settings.queryName") expect(document.activeElement).toBe(correction);
+    clickButton(container, "Create");
+    await waitFor(() => attempts === 2);
+  });
+
+  it("explains missing required credentials and clears their error when supplied", async () => {
+    const { container } = renderApiKeyDialog();
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    const picker = control<HTMLSelectElement>(container, "Existing Secret for API key");
+    flushSync(() => picker.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(picker.getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("API key is required.");
+    chooseSecret(container, "API key", "payments.api");
+    expect(picker.getAttribute("aria-invalid")).not.toBe("true");
+  });
+
+  it("explains a missing descriptor-required setting after blur", () => {
+    const { container } = renderDialog({ descriptors: apiKeyDescriptorsWithAudience });
+    const input = control<HTMLInputElement>(container, "Audience (required)");
+    flushSync(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("Audience is required.");
+    changeText(container, "Audience (required)", "payments");
+    expect(input.getAttribute("aria-invalid")).not.toBe("true");
+  });
+
   it("puts the required API key before optional settings and keeps the existing Secret path metadata-only", async () => {
     const { container, calls } = renderApiKeyDialog();
 
@@ -476,7 +549,7 @@ describe("connection credential creation", () => {
     expect(button(container, "Create").disabled).toBe(false);
   });
 
-  it("restores focus to the New connection opener while the post-create refresh is pending", async () => {
+  it("restores focus to the Create connection opener while the post-create refresh is pending", async () => {
     const refresh = deferred<{ items: ConnectionMetadata[] }>();
     let listCalls = 0;
     const getJson = vi.fn((url: string) => {
@@ -492,8 +565,8 @@ describe("connection credential creation", () => {
     (context.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = getJson;
     const { container: host } = renderConnectionsPage(context);
 
-    await waitFor(() => !button(host, "New connection").disabled);
-    const opener = button(host, "New connection");
+    await waitFor(() => !button(host, "Create connection").disabled);
+    const opener = button(host, "Create connection");
     opener.focus();
     flushSync(() => opener.click());
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
@@ -531,19 +604,19 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    expect(button(host, "New connection").disabled).toBe(false);
+    expect(button(host, "Create connection").disabled).toBe(false);
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B is unavailable.") === true);
 
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "New connection").disabled).toBe(true);
+    expect(button(host, "Create connection").disabled).toBe(true);
 
     endpointBUnavailable = false;
     clickButton(host, "Search");
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "New connection").disabled).toBe(false);
-    clickButton(host, "New connection");
+    expect(button(host, "Create connection").disabled).toBe(false);
+    clickButton(host, "Create connection");
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
     expect(control<HTMLSelectElement>(host, "Type").value).toBe("endpoint-b");
   });

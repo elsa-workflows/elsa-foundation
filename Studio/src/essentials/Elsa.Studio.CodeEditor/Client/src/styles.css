@@ -159,6 +159,11 @@
   background: color-mix(in srgb, var(--studio-accent) 8%, transparent);
 }
 
+/* The native caret is used when CodeMirror's drawn selection is not installed. */
+.studio-code-editor .studio-code-editor-rich .cm-content {
+  caret-color: var(--studio-text);
+}
+
 .studio-code-editor-rich .cm-cursor {
   border-left-color: var(--studio-text);
 }

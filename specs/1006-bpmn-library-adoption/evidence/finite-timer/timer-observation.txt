@@ -1,0 +1,84 @@
+Name:        Elsa.Tasks.Services.TaskStateManager
+MethodTable: 000000013995f248
+Size:        72(0x48) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000013995f560 04000011        8 ...ger, Elsa.Tasks]]   No instance 0000007d6aa140f8 <logger>P
+000000010f249a48 04000012       10 ...ing.SemaphoreSlim   No instance 0000007d6aa14530 _gate
+0000000110497ee8 04000013       18 ...Private.CoreLib]]   No instance 0000007d6aa14588 <RunningBackgroundTasks>k__BackingField
+000000013995f5f8 04000014       20 ...Elsa.Tasks.Core]]   No instance 0000007d6aa145c0 <BackgroundTasks>k__BackingField
+000000013995fb88 04000015       28 ...Elsa.Tasks.Core]]   No instance 0000007d6aa145f8 <ScheduledTaskExecutions>k__BackingField
+0000000139960118 04000016       30 ...Elsa.Tasks.Core]]   No instance 0000007d6aa14630 <RecurringTasks>k__BackingField
+000000010c0efc08 04000017       38 ...lationTokenSource   No instance 0000007d6aa17960 <CancellationTokenSource>k__BackingField
+Name:        Elsa.Tasks.Schedules.ScheduledTaskExecution
+MethodTable: 000000013c04db68
+Size:        64(0x40) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010f88fd18 0400000c        8 ...Private.CoreLib]]   No instance 0000007deaa9e0e8 _action
+000000010cd72700 0400000d       10 ...m.Threading.Timer   No instance 0000007deaa9e1e8 _timer
+000000010c8d5270 0400000e       18 ...s.Logging.ILogger   No instance 000000802aaa89b8 _logger
+000000010b2e4460 0400000f       28         System.Int64  Yes instance  268219130405333 _armedAt
+000000010bdf3558 04000010       30      System.TimeSpan  Yes instance 0000007deaa9e198 _wait
+000000013cc85670 04000011       20 ...Private.CoreLib]]   No instance 0000007deaa9e128 <Interval>k__BackingField
+000000010bdf3558 0400000b        8      System.TimeSpan  Yes   static 000000819a81dd70 MaxTimerWait
+Name:        Elsa.Tasks.Schedules.ScheduledTaskExecution
+MethodTable: 000000013c04db68
+Size:        64(0x40) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010f88fd18 0400000c        8 ...Private.CoreLib]]   No instance 000000802aaac118 _action
+000000010cd72700 0400000d       10 ...m.Threading.Timer   No instance 000000802aaac218 _timer
+000000010c8d5270 0400000e       18 ...s.Logging.ILogger   No instance 000000802aa9d1b0 _logger
+000000010b2e4460 0400000f       28         System.Int64  Yes instance  268224045122791 _armedAt
+000000010bdf3558 04000010       30      System.TimeSpan  Yes instance 000000802aaac1c8 _wait
+000000013cc85670 04000011       20 ...Private.CoreLib]]   No instance 000000802aaac158 <Interval>k__BackingField
+000000010bdf3558 0400000b        8      System.TimeSpan  Yes   static 000000819a81dd70 MaxTimerWait
+Name:        Elsa.Tasks.Schedules.ScheduledTaskExecution
+MethodTable: 000000013c04db68
+Size:        64(0x40) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010f88fd18 0400000c        8 ...Private.CoreLib]]   No instance 000000802aaac320 _action
+000000010cd72700 0400000d       10 ...m.Threading.Timer   No instance 000000802aaac420 _timer
+000000010c8d5270 0400000e       18 ...s.Logging.ILogger   No instance 000000802aa9f028 _logger
+000000010b2e4460 0400000f       28         System.Int64  Yes instance  267665462138250 _armedAt
+000000010bdf3558 04000010       30      System.TimeSpan  Yes instance 000000802aaac3d0 _wait
+000000013cc85670 04000011       20 ...Private.CoreLib]]   No instance 000000802aaac360 <Interval>k__BackingField
+000000010bdf3558 0400000b        8      System.TimeSpan  Yes   static 000000819a81dd70 MaxTimerWait
+Name:        Elsa.Tasks.Schedules.ScheduledTaskExecution
+MethodTable: 000000013c04db68
+Size:        64(0x40) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010f88fd18 0400000c        8 ...Private.CoreLib]]   No instance 000000802aaac540 _action
+000000010cd72700 0400000d       10 ...m.Threading.Timer   No instance 000000802aaac640 _timer
+000000010c8d5270 0400000e       18 ...s.Logging.ILogger   No instance 000000802aa9fb88 _logger
+000000010b2e4460 0400000f       28         System.Int64  Yes instance  268224045244291 _armedAt
+000000010bdf3558 04000010       30      System.TimeSpan  Yes instance 000000802aaac5f0 _wait
+000000013cc85670 04000011       20 ...Private.CoreLib]]   No instance 000000802aaac580 <Interval>k__BackingField
+000000010bdf3558 0400000b        8      System.TimeSpan  Yes   static 000000819a81dd70 MaxTimerWait
+Name:        Elsa.Tasks.Schedules.ScheduledTaskExecution
+MethodTable: 000000013c04db68
+Size:        64(0x40) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010f88fd18 0400000c        8 ...Private.CoreLib]]   No instance 000000802aaac728 _action
+000000010cd72700 0400000d       10 ...m.Threading.Timer   No instance 000000802aaac828 _timer
+000000010c8d5270 0400000e       18 ...s.Logging.ILogger   No instance 000000802aaa1540 _logger
+000000010b2e4460 0400000f       28         System.Int64  Yes instance  268218861317583 _armedAt
+000000010bdf3558 04000010       30      System.TimeSpan  Yes instance 000000802aaac7d8 _wait
+000000013cc85670 04000011       20 ...Private.CoreLib]]   No instance 000000802aaac768 <Interval>k__BackingField
+000000010bdf3558 0400000b        8      System.TimeSpan  Yes   static 000000819a81dd70 MaxTimerWait
+Name:        Elsa.Tasks.Schedules.ScheduledTaskExecution
+MethodTable: 000000013c04db68
+Size:        64(0x40) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010f88fd18 0400000c        8 ...Private.CoreLib]]   No instance 000000802aaac930 _action
+000000010cd72700 0400000d       10 ...m.Threading.Timer   No instance 000000802aaaca48 _timer
+000000010c8d5270 0400000e       18 ...s.Logging.ILogger   No instance 000000802aaa3348 _logger
+000000010b2e4460 0400000f       28         System.Int64  Yes instance  268218861308833 _armedAt
+000000010bdf3558 04000010       30      System.TimeSpan  Yes instance 000000802aaac9f8 _wait
+000000013cc85670 04000011       20 ...Private.CoreLib]]   No instance 000000802aaac970 <Interval>k__BackingField
+000000010bdf3558 0400000b        8      System.TimeSpan  Yes   static 000000819a81dd70 MaxTimerWait

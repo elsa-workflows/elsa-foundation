@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "task": "Current actual Studio compatibility before T032 deletion; final post-deletion proof remains open",
+  "sourceParentCommit": "6e2172c0766b20f1ce1b10311a938d3b372ac81f",
+  "studioBuildSourceCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "backendBuildSourceCommit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "fullSourceRevisionIdsExplicit": true,
+  "bothProductionSourceTreesEqualParent": true,
+  "normalBrowserJourneyPassed": true,
+  "noUiMocksOrPrivateStateInjectionOrApiSubstitution": true,
+  "actualPublishedRunKind": "PublishedRun",
+  "workflowExecutionId": "14i0OqMY6mU",
+  "artifactId": "artifact-9d7bfb748b98",
+  "actualDefaultEditPersistedAfterReload": true,
+  "actualDownloadedXmlChecked": true,
+  "actualPersistedAuthoredV1ContractChecked": true,
+  "frozenPublishedContractsMatched": 2,
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "filesSha256": {
+    "Studio/package.json": "7f094f1844303a154a9350437c9d06f6a25a36d7e282d7e8224e9e5985cc39ef",
+    "Studio/pnpm-lock.yaml": "fa3575e78a9cc0acb3a746d1cf1f1b0014ac40cce3a083fa65eb23f8144407c6",
+    "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj": "cb1fcd8236317e3d67b55b867b894e63a4aa085f9be04ce1e76d67a3f36c5126",
+    "Studio/src/apps/Elsa.Studio.Web/Program.cs": "6f9af79604e116219d0a47418271d144802b9a19de3b41dd2696a4c9376980e6",
+    "Studio/src/apps/Elsa.Studio.Web/shells.json": "a1cd3856b955815e4785d98a62fe8ed1a30b13a993cce4d4f8d6593714c2c101",
+    "Studio/src/apps/Elsa.Studio.Web/appsettings.json": "35291a2abb553e830e829b39a1f774b2ccc9cb396ffc360f9c16713f58ec5495",
+    "Studio/src/apps/Elsa.Studio.Web/nuplane-management.json": "c18aa14fca8c12e2b7925fcacc1d75ff841f2b07ec6ce7d61dc754376f017f68",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnTypes.ts": "34b794dfca78c5ef7f2c55ee62dabe80485e05c73c72fc383fb51de4879bbb47",
+    "e2e-tests/bpmn/fixtures/studio-default-flow.bpmn": "ba26744f4535eaa902ab6187597bea04a1dbf07d671985890f3622f58c27e5e5",
+    "e2e-tests/bpmn/verify_published_contracts.py": "27dd5b278c2abcd1382a067299c406e03215ede5a301241e92ab7ed2864be0c7",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "813f8d37d6007654918eb38bd8fd3201f034bea97934ad2c2f9ad6568abb5fcb",
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion.md": "b2a55e085d935963b4f7ecedf38f8332093272a2ffc2e11be2923ac6a7c416ae"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/01-imported-dom.txt": {
+      "sha256": "6fe35092f384c64b6e95286de1aae95775652d2052e6f754163cde383f458ddc",
+      "bytes": 12209
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/02-edited-dom.txt": {
+      "sha256": "d824af7eea448eeceac2375e777cae3f57547b14214dd39566c954b60c86e8c0",
+      "bytes": 12475
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/03-publication-dom.txt": {
+      "sha256": "c123f380b69b78bc50e41077fa4c2682dd9bd859e9ca844bd3ea1bd27bec9aa9",
+      "bytes": 12875
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/04-published-run-dom.txt": {
+      "sha256": "6cc56504c5c5c04d05670acaca007af0f151530df0753813c4ff6ec4d2923c9c",
+      "bytes": 4488
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/05-reloaded-dom.txt": {
+      "sha256": "ed2e3c9224c963dda1d6cb2925ec3134d058c7fe803e346598db3fbc3581d0cc",
+      "bytes": 12465
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/backend-binaries.json": {
+      "sha256": "5a1d753d1bf2aafe18a9fbb3d4e5cf53685644704268ab37f354f901a83dc366",
+      "bytes": 34596
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/bounded-reviews.json": {
+      "sha256": "d60d658f93863749b06799b40df43541f223907ad5e88f99f4a48bb6b451035a",
+      "bytes": 592
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/default-flow-edited.png": {
+      "sha256": "0022f7feb993fcb868ac2e59f33498298af2d96570991118f404439db64d082d",
+      "bytes": 94656
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/default-flow-receipt.json": {
+      "sha256": "3a59ac144d07dbe84830baaa301e84a04a4103bfabd41e72ce8efce4bb269e10",
+      "bytes": 612
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/design-database.json": {
+      "sha256": "1ef45471d88e5821c7b03b6d9ab654015da64cdd459ad3d8f5eb54297f5dfd85",
+      "bytes": 320
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/design.sqlite.gz": {
+      "sha256": "72dfd1ac9183e6becb7b31b155bcc9ee43107d09628061c45def3cf65078be9a",
+      "bytes": 106962
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/exported-default-flow.bpmn": {
+      "sha256": "1bd65d5af0588c23ac3946a54b00d6e4f59b47ed9bc5227e76f69f0d36efb39c",
+      "bytes": 3262
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/identities.json": {
+      "sha256": "565751f58b57bcacec070545c293730c98f657108c18b230ccfe8ba625fb23bc",
+      "bytes": 333
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/persisted-authored-v1.json": {
+      "sha256": "b73086fd3d8eb9aa4f7cb2321b717264b64c32819b277290cb66316b0b8f1d97",
+      "bytes": 5362
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/published-contracts.json": {
+      "sha256": "f8e6beb5864f6ec86d471103c5062b87093945f470af90a46c528e7bdebe102c",
+      "bytes": 3492
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/published-run-api.json": {
+      "sha256": "bd0aa146ef068866193a082bb820e12432946c5757fafbb3bfc3a42ebefbc391",
+      "bytes": 4208
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/published-run-completed.png": {
+      "sha256": "e9cbcff4b542fb0d9c5f1bb22ea5aa9b217baf795b23866aec341c84c5a5ad91",
+      "bytes": 68095
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/published.png": {
+      "sha256": "a42fd51b2793195f77e01ffeaf7ff9fff2576591f29f0c5c8cf158e7b061668c",
+      "bytes": 64733
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/reloaded-default-flow.png": {
+      "sha256": "69b1adc70ffce00de30b1d68b7e17b9f2894055e07c4641ebd74f3e02d0dd680",
+      "bytes": 90030
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/runtime-database.json": {
+      "sha256": "d7246dd9ed60659949ad75662f6d570c833c284d72b07cf7680cb9d8a5767fc8",
+      "bytes": 320
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/runtime.sqlite.gz": {
+      "sha256": "a893192bbc062407ffe03c4867abfd38e6ad8774280f212f51f76a995bbc4439",
+      "bytes": 132528
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/served-workflows-entry.json": {
+      "sha256": "a863f22d0880d46f243d404ee31ffc20fdbfc0c81e2f4b7a0b2ad3f8b65ccf04",
+      "bytes": 621
+    },
+    "specs/1006-bpmn-library-adoption/evidence/current-studio-pre-deletion/studio-binaries.json": {
+      "sha256": "d5d78af201043763be814d723acc5cb953298fc45149ec61df73d29b23465be4",
+      "bytes": 7538
+    }
+  },
+  "ownedProcesses": {
+    "backend": {
+      "controllerProcessId": 40973,
+      "processId": 40975,
+      "startEpochSeconds": 1793141897,
+      "retainedForPostDeletionQualification": true,
+      "currentlyRunning": true
+    },
+    "studio": {
+      "controllerProcessId": 41058,
+      "processId": 41059,
+      "startEpochSeconds": 1793141918,
+      "retainedForPostDeletionQualification": true,
+      "currentlyRunning": true
+    }
+  },
+  "userLocalhostHostsUntouched": true,
+  "allSourceShellFeaturesPreserved": true,
+  "onlyBackendAuthConfigurationAddition": "Exact owned Studio origin in disposable return/CORS allowlists. No authentication or cookie policy weakening.",
+  "studioNuplaneManagementEqualsCommittedSource": true,
+  "fullFrontendBuildPassed": true,
+  "frozenPnpmInstallPassed": true,
+  "subsequentLockedReleaseStudioBuildPassed": true,
+  "excludedAttempts": [
+    "Missing private-root copy of committed Nuplane management config refused Studio startup before journey; copied standard configuration and restarted only that owned host.",
+    "Unsupported locator upload method performed no action; actual file chooser upload succeeded."
+  ],
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6,
+  "remainingGates": [
+    "T032 deletion/T033 guards/T034 permanent audit/T035 docs",
+    "Final post-deletion Studio and T036 whole gates",
+    "T037/T038 fullPR/required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent2898/2907/program production acceptance;Orleans/task-runner follow-up deferred"
+  ]
+}

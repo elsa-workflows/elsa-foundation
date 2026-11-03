@@ -1,0 +1,784 @@
+  Determining projects to restore...
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Logging.Abstractions will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+  All projects are up-to-date for restore.
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Logging.Abstractions will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Cluster.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Core/bin/Release/net10.0/Elsa.Cluster.Core.dll
+  Elsa.Caching.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll
+  Elsa.Cluster.InProcess -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/InProcess/bin/Release/net10.0/Elsa.Cluster.InProcess.dll
+  Elsa.Expressions.JavaScript.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Core/bin/Release/net10.0/Elsa.Expressions.JavaScript.Core.dll
+  Elsa.Http.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Core/bin/Release/net10.0/Elsa.Http.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Expressions.JavaScript.Jint -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Jint/bin/Release/net10.0/Elsa.Expressions.JavaScript.Jint.dll
+  Elsa.Foundation.Identity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Core/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll
+  Elsa.Api.AspNetCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/AspNetCore/bin/Release/net10.0/Elsa.Api.AspNetCore.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Locking.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll
+  Elsa.Foundation.Identity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/bin/Release/net10.0/Elsa.Foundation.Identity.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Mediator.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Core/bin/Release/net10.0/Elsa.Mediator.Core.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Events.Strategies -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Strategies/bin/Release/net10.0/Elsa.Events.Strategies.dll
+  Elsa.Expressions.JavaScript.Rendering.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Rendering/Core/bin/Release/net10.0/Elsa.Expressions.JavaScript.Rendering.Core.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Api.Capabilities -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/Capabilities/bin/Release/net10.0/Elsa.Api.Capabilities.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Expressions -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Elsa.Expressions/bin/Release/net10.0/Elsa.Expressions.dll
+  Elsa.Activities.Scripting -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Scripting/bin/Release/net10.0/Elsa.Activities.Scripting.dll
+  Elsa.Events -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll
+  Elsa.Workflows.Design.Validations.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Core/bin/Release/net10.0/Elsa.Workflows.Design.Validations.Core.dll
+  Elsa.Serialization.SystemText -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/SystemText/bin/Release/net10.0/Elsa.Serialization.SystemText.dll
+  Elsa.Expressions.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/bin/Release/net10.0/Elsa.Expressions.JavaScript.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Activities.Scheduling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Scheduling/bin/Release/net10.0/Elsa.Activities.Scheduling.dll
+  Elsa.Activities.Sequence -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Sequence/bin/Release/net10.0/Elsa.Activities.Sequence.dll
+  Elsa.Activities.ControlFlow -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/ControlFlow/bin/Release/net10.0/Elsa.Activities.ControlFlow.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Testing/bin/Release/net10.0/Elsa.Testing.dll
+  Elsa.Tasks -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll
+  Elsa.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/bin/Release/net10.0/Elsa.Http.dll
+  Elsa.Serialization.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Serialization/Testing/bin/Release/net10.0/Elsa.Serialization.Testing.dll
+  Elsa.Workflows.Runtime.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/JavaScript/bin/Release/net10.0/Elsa.Workflows.Runtime.JavaScript.dll
+  Elsa.Activities.Flowchart -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Flowchart/bin/Release/net10.0/Elsa.Activities.Flowchart.dll
+  Elsa.Activities.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/bin/Release/net10.0/Elsa.Activities.Runtime.dll
+  Elsa.Activities.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Primitives/bin/Release/net10.0/Elsa.Activities.Primitives.dll
+  Elsa.Activities.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/bin/Release/net10.0/Elsa.Activities.Http.dll
+  Elsa.Expressions.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Expressions/Testing/bin/Release/net10.0/Elsa.Expressions.Testing.dll
+  Elsa.Workflows.Runtime.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Api/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll
+  Elsa.Activities.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Testing/bin/Release/net10.0/Elsa.Activities.Testing.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs(218,22): warning CS8620: Argument of type 'Dictionary<string, string>' cannot be used for parameter 'expected' of type 'IReadOnlyDictionary<string, string?>' in 'void Assert.Equal<IReadOnlyDictionary<string, string?>>(IReadOnlyDictionary<string, string?> expected, IReadOnlyDictionary<string, string?> actual)' due to differences in the nullability of reference types. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs(219,22): warning CS8620: Argument of type 'Dictionary<string, string>' cannot be used for parameter 'expected' of type 'IReadOnlyDictionary<string, string?>' in 'void Assert.Equal<IReadOnlyDictionary<string, string?>>(IReadOnlyDictionary<string, string?> expected, IReadOnlyDictionary<string, string?> actual)' due to differences in the nullability of reference types. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj]
+  Elsa.Activities.Runtime.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/bin/Release/net10.0/Elsa.Activities.Runtime.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Runtime/Tests/bin/Release/net10.0/Elsa.Activities.Runtime.Tests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Activities.Runtime.Tests.ActivationScopeSemanticTests.Every_attempt_of_one_invocation_gets_a_fresh_activity_and_transient_dependency(reason: Retry)
+    Elsa.Activities.Runtime.Tests.ActivationScopeSemanticTests.Every_attempt_of_one_invocation_gets_a_fresh_activity_and_transient_dependency(reason: Resume)
+    Elsa.Activities.Runtime.Tests.ActivationScopeSemanticTests.Every_attempt_owns_its_scoped_dependencies_until_its_own_lease_is_disposed
+    Elsa.Activities.Runtime.Tests.ActivationScopeSemanticTests.Constructor_failure_disposes_the_attempt_scope_and_every_dependency_it_created
+    Elsa.Activities.Runtime.Tests.ActivationScopeSemanticTests.Concurrent_attempts_never_share_scoped_identity
+    Elsa.Activities.Runtime.Tests.ActivitiesRuntimeFeatureTests.ComposesTheActivatorWithItsSecretInputResolver
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.Completion_commits_one_result_outcome_and_read_only_projections
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.Projection_failure_rejects_the_whole_completion
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.Opaque_projection_key_with_dot_prefers_exact_result_property
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.Undeclared_outcome_and_nonpersistable_result_are_rejected
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.Transient_whole_result_projection_preserves_resource_identity_without_serialization
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.External_result_is_stored_and_projection_views_preserve_policy_without_downgrade
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.An_external_result_whose_policy_requires_encryption_is_withheld_and_never_written
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.A_projection_that_requires_encryption_withholds_the_folded_result_before_any_external_write
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.An_inline_result_whose_policy_requires_encryption_is_withheld
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.Incompatible_projection_retention_is_rejected_before_external_write
+    Elsa.Activities.Runtime.Tests.ActivityCompletionContractTests.StrongerProjectionPolicyIsFoldedIntoAtomicResultBeforePersistence
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Inline_completion_projects_its_outcome(nested: False, mode: Durable)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Inline_completion_projects_its_outcome(nested: False, mode: Balanced)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Inline_completion_projects_its_outcome(nested: False, mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Inline_completion_projects_its_outcome(nested: True, mode: Durable)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Inline_completion_projects_its_outcome(nested: True, mode: Balanced)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Inline_completion_projects_its_outcome(nested: True, mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Resumed_completion_projects_its_outcome(nested: False, mode: Durable)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Resumed_completion_projects_its_outcome(nested: False, mode: Balanced)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Resumed_completion_projects_its_outcome(nested: False, mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Resumed_completion_projects_its_outcome(nested: True, mode: Durable)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Resumed_completion_projects_its_outcome(nested: True, mode: Balanced)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.Resumed_completion_projects_its_outcome(nested: True, mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.A_withheld_input_renders_as_a_sensitive_marker_with_its_reference_and_no_value(policyIsSensitive: True)
+    Elsa.Activities.Runtime.Tests.ActivityExecutionInspectionOutcomeTests.A_withheld_input_renders_as_a_sensitive_marker_with_its_reference_and_no_value(policyIsSensitive: False)
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_DoesNotCaptureStackTrace_ByDefault
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_CapturesStackTrace_WhenPolicyEnablesIt
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_EndsOpenAttemptAndPersistsNormalizedFault
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_ReadsRetryabilityAndCodeFromAnyClassifiedException(isRetryable: True)
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_ReadsRetryabilityAndCodeFromAnyClassifiedException(isRetryable: False)
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_KeepsTheSubStatusAsTheCodeWhenTheClassificationNamesNone
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_RecordsASecretResolutionFailureWithItsReferenceCodeAndClassification
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_ParksTheActivityWithAnActivationFailureIncidentWhenNoSecretResolverIsComposed
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.IncidentId_StaysWithinProjectionColumnBudget_ForDispatchedExecutionIdShapes
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.CommitAsync_AppliesFaultCapturePolicyToInnerExceptionMetadata
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.Sensitive_JavaScript_failure_cannot_reach_durable_incident_metadata
+    Elsa.Activities.Runtime.Tests.ActivityFaultIncidentRecorderTests.Sensitive_external_provider_cancellation_shaped_failure_cannot_reach_durable_incident_metadata
+    Elsa.Activities.Runtime.Tests.ActivityFaultMaskingTests.An_exception_is_handed_on_unchanged_while_no_value_is_registered
+    Elsa.Activities.Runtime.Tests.ActivityFaultMaskingTests.An_exception_is_replaced_while_a_value_is_registered_even_when_its_text_holds_none
+    Elsa.Activities.Runtime.Tests.ActivityFaultMaskingTests.An_exception_carrying_a_registered_value_is_replaced_with_the_value_masked
+    Elsa.Activities.Runtime.Tests.ActivityFaultMaskingTests.An_activation_failure_is_handed_on_unchanged_while_a_value_is_registered
+    Elsa.Activities.Runtime.Tests.ActivityFaultMaskingTests.A_returned_fault_keeps_its_classification_and_gets_its_message_masked
+    Elsa.Activities.Runtime.Tests.ActivityFaultMaskingTests.Disposing_releases_the_values_registered_for_the_execution
+    Elsa.Activities.Runtime.Tests.ActivityInputEvidenceSensitivityTests.An_input_whose_effective_policy_is_sensitive_is_flagged_and_its_value_stays_out_of_the_evidence
+    Elsa.Activities.Runtime.Tests.ActivityInputEvidenceSensitivityTests.An_input_whose_effective_policy_requires_encryption_is_withheld_flagged_and_never_hydrated
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(activityType: typeof(Elsa.Activities.Primitives.Activities.Break), expectedResultType: typeof(Elsa.Activities.Runtime.Core.Models.ActivityUnit), expectedInputKeys: [])
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(activityType: typeof(Elsa.Activities.Primitives.Activities.Fault), expectedResultType: typeof(Elsa.Activities.Runtime.Core.Models.ActivityUnit), expectedInputKeys: ["category", "code", "faultType", "message"])
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(activityType: typeof(Elsa.Activities.Primitives.Activities.Inline), expectedResultType: typeof(object), expectedInputKeys: ["Expression"])
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(activityType: typeof(Elsa.Activities.Primitives.Activities.ReadLine), expectedResultType: typeof(Elsa.Activities.Primitives.Activities.ReadLineResult), expectedInputKeys: [])
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(activityType: typeof(Elsa.Activities.Primitives.Activities.WriteLines), expectedResultType: typeof(Elsa.Activities.Runtime.Core.Models.ActivityUnit), expectedInputKeys: ["Lines"])
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.MigratedPrimitiveLeaf_UsesPlainInputsAndOneAtomicResult(activityType: typeof(Elsa.Activities.Primitives.Activities.Event), expectedResultType: typeof(Elsa.Activities.Primitives.Activities.EventResult), expectedInputKeys: ["EventName", "CorrelationId", "CanStartWorkflow"])
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.EveryRetainedFirstPartyClrActivity_HasPlainInputsAndExactlyOneAtomicResult
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.IfForEachIntrinsicSet_ComposeAndRunToCompletion_ThroughTheRealHarness
+    Elsa.Activities.Runtime.Tests.ActivityLibraryAcceptanceTests.SetTargetingRootContainerScopedVariable_CommitsIntoTheRootNodesOwnContainerFrame
+    Elsa.Activities.Runtime.Tests.ActivityOutputEvidenceSensitivityTests.An_output_whose_result_policy_requires_encryption_is_flagged_and_not_captured
+    Elsa.Activities.Runtime.Tests.ActivityOutputEvidenceSensitivityTests.An_ordinary_output_is_captured
+    Elsa.Activities.Runtime.Tests.ActivitySchedulingMetadataContextTests.ChildOutcomeContext_SnapshotsCommittedSchedulingMetadata_AndLegacyConstructorUsesEmptyMetadata
+    Elsa.Activities.Runtime.Tests.ActivitySchedulingMetadataContextTests.DescendantFaultContext_SnapshotsViaChildSchedulingMetadata_AndLegacyConstructorUsesEmptyMetadata
+    Elsa.Activities.Runtime.Tests.ActivityTransitionContractTests.Complete_carries_one_result_and_one_outcome
+    Elsa.Activities.Runtime.Tests.ActivityTransitionContractTests.Suspend_requires_typed_trigger_expectations
+    Elsa.Activities.Runtime.Tests.ActivityTransitionContractTests.Fault_and_cancel_are_distinct_from_successful_outcomes
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.NotificationSkipsIntermediateCompositeAndReachesAncestor
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.NotificationIsEvaluatedBeforeTheRequestersDirectParentSeesItComplete
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.WhenTheAncestorIsTheDirectParentTheLateCompletionIsDropped
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.OnlyTheNearestMatchingAncestorIsNotified
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.NoMatchingAncestorFaultsTheRequesterWithAStableCode
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.ANotificationToAnAncestorThatStoppedRunningIsDropped
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.AnAncestorNotificationWithADeferContinuationFaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.AChildCompletionEvaluationThatCompletesMayNotifyAnAncestor_AheadOfItsOwnCompletion
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.AChildCompletionEvaluationThatDefersMayNotNotifyAnAncestor
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.AChildFaultEvaluationMayNotNotifyAnAncestor
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.AChildCompletionEvaluationWithNoMatchingAncestorFaultsTheRequesterWithTheStableCode
+    Elsa.Activities.Runtime.Tests.AncestorNotificationExecutionTests.AHostStopBetweenTheNotificationAndTheCompletionDeliversEachOnceAfterRestart
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.ATypeSelectorReachesTheNearestAncestorOfThatType_ThroughAnIntermediateComposite
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.ADirectChildIsItsOwnViaChild
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.AnAuthoredIdSelectsOneAncestorOfTheType_SkippingANearerOne
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.AGraphBoundaryEndsTheWalkWhenAsked_AndAnOptionalRequestThenSendsNothing
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.WithoutTheBoundaryStopTheWalkCrossesAGraphBoundary
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.AnOptionalRequestWithNoMatchCompletesTheRequesterAndSendsNothing
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.ARequiredRequestWithNoMatchFaultsTheRequesterWithTheStableCode
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.ASelectorNamesExactlyOneOfConsumerKeyOrActivityType(consumerKey: null, activityTypeKey: null)
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.ASelectorNamesExactlyOneOfConsumerKeyOrActivityType(consumerKey: "elsa.clr-activity", activityTypeKey: "Some.Type")
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.AnAuthoredIdNeedsAnActivityType
+    Elsa.Activities.Runtime.Tests.AncestorSelectorExecutionTests.TheConsumerKeyOverloadMapsToAConsumerKeySelector
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.CoordinatorCapabilityCanBeEnabledWithoutStartingLocalWorkers(runWorkers: True)
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.CoordinatorCapabilityCanBeEnabledWithoutStartingLocalWorkers(runWorkers: False)
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.InvalidWorkerLimitsFailComposition(concurrency: 0, leaseSeconds: 30, renewalSeconds: 10)
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.InvalidWorkerLimitsFailComposition(concurrency: 257, leaseSeconds: 30, renewalSeconds: 10)
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.InvalidWorkerLimitsFailComposition(concurrency: 2, leaseSeconds: 10, renewalSeconds: 10)
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.InvalidWorkerLimitsFailComposition(concurrency: 2, leaseSeconds: 10, renewalSeconds: 20)
+    Elsa.Activities.Runtime.Tests.BackgroundActivitiesFeatureTests.InvalidWorkerLimitsFailComposition(concurrency: 2, leaseSeconds: 10, renewalSeconds: 0)
+    Elsa.Activities.Runtime.Tests.BackgroundActivityCheckpointEnricherTests.Terminal_checkpoint_cancels_background_work_only_after_durable_admission(status: Completed)
+    Elsa.Activities.Runtime.Tests.BackgroundActivityCheckpointEnricherTests.Terminal_checkpoint_cancels_background_work_only_after_durable_admission(status: Faulted)
+    Elsa.Activities.Runtime.Tests.BackgroundActivityCheckpointEnricherTests.Terminal_checkpoint_cancels_background_work_only_after_durable_admission(status: Cancelled)
+    Elsa.Activities.Runtime.Tests.BackgroundActivityCheckpointEnricherTests.Activity_cancellation_targets_only_admitted_background_invocations
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerRenewalTests.Completed_body_waits_for_an_in_flight_renewal_to_publish_before_recording_receipt
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerRenewalTests.Cancellation_before_receipt_is_treated_as_a_fenced_result_without_waking_the_coordinator
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerRenewalTests.Non_cancellation_receipt_conflict_still_escapes_the_worker
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Records_typed_scalar_completion_and_enqueues_one_coordinator_receipt
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Hands_the_body_the_operation_keys_resolved_at_admission
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Work_admitted_without_operation_keys_uses_the_invocation_id
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Records_unit_completion
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Records_custom_dto_completion_using_the_pinned_result_type
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Rejects_an_outcome_only_callback_from_background_execution
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Records_returned_fault_and_cancel_as_distinct_terminal_results
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Converts_thrown_body_and_disposal_failures_to_fault_receipts
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Rejects_unsupported_transition_as_a_fault_receipt
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Stale_claim_is_rejected_before_activation_or_dispatch
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Marked_but_wrong_activated_type_is_disposed_without_running
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Mismatched_pinned_executable_hash_is_rejected_before_activation
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Missing_pinned_executable_is_recorded_as_terminal_validation_fault
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Preserves_declared_classification_for_activation_faults
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Pinned_executable_read_failure_propagates_and_leaves_claim_recoverable
+    Elsa.Activities.Runtime.Tests.BackgroundActivityWorkerTests.Work_item_from_another_persistence_scope_is_not_visible_to_the_worker
+    Elsa.Activities.Runtime.Tests.BreakPropagationExecutionTests.For_SequenceBodyWithBreakPartway_EndsLoopEarly_AndLaterStepNeverRuns
+    Elsa.Activities.Runtime.Tests.BreakPropagationExecutionTests.While_IfTrueBreakBody_EndsAfterOnePass
+    Elsa.Activities.Runtime.Tests.BreakPropagationExecutionTests.For_FlowchartBodyWithBreak_EndsLoopEarly_AndBubblesBreak
+    Elsa.Activities.Runtime.Tests.BreakPropagationExecutionTests.For_FlowchartDiamondBodyWithBreakOnOneFork_EndsLoopEarly_AndJoinTargetNeverRuns
+    Elsa.Activities.Runtime.Tests.BreakPropagationExecutionTests.FlowchartTriggerStart_ForLoopFlowchartBody_RestartsAtTriggerEachPass
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.LeafChildFault_AbsorbedWithDefer_ResolvesIncidentAndWorkflowCompletes
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.Absorption_CopiesItsRequestMetadataIntoTheIncidentOutcome
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.CompositeChildFault_AbsorbedWithComplete_ReclaimsDescendantsAndResolvesIncident
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.WrongIncidentId_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.DuplicateAbsorption_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.FaultContinuationWithAbsorption_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.AbsorptionInCompletionEvaluation_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.InitialStructuralExecution_CannotStageAbsorption
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.ChildFault_AbsorbedWithDeferThatSchedulesNewChild_DeliversCleanCompletion
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.ChildScheduleDerivedFromFaultEvaluation_CarriesNoFaultScopedMetadata
+    Elsa.Activities.Runtime.Tests.ChildFaultAbsorptionExecutionTests.CompositeAbsorbsAndCompletesUnderGrandparent_GrandparentReceivesCompletion
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.LeafChildFault_InterventionRequested_IncidentWaitsAndRunStaysRunningUnderTheFaultStrategy
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.ChildFault_CarriesTheCommittedFaultCodeAndCategory
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.ChildFault_WithoutCategory_ReportsTheCodeAndNoCategory
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.CompositeChildFault_Intervention_DoesNotCancelTheFaultedChildsSubtree
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.Misuse_FaultsTheEvaluation(misuse: "AbsorbToo", expectedMessage: "cannot both absorb the child fault and request int"···)
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.Misuse_FaultsTheEvaluation(misuse: "StageTwice", expectedMessage: "cannot request intervention more than once")
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.Misuse_FaultsTheEvaluation(misuse: "CompleteInsteadOfDefer", expectedMessage: "requires a Defer continuation")
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.Misuse_FaultsTheEvaluation(misuse: "OverrideIncidentId", expectedMessage: "but this evaluation carries incident")
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.InterventionInCompletionEvaluation_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.AssignedOperationKeys_InScheduleMetadata_ReachTheChildContext(explicitProvenance: False)
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.AssignedOperationKeys_InScheduleMetadata_ReachTheChildContext(explicitProvenance: True)
+    Elsa.Activities.Runtime.Tests.ChildFaultInterventionExecutionTests.OperationKeyAssignedToACompositeChild_IsNotInheritedByTheActivitiesInsideIt
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.InvokeStagedNotification_DeliveredWithCodePayloadAndChildIdentity
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.MultipleNotifications_DeliveredInStagingOrderWithDistinctDerivedIds
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.CompletionStagedNotification_DeliveredFromChildCompletionEvaluation
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.NonImplementingParent_SilentlyAcksTheNotification
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.RootActivityStaging_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.FaultContinuationWithStagedNotification_PreservesChildFaultAndRefusesLegacyNotificationConsumer
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.ParentNotRunning_AcksLaterNotifications
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.SeamACancellationFromNotificationEvaluation_TearsDownNotifyingChild
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.NotificationEvaluation_ClaimsAndCompletesTheTargetParentUnderTheNotificationReason
+    Elsa.Activities.Runtime.Tests.ChildParentNotificationExecutionTests.ChildCompletionEvaluation_ClaimsAndCompletesTheTargetParentUnderTheEvaluationReason
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.CompletingContinuation_CancelsWaitingSiblingAndCleansBookmark
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.DeferredContinuation_CancelsWaitingSiblingThenSchedulesNextChild
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.NestedSubtree_CancelsGrandchildAndCleansItsBookmark
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.TerminalTarget_IsSkippedAsFirstCompletionWinsRace
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.BlockingIncidentInsideCancelledSubtree_IsSuppressedAndWorkflowCompletes
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.UnknownTarget_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.NonChildTarget_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.DuplicateTarget_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.FaultContinuationWithCancellation_FaultsTheEvaluation
+    Elsa.Activities.Runtime.Tests.ChildSubtreeCancellationExecutionTests.InitialStructuralExecution_CannotStageCancellations
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Each_attempt_gets_a_fresh_hydrated_activity_and_scoped_service
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydration_failure_disposes_the_attempt_scope
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_value_withheld_because_its_policy_requires_encryption_is_refused_before_the_activity_is_created
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.An_unrecoverable_withheld_input_is_refused_before_a_missing_resolver_is_reported
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_withheld_input_is_refused_for_a_strategy_that_does_not_hydrate_inputs
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_withheld_secret_is_resolved_for_the_partition_converted_with_its_plan_and_hydrated
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_withheld_secret_on_an_any_typed_input_is_converted_with_its_canonical_any_plan_and_hydrated
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Activation_writes_nothing_back_to_the_request_snapshot
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_context_without_one_partition_refuses_before_the_resolver_is_called
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.An_instance_whose_tenant_differs_from_the_partition_refuses_with_TenantMismatch_before_the_resolver_is_called
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.An_instance_without_a_differing_tenant_resolves_under_the_partition(instanceTenantId: null)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.An_instance_without_a_differing_tenant_resolves_under_the_partition(instanceTenantId: "tenant-a")
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.An_instance_the_partition_cannot_read_refuses_before_the_resolver_is_called
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_snapshot_without_withheld_inputs_never_calls_the_resolver_or_reads_the_partition_or_the_instance
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Two_secret_inputs_resolve_independently
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolved_value_is_registered_with_the_mask_before_the_next_reference_resolves
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_failed_resolution_faults_with_the_reference_name_code_and_retryable_flag_and_no_value(failureCode: "NotFound", isRetryable: False)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_failed_resolution_faults_with_the_reference_name_code_and_retryable_flag_and_no_value(failureCode: "Revoked", isRetryable: False)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_failed_resolution_faults_with_the_reference_name_code_and_retryable_flag_and_no_value(failureCode: "StoreUnavailable", isRetryable: True)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_conversion_failure_reports_ConversionFailed_and_drops_the_conversion_message
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_secret_withheld_without_a_conversion_plan_reports_ConversionFailed
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_canceled_resolution_is_not_reported_as_a_resolution_failure(resolverThrows: True)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_canceled_resolution_is_not_reported_as_a_resolution_failure(resolverThrows: False)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolver_that_throws_while_the_activation_is_live_reports_ResolverFailed_without_what_it_threw
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolver_that_returns_null_reports_ResolverFailed
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_cancellation_typed_conversion_failure_while_the_activation_is_live_reports_ConversionFailed
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_fatal_exception_from_the_resolver_propagates_instead_of_being_mapped
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_fatal_exception_from_the_conversion_propagates_instead_of_being_mapped
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_classified_resolution_failure_keeps_its_classification_when_lease_disposal_also_fails
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_canceled_resolution_stays_a_cancellation_when_lease_disposal_also_fails
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_failure_that_is_not_the_activations_cancellation_stays_a_fault_when_the_token_is_canceled_during_lease_disposal
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Cancellation_cleanup_keeps_the_carried_disposal_failure_and_the_leases_own
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Cancellation_cleanup_reports_the_leases_disposal_failure_with_the_cancellation
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Cancellation_cleanup_reports_nothing_when_no_disposal_failed
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.ActivationLease_WhenActivityAndScopeDisposalFail_AttemptsBothAndAggregatesFailures
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_rejects_a_second_write_to_the_same_activity_instance
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_replays_pinned_optional_absence_across_changed_property_initializers
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_accepts_explicit_null_for_a_required_nullable_reference_input
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_honors_pinned_non_nullable_contract_when_the_current_clr_property_is_nullable
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_uses_inherited_input_key_to_assign_hidden_derived_property
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_rejects_absence_for_an_optional_non_nullable_value_input
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_rejects_absence_and_explicit_null_for_an_optional_non_nullable_reference_input(absent: True)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.Hydrator_rejects_absence_and_explicit_null_for_an_optional_non_nullable_reference_input(absent: False)
+    Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.External_input_is_dereferenced_only_for_activation
+    Elsa.Activities.Runtime.Tests.CodeIoLeafRuntimeTests.WriteLines_RunsToCompletion_AndEmitsDoneOutcome
+    Elsa.Activities.Runtime.Tests.CodeIoLeafRuntimeTests.WriteLines_ObjectExpressionLines_RunsToCompletion
+    Elsa.Activities.Runtime.Tests.CodeIoLeafRuntimeTests.ReadLine_RunsToCompletion_AndEmitsDoneOutcome
+    Elsa.Activities.Runtime.Tests.CodeIoLeafRuntimeTests.Inline_RunsToCompletion_AndEmitsDoneOutcome
+    Elsa.Activities.Runtime.Tests.CodeIoLeafRuntimeTests.Break_RunsToCompletion_AndEmitsBreakOutcome
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableEvaluatorTests.Descendant_resolves_container_variable_by_declaration_and_scope_identity
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableEvaluatorTests.Workflow_variable_remains_visible_from_nested_container_frames
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableEvaluatorTests.Nested_frames_resolve_each_declaration_explicitly_without_name_shadowing
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableEvaluatorTests.Reference_to_sibling_scope_is_rejected_as_unavailable
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableEvaluatorTests.Closed_frame_is_not_part_of_a_later_visible_frame_snapshot
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableEvaluatorTests.Explicit_frame_update_is_visible_only_through_the_new_immutable_snapshot
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableIsolationTests.Repeated_executions_of_the_same_container_declaration_do_not_share_values
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableIsolationTests.Resume_restores_the_original_container_executions_values
+    Elsa.Activities.Runtime.Tests.ContainerScopedVariableIsolationTests.Completed_scope_is_no_longer_live_but_retains_values_for_inspection
+    Elsa.Activities.Runtime.Tests.CrossSlotSchedulingExecutionTests.AnOuterParentSchedulesANodeFromAnInnerSlot_AndItReadsTheInnerForwardResult
+    Elsa.Activities.Runtime.Tests.CrossSlotSchedulingExecutionTests.AForwardResultInsideALoopIterationResolvesForANodeScheduledOutsideTheLoop
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AZeroOrPastDueTimeSchedulesAtOnce(seconds: 0)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AZeroOrPastDueTimeSchedulesAtOnce(seconds: -30)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_TheChildRunsOnceAtTheFirstSweepAfterItsDueTime(mode: Durable)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_TheChildRunsOnceAtTheFirstSweepAfterItsDueTime(mode: Balanced)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_TheChildRunsOnceAtTheFirstSweepAfterItsDueTime(mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_OtherWorkOfTheRunIsNotHeldBack(mode: Durable)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_OtherWorkOfTheRunIsNotHeldBack(mode: Balanced)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_OtherWorkOfTheRunIsNotHeldBack(mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AChildCompletionEvaluationCanDelayTheNextSchedule(mode: Durable)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AChildCompletionEvaluationCanDelayTheNextSchedule(mode: Balanced)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AChildCompletionEvaluationCanDelayTheNextSchedule(mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AParentThatIsNoLongerRunningGetsNoChild(mode: Durable)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AParentThatIsNoLongerRunningGetsNoChild(mode: Balanced)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_AParentThatIsNoLongerRunningGetsNoChild(mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ATerminalRunGetsNoChild(mode: Durable, faulted: False)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ATerminalRunGetsNoChild(mode: Balanced, faulted: False)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ATerminalRunGetsNoChild(mode: Ephemeral, faulted: False)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ATerminalRunGetsNoChild(mode: Durable, faulted: True)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ATerminalRunGetsNoChild(mode: Balanced, faulted: True)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ATerminalRunGetsNoChild(mode: Ephemeral, faulted: True)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ADeletedRunGetsNoChild
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ARefusedDueTimeFaultsTheEvaluation(capability: True, code: "runtime.delayed-schedule.too-far")
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ARefusedDueTimeFaultsTheEvaluation(capability: False, code: "runtime.delayed-schedule.unavailable")
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ARunThatOnlyWaitsIsNotStalled(mode: Durable)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ARunThatOnlyWaitsIsNotStalled(mode: Balanced)
+    Elsa.Activities.Runtime.Tests.DelayedScheduleExecutionTests.DelayedSchedule_ARunThatOnlyWaitsIsNotStalled(mode: Ephemeral)
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AFaultInsideASequenceReachesTheReceiver_AndAbsorbingItCancelsTheSequence
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.DescendantFaultCallback_UsesCommittedViaChildMetadata_WhenDeliveryMetadataDisagrees
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AFaultInsideAForEachBodyReachesTheReceiverThroughTheForEach
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AFaultInsideAWhileBodyReachesTheReceiverThroughTheWhile
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AFaultInsideAForBodyReachesTheReceiverThroughTheFor
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.NestedPassiveCompositesAreWalkedPast_AndTheViaChildIsTheReceiversDirectChild
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.RequestingInterventionKeepsTheIncidentBlockingAndTheRunRunning
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AFlowchartInBetweenEndsTheWalk_SoTheStepSuspendsAsBefore
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AReusableActivityBoundaryEndsTheWalk
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.WithoutAnOptedInAncestorASequenceFaultBehavesAsBefore
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AReceiverStillGetsItsDirectChildsFaultThroughTheChildFaultCallback
+    Elsa.Activities.Runtime.Tests.DescendantFaultExecutionTests.AHostStopBeforeTheDeliveryIsEvaluatedDeliversItOnceAfterRestart
+    Elsa.Activities.Runtime.Tests.EventCorrelationRoutingTests.Route_ResumesOnlyTheWaitingEventWithTheMatchingCorrelation
+    Elsa.Activities.Runtime.Tests.EventCorrelationRoutingTests.Route_TargetedAtOneExecution_ResumesOnlyThatExecutionsWait
+    Elsa.Activities.Runtime.Tests.EventCorrelationRoutingTests.TargetedRequest_RequiresResumeOnlyRouting(mode: StartOnly)
+    Elsa.Activities.Runtime.Tests.EventCorrelationRoutingTests.TargetedRequest_RequiresResumeOnlyRouting(mode: StartAndResume)
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Any_json_value_reads_as_the_payload_and_writes_back_unchanged(json: "{\"orderId\":\"1\"}")
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Any_json_value_reads_as_the_payload_and_writes_back_unchanged(json: "[1,2]")
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Any_json_value_reads_as_the_payload_and_writes_back_unchanged(json: "\"text\"")
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Any_json_value_reads_as_the_payload_and_writes_back_unchanged(json: "42")
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Any_json_value_reads_as_the_payload_and_writes_back_unchanged(json: "true")
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Any_json_value_reads_as_the_payload_and_writes_back_unchanged(json: "{\"EventName\":\"order.approved\"}")
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.Json_null_reads_as_a_trigger_without_a_payload
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.A_trigger_without_a_payload_round_trips
+    Elsa.Activities.Runtime.Tests.EventReceivedTests.The_trigger_type_alias_is_unchanged
+    Elsa.Activities.Runtime.Tests.EventTestDriveTests.WaitDriver_MatchesTheNodeScopedResumeTarget
+    Elsa.Activities.Runtime.Tests.EventTestDriveTests.ModuleDriver_DescribesFixedEvent_AndReturnsSeparateStimulus
+    Elsa.Activities.Runtime.Tests.EventTestDriveTests.WaitDriver_DeliversInputTheEventTriggerAccepts(dataJson: null)
+    Elsa.Activities.Runtime.Tests.EventTestDriveTests.WaitDriver_DeliversInputTheEventTriggerAccepts(dataJson: "{\"payload\":\"text\"}")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.ProviderId_IsExplicitAndStable
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_ReturnsEventStimulus_ForEventNodeWithLiteralName
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_CarriesCorrelationScope_WhenLiteralCorrelationPresent
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_ReturnsEmpty_ForNonEventActivityType
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_Throws_WhenEventNameLiteralMissing
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_Throws_WhenEventNameIsBlank
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_Throws_WhenEventNameIsNonLiteral
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_RefusesASecretReadWithTheFixedPublishCode(inputName: "EventName")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_RefusesASecretReadWithTheFixedPublishCode(inputName: "CorrelationId")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_RefusesASecretReadWithTheFixedPublishCode(inputName: "CanStartWorkflow")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Hash_IsDeterministicAndPrefixed
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_returns_event_name_as_one_atomic_result
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_ReturnsRecognizedEmpty_WhenCanStartWorkflowIsFalse
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Describe_IndexesNode_WhenCanStartWorkflowIsExplicitlyTrue
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_with_event_stimulus_registration_when_it_cannot_start
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_with_trimmed_correlation_metadata(correlationId: "order-7")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_with_trimmed_correlation_metadata(correlationId: " order-7 ")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_without_correlation_metadata_when_correlation_is_blank(correlationId: null)
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_without_correlation_metadata_when_correlation_is_blank(correlationId: "")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_without_correlation_metadata_when_correlation_is_blank(correlationId: "   ")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_suspends_when_the_start_trigger_targeted_another_node
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_completes_when_the_start_trigger_targeted_this_node
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_completes_a_targeted_start_whatever_the_payload_shape(payloadJson: "\"text\"")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_completes_a_targeted_start_whatever_the_payload_shape(payloadJson: "[1,2]")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Execute_direct_invocation_completes_without_a_payload
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Resume_completes_with_the_committed_event_name
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Resume_request_accepts_any_delivered_payload(triggerJson: "null", expectedPayload: null)
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Resume_request_accepts_any_delivered_payload(triggerJson: "42", expectedPayload: "42")
+    Elsa.Activities.Runtime.Tests.EventTriggerStimulusProviderTests.Resume_request_accepts_any_delivered_payload(triggerJson: "{\"EventName\":\"other\"}", expectedPayload: "{\"EventName\":\"other\"}")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_resume_invokes_only_the_matching_live_wait(condition: "matching")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_resume_invokes_only_the_matching_live_wait(condition: "rearmed")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_resume_invokes_only_the_matching_live_wait(condition: "completed")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_resume_invokes_only_the_matching_live_wait(condition: "cancelled")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_resume_invokes_only_the_matching_live_wait(condition: "superseded")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_resume_invokes_only_the_matching_live_wait(condition: "workflow-terminal")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_unavailable_admission_retains_identical_work_and_retries_a_real_callback(boundary: "observation")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_unavailable_admission_retains_identical_work_and_retries_a_real_callback(boundary: "checkpoint")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_unavailable_admission_retains_identical_work_and_retries_a_real_callback(boundary: "sibling")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_unavailable_admission_retains_identical_work_and_retries_a_real_callback(boundary: "qualification")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_unavailable_admission_retains_identical_work_and_retries_a_real_callback(boundary: "scope")
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_test_receipt_root_lease_refusal_retains_work_then_commits_receipt_and_real_callback
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_missing_owner_or_material_keeps_work_until_authority_can_be_read(missingMaterial: False)
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_missing_owner_or_material_keeps_work_until_authority_can_be_read(missingMaterial: True)
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_rearm_between_preflight_and_initial_claim_preserves_the_replacement
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Exact_queued_redelivery_after_claim_uses_consumed_trigger_without_consuming_a_rearmed_wait
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_TypedTriggerValidatesThenResumesFreshActivationAndCommitsOneCompletion
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_WrongTypedTriggerIsRejectedBeforeActivation
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_DuplicateTypedTriggerIsDeduplicatedBeforeActivation
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_RedeliveredAfterWorkerCancellation_ClaimsFreshAttemptFromConsumedDelivery
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.TypedTriggerHistory_RemainsBoundedAndRetiresPayloadsAcrossLongSuspendResumeLoop
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_ValidTriggerNotifiesBookmarkConsumptionOnceAfterClaimCommit
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_SelectedTriggerAtomicallyRetiresSiblingBookmarksAndRegistrations
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_ActivationConstructionFailureFaultsConsumedClaimWithoutOrphanBookmark
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_ThrownResumeFaultsConsumedClaimWithoutOrphanBookmark
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_ThrowingControlResultGetter_faults_the_resume_and_disposes_activation
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_UnsolicitedOperationCancellation_FaultsConsumedClaimWithoutReactivation
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_ActivityDisposalFailure_ReleasesScopeAndFaultsWithoutDoubleExecution
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_TypedResumeCanAtomicallyConsumeOneTriggerAndRegisterItsReplacement
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_TypedResumeCommitsReturnedFaultAsFaultTransition
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.HandleAsync_TypedResumeCommitsReturnedCancellationAndConsumesDelivery
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Unavailable_resume_keeps_native_work_and_retries_consumed_payload_in_a_fresh_activation
+    Elsa.Activities.Runtime.Tests.WorkflowResumeBookmarkSchedulerWorkHandlerTests.Unavailable_resume_with_disposal_failure_records_a_real_native_fault
+    Elsa.Activities.Runtime.Tests.FaultActivityTests.Execute_ReturnsTypedFault_WithConfiguredMessage
+    Elsa.Activities.Runtime.Tests.FaultActivityTests.Execute_ReturnsTypedFault_WithDefaultMessage_WhenMessageIsUnset
+    Elsa.Activities.Runtime.Tests.FaultActivityTests.Execute_CarriesCodeCategoryAndFaultType
+    Elsa.Activities.Runtime.Tests.FaultActivityTests.Execute_WithoutClassification_ProducesNoFaultMetadata
+    Elsa.Activities.Runtime.Tests.FaultActivityTests.Execute_TreatsBlankClassificationAsUnset(blank: "")
+    Elsa.Activities.Runtime.Tests.FaultActivityTests.Execute_TreatsBlankClassificationAsUnset(blank: "   ")
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.FaultActivity_RecordsBlockingIncident_WithoutThrowingToHost
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.FaultActivity_UsesDefaultMessage_WhenNoMessageIsBound
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.FaultActivity_WorkflowFault_IsAuthoredByTheIncidentStrategy
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.FaultActivity_WithContinueWithIncidentsStrategy_LeavesTheWorkflowRunning
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_invoke_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_invoke_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_resume_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_resume_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_parent_completion_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_parent_completion_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_parent_notification_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_parent_notification_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_masked_store_outage_stays_retryable_with_its_code_and_original_type_name
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_failure_code_containing_a_resolved_value_is_recorded_intact
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_returned_fault_whose_value_occurs_in_the_marker_is_masked_once_on_the_invoke_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_returned_fault_whose_value_occurs_in_the_marker_is_masked_once_on_the_resume_path
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.A_missing_storage_driver_still_parks_the_activity_when_a_resolved_value_is_registered
+    Elsa.Activities.Runtime.Tests.FaultIncidentExecutionTests.Runtime_spans_of_a_masked_fault_carry_no_fault_text
+    Elsa.Activities.Runtime.Tests.FinishCorrelateExecutionTests.FinishIntrinsic_EndsWorkflow_WithConfiguredOutcome
+    Elsa.Activities.Runtime.Tests.FinishCorrelateExecutionTests.FinishIntrinsic_EndsWorkflow_WithDoneOutcome
+    Elsa.Activities.Runtime.Tests.FinishCorrelateExecutionTests.SetCorrelationIdIntrinsic_PersistsCorrelationId
+    Elsa.Activities.Runtime.Tests.FinishCorrelateExecutionTests.FinishInsideSequence_EndsWorkflow_AndSkipsLaterSiblings
+    Elsa.Activities.Runtime.Tests.InlineActivityTests.Execute_SurfacesSeededExpressionValue_OnResult
+    Elsa.Activities.Runtime.Tests.InlineActivityTests.Execute_SurfacesNull_WhenExpressionInputIsUnset
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_offer_rides_the_wait_outcome_with_the_requester
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_request_without_an_offer_writes_neither_key
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.Request_metadata_cannot_forge_the_offer_or_the_requester
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: [])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["a.b", "a.c", "a.d", "a.e", "a.f", ···])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["nodot"])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["Upper.case"])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["runtime.retry"])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["test.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"···])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["test.same", "test.same"])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_invalid_offer_faults_the_evaluation(offer: ["test.ok\n"])
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.An_offer_from_a_parent_without_the_callback_faults_the_evaluation
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_to_continue_resolves_the_incident_and_the_requester_schedules_its_next_child
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_to_complete_completes_the_requester_and_records_the_processed_marker
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_to_fault_faults_the_requester_with_its_fault
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_evaluation_that_misuses_a_seam_faults_the_requester(decision: "test.misuse.absorb", expectedMessage: "only valid in a child-fault evaluation")
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_evaluation_that_misuses_a_seam_faults_the_requester(decision: "test.misuse.intervene", expectedMessage: "only valid in a child-fault evaluation")
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_evaluation_that_misuses_a_seam_faults_the_requester(decision: "test.misuse.cancel-and-fault", expectedMessage: "cannot also cancel child subtrees")
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_repeated_delivery_is_acked_by_the_processed_marker
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_requester_that_is_no_longer_running_acks_the_delivery_without_a_callback
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_stop_between_the_alteration_checkpoint_and_the_delivery_applies_the_decision_once_after_restart
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.The_same_idempotency_key_twice_is_replayed_and_applies_once
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_second_key_on_the_same_incident_is_refused_as_stale_and_a_retry_after_it_finds_no_blocking_incident
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.A_decision_that_was_not_offered_is_refused
+    Elsa.Activities.Runtime.Tests.InterventionDecisionExecutionTests.The_payload_checks_its_arguments
+    Elsa.Activities.Runtime.Tests.OutputCaptureVariableWithholdingRunTests.A_captured_result_that_requires_encryption_completes_with_the_marker_in_the_variable_and_no_value_committed
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.FaultWithNotifications_UsesOneCombinedCallbackAndAbsorbsTheExactIncident
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.CombinedOutcomeCallback_UsesCommittedChildSchedulingMetadata_WhenDeliveryMetadataDisagrees
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.CombinedOutcomeCallback_CanBubbleItsFaultAndOrderedNotificationsToGrandparent
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.CombinedOutcome_DeferCanAbsorbAndScheduleTheNextChild
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.FaultOnlyParent_UsesItsLegacyFaultCallbackForCombinedChildOutcome
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.ParentWithNeitherLegacyCapability_PreservesFaultOnlyBypassAndBlockingIncident
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.ParentWithBothLegacyCapabilities_RefusesCombinedOutcomeWithoutCallingEitherCallback
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.CombinedCallbackFaultWithoutAbsorption_RecordsOneParentFaultAndPreservesChildIncident
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.CombinedFaultOrCancelContinuation_CannotAbsorbChildIncident(behavior: FaultWithAbsorption)
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.CombinedFaultOrCancelContinuation_CannotAbsorbChildIncident(behavior: CancelWithAbsorption)
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.FailedOrCancelledChildCallback_DiscardsStagedNotifications(behavior: ThrowAfterStaging)
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.FailedOrCancelledChildCallback_DiscardsStagedNotifications(behavior: DisposeThrowsAfterStaging)
+    Elsa.Activities.Runtime.Tests.ParentOutcomeExecutionTests.FailedOrCancelledChildCallback_DiscardsStagedNotifications(behavior: CancelAfterStaging)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Balanced_counts_MaxActivitiesPerCommit_in_activities_not_checkpoints
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Balanced_with_the_smallest_cap_still_completes
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Ephemeral_has_no_intermediate_commits
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Only_Ephemeral_without_completion_records_drops_the_record_of_a_run_that_was_never_committed(mode: Ephemeral, recordCompletion: False, expectRecord: False)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Only_Ephemeral_without_completion_records_drops_the_record_of_a_run_that_was_never_committed(mode: Ephemeral, recordCompletion: True, expectRecord: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Only_Ephemeral_without_completion_records_drops_the_record_of_a_run_that_was_never_committed(mode: Balanced, recordCompletion: False, expectRecord: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Only_Ephemeral_without_completion_records_drops_the_record_of_a_run_that_was_never_committed(mode: Durable, recordCompletion: False, expectRecord: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Ephemeral_without_completion_records_still_records_a_run_committed_earlier_in_the_same_pass
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_suspension_and_its_resume_are_committed_in_every_mode(mode: Durable, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_suspension_and_its_resume_are_committed_in_every_mode(mode: Balanced, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_suspension_and_its_resume_are_committed_in_every_mode(mode: Ephemeral, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_suspension_and_its_resume_are_committed_in_every_mode(mode: Ephemeral, recordCompletion: False)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_fault_is_committed_in_every_mode(mode: Durable, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_fault_is_committed_in_every_mode(mode: Balanced, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_fault_is_committed_in_every_mode(mode: Ephemeral, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_fault_is_committed_in_every_mode(mode: Ephemeral, recordCompletion: False)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_cancellation_is_committed_in_every_mode(mode: Durable, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_cancellation_is_committed_in_every_mode(mode: Balanced, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_cancellation_is_committed_in_every_mode(mode: Ephemeral, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_cancellation_is_committed_in_every_mode(mode: Ephemeral, recordCompletion: False)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_handler_fault_records_its_poison_and_incident_and_keeps_the_progress_before_it_in_every_mode(mode: Durable, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_handler_fault_records_its_poison_and_incident_and_keeps_the_progress_before_it_in_every_mode(mode: Balanced, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_handler_fault_records_its_poison_and_incident_and_keeps_the_progress_before_it_in_every_mode(mode: Ephemeral, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_handler_fault_records_its_poison_and_incident_and_keeps_the_progress_before_it_in_every_mode(mode: Ephemeral, recordCompletion: False)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_node_that_loses_ownership_mid_pass_commits_nothing_and_a_peer_completes_the_run_once(mode: Balanced, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_node_that_loses_ownership_mid_pass_commits_nothing_and_a_peer_completes_the_run_once(mode: Ephemeral, recordCompletion: True)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.A_node_that_loses_ownership_mid_pass_commits_nothing_and_a_peer_completes_the_run_once(mode: Ephemeral, recordCompletion: False)
+    Elsa.Activities.Runtime.Tests.PersistenceModeFlushTests.Under_Durable_a_node_that_loses_ownership_keeps_what_it_committed_and_a_peer_completes_the_run_once
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Durable, hostDefault: Balanced, interruption: HostStops)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Durable, hostDefault: Balanced, interruption: OwnershipLost)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Durable, hostDefault: Ephemeral, interruption: HostStops)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Durable, hostDefault: Ephemeral, interruption: OwnershipLost)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Balanced, hostDefault: Durable, interruption: HostStops)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Balanced, hostDefault: Durable, interruption: OwnershipLost)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Balanced, hostDefault: Ephemeral, interruption: HostStops)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Balanced, hostDefault: Ephemeral, interruption: OwnershipLost)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Ephemeral, hostDefault: Durable, interruption: HostStops)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Ephemeral, hostDefault: Durable, interruption: OwnershipLost)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Ephemeral, hostDefault: Balanced, interruption: HostStops)
+    Elsa.Activities.Runtime.Tests.PersistenceModeRedriveTests.A_run_driven_again_before_its_first_commit_keeps_the_mode_its_workflow_chose(chosen: Ephemeral, hostDefault: Balanced, interruption: OwnershipLost)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedRetry_ReusesPinnedSnapshotAndCreatesFreshAttempt
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.A_secret_input_resolves_on_invoke_and_again_on_resume_and_only_its_reference_is_persisted
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.A_resolver_that_throws_faults_the_activity_with_ResolverFailed_and_persists_nothing_it_threw(cancellationTyped: False)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.A_resolver_that_throws_faults_the_activity_with_ResolverFailed_and_persists_nothing_it_threw(cancellationTyped: True)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_MalformedTargetedStartTrigger_FaultsWithoutRunningBusinessLogic
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedSuspension_CommitsAttemptPrivateStateRegistrationsAndBookmarkIntentsAtomically(includeInspection: False)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedSuspension_CommitsAttemptPrivateStateRegistrationsAndBookmarkIntentsAtomically(includeInspection: True)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_PublishedBoundaryRemainsInParentScopeAndSchedulesItsChildrenInItsOwnScope
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ExplicitBranchProvenanceInheritsTheBoundaryScopeWhenItsScopeIsUnspecified
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.BackgroundPlacementWithoutCapabilityRecordsIncidentWithoutActivatingBody
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedNode_UsesActivationLeaseAndCommitsReturnedResultAtomically
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedNodeWithoutInspection_CommitsCompletionAndDownstreamIntentAtomically
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_SensitiveContractInputsAndOutputsAreExcludedBeforeDiagnosticCapture
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedNode_CommitsReturnedFaultAsFaultTransition
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedNode_CommitsReturnedCancellationAndSchedulesWorkflowCancellation
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ReplayedTypedInvocation_UsesCommittedCompletionWithoutReactivation
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_RedeliveredAfterWorkerCancellation_ClosesAbandonedAttemptAndClaimsFreshRetryBeforeActivation
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ActivationCanceledWhileResolvingASecretAndLeaseDisposalFails_RecordsNoFault
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_SecretValueInAnActivityFault_IsMaskedAndReleasedOnceTheFaultIsRecorded
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ExecutionCanceledAfterASecretResolved_StaysACancellationAndRecordsNoFault
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ExecutionCanceledAfterASecretResolvedWhileDisposalFails_ReportsTheDisposalFailureMasked
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_CancellationCarryingTheValueWhileDisposalFails_ReportsTheCancellationMasked
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_CancellationCarryingTheValueWithoutADisposalFailure_RethrowsTheOriginalCancellation
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ActivationCanceledAfterASecretResolvedWhileDisposalFails_ReportsTheDisposalFailureMasked
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_UnsolicitedOperationCancellation_FaultsDurablyWithoutReactivation
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ActivityDisposalFailure_ReleasesScopeAndFaultsWithoutDoubleExecution
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_ScopeDisposalFailure_FaultsDurablyWithoutDoubleExecution
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_StructuralDeferDisposalFailure_DiscardsStagedStateAndFaultsOpenAttempt
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_InitialStructuralDeferWithoutChild_FaultsInsteadOfLeavingInvocationRunning
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_OrdinaryActivityReceivesAuthorContextWithoutSchedulingSeam
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TerminalStructuralCompletion_DiscardsPrivateState
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TerminalStructuralDecisionWithScheduledChild_FaultsAsProtocolViolation
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_RedeliveredAfterCommittedStructuralDefer_DoesNotReactivateOrDuplicateChildIntent
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_CheckpointParticipantEntryChangesCommitWithChildScheduling
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_CheckpointParticipantHandedAWithheldInput_FaultsWithTheWithheldInputCode
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_CheckpointParticipantEntryAndCompletionChangesCommitAtomically
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_DelayedReplayAfterNewerStructuralActivation_DoesNotReactivateOrClaimAnotherAttempt
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.ParentCallback_DelayedReplayAfterNewerCallback_DoesNotReactivateOrClaimAnotherAttempt
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.ParentCallback_ReplayIsSuppressedPerChildWhileAnotherLoopIterationStillRuns
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.ParentCallback_LongRunningContainerRetainsBoundedAttemptDiagnosticsAndMonotonicOrdinal
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.ParentCallback_WithoutInspection_CommitsCompletionAndDownstreamIntentAtomically
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.ParentCallback_CheckpointParticipantCompletionChangesCommitWithParentCompletion
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.StructuralCompletion_CommittedOutputSnapshotsRespectTheContractCapturePolicy(requiresEncryption: False, notifyParent: False)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.StructuralCompletion_CommittedOutputSnapshotsRespectTheContractCapturePolicy(requiresEncryption: False, notifyParent: True)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.StructuralCompletion_CommittedOutputSnapshotsRespectTheContractCapturePolicy(requiresEncryption: True, notifyParent: False)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.StructuralCompletion_CommittedOutputSnapshotsRespectTheContractCapturePolicy(requiresEncryption: True, notifyParent: True)
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_AssignedOperationKeys_ReachTheActivityContext
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_WithoutAssignedKey_UsesTheFirstAttemptIdentity
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_WithoutAssignedKeyOrLineage_UsesTheInvocationId
+    Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_CrashReattempt_KeepsTheOperationKey
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: null, isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "null", isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "{\"orderId\":\"1\"}", isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "\"text\"", isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "[1,2]", isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "42", isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "true", isLocalEvent: False)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: null, isLocalEvent: True)
+    Elsa.Activities.Runtime.Tests.PublishEventResumeRoutingTests.PublishEvent_resumes_the_waiting_event(payloadJson: "{\"orderId\":\"1\"}", isLocalEvent: True)
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Execute_StagesPublishRequest_AndCompletesDone_WithoutRouting
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Execute_WithBlankName_Throws(name: null)
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Execute_WithBlankName_Throws(name: "")
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Execute_WithBlankName_Throws(name: "   ")
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Buffer_BuildsIntent_WithEventStimulusIdentity_AndNoRouterCall
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Buffer_SupportsMultiplePublishesPerInvocation_OrdinalOrdered_WithDistinctIds
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Buffer_TakeIsIdempotent_ReturnsEmptyAfterDrainOrReset
+    Elsa.Activities.Runtime.Tests.PublishEventTests.LocalEvent_StagesAndCarriesTheLocalFlag_ThroughToTheIntent
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Handler_Intent_only_signature_refuses_before_old_router_effects(local: False)
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Handler_Intent_only_signature_refuses_before_old_router_effects(local: True)
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Handler_WrapsRouterFailure_AsTransientDeliveryFailure
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Handler_FailsAsTransient_WhenAdmissionShedsAStart
+    Elsa.Activities.Runtime.Tests.PublishEventTests.Handler_ClassifiesCheckpointRuleViolation_AsPermanentDeliveryFailure
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_projects_immutable_input_key_correlation_and_local_publisher(local: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_projects_immutable_input_key_correlation_and_local_publisher(local: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_preserves_legacy_absent_local_flag_without_defaulting_other_routing_fields
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_requires_every_staged_field_and_preserves_identity_in_domain_failure(field: "stimulusType")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_requires_every_staged_field_and_preserves_identity_in_domain_failure(field: "stimulusHash")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_requires_every_staged_field_and_preserves_identity_in_domain_failure(field: "eventName")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_requires_every_staged_field_and_preserves_identity_in_domain_failure(field: "correlationId")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_requires_every_staged_field_and_preserves_identity_in_domain_failure(field: "payload")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "kind")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "type")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "hash")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "name")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "unknown")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "duplicate")
+    Elsa.Activities.Runtime.Tests.PublishStimulusIntentAdapterTests.Owning_adapter_refuses_malformed_or_conflicting_payload_without_raw_parser_exception(defect: "not-object")
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publisher_pipeline_commits_protocol_without_recipients_then_saves_complete_cohort_before_effect(coalescing: False, local: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publisher_pipeline_commits_protocol_without_recipients_then_saves_complete_cohort_before_effect(coalescing: False, local: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publisher_pipeline_commits_protocol_without_recipients_then_saves_complete_cohort_before_effect(coalescing: True, local: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publisher_pipeline_commits_protocol_without_recipients_then_saves_complete_cohort_before_effect(coalescing: True, local: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_source_boundary_failure_leaves_claim_and_attempt_history_owed_then_repairs(coalescing: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_source_boundary_failure_leaves_claim_and_attempt_history_owed_then_repairs(coalescing: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "missing", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "missing", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "unobserved", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "unobserved", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "seed", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "seed", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "held", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "held", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "not-adopted", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(schema: "not-adopted", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Late_enricher_publication_is_checked_on_final_envelope_before_acceptance(schema: "missing", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Late_enricher_publication_is_checked_on_final_envelope_before_acceptance(schema: "missing", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Late_enricher_publication_is_checked_on_final_envelope_before_acceptance(schema: "held", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Late_enricher_publication_is_checked_on_final_envelope_before_acceptance(schema: "held", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Late_enricher_publication_is_checked_on_final_envelope_before_acceptance(schema: "finalized", materialized: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Late_enricher_publication_is_checked_on_final_envelope_before_acceptance(schema: "finalized", materialized: True)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Materialized_publication_is_not_silently_dropped_by_skip_policy
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Unrepresented_materialized_publication_refuses_instead_of_disappearing_from_mixed_envelope
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Duplicate_representations_are_checked_then_only_equivalent_work_is_folded(conflicting: False)
+    Elsa.Activities.Runtime.Tests.PublishStimulusSourcePipelineTests.Duplicate_representations_are_checked_then_only_equivalent_work_is_folded(conflicting: True)
+    Elsa.Activities.Runtime.Tests.ReadLineActivityTests.Execute_SetsResult_ToLineReadFromInput
+    Elsa.Activities.Runtime.Tests.ReadLineActivityTests.Execute_SetsNullResult_WhenInputIsExhausted
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.StraightLineReplaySafeHotLoop_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.StraightLineReplaySafeHotLoop_D1OnlyVersusDisabled_IsByteIdentical
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.MultiOutcomeBranch_EnabledVersusDisabled_IsByteIdentical_AndCascadePumpsInline
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.FanInJoin_EnabledVersusDisabled_IsByteIdentical_AndJoinEdgeFallsBackToDiscreteCascade
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.SuspendingReplaySafeLeaf_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.ExternalHotLoop_EnabledVersusDisabled_IsByteIdentical_AndNeverFuses
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.SetIntrinsicHotLoop_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.SetOutputIntrinsicChain_EnabledVersusDisabled_IsByteIdentical_AndOutputsAreCorrect
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.NonFusableIntrinsic_EnabledVersusDisabled_IsByteIdentical_AndNeverFuses
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: Set, expected: True)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: Merge, expected: True)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: Reduce, expected: True)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: Return, expected: True)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: Control, expected: True)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: SetCorrelationId, expected: False)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: SetInstanceName, expected: False)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: SetOutput, expected: True)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusability_IsClassifiedPerKind(kind: Finish, expected: False)
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.IntrinsicFusabilityTheory_CoversEveryIntrinsicKind
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionGuardrailTests.DurableFingerprint_IsDeterministicAcrossRuns
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionHarnessPrerequisiteTests.CoalescedHarnessPath_FoldsCheckpointsIntoASegment_AndStillCompletes
+    Elsa.Activities.Runtime.Tests.ReplaySafeFusionHarnessPrerequisiteTests.ReplaySafeProbeNode_ResolvesReplaySafeContract_WhileProbeStaysExternal
+    Elsa.Activities.Runtime.Tests.RescheduleActivityAlterationExecutionTests.RescheduledSuspendedLeaf_Completes_AndTheParentRoutesItsCompletion
+    Elsa.Activities.Runtime.Tests.RescheduleActivityAlterationExecutionTests.FaultedLeafWhoseFaultTheParentEvaluated_UnderAParentThatDoesNotAcceptIt_IsRefused
+    Elsa.Activities.Runtime.Tests.RescheduleActivityAlterationExecutionTests.FaultedLeafUnderASequence_IsRescheduled_AndTheSequenceContinues
+    Elsa.Activities.Runtime.Tests.RescheduleActivityAlterationExecutionTests.FaultedBranchOfADeferredParallel_IsRescheduled_AndTheJoinCompletes
+    Elsa.Activities.Runtime.Tests.RescheduleActivityAlterationExecutionTests.FaultedBranchOfAParallelThatFaultedOnIt_IsRefused
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.RetriedLeaf_Completes_AndTheParentSeesAnOrdinaryChildCompletion
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.RetriedLeaf_RunsWithTheSourcesOperationKey(assignKeys: True)
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.RetriedLeaf_RunsWithTheSourcesOperationKey(assignKeys: False)
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.SameIdempotencyKeyTwice_SchedulesOneSuccessor
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.NewIdempotencyKeyAfterSuccess_IsRejectedSourceActivityNotFaulted
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.TerminalRun_IsRejectedWorkflowTerminal
+    Elsa.Activities.Runtime.Tests.RetryFaultedActivityAlterationExecutionTests.RetriedLeafFaultingAgain_WaitsForInterventionWithAFreshIncident
+    Elsa.Activities.Runtime.Tests.RuntimeInProcessHopFastPathGuardrailTests.FastPath_EnabledVersusDisabled_CommitsByteIdenticalDurableState
+    Elsa.Activities.Runtime.Tests.RuntimeInProcessHopFastPathGuardrailTests.DurableFingerprint_IsDeterministicAcrossRuns
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureConversionTests.Project_applies_the_pinned_plan_before_persisting_the_target_value
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureConversionTests.Project_rejects_transient_resources_before_durable_capture_state_is_written
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureConversionTests.Project_rejects_a_transient_resource_captured_into_a_graph_variable
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureConversionTests.Project_allows_durable_capture_when_mixed_transient_capture_is_not_selected
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureConversionTests.Project_applies_registered_typed_json_plan_before_persisting_the_target_value
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureConversionTests.Project_applies_registered_typed_xml_plan_before_persisting_the_target_value
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureWithholdingTests.A_withheld_result_captured_into_a_variable_is_written_as_its_marker_without_reaching_the_storage_driver
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureWithholdingTests.A_present_projection_that_requires_encryption_captured_into_a_variable_is_withheld_even_under_an_ordinary_contract
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureWithholdingTests.A_withheld_result_captured_into_a_durable_output_is_refused_before_the_storage_driver_encodes_it
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureWithholdingTests.A_present_projection_that_requires_encryption_captured_into_a_durable_output_is_refused_even_under_an_ordinary_contract
+    Elsa.Activities.Runtime.Tests.RuntimeOutputCaptureWithholdingTests.An_ordinary_result_is_still_encoded_and_captured
+    Elsa.Activities.Runtime.Tests.RuntimeWorkflowVariableCaptureWriteBackTests.Apply_SetsTheCapturedInlineValueOnTheDeclaredRootFrameKey
+    Elsa.Activities.Runtime.Tests.RuntimeWorkflowVariableCaptureWriteBackTests.Apply_WritesAnExplicitNullForANullEncoding
+    Elsa.Activities.Runtime.Tests.RuntimeWorkflowVariableCaptureWriteBackTests.Apply_RepresentsAnExternalizedCaptureAsAnExternalEnvelope
+    Elsa.Activities.Runtime.Tests.RuntimeWorkflowVariableCaptureWriteBackTests.Apply_ThrowsForAnUndeclaredWorkflowVariable
+    Elsa.Activities.Runtime.Tests.RuntimeWorkflowVariableCaptureWriteBackTests.Apply_ThrowsWhenTheWorkflowHasNoRootFrame
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.IP5_structural_parent_evaluation_resolves_again_on_the_notify_parent_and_parent_completion_paths
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.IP6_child_completion_rematerializes_a_withheld_envelope_and_resolves_it_again_without_persisting_it
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.IP9_a_boundary_retry_clones_only_boundary_inputs_and_neither_activates_nor_resolves
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.IP10_an_operator_reschedule_copies_the_withheld_envelope_and_the_successor_resolves_again
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_resume_canceled_while_resolving_a_secret_whose_lease_disposal_fails_records_no_fault
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_parent_completion_canceled_while_resolving_a_secret_whose_lease_disposal_fails_records_no_fault
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_parent_notification_canceled_while_resolving_a_secret_whose_lease_disposal_fails_records_no_fault
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_rematerialization_canceled_while_its_lease_disposal_fails_records_no_fault
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_resume_canceled_while_it_runs_reports_its_disposal_failure_masked
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_resume_activation_canceled_after_a_secret_resolved_reports_its_disposal_failure_masked
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_parent_completion_canceled_while_it_runs_reports_its_disposal_failure_masked
+    Elsa.Activities.Runtime.Tests.SecretInputPathCoverageTests.A_parent_notification_canceled_while_it_runs_reports_its_disposal_failure_masked
+    Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests.The_runtime_registers_one_scoped_default_mask
+    Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests.Two_composed_masks_fail_startup_naming_both_in_either_registration_order(registeredFirst: typeof(Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests+FirstSecretMask), registeredSecond: typeof(Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests+SecondSecretMask))
+    Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests.Two_composed_masks_fail_startup_naming_both_in_either_registration_order(registeredFirst: typeof(Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests+SecondSecretMask), registeredSecond: typeof(Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests+FirstSecretMask))
+    Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests.The_default_replaced_with_services_Replace_starts_and_resolves_the_replacement
+    Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests.Composing_the_runtime_twice_registers_the_check_once
+    Elsa.Activities.Runtime.Tests.SecretMaskCompositionTests.A_shell_composing_two_masks_fails_activation_naming_both
+    Elsa.Activities.Runtime.Tests.SecretResolverCompositionTests.Two_composed_resolvers_fail_startup_naming_both_in_either_registration_order(secondRegisteredFirst: False)
+    Elsa.Activities.Runtime.Tests.SecretResolverCompositionTests.Two_composed_resolvers_fail_startup_naming_both_in_either_registration_order(secondRegisteredFirst: True)
+    Elsa.Activities.Runtime.Tests.SecretResolverCompositionTests.One_composed_resolver_starts
+    Elsa.Activities.Runtime.Tests.SecretResolverCompositionTests.No_composed_resolver_starts
+    Elsa.Activities.Runtime.Tests.SecretResolverCompositionTests.Composing_the_runtime_twice_registers_the_check_once
+    Elsa.Activities.Runtime.Tests.SecretResolverCompositionTests.A_shell_composing_two_resolvers_fails_activation_naming_both
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Variable_write_intrinsic_commits_frame_change_before_continuation_and_recovery_does_not_reapply_it(intrinsicKind: Set)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Variable_write_intrinsic_commits_frame_change_before_continuation_and_recovery_does_not_reapply_it(intrinsicKind: Merge)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Variable_write_intrinsic_commits_frame_change_before_continuation_and_recovery_does_not_reapply_it(intrinsicKind: Reduce)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_intrinsic_evaluates_only_declared_portable_expression_parameters
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_intrinsic_reads_the_visible_variable_through_the_javascript_ambient_surface(script: "getVariable('greeting') + '!'")
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_intrinsic_reads_the_visible_variable_through_the_javascript_ambient_surface(script: "variables.greeting + '!'")
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_intrinsic_reads_the_visible_variable_through_the_javascript_ambient_surface(script: "getGreeting() + '!'")
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Result_and_control_intrinsics_commit_before_their_selected_continuation(intrinsicKind: Return, expectedOutcome: "Done", expectedResult: "returned")
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Result_and_control_intrinsics_commit_before_their_selected_continuation(intrinsicKind: Control, expectedOutcome: "Approved", expectedResult: null)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Identity_intrinsic_commits_authoritative_state_and_cross_branch_projection_before_continuation(intrinsicKind: SetCorrelationId, assignedValue: "order-42")
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Identity_intrinsic_commits_authoritative_state_and_cross_branch_projection_before_continuation(intrinsicKind: SetInstanceName, assignedValue: "Order 42")
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_output_intrinsic_commits_typed_named_value_before_continuation
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Finish_intrinsic_commits_terminal_workflow_checkpoint_and_schedules_no_continuation
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_intrinsic_refuses_a_secret_read_with_the_fixed_code_and_writes_nothing(resolverResolvesSecrets: False)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Set_intrinsic_refuses_a_secret_read_with_the_fixed_code_and_writes_nothing(resolverResolvesSecrets: True)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Intrinsic_literal_read_refuses_a_withheld_input_with_the_fixed_code(intrinsicKind: SetOutput, inputKey: "name", withheldLiteral: False)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Intrinsic_literal_read_refuses_a_withheld_input_with_the_fixed_code(intrinsicKind: SetOutput, inputKey: "name", withheldLiteral: True)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Intrinsic_literal_read_refuses_a_withheld_input_with_the_fixed_code(intrinsicKind: Finish, inputKey: "outcome", withheldLiteral: False)
+    Elsa.Activities.Runtime.Tests.SetVariableDurabilityExecutionTests.Intrinsic_literal_read_refuses_a_withheld_input_with_the_fixed_code(intrinsicKind: Finish, inputKey: "outcome", withheldLiteral: True)
+    Elsa.Activities.Runtime.Tests.SideEffectProfileContractTests.Unmarked_contract_defaults_to_External
+    Elsa.Activities.Runtime.Tests.SideEffectProfileContractTests.Changing_the_profile_changes_the_fingerprint
+    Elsa.Activities.Runtime.Tests.SideEffectProfileContractTests.Default_profile_does_not_churn_the_fingerprint
+    Elsa.Activities.Runtime.Tests.SideEffectProfileContractTests.ReplaySafe_contract_round_trips_through_json_and_validates_the_fingerprint
+    Elsa.Activities.Runtime.Tests.StatefulActivityContractTests.Initial_and_resume_attempts_use_typed_state_trigger_and_fresh_activity_objects
+    Elsa.Activities.Runtime.Tests.StatefulActivityContractTests.Initial_and_resume_contexts_are_immutable_identity_only_value_contexts
+    Elsa.Activities.Runtime.Tests.StatefulActivityContractTests.Suspension_rejects_nonpersistable_state_and_trigger_shapes
+    Elsa.Activities.Runtime.Tests.StatefulActivityContractTests.Trigger_registration_metadata_is_a_read_only_defensive_snapshot
+    Elsa.Activities.Runtime.Tests.StatefulActivityContractTests.Stateful_transition_requires_registrations_of_the_declared_trigger_type
+    Elsa.Activities.Runtime.Tests.StatefulValueSerializationRegressionTests.Suspension_serializes_state_once_and_materializes_the_frozen_payload
+    Elsa.Activities.Runtime.Tests.StatefulValueSerializationRegressionTests.Untyped_resume_uses_deserialized_values_without_serializing_them_again
+    Elsa.Activities.Runtime.Tests.StatefulValueSerializationRegressionTests.Typed_start_uses_deserialized_trigger_without_serializing_it_again
+    Elsa.Activities.Runtime.Tests.StatefulValueSerializationRegressionTests.Public_resume_context_keeps_defensive_copies_of_state_and_trigger
+    Elsa.Activities.Runtime.Tests.StatefulValueSerializationRegressionTests.Repeated_invalid_type_validation_keeps_the_current_value_role_in_diagnostics
+    Elsa.Activities.Runtime.Tests.StructuralChildReportMetadataExecutionTests.ACompletingStructuralChildReportsWithTheMetadataItsParentGaveIt
+    Elsa.Activities.Runtime.Tests.StructuralChildReportMetadataExecutionTests.AFaultingStructuralChildReportsWithTheMetadataItsParentGaveIt
+    Elsa.Activities.Runtime.Tests.TypedActivityAuthoringContractTests.Activity_contract_exposes_only_atomic_execution
+    Elsa.Activities.Runtime.Tests.TypedActivityAuthoringContractTests.Activity_contract_has_no_legacy_no_op_authoring_base
+    Elsa.Activities.Runtime.Tests.TypedActivityAuthoringContractTests.Structural_activity_rejects_the_ordinary_activity_path
+    Elsa.Activities.Runtime.Tests.TypedActivityAuthoringContractTests.Typed_activity_receives_only_identity_and_cancellation_and_returns_atomic_result
+    Elsa.Activities.Runtime.Tests.UndeclaredPayloadTypeResumeTests.Resume_WithoutDeclaredPayloadType_CompletesTheWaitingActivity
+    Elsa.Activities.Runtime.Tests.UndeclaredPayloadTypeResumeTests.Route_WithoutDeclaredPayloadType_ResumesTheWaitingExecution
+    Elsa.Activities.Runtime.Tests.VariableExpressionEvaluatorTests.Resolve_reads_workflow_variable_from_its_stable_frame_address
+    Elsa.Activities.Runtime.Tests.VariableExpressionEvaluatorTests.Resolve_uses_reference_key_instead_of_authored_variable_name
+    Elsa.Activities.Runtime.Tests.VariableExpressionEvaluatorTests.Resolve_rejects_variable_from_an_unavailable_scope
+    Elsa.Activities.Runtime.Tests.VariableFrameRuntimeTests.Root_container_and_iteration_frames_have_stable_activation_identity_and_isolated_values
+    Elsa.Activities.Runtime.Tests.VariableFrameRuntimeTests.Frame_rejects_stale_writes_and_writes_after_close
+    Elsa.Activities.Runtime.Tests.VisibleScopeNameAccessTests.Read_by_name_resolves_nearest_scope_with_shadowing
+    Elsa.Activities.Runtime.Tests.VisibleScopeNameAccessTests.Write_by_name_targets_the_nearest_visible_scope
+    Elsa.Activities.Runtime.Tests.VisibleScopeNameAccessTests.Write_by_name_to_a_workflow_variable_targets_the_workflow_scope
+    Elsa.Activities.Runtime.Tests.VisibleScopeNameAccessTests.Enumerate_visible_variables_is_nearest_first_with_shadowed_names_omitted
+    Elsa.Activities.Runtime.Tests.VisibleScopeNameAccessTests.Name_based_write_does_not_change_the_structured_reference_contract
+    Elsa.Activities.Runtime.Tests.WorkflowInstanceParameterRunTests.A_later_activity_sees_the_correlation_id_a_correlate_assigned
+    Elsa.Activities.Runtime.Tests.WorkflowInstanceParameterRunTests.An_instance_without_a_correlation_id_reads_null
+    Elsa.Activities.Runtime.Tests.WorkflowInstanceParameterRunTests.The_instance_id_is_the_workflow_execution_id
+    Elsa.Activities.Runtime.Tests.WorkflowOutputReadBackEndToEndExecutionTests.ExecuteWorkflow_SetOutputValue_IsReadableOnInstanceDetails
+    Elsa.Activities.Runtime.Tests.WorkflowOutputReadBackEndToEndExecutionTests.ExecuteWorkflow_DefaultPolicy_SurfacesOutputAsDiagnosticSnapshot_NotAbsent
+    Elsa.Activities.Runtime.Tests.WorkflowOutputReadBackEndToEndExecutionTests.SensitiveMarkedOutput_SurfacesAsRedactedMarker_EvenUnderAPayloadCapturingPolicy
+    Elsa.Activities.Runtime.Tests.WorkflowParentActivityCompletionSchedulerWorkHandlerTests.ChildCompletionCallback_ReturningUndeclaredOutcome_FaultsParentAndEndsAttempt
+    Elsa.Activities.Runtime.Tests.WorkflowParentActivityCompletionSchedulerWorkHandlerTests.ChildCompletionCallback_CompletingParent_DiscardsPrivateState
+    Elsa.Activities.Runtime.Tests.WorkflowParentActivityCompletionSchedulerWorkHandlerTests.ChildCompletionWithoutCallback_DisposalFailureFaultsBeforeDeferredCheckpoint
+    Elsa.Activities.Runtime.Tests.WorkflowParentActivityCompletionSchedulerWorkHandlerTests.ChildCompletionCallbackAndDisposalFailures_AreAggregatedIntoOneFault
+    Elsa.Activities.Runtime.Tests.WorkflowParentActivityCompletionSchedulerWorkHandlerTests.ChildCompletionCallbackAndDisposalFailures_KeepTheClassificationOfTheCallbackFailure
+    Elsa.Activities.Runtime.Tests.WriteLineBoundInputExecutionTests.WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper
+    Elsa.Activities.Runtime.Tests.WriteLineJavaScriptInputEndToEndTests.WriteLine_with_javascript_bound_text_input_evaluates_and_completes(source: "\"a \" + 1")
+    Elsa.Activities.Runtime.Tests.WriteLineJavaScriptInputEndToEndTests.WriteLine_with_javascript_bound_text_input_evaluates_and_completes(source: "return \"a \" + 1;")
+    Elsa.Activities.Runtime.Tests.WriteLineJavaScriptInputEndToEndTests.WriteLine_with_javascript_bound_text_input_evaluates_and_completes(source: "const prefix = \"a \"; return prefix + 1;")
+    Elsa.Activities.Runtime.Tests.WriteLineJavaScriptInputEndToEndTests.WriteLine_with_javascript_bound_text_input_evaluates_and_completes(source: "const prefix = \"a \"; prefix + 1")
+    Elsa.Activities.Runtime.Tests.WriteLineJavaScriptInputEndToEndTests.WriteLine_with_undefined_javascript_input_records_associated_failed_input_without_a_snapshot
+    Elsa.Activities.Runtime.Tests.WriteLinesActivityTests.Execute_WritesEachLine_InOrder
+    Elsa.Activities.Runtime.Tests.WriteLinesActivityTests.Execute_WritesNothing_WhenCollectionIsEmpty
+    Elsa.Activities.Runtime.Tests.WriteLinesActivityTests.Execute_WritesNothing_WhenInputIsUnset
+    Elsa.Activities.Runtime.Tests.Integration.ShellScopedActivityIoTypeRegistrationTests.FeatureAssemblyProvider_IsReachableFromShellScope_AndStartupPassRegistersItsActivityIoTypes

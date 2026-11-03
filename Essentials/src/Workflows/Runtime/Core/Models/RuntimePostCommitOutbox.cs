@@ -52,6 +52,32 @@ public sealed class RuntimePostCommitOutboxItem
         IReadOnlyDictionary<string, string>? metadata = null,
         long deliveryFencingToken = 0,
         DateTimeOffset? deliveryVisibleAfter = null)
+        : this(outboxItemId, intent, status, recordedAt, availableAt, retryPolicy, deliveryAttemptCount,
+            deliveringOwnerId, deliveryStartedAt, deliveredAt, lastFailureMessage, metadata,
+            deliveryFencingToken, deliveryVisibleAfter, null, null, null)
+    {
+    }
+
+    /// <summary>Reads additive delivery protocol state while retaining the original CLR constructor.</summary>
+    [JsonConstructor]
+    public RuntimePostCommitOutboxItem(
+        string outboxItemId,
+        RuntimePostCommitIntent intent,
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset recordedAt,
+        DateTimeOffset? availableAt,
+        RuntimePostCommitRetryPolicy? retryPolicy,
+        int deliveryAttemptCount,
+        string? deliveringOwnerId,
+        DateTimeOffset? deliveryStartedAt,
+        DateTimeOffset? deliveredAt,
+        string? lastFailureMessage,
+        IReadOnlyDictionary<string, string>? metadata,
+        long deliveryFencingToken,
+        DateTimeOffset? deliveryVisibleAfter,
+        int? stimulusDeliveryProtocolVersion,
+        PersistenceScope? stimulusDeliverySourceScope,
+        StimulusDeliverySnapshot? recipientSnapshot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         ArgumentNullException.ThrowIfNull(intent);
@@ -63,6 +89,18 @@ public sealed class RuntimePostCommitOutboxItem
 
         Validate(status, deliveringOwnerId, deliveryStartedAt, deliveredAt, deliveryFencingToken, deliveryVisibleAfter);
 
+        if (stimulusDeliveryProtocolVersion is not null and not StimulusDeliverySnapshot.CurrentVersion)
+            throw new ArgumentOutOfRangeException(nameof(stimulusDeliveryProtocolVersion));
+        if (stimulusDeliveryProtocolVersion is not null && stimulusDeliverySourceScope is null)
+            throw new ArgumentException("A declared recipient protocol requires its committed persistence scope.", nameof(stimulusDeliverySourceScope));
+        if (recipientSnapshot is not null && (stimulusDeliveryProtocolVersion != recipientSnapshot.Version ||
+            recipientSnapshot.SourceOutboxItemId != outboxItemId || recipientSnapshot.Scope.PersistenceScope != stimulusDeliverySourceScope ||
+            recipientSnapshot.IntentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeIntent(intent)))
+            throw new ArgumentException("The recipient snapshot does not belong to this declared source protocol.", nameof(recipientSnapshot));
+
+        StimulusDeliveryProtocolVersion = stimulusDeliveryProtocolVersion;
+        StimulusDeliverySourceScope = stimulusDeliverySourceScope;
+        RecipientSnapshot = recipientSnapshot;
         OutboxItemId = outboxItemId;
         Intent = intent;
         Status = status;
@@ -94,6 +132,114 @@ public sealed class RuntimePostCommitOutboxItem
     public long DeliveryFencingToken { get; }
     public DateTimeOffset? DeliveryVisibleAfter { get; }
 
+    /// <summary>Null means no recipient protocol is declared; it never authorizes recipient selection.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StimulusDeliveryProtocolVersion { get; }
+
+    /// <summary>Persistence scope accepted with a required-source commit, including publishers without TenantId.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PersistenceScope? StimulusDeliverySourceScope { get; }
+
+    /// <summary>Absent until the first delivery installs the complete set; a present empty set is final.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusDeliverySnapshot? RecipientSnapshot { get; }
+
+    /// <summary>Whether unresolved stimulus delivery still needs this publisher or an exact recipient's execution/dedup state.</summary>
+    /// <remarks>Every status except Delivered is owed, including FailedFinal and Cancelled. Snapshot absence retains the
+    /// declared publisher; a selected start requires the original per-artifact key. Source rows themselves remain retained.</remarks>
+    public bool RetainsExecutionForStimulusDelivery(string workflowExecutionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        if (Status == RuntimePostCommitOutboxStatus.Delivered || StimulusDeliveryProtocolVersion is null) return false;
+        if (Intent.WorkflowExecutionId == workflowExecutionId) return true;
+        if (RecipientSnapshot is not { } snapshot) return false;
+        if (snapshot.Resumes.Any(recipient => recipient.WorkflowExecutionId == workflowExecutionId)) return true;
+        if (snapshot.Starts.Count == 0) return false;
+        var key = Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+        return snapshot.Starts.Any(recipient => KeyedWorkflowStartIdentity.For(key, recipient.Executable.ArtifactId)
+            .WorkflowExecutionId == workflowExecutionId);
+    }
+
+    /// <summary>Pure absent-to-whole transition; providers must pass their current authoritative source and publisher.</summary>
+    public RuntimePostCommitOutboxItem InstallRecipientSnapshot(PostCommitDeliveryContext source,
+        StimulusDeliverySnapshot candidate, WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(scope);
+        if (!candidate.MatchesSource(source))
+            throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
+        if (!candidate.Scope.Matches(publisher, scope))
+            throw new InvalidDataException("The persisted source or authoritative publisher differs from the recipient proposal.");
+        ValidateStimulusSource(source.SourceOutboxItemId, source.IntentFingerprint, source.Scope,
+            source.Claim.OwnerId, source.Claim.FencingToken, publisher, scope, observedAt);
+        if (RecipientSnapshot is { } winner)
+        {
+            if (!winner.MatchesSource(source) || !winner.Scope.Matches(publisher, scope))
+                throw new InvalidDataException("The persisted recipient cohort differs from its authoritative source.");
+            return this;
+        }
+        return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
+            DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
+            DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate);
+    }
+
+    /// <summary>Validate a provider's canonical source and current claim before selection or saved-recipient effects.</summary>
+    /// <remarks>Only providers supply authoritative physical data, publisher and time. The returned context grants no
+    /// independent authority; an absent cohort permits selection, while a prior data-only cohort refuses.</remarks>
+    public PostCommitDeliveryContext OpenStimulusDeliverySource(PostCommitDeliveryContext expected,
+        WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(expected); ArgumentNullException.ThrowIfNull(publisher); ArgumentNullException.ThrowIfNull(scope);
+        ValidateStimulusSource(expected.SourceOutboxItemId, expected.IntentFingerprint, expected.Scope,
+            expected.Claim.OwnerId, expected.Claim.FencingToken, publisher, scope, observedAt);
+        if (expected.Claim.Item.RecipientSnapshot is { } observedWinner && !observedWinner.IsEquivalentTo(RecipientSnapshot))
+            throw new InvalidDataException("A previously observed immutable cohort was removed or replaced.");
+        var source = new PostCommitDeliveryContext(new(this, expected.Claim.OwnerId, expected.Claim.FencingToken,
+            DeliveryStartedAt ?? throw new InvalidDataException("The physical source has no claim start."), DeliveryVisibleAfter!.Value), scope);
+        if (RecipientSnapshot is { } snapshot &&
+            (snapshot.RetentionAcceptanceVersion != StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ||
+             !snapshot.MatchesSource(source) || !snapshot.Scope.Matches(publisher, scope)))
+            throw new InvalidDataException("The saved cohort has no matching verified source/publisher acceptance.");
+        return source;
+    }
+
+    /// <summary>Pure validation of compact saved-start provenance against a provider's current physical source/publisher.</summary>
+    /// <remarks>The returned context is not independent authorization. Providers supply scoped physical data and trusted
+    /// time; reference eligibility, executable retention and recipient admission remain separate requirements.</remarks>
+    public PostCommitDeliveryContext OpenSavedStartSource(WorkflowExecutableStimulusDeliveryAuthority authority,
+        WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(authority); ArgumentNullException.ThrowIfNull(publisher); ArgumentNullException.ThrowIfNull(scope);
+        ValidateStimulusSource(authority.SourceOutboxItemId, authority.IntentFingerprint, authority.Scope,
+            authority.OwnerId, authority.FencingToken, publisher, scope, observedAt);
+        var snapshot = RecipientSnapshot ?? throw new InvalidDataException("The exact source has no accepted recipient cohort.");
+        var claim = new RuntimePostCommitOutboxClaim(this, authority.OwnerId, authority.FencingToken,
+            DeliveryStartedAt ?? throw new InvalidDataException("The physical source has no claim start."), DeliveryVisibleAfter!.Value);
+        var source = new PostCommitDeliveryContext(claim, scope);
+        if (!snapshot.MatchesSource(source) || !snapshot.Scope.Matches(publisher, scope))
+            throw new InvalidDataException("The saved cohort differs from its authoritative source or publisher.");
+        var recipient = snapshot.Starts.SingleOrDefault(entry => entry.Binding.TriggerBindingId == authority.TriggerBindingId);
+        if (recipient is null || !recipient.SourceProvenanceCaptured)
+            throw new InvalidDataException("No captured start entry authorizes the requested binding.");
+        return source;
+    }
+
+    private void ValidateStimulusSource(string sourceOutboxItemId, string intentFingerprint, PersistenceScope expectedScope,
+        string ownerId, long fencingToken, WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        if (OutboxItemId != sourceOutboxItemId || scope != expectedScope ||
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent) != intentFingerprint || publisher.WorkflowExecutionId != Intent.WorkflowExecutionId)
+            throw new InvalidDataException("The persisted source or authoritative publisher differs from delivery provenance.");
+        if (Status != RuntimePostCommitOutboxStatus.Delivering || DeliveringOwnerId != ownerId ||
+            DeliveryFencingToken != fencingToken || DeliveryVisibleAfter is null || DeliveryVisibleAfter <= observedAt)
+            throw new RuntimePostCommitOutboxStaleClaimException(OutboxItemId, ownerId, fencingToken,
+                DeliveringOwnerId, DeliveryFencingToken, Status);
+        if (StimulusDeliverySourceScope != scope || StimulusDeliveryProtocolVersion != StimulusDeliverySnapshot.CurrentVersion)
+            throw new InvalidDataException("Legacy delivery responsibility requires recovery; recipients cannot be reconstructed.");
+    }
+
     public bool IsTerminal => Status is RuntimePostCommitOutboxStatus.Delivered
         or RuntimePostCommitOutboxStatus.FailedFinal
         or RuntimePostCommitOutboxStatus.Cancelled;
@@ -114,7 +260,10 @@ public sealed class RuntimePostCommitOutboxItem
         StringComparer.Ordinal.Equals(LastFailureMessage, other.LastFailureMessage) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata) &&
         DeliveryFencingToken == other.DeliveryFencingToken &&
-        DeliveryVisibleAfter == other.DeliveryVisibleAfter;
+        DeliveryVisibleAfter == other.DeliveryVisibleAfter &&
+        StimulusDeliveryProtocolVersion == other.StimulusDeliveryProtocolVersion &&
+        StimulusDeliverySourceScope == other.StimulusDeliverySourceScope &&
+        (RecipientSnapshot is null ? other.RecipientSnapshot is null : RecipientSnapshot.IsEquivalentTo(other.RecipientSnapshot));
 
     /// <summary>
     /// Exact-replay idempotency for saving a pending item whose identity already exists: the save is a replay only when both
@@ -303,6 +452,8 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
         }
         if (followUpOutboxItem is not null)
         {
+            if (followUpOutboxItem.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+                throw new ArgumentException("A failure follow-up cannot mint a verified cohort acceptance witness.", nameof(followUpOutboxItem));
             if (workflowDispatch is null || workflowDispatch.Mode != WorkflowDispatchMode.WaitForCompletion)
                 throw new ArgumentException("A failure follow-up is valid only for a waited workflow dispatch.", nameof(followUpOutboxItem));
             var identity = new WorkflowDispatchIdentity(
@@ -678,7 +829,10 @@ public static class RuntimePostCommitOutboxClaimTransitions
             lastFailureMessage,
             metadata,
             deliveryFencingToken,
-            deliveryVisibleAfter);
+            deliveryVisibleAfter,
+            item.StimulusDeliveryProtocolVersion,
+            item.StimulusDeliverySourceScope,
+            item.RecipientSnapshot);
 }
 
 public sealed class RuntimePostCommitRetryPolicy

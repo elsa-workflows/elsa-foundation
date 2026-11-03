@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    "T025 native Sequence/Flowchart current-library EF qualification complete"
+  ],
+  "sourceParentCommit": "3df24f6c845d0c1d347984f6ea6a39ba659168d7",
+  "filesSha256": {
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/NativeBackgroundActivityFlowchartEfTests.cs": "a1a9fe4dcd68cebc792a12f3ec6522f7a9484df7e138462e83c7d1e30b1367da",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/NativeBackgroundActivityFlowchartEfTests.Replay.cs": "6f39e09c4194112fea23fbd8c29f32d75c1d2d38c81942b8e6877684f1af93cd",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.cs": "ccc4042040ef682eee1b66589cd1dc7bbfd92259eec4345f9ec41fcb73550afe",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.ContinuedReplay.cs": "52cb6838476b12c35d993c7397f57ab0a8d4c517cb735b0bcca25701a5519a2c",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.OutcomeReplay.cs": "48a46c1d16b570fd607bba8372f4bca15790528e4ffbc9ab93941887ca5a1ba7",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/CombinedChildOutcomeEfTests.Bpmn.cs": "87ced809139040fc4a694268e3bb09956f2dfb2e7904a213d35e1d747ab3e2d1",
+    "Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs": "c8ed0975477b89a177991108dfa5221a660970f8cc38118f6f6203608754076f",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStateCodec.cs": "5ced50bd26d1ba79980f7a1d1f6511e6320f0b047c3f889209abe0bbf6e421cc",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "e5b927efaf48caee929132475b7b0062ff30bba973746a43df4f9e5e6d9105ae",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityAttemptActivationClaimer.cs": "1ff1e4d57f32718b3cc92f4ffdaa74a954a770abe552704c35650211671de31c",
+    "Essentials/src/Activities/Sequence/Activities/Sequence.cs": "d28f3a1d06538e41f39eae6509d3c0a00e35ddc2b27db3c45f28f8c97844844e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Recovery/RuntimeResumptionService.cs": "c635e515945f26967ff2848a77c5e9b241a3c63dac6957e12a96bdfa41313a1c",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "specs/1006-bpmn-library-adoption/tasks.md": "754d471331f7278acaace7b743bda6ff5f88d70cfb60124905da54723fc44969",
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.md": "b92f48d2834db3710e1d577d825cadcbc01d36a5a9a733a0dedcdc46f5bf5a47"
+  },
+  "binariesSha256": {
+    "Bpmn.Model.dll": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+    "Bpmn.Semantics.dll": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+    "Elsa.Activities.Bpmn.dll": "f50c527cd9fcab16ea58cc020b30e5872c4d6f7b4b8453e96c2e31ac39f93286",
+    "Elsa.Activities.Runtime.dll": "20a535794bdd245e658f2611a64e953ac488067297aa1b99bc972e07016deb90",
+    "Elsa.Workflows.Runtime.dll": "efbcba743bb7acd8dd05eb56363a9ebcb27e49a25659d901b13a372ff6dbd952",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "4c8f90ffc3f86a25409c199d3a317257d938974cc45b5dc6f057091f4bd41290",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll": "cb6487e82f106f1393ecf1b4660f031d4c23df2e0553cc2e543aa6d9a6f00475"
+  },
+  "releasedPackages": [
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "checks": [
+    {
+      "name": "native/actual legacy recovery plus corrected combined-outcome regression",
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "f3c6fd491b084e296bd72190cc6fc2b6f1afb92b1fd86365f611421a5cca4b32"
+    },
+    {
+      "name": "whole Runtime EF",
+      "passed": 1678,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "a07d19626f630228954a0f3f962044f66c1dfbb769b8017e3c9a0fb08e2fc9ad"
+    }
+  ],
+  "matrix": {
+    "persistenceModes": [
+      "Durable",
+      "Balanced"
+    ],
+    "persistedModeMetadataPositivelyAsserted": true,
+    "bpmnCompletionBothInternalAndOuterOrders": 12,
+    "beforeClaimCancellation": 4,
+    "midCancellationBothResultsOrdersAndFreshLatePointerReplay": 8,
+    "existingSingleProviderTypedFault": 4,
+    "preAcceptanceTypedFaultRecoveryBothChildrenAndFreshTerminalPointerReplay": 8,
+    "unchangedGenericNativeControls": 7,
+    "actualLegacyRecoveryRegression": 17,
+    "nativeTotal": 43,
+    "nativeAndLegacyTotal": 60,
+    "combinedRegressionCases": 3,
+    "focusedTotal": 63,
+    "newDiscoveredCases": 24
+  },
+  "qualification": {
+    "actualPublishedNativeWorkflows": true,
+    "realBackgroundWorkerResultBeforeAcceptance": true,
+    "originalProviderDisposedBeforeRecovery": true,
+    "pinnedExecutablePreserved": true,
+    "savedCoordinatorPointerAndActualNormalParentCallbackIndependentlyReplayed": true,
+    "callbackPositiveQueueAndActualHandlerReentry": true,
+    "completeCommittedActivityValueBackgroundIncidentDocumentsFrozen": true,
+    "workflowAllCurrentFieldsExceptUpdatedAtIncludingRootVariableFrame": true,
+    "persistedBookmarksObservedViaConcreteEfObserveAsync": true,
+    "positiveBookmarkGenerationWitnessInThisNativeSuite": false,
+    "noPoisonAndQueueConsumptionPositivelyAsserted": true,
+    "sequenceRemainsRunningInsideFaultedWorkflowWhileFlowchartFaulted": true,
+    "originalTypedResultAndIncidentPreserved": true
+  },
+  "mutations": {
+    "sourceRestored": true,
+    "sourceSha256": {
+      "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityAttemptActivationClaimer.cs": "1ff1e4d57f32718b3cc92f4ffdaa74a954a770abe552704c35650211671de31c",
+      "Essentials/src/Activities/Sequence/Activities/Sequence.cs": "d28f3a1d06538e41f39eae6509d3c0a00e35ddc2b27db3c45f28f8c97844844e"
+    },
+    "mutants": [
+      {
+        "name": "ignore-processed-native-parent",
+        "failed": 12,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "Published_bpmn_process_waits_for_internal_and_outer_joins_across_host_restart",
+        "logSha256": "1fef5db71b8dba564596e4b9b53d49a2351e55686545b454224cd15183a5239c"
+      },
+      {
+        "name": "normalize-sequence-parent-fault",
+        "failed": 4,
+        "passed": 4,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "Native_bpmn_typed_fault_recovers_before_acceptance",
+        "logSha256": "4a83e4f7efb854aa73373fb24c0182cda87a37944062904c05d3b6c524316f5a"
+      }
+    ]
+  },
+  "combinedOutcomeRequalificationMutations": {
+    "sourceRestored": true,
+    "sourceSha256": {
+      "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "e5b927efaf48caee929132475b7b0062ff30bba973746a43df4f9e5e6d9105ae",
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9"
+    },
+    "mutants": [
+      {
+        "name": "ignore-processed-outcome",
+        "failed": 1,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "logSha256": "6056333184e8a4d6249b10f855103a5a07cfd7dc0995c692f21cdbc6633fdc8f"
+      },
+      {
+        "name": "omit-exact-incident-absorption",
+        "failed": 1,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "logSha256": "18316772cd35e25f9df6b9ec120de61af545a4639178458366a9c794858f44a5"
+      }
+    ]
+  },
+  "combinedOutcomeObservationFix": "Require exact trailing activity BookmarkWaiting, physical BookmarkId linkage and nonempty matching CreateBookmark/Scheduler work IDs written in one checkpoint before accepting original pre-ACK cut. No full-sweep wait, field exclusions or post-ACK rebaseline.",
+  "mutationLimits": [
+    "Processed-receipt bypass: twelve completion cases fail complete durable-fact equality after captured actual parent callback; no inference of body rerun/advanced joins.",
+    "Sequence fault policy: four Sequence fail Running/Faulted comparison and four Flowchart pass; failure occurs after recovered acceptance, before terminal replay."
+  ],
+  "initialUnqualifiedFailures": [
+    {
+      "qualified": false,
+      "reason": "New observer initially exposed only plain handler compatibility interface; actual pipeline partition was lost on callback replay. Nineteen pass/six fail; corrected by forwarding actual IRuntimePipelineWorkHandler context.",
+      "logSha256": "c24a2d6bea4ffbd91f848a298064039ea63d8cadef007e1af7729f66ca5780ae"
+    },
+    {
+      "qualified": false,
+      "reason": "First fault-policy mutation used nonexistent context member and failed compilation; excluded from behavioral mutant totals.",
+      "logSha256": "1b229cb79cca082eb3c28aa9aca8a67629ed0e8d3781544b7166d2c546bbb56e"
+    },
+    {
+      "qualified": false,
+      "reason": "Initial final whole EF run: 1677 pass/one existing combined-outcome snapshot comparison failure around concurrent recovery/held ACK. Retained separately from final qualification.",
+      "logSha256": "f45a4f39cc6c3a2546990215d10653b66295037fc94a4b0779591e7a3153885b"
+    },
+    {
+      "qualified": false,
+      "reason": "Attempted waiting for full recovery while ACK held also waits delivery; one normal failure/two companion passes. Rejected in favor of exact completed bookmark checkpoint cut.",
+      "logSha256": "3579d2c8f8a5374670f0c48210827c57a60619affe76be99a7412195fbb7047d"
+    },
+    {
+      "qualified": false,
+      "reason": "Same rejected whole-recovery wait timed out under the guard mutant before duplicate evaluation; not counted as behavioral mutation proof.",
+      "logSha256": "9eea9be07736a7b01e75cda71b83fb7bdbc9336f500c1b40242109f62066dcd4"
+    }
+  ],
+  "observerHistory": "Original older continued-legacy observer exposed only plain compatibility interface; historical receipts remain frozen. Current native and older observers also implement pipeline handler and forward actual context. Current seventeen actual legacy cases rerun with faithful instrumentation.",
+  "snapshotLimits": [
+    "Workflow UpdatedAt operational touch time excluded; not whole-workflow byte identity.",
+    "Native background cases have no positive physical bookmark-generation witness; absence/equality only. Separate T017/T024 positive waits remain source-bound.",
+    "Cancellation/fault replay uses terminal workflow purge; not claimed as live parent callback guard.",
+    "Provider restart is not process kill/restart, old-binary native upgrade/rollback or final actual Workbench/Studio acceptance."
+  ],
+  "oldCapturedCheckpointsUnchanged": {
+    "deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+      "receiptSha256": "f1829d951f4d48104800d77a291e12f33f228a91f1079185de8c0d84af4ca111"
+    },
+    "listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+      "receiptSha256": "276a402ca42780be010162a9cc0fd39b739dc1f170f44bda0a6bb591d1cec7c6"
+    },
+    "listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "receiptSha256": "ed4c3c8577655ee70b53ab8c9c59098460390ef34ae1f3db196459faefae5e73"
+    },
+    "parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1",
+      "receiptSha256": "1056c29067953c365127bd71a500604d50f0e6305535977d83059fef1ddb8c68"
+    },
+    "parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "receiptSha256": "91738281dd197a5c8e62794914c18d158638e32a9daa26b36369be8ef01ccb25"
+    },
+    "queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+      "receiptSha256": "c6aa235d7649d6733ca0f6a352bd6ec3af0867dc9ea8b280a5c1084fe77332d5"
+    },
+    "queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+      "receiptSha256": "0bbc348c2306da431780d6fe03bb060f195b6bfdac9d2972ed5acf7baa6e728b"
+    },
+    "resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+      "receiptSha256": "9ebbfc0c3fbb3d8ce573ffcad810b815d547234d491c5b4d80e8dd8a61850d79"
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/continued-legacy-callback-replay.md": {
+      "sha256": "f60742244b93249b52b3451d090a94d79512395847a63c158ac706b6c7af6366"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/continued-legacy-callback-replay.json": {
+      "sha256": "5e727eb3f474add1a7f5889c9e77253282f16872b7049df2f7e0eda63e105bc9"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": {
+      "sha256": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.json": {
+      "sha256": "7d45e6d512a09779ae38a88bc977370b307620d5811c860e0497c07eb0030e0c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.md": {
+      "sha256": "957d261394ee1bc9fed0cfb6bd999ef186ed1ff023bbd4abad28784c68ead1ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.json": {
+      "sha256": "aea0a590025f4d65c9b563d44b0b4774c4992103b77a822da5fed01bd0ce6c15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.md": {
+      "sha256": "ba62cb1f2422815b2ad451384bd8e2dfa06fe7e9ee2d508d0a7c8af3c9cd7976"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.json": {
+      "sha256": "9b98cfcc71a21a537e4577537dac3bbb41b2511c563bcc3a7ff8aa8458a88f56"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": {
+      "sha256": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.json": {
+      "sha256": "8c2494c50096b654b70050be62d9e39322572eb237156fbb5cd42d1e9072e081"
+    }
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "oldCaptureWriterInvoked": false,
+  "reviews": {
+    "type": "three independent bounded source/artifact audits; not full PR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "remainingGates": [
+    "T029/T045 binding/called controls and final actual Workbench/current Studio",
+    "T032 semantic writer/duplicate semantics deletion; T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full-PR/required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent #2898/#2907/program production acceptance; Orleans/task-runner deferred"
+  ]
+}

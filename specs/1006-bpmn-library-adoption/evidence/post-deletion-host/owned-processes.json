@@ -1,0 +1,27 @@
+{
+  "processes": {
+    "legacy": {
+      "controllerProcessId": 55069,
+      "processId": 55070,
+      "startEpochSeconds": 1793145758,
+      "childRunning": false,
+      "controllerRunning": false
+    },
+    "backend": {
+      "controllerProcessId": 55057,
+      "processId": 55065,
+      "startEpochSeconds": 1793145746,
+      "childRunning": true,
+      "controllerRunning": true
+    },
+    "studio": {
+      "controllerProcessId": 41058,
+      "processId": 41059,
+      "startEpochSeconds": 1793141918,
+      "childRunning": true,
+      "controllerRunning": true
+    }
+  },
+  "userLocalhostHostsUntouched": true,
+  "ownedStudioPairRetainedForResultingMainQualification": true
+}

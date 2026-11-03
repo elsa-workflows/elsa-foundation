@@ -3,9 +3,9 @@ import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import type { CreateWorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorTypes";
 import { CreateWorkflowDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/CreateWorkflowDialog";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "ready";

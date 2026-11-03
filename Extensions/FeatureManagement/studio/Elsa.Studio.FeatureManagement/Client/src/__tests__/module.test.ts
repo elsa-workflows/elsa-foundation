@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, defaultStudioHostId, studioBackendCapabilitiesChangedEvent, studioNavigationRequestedEvent, type AuthProviderManager } from "@elsa-workflows/studio-sdk";
 import {
   applyFeatureToggle,
   buildDependentsIndex,
@@ -64,6 +64,37 @@ describe("feature management module", () => {
     expect(editor.id).toBe("boolean");
   });
 
+  it("reviews the organization Boolean alone, allows cancellation and applies without disabling the design API", async () => {
+    const descriptor = setting({ name: "WorkflowOrganizationEnabled", displayName: "Workflow organization", jsonType: "boolean", defaultValue: true });
+    const original = { WorkflowOrganizationEnabled: true, HostExtensionSetting: "keep" };
+    let payload: unknown = null;
+    const api = stubApi({
+      getJson: async () => ({ revision: "organization-rev-1", features: [feature("WorkflowsDesignApi", true, original, ["Workflows"], { settings: [descriptor] })] }),
+      postJson: async (_url, body) => {
+        payload = body;
+        return { catalog: { revision: "organization-rev-2", features: [feature("WorkflowsDesignApi", true, { ...original, WorkflowOrganizationEnabled: false }, ["Workflows"], { settings: [descriptor] })] }, featureDescriptorCount: 1, reloadedShellCount: 1 };
+      }
+    });
+    register(api);
+    const page = await renderFeatureManagementPage();
+    await click(buttonByText(page.container, "Edit settings"));
+    const toggle = page.container.querySelector<HTMLInputElement>(".feature-management-settings-dialog input[type='checkbox']");
+    expect(toggle?.checked).toBe(true);
+    await click(toggle);
+    await click(buttonByText(page.container.querySelector(".feature-management-settings-dialog")!, "Save draft"));
+    let review = await openImpactReview(page.container);
+    const row = impactRowText(review, "WorkflowsDesignApi");
+    expect(row).toContain("Workflow organization");
+    expect(row).not.toContain("HostExtensionSetting");
+    await click(buttonByText(review, "Cancel"));
+    expect(payload).toBeNull();
+    expect(original.WorkflowOrganizationEnabled).toBe(true);
+    review = await openImpactReview(page.container);
+    await click(buttonByText(review, "Apply"));
+    expect(payload).toEqual({ revision: "organization-rev-1", features: [{ id: "WorkflowsDesignApi", enabled: true, configuration: { WorkflowOrganizationEnabled: false, HostExtensionSetting: "keep" } }] });
+    await page.unmount();
+  });
+
   it("creates apply payload with disabled feature configuration cleared", () => {
     const payload = createApplyPayload("rev-1", [
       feature("Enabled", true, { value: 1 }),
@@ -77,6 +108,13 @@ describe("feature management module", () => {
         { id: "Disabled", enabled: false, configuration: {} }
       ]
     });
+  });
+
+  it("omits package diagnostics while retaining unknown configured features in the full desired state", () => {
+    const diagnostic = { ...feature("Broken.Package:1.0.0", false, {}), sourceKind: "manifest-error", readError: "Protected metadata is unavailable." };
+    const payload = createApplyPayload("rev-1", [feature("UnknownConfigured", true, { value: 1 }), diagnostic]);
+
+    expect(payload.features).toEqual([{ id: "UnknownConfigured", enabled: true, configuration: { value: 1 } }]);
   });
 
   it("enabling a feature cascades to its transitive dependencies", () => {
@@ -1106,6 +1144,22 @@ describe("feature impact review", () => {
     await unmount();
   });
 
+  it("opens on the Server host when no target or pending apply picks one", async () => {
+    const api = stubApi({
+      hostGetJson: async () => ({ revision: "studio-rev-1", features: [feature("StudioFeature", true, {})] }),
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("ServerFeature", true, {})] })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    expect(defaultStudioHostId).toBe("server");
+    const selectedHosts = Array.from(container.querySelectorAll("[aria-label='Hosts'] [role='tab']")).filter(tab => tab.getAttribute("aria-selected") === "true");
+    expect(selectedHosts.map(tab => tab.textContent)).toEqual([expect.stringContaining("Server")]);
+    expect(container.querySelector("[aria-label='Disable ServerFeature']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Disable StudioFeature']")).toBeNull();
+    await unmount();
+  });
+
   it("resets only the selected host draft and clears its open review", async () => {
     const api = stubApi({
       hostGetJson: async () => ({ revision: "studio-rev-1", features: [feature("StudioFeature", true, {})] }),
@@ -1254,6 +1308,129 @@ describe("feature impact review", () => {
     expect(container.textContent).toContain("Unsaved changes");
     expect(postCount).toBe(0);
     await unmount();
+  });
+
+  it("saves only changed settings and does not materialize untouched defaults", async () => {
+    const featureId = "WorkflowsRuntimeEntityFrameworkCore";
+    const settings = [
+      setting({ name: "WorkflowExecutableCacheCapacity", displayName: "Workflow executable cache capacity", jsonType: "integer", defaultValue: 256 }),
+      setting({ name: "ConnectionName", displayName: "Connection name", jsonType: "string" }),
+      setting({ name: "ConnectionString", displayName: "Connection string", jsonType: "string" }),
+      setting({ name: "PooledContexts", displayName: "Pooled contexts", jsonType: "boolean" }),
+      setting({ name: "Provider", displayName: "Provider", jsonType: "string", defaultValue: "Sqlite" }),
+      setting({ name: "Schema", displayName: "Schema", jsonType: "string" }),
+      setting({ name: "ExistingSetting", displayName: "Existing setting", jsonType: "string", defaultValue: "default" })
+    ];
+    const initialFeature = feature(featureId, true, {
+      WorkflowExecutableCacheCapacity: 256,
+      ExistingSetting: "preserve me"
+    }, ["Runtime"], { settings });
+    let submitted: unknown;
+    let responseRevision = 1;
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: [initialFeature] }),
+      postJson: async (_url, body) => {
+        submitted = body;
+        const request = body as { features: Array<{ configuration: Record<string, unknown> }> };
+        const requestFeature = request.features[0];
+        if (!requestFeature) throw new Error("The feature apply request should contain the feature.");
+        return {
+          catalog: {
+            revision: `server-rev-${++responseRevision}`,
+            features: [feature(featureId, true, requestFeature.configuration, ["Runtime"], { settings })]
+          },
+          featureDescriptorCount: 1,
+          reloadedShellCount: 1
+        };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    const openSettingsDialog = async () => {
+      await click(buttonByText(container, "Edit settings"));
+      const dialog = container.querySelector(".feature-management-settings-dialog");
+      if (!dialog) throw new Error("The feature settings dialog should open.");
+      return dialog;
+    };
+
+    try {
+      let dialog = await openSettingsDialog();
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).not.toContain("Unsaved changes");
+      expectControlUnavailableByText(container, "Review changes");
+
+      dialog = await openSettingsDialog();
+      let capacityInput = dialog.querySelector("input[type='number']") as HTMLInputElement | null;
+      await changeInput(capacityInput, "257");
+      await click(buttonByText(dialog, "Reset changes"));
+      expect(capacityInput?.value).toBe("256");
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).not.toContain("Unsaved changes");
+      expectControlUnavailableByText(container, "Review changes");
+
+      dialog = await openSettingsDialog();
+      capacityInput = dialog.querySelector("input[type='number']") as HTMLInputElement | null;
+      await changeInput(capacityInput, "257");
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).toContain("Unsaved changes");
+
+      const review = await openImpactReview(container);
+      const changedFeature = impactRow(review, featureId);
+      const changedSettings = Array.from(changedFeature?.querySelectorAll(".feature-management-impact-section") ?? [])
+        .find(section => section.querySelector("h5")?.textContent === "Changed settings");
+      expect(Array.from(changedSettings?.querySelectorAll("dt") ?? []).map(item => item.textContent)).toEqual([
+        "Workflow executable cache capacity"
+      ]);
+
+      await click(buttonByText(review, "Apply"));
+      expect(submitted).toEqual({
+        revision: "server-rev-1",
+        features: [{
+          id: featureId,
+          enabled: true,
+          configuration: {
+            WorkflowExecutableCacheCapacity: 257,
+            ExistingSetting: "preserve me"
+          }
+        }]
+      });
+
+      dialog = await openSettingsDialog();
+      const existingSettingLabel = Array.from(dialog.querySelectorAll("label"))
+        .find(label => label.querySelector("strong")?.textContent === "Existing setting");
+      const existingSettingInput = existingSettingLabel?.querySelector("input, textarea") as HTMLInputElement | null;
+      expect(existingSettingInput?.value).toBe("preserve me");
+      await changeInput(existingSettingInput, "");
+      await click(buttonByText(dialog, "Save draft"));
+      expect(container.textContent).toContain("Unsaved changes");
+
+      const clearReview = await openImpactReview(container);
+      const clearedFeature = impactRow(clearReview, featureId);
+      const clearedSettings = Array.from(clearedFeature?.querySelectorAll(".feature-management-impact-section") ?? [])
+        .find(section => section.querySelector("h5")?.textContent === "Changed settings");
+      expect(Array.from(clearedSettings?.querySelectorAll("dt") ?? []).map(item => item.textContent)).toEqual([
+        "Existing setting"
+      ]);
+      expect(Array.from(clearedSettings?.querySelectorAll("dd") ?? []).map(item => item.textContent?.trim())).toEqual([
+        "preserve me → Not set"
+      ]);
+
+      await click(buttonByText(clearReview, "Apply"));
+      expect(submitted).toEqual({
+        revision: "server-rev-2",
+        features: [{
+          id: featureId,
+          enabled: true,
+          configuration: {
+            WorkflowExecutableCacheCapacity: 257,
+            ExistingSetting: ""
+          }
+        }]
+      });
+    } finally {
+      await unmount();
+    }
   });
 
   it("invalidates the review as soon as a catalog refresh starts", async () => {
@@ -2070,3 +2247,40 @@ async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
   await Promise.resolve();
 }
+
+describe("backend feature administration isolation",() => {
+  it("refuses reviewed Apply after connection lifetime changes",async()=>{
+    let posts=0;
+    const api=stubApi({getJson:async()=>({revision:"rev-a",features:[feature("FeatureA",true,{})]}),postJson:async()=>{posts++;return {};}});
+    api.backendSession={key:"backend-a:alice:tenant-a:generation-one",identity:{status:"anonymous",roles:[],permissions:[]},profile:{name:"Backend A"}};
+    register(api);const page=await renderFeatureManagementPage();
+    try {
+      expect(page.container.textContent).toContain("Server · Backend A");
+      await click(page.container.querySelector("[aria-label='Disable FeatureA']"));const review=await openImpactReview(page.container);
+      api.backendSession={...api.backendSession,key:"backend-b:bob:tenant-b:generation-two",profile:{name:"Backend B"}};
+      await click(buttonByText(review,"Apply"));expect(posts).toBe(0);
+    } finally {await page.unmount();}
+  });
+  it("pins settings and revision, guards drafts, and refreshes only the applied connection",async()=>{
+    let payload:any;const events:string[]=[];
+    const source=feature("Configured",true,{Limit:1},[],{settings:[setting({name:"Limit",displayName:"Limit",jsonType:"integer"})]});
+    const api=stubApi({getJson:async()=>({revision:"rev-a",features:[source]}),postJson:async(_url,body)=>{payload=body;return {catalog:{revision:"rev-b",features:[source]},featureDescriptorCount:1,reloadedShellCount:1};}});
+    api.backendSession={key:"exact-backend-session",identity:{status:"anonymous",roles:[],permissions:[]},profile:{name:"Backend A"}};
+    const listener=(event:Event)=>events.push((event as CustomEvent).detail.key);window.addEventListener(studioBackendCapabilitiesChangedEvent,listener);
+    register(api);const page=await renderFeatureManagementPage();
+    try {
+      await editSettingValue(page.container,"Configured","Limit","7");
+      const leave=new Event(studioNavigationRequestedEvent,{cancelable:true});window.dispatchEvent(leave);expect(leave.defaultPrevented).toBe(true);
+      const review=await openImpactReview(page.container);await click(buttonByText(review,"Apply"));
+      expect(payload.revision).toBe("rev-a");expect(payload.features[0].configuration.Limit).toBe(7);expect(events).toEqual(["exact-backend-session"]);
+    } finally {window.removeEventListener(studioBackendCapabilitiesChangedEvent,listener);await page.unmount();}
+  });
+  it("preserves missing descriptor information and explains dormant features",async()=>{
+    const api=stubApi({getJson:async()=>({revision:"rev",features:[feature("Older",true,{}),{...feature("Dormant",true,{}),runtimeAvailable:true,availability:{status:"dormant",reasons:[{family:"schema",version:"1",kind:"missing",reason:"Schema finalization is pending."}]}}]})});
+    register(api);const page=await renderFeatureManagementPage();
+    try {
+      await click(buttonContainingText(page.container,"Older"));expect(page.container.textContent).toContain("Not reported");
+      await click(buttonContainingText(page.container,"Dormant"));expect(page.container.textContent).toContain("Schema finalization is pending.");
+    } finally {await page.unmount();}
+  });
+});

@@ -27,6 +27,10 @@ public interface IActivityStructureHandler
     /// </summary>
     Type? AuthoredPayloadType => null;
 
+    /// <summary>
+    /// Projects child slots and any structure-owned invocation outcome declarations. Generic publishing
+    /// consumes the outcome projections without inspecting this handler's authored payload.
+    /// </summary>
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
@@ -34,6 +38,9 @@ public interface IActivityStructureHandler
     /// Flowchart outcome ports. Values and expressions must never be included.
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
+
+    /// <summary>Projects typed inputs consumed conditionally by this structure before activity activation.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
 
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 

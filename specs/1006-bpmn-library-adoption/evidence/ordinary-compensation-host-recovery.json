@@ -1,0 +1,762 @@
+{
+  "schemaVersion": 1,
+  "task": "T029 ordinary bound-task compensation actual-host qualification and supplemental actual legacy active-compensation capture",
+  "sourceParentCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "currentHostBuildSourceCommit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "currentHostSourceRevisionIdExplicit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "productionSourcesByteIdenticalToCurrentParent": true,
+  "oldHostBuildSourceCommit": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "oldHostSourceRevisionIdExplicit": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "oldCompleteBinaryManifestMatchesPriorActualSourceQualification": true,
+  "oldSourceProvenanceReceipt": "specs/1006-bpmn-library-adoption/evidence/legacy-called-workbench-recovery.json",
+  "oldSourceProvenanceReceiptSha256": "976a2e88c7b5aa8a0774a9ce531c5b50a98c9509f7c9eb9e8aaaa0624ac5936f",
+  "productionSourceUnchangedDuringPositiveRuns": true,
+  "allHostsRecoveryProbeAbsent": true,
+  "releasedPackageBinariesMatchCache": true,
+  "persistenceMode": "Balanced",
+  "actualCases": {
+    "publicAuthoredWorkflows": 2,
+    "ordinaryCompensableServiceTasksPerWorkflow": 2,
+    "realEventCompensationHandlersPerWorkflow": 2,
+    "newStandardWorkflowContinuations": 1,
+    "actualLegacySeedCapturedBeforeWriterExit": true,
+    "legacyOldControlContinuations": 1,
+    "legacyUpgradedContinuations": 1,
+    "qualifiedStandardHostProcesses": 3,
+    "qualifiedOldHostProcesses": 2,
+    "actualProcessRestarts": 3,
+    "allFourteenApiAndCheckedPhasesPassed": true,
+    "legacySemanticVersionRemainsOneUntilNormalCompletion": true,
+    "positiveSyntheticStateOrRuntimeOrClockEdits": false
+  },
+  "comparisons": {
+    "boundaries": [
+      {
+        "before": "prepared",
+        "after": "reopened",
+        "completeCheckedObservationEqual": true,
+        "observationSha256": "8eac589f041f9dc6e58798d18d9c82d7847e1b6b69167f589de492b978707731",
+        "stateVersion": 2
+      },
+      {
+        "before": "legacy-seed",
+        "after": "legacy-old-reopened",
+        "completeCheckedObservationEqual": true,
+        "observationSha256": "c57c9dae0a50efd40bfcabb95d619e95a9ac1af656628b30b0683000eb66300f",
+        "stateVersion": 1
+      },
+      {
+        "before": "legacy-seed",
+        "after": "legacy-upgraded-reopened",
+        "completeCheckedObservationEqual": true,
+        "observationSha256": "c57c9dae0a50efd40bfcabb95d619e95a9ac1af656628b30b0683000eb66300f",
+        "stateVersion": 1
+      }
+    ],
+    "fieldExclusions": [],
+    "scope": "Complete checked named workflow/all activity/incident/dispatch/physical-wait/source model projection. Not every module row, variable or scheduler document. Subsequent newly minted handler A IDs differ between old and upgraded hosts; no cross-host final identity equality claimed."
+  },
+  "wholeRuntimeSnapshots": 14,
+  "wholeDesignSnapshots": 2,
+  "wholeModuleSnapshots": 16,
+  "identityAndTokensExcluded": true,
+  "qualifiedOwnedProcessesExited": true,
+  "filesSha256": {
+    "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1": "353494c9a929b48950ce5df489b9278da40e71697c8c39bb829bdcf376656324",
+    "e2e-tests/bpmn/test_opted_called_snapshot_reader.py": "b4f7181cffa60875828a0ac1af0f27f293b60d0379f7aab8a4274e2d973c440f",
+    "e2e-tests/bpmn/test_called_snapshot_reader.py": "b24d72b97511d91d57a423b74bf174034ad8a7b12f8cc4d1a778050a88233a5a",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/stimuli/_StimuliCommon.ps1": "7afd5ef449e274237db35bc27c787af8d5e4f5e3e236b5a8e7acad9987ec21b7",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "cc92c01900be96385a011ab0b2fdcf7b9fc192f3d0f978b59a221e0e1fdaeb0e",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.cs": "7db5bdb5fd4fdf3a2d2d573c0ee12c6d77d4605b818232b9b431826cd3a82e75",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Escalation.cs": "f7133978eec14279d9d26635ba5f05ccc38d191bd1f1361aae57d2538bc45711",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "2e7e1246eddc92f28703065038aaa9dd74aec19ec51e1b96d69fbb1632691e99",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "eac338b10044cfaecaaf7d9d5af7fb34edd76d7c1d9fca7f3227a02b80225182",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "global.json": "a647fbc942871cef23ce38ef75c362bd02269b0bb634aa348a4537cadc926c3f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "684c31b81e06a1b0a2f34538bb9d8da29525867ab7f228b79f4b19fb74c04c3f",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "Essentials/apps/Elsa.Workbench/Program.cs": "935ff425bce142597d82d59c763fca41ac386564c67f42dcad49b3f56891c568",
+    "Essentials/apps/Elsa.Workbench/appsettings.json": "20ab11c707acf9b8c2c3305a972e1493da6747da45a1c5532bd65d63b54495b0",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnControlProtocol.cs": "955e3c3161e34345dcdf63aca43d9addc5e588cc657c79ce7084ba50c10bc60d",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "2342a7d9ff3aa55821884ca45fa3b6f92f732a6b54a4815e1df9f9868e457d66",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "304f300ffc0b4d5e44d534c836ca079e05e2287e2b4b301b39c623bb2433a4fb",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationExecutor.cs": "bdcbfce6f2692d083a1c19e0def64fc544e835902f0ff7b8fddaa4c385fd0d80",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs": "2141d1a62ad804fa83f10739a47d474011b1834e3a81fa1c49f46c0ed93e73c3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildCancelExecutor.cs": "099324a417801eaa57badd3a7897a7ea4576ca3f6f6c61b7c50963da70be0fb3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancelIntentFactory.cs": "100c7344d3f33988b163eef3c3f8dd323d5d2b6ed33a7ec6296992b6637d823e",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "f94b5634281f4a4995313fd5b92105fdcc4e4d5007b4d8f423343fddca6bf586",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "47aef1e9f8c740999704659682bad26b86983e54a68566ba9d5ed333bd75c771",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "209497c223fc2cf3ed1b491e776acaba535e7a4de1c560baefccb3466602ae96",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs": "3dc8474a8342f58f6f781803d3ec75f3265ae7b4c8a42faa31bf874f4096aa75",
+    "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs": "b93fcd5387e333000261804ee8e9507d0cbfacd998641a59372ae70a1e550b94",
+    "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs": "f99988de7f05486c1a07ec5fa6768331f4b25232c12cb1862f962a40e663a5f3",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimePortableExpressionEvaluator.cs": "62315f089834167ec4e3fa97780365796ef06132ffb4e4fc4c1951282292accd",
+    "Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs": "7e19747b75b8daf2ee5f79720820936902aba72ff8c77a2d80ea2b39db853572",
+    "Essentials/src/Activities/Primitives/Activities/Event.cs": "3efe57fdf22dbb7395d302c7e9c56c97a4ef57b6fa168d253561e17d0258ee3c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs": "431b73abf580af6303dc556b4c6e68d7006ae00c422d021e24c671200122b94e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "8871951b099053d008a51c036d651baf3858ba5df4e79a08b493f8c3f6af8819",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": "ad8ae1307ac345820a65664dcb8ddd87608fa12165b6c6b691798e23b8e6cc20",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs": "762a1a1e9f3dd2092bc35790f2c6549bd85ec11eb643849f57507a0d3085299b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0",
+    "e2e-tests/bpmn/Test-BpmnConcurrentCalledHost.ps1": "79c5de9cc95c986d1fa32192bf499cf32f89f3a28373f2724f2cd9246f621ab3",
+    "e2e-tests/bpmn/_CalledControlCommon.ps1": "9f13b5cbcb2a6a41ea0a97722428f793bc2888412ceef6a992fb86dcde8e27a5",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Concurrent.cs": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+    "Essentials/src/Tasks/Schedules/ScheduledTaskExecution.cs": "912696fb5307e74d894773c4b841c72ab4f24ab8546acc3be34e96b2fc0daca8",
+    "Essentials/tests/Tasks/Tests/TaskScheduleTests.cs": "79ef549b37794ef95a26bb56bd0a616d0ac95d06c3080831df0d873b31acd9a8",
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "de2c4cbbb2aed509986869c24f620e4f03c55f8ae252361361faceb94e926248",
+    "e2e-tests/bpmn/Test-BpmnCalledAckHost.ps1": "b7953c6c59ee15615b5f5478d40f320f69a9ce1eba205bb7e71047270e9f7cb8",
+    "e2e-tests/bpmn/test_called_ack_snapshot_reader.py": "294d3c1a9443dbb6d22bf4516fffd6e285027b5f8d3b70a53597b95f9e1ac66c",
+    "e2e-tests/bpmn/verify_published_contracts.py": "27dd5b278c2abcd1382a067299c406e03215ede5a301241e92ab7ed2864be0c7",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Acknowledgment.cs": "b2409701254ac5707b96478e31c90938f499792f3ff23f18e092bf6cfb2fb0b5",
+    "e2e-tests/bpmn/Test-BpmnCompensationHost.ps1": "6311725bd052dd7468d257c17527bd278987edb66f5405765c697c5349cf0dcf",
+    "e2e-tests/bpmn/test_compensation_snapshot_reader.py": "67a3dfc122ff29902ff2c671c8e1743225f111cbd6af229acd2c64618e8a08db",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Compensation.cs": "03894ef0b9049f853993bcd4fca0935f08596ff1fa6724b726487d7fa5164369",
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-host-recovery.md": "4a9f3dcc711c7e3158017ac14a0b786f966d875c1ebfde1bceb4dc4d10f4bfdb",
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/README.md": "c59f32649bf20c7ead7b831c9cc8c9e707399f55799194d6b66179f3d9333cf1"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/README.md": {
+      "sha256": "c59f32649bf20c7ead7b831c9cc8c9e707399f55799194d6b66179f3d9333cf1",
+      "bytes": 3841
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/bounded-reviews.json": {
+      "sha256": "53b0ee0f70495d1d0630ecd996c55e5cd725a102d98166bed44f415a0f4bfea0",
+      "bytes": 745
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/comparisons.json": {
+      "sha256": "652d43b75e64ec74e222e9207a42b49d76eae00b76559d7411e98953fecfee2f",
+      "bytes": 1079
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/compatibility-called-ack.json": {
+      "sha256": "49b7a663a2d656e28843d286bf8a5de4c4e6f2ab016b4ae6622090ad98cb8389",
+      "bytes": 2698
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/compatibility-coded.json": {
+      "sha256": "bf2c12cd54e63cf0a05cfec6418a535641185e9fb1783754d88587ea82f9420a",
+      "bytes": 1849
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/compatibility-concurrent-prepared.json": {
+      "sha256": "be5810ceae03d72692fee46c3ab8af6ff5cb37918f533ad356d86ee8c04d47db",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/compatibility-legacy-called.json": {
+      "sha256": "7e0311d5526a65c237d696acd937570ea611fa46524f65f0711ea824a6982f84",
+      "bytes": 1535
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/design-contracts.json": {
+      "sha256": "e5c2f96df7c3a36b52f3631e81d5228733819dc0cd2cbe1c054ccf2f6a193f90",
+      "bytes": 3492
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/design.json": {
+      "sha256": "522b6901546daa8b6a51f65f3fef52e2e54d4bc61a5a1ec7af0aa21d94f101bb",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/design.sqlite.gz": {
+      "sha256": "069a0d55733a13bec7f0c468eaf258e60c8fd2380e45fe0761f95a5a5e1f0d7f",
+      "bytes": 107762
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/finished-api.json": {
+      "sha256": "0841a906902fc6a3af774d9688c9df572b15d4bf67f9e407d4eaf4b84e2e643e",
+      "bytes": 25307
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/finished-checked.json": {
+      "sha256": "d7b955d33d4f50a1121b2e8874966ef547306800489c2e8700bfb942908c8e28",
+      "bytes": 50451
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/finished-controls.json": {
+      "sha256": "a6fad5f85ac3e7606d38d27df1fd79a42c6e48bee484d3968dc33248ba4a2750",
+      "bytes": 1844
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/finished-runtime.json": {
+      "sha256": "a16c97c2b06e12354c3ab098970517f9736277b2493c35d47f284e9234d17199",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/finished-runtime.sqlite.gz": {
+      "sha256": "04e32ad4e02886ec51736787b8f4f263c911e080134fcf33206b435871b9bd3e",
+      "bytes": 157922
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/handler-a-api.json": {
+      "sha256": "5e1abab3d8e5423a0f732a875287341ab6abb55de221e852e3dee30b11c0f71c",
+      "bytes": 23796
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/handler-a-checked.json": {
+      "sha256": "35cf12a2848029674eb533675b1e829a5ce69758da74f9e81b2079489f50a549",
+      "bytes": 41743
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/handler-a-controls.json": {
+      "sha256": "1d636e972e5295c5715132db3fa07398b318f83a8c8ccd2ccf822a5bea3ae03c",
+      "bytes": 2137
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/handler-a-runtime.json": {
+      "sha256": "d6a96efe286311ed6cf8b699b2f2ed25232f6cd86dfc1990ad3268ac813a00ab",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/handler-a-runtime.sqlite.gz": {
+      "sha256": "e383aa3d32d51033c2ad01090e8f522ae92aa8f5633facf7115150a2bc1f5287",
+      "bytes": 144629
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/historical-evidence-inventory.json": {
+      "sha256": "a38d2b5b467e2810c9844541e3b015b4591b54c15a53b194d27097cfbfa310d0",
+      "bytes": 62723
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-binaries.json": {
+      "sha256": "f7103b86318e57c1d06c30c9d5ab18feee28abf094efa0813628347a45f2dc62",
+      "bytes": 34490
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-finished-api.json": {
+      "sha256": "a6dc1bd85c1eeb41195ab611869eb2ff9f3663bf4d727b233c940267cc7f84c9",
+      "bytes": 25307
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-finished-checked.json": {
+      "sha256": "0618955aae46e120582ff41a2208ee0e62dbc9bcc1e010a0dae6268800329cb6",
+      "bytes": 50259
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-finished-controls.json": {
+      "sha256": "b80d36bf2c2034e2b08b6afb6d312820d2a033831b14e29a433dc17ef4052340",
+      "bytes": 1844
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-finished-runtime.json": {
+      "sha256": "13378d6bb1c1c2e9e7e09c4601d1c04e1db84dadda0b881a29462ad80c352ffc",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-finished-runtime.sqlite.gz": {
+      "sha256": "996eabf2f292536e609d595f20ad26cbf126832883c88d7fca37a80e16d0088c",
+      "bytes": 157396
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-handler-a-api.json": {
+      "sha256": "6b07031cdd2194d8d4492703cad8705a541bc7e4e9e0bc5df035916f1ceb825c",
+      "bytes": 23798
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-handler-a-checked.json": {
+      "sha256": "a6cefd4a4f5434f0b6a548450b1295744db057ea965359fb9179278682890a82",
+      "bytes": 41151
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-handler-a-controls.json": {
+      "sha256": "9f2179fc5e77c44775b7bd0fdfa2f5a87146a29e6fba02e1957d77897ff8e9c1",
+      "bytes": 2137
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-handler-a-runtime.json": {
+      "sha256": "1fd44a65e491cb634bee46a22f71597c21773cae209e09497fe634742be58a26",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-handler-a-runtime.sqlite.gz": {
+      "sha256": "672def028d1ff55fcd2b60a31a64d28c2668fbb09d0a610bdb3a3fde0cff0cde",
+      "bytes": 144809
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-reopened-api.json": {
+      "sha256": "67b8128d1910182605fc411b15ced7f90d959b0e4f1a99218536216bc8e60571",
+      "bytes": 22008
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-reopened-checked.json": {
+      "sha256": "48c8ccf8086f044a3111d0f58c5bf2023badbbf6af2025b1c88c4b4c67c4b3ac",
+      "bytes": 28839
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-reopened-controls.json": {
+      "sha256": "efc7bce879ab16b89309c4b481133a0927d130ab37313b16a3ac1bc79aad18e8",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-reopened-runtime.json": {
+      "sha256": "16cc90b257fcba25a98c2d467cdde918ddb46fcf52ebd6204a610710add4fcfe",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-reopened-runtime.sqlite.gz": {
+      "sha256": "9079a32f178535d5a3bdab8b7e5f297c87e551c3bbde9781d6aae0bb2d9f1498",
+      "bytes": 137331
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-settled-api.json": {
+      "sha256": "0d8a5be8fc633dff59d5eccc6eaf33aef70b80672da840d2038adf7e2c599042",
+      "bytes": 25263
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-settled-checked.json": {
+      "sha256": "943b90dba11c6259b9a0260181a2f75642d2772835dd1e3e673bc2585e83d32e",
+      "bytes": 53239
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-settled-controls.json": {
+      "sha256": "c6b07fa0b777ef76669516176c809ebd02986a95bfaec582d36fd8d648faa474",
+      "bytes": 2136
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-settled-runtime.json": {
+      "sha256": "49d019476e1a73cd8bce08b8712c0b17255215a5f42cfae065c8633766782901",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-old-settled-runtime.sqlite.gz": {
+      "sha256": "686ffa53ff71602046b09a5d18315bdf2f0f26b7dd1374c84e3ed618990c3213",
+      "bytes": 153629
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-api.json": {
+      "sha256": "38df780d8a275c9783a0ed2b69c1ad110a85df4cc2013499fb84a1c8e0528540",
+      "bytes": 22235
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-checked.json": {
+      "sha256": "eac48c92159fb5e8e1180c3cdf6a9fc06e48c3bf100e1932defea53d4222667f",
+      "bytes": 28839
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-controls.json": {
+      "sha256": "52a0c717986fd530409cfbace725fd9fa25c9caad139e3acc0c2d974bc585fbf",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-design-contracts.json": {
+      "sha256": "d38d5ac2ced1fd13e36c52f8218a63dab6232752bad423eeeb012d9d7f093827",
+      "bytes": 3492
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-design.json": {
+      "sha256": "39a17a5c9fcc015ab741090967c45f575ccab74b974c0837eaafb61192690f14",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-design.sqlite.gz": {
+      "sha256": "7dfb32a9f6a34c8ff2b57289b391ee903358d2e340fd31747e4e4ca52b5a3252",
+      "bytes": 106271
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-restored-controls.json": {
+      "sha256": "52a0c717986fd530409cfbace725fd9fa25c9caad139e3acc0c2d974bc585fbf",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-runtime.json": {
+      "sha256": "333ae0c88f890f21e5fd093afb021478e549c9d9380987faaa1cd9fdb361fcf5",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-runtime.sqlite.gz": {
+      "sha256": "322a06c7dc92a227c82f8a58449303a581c9b70774e9a0b2f322968815a1674a",
+      "bytes": 137264
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-finished-api.json": {
+      "sha256": "be4ef37620de1321f273b5202ae0500196482a19804585ca5ebb83cb7f605b81",
+      "bytes": 25309
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-finished-checked.json": {
+      "sha256": "7f96d1d440509057cc68c24863df21ea3d850d1f24280f7fda66a45ac0697313",
+      "bytes": 50387
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-finished-controls.json": {
+      "sha256": "49ac4160a69b4fb63aec9058aee2a9ceef1b7bbd609fe34fc49d86c3b8d30a8d",
+      "bytes": 1844
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-finished-runtime.json": {
+      "sha256": "6b16847d9947a48b657bbaa012151fb9777fe8b301f563be5ac845b610a52a91",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-finished-runtime.sqlite.gz": {
+      "sha256": "c6f7bbc36f27578f43dcf41a56268303515656ccfca50fa00bf4fed2d6c3cb0c",
+      "bytes": 157786
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-handler-a-api.json": {
+      "sha256": "2b7818f49e4e735a825d1841f1936caa801f6683f71ab8739812bc681673e019",
+      "bytes": 23799
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-handler-a-checked.json": {
+      "sha256": "8251d80d71fdb510b7077a685dc2ee5d6f1965b2337f6fc003cd1938e538549e",
+      "bytes": 41283
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-handler-a-controls.json": {
+      "sha256": "50f47883adb0265ee1efafa4abc568f64fbd1780114e330b8abe58538a1ccb30",
+      "bytes": 2137
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-handler-a-runtime.json": {
+      "sha256": "a03e9b8047b96c30284595c0a7a7d74ea2ac115c3a0e480326f5fe6040727646",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-handler-a-runtime.sqlite.gz": {
+      "sha256": "28ceb55ddfe6998f47de67c6f6d9615f68622093b6301000194e44e47f2c66f9",
+      "bytes": 145239
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-reopened-api.json": {
+      "sha256": "854c07c3a2c982924d7ed69af371f433ba2fd856773be6c0458e3de531846fb4",
+      "bytes": 22008
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-reopened-checked.json": {
+      "sha256": "53886abb961c0d241bde45b009a8ae3d47fb2a6f1626d4f57436cbaa556274aa",
+      "bytes": 28839
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-reopened-controls.json": {
+      "sha256": "a8cc38917eb2e320ed2130308be51b9d774c4046d5034397948fd6b3e37d40e1",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-reopened-runtime.json": {
+      "sha256": "a91df3903a53b65280b5c6a141933775acfd2672133e72d8040e16b9f176f17f",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-reopened-runtime.sqlite.gz": {
+      "sha256": "8388a67c3086f90ac94c9c509177fdca6ccf78b3e4c6295e8d7bd17effcbcf2a",
+      "bytes": 137424
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-settled-api.json": {
+      "sha256": "9cd02fc8fa1b06939b1eeb0860699b2e2ff125e81c09a506d9f7c590bcc64d50",
+      "bytes": 25265
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-settled-checked.json": {
+      "sha256": "f3c3b232d45f851269a0efcd485e5a633e4f7557f00a156f9b3c2805243d636a",
+      "bytes": 53400
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-settled-controls.json": {
+      "sha256": "fd7593a3fd7163330d28a789b9d127d3d7693b095a4545ed9155d91cd255ffd6",
+      "bytes": 2136
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-settled-runtime.json": {
+      "sha256": "0c4d1163501e4ebccee123954436a56614a48345f6decc8e1ad1353678325817",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-upgraded-settled-runtime.sqlite.gz": {
+      "sha256": "9841ed6106b3013ede0309680397c7d4ff023fcd5a99af491c259f73d0d5ffc1",
+      "bytes": 153938
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/owned-processes.json": {
+      "sha256": "aaca439d2e83303a640a4be22a7b7532866d501bd6a4d3a91a25fd8e6c48c7fc",
+      "bytes": 949
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/prepared-api.json": {
+      "sha256": "b4f4d4fe456b05e2616c12d65a8ba684e577a50b47604b11a6c6571824403e3b",
+      "bytes": 22233
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/prepared-checked.json": {
+      "sha256": "8d5421ca52a734b0ee63222f6ed72952689406ee80b96f08d5236e275c552a8d",
+      "bytes": 29364
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/prepared-controls.json": {
+      "sha256": "b54cae20573d06076d9f39ef19518247407dedf89d52dd5bcb1316893b06e6f3",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/prepared-restored-controls.json": {
+      "sha256": "b54cae20573d06076d9f39ef19518247407dedf89d52dd5bcb1316893b06e6f3",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/prepared-runtime.json": {
+      "sha256": "73ef5da01b98de9c9560e38417e418e6e304d567917f736a8088551c6372c325",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/prepared-runtime.sqlite.gz": {
+      "sha256": "0f7ddc932a40dd0f7066d63e9d3efe7f29080118a8431d89d83c3a4296a6dd31",
+      "bytes": 137729
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reader-binaries.json": {
+      "sha256": "bb58ccfeea0f36ee6ac3ad5eca30aa752d071c9336aa37252daef56b83427c9e",
+      "bytes": 6306
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reader-mutation.json": {
+      "sha256": "c5e02016a5c340cba3570d63b23e768e6ab493e47cf2decd1ff5a0ea4dd15c27",
+      "bytes": 567
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/released-package-binaries.json": {
+      "sha256": "d0509037fec6fb611c3244bf2adabcd466e37092aa9a0119e07e51ba9d8f15cd",
+      "bytes": 555
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reopened-api.json": {
+      "sha256": "9c0930f35e88a100b6398437e3b9a1255d8f3840be85f3e01c16cc525f928b8a",
+      "bytes": 22006
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reopened-checked.json": {
+      "sha256": "8d5421ca52a734b0ee63222f6ed72952689406ee80b96f08d5236e275c552a8d",
+      "bytes": 29364
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reopened-controls.json": {
+      "sha256": "b54cae20573d06076d9f39ef19518247407dedf89d52dd5bcb1316893b06e6f3",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reopened-runtime.json": {
+      "sha256": "73ef5da01b98de9c9560e38417e418e6e304d567917f736a8088551c6372c325",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/reopened-runtime.sqlite.gz": {
+      "sha256": "0f7ddc932a40dd0f7066d63e9d3efe7f29080118a8431d89d83c3a4296a6dd31",
+      "bytes": 137729
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/settled-api.json": {
+      "sha256": "17bae5c7027e09742d875739bdb4c6a71071131970e784f256d483b7b70466d6",
+      "bytes": 25263
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/settled-checked.json": {
+      "sha256": "9f8bb797a5bb42f2d61d9a1abde4784c89632fa444aa884ea7b7210458ca3465",
+      "bytes": 53868
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/settled-controls.json": {
+      "sha256": "536609185828927ef0e3c0581aac7d802a54274c45ceef214dd67cca8b0825a9",
+      "bytes": 2136
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/settled-runtime.json": {
+      "sha256": "ba64032443c27856e3db632a461303c61870a375e584d184d9284bf6d6555b93",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/settled-runtime.sqlite.gz": {
+      "sha256": "27810b22277e116f5cb33aa0f7137a6e349dc666cf5f6e1765e6c83d2437a477",
+      "bytes": 154002
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/standard-binaries.json": {
+      "sha256": "5a1d753d1bf2aafe18a9fbb3d4e5cf53685644704268ab37f354f901a83dc366",
+      "bytes": 34596
+    }
+  },
+  "readerControls": {
+    "actualPhases": 14,
+    "uniqueCompensationControls": 100,
+    "postMutationRestoredCurrentAndLegacyControls": 16,
+    "priorFixtureCompatibilityControls": 26,
+    "compatibilityFunctions": [
+      "coded",
+      "concurrent",
+      "legacy-called",
+      "called-ack"
+    ]
+  },
+  "observationReplayOrderMutation": {
+    "name": "observation-reader-omits-reverse-replay-order",
+    "sourceSha256": "03894ef0b9049f853993bcd4fca0935f08596ff1fa6724b726487d7fa5164369",
+    "scope": "Private compiled observation-tool variant only; never a positive host or runtime.",
+    "sourceRestored": true,
+    "compileSucceeded": true,
+    "reversedReplayIncorrectlyAccepted": true,
+    "independentControlFailedAsExpected": true,
+    "buildLogSha256": "222f8cb1bf1f6acd614b6e360fe09ccfd67ec85a44525c01bea20d9c7291a9de",
+    "controlLogSha256": "dc93e0d0a34ca32a0e822717fc3fbbbce7cbf8b80994a650cd0c929eb990d6d3"
+  },
+  "actualPublishedContractComparison": {
+    "old": 2,
+    "current": 2,
+    "bothMatchFrozenFingerprint": true,
+    "closedSnapshotsUnchanged": true
+  },
+  "historicalDatabaseCapturesUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "ef0cdf0a0b289630bc0d578977c946925451d59989b657892eb3ac5551cd55c6",
+      "databaseSha256": "7e4d5d42e7716e6289359d0cd00a1b06f9a838ff6253c15966c6a3e43921ba7d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-runtime.sqlite.gz": {
+      "compressedSha256": "01a1f61c6970bdbb9cffe25deaf1451b99ae053b0f3d2d8d61a4e993003a7626",
+      "databaseSha256": "4bb165f9325cf092377056a13227bae1240750ba11927e4e06cf5a95f6b61a8f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-runtime.sqlite.gz": {
+      "compressedSha256": "0f2f733c9e482a218544918b352fb65b32a37f6a3dff4492b73949a417f3927b",
+      "databaseSha256": "1720cc78c20c7bf03a98c291475f8fd0a5845be514c80344942734b427509640"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/design.sqlite.gz": {
+      "compressedSha256": "b4ca2421b3fcbfddafcc2ef4679945ee19f09c7766310bac4da75e7cab93e454",
+      "databaseSha256": "de000465e0b78cfa777d12507b73ab6da09ccea5a2b4d22fd81eb46ef4232673"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-runtime.sqlite.gz": {
+      "compressedSha256": "8116c2433f7e97ca3ead5c6b71429dc6dd5a862b293320fb15f92e3b56dc0b6d",
+      "databaseSha256": "b6c802751da8fc4562e3980737ba2a402f9c2b4d7c7020233becbf57159033d0"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "324434f3b08bfbf5ed4140b3d3036cb17c43e6b5e5fb7e11182610a5ed39a46b",
+      "databaseSha256": "d507c063aabd7b38c57f3e8d62c0b9c9b02c807ee0614b48df67aa6314c8d469"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+      "databaseSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "d89330ade54f818bb19ea65c26371381404fc71efd47820014bff786acb3c050",
+      "databaseSha256": "f8d863e2a90c8a90d78e149d265346e25157dfc42b870d37b7222ba7be5aa087"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz": {
+      "compressedSha256": "bcf934af937cf21823624e0a94c7bc634b7a227f8e30940953e1d4c06c1d5843",
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.sqlite.gz": {
+      "compressedSha256": "101c56c6730d43fb75609fc2ddd8b8933e053ad8d8df9e7ef61f2387ba984ba2",
+      "databaseSha256": "32bab40972d5a8f686db0f099d1a2c5f625f9dfa419af479cf5a38776a33fe7a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/declared.sqlite.gz": {
+      "compressedSha256": "392bcfa54463b92e8ad043eab79e6d7d63936cbbdfd0340ad87e9f09edf5ac38",
+      "databaseSha256": "9a993a5b570c932b8812bbd662d3a134df5bbe217525b42ca7459397e1a38f10"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/data-only.sqlite.gz": {
+      "compressedSha256": "57cc1d6d3722b64ff017edcfcfc6ea02c10046610b1e9403cfa96ba0e3334566",
+      "databaseSha256": "f8096020838a188e227603d2b3027b17f50e76b866a4cea9e4d0837743d2dc63"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-empty.sqlite.gz": {
+      "compressedSha256": "58673fb41938539a228b85b0cde9eb90a06e05620e10a58989d9968a017c2d8f",
+      "databaseSha256": "aa92890779b9f3537067eab1b74574edeb20ad3ead025479b9f76fb3491a7b15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/data-only-delivered.sqlite.gz": {
+      "compressedSha256": "a9268a53ff9a2903aaf0506c81deb065befa89413ebd95f0d81eca07b69cd214",
+      "databaseSha256": "026b39cf4b0e05882588459b1cced2665f8d00daa4bc07829a941261f615d079"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/scope-only.sqlite.gz": {
+      "compressedSha256": "80ed05f378635e4451cff08050ea9f2b79c951639d9c6817eb347173d1ad2ac6",
+      "databaseSha256": "5320153ef86df6e3f598c4eb7a6c001689a376e0e01fb1358c87efeda74fccb5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-failed-final.sqlite.gz": {
+      "compressedSha256": "a6caf6ca2c0499fb73c1fe5f7ade3d8eb0c8868679c7e1ad616761f00a57a13f",
+      "databaseSha256": "16274a11dedae49d7df796e24cc359da0bcaf30bc55e54cc6bc35e025b117160"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-delivered.sqlite.gz": {
+      "compressedSha256": "a48c27ad47b556adf593faad73b5e08bc49866394cc59030031067b7fcaf634a",
+      "databaseSha256": "4e9ef8f16694d67149d888b2231fb2a44e8a81804bfdfd800490bec77c656e8b"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted.sqlite.gz": {
+      "compressedSha256": "e988c144e4a89f1ab2438ad1b35099545223c584548b494b32c28b5520dea180",
+      "databaseSha256": "11420339c60f58766e858df415678b9511dd869cc61b3295bc31037d23fc27ee"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/scope-only-delivered.sqlite.gz": {
+      "compressedSha256": "eaa72ab432c009c3269e34cbed04632cb5106896c56782fedd9169f1859e81b9",
+      "databaseSha256": "cc6c2d1b30d430dc7ede0ca7737db21b84a11dccb718697f38aceb9609ff3a34"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-cancelled.sqlite.gz": {
+      "compressedSha256": "d0450b5853a684b2943c47dd1e248f037ffd04007936d3f776faee083552c1be",
+      "databaseSha256": "da368b45105518a5cdb9b8102598e1fd0c18887b3d578649095aa08e96dbd717"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/legacy-delivered.sqlite.gz": {
+      "compressedSha256": "3120819abaac842cf482dca7a37b557004563ff35e9f5d5428c27de84b435bef",
+      "databaseSha256": "3290a46003265952a9939930cf391b04d57c5121c8c5054657a258bf78751beb"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/generic-scope-only.sqlite.gz": {
+      "compressedSha256": "0d6c8eaad5954603dddce36bf2dbddcee77d241bbb63cc2e34b97fc9e1173b09",
+      "databaseSha256": "c67c31df204acfdc892f23ba7f682b0cb28d82c4076833f768fe4e1159960e37"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/legacy-pending.sqlite.gz": {
+      "compressedSha256": "3763d443d8a41a0997ad83f4251dc24156a79bf2c8a10f1ddc8b2ea7076b3214",
+      "databaseSha256": "182cd4763c65216761b5fe071d17795d19dcc2b123085f4235c152dc7b52aa49"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/declared-delivered.sqlite.gz": {
+      "compressedSha256": "50a76f203595e49bf96c96aa3b48b5e8b6c04af140dd5f78df0b72f1f3e423a5",
+      "databaseSha256": "39edfe35aa14a63472d0be5a4a4cff005c50e7b39fb3563f601e3eb6ed540c14"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/before-selection-v1-control.sqlite.gz": {
+      "compressedSha256": "1228abf2ba7e4f78a8f60ce43169b4b13fb0858fec9c390bd47c0ac70879b811",
+      "databaseSha256": "2ca8c92193f5850f45630e74c29883ffbed56b752c1c1fe0d9515e456d6b3755"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/after-selection.sqlite.gz": {
+      "compressedSha256": "a945fe4cb549ab0e7135e9010046465fc112feed0f158eadbbe28e8044039812",
+      "databaseSha256": "40b267b32fa8460ac49a569d99321af0bd13cb18faf99794ea6bba9c867d0b62"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/before-selection.sqlite.gz": {
+      "compressedSha256": "89b615a141bdbda46dcc93e5af4e04364c9d7a0ee7f4b881898d342d49fd0936",
+      "databaseSha256": "dfca82d90a4ec92afef9e4bfab4d82b0d5101fd5dc94e56baad7539e4f247322"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/after-selection-v1-control.sqlite.gz": {
+      "compressedSha256": "516e530e76ab112e6acd62dffdd5d60bad8185d92b8f3938817041df1af5add0",
+      "databaseSha256": "9252eea840ee763e3294fa4a76920c0cc718a9010b007c62744523f523410b14"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "31d61984d252ff98e764648428d2c0de3125e78637b01356bd8b69e5798d4d97",
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-held-runtime.sqlite.gz": {
+      "compressedSha256": "afadcd6020f006db0ae0485b7ba28b82b0e97ee2831edc82137d36c33d2ee11e",
+      "databaseSha256": "24eb6b3cd57144a27ebc74b9e6b39f3b5bf045849b7070bef3ce215c7c6a4a2a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-recovered-runtime.sqlite.gz": {
+      "compressedSha256": "bd6da4d65d18c5f5a17b91be72d6b98b11fc30ea9086e7aa762fd2cdc3d5692a",
+      "databaseSha256": "fce212e46677bbad54e047f93fddad4ab30a84fb2234d11cd3f1e6a373d0ce8b"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-held-runtime.sqlite.gz": {
+      "compressedSha256": "5b5b6fbd6fa93c810207832f325ad6ab6a5df448a59f6ebee581b6063723afcb",
+      "databaseSha256": "3e8eba9557f2351a67ef714372333c658114bce1432905bc3f66868f8642b09a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/design.sqlite.gz": {
+      "compressedSha256": "e03847b01a8cd5664cdc0fefb0f4914c9c82b2f71844554f5b550573b6abad09",
+      "databaseSha256": "5ce69ae5dfd285c3552802219ebc67317358a6e0ed4a46b54704998a22632e12"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-recovered-runtime.sqlite.gz": {
+      "compressedSha256": "43752061e5b57fa58a542f27e465b3dbf67b109b4613c39b61ff95ab401ce9ee",
+      "databaseSha256": "f3b8b2c6b89bd33d3c3ef5971b7b97e2592d45901dd6f0cc7bd6cf8c0d0360ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selected-runtime.sqlite.gz": {
+      "compressedSha256": "968948df0f6fa5a19fffb49b0dfe0cb6aeb0fef9d26770642b179a38aeb05014",
+      "databaseSha256": "639a9355eb750eaaaf56dbd9380e0d9528d2bec1635854090c90054b3a36046f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "f55afcc37b591894d2c968a27583a38bfd0624a669cd3f7df663b544f6cee18b",
+      "databaseSha256": "2aa31aaf4c4a19d307b0e83463a3013fe189d11e53e911bcfb4893ef4b2c95a2"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/prepared-runtime.sqlite.gz": {
+      "compressedSha256": "c91948ebe002ec0516ae95830225d8cb412e2196e7e6847c749f491b47d28385",
+      "databaseSha256": "3e233f32f99452999fd57d1f9483620333d9fe85dc7709dd372b57362ae95621"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/design.sqlite.gz": {
+      "compressedSha256": "a73cb3fab55e5cf77775c67937f511f0694011a2812cfa0f62e27d53895d4579",
+      "databaseSha256": "b10cdf20cfe939a2f6b98169d0bef861865b8d3e5fcdafe810549c8ee90f599f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/recovered-runtime.sqlite.gz": {
+      "compressedSha256": "cbbb4b5aa7995b5122732c2f41a2057d99f44680d4a08bf15b89dda0ca60656d",
+      "databaseSha256": "be0637dc441a558fc09594b6e81c7fed723d4a6b1e39e42eb162f4f83476fb04"
+    }
+  },
+  "allPriorEvidenceInventory": "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/historical-evidence-inventory.json",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChangedInThisIncrement": false,
+  "rootDependenciesChanged": false,
+  "duplicateSemanticWriterDeleted": false,
+  "inheritedNotRerun": {
+    "wholeProjectTests": {
+      "RuntimeEF": 1710,
+      "Bpmn": 303,
+      "Interchange": 130,
+      "Tasks": 71,
+      "total": 2214,
+      "failed": 0,
+      "skipped": 0,
+      "receipt": "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/current-suite-results.json",
+      "receiptSha256": "715ebee554b4726d83dff27d347cbfdc9d92c1e8b3407e8dea7c5c71c8284546"
+    },
+    "actualCalledEscalationAndT045Evidence": [
+      "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench-recovery.md",
+      "specs/1006-bpmn-library-adoption/evidence/called-control-reconciliation.md"
+    ],
+    "priorStudio": "Source-bound earlier actual journey; final current Studio remains open."
+  },
+  "reviews": {
+    "type": "three independent bounded correctness/standards/acceptance source and artifact audits",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6,
+  "excludedAttempts": [
+    "Initial new preparation used Text instead of the actual declared lowercase text reference; normal publication refused before execution. The failed API receipt remains false and is not a qualified execution."
+  ],
+  "scopeLimits": [
+    "Balanced actual public-host ordinary task compensation and one live replay restart, plus an actual legacy v1 capture with distinct old/current continuation controls.",
+    "Complete checked observations cover named workflow/all activity/incident/dispatch/physical-wait/source model projections; not every module row, variable or scheduler record.",
+    "Both old/current initial checked observations equal the original capture. Later newly minted handler A IDs are independent; no cross-host final identity equality is claimed.",
+    "No runtime/adapter invocation counts, final current Studio or production acceptance are inferred.",
+    "Whole suites and called-escalation witnesses remain inherited source-bound evidence, not fresh runs."
+  ],
+  "remainingGates": [
+    "Final actual current Studio and T032 duplicate-semantics deletion after retained captured-state proof",
+    "T033/T034/T035 guards/permanent242baseline/docs",
+    "T036/T037/T038 final qualification/fullPR/green required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent2898/2907/program production acceptance;Orleans/task-runner follow-up deferred"
+  ]
+}

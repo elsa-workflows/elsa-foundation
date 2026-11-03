@@ -1,3 +1,4 @@
+import type { ActivityPaletteHints } from "./graph-authoring/activityPaletteContext";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
@@ -48,6 +49,9 @@ export interface WorkflowDefinitionSummary {
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
   folderBreadcrumb?: WorkflowFolderBreadcrumbItem[];
+  tags?: { tagId: string; valueId?: string | null }[];
+  favorite?: boolean;
+  permissions?: { canAssignTags?: boolean; canManageFolders?: boolean; canManageTags?: boolean; canShareViews?: boolean };
 }
 
 export interface WorkflowFolderBreadcrumbItem {
@@ -62,6 +66,7 @@ export interface WorkflowFolder {
   normalizedName: string;
   createdAt: string;
   lastModifiedAt: string;
+  revision?: string;
 }
 
 export interface WorkflowFolderDetail {
@@ -119,6 +124,9 @@ export interface IncidentStrategiesResponse {
 
 /** When a run's state is committed, and therefore what a crash costs. Unset means the host's default applies. */
 export type PersistenceMode = "Durable" | "Balanced" | "Ephemeral";
+
+/** Whether a run's inspection evidence is exact per activity or folded to a commit boundary. */
+export type InspectionGranularity = "activity-level" | "boundary-level";
 
 export interface WorkflowStrategyOptions {
   incidentStrategy?: IncidentStrategyReference | null;
@@ -213,6 +221,7 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;
   ports?: unknown[];
@@ -222,6 +231,8 @@ export interface ActivityCatalogItem {
   // additive). Signals the client to materialize an intrinsic ActivityNode rather than a catalog activity
   // reference; older backends omit it and nothing new is shown. Absent ⇒ an ordinary catalog activity.
   intrinsic?: ActivityAuthoringIntrinsic | null;
+  /** Where the catalog row came from (the API's provenance view): `CLR` or `Json` for a source-owned activity, `ActivityDefinitionDraft` for a design-authored one. */
+  provenance?: { sourceKind?: string | null; sourceId?: string | null; featureId?: string | null } | null;
   /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
   activityDefinitionId?: string;
   activityDefinitionVersionId?: string;
@@ -435,6 +446,7 @@ export interface VisibleVariableView {
   name: string;
   scopeId: string;
   isWorkflowScope: boolean;
+  type?: ArgumentType;
 }
 
 // A non-blocking advisory that a container scope declares a name that shadows a visible ancestor
@@ -513,6 +525,7 @@ export interface VariableTypeDescriptorsResponse {
 }
 
 export interface CreateDefinitionRequest {
+  activityPresentation?: ActivityPresentationRecord[];
   name: string;
   description?: string | null;
   initialState?: WorkflowDefinitionState | null;
@@ -554,6 +567,7 @@ export interface PublishedWorkflowResponse {
 }
 
 export interface StartWorkflowDraftTestRunRequest {
+  layout?: DesignMetadataRecord[];
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;
@@ -882,6 +896,10 @@ export interface WorkflowInstanceDetails {
   incidents?: IncidentStateSummary[] | null;
   /** The caller's permissions for this run (spec 260 FR-416); an older host omits it, which reads as "may not manage". */
   permissions?: WorkflowInstancePermissions | null;
+  /** Run checkpoint cadence (`Durable`, `Balanced`, `Ephemeral`); absent on older Runtime hosts. */
+  persistenceMode?: PersistenceMode | null;
+  /** `activity-level` when Durable, otherwise `boundary-level`; absent on older Runtime hosts. */
+  inspectionGranularity?: InspectionGranularity | null;
 }
 
 /** A display hint: the endpoints still enforce every permission. */
@@ -1235,6 +1253,7 @@ export interface RuntimeValueTypeDescriptor {
 }
 
 export interface ActivityExecutionStateSummary {
+  executionSequence?: number;
   activityExecutionId: string;
   workflowExecutionId: string;
   executableNodeId: string;
@@ -1269,7 +1288,10 @@ export interface ActivityExecutionStateSummary {
 export interface ActivityExecutionSchedulingProvenance {
   parentActivityExecutionId?: string | null;
   schedulingActivityExecutionId?: string | null;
+  branchId?: string | null;
   iterationId?: string | null;
+  executionPathId?: string | null;
+  executionScopeId?: string | null;
   schedulingCause?: string | null;
   metadata?: Record<string, string> | null;
 }

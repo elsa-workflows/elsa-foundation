@@ -15,12 +15,12 @@
     <RepositoryUrl>https://github.com/elsa-workflows/elsa-foundation.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>elsa;studio;workflow;workflows;designer;ui</PackageTags>
-    <!-- Each project's Client/ folder holds frontend (Vite/pnpm) source. It is built
-         separately into wwwroot and is never a .NET compile/content input. Excluding it
+    <!-- Client/ and the Hosting SDK/UI facades hold frontend (Vite/pnpm) source. They build
+         separately into wwwroot and are never .NET compile/content inputs. Excluding them
          from the default item globs keeps dev-only files (package.json, tsconfig.json,
          etc.) out of publish output, which otherwise collide across projects with
          NETSDK1152 during `dotnet publish`. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);Client\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Client\**;StudioSdk\**;StudioUi\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">

@@ -37,7 +37,8 @@ internal static class TestSchedulerDrainer
         IWorkflowSchedulerPoisonStore? poisonStore = null,
         IRuntimeDomainRetryPolicy? retryPolicy = null,
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
-        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null) =>
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
+        bool hasResumptionRedriver = false) =>
         new(
             schedulerWorkQueue,
             handlers,
@@ -49,7 +50,8 @@ internal static class TestSchedulerDrainer
             faultCapturePolicy,
             retryPolicy,
             claimOptions: claimOptions,
-            consumedWorkClaimAccessor: consumedWorkClaimAccessor);
+            consumedWorkClaimAccessor: consumedWorkClaimAccessor)
+        { HasResumptionRedriver = hasResumptionRedriver };
 
     // A real gate over an empty hold store: holds nothing, so it answers CanAdvance: true for every boundary.
     public static IWorkflowSchedulerPauseGate NewInertPauseGate(TimeProvider? timeProvider = null) =>

@@ -1,0 +1,21 @@
+{
+  "observation": "Read-only physical SQLite envelope/projections, not qualified EF bridge recovery.",
+  "failedConcurrentRunQualified": false,
+  "rows": [
+    {
+      "outboxItemId": "commit:c391637f157f448c:parent:dispatch:v1:15bab8cb07a2ba99c4ff32cabfde5c74aaf79d275c2e6e4001dd8af4863d0eb4:activity:root:child:14hrKevBxYx:activity-inspection-captured:dispatch:v1:15bab8cb07a2ba99c4ff32cabfde5c74aaf79d275c2e6e4001dd8af4863d0eb4:activity:root:intent:dispatch-control:v1:dispatch:v1:15bab8cb07a2ba99c4ff32cabfde5c74aaf79d275c2e6e4001dd8af4863d0eb4:0",
+      "intentWorkflowExecutionId": "wfexec:dispatch:v1:15bab8cb07a2ba99c4ff32cabfde5c74aaf79d275c2e6e4001dd8af4863d0eb4",
+      "kind": "Elsa.Activities.DispatchWorkflow.NotifyControl",
+      "status": "Pending",
+      "recordedAt": "2026-10-27T20:57:54.258472+00:00",
+      "availableAt": "2026-10-27T20:57:54.258472+00:00",
+      "deliveryAttemptCount": 0,
+      "deliveryFencingToken": 0,
+      "deliveringOwnerId": null,
+      "lastFailureMessage": null,
+      "physicalRevision": 1,
+      "claimableIsEligible": 1,
+      "canonicalEnvelopeSha256": "6f2dd430da06cc76f01295d2ac19baefa3858f480dd041a6ee869203a1678024"
+    }
+  ]
+}

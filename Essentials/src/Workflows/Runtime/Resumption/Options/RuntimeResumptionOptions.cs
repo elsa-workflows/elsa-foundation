@@ -33,6 +33,12 @@ public sealed class RuntimeResumptionOptions
     /// </summary>
     public int MaxExecutionsPerSweep { get; set; } = 100;
 
+    /// <summary>
+    /// Maximum concurrent dispatches in a sweep. Defaults to one. Parallel dispatch requires bound operation
+    /// scopes; custom hosts without a scope factory retain sequential dispatch. Tune against provider capacity.
+    /// </summary>
+    public int MaxConcurrentDispatches { get; set; } = 1;
+
     /// <summary>Lease-expiry threshold handed to the recovery scanner.</summary>
     public TimeSpan LeaseTimeout { get; set; } = TimeSpan.FromMinutes(5);
 

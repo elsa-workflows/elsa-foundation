@@ -1,4 +1,5 @@
 import type { ActivityCatalogItem } from "./workflowTypes";
+import { pathBeforeStudioSegment } from "./studioHostPath";
 
 /**
  * Shared activity-icon resolution for the designer palette, canvas nodes, and the run-view
@@ -249,9 +250,8 @@ export function resolveStudioHostBase(baseHref?: string): string {
   const source = baseHref
     ?? (typeof document !== "undefined" ? document.baseURI : "http://localhost/");
   const url = new URL(source, "http://localhost/");
-  const studio = url.pathname.indexOf("/studio");
-  const prefix = studio >= 0 ? url.pathname.slice(0, studio) : url.pathname;
-  url.pathname = `${prefix.replace(/\/+$/, "")}/`;
+  const prefix = pathBeforeStudioSegment(url.pathname);
+  url.pathname = `${(prefix === null ? url.pathname : prefix).replace(/\/+$/, "")}/`;
   url.search = "";
   url.hash = "";
   return url.toString();

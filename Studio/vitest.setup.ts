@@ -12,8 +12,10 @@ import { afterEach, beforeEach, vi } from "vitest";
  */
 
 // Fake timers live on the Vitest worker, not in the per-file module cache.
-// `isolate` therefore does not reset them, and a file that forgets
-// `useRealTimers` leaves `vi.waitFor` advancing a leftover fake clock.
+// File isolation therefore does not reset them. These hooks are a worker-wide
+// guard so a leftover fake clock from another file cannot make `vi.waitFor`
+// in a later file advance that clock. They do not imply that every suite
+// fakes timers, and they are not a per-file leak fix.
 beforeEach(() => {
   vi.useRealTimers();
 });

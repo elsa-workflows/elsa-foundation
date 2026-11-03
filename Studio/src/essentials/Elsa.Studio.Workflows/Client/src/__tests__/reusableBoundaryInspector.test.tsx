@@ -51,6 +51,18 @@ afterEach(() => {
 });
 
 describe("ReusableBoundaryInspector", () => {
+  it("names historical intrinsic steps without needing the live catalog", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [
+      hierarchyItem("set", 1, { activityType: "elsa.intrinsic.set" }),
+      hierarchyItem("output", 2, { activityType: "elsa.intrinsic.setoutput" })
+    ]));
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+    await waitFor(() => expect([...container.querySelectorAll('[role="treeitem"]')].map(item => item.textContent).join(" "))
+      .toContain("Set Variable"));
+    expect([...container.querySelectorAll('[role="treeitem"]')].map(item => item.textContent).join(" ")).toContain("Set Output");
+  });
+
   it("starts on readable Steps and keeps identities and sequence in collapsed Technical details", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(7, [hierarchyItem("step-1", 6, {

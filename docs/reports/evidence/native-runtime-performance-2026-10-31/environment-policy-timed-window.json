@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-10-31T12:26:58.635302+00:00",
+  "new": "Start five consecutive 2s external CPU samples <=400%; qualify only measured interval with a +/-2s margin; reject two consecutive samples >500%. Prior policies conservatively checked whole process.",
+  "reason": "Cold startup and untimed validation are outside throughput sample; preserve immutable baseline binary and use its recorded start/end times to align load",
+  "acceptedBeforeChange": [
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1.json",
+    "scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency16-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1.json",
+    "baseline-ProviderPostgreSql-ModeDurable-Activities100-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1.json",
+    "scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency4-r1.json",
+    "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency16-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1.json",
+    "baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1.json",
+    "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency4-r1.json",
+    "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r1.json",
+    "baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r2.json",
+    "baseline-ProviderPostgreSql-ModeDurable-Activities10-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r2.json",
+    "baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r2.json",
+    "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r2.json",
+    "baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1.json",
+    "baseline-ProviderPostgreSql-ModeDurable-Activities1-r1.json"
+  ]
+}

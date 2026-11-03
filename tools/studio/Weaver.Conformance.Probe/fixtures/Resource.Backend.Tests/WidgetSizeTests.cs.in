@@ -1,0 +1,380 @@
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+using Elsa.Studio.Preferences.Core.Models;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetSizeTests
+{
+    [Fact]
+    public async Task Size_contract_and_owner_projection_are_bounded_and_distinct_from_visibility()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var descriptor = env.Size.Descriptor;
+        Assert.Equal("acme_home_set_size", descriptor.Name);
+        Assert.Equal(AgentToolMutability.Mutating, descriptor.Mutability);
+        Assert.Equal(AgentRisk.ReviewRequired, descriptor.Risk);
+        Assert.Equal(WidgetContract.Module, descriptor.ModuleId);
+        Assert.Equal("acme.home.widget-context", descriptor.DisclosureSourceId);
+        Assert.Equal("acme.home.widget-size", descriptor.ResultType);
+        Assert.Equal("1", descriptor.ResultSchemaVersion);
+        Assert.Equal("acme.home.widget-size-result", descriptor.ResultRendererId);
+        Assert.Equal(new[] { WidgetContract.ReadPermission, WidgetContract.WritePermission }, descriptor.RequiredPermissions);
+        var source = await env.Resource.ObserveAsync(null, null, false, default);
+        var size = JsonSerializer.SerializeToElement(WidgetContract.SizeState(source));
+        Assert.Equal(new[] { "hostId", "revision", "size", "widgetId" }, size.EnumerateObject().Select(p => p.Name).Order().ToArray());
+        Assert.Equal("medium", size.GetProperty("size").GetString());
+        Assert.Equal(WidgetTestEnvironment.HostId, size.GetProperty("hostId").GetString());
+        Assert.Equal("rev-1", size.GetProperty("revision").GetString());
+        Assert.Equal(WidgetContract.Endpoint + "/size", WidgetContract.SizeEndpoint);
+        Assert.DoesNotContain("CANARY", size.GetRawText());
+        // Neither the old owner projection nor the current context contract gains another field.
+        var visibility = JsonSerializer.SerializeToElement(WidgetContract.State(source));
+        Assert.Equal(new[] { "hostId", "revision", "visible", "widgetId" }, visibility.EnumerateObject().Select(p => p.Name).Order().ToArray());
+        var context = JsonSerializer.SerializeToElement((await env.SnapshotAsync()).Content);
+        Assert.Equal(new[] { "revision", "visible", "widgetId" }, context.EnumerateObject().Select(p => p.Name).Order().ToArray());
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Preparation_is_automatic_eligible_without_lowering_risk_or_visibility_review()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var result = await env.Size.PrepareAsync(env.Invocation(WidgetContract.SizeTool,
+            new Dictionary<string, object?> { ["size"] = JsonSerializer.SerializeToElement("small") }, [await env.SnapshotAsync()]));
+        Assert.True(result.Succeeded);
+        Assert.False(result.Value!.RequiresApproval);
+        Assert.Equal(AgentRisk.ReviewRequired, result.Value.Risk);
+        Assert.Equal("rev-1", result.Value.Target!.Revision);
+        Assert.Equal("medium", result.Value.Preview.Data.GetProperty("beforeSize").GetString());
+        Assert.Equal("small", result.Value.Preview.Data.GetProperty("size").GetString());
+        Assert.Equal(WidgetContract.SizeResult, result.Value.Preview.TypeId);
+        Assert.Equal(new[] { "beforeSize", "hostId", "revision", "size", "widgetId" },
+            result.Value.Preview.Data.EnumerateObject().Select(p => p.Name).Order().ToArray());
+        Assert.True((await env.PrepareAsync()).Value!.RequiresApproval);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.All(env.Permissions.Calls, call => { Assert.Equal(env.Key, call.Resource); Assert.Equal(env.Key.TenantId, call.TenantId); });
+        Assert.Contains(env.Permissions.Calls, call => call.Permission == WidgetContract.ReadPermission);
+        Assert.Contains(env.Permissions.Calls, call => call.Permission == WidgetContract.WritePermission);
+    }
+
+    [Theory]
+    [InlineData("small", false)]
+    [InlineData("small", true)]
+    [InlineData("medium", false)]
+    [InlineData("medium", true)]
+    public async Task Policy_finalized_automatic_or_reviewed_size_executes_one_native_effect(string size, bool approval)
+    {
+        var beforeSize = size == "small" ? "medium" : "small";
+        var env = await WidgetTestEnvironment.CreateAsync(WidgetTestEnvironment.InitialJson.Replace("\"size\":\"medium\"", "\"size\":\"" + beforeSize + "\""));
+        var before = await env.DocumentAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync(size)).Value!, WidgetContract.SizeTool) with { RequiresApproval = approval };
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.True(result.Succeeded);
+        Assert.True(result.Value!.Succeeded);
+        var after = await env.DocumentAsync();
+        Assert.Equal("rev-2", after.Revision);
+        Assert.Equal(size, WidgetResource.Size(WidgetResource.Read(env.Key, after)));
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+        Assert.Equal(env.Key, env.Preferences.LastKey);
+        Assert.Equal(StudioPreferenceWriteCondition.Matches(before.Revision), env.Preferences.LastCondition);
+        var expected = JsonSerializer.Deserialize<JsonElement>(before.Value.GetRawText().Replace("\"size\":\"" + beforeSize + "\"", "\"size\":\"" + size + "\""));
+        Assert.True(JsonElement.DeepEquals(expected, after.Value));
+        var oldWidgets = before.Value.GetProperty("widgets").EnumerateArray().ToArray();
+        var newWidgets = after.Value.GetProperty("widgets").EnumerateArray().ToArray();
+        Assert.True(JsonElement.DeepEquals(oldWidgets[0], newWidgets[0]));
+        Assert.True(JsonElement.DeepEquals(oldWidgets[2], newWidgets[2]));
+        Assert.Equal(oldWidgets[1].GetProperty("visible").GetBoolean(), newWidgets[1].GetProperty("visible").GetBoolean());
+        Assert.True(JsonElement.DeepEquals(oldWidgets[1].GetProperty("options"), newWidgets[1].GetProperty("options")));
+        Assert.True(JsonElement.DeepEquals(oldWidgets[1].GetProperty("future"), newWidgets[1].GetProperty("future")));
+        Assert.Equal("9007199254740993.123456789", newWidgets[1].GetProperty("options").GetProperty("precise").GetRawText());
+        Assert.Equal(before.Value.GetProperty("futureRoot").GetRawText(), after.Value.GetProperty("futureRoot").GetRawText());
+        var receipt = result.Value.Receipt!;
+        Assert.Equal(prepared.InvocationId, receipt.InvocationId);
+        Assert.Equal(prepared.Target, receipt.Before);
+        Assert.Equal("rev-2", receipt.After.Revision);
+        Assert.Equal(AgentEffectScope.ServerPersisted, receipt.Scope);
+        Assert.Equal(WidgetContract.SizeResult, receipt.Evidence.TypeId);
+        Assert.Equal("1", receipt.Evidence.SchemaVersion);
+        Assert.Equal(beforeSize, result.Value.Payload!.Data.GetProperty("beforeSize").GetString());
+        Assert.Equal(size, result.Value.Payload.Data.GetProperty("size").GetString());
+        Assert.Equal("rev-2", result.Value.Payload.Data.GetProperty("revision").GetString());
+        Assert.True(JsonElement.DeepEquals(result.Value.Payload.Data, receipt.Evidence.Data));
+        Assert.DoesNotContain("CANARY", JsonSerializer.Serialize(result.Value));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("extra")]
+    [InlineData("null")]
+    [InlineData("boolean")]
+    [InlineData("alias")]
+    [InlineData("wide")]
+    [InlineData("case")]
+    [InlineData("whitespace")]
+    public async Task Preparation_refuses_noncanonical_or_extra_size_arguments(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var arguments = new Dictionary<string, object?> { ["size"] = "small" };
+        switch (scenario)
+        {
+            case "missing": arguments.Clear(); break;
+            case "extra": arguments["hostId"] = "other"; break;
+            case "null": arguments["size"] = null; break;
+            case "boolean": arguments["size"] = true; break;
+            case "alias": arguments["size"] = "S"; break;
+            case "wide": arguments["size"] = "wide"; break;
+            case "case": arguments["size"] = "Small"; break;
+            case "whitespace": arguments["size"] = " small "; break;
+        }
+        var result = await env.Size.PrepareAsync(env.Invocation(WidgetContract.SizeTool, arguments, [await env.SnapshotAsync()]));
+        Assert.False(result.Succeeded);
+        Assert.Equal("acme.home.arguments_invalid", result.Error!.Code);
+        Assert.Equal(400, result.Error.StatusCode);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("wide")]
+    [InlineData("alias")]
+    public async Task Existing_unsupported_size_is_not_migrated_or_defaulted(string scenario)
+    {
+        var json = WidgetTestEnvironment.InitialJson.Replace("\"size\":\"medium\",", scenario switch
+        {
+            "missing" => "",
+            "wide" => "\"size\":\"wide\",",
+            _ => "\"size\":\"M\","
+        });
+        var env = await WidgetTestEnvironment.CreateAsync(json);
+        var result = await env.PrepareSizeAsync();
+        Assert.False(result.Succeeded);
+        Assert.Equal("acme.home.size_unsupported", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+        // Existing visibility behavior remains valid even where the separate size operation is unsupported.
+        Assert.True((await env.PrepareAsync()).Succeeded);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("foreign")]
+    [InlineData("stale")]
+    [InlineData("mutations-disabled")]
+    public async Task Preparation_requires_current_context_and_mutation_admission(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var context = await env.SnapshotAsync();
+        if (scenario == "foreign") context = context with { Target = context.Target! with { ResourceId = "other.module:card" } };
+        if (scenario == "stale") context = context with { Target = context.Target! with { Revision = "rev-0" } };
+        var invocation = env.Invocation(WidgetContract.SizeTool, new Dictionary<string, object?> { ["size"] = "small" }, scenario == "missing" ? [] : [context])
+            with { AllowMutations = scenario != "mutations-disabled" };
+        var result = await env.Size.PrepareAsync(invocation);
+        Assert.False(result.Succeeded);
+        Assert.Equal(scenario == "mutations-disabled" ? "acme.home.mutation_denied" : "acme.home.context_stale", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("read")]
+    [InlineData("write")]
+    [InlineData("actor")]
+    [InlineData("tenant")]
+    public async Task Application_rechecks_native_read_write_and_actor_tenant_authority(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        switch (scenario)
+        {
+            case "read": env.Permissions.DeniedPermission = WidgetContract.ReadPermission; break;
+            case "write": env.Permissions.DeniedPermission = WidgetContract.WritePermission; break;
+            case "actor": env.Auth.Session = env.Auth.Session with { Subject = "actor-b" }; break;
+            case "tenant": env.Auth.Session = env.Auth.Session with { TenantId = "tenant-b" }; break;
+        }
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.False(result.Succeeded);
+        Assert.Equal(403, result.Error!.StatusCode);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("medium", WidgetResource.Size(WidgetResource.Read(env.Key, await env.DocumentAsync())));
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("target")]
+    [InlineData("arguments-extra")]
+    [InlineData("arguments-duplicate")]
+    [InlineData("preview")]
+    [InlineData("module")]
+    [InlineData("risk")]
+    [InlineData("version")]
+    public async Task Changed_prepared_size_contract_cannot_reach_native_write(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        prepared = scenario switch
+        {
+            "expired" => prepared with { ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1) },
+            "target" => prepared with { Target = prepared.Target! with { ResourceId = "other.module:card" } },
+            "arguments-extra" => prepared with { Arguments = JsonSerializer.Deserialize<JsonElement>("{\"size\":\"small\",\"visible\":false}") },
+            "arguments-duplicate" => prepared with { Arguments = JsonSerializer.Deserialize<JsonElement>("{\"size\":\"small\",\"size\":\"medium\"}") },
+            "preview" => prepared with { Preview = prepared.Preview with { Data = JsonSerializer.Deserialize<JsonElement>("{}") } },
+            "module" => prepared with { ModuleId = "Foreign" },
+            "risk" => prepared with { Risk = AgentRisk.ReadOnly },
+            "version" => prepared with { ToolContractVersion = "2" },
+            _ => prepared
+        };
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task Noop_is_not_a_successful_effect()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var result = await env.PrepareSizeAsync("medium");
+        Assert.False(result.Succeeded);
+        Assert.Equal("acme.home.noop", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Stale_size_preparation_preserves_the_winning_owner_document()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        var winner = JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson.Replace("ROOT_CANARY", "WINNING_DOCUMENT"));
+        await env.Store.WriteAsync(env.Key, new(1, winner), StudioPreferenceWriteCondition.Matches("rev-1"), DateTimeOffset.UtcNow);
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.Equal("acme.home.stale", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.True(JsonElement.DeepEquals(winner, (await env.DocumentAsync()).Value));
+    }
+
+    [Fact]
+    public async Task Native_CAS_conflict_after_owner_reread_cannot_overwrite_a_concurrent_winner()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        var winner = JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson.Replace("ROOT_CANARY", "CONCURRENT_WINNER"));
+        env.Preferences.BeforeWrite = async () =>
+        {
+            await env.Store.WriteAsync(env.Key, new(1, winner), StudioPreferenceWriteCondition.Matches("rev-1"), DateTimeOffset.UtcNow);
+        };
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.Equal("acme.home.conflict", result.Error!.Code);
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(0, env.Preferences.Committed);
+        Assert.Equal(StudioPreferenceWriteCondition.Matches("rev-1"), env.Preferences.LastCondition);
+        Assert.True(JsonElement.DeepEquals(winner, (await env.DocumentAsync()).Value));
+    }
+
+    [Fact]
+    public async Task Another_host_with_the_same_revision_cannot_receive_the_original_size_operation()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        await env.Store.WriteAsync(env.Key with { StudioHostId = "another-host" }, new(1, JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson)),
+            StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+        var reconfigured = new SetWidgetSizeTool(new WidgetResource(env.Http, env.Auth, env.Permissions, env.Preferences, new("another-host")));
+        var result = await reconfigured.ExecuteAsync(prepared);
+        Assert.Equal("acme.home.review_invalid", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+    }
+
+    [Theory]
+    [InlineData("confirmation")]
+    [InlineData("postcommit-throw")]
+    [InlineData("postcommit-cancel")]
+    [InlineData("read-revoked")]
+    public async Task Unconfirmed_native_size_commit_has_no_receipt_and_cannot_be_replayed(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        env.Preferences.FailConfirmation = scenario == "confirmation";
+        env.Preferences.ThrowAfterCommit = scenario == "postcommit-throw";
+        env.Preferences.CancelAfterCommit = scenario == "postcommit-cancel";
+        if (scenario == "read-revoked") env.Permissions.DenyRead = () => env.Preferences.Committed > 0;
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.True(result.Succeeded);
+        Assert.False(result.Value!.Succeeded);
+        Assert.Null(result.Value.Receipt);
+        Assert.Null(result.Value.Payload);
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+        Assert.Equal("small", WidgetResource.Size(WidgetResource.Read(env.Key, await env.DocumentAsync())));
+        env.Preferences.FailConfirmation = env.Preferences.ThrowAfterCommit = env.Preferences.CancelAfterCommit = false;
+        env.Permissions.DenyRead = null;
+        var replay = await env.Size.ExecuteAsync(prepared);
+        Assert.Equal("acme.home.stale", replay.Error!.Code);
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+    }
+
+    [Fact]
+    public async Task Different_independent_readback_cannot_claim_the_returned_native_revision()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        env.Preferences.AfterCommit = async () =>
+        {
+            var current = await env.DocumentAsync();
+            var later = JsonSerializer.Deserialize<JsonElement>(current.Value.GetRawText().Replace("ROOT_CANARY", "LATER_NATIVE_WRITE"));
+            await env.Store.WriteAsync(env.Key, new(1, later), StudioPreferenceWriteCondition.Matches(current.Revision), DateTimeOffset.UtcNow);
+        };
+        var result = await env.Size.ExecuteAsync(prepared);
+        Assert.True(result.Succeeded);
+        Assert.False(result.Value!.Succeeded);
+        Assert.Null(result.Value.Receipt);
+        Assert.Null(result.Value.Payload);
+        Assert.Equal("rev-3", (await env.DocumentAsync()).Revision);
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+    }
+
+    [Fact]
+    public async Task Cancellation_before_size_dispatch_does_not_write()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => env.Size.ExecuteAsync(prepared, cancelled.Token));
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Historical_size_receipt_requires_current_read_authority_without_requiring_write(bool revokeRead)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var original = await env.SnapshotAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareSizeAsync()).Value!, WidgetContract.SizeTool);
+        var applied = (await env.Size.ExecuteAsync(prepared)).Value!;
+        Assert.True(applied.Succeeded);
+        var receiptBefore = JsonSerializer.Serialize(applied.Receipt);
+        env.Permissions.DeniedPermission = revokeRead ? WidgetContract.ReadPermission : WidgetContract.WritePermission;
+        var admission = await env.Context.AdmitDisclosureAsync(new("session-a", [original], [applied], true) { IsHistorical = true });
+        if (revokeRead)
+        {
+            Assert.Empty(admission.Attachments);
+            Assert.Contains(admission.Diagnostics, diagnostic => diagnostic.Required && diagnostic.Code == "acme.home.permission_denied");
+        }
+        else
+        {
+            Assert.DoesNotContain(admission.Diagnostics, diagnostic => diagnostic.Required);
+            Assert.Single(admission.Attachments, attachment => attachment.Origin == AgentContextOrigin.InstalledGuidance);
+            Assert.DoesNotContain(admission.Attachments, attachment => attachment.Target is not null);
+        }
+        Assert.Equal(receiptBefore, JsonSerializer.Serialize(applied.Receipt));
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal("small", WidgetResource.Size(WidgetResource.Read(env.Key, await env.DocumentAsync())));
+    }
+}

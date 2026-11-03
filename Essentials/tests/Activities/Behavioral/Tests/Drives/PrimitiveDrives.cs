@@ -230,6 +230,7 @@ public sealed class PublishEventDrive : PrimitiveDrive
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
+            .ConfigureServices(NativeStimulusDeliveryTestServices.Configure)
             .Build("actexec-seq", "actexec-publish");
 
         var leaf = Nodes.Leaf("node-publish", typeof(PublishEvent), new Dictionary<string, object?>

@@ -4,8 +4,8 @@ import axe from "axe-core";
 async function mockInputEvidence(page: Page, longText = "", outputEvidence: "none" | "uniform" | "mixed" = "none") {
   await page.route("**/capabilities", route => route.fulfill({ json: { capabilities: [{
     id: "elsa.api.runtime", contractVersion: "1", links: [
-      { rel: "activity-execution", href: "/evidence-inspection/{workflowExecutionId}/{activityExecutionId}" },
-      { rel: "activity-execution-value-payload", href: "/evidence-payload/{evidenceId}" }
+      { rel: "activity-execution", href: "evidence-inspection/{workflowExecutionId}/{activityExecutionId}", templated: true },
+      { rel: "activity-execution-value-payload", href: "evidence-payload/{evidenceId}", templated: true }
     ]
   }] } }));
   const snapshot = (inputKey: string, name: string, extra: Record<string, unknown>) => ({
@@ -125,7 +125,7 @@ for (const theme of ["light", "dark"]) {
         const violations = await page.evaluate(async () => {
           const root = document.querySelector('[aria-label="Run details"]');
           if (!root) return [{ id: "missing-run-details", impact: "critical", help: "Run details inspector is missing." }];
-          const result = await (window as Window & { axe: typeof axe }).axe.run(root, { resultTypes: ["violations"] });
+          const result = await window.axe.run(root, { resultTypes: ["violations"] });
           return result.violations
             .filter(violation => violation.impact === "critical" || violation.impact === "serious")
             .map(({ id, impact, help }) => ({ id, impact, help }));

@@ -1,6 +1,7 @@
+import { latestActivityExecution } from "./runtimeActivityOrder";
 import type { Node } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "./workflowTypes";
-import { getChildSlots, latestActivityExecution, type ChildSlot, type WorkflowRuntimeNodeOverlay } from "./workflowAdapter";
+import { getChildSlots, type ChildSlot, type WorkflowRuntimeNodeOverlay } from "./workflowAdapter";
 import type { ExecutableActivityGraph } from "./executableGraph";
 import { compensatedOutcome } from "./compensationRuntime";
 
@@ -108,7 +109,8 @@ export function applyRuntimeOverlays<TNodeData extends Record<string, unknown>>(
       return { ...node, selected } as NodeWithRuntime;
     }
 
-    const latestActivity = latestActivityExecution(nodeActivities);
+    const latestActivity = nodeActivities.find(activity => activity.activityExecutionId === selectedEvidenceId)
+      ?? latestActivityExecution(nodeActivities);
     const activeIncidents = nodeIncidents.filter(isActiveIncident);
     const historicalIncidents = nodeIncidents.filter(incident => !isActiveIncident(incident));
     const primaryIncident = [...activeIncidents].sort((left, right) =>

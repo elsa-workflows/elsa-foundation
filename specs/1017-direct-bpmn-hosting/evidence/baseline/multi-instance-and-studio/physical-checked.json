@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 1,
+  "kind": "independent-readonly-actual-multi-instance-observation",
+  "observedAtUtc": "2026-10-28T07:41:31.155375+00:00",
+  "sourceRevisionDeclaredByApi": "438001406d980051584234e5d656eb8e6a67f47f",
+  "apiReceipt": {
+    "path": "/tmp/elsa-2898-extended-baseline/multi-instance-api.json",
+    "sha256": "8ebe243d1d6ecff3e834aef2842c8122c68171584f48617dd70e826d6b16fd73"
+  },
+  "stores": {
+    "runtime": {
+      "path": "/tmp/elsa-2898-extended-baseline/mi-and-studio-layout-stores/runtime.sqlite",
+      "sha256Before": "c62347ebb3cde510f07c2848eaf0b58c403c92ac605d23f78dfffcb167ea7540",
+      "sha256After": "c62347ebb3cde510f07c2848eaf0b58c403c92ac605d23f78dfffcb167ea7540",
+      "sqliteIntegrity": "ok",
+      "sidecarsAbsentBeforeRead": true
+    },
+    "design": {
+      "path": "/tmp/elsa-2898-extended-baseline/mi-and-studio-layout-stores/design.sqlite",
+      "sha256Before": "b4dabf4f0a1c8bb03ec598023af350d59318fba4db472ab85f0dfc773aef0a0f",
+      "sha256After": "b4dabf4f0a1c8bb03ec598023af350d59318fba4db472ab85f0dfc773aef0a0f",
+      "sqliteIntegrity": "ok",
+      "sidecarsAbsentBeforeRead": true
+    }
+  },
+  "cases": [
+    {
+      "parentWorkflowExecutionId": "14iaeNO6ARA",
+      "persistenceMode": "Balanced",
+      "isSequential": true,
+      "cardinality": 3,
+      "nextIndex": 2,
+      "completedCount": 1,
+      "parentStatus": "Running",
+      "bpmnActivityExecutionId": "14iaeNOk78H",
+      "bpmnStatus": "Running",
+      "privateStateVersion": 2,
+      "loopId": "loop:7",
+      "liveIterationIds": [
+        "bpmn-mi:token:16"
+      ],
+      "activeWork": [
+        {
+          "nodeId": "node-call",
+          "elementId": "mi-call",
+          "tokenId": "token:16",
+          "schedulingCause": "multi-instance",
+          "iterationId": "bpmn-mi:token:16"
+        }
+      ],
+      "calls": [
+        {
+          "callActivityExecutionId": "14iaeNV0xOx",
+          "callStatus": "Completed",
+          "iterationId": "bpmn-mi:token:9",
+          "dispatchId": "dispatch:v1:84a093e932e5ee4c1aa3c9f8bc56b5d2fdd81aaef2b5ec76373a5ae4469bf778",
+          "dispatchStatus": "Completed",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:84a093e932e5ee4c1aa3c9f8bc56b5d2fdd81aaef2b5ec76373a5ae4469bf778",
+          "childStatus": "Completed",
+          "physicalBookmarkCount": 0,
+          "physicalBookmarks": []
+        },
+        {
+          "callActivityExecutionId": "14iaeWneg0W",
+          "callStatus": "Suspended",
+          "iterationId": "bpmn-mi:token:16",
+          "dispatchId": "dispatch:v1:0b0375b324087bde852450d310e1b48b66976fafc13f61310bc38ebfce837f31",
+          "dispatchStatus": "Started",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:0b0375b324087bde852450d310e1b48b66976fafc13f61310bc38ebfce837f31",
+          "childStatus": "Running",
+          "physicalBookmarkCount": 1,
+          "physicalBookmarks": [
+            {
+              "bookmarkId": "dispatch:v1:0b0375b324087bde852450d310e1b48b66976fafc13f61310bc38ebfce837f31:activity:root:attempt:1:trigger:1",
+              "activityExecutionId": "dispatch:v1:0b0375b324087bde852450d310e1b48b66976fafc13f61310bc38ebfce837f31:activity:root",
+              "scope": "default",
+              "rowRevision": 1135113561169829410
+            }
+          ]
+        }
+      ],
+      "apiPhysicalStatusesMatch": true
+    },
+    {
+      "parentWorkflowExecutionId": "14iaecDn3h9",
+      "persistenceMode": "Balanced",
+      "isSequential": false,
+      "cardinality": 3,
+      "nextIndex": 3,
+      "completedCount": 1,
+      "parentStatus": "Running",
+      "bpmnActivityExecutionId": "14iaecES9B8",
+      "bpmnStatus": "Running",
+      "privateStateVersion": 2,
+      "loopId": "loop:7",
+      "liveIterationIds": [
+        "bpmn-mi:token:12",
+        "bpmn-mi:token:15"
+      ],
+      "activeWork": [
+        {
+          "nodeId": "node-call",
+          "elementId": "mi-call",
+          "tokenId": "token:12",
+          "schedulingCause": "multi-instance",
+          "iterationId": "bpmn-mi:token:12"
+        },
+        {
+          "nodeId": "node-call",
+          "elementId": "mi-call",
+          "tokenId": "token:15",
+          "schedulingCause": "multi-instance",
+          "iterationId": "bpmn-mi:token:15"
+        }
+      ],
+      "calls": [
+        {
+          "callActivityExecutionId": "14iaecMyfI6",
+          "callStatus": "Suspended",
+          "iterationId": "bpmn-mi:token:15",
+          "dispatchId": "dispatch:v1:5e2222444abae627d6fad4d322492473abbbc45169af9336de68966de9fa3ac9",
+          "dispatchStatus": "Started",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:5e2222444abae627d6fad4d322492473abbbc45169af9336de68966de9fa3ac9",
+          "childStatus": "Running",
+          "physicalBookmarkCount": 1,
+          "physicalBookmarks": [
+            {
+              "bookmarkId": "dispatch:v1:5e2222444abae627d6fad4d322492473abbbc45169af9336de68966de9fa3ac9:activity:root:attempt:1:trigger:1",
+              "activityExecutionId": "dispatch:v1:5e2222444abae627d6fad4d322492473abbbc45169af9336de68966de9fa3ac9:activity:root",
+              "scope": "default",
+              "rowRevision": 1890429944979407518
+            }
+          ]
+        },
+        {
+          "callActivityExecutionId": "14iaecN4jHy",
+          "callStatus": "Suspended",
+          "iterationId": "bpmn-mi:token:12",
+          "dispatchId": "dispatch:v1:4b3de329ade2838ee2f0f021e29d13ed8ec1782159fa3064ecb02c268c8e8f31",
+          "dispatchStatus": "Started",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:4b3de329ade2838ee2f0f021e29d13ed8ec1782159fa3064ecb02c268c8e8f31",
+          "childStatus": "Running",
+          "physicalBookmarkCount": 1,
+          "physicalBookmarks": [
+            {
+              "bookmarkId": "dispatch:v1:4b3de329ade2838ee2f0f021e29d13ed8ec1782159fa3064ecb02c268c8e8f31:activity:root:attempt:1:trigger:1",
+              "activityExecutionId": "dispatch:v1:4b3de329ade2838ee2f0f021e29d13ed8ec1782159fa3064ecb02c268c8e8f31:activity:root",
+              "scope": "default",
+              "rowRevision": 3187372616947185089
+            }
+          ]
+        },
+        {
+          "callActivityExecutionId": "14iaecMvUXq",
+          "callStatus": "Completed",
+          "iterationId": "bpmn-mi:token:9",
+          "dispatchId": "dispatch:v1:09170f3ca10b2b10400872c47c420fd8772c8242899861f8dc2c24b9c69e78c8",
+          "dispatchStatus": "Completed",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:09170f3ca10b2b10400872c47c420fd8772c8242899861f8dc2c24b9c69e78c8",
+          "childStatus": "Completed",
+          "physicalBookmarkCount": 0,
+          "physicalBookmarks": []
+        }
+      ],
+      "apiPhysicalStatusesMatch": true
+    },
+    {
+      "parentWorkflowExecutionId": "14iaelq4I8k",
+      "persistenceMode": "Durable",
+      "isSequential": true,
+      "cardinality": 3,
+      "nextIndex": 2,
+      "completedCount": 1,
+      "parentStatus": "Running",
+      "bpmnActivityExecutionId": "14iaelq93MG",
+      "bpmnStatus": "Running",
+      "privateStateVersion": 2,
+      "loopId": "loop:7",
+      "liveIterationIds": [
+        "bpmn-mi:token:16"
+      ],
+      "activeWork": [
+        {
+          "nodeId": "node-call",
+          "elementId": "mi-call",
+          "tokenId": "token:16",
+          "schedulingCause": "multi-instance",
+          "iterationId": "bpmn-mi:token:16"
+        }
+      ],
+      "calls": [
+        {
+          "callActivityExecutionId": "14iaelwQZlK",
+          "callStatus": "Completed",
+          "iterationId": "bpmn-mi:token:9",
+          "dispatchId": "dispatch:v1:ebc7109510850648375e16f540410b0e42fc26b2262a0282b6c642f27b88d686",
+          "dispatchStatus": "Completed",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:ebc7109510850648375e16f540410b0e42fc26b2262a0282b6c642f27b88d686",
+          "childStatus": "Completed",
+          "physicalBookmarkCount": 0,
+          "physicalBookmarks": []
+        },
+        {
+          "callActivityExecutionId": "14iaeuzV7jn",
+          "callStatus": "Suspended",
+          "iterationId": "bpmn-mi:token:16",
+          "dispatchId": "dispatch:v1:ac95b147a6718538cf77a5a41f9b21865d3c7c459e508d7c3591d64d6b0ab80c",
+          "dispatchStatus": "Started",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:ac95b147a6718538cf77a5a41f9b21865d3c7c459e508d7c3591d64d6b0ab80c",
+          "childStatus": "Running",
+          "physicalBookmarkCount": 1,
+          "physicalBookmarks": [
+            {
+              "bookmarkId": "dispatch:v1:ac95b147a6718538cf77a5a41f9b21865d3c7c459e508d7c3591d64d6b0ab80c:activity:root:attempt:1:trigger:1",
+              "activityExecutionId": "dispatch:v1:ac95b147a6718538cf77a5a41f9b21865d3c7c459e508d7c3591d64d6b0ab80c:activity:root",
+              "scope": "default",
+              "rowRevision": 415308872662084244
+            }
+          ]
+        }
+      ],
+      "apiPhysicalStatusesMatch": true
+    },
+    {
+      "parentWorkflowExecutionId": "14iaf0d2A9k",
+      "persistenceMode": "Durable",
+      "isSequential": false,
+      "cardinality": 3,
+      "nextIndex": 3,
+      "completedCount": 1,
+      "parentStatus": "Running",
+      "bpmnActivityExecutionId": "14iaf0dgqlS",
+      "bpmnStatus": "Running",
+      "privateStateVersion": 2,
+      "loopId": "loop:7",
+      "liveIterationIds": [
+        "bpmn-mi:token:12",
+        "bpmn-mi:token:15"
+      ],
+      "activeWork": [
+        {
+          "nodeId": "node-call",
+          "elementId": "mi-call",
+          "tokenId": "token:12",
+          "schedulingCause": "multi-instance",
+          "iterationId": "bpmn-mi:token:12"
+        },
+        {
+          "nodeId": "node-call",
+          "elementId": "mi-call",
+          "tokenId": "token:15",
+          "schedulingCause": "multi-instance",
+          "iterationId": "bpmn-mi:token:15"
+        }
+      ],
+      "calls": [
+        {
+          "callActivityExecutionId": "14iaf0jeszg",
+          "callStatus": "Completed",
+          "iterationId": "bpmn-mi:token:9",
+          "dispatchId": "dispatch:v1:3476467da7d61cbd6dc44dd5c5c87f3cf4e316cd169409babaa768836cf4d201",
+          "dispatchStatus": "Completed",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:3476467da7d61cbd6dc44dd5c5c87f3cf4e316cd169409babaa768836cf4d201",
+          "childStatus": "Completed",
+          "physicalBookmarkCount": 0,
+          "physicalBookmarks": []
+        },
+        {
+          "callActivityExecutionId": "14iaf0jVnE9",
+          "callStatus": "Suspended",
+          "iterationId": "bpmn-mi:token:12",
+          "dispatchId": "dispatch:v1:68d3853b3e724ce1163687f03e60fe383aaedfd82c04e2612d78143fac1126ed",
+          "dispatchStatus": "Started",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:68d3853b3e724ce1163687f03e60fe383aaedfd82c04e2612d78143fac1126ed",
+          "childStatus": "Running",
+          "physicalBookmarkCount": 1,
+          "physicalBookmarks": [
+            {
+              "bookmarkId": "dispatch:v1:68d3853b3e724ce1163687f03e60fe383aaedfd82c04e2612d78143fac1126ed:activity:root:attempt:1:trigger:1",
+              "activityExecutionId": "dispatch:v1:68d3853b3e724ce1163687f03e60fe383aaedfd82c04e2612d78143fac1126ed:activity:root",
+              "scope": "default",
+              "rowRevision": 3820740778857264570
+            }
+          ]
+        },
+        {
+          "callActivityExecutionId": "14iaf0jhvE8",
+          "callStatus": "Suspended",
+          "iterationId": "bpmn-mi:token:15",
+          "dispatchId": "dispatch:v1:eae34100d1ba9604299c4015a584c45c7fe83680f4f89b14b23f3716a9935416",
+          "dispatchStatus": "Started",
+          "childWorkflowExecutionId": "wfexec:dispatch:v1:eae34100d1ba9604299c4015a584c45c7fe83680f4f89b14b23f3716a9935416",
+          "childStatus": "Running",
+          "physicalBookmarkCount": 1,
+          "physicalBookmarks": [
+            {
+              "bookmarkId": "dispatch:v1:eae34100d1ba9604299c4015a584c45c7fe83680f4f89b14b23f3716a9935416:activity:root:attempt:1:trigger:1",
+              "activityExecutionId": "dispatch:v1:eae34100d1ba9604299c4015a584c45c7fe83680f4f89b14b23f3716a9935416:activity:root",
+              "scope": "default",
+              "rowRevision": 2054589910929083896
+            }
+          ]
+        }
+      ],
+      "apiPhysicalStatusesMatch": true
+    }
+  ],
+  "procedure": [
+    "Require exact previously observed Runtime/Design SHA256 values and absent WAL/SHM/journal sidecars.",
+    "Open original stores with SQLite mode=ro&immutable=1 and PRAGMA query_only=ON; require integrity_check=ok.",
+    "Read ContentJson and physical ScopeKey/bookmark Revision from activity/workflow/dispatch/bookmark tables; decode base64 UTF-16LE identity strings, preserving unencoded historical strings when decoding is invalid.",
+    "Correlate exact API parent/call/child IDs and statuses, parent/child artifact pins, persistence mode, loop counters, native iteration provenance, active semantic work, exact dispatch links and physical bookmark ownership/counts.",
+    "Close connections; require both original store hashes and API receipt hash unchanged."
+  ],
+  "executionStoreWritesPerformed": false,
+  "sourceFilesEdited": false,
+  "receiptFileWritten": true,
+  "passed": true,
+  "upgradedHostRecoveryProved": false,
+  "limitations": [
+    "This is independent direct read-only SQLite correlation, not execution through the provider reader or an upgraded host.",
+    "Declared executing source comes from the API capture receipt; this read does not independently attest running binary/process provenance.",
+    "No proof of native-parent pending-callback capture, direct hosting, new material/state contracts, distributed execution or other database providers.",
+    "Sequential capture legitimately has two admitted calls: one completed, one current, with third iteration still unadmitted in the saved loop.",
+    "An initial read-only audit attempt stopped on an unrelated unencoded historical dispatch identity; it wrote no receipt or execution data. The successful pass handles the existing mixed representation and repeats all checks."
+  ]
+}

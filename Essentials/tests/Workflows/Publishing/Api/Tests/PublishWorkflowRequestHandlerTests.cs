@@ -1,3 +1,8 @@
+using Elsa.Workflows.Runtime.Resolvers;
+using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Testing;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Publishing.Handlers;
@@ -77,6 +82,107 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
     private static readonly string DefaultSlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
+
+    [Fact]
+    public async Task Republishing_with_a_retained_pre_fix_Set_artifact_stores_and_executes_the_corrected_contract()
+    {
+        var legacy = LegacyWorkflowHashFixture.Load();
+        var root = new ActivityNode("set-counter", "elsa.intrinsic.set@1",
+            [new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement("7"), "JavaScript"), null, null, null, null)], [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set, new TypeReference("Elsa.Any"),
+                new Elsa.Expressions.Core.Models.VariableReference("counter", "workflow"))
+        };
+        var version = WorkflowVersion(root, legacy.Identity.DefinitionId, legacy.Identity.DefinitionVersionId, legacy.Identity.ArtifactVersion);
+        version.State = version.State with
+        {
+            Variables = [new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null,
+                new ArgumentValue(JsonSerializer.SerializeToElement(0), "Literal"))]
+        };
+        var legacyPublication = await Handler(null, new CapturedLegacyCompiler(legacy), new FakeVersionStore(version))
+            .Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var (handler, _) = RecordingHandler(version);
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+
+        Assert.NotEqual(legacy.Identity.ArtifactId, publication.ArtifactId);
+        var current = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(current);
+        Assert.Equal("Int32", current.RootActivity.InputBindings["value"].TargetType.Alias);
+        // The same authored expression and declarations collided under v1. The compatibility verifier
+        // recognizes that historical rendering, while publication emitted the distinct current identity.
+        Assert.True(new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher()
+            .MatchesHash(LegacyWorkflowHashFixture.WithRoot(legacy, current.RootActivity)));
+        var retained = await _store.FindAsync(legacy.Identity.ArtifactId);
+        Assert.Equal(legacy.Identity.ArtifactHash, retained!.Identity.ArtifactHash);
+        Assert.Equal("Elsa.Any", retained.RootActivity.InputBindings["value"].TargetType.Alias);
+        Assert.Equal(legacy.CreatedAt, retained.CreatedAt);
+        var historicalReference = await _referenceStore.FindAsync(legacyPublication.SourceReferenceId);
+        Assert.NotNull(historicalReference);
+        Assert.Equal(legacy.Identity.ArtifactId, historicalReference.ArtifactId);
+        Assert.NotNull(historicalReference.DeletedAt);
+
+        Assert.Equal(7, await ExecutePublishedSetAndReadAsync(current));
+        var retry = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        Assert.Equal(publication.ArtifactId, retry.ArtifactId);
+        Assert.Equal(publication.PublicationId, retry.PublicationId);
+    }
+
+    private sealed class CapturedLegacyCompiler(WorkflowExecutable executable) : IWorkflowExecutableCompiler
+    {
+        public ValueTask<WorkflowExecutable> CompileAsync(WorkflowExecutableCompileRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(executable);
+    }
+
+    private sealed class SevenExpressionEvaluator : Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest request)
+        {
+            Assert.Empty(request.ParameterValues);
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(7));
+        }
+    }
+
+    private static async Task<int> ExecutePublishedSetAndReadAsync(WorkflowExecutable executable)
+    {
+        const string workflowId = "hash-upgrade-execution";
+        const string invocationId = "hash-upgrade-set";
+        var now = DateTimeOffset.UtcNow;
+        var workflows = new InMemoryWorkflowExecutionStateStore();
+        var activities = new InMemoryActivityExecutionStateStore();
+        var type = new ValueTypeDescriptor("Int32");
+        await workflows.SaveAsync(new WorkflowExecutionState(workflowId, executable.Identity, WorkflowExecutionStatus.Running,
+            null, now, now, now, null, null, null, null, new Dictionary<string, string>())
+        {
+            RootVariableFrame = new VariableFrameFactory().CreateRoot(workflowId, "workflow",
+                new Dictionary<string, ValueEnvelope> { ["counter"] = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(0), ValueProtectionPolicy.InstanceInline) })
+        });
+        var activity = new ActivityExecutionState(
+            new ActivityExecution(invocationId, workflowId, "set-counter", "set-counter", "elsa.intrinsic.set", "1.0.0"),
+            ActivityExecutionStatus.Scheduled, null, now, null, null, null, null, null, null, null, [], [], 0, 0,
+            new Dictionary<string, string>());
+        await activities.SaveAsync(activity);
+        var payload = new RuntimeStartActivityCommandPayload(executable.Identity, "set-counter", invocationId,
+            RuntimeStartActivityCommandPayload.ScheduledActivityReason);
+        var work = new RuntimeSchedulerWorkItem("start", workflowId, "command", WorkflowExecutionCommandKind.StartActivity,
+            "envelope", "hash-upgrade-start", now, now, 1, JsonSerializer.SerializeToElement(payload),
+            new Dictionary<string, string>(), new Dictionary<string, string>());
+        var executor = new WorkflowIntrinsicExecutor(workflows, activities, new RuntimeInputBindingResolver(),
+            new InMemoryDurableValueStateStore(), new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
+            TimeProvider.System, portableExpressionEvaluator: new SevenExpressionEvaluator(),
+            inputValidator: new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()));
+
+        var commit = await executor.ExecuteAsync(work, payload, executable, executable.RootActivity, activity);
+
+        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(commit.StateChanges.ActivityExecutions).State.Status);
+        var value = commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"];
+        var nextRead = new RuntimeInputBinding("next", type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableRead,
+            variable: new RuntimeVariableReference("counter", "workflow"));
+        var resolved = new RuntimeInputBindingResolver().Resolve(nextRead, new RuntimeInputBindingResolutionContext(workflowId, "next-activity",
+            variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope> { [new("workflow", "counter")] = value }));
+        Assert.Equal("Int32", resolved.Envelope!.Type.Alias);
+        return resolved.Envelope.InlineValue!.Value.GetInt32();
+    }
 
     [Fact]
     public async Task Publishes_reviewed_snapshot_when_candidate_and_authority_are_unchanged()

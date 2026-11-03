@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Cable, CheckCircle2, Plus, RefreshCw, Search, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Plus, RefreshCw, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioButton, StudioSearchInput , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar} from "@elsa-workflows/studio-ui";
 import { deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
 import { ConnectionCreateDialog } from "./ConnectionCreateDialog";
@@ -24,7 +25,7 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const currentContextRef = useRef(context);
   const loadRequestRef = useRef(0);
   const operationRef = useRef<object | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const searchFormRef = useRef<HTMLFormElement>(null);
   currentContextRef.current = context;
   const contextIsLoaded = loadedContext === context;
   const visibleItems = contextIsLoaded ? items : [];
@@ -114,24 +115,23 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     <button type="button" className="connections-icon-button" aria-label="Dismiss notification" onClick={() => setNotice(null)}><X size={14} aria-hidden="true" /></button>
   </div> : null;
 
-  return <section className="connections-shell" aria-label="Connections management">
-    <header className="connections-header">
-      <div><span className="connections-kicker">Service access</span><h2><Cable size={20} aria-hidden="true" />Connections</h2><p>Connect your services once, then reuse them in your workflows.</p></div>
-      {!loading && contextIsLoaded && !loadError ? <span className="connections-count">{visibleItems.length} shown</span> : null}
-    </header>
-    <div className="connections-toolbar">
-      <form className="connections-search" role="search" aria-label="Connections" onSubmit={event => { event.preventDefault(); void load(search); }}>
-        <label className="connections-search-field"><Search size={16} aria-hidden="true" /><input ref={searchRef} type="search" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => setSearch(event.target.value)} /></label>
-        <button type="submit" disabled={loading}>Search</button>
+  return <StudioPage className="connections-shell" aria-label="Connections management">
+    <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows." actions={        <div className="studio-page-actions" role="group" aria-label="Connection page actions">
+          <StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />Create connection</StudioButton>
+          <StudioButton size="md" onClick={() => void load(appliedSearch)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Refresh</StudioButton>
+        </div>} />
+    <StudioCollectionToolbar>
+      <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => { event.preventDefault(); void load(search); }}>
+        <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => setSearch(event.target.value)} />
+        <StudioButton type="submit" size="md" disabled={loading}>Search</StudioButton>
       </form>
-      <div className="connections-toolbar-actions"><button type="button" onClick={() => void load(appliedSearch)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Refresh</button>
-        <button type="button" className="connections-primary" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />New connection</button></div>
-    </div>
+    </StudioCollectionToolbar>
     {!selected ? notification : null}
     {loadError && contextIsLoaded ? <p className="connections-load-error">{loadError}</p> : null}
     <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onOpen={name => { setNotice(null); setSelectedName(name); }} />
+    {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
-    {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchRef.current?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setSearch(""); void load("", created.name); }} /> : null}
-  </section>;
+    {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setSearch(appliedSearch); void load(appliedSearch, created.name); }} /> : null}
+  </StudioPage>;
 }
