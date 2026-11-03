@@ -1,5 +1,5 @@
 {
-  "description": "Spec 1193 slice C: one contract, two implementations. Elsa.Agent.Tests prepares each case's operations against `snapshot` and `catalog`; the Studio Workflows Vitest applies the frozen batch to `draft`. An accepted case must freeze exactly `frozen`, which the applier must apply; a refused case must be refused by the server, and its `clientFrozen` (what a laxer server would have frozen) must be refused by the applier.",
+  "description": "Spec 1193 slice C: one contract, two implementations. Elsa.Agent.Tests prepares each case's operations against `snapshot` and `catalog`; the Studio Workflows Vitest applies the frozen batch to `draft`. An accepted case must freeze exactly `frozen`, which the applier must apply; a refused case must be refused by the server, and its `clientFrozen` (what a laxer server would have frozen) must be refused by the applier. A refused case names the reason each side must give (`serverReason`, `clientReason`), and `snapshot` is exactly what the Studio bridge builds from `draft`.",
   "catalog": [
     { "activityVersionId": "flowchart-v1", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "category": "Composition", "displayName": "Flowchart", "executionType": "Action", "inputs": [], "outputs": [],
       "designFacets": [{ "kind": "elsa.flowchart.structure", "schemaVersion": "1.0.0", "payload": { "mode": "flowchart", "supportsScopedVariables": true,
@@ -65,6 +65,7 @@
         { "index": 4, "kind": "disconnect", "risk": "destructive", "source": "a", "target": "seq", "sourcePort": "Done" },
         { "index": 5, "kind": "connect", "risk": "reviewRequired", "source": "b", "target": "seq", "sourcePort": "Done", "targetPort": null, "scopeOwnerId": "flow", "slot": "elsa.flowchart.structure:activities" } ] } },
     { "name": "add-into-an-added-container", "accepted": false,
+      "serverReason": "is added by this batch, so its slots cannot be confirmed yet", "clientReason": "is added by this batch; activities are added into it in a following batch",
       "operations": [
         { "kind": "add", "ref": "box", "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities" },
         { "kind": "add", "ref": "inside", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow", "box"], "slot": "elsa.sequence.structure:activities" } ],
@@ -72,6 +73,7 @@
         { "index": 0, "kind": "add", "risk": "reviewRequired", "nodeId": "box", "activityVersionId": "sequence-v1", "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities", "position": null },
         { "index": 1, "kind": "add", "risk": "reviewRequired", "nodeId": "inside", "activityVersionId": "write-v1", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow", "box"], "slot": "elsa.sequence.structure:activities", "position": null } ] } },
     { "name": "two-set-roots", "accepted": false,
+      "serverReason": "a batch installs at most one root", "clientReason": "A batch installs at most one root",
       "operations": [
         { "kind": "add", "ref": "one", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "scopePath": [], "slot": "root" },
         { "kind": "add", "ref": "two", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "scopePath": [], "slot": "root" },
@@ -83,11 +85,13 @@
         { "index": 2, "kind": "set-root", "risk": "destructive", "nodeId": "one", "replacesRoot": true },
         { "index": 3, "kind": "set-root", "risk": "destructive", "nodeId": "two", "replacesRoot": true } ] } },
     { "name": "reuses-an-id-only-presentation-holds", "accepted": false,
+      "serverReason": "never reuses an existing or removed id", "clientReason": "is already used",
       "operations": [
         { "kind": "add", "ref": "ghost", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities" } ],
       "clientFrozen": { "schemaVersion": "1", "highComplexity": false, "risk": "reviewRequired", "operations": [
         { "index": 0, "kind": "add", "risk": "reviewRequired", "nodeId": "ghost", "activityVersionId": "write-v1", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities", "position": null } ] } },
     { "name": "removes-the-root", "accepted": false,
+      "serverReason": "the root cannot be removed", "clientReason": "The root cannot be removed",
       "operations": [{ "kind": "remove", "activity": { "id": "flow" } }],
       "clientFrozen": { "schemaVersion": "1", "highComplexity": false, "risk": "destructive", "operations": [
         { "index": 0, "kind": "remove", "risk": "destructive", "nodeId": "flow" } ] } }

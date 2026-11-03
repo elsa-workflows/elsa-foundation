@@ -6,8 +6,8 @@ import { workflowAgentCapabilities, workflowPromptStarters } from "./workflowAge
 export interface WorkflowBatchUndoAvailability {
   status: "available" | "unavailable";
   reason?: string;
-  /** The user's explicit save covered the batch. */
-  persisted: boolean;
+  /** The user's explicit save covered the batch; null when this editor cannot know (its history is not the one that applied it). */
+  persisted: boolean | null;
 }
 
 export interface WorkflowAgentController {
@@ -71,7 +71,7 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
   });
   // The designer-history Undo of an applied batch belongs to the module that owns the designer. It is a result control:
   // the host shows it after whichever renderer presents the batch result (Weaver Workflows' card).
-  agent.resultControls.add({
+  agent.resultControls?.add({
     id: "workflows.agent.batch-undo", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow batch Undo",
     resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowAgentResult").then(module => ({

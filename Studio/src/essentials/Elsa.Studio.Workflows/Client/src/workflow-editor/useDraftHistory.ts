@@ -27,8 +27,8 @@ interface HistoryEntry {
 export interface WorkflowBatchUndoState {
   status: "available" | "unavailable";
   reason?: string;
-  /** The user's explicit save covered this batch. */
-  persisted: boolean;
+  /** The user's explicit save covered this batch; null when this history did not apply it, so it cannot know. */
+  persisted: boolean | null;
 }
 
 /** The designer-history seam a reviewed Operation Batch uses (spec 1193 FR-009). */
@@ -179,9 +179,9 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
 
   const batchHistory = useMemo<WorkflowBatchHistory>(() => {
     const undoState = (batchId: string): WorkflowBatchUndoState => {
-      const persisted = savedBatchesRef.current.has(batchId);
       if (!knownBatchesRef.current.has(batchId))
-        return { status: "unavailable", persisted, reason: "This change was applied in an editor whose history is no longer open. Use the designer's own history." };
+        return { status: "unavailable", persisted: null, reason: "This change was applied in an editor whose history is no longer open here. Use the designer's own history." };
+      const persisted = savedBatchesRef.current.has(batchId);
       const latest = latestDraftRef.current;
       const laterEdit = !latest || getDraftSignature(latest) !== lastCapturedSignatureRef.current;
       if (originRef.current === batchId && !laterEdit && canUndo(historyRef.current)) return { status: "available", persisted };

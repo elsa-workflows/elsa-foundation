@@ -1501,21 +1501,21 @@ async function workflowReadOnly() {
 }
 
 // Spec 1193 T022: one reviewed Operation Batch in the actual packaged editor. Four refused controls first, each with zero
-// working-state change (an edit after the proposal, a selection change, a remount); then the batch itself, five or more
-// operation kinds with one in a nested scope and a hand edit in its base revision, observed through the designer's own
+// working-state change (an edit after the proposal, a selection change, a remount); then the batch itself, six operation
+// kinds with two in a nested flowchart and a hand edit in its base revision, observed through the designer's own
 // export, validation, autosave, Undo and Redo; and last an approval from a second tab. Weaver never saves or publishes.
 const BATCH_TOOL = "workflow_apply_operation_batch";
 async function workflowBatch() {
   const wf = config.workflow ?? {};
   const { definitionId, definitionPath, nodes, batch, followUp } = wf;
-  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.seq && nodes?.inner && batch?.operations && followUp?.operations,
+  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.nested && nodes?.inner && batch?.operations && followUp?.operations,
     "The batch journey needs exact owning IDs, node IDs and both prepared batches.");
   owningDraftPath = wf.draftPath;
   const editorUrl = studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId);
   const node = (id, target = page) => target.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
   const commands = {};
   await page.goto(editorUrl);
-  for (const id of [nodes.a, nodes.b, nodes.seq]) await expect(node(id)).toBeVisible();
+  for (const id of [nodes.a, nodes.b, nodes.nested]) await expect(node(id)).toBeVisible();
   await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
   const before = await owner("owner-before", definitionPath);
   result.ownerBefore = before.receipt;
@@ -1573,10 +1573,10 @@ async function workflowBatch() {
   const sameDraft = async (name, expected) => expect((await owner(name, definitionPath)).value.draft).toEqual(expected);
 
   // Control 1: a hand edit after the proposal changes the working-state revision; the selection stays as reviewed.
-  await select(nodes.seq, "stale-select");
+  await select(nodes.nested, "stale-select");
   const stale = await request(batch, "staleEdit");
-  await drag(nodes.seq, 60, 40, "stale-hand-edit");
-  await expect(node(nodes.seq)).toHaveClass(/\bselected\b/);
+  await drag(nodes.nested, 60, 40, "stale-hand-edit");
+  await expect(node(nodes.nested)).toHaveClass(/\bselected\b/);
   const staleOutcome = await refused(stale, "staleEdit", /revision changed after review, so this change is stale/);
   need(JSON.stringify(staleOutcome.working.layout) !== JSON.stringify(initial.layout), "The hand edit after the proposal was not in the working state.");
   // Control 2: a selection change rotates the editor binding before dispatch.
@@ -1595,13 +1595,13 @@ async function workflowBatch() {
 
   // The batch. A hand edit just before the request is part of its base revision; its ordinary autosave settles first.
   const writesBeforeHandEdit = owningWrites.length;
-  await drag(nodes.seq, 40, 30, "base-hand-edit");
+  await drag(nodes.nested, 40, 30, "base-hand-edit");
   await expect.poll(() => owningWrites.length, { timeout: 15000 }).toBeGreaterThan(writesBeforeHandEdit);
   await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
   const base = await workingDraft("working-before-batch");
   const ownerBase = (await owner("owner-before-batch", definitionPath)).value.draft;
-  const seqRow = rows => rows.find(row => row.nodeId === nodes.seq);
-  expect([seqRow(ownerBase.layout)?.x, seqRow(ownerBase.layout)?.y]).toEqual([seqRow(base.layout)?.x, seqRow(base.layout)?.y]);
+  const nestedRow = rows => rows.find(row => row.nodeId === nodes.nested);
+  expect([nestedRow(ownerBase.layout)?.x, nestedRow(ownerBase.layout)?.y]).toEqual([nestedRow(base.layout)?.x, nestedRow(base.layout)?.y]);
   const writesBeforeBatch = owningWrites.length;
   const positive = await request(batch, "applied");
   const reviewText = await positive.proposal.innerText();
@@ -1620,13 +1620,15 @@ async function workflowBatch() {
   await settled();
   const applied = await workingDraft("working-applied");
   const root = applied.state.rootActivity, children = root.structure.payload.activities;
-  const seq = children.find(child => child.nodeId === nodes.seq);
-  const greet = seq?.structure?.payload?.activities?.find(child => child.nodeId === batch.addedNodeId);
-  need(greet && greet.activityVersionId === batch.writeLineVersionId, "The added activity is not in the nested sequence.");
+  const nested = children.find(child => child.nodeId === nodes.nested);
+  const greet = nested?.structure?.payload?.activities?.find(child => child.nodeId === batch.addedNodeId);
+  need(greet && greet.activityVersionId === batch.writeLineVersionId, "The added activity is not in the nested flowchart.");
+  const innerPairs = (nested.structure.payload.connections ?? []).map(edge => edge.source.nodeId + ">" + edge.target.nodeId);
+  expect(innerPairs).toEqual([nodes.inner + ">" + batch.addedNodeId]);
   need(JSON.stringify(greet).includes(batch.literal), "The added activity's declared input was not set.");
   need((applied.activityPresentation ?? []).some(row => row.nodeId === nodes.a && row.displayName === batch.displayName), "The display name update is missing.");
   const pairs = (root.structure.payload.connections ?? []).map(edge => edge.source.nodeId + ">" + edge.target.nodeId).sort();
-  expect(pairs).toEqual([nodes.a + ">" + nodes.b, nodes.b + ">" + nodes.seq].sort());
+  expect(pairs).toEqual([nodes.a + ">" + nodes.b, nodes.b + ">" + nodes.nested].sort());
   const bRow = applied.layout.find(row => row.nodeId === nodes.b);
   expect([bRow?.x, bRow?.y]).toEqual([batch.position.x, batch.position.y]);
   await nativeValidation("validation-after-batch");

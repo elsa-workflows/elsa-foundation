@@ -49,6 +49,7 @@ public sealed class WorkflowBatchConformanceTests
         {
             Assert.False(result.Succeeded);
             Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, result.Error?.Code);
+            Assert.Contains(item["serverReason"]!.GetValue<string>(), result.Error!.Message, StringComparison.Ordinal);
         }
     }
 

@@ -223,7 +223,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       state(token) {
         const id = batchIdOf(token);
         const current = latest.current;
-        if (!id || !current.history) return { status: "unavailable", persisted: false, reason: "The originating workflow editor is unavailable." };
+        if (!id || !current.history) return { status: "unavailable", persisted: null, reason: "The originating workflow editor is unavailable." };
         const state = current.history.undoState(id);
         if (state.status === "available" && (current.canEdit?.() === false || pending.current))
           return { ...state, status: "unavailable", reason: "The designer is read-only or busy right now. Try again in a moment." };

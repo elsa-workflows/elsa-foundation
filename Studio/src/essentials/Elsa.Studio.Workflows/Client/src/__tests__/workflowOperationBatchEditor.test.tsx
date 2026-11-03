@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAgentRegistry, type StudioAgentClientExecutionResult, type StudioAgentPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
+import { WorkflowBatchUndoControl } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
 import { useWorkflowGraphOperationBatch } from "../workflow-editor/useWorkflowGraphOperationBatch";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
@@ -234,6 +235,52 @@ describe("reviewed Operation Batch in the editor", () => {
     expect(controller.batch!.state(token(result)).persisted).toBe(true);
   });
 
+  it("never tells the card \"Not saved\" after the whole change is undone; it shows only the reason", async () => {
+    const result = await run(request(fiveKinds()));
+    const card = mountCard(token(result));
+    expect(outcome(card)).toBe("applied-locally");
+    expect(card.container.textContent).toContain("Not saved");
+
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result))).toMatchObject({ status: "unavailable", persisted: false });
+    expect(outcome(card)).toBeNull();
+    expect(card.container.textContent).not.toContain("Not saved");
+    expect(card.container.querySelector("[role=note]")!.textContent).toContain("This change is undone");
+    card.unmount();
+  });
+
+  it("after an explicit save and an editor remount, the card says the save state is not known here, never \"Not saved\"", async () => {
+    const result = await run(request(fiveKinds()));
+    await persistence.saveDraft(doc.state.draft!, "Saved");
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+    let card = mountCard(token(result));
+    expect(outcome(card)).toBe("persisted");
+    card.unmount();
+
+    // The editor unmounts: the controller no longer has a batch surface.
+    flushSync(() => root.unmount());
+    expect(controller.batch).toBeNull();
+    card = mountCard(token(result));
+    expect(outcome(card)).toBe("unknown");
+    expect(card.container.textContent).not.toContain("Not saved");
+    expect(card.container.textContent).toContain("The originating workflow editor is unavailable.");
+    card.unmount();
+
+    // A remounted editor has its own history, which did not apply the batch: the saved set is not its to know.
+    root = createRoot(container);
+    flushSync(() => root.render(<Probe />)); load();
+    expect(controller.batch!.state(token(result))).toMatchObject({ status: "unavailable", persisted: null });
+    card = mountCard(token(result));
+    expect(outcome(card)).toBe("unknown");
+    expect(card.container.textContent).not.toContain("Not saved");
+    expect(card.container.querySelector("[role=note]")!.textContent).toContain("history is no longer open here");
+    card.unmount();
+  });
+
   it("disables the review card's Undo with a reason after a later edit; designer history stays the path", async () => {
     const result = await run(request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]));
     expect(controller.batch!.state(token(result)).status).toBe("available");
@@ -338,6 +385,18 @@ async function run(invocation: StudioAgentPreparedInvocation) {
   let completion!: Promise<StudioAgentClientExecutionResult>;
   flushSync(() => { completion = controller.execute!(invocation); });
   return completion;
+}
+
+function mountCard(undoToken: string) {
+  const host = document.createElement("div"); document.body.append(host);
+  const cardRoot = createRoot(host);
+  const toolResult = { payload: { data: { undoToken } } } as unknown as React.ComponentProps<typeof WorkflowBatchUndoControl>["toolResult"];
+  flushSync(() => cardRoot.render(<WorkflowBatchUndoControl controller={controller} proposal={null} result={null} toolResult={toolResult} />));
+  return { container: host, unmount: () => { flushSync(() => cardRoot.unmount()); host.remove(); } };
+}
+
+function outcome(card: { container: HTMLElement }) {
+  return card.container.querySelector("[data-outcome]")?.getAttribute("data-outcome") ?? null;
 }
 
 function token(result: StudioAgentClientExecutionResult) {

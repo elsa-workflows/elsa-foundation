@@ -1431,7 +1431,8 @@ export interface StudioAgentRegistry extends StudioAgentPromptDispatcher {
   readonly toolSlots: StudioContributionRegistry<StudioAgentToolSlotContribution>;
   readonly toolContracts: StudioContributionRegistry<StudioAgentToolContractContribution>;
   readonly resultRenderers: StudioContributionRegistry<StudioAgentResultRendererContribution>;
-  readonly resultControls: StudioContributionRegistry<StudioAgentResultControlContribution>;
+  /** Optional, additive: hosts that predate result controls omit it, so contributors guard its use. */
+  readonly resultControls?: StudioContributionRegistry<StudioAgentResultControlContribution>;
 }
 
 export type StudioAiPromptMode = "enqueue" | "steer";

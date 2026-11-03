@@ -257,7 +257,10 @@ Register only declarative, scoped contributions:
 - `toolContracts` declare input, target, result, risk, permissions,
   availability, invocation modes, and renderer expectations.
 - `resultRenderers` render module-specific tool results inside the host-owned
-  Review Shell, with structured fallback when no renderer matches.
+  Review Shell, with structured fallback when no renderer matches. A renderer may present another module's
+  results through `resourceModuleIds`.
+- `resultControls` (optional; hosts that predate it omit it, so guard its use) add the resource-owning module's
+  interactive control for a result type, rendered after whichever renderer presents it.
 
 Use stable IDs, set `moduleId` when the contribution belongs to a module, scope
 `surfaces` narrowly, and include `requiredPermissions` for anything not available
@@ -266,8 +269,10 @@ to every authenticated user. Mutating capabilities should use `review-required`,
 
 ## Weaver module participation (candidate)
 
-Register context, prompt actions, capabilities, tool contracts and result renderers through
-`api.agent`. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
+Register context, prompt actions, capabilities, tool contracts, result renderers and, where the host offers them,
+result controls through `api.agent`. A renderer contributed by one package for another module's results declares that
+module in `resourceModuleIds`; a control that only the resource-owning module can perform, such as a designer-history
+Undo of a change it applied, is that module's result control, so neither package needs the other's internals. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
 registries and `studio.ai.*` Slots have been removed. The SDK package re-exports the canonical
 host barrel, so package consumers receive these same declarations. This candidate is still
 subject to the independent #3438 package witness before signature freeze.

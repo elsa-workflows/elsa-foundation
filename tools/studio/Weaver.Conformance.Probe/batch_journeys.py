@@ -2,7 +2,7 @@
 
 On each actual adapter, the reviewed Operation Batch tool (workflow_apply_operation_batch) must:
 
-- prepare one batch of six operation kinds, one of them in a nested sequence, as a proposal that awaits review even in
+- prepare one batch of seven operations of six kinds, three of them in a nested flowchart, as a proposal that awaits review even in
   full-auto, labelled destructive because it disconnects, with every target resolved and nothing changed on the server;
 - end each negative control at preparation with the workflow module's own clarification or refusal and no proposal:
   an activity the catalog does not offer, an activity the catalog lists but does not let anyone add, an input the
@@ -12,7 +12,8 @@ On each actual adapter, the reviewed Operation Batch tool (workflow_apply_operat
   validation, dirty state, autosave suspension across Undo and Redo, and no save or publish, while an edit after the
   proposal, a selection change, a remount and an approval from a second tab are each refused with zero change.
 
-The consumer's catalog has no credential input and no excluded activity, so the host's test-only
+The consumer's catalog has one container activity, the Flowchart, so the nested scope is a flowchart inside the root
+flowchart. It has no credential input and no excluded activity either, so the host's test-only
 QualificationBatchCatalog feature, selected through the ordinary native feature apply for this inventory only, adds one
 of each to the designer's own catalog read. The native turns send the open editor's snapshot as Studio does, in its
 compact structured form, for the workflow this case seeds. Nothing is retried.
@@ -35,7 +36,7 @@ from authorization_journeys import select_command
 from journey_runtime import browser_inputs, same
 from owner_resources import seed_batch_workflow
 from runtime import RUNTIME_ENVIRONMENT, private_json
-from truth_seam_journeys import READER
+from truth_seam_journeys import READER, same_target
 
 
 SECTION = "workflowBatchQualification"
@@ -68,36 +69,37 @@ EXPECTED_REFUSALS = {
 BROWSER_JOURNEY = "workflow-batch"
 BROWSER_COMMANDS = ("staleEdit", "selectionChange", "remount", "applied", "secondTab")
 BROWSER_OBSERVATIONS = {"staleEdit": "refused", "selectionChange": "refused", "remount": "refused", "secondTab": "refused", "applied": True,
-                        "operationCount": 6, "nestedScope": True, "handEditInBase": True, "validated": True, "dirty": True,
+                        "operationCount": 7, "nestedScope": True, "handEditInBase": True, "validated": True, "dirty": True,
                         "autosaveSuspended": True, "undoRestored": True, "redoRestored": True, "noSaveOrPublish": True}
 
 
 def positive_operations(seed):
-    """Six kinds over the seeded draft: an add into the nested sequence, its declared input, a display name, a move, and a
-    rewiring that removes one connection (destructive) and adds another, so every node stays reachable and valid."""
-    n, write = seed["nodes"], seed["writeLine"]
+    """Six kinds over the seeded draft: an add into the nested flowchart wired after its existing activity, its declared
+    input, a display name, a move, and a rewiring that removes one connection (destructive) and adds another, so every
+    node stays connected and reachable and the designer's structural validation stays clean."""
+    n, write, flow = seed["nodes"], seed["writeLine"], seed["flowchart"]
     return [
         {"kind": "add", "ref": ADDED, "activityTypeKey": write["activityTypeKey"], "version": write["version"],
-         "scopePath": [n["root"], n["seq"]], "slot": seed["containers"]["Sequence"]["slot"], "position": {"x": 200, "y": 120}},
+         "scopePath": [n["root"], n["nested"]], "slot": flow["slot"], "position": {"x": 200, "y": 240}},
         {"kind": "set-property", "activity": {"ref": ADDED}, "property": "text", "value": {"literal": LITERAL}},
+        {"kind": "connect", "source": {"id": n["inner"]}, "target": {"ref": ADDED}},
         {"kind": "update", "activity": {"id": n["a"]}, "fields": {"displayName": DISPLAY_NAME}},
         {"kind": "position", "activity": {"id": n["b"]}, "x": POSITION["x"], "y": POSITION["y"]},
-        {"kind": "disconnect", "source": {"id": n["a"]}, "target": {"id": n["seq"]}},
-        {"kind": "connect", "source": {"id": n["b"]}, "target": {"id": n["seq"]}},
+        {"kind": "disconnect", "source": {"id": n["a"]}, "target": {"id": n["nested"]}},
+        {"kind": "connect", "source": {"id": n["b"]}, "target": {"id": n["nested"]}},
     ]
 
 
-POSITIVE_RISKS = ["reviewRequired", "reviewRequired", "reviewRequired", "reviewRequired", "destructive", "reviewRequired"]
+POSITIVE_RISKS = ["reviewRequired", "reviewRequired", "reviewRequired", "reviewRequired", "reviewRequired", "destructive", "reviewRequired"]
 
 
 def control_operations(seed, control, canary):
-    n, write = seed["nodes"], seed["writeLine"]
-    sequence_slot = seed["containers"]["Sequence"]["slot"]
+    n, write, flow = seed["nodes"], seed["writeLine"], seed["flowchart"]
     return {
         "missing-activity": [{"kind": "add", "ref": "batch-missing", "activityTypeKey": "Qualification.NotInstalled", "version": "1.0.0",
-                              "scopePath": [n["root"], n["seq"]], "slot": sequence_slot}],
+                              "scopePath": [n["root"], n["nested"]], "slot": flow["slot"]}],
         "excluded-activity": [{"kind": "add", "ref": "batch-excluded", "activityTypeKey": EXCLUDED["activityTypeKey"], "version": EXCLUDED["version"],
-                               "scopePath": [n["root"], n["seq"]], "slot": sequence_slot}],
+                               "scopePath": [n["root"], n["nested"]], "slot": flow["slot"]}],
         "undeclared-property": [{"kind": "set-property", "activity": {"id": n["a"]}, "property": "notDeclared", "value": {"literal": "x"}}],
         "ambiguous-target": [{"kind": "remove", "activity": {"name": write["displayName"]}}],
         "credential-literal": [{"kind": "set-property", "activity": {"id": "batch-credential"}, "property": CREDENTIAL["input"], "value": {"literal": canary}}],
@@ -107,37 +109,73 @@ def control_operations(seed, control, canary):
 
 def batch_snapshot(seed, revision, *, working_state="draft", credential_node=False):
     """The workflow module's client snapshot of the seeded draft, as the open editor sends it: identity, revision, binding,
-    the activities, and the compact structure (versions and containers by activity index)."""
-    n, write, containers = seed["nodes"], seed["writeLine"], seed["containers"]
-    activities = [{"id": n["root"], "type": containers["Flowchart"]["activityTypeKey"], "displayName": containers["Flowchart"]["displayName"]},
+    the activities, and the compact structure (versions and containers by activity index, as compactWorkflowStructure)."""
+    n, write, flow = seed["nodes"], seed["writeLine"], seed["flowchart"]
+    activities = [{"id": n["root"], "type": flow["activityTypeKey"], "displayName": flow["displayName"]},
                   {"id": n["a"], "type": write["activityTypeKey"], "displayName": write["displayName"]},
                   {"id": n["b"], "type": write["activityTypeKey"], "displayName": write["displayName"]},
-                  {"id": n["seq"], "type": containers["Sequence"]["activityTypeKey"], "displayName": containers["Sequence"]["displayName"]},
+                  {"id": n["nested"], "type": flow["activityTypeKey"], "displayName": flow["displayName"]},
                   {"id": n["inner"], "type": write["activityTypeKey"], "displayName": write["displayName"]}]
-    versions = {containers["Flowchart"]["activityVersionId"]: [0], write["activityVersionId"]: [1, 2, 4], containers["Sequence"]["activityVersionId"]: [3]}
+    versions = {}
+    for index, version in enumerate([flow["activityVersionId"], write["activityVersionId"], write["activityVersionId"], flow["activityVersionId"], write["activityVersionId"]]):
+        versions.setdefault(version, []).append(index)
     root_members = [1, 2, 3]
     if credential_node:
         # An unsaved hand-added node of the credential activity, as the working draft holds it before any save.
         activities.append({"id": "batch-credential", "type": CREDENTIAL["activityTypeKey"], "displayName": "Qualification credential activity"})
         versions[CREDENTIAL["activityVersionId"]] = [5]
         root_members.append(5)
+    slot = lambda members: [{"id": flow["slot"], "mode": "flowchart", "cardinality": "many", "nodes": members}]
     structure = {"versions": [{"id": key, "nodes": value} for key, value in versions.items()], "containers": [
-        {"id": n["root"], "parentId": None, "slot": None, "slots": [{"id": containers["Flowchart"]["slot"], "mode": "flowchart", "cardinality": "many", "nodes": root_members}]},
-        {"id": n["seq"], "parentId": n["root"], "slot": containers["Flowchart"]["slot"],
-         "slots": [{"id": containers["Sequence"]["slot"], "mode": "sequence", "cardinality": "many", "nodes": [4]}]}]}
+        {"id": n["root"], "parentId": None, "slot": None, "slots": slot(root_members)},
+        {"id": n["nested"], "parentId": n["root"], "slot": flow["slot"], "slots": slot([4])}]}
     target = {"moduleId": WORKFLOW_MODULE, "resourceType": "workflow-definition", "resourceId": seed["definitionId"], "revision": revision}
     return {"id": str(uuid.uuid4()), "moduleId": WORKFLOW_MODULE, "schemaVersion": "1", "source": WORKFLOW_MODULE, "sourceId": seed["definitionId"],
             "label": "Open workflow", "contentType": "workflow.definition", "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot",
             "target": target, "client": {"clientId": "qualification-editor", "generationId": str(uuid.uuid4())},
             "content": {"workflowDefinitionId": seed["definitionId"], "draftId": seed["draftId"], "revision": revision, "selectedNodeId": n["a"],
                         "workingState": working_state, "activities": activities, "structure": structure,
-                        "connections": [{"source": n["a"], "target": n["b"], "sourcePort": "Done"}, {"source": n["a"], "target": n["seq"], "sourcePort": "Done"}],
-                        "positions": [{"nodeId": n["a"], "x": 120, "y": 160}, {"nodeId": n["b"], "x": 420, "y": 160}, {"nodeId": n["seq"], "x": 120, "y": 420}],
+                        "connections": [{"source": n["a"], "target": n["b"], "sourcePort": "Done"}, {"source": n["a"], "target": n["nested"], "sourcePort": "Done"}],
+                        "positions": [{"nodeId": n["a"], "x": 120, "y": 160}, {"nodeId": n["b"], "x": 420, "y": 160}, {"nodeId": n["nested"], "x": 120, "y": 420},
+                                      {"nodeId": n["inner"], "x": 80, "y": 80}],
                         "secretReferences": []}}
 
 
-def _identity(target):
-    return {key: (target or {}).get(key) for key in ("moduleId", "resourceType", "resourceId", "revision")} if isinstance(target, dict) else None
+# Each actual adapter's own frame order, pinned. Observed natively on the slice B witness (b0d45f106): a reviewed proposal
+# (lifecycle denied-result-continuation, both adapters), a tool refused at preparation (malformed-arguments, Copilot), and
+# a turn whose commanded tool the adapter was not offered (truth-seam read-only layout request, both adapters). Copilot's
+# SDK runs the supplied function and reports the refusal through its own events. Anthropic leaves the call to the engine
+# (AgentTurnServices): a refused dispatch carries no result, so no context is re-admitted before toolCallCompleted (a
+# successful read re-admits there, as observed), and the continuation step admits its context once, as observed.
+PROPOSAL_FRAMES = {
+    "copilot": ["started", "contextAdmitted", "toolCallStarted", "proposalCreated", "toolApprovalRequested"],
+    "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "toolCallRequested", "stepCompleted", "toolCallStarted",
+                  "proposalCreated", "toolApprovalRequested"],
+}
+REFUSED_FRAMES = {
+    "copilot": ["started", "contextAdmitted", "toolCallStarted", "toolCallCompleted", "contextAdmitted", "contributedResult", "messageDelta", "completed"],
+    "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "toolCallRequested", "stepCompleted", "toolCallStarted",
+                  "toolCallCompleted", "contributedResult", "contextAdmitted", "stepStarted", "messageDelta", "stepCompleted", "completed"],
+}
+# The continuation after the reviewed proposal is denied (lifecycle denied-result-continuation, both adapters).
+DENIED_CONTINUATION_FRAMES = {
+    "copilot": ["started", "contextAdmitted", "messageDelta", "completed"],
+    "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "messageDelta", "stepCompleted", "completed"],
+}
+UNOFFERED_FRAMES = {
+    "copilot": ["started", "contextAdmitted", "error"],
+    "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "error"],
+}
+UNOFFERED_ERROR = {"copilot": "agent.provider.github_copilot.turn_failed", "anthropic": "agent.provider.anthropic.turn_failed"}
+UNOFFERED_MESSAGE = "The commanded tool is not uniquely advertised by the actual adapter."
+# How each adapter hands a refused tool outcome back: Copilot's function returns, Anthropic continues with the results.
+OUTCOME_ROWS = {"copilot": ".return", "anthropic": ".continuation"}
+
+
+def _kinds(values, expected, what):
+    kinds = [frame.get("kind") for frame in values]
+    check(kinds == expected, what + " did not follow this adapter's frame order: " + json.dumps(kinds))
+    return kinds
 
 
 def _frames(frames):
@@ -164,7 +202,7 @@ def _admitted_draft(values, target):
         payload = frame.get("payload")
         check(isinstance(payload, dict) and payload.get("diagnostics") == [], "Context admission reported a diagnostic")
         drafts = [item for item in payload.get("attachments", []) if isinstance(item, dict) and item.get("contentType") == "workflow.definition"]
-        check(len(drafts) == 1 and _identity(drafts[0].get("target")) == _identity(target)
+        check(len(drafts) == 1 and same_target(drafts[0].get("target"), target)
               and isinstance((drafts[0].get("content") or {}).get("structure"), dict),
               "The admission lost the exact working-state target or its structure")
     return admitted
@@ -175,15 +213,13 @@ def require_proposal_turn(frames, rows, *, provider, command_id, target, operati
     check(provider in PROVIDERS, "Unknown adapter")
     values = _frames(frames)
     _admitted_draft(values, target)
-    kinds = [frame.get("kind") for frame in values]
-    check(kinds[-2:] == ["proposalCreated", "toolApprovalRequested"] and kinds.count("proposalCreated") == 1
-          and "toolCallCompleted" not in kinds and "error" not in kinds, "The batch turn did not pause at exactly one review")
+    _kinds(values, PROPOSAL_FRAMES[provider], "The batch turn")
     proposal = values[-2].get("payload")
     prepared = proposal.get("preparedInvocation") if isinstance(proposal, dict) else None
     check(isinstance(prepared, dict) and prepared.get("toolName") == BATCH_TOOL and prepared.get("requiresApproval") is True
           and proposal.get("requiresApproval") is True and str(proposal.get("status", "")).replace("-", "").lower() == "awaitingapproval"
           and prepared.get("executionLocation") == "clientWorkingState" and prepared.get("risk") == "destructive"
-          and _identity(prepared.get("target")) == _identity(target),
+          and same_target(prepared.get("target"), target) and values[-1].get("proposalId") == proposal.get("id"),
           "The batch proposal is not a reviewed, destructive client working-state change of the exact target")
     frozen = (prepared.get("arguments") or {}).get("operations")
     labels = ((prepared.get("preview") or {}).get("data") or {}).get("operations")
@@ -203,13 +239,13 @@ def require_refused_turn(frames, rows, *, provider, command_id, target, control,
     check(provider in PROVIDERS and control in EXPECTED_REFUSALS, "Unknown adapter or control")
     values = _frames(frames)
     _admitted_draft(values, target)
-    kinds = [frame.get("kind") for frame in values]
-    check(kinds[-1] == "completed" and "proposalCreated" not in kinds and "toolApprovalRequested" not in kinds and "error" not in kinds,
-          "A refused batch still reached review or failed the turn")
-    completed = [frame.get("payload") for frame in values if frame.get("kind") == "toolCallCompleted"]
-    check(len(completed) == 1 and isinstance(completed[0], dict) and completed[0].get("toolName") == BATCH_TOOL and completed[0].get("succeeded") is False,
-          "The batch tool did not complete once, refused")
-    content = completed[0].get("content")
+    _kinds(values, REFUSED_FRAMES[provider], "The refused batch turn")
+    completed = next(frame.get("payload") for frame in values if frame.get("kind") == "toolCallCompleted")
+    result = completed.get("result") if isinstance(completed, dict) else None
+    check(isinstance(completed, dict) and completed.get("toolName") == BATCH_TOOL and completed.get("succeeded") is False
+          and isinstance(result, dict) and result.get("succeeded") is False and result.get("payload") is None and result.get("receipt") is None
+          and completed.get("summary") == result.get("content"), "The batch tool did not complete once, refused, with no payload or receipt")
+    content = completed.get("summary")
     start, detail = EXPECTED_REFUSALS[control]
     check(isinstance(content, str) and content.startswith(start) and detail in content
           and (control == "historical-version" or content.endswith(NOTHING_CHANGED)),
@@ -217,7 +253,7 @@ def require_refused_turn(frames, rows, *, provider, command_id, target, control,
     owned = _owned(rows, provider, command_id)
     calls = [row for row in owned if row.get("kind") == provider + ".call"]
     check(BATCH_TOOL in _offered(owned, provider) and len(calls) == 1 and calls[0]["data"].get("toolName") == BATCH_TOOL
-          and any(row.get("kind") == provider + ".return" for row in owned),
+          and any(row.get("kind") == provider + OUTCOME_ROWS[provider] for row in owned),
           "The actual adapter did not call the batch tool once and receive its refusal")
     if canary is not None:
         # The model wrote the literal itself, so only its own call carries it: no admitted context, result or refusal does.
@@ -235,10 +271,10 @@ def require_unoffered_turn(frames, rows, *, provider, command_id, target):
         check(len(permissions) == 1 and (permissions[0].get("content") or {}).get("manage") == "denied"
               and BATCH_TOOL not in (permissions[0].get("content") or {}).get("tools", [BATCH_TOOL]),
               "The reader's permissions do not withhold the batch tool")
-    kinds = [frame.get("kind") for frame in values]
-    check("proposalCreated" not in kinds and not any(frame.get("kind") in ("toolCallStarted", "toolCallRequested")
-                                                     and (frame.get("payload") or {}).get("toolName") == BATCH_TOOL for frame in values),
-          "An actor without manage permission reached the batch tool or a review")
+    kinds = _kinds(values, UNOFFERED_FRAMES[provider], "The no-manage turn")
+    error = values[-1].get("error")
+    check(isinstance(error, dict) and error.get("code") == UNOFFERED_ERROR[provider] and error.get("message") == UNOFFERED_MESSAGE,
+          "The no-manage turn did not end because the actual adapter was never offered the batch tool")
     owned = _owned(rows, provider, command_id)
     check(BATCH_TOOL not in _offered(owned, provider) and not any(row.get("kind") == provider + ".call" for row in owned),
           "The actual adapter was offered or called the batch tool for an actor without manage permission")
@@ -311,7 +347,7 @@ def _turn(runtime, name, http, attachment, operations):
     message = transport.message(session, {"content": "Owned workflow batch qualification request", "mode": "build", "requestId": str(uuid.uuid4()),
         "requestedCapabilities": ["workflow.propose-change"], "contextAttachments": [attachment]}).require_status(200)
     accepted = message.json()["data"]["message"]
-    check(any(isinstance(item, dict) and item.get("contentType") == "workflow.definition" and _identity(item.get("target")) == _identity(attachment["target"])
+    check(any(isinstance(item, dict) and item.get("contentType") == "workflow.definition" and same_target(item.get("target"), attachment["target"])
               for item in accepted.get("context") or []), "The accepted message does not carry the admitted working-state context")
     stream = transport.collect_turn(session)
     return transport, session, command_id, [frame.value for frame in stream.frames], offset, [created.receipt, command, message.receipt, stream.receipt]
@@ -329,7 +365,7 @@ def _native(runtime, name, seed, clients):
                                                 target=attachment["target"], operations=positive_operations(seed))
     denied = transport.deny(records["positive"]["proposalId"]).require_status(200)
     continuation = transport.collect_turn(session)
-    check([frame.value.get("kind") for frame in continuation.frames][-1:] == ["completed"], "The denied batch's turn did not complete")
+    _kinds([frame.value for frame in continuation.frames], DENIED_CONTINUATION_FRAMES[runtime.provider], "The denied batch's continuation")
     evidence += [*refs, trace["receipt"], denied.receipt, continuation.receipt]
     for control in CONTROLS:
         canary = "CANARY-CREDENTIAL-" + uuid.uuid4().hex if control == "credential-literal" else None
@@ -364,7 +400,7 @@ def _browser(runtime, name, seed):
     n, write = seed["nodes"], seed["writeLine"]
     workflow = {key: seed[key] for key in ("definitionId", "draftId", "definitionPath", "draftPath", "validationPath")}
     workflow.update(nodes=n, batch={"operations": positive_operations(seed), "addedNodeId": ADDED, "writeLineVersionId": write["activityVersionId"],
-                                    "literal": LITERAL, "displayName": DISPLAY_NAME, "position": POSITION},
+                                    "literal": LITERAL, "displayName": DISPLAY_NAME, "position": POSITION, "slot": seed["flowchart"]["slot"]},
                     followUp={"operations": [{"kind": "position", "activity": {"id": n["a"]}, "x": 160, "y": 200}]})
     config = {"journey": BROWSER_JOURNEY, "provider": runtime.provider, "studioOrigin": runtime.studio_origin,
               "backendOrigin": runtime.backend_origin, "storageState": identity["storageState"],

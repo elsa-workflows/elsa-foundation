@@ -41,7 +41,7 @@ export function WorkflowBatchUndoControl({ controller, toolResult }: StudioAgent
   const batch = controller.batch;
   useEffect(() => batch?.subscribe(() => setVersion(version => version + 1)), [batch]);
   if (!token) return null;
-  const availability = batch?.state(token) ?? { status: "unavailable" as const, persisted: false, reason: "The originating workflow editor is unavailable." };
+  const availability = batch?.state(token) ?? { status: "unavailable" as const, persisted: null, reason: "The originating workflow editor is unavailable." };
   async function undo() {
     if (pending || !token || !batch) return;
     setPending(true); setStatus("");
@@ -50,10 +50,13 @@ export function WorkflowBatchUndoControl({ controller, toolResult }: StudioAgent
     finally { setPending(false); }
   }
   return <div className="wf-agent-batch-undo">
-    {/* FR-011: the live outcome of an applied batch, applied locally until the user's explicit save persists it. */}
-    <p data-outcome={availability.persisted ? "persisted" : "applied-locally"}>{availability.persisted
-      ? "Persisted by your explicit save."
-      : "Not saved: the change is in the unsaved working draft. Saving and publishing stay with you."}</p>
+    {/* FR-011: the live outcome. Persisted once the user's explicit save covered it; "not saved" only while this editor's
+        history holds the batch as its current, un-undone entry; unknown (another editor's history) is said neutrally. Anything
+        else says only why, never claiming unsaved. */}
+    {availability.persisted === true ? <p data-outcome="persisted">Persisted by your explicit save.</p>
+      : availability.status === "available" ? <p data-outcome="applied-locally">Not saved: the change is in the unsaved working draft. Saving and publishing stay with you.</p>
+        : availability.persisted === null ? <p data-outcome="unknown">Whether this change was saved is not known here.</p>
+          : null}
     <button type="button" disabled={pending || availability.status !== "available"} title={availability.reason} onClick={() => void undo()}>Undo whole change</button>
     {availability.status !== "available" && availability.reason ? <p role="note">{availability.reason}</p> : null}
     {status ? <p role="status">{status}</p> : null}
