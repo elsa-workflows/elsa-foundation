@@ -13,15 +13,26 @@ namespace Elsa.Etl.RabbitMq;
 /// </summary>
 /// <remarks>
 /// Each publication opens its own connection without automatic recovery: the runtime retries a whole batch, so a connection
-/// that recovered mid-batch could not tell which messages it confirmed.
+/// that recovered mid-batch could not tell which messages it confirmed. Each confirm and each protocol round trip is bounded,
+/// because a broker under a resource alarm blocks publishers without closing their connections; a bounded wait yields the
+/// attempt and its capacity instead of holding them until the alarm clears.
 /// </remarks>
 internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
 {
     // AMQP reply codes that a retry cannot cure: access refused, not found and precondition failed (a channel error), and
-    // not allowed (a connection error, such as a virtual host the user may not open). RabbitMQ also answers a virtual host's
-    // or user's connection limit with not allowed, which a later attempt can pass, so that reply is transient.
+    // not allowed (a connection error, such as a virtual host the user may not open). RabbitMQ also answers a connection or
+    // channel limit (per virtual host, user or node) with not allowed; a later attempt can pass it, so such a reply is transient.
     private static readonly HashSet<ushort> RejectedReplyCodes = [403, 404, 406, 530];
     private const ushort NotAllowed = 530;
+    private static readonly TimeSpan DefaultConfirmTimeout = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _confirmTimeout;
+
+    public RabbitMqEtlPublisher() : this(DefaultConfirmTimeout)
+    {
+    }
+
+    /// <summary>Uses a shorter bound on each confirm and round trip, for tests.</summary>
+    internal RabbitMqEtlPublisher(TimeSpan confirmTimeout) => _confirmTimeout = confirmTimeout;
 
     public EtlRabbitMqTarget DescribeTarget(string connectionString)
     {
@@ -33,7 +44,7 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     public async ValueTask<EtlRabbitMqPublishOutcome> PublishAsync(string connectionString, string exchange, string routingKey,
         IReadOnlyList<EtlRabbitMqMessage> messages, CancellationToken cancellationToken)
     {
-        var factory = Factory(connectionString);
+        var factory = Factory(connectionString, _confirmTimeout);
         await using var connection = await factory.CreateConnectionAsync(cancellationToken);
         await using var channel = await connection.CreateChannelAsync(
             new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), cancellationToken);
@@ -46,14 +57,20 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
                 DeliveryMode = DeliveryModes.Persistent,
                 Headers = message.Headers.ToDictionary(header => header.Key, object? (header) => header.Value)
             };
+            using var confirm = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            confirm.CancelAfter(_confirmTimeout);
             try
             {
                 // With confirmation tracking, the publish completes when the broker confirms the message.
-                await channel.BasicPublishAsync(exchange, routingKey, mandatory: true, properties, message.Body, cancellationToken);
+                await channel.BasicPublishAsync(exchange, routingKey, mandatory: true, properties, message.Body, confirm.Token);
             }
             catch (PublishException exception)
             {
                 return exception.IsReturn ? EtlRabbitMqPublishOutcome.Unroutable : EtlRabbitMqPublishOutcome.Nacked;
+            }
+            catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException("The RabbitMQ broker did not confirm a message in time.", exception);
             }
         }
         return EtlRabbitMqPublishOutcome.Confirmed;
@@ -71,17 +88,17 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     };
 
     private static EtlRabbitMqErrorKind Classify(ShutdownEventArgs reason) =>
-        reason.ReplyCode == NotAllowed && reason.ReplyText.Contains("connection limit", StringComparison.OrdinalIgnoreCase)
+        reason.ReplyCode == NotAllowed && reason.ReplyText.Contains("limit", StringComparison.OrdinalIgnoreCase)
             ? EtlRabbitMqErrorKind.Transient
             : RejectedReplyCodes.Contains(reason.ReplyCode) ? EtlRabbitMqErrorKind.Rejected : EtlRabbitMqErrorKind.Transient;
 
-    private static ConnectionFactory Factory(string connectionString) => new()
+    private static ConnectionFactory Factory(string connectionString, TimeSpan? roundTrip = null) => new()
     {
         Uri = new Uri(connectionString),
         AutomaticRecoveryEnabled = false,
         TopologyRecoveryEnabled = false,
         ClientProvidedName = "elsa-etl",
         RequestedConnectionTimeout = TimeSpan.FromSeconds(30),
-        ContinuationTimeout = TimeSpan.FromSeconds(30)
+        ContinuationTimeout = roundTrip ?? DefaultConfirmTimeout
     };
 }

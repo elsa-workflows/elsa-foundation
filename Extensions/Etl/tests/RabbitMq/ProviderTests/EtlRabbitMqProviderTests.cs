@@ -108,6 +108,43 @@ public sealed class EtlRabbitMqProviderTests(EtlRabbitMqBrokerFixture broker)
     }
 
     [SkippableFact]
+    public async Task A_user_at_its_channel_limit_yields()
+    {
+        Skip.If(broker.SkipReason is not null, broker.SkipReason);
+        // A user that may open no channel is refused with 530 when the publisher opens its channel, as one at its limit is.
+        var secret = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(12));
+        Skip.IfNot(await broker.ControlAsync("add_user", _name, secret), "The supplied broker cannot be configured.");
+        await broker.ControlAsync("set_permissions", "-p", "/", _name, ".*", ".*", ".*");
+        await broker.ControlAsync("set_user_limits", _name, """{"max-channels": 0}""");
+        var uri = new UriBuilder(broker.ConnectionString) { UserName = _name, Password = secret }.Uri.ToString();
+
+        Assert.Equal(EtlRabbitMqWriteOutcome.Yield,
+            await Writer().WriteAsync(Delivery("", _name, """[{"id":1}]""") with { ConnectionString = uri }, default));
+    }
+
+    [SkippableFact]
+    public async Task A_broker_under_a_resource_alarm_yields_once_a_confirm_takes_too_long()
+    {
+        Skip.If(broker.SkipReason is not null, broker.SkipReason);
+        await DeclareAsync(_name, bind: true);
+        // A disk alarm blocks every publishing connection without closing it.
+        Skip.IfNot(await broker.ControlAsync("set_disk_free_limit", "10000GB"), "The supplied broker cannot be configured.");
+        try
+        {
+            var started = DateTime.UtcNow;
+            var outcome = await new EtlRabbitMqRouteWriter(new RabbitMqEtlPublisher(TimeSpan.FromSeconds(3)))
+                .WriteAsync(Delivery(_name, "loaded", """[{"id":1}]"""), default);
+
+            Assert.Equal(EtlRabbitMqWriteOutcome.Yield, outcome);
+            Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(30));
+        }
+        finally
+        {
+            await broker.ControlAsync("set_disk_free_limit", "50MB");
+        }
+    }
+
+    [SkippableFact]
     public async Task An_unreachable_broker_yields()
     {
         Skip.If(broker.SkipReason is not null, broker.SkipReason);

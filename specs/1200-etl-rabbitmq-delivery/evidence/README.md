@@ -26,7 +26,8 @@ At `154fbb248` (review round 3), the ETL suite passed 1269 of 1269. At `bc08d23a
 - **Untested guards:** the binding's refusal of a blank AMQP URI; the driver's disabled automatic recovery, which keeps a recovered connection from confirming part of a batch; and the compiler's size budget for the exchange and routing key.
 - **The default ports** come from the client's connection factory; the target test pins them, but no guard of ours chooses them.
 - **Guards tested but not bite-proven:** the default-exchange routing, the content type and headers set by the driver, the binding's revision check (shared with the SQL bindings' pattern), the cross-catalog ambiguity check in `HostConnectorBindings` (untested for RabbitMQ), and the Studio controls.
-- **Untested:** the driver's classification of failed authentication through `BrokerUnreachableException`'s inner exception on every broker version, and of reply codes 403, 406 and 530; only refused credentials and a missing exchange are exercised.
+- **Untested:** the driver's classification of failed authentication through `BrokerUnreachableException`'s inner exception on broker versions other than 4.1, and of reply codes 403 and 406; refused credentials, a missing exchange (404) and both kinds of 530 are exercised.
+- **The store refusing a confirmed route's record.** Dispatch yields on `BudgetExceeded` or `Conflict` and fails with `etl.rabbitmq-delivery-refused` on any other refusal, the mapping SQL delivery uses; no test makes the store refuse.
 - **A broker restart during a publication.** The unreachable broker and the negative acknowledgement are proven; a connection closed mid-batch is classified like an unreachable broker but not exercised.
 
 ## Actual Workbench journey

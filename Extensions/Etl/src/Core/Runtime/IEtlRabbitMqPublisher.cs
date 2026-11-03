@@ -16,7 +16,8 @@ public interface IEtlRabbitMqPublisher
     /// <summary>
     /// Publishes the messages in order on one channel with publisher confirms, each persistent, mandatory and of content type
     /// <c>application/json</c>, and returns once every message was confirmed, or at the first message the broker returned as
-    /// unroutable or negatively acknowledged. Earlier messages of the list may already have been delivered.
+    /// unroutable or negatively acknowledged. Earlier messages of the list may already have been delivered. Each confirm must be
+    /// bounded, so a broker that blocks publishers under a resource alarm surfaces as a transient failure, not an endless wait.
     /// </summary>
     ValueTask<EtlRabbitMqPublishOutcome> PublishAsync(string connectionString, string exchange, string routingKey,
         IReadOnlyList<EtlRabbitMqMessage> messages, CancellationToken cancellationToken);
