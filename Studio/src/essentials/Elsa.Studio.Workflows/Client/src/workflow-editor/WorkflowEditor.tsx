@@ -32,7 +32,6 @@ import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { withWorkflowStartEnabled } from "../workflowStartEditing";
 import { getWorkflowStartEnabled } from "../workflowStart";
-import { BlockPrototypeDialog } from "./BlockPrototypeDialog";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
@@ -193,7 +192,6 @@ export function WorkflowEditor({
     [{ id: "elsa.api.bpmn-publishing", contractVersion: "1", relations: ["bpmn-authored-claim-publish"] }]).state === "available";
   const publicationUnavailableReason = operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined;
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
-  const [blockPrototypeOpen, setBlockPrototypeOpen] = useState(false);
   const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
   const [templatesAvailable, setTemplatesAvailable] = useState(false);
   useEffect(() => {
@@ -1439,7 +1437,6 @@ export function WorkflowEditor({
           {restoration.message ? <span role="status">{restoration.message}</span> : null}
         </div> : null}
         moreActions={documentAdapter ? [{ label: "Document", actions: [{ label: "Save a copy", icon: <Boxes size={15} />, onSelect: () => setSaveTemplateOpen(true) }, { label: "Export JSON", icon: <Download size={15} />, onSelect: exportJson }] }] : [
-          { label: "Block prototype", actions: [{ label: "Extract into block", icon: <Boxes size={15} />, disabled: busy || !canAddActivitiesToCanvas || scope?.owner.structure?.kind !== "elsa.sequence.structure", onSelect: () => setBlockPrototypeOpen(true) }] },
           ...(templatesAvailable ? [{ label: "Templates", actions: [{ label: "Save as template", icon: <Boxes size={15} />, disabled: busy, onSelect: () => setSaveTemplateOpen(true) }] }] : []),
           {
             label: "Weaver",
@@ -1508,17 +1505,6 @@ export function WorkflowEditor({
         />
       ) : null}
 
-      {blockPrototypeOpen && paletteCatalog.find(activity => activity.activityTypeKey === "Elsa.Activities.Sequence.Activities.Sequence") ? <BlockPrototypeDialog
-        draft={draft} frames={frames} catalog={catalogByVersion}
-        sequenceActivity={paletteCatalog.find(activity => activity.activityTypeKey === "Elsa.Activities.Sequence.Activities.Sequence")!}
-        initialSelection={selectedCanvasNodeIds} disabled={busy || !canAddActivitiesToCanvas}
-        onClose={() => setBlockPrototypeOpen(false)} onApply={(next, blockId) => {
-          if (busy || !canAddActivitiesToCanvas) return;
-          flushPendingHistory();
-          editDraftAndSelect(() => next, blockId);
-          setBlockPrototypeOpen(false);
-          setStatus("Extracted into block.");
-        }} /> : null}
       {saveTemplateOpen ? <React.Suspense fallback={<p role="status">Loading template dialog…</p>}><SaveWorkflowTemplateDialog context={context} draft={draft} name={details.definition.name + (documentAdapter ? " copy" : "")} description={details.definition.description} onClose={() => setSaveTemplateOpen(false)} /></React.Suspense> : null}
       {error ? (
         <WorkflowAlert
