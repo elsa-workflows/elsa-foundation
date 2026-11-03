@@ -25,7 +25,7 @@ class VerdictTests(unittest.TestCase):
                 {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
                     {'status': 'passed', 'attachments': [
                         {'name': name, 'path': str(self.artifact)} for name in
-                        ['trace', 'reference.png', 'reference.aria.yml', 'completed.png', 'completed.aria.yml']]}]}
+                        ['trace'] + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
                 for project in acceptance.PROJECTS]}
             for journey in acceptance.JOURNEYS]}]}
 
@@ -56,6 +56,38 @@ class VerdictTests(unittest.TestCase):
         self.artifact.write_text('proof')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root / 'different-run')
 
+    def test_each_intermediate_capture_is_required(self):
+        for spec in self.report['suites'][0]['specs']:
+            for attachment in list(spec['tests'][0]['results'][0]['attachments']):
+                with self.subTest(journey=spec['title'], capture=attachment['name']):
+                    report = copy.deepcopy(self.report)
+                    target = next(row for row in report['suites'][0]['specs'] if row['title'] == spec['title'])
+                    target['tests'][0]['results'][0]['attachments'].remove(attachment)
+                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+
+    def test_stale_development_overlays_never_reach_owned_content_root(self):
+        project = self.root / 'source/Host.csproj'
+        project.parent.mkdir()
+        output = project.parent / 'bin/Debug/net10.0'
+        output.mkdir(parents=True)
+        for name in ('appsettings.json', 'shells.json'):
+            (project.parent / name).write_text('{}')
+            (output / name).write_text('{}')
+        for name in ('appsettings.Development.json', 'shells.Development.json'):
+            (output / name).write_text('{"ConnectionString":"Data Source=/shared/developer/elsa.db"}')
+        destination = self.root / 'private'
+        acceptance.prepare_host(project, destination)
+        self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
+
+    def test_unrelated_healthy_listener_is_not_a_readiness_answer(self):
+        with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.urllib.request, 'urlopen') as request, patch.object(acceptance.time, 'sleep'):
+            popen.return_value.poll.side_effect = [None, 1, 1]
+            request.return_value.__enter__.return_value.status = 200
+            with self.assertRaises(RuntimeError):
+                with acceptance.host(self.root, 'missing.dll', 'http://localhost:1', '/', self.root / 'collision.log', {}):
+                    self.fail('An unrelated listener was accepted')
+            request.assert_not_called()
+
     def test_inherited_credentials_and_store_overrides_are_not_forwarded(self):
         with patch.dict(os.environ, {'ConnectionStrings__Elsa': 'private', 'OPENAI_API_KEY': 'private', 'PATH': '/bin'}, clear=True):
             env = acceptance.clean_environment()
@@ -72,6 +104,12 @@ class VerdictTests(unittest.TestCase):
                     process.poll.return_value = 1 if fail_start else None
                     with patch.object(acceptance.urllib.request, 'urlopen') as request:
                         request.return_value.__enter__.return_value.status = 200
+                        if not fail_start:
+                            def started(*args, **kwargs):
+                                kwargs['stdout'].write('Now listening on: http://localhost:1\n')
+                                kwargs['stdout'].flush()
+                                return process
+                            popen.side_effect = started
                         with self.assertRaises(RuntimeError):
                             with acceptance.host(self.root, 'host.dll', 'http://localhost:1', '/', self.root / 'host.log', {}):
                                 raise RuntimeError('journey failed')

@@ -79,9 +79,12 @@ test("collections and connection creation", async ({ page }, info) => {
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("status")).toContainText(`Connection 'qa-${stamp}' created.`);
+  await expect(page.getByRole("status").filter({ hasText: /^Connection / })).toContainText(`Connection 'qa-${stamp}' created.`);
   await expect(page.getByRole("row").filter({ hasText: `qa-${stamp}` })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
   await capture(page, info, "completed");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("agent authoring and navigation", async ({ page }, info) => {
@@ -106,10 +109,12 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await expect(instructions).toHaveValue("Proofread the supplied text and return concise suggestions.");
   const advanced = editor.locator("details.agent-specialist-advanced");
   await expect(advanced).not.toHaveAttribute("open");
+  await page.getByRole("tab", { name: "Designer", exact: true }).scrollIntoViewIfNeeded();
+  await capture(page, info, "agent-designer");
   await advanced.locator("summary").press("Enter");
   await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toBeVisible();
+  await capture(page, info, "advanced-settings");
   await advanced.locator("summary").press("Enter");
-  await capture(page, info, "agent-designer");
   await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
   const outcome = page.getByRole("region", { name: "Done", exact: true });
   await expect(outcome.getByText("Emitted", { exact: true })).toBeVisible();

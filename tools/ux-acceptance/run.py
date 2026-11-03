@@ -17,7 +17,11 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
-JOURNEYS = {'collections and connection creation', 'agent authoring and navigation'}
+CAPTURES = {
+    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'invalid-name', 'completed'],
+    'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'advanced-settings', 'completed'],
+}
+JOURNEYS = set(CAPTURES)
 
 
 def command(args, log, *, cwd=ROOT, env=None):
@@ -47,11 +51,11 @@ def verdict(report, artifacts):
             raise ValueError(f'{project} / {title}: not a single successful execution')
         attachments = results[0].get('attachments', [])
         names = {item.get('name') for item in attachments}
-        required = {'trace', 'reference.png', 'reference.aria.yml', 'completed.png', 'completed.aria.yml'}
+        required = {'trace'} | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
         if not required <= names:
             raise ValueError(f'{project} / {title}: missing artifacts {sorted(required - names)}')
         for item in attachments:
-            if item.get('name') not in required:
+            if not item.get('path') and item.get('name') not in required:
                 continue
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
@@ -85,12 +89,16 @@ def host(directory, dll, url, ready_path, log, env):
             while True:
                 if process.poll() is not None:
                     raise RuntimeError(f'{dll} exited; see {log}')
-                try:
-                    with urllib.request.urlopen(url + ready_path, timeout=2) as response:
-                        if response.status == 200:
-                            break
-                except (OSError, TimeoutError):
-                    pass
+                # An HTTP 200 alone can come from a listener that won the released-port race.
+                # ASP.NET logs this only after it has bound every address; the process is ours and still alive.
+                bound = f'Now listening on: {url}' in log.read_text()
+                if bound:
+                    try:
+                        with urllib.request.urlopen(url + ready_path, timeout=2) as response:
+                            if response.status == 200 and process.poll() is None:
+                                break
+                    except (OSError, TimeoutError):
+                        pass
                 if time.monotonic() > deadline:
                     raise TimeoutError(f'{dll} not ready; see {log}')
                 time.sleep(.25)
@@ -108,7 +116,7 @@ def host(directory, dll, url, ready_path, log, env):
 
 def prepare_host(project, destination):
     output = project.parent / 'bin/Debug/net10.0'
-    shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages"))
+    shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
     # Older local outputs may contain stores. Never seed acceptance from them.
     for file in destination.rglob('*'):
         if file.is_file() and (file.suffix in {'.db', '.db-shm', '.db-wal'} or file.name == 'nuplane.lock.json'):
@@ -125,6 +133,8 @@ def run(output):
               'kind': 'composed-source', 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review'}
     try:
+        if dirty:
+            raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
         command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'backend-build.log')
@@ -145,7 +155,8 @@ def run(output):
             identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
             identity['AllowedReturnUrlOrigins'] = [studio_url]
             (backend / 'shells.json').write_text(json.dumps(shells))
-            env = dict(clean_environment(), HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"))
+            env = dict(clean_environment(), HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
+                       **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
             report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url)
             with host(backend, 'Elsa.Workbench.dll', backend_url, '/health/ready', output / 'backend.log', env):
@@ -157,6 +168,12 @@ def run(output):
                     command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts'],
                             output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
                     report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output)
+        end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        end_dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
+        if sha != end_sha or dirty != end_dirty:
+            raise ValueError('Source changed during acceptance; rerun the exact committed revision')
+        if dirty:
+            raise ValueError('Dirty source run is preliminary evidence, not final acceptance')
         report.update(status='passed', stage='complete')
     except Exception as error:
         report['error'] = str(error)
@@ -171,4 +188,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     args = parser.parse_args()
+    def terminate(_signum, _frame):
+        raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')
+    signal.signal(signal.SIGTERM, terminate)
     run(args.output.resolve())
