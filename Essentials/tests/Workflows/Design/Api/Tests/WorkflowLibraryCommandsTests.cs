@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Tasks.Core;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Host = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiContractTests.AuthorizationHost;
 
@@ -190,6 +191,71 @@ public sealed partial class WorkflowLibraryApiContractTests
             .OfType<IStartupTask>().Single(item => item.GetType().Name == "WorkflowLibraryCommandsStartupTask");
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => task.ExecuteAsync(CancellationToken.None));
         Assert.Contains("IWorkflowLibraryCommands has multiple registrations", error.Message);
+    }
+
+    [Fact]
+    public async Task A_replaced_command_service_decides_the_endpoints_that_have_a_core_counterpart_too()
+    {
+        var replacement = new RecordingCommands();
+        await using var host = await StartAsync(new LibraryProbe(), services =>
+        {
+            services.RemoveAll<IWorkflowLibraryCommands>();
+            services.AddSingleton<IWorkflowLibraryCommands>(replacement);
+        });
+        using var created = await SendAsync(host, "POST", "/design/workflows/tags", "library-catalog", "{\"name\":\"Critical\"}");
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.Contains("replacement-tag", await created.Content.ReadAsStringAsync());
+        // An unkeyed HTTP create still reaches the Core contract under a fresh key, for the request's own actor and tenant.
+        Assert.Equal(("user-a", "tenant-design"), (replacement.Actors.Single().ActorId, replacement.Actors.Single().TenantId));
+        Assert.False(string.IsNullOrWhiteSpace(replacement.TagKeys.Single()));
+        using var favorite = await SendAsync(host, "PUT", "/design/workflows/definitions/orders/favorite", "library-read", "{}");
+        Assert.Equal(HttpStatusCode.Forbidden, favorite.StatusCode);
+        Assert.Contains("Replacement refused", await favorite.Content.ReadAsStringAsync());
+        using var view = await SendAsync(host, "POST", "/design/workflows/views", "library-read", "{\"name\":\"Mine\",\"query\":{}}");
+        Assert.Equal(HttpStatusCode.Conflict, view.StatusCode);
+        Assert.NotNull(replacement.ViewKeys.Single());
+    }
+
+    [Fact]
+    public async Task A_core_create_without_an_operation_key_is_invalid_and_an_update_takes_none()
+    {
+        await using var host = await StartAsync(new KeyedLibraryProbe());
+        using var scope = Request(host, "library-all");
+        var commands = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryCommands>();
+        var actor = new WorkflowLibraryActor("user-a", "tenant-design");
+        Assert.Equal(WorkflowLibraryCommandStatus.Invalid, (await commands.CreateTagAsync(actor, new("Critical"), " ")).Status);
+        Assert.Equal(WorkflowLibraryCommandStatus.Invalid, (await commands.SaveViewAsync(actor, null, new("Mine", new()), null)).Status);
+        Assert.Equal(WorkflowLibraryCommandStatus.Invalid, (await commands.SaveViewAsync(actor, "view-1", new("Mine", new(), Revision: "v1"), "key")).Status);
+        Assert.Equal(WorkflowLibraryCommandStatus.Invalid, (await commands.MoveDefinitionsAsync(actor, ["orders"], null, "")).Status);
+    }
+
+    private sealed class RecordingCommands : IWorkflowLibraryCommands
+    {
+        public List<WorkflowLibraryActor> Actors { get; } = [];
+        public List<string> TagKeys { get; } = [];
+        public List<string?> ViewKeys { get; } = [];
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>> GetPermissionsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) => ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>(WorkflowLibraryCommandStatus.Applied, null, new(true, true, true, true)));
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryOrganizationSnapshot>> GetOrganizationAsync(WorkflowLibraryActor actor, string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>> ListTagsAsync(WorkflowLibraryActor actor, string? search, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input, string operationKey, CancellationToken cancellationToken = default)
+        {
+            Actors.Add(actor); TagKeys.Add(operationKey);
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Applied, null,
+                new("replacement-tag", input.Name, null, "marker", "single", false, "r1", [])));
+        }
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> FindTagByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> EditTagsAsync(WorkflowLibraryActor actor, WorkflowLibraryTagEdit edit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> SetFavoritesAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, bool favorite, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>(WorkflowLibraryCommandStatus.Applied, null,
+                definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Denied, null, "Replacement refused")).ToArray()));
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string operationKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryViewSnapshot>>> ListViewsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> SaveViewAsync(WorkflowLibraryActor actor, string? viewId, WorkflowLibraryViewSave input, string? operationKey, CancellationToken cancellationToken = default)
+        {
+            ViewKeys.Add(operationKey);
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>(WorkflowLibraryCommandStatus.Conflict, "Replacement conflict"));
+        }
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> FindViewByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     // A command runs within the current request: the scope's accessor carries a principal like the route's own.

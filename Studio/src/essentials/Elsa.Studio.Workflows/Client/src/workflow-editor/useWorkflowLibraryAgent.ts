@@ -29,17 +29,19 @@ export function useWorkflowPageAgent<TState>({ controller, clientId, kind, toolI
   latest.current = { build, apply, current, restore };
   const attachment = build(current(), { clientId, generationId: generation.current });
   const revision = attachment?.target?.revision ?? null;
+  // Keyed by this page instance's generation, so two mounted pages of one kind never replace or remove each other's entries.
+  const snapshotKey = `${kind}:${generation.current}`;
   useEffect(() => {
     if (!library || !attachment) return;
-    library.snapshots.set(kind, attachment);
-    return () => { if (library.snapshots.get(kind) === attachment) library.snapshots.delete(kind); };
+    library.snapshots.set(snapshotKey, attachment);
+    return () => { if (library.snapshots.get(snapshotKey) === attachment) library.snapshots.delete(snapshotKey); };
     // The attachment is rebuilt whenever its revision changes; the revision is its identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [library, kind, revision]);
+  }, [library, snapshotKey, revision]);
   useEffect(() => {
     if (!library) return;
     const handler = async (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => {
-      const problem = signal?.aborted ? "The change was cancelled before it was applied." : pageBindingProblem(invocation, library.snapshots.get(kind), library.snapshots.get(kind)?.target?.resourceType ?? "");
+      const problem = signal?.aborted ? "The change was cancelled before it was applied." : pageBindingProblem(invocation, library.snapshots.get(snapshotKey), library.snapshots.get(snapshotKey)?.target?.resourceType ?? "");
       if (problem) return { outcome: "refused" as const, summary: problem };
       const args = invocation.arguments as { change?: unknown } | null;
       const before = latest.current.current();
@@ -58,7 +60,14 @@ export function useWorkflowPageAgent<TState>({ controller, clientId, kind, toolI
       });
       return pageReceipt(invocation, resultType, afterRevision, token, describe);
     };
-    library.handlers.set(toolId, handler);
-    return () => { if (library.handlers.get(toolId) === handler) library.handlers.delete(toolId); };
-  }, [clientId, describe, kind, library, resultType, toolId]);
+    // The tool contract dispatches by the invocation's client generation: exactly this page instance's handler.
+    const handlerKey = workflowPageHandlerKey(toolId, generation.current);
+    library.handlers.set(handlerKey, handler);
+    return () => { if (library.handlers.get(handlerKey) === handler) library.handlers.delete(handlerKey); };
+  }, [clientId, describe, library, resultType, snapshotKey, toolId]);
+}
+
+/** The handler of one page instance for one working-state tool, by its client generation. */
+export function workflowPageHandlerKey(toolId: string, generationId: string | undefined) {
+  return `${toolId}:${generationId ?? ""}`;
 }

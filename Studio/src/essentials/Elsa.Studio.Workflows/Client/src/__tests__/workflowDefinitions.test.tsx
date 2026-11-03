@@ -8,6 +8,8 @@ import { WorkflowDefinitions } from "../workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../workflow-editor/workflowDefinitionBrowseSession";
 import { getDialogs, setDialogs } from "../workflow-editor/dialogs";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
+import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
 let previousClipboard: PropertyDescriptor | undefined;
@@ -109,6 +111,25 @@ describe("workflow definition list", () => {
     expect(header!.compareDocumentPosition(states!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     expect(actions?.querySelector("button")?.textContent).toContain("Create workflow");
+  });
+
+  it("discloses the saved templates its create dialog offers, so a Weaver prefill can choose one (spec 1193 FR-023)", async () => {
+    const template = { id: "template-1", name: "Approval", description: "Two steps", revision: "t-r3", createdAt: "2026-01-01T00:00:00Z", lastModifiedAt: "2026-01-01T00:00:00Z",
+      content: { state: { variables: [], inputs: [], outputs: [], rootActivity: { nodeId: "root", activityVersionId: flowchartActivity().activityVersionId, inputs: [], outputs: [] } },
+        layout: [], activityPresentation: [] } };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? { capabilities: [{ ...definitionCapabilities.capabilities[0], links: [...definitionCapabilities.capabilities[0].links, { rel: "workflow-templates", href: "design/workflows/templates" }] }, activityCapability] }
+      : url.endsWith("design/workflows/templates") ? [template] : routeJson(url));
+    const agent = createAgentRegistry();
+    const weaver = registerWorkflowAgent(agent);
+    const container = render(context(getJson), vi.fn(), weaver);
+    await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
+    click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    await vi.waitFor(() => {
+      const dialog = [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
+      expect((dialog?.content as { templates?: Array<{ id: string; revision: string }> } | undefined)?.templates).toEqual([
+        { id: "template-1", name: "Approval", description: "Two steps", revision: "t-r3" }]);
+    }, { timeout: 5_000, interval: 20 });
   });
 
   it("keeps an open create dialog and its name when its workspace tab goes to the background and returns", async () => {
@@ -254,7 +275,7 @@ async function settle() {
   for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-function render(contextValue: StudioEndpointContext, onOpen: (id: string) => void) {
+function render(contextValue: StudioEndpointContext, onOpen: (id: string) => void, weaver?: WorkflowAgentController) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -262,7 +283,7 @@ function render(contextValue: StudioEndpointContext, onOpen: (id: string) => voi
   const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioAgentRegistry;
   function Harness() {
     const session = useWorkflowDefinitionBrowseSession(contextValue);
-    return <WorkflowDefinitions context={contextValue} ai={ai} onOpen={onOpen} session={session} />;
+    return <WorkflowDefinitions context={contextValue} ai={ai} weaver={weaver} onOpen={onOpen} session={session} />;
   }
   flushSync(() => root.render(<Harness />));
   return container;

@@ -159,6 +159,58 @@ public sealed class WorkflowLibraryAgentTests
     }
 
     [Fact]
+    public async Task Tags_beyond_the_first_catalog_page_are_found_by_their_own_name_for_adding_and_removing()
+    {
+        // 150 tags that sort before "Critical", so the first page of the whole catalog never holds it.
+        var commands = new FakeCommands();
+        commands.Catalog.AddRange(Enumerable.Range(0, 150).Select(index => new WorkflowLibraryTagSnapshot($"tag-{index}", $"Alpha {index:000}", null, "marker", "single", false, "t1", [])));
+        commands.Catalog.Add(new("tag-zulu", "Zulu", null, "marker", "single", false, "t1", []));
+        var result = await AssignTool(commands).PrepareAsync(Invocation(WorkflowLibraryAssignTagsTool.ToolName,
+            new { definitionIds = new[] { "one" }, add = new[] { new { tag = "critical" } }, remove = new[] { new { tag = "zulu" } } }));
+        Assert.True(result.Succeeded, result.Error?.Message);
+        Assert.Equal(0, result.Value!.Preview.Data.GetProperty("createsTags").GetInt32());
+        Assert.Equal("tag-critical", result.Value.Arguments.GetProperty("add")[0].GetProperty("tagId").GetString());
+        Assert.Equal("tag-zulu", result.Value.Arguments.GetProperty("remove")[0].GetProperty("tagId").GetString());
+        Assert.Equal(new[] { "critical", "zulu" }, commands.Searches);
+    }
+
+    [Fact]
+    public async Task A_tag_named_twice_in_any_case_is_one_change_and_one_creation()
+    {
+        var commands = new FakeCommands();
+        var result = await AssignTool(commands).PrepareAsync(Invocation(WorkflowLibraryAssignTagsTool.ToolName,
+            new { definitionIds = new[] { "one" }, add = new object[] { new { tag = "Brand new" }, new { tag = "brand NEW" }, new { tag = "Critical" }, new { tag = "CRITICAL" } } }));
+        Assert.True(result.Succeeded, result.Error?.Message);
+        Assert.Equal(1, result.Value!.Preview.Data.GetProperty("createsTags").GetInt32());
+        Assert.Equal(2, result.Value.Arguments.GetProperty("add").GetArrayLength());
+        Assert.Equal(1, result.Value.Arguments.GetProperty("creates").GetArrayLength());
+        var both = await AssignTool(commands).PrepareAsync(Invocation(WorkflowLibraryAssignTagsTool.ToolName,
+            new { definitionIds = new[] { "one" }, add = new[] { new { tag = "Critical" } }, remove = new[] { new { tag = "critical" } } }));
+        Assert.Equal("agent.workflow.library_clarify", both.Error!.Code);
+    }
+
+    [Fact]
+    public async Task A_creation_that_fails_after_another_committed_reports_one_partial_status()
+    {
+        var commands = new FakeCommands();
+        commands.FailCreates.Add("Second new");
+        var tool = AssignTool(commands);
+        var prepared = await PreparedAsync(tool, Invocation(WorkflowLibraryAssignTagsTool.ToolName,
+            new { definitionIds = new[] { "one" }, add = new object[] { new { tag = "First new" }, new { tag = "Second new" } } }));
+        var executed = await tool.ExecuteAsync(prepared);
+        Assert.True(executed.Succeeded, executed.Error?.Message);
+        var data = executed.Value!.Payload!.Data;
+        Assert.Equal("partial", data.GetProperty("status").GetString());
+        Assert.Contains("No workflow tags were changed", executed.Value.Content);
+        Assert.Empty(commands.Edits);
+        // A first creation that fails changes nothing: a refusal, with no receipt.
+        var none = new FakeCommands(); none.FailCreates.Add("Only new");
+        var refused = await AssignTool(none).ExecuteAsync(await PreparedAsync(AssignTool(none),
+            Invocation(WorkflowLibraryAssignTagsTool.ToolName, new { definitionIds = new[] { "one" }, add = new[] { new { tag = "Only new" } } })));
+        Assert.False(refused.Succeeded);
+    }
+
+    [Fact]
     public async Task A_partial_tag_edit_reports_each_target_and_is_never_reported_as_applied()
     {
         var commands = new FakeCommands { EditOutcome = id => id == "two" ? WorkflowLibraryCommandStatus.Conflict : WorkflowLibraryCommandStatus.Applied };
@@ -440,10 +492,23 @@ public sealed class WorkflowLibraryAgentTests
             OrganizationReads.Add(definitionId);
             return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryOrganizationSnapshot>(WorkflowLibraryCommandStatus.Applied, null, new(definitionId, null, [], "r-" + definitionId)));
         }
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>> ListTagsAsync(WorkflowLibraryActor actor, string? search, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>(WorkflowLibraryCommandStatus.Applied, null, [Critical, .. CreatedTags.Values]));
+        /// <summary>Further catalog tags, before Critical in name order, so a first page of 100 never reaches it.</summary>
+        public List<WorkflowLibraryTagSnapshot> Catalog { get; } = [];
+        public HashSet<string> FailCreates { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<string?> Searches { get; } = [];
+        // As the library answers: the normalized-prefix search, ordered by normalized name, first page of 100.
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>> ListTagsAsync(WorkflowLibraryActor actor, string? search, CancellationToken cancellationToken = default)
+        {
+            Searches.Add(search);
+            var term = search?.Trim().ToUpperInvariant();
+            var page = Catalog.Append(Critical).Concat(CreatedTags.Values).Where(tag => term is null || tag.Name.ToUpperInvariant().StartsWith(term, StringComparison.Ordinal))
+                .OrderBy(tag => tag.Name.ToUpperInvariant(), StringComparer.Ordinal).Take(100).ToArray();
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>(WorkflowLibraryCommandStatus.Applied, null, page));
+        }
         public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input, string operationKey, CancellationToken cancellationToken = default)
         {
+            if (FailCreates.Contains(input.Name))
+                return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Conflict, "A tag with this name already exists."));
             if (!CreatedTags.ContainsKey(operationKey)) CreatedTags[operationKey] = new("tag-" + CreatedTags.Count, input.Name, null, "marker", "single", false, "t1", []);
             if (DropCreateResponse) throw new TimeoutException("The response was lost after the tag was committed.");
             return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Applied, null, CreatedTags[operationKey]));

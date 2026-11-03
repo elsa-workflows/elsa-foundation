@@ -40,6 +40,8 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
     private IQueryable<WorkflowDefinition> DefinitionRows => Scoped(db.Definitions);
     private static T Missing<T>(string id) => throw EntityNotFoundException.ForEntity(typeof(T), id);
     private static void Conflict(string message) => throw new WorkflowLibraryConflictException(message);
+    /// <summary>Rolls a keyed create back because its key already holds a committed create; the caller rereads by the key.</summary>
+    private sealed class KeyedCreateRaced() : Exception("A concurrent create under this operation key committed first.");
     private static void CheckRevision(string? expected, string actual)
     {
         if (expected is not null && !StringComparer.Ordinal.Equals(expected, actual))

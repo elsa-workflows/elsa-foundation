@@ -22,8 +22,9 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
 {
     private const string NotPermitted = "The requested workflow library operation is not permitted.";
     private const int TagPageSize = 100;
+    private const string KeyRequired = "A new tag or workflow view is created under a client operation key.";
 
-    /// <summary>The request's built-in command service, which the library endpoints call.</summary>
+    /// <summary>The request's built-in command service, which the library endpoints without a Core counterpart call.</summary>
     internal static WorkflowLibraryCommands For(HttpContext http) => http.RequestServices.GetRequiredService<WorkflowLibraryCommands>();
 
     // ---- The request-bound commands the endpoints call: the endpoints' former bodies, unchanged in order and outcome. ----
@@ -170,7 +171,9 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         string operationKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationKey);
+        // A Core create is always keyed, so a lost response is resolved by rereading the key, never by a second create.
+        if (string.IsNullOrWhiteSpace(operationKey))
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Invalid, KeyRequired));
         var tag = new WorkflowTagInput(input.Name, input.Description, input.Mode, input.Cardinality, false,
             input.ValueNames?.Select(name => new WorkflowTagValue("", name)).ToArray());
         return RunAsync(actor, WorkflowDesignPermissions.ManageTags, async http => ToSnapshot(await CreateTagAsync(http, tag, operationKey, cancellationToken)),
@@ -219,7 +222,9 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         IReadOnlyList<string> definitionIds, string? folderId, string operationKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definitionIds);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationKey);
+        if (string.IsNullOrWhiteSpace(operationKey))
+            return new(WorkflowLibraryCommandStatus.Invalid, "A folder move is applied under an operation key.",
+                definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Invalid)).ToArray());
         // The store moves the set atomically: every target shares the one outcome, never a partial result.
         var result = await RunAsync(actor, WorkflowDesignPermissions.Manage, async http =>
         {
@@ -239,6 +244,10 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         WorkflowLibraryViewSave input, string? operationKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
+        // A Core view create is always keyed (as a tag create is); an update is bound by its revision and takes no key.
+        if (viewId is null && string.IsNullOrWhiteSpace(operationKey) || viewId is not null && operationKey is not null)
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>(WorkflowLibraryCommandStatus.Invalid,
+                viewId is null ? KeyRequired : "An update of a workflow view is bound by its revision and takes no operation key."));
         var view = new WorkflowLibraryViewInput(input.Name, ToQuery(input.Query), input.Shared, input.Columns, input.Revision);
         return RunAsync(actor, WorkflowDesignPermissions.Read, async http => ToSnapshot(await SaveViewAsync(http, viewId, view, operationKey, cancellationToken)),
             cancellationToken);

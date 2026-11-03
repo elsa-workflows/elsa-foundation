@@ -106,7 +106,9 @@ public sealed class DefinitionFolderMoveEndpoint : ApiEndpoint<MoveWorkflowDefin
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryDefinitionFolderMove";
     public override Task HandleAsync(MoveWorkflowDefinitions request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).MoveDefinitionsAsync(HttpContext, request.DefinitionIds, request.FolderId, request.OperationKey, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.MoveDefinitionsAsync(HttpContext, request.DefinitionIds, request.FolderId, request.OperationKey, cancellationToken)
+            : WorkflowLibraryEndpointCommands.MoveDefinitionsAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.DefinitionIds, request.FolderId, request.OperationKey, cancellationToken);
 }
 
 [Get("definitions/page")]
@@ -203,7 +205,9 @@ public sealed class TagCreateEndpoint : ApiEndpoint<CreateWorkflowTag, WorkflowT
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryTagCreate";
     public override Task<WorkflowTag> HandleAsync(CreateWorkflowTag request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).CreateTagAsync(HttpContext, request.ToInput(), request.OperationKey, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.CreateTagAsync(HttpContext, request.ToInput(), request.OperationKey, cancellationToken)
+            : WorkflowLibraryEndpointCommands.CreateTagAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.ToInput(), request.OperationKey, cancellationToken);
 }
 
 [Put("tags/{tagId}")]
@@ -226,7 +230,9 @@ public sealed class TagBulkEndpoint : ApiEndpoint<WorkflowTagBulkEdit, IReadOnly
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryTagBulk";
     public override Task<IReadOnlyList<WorkflowTagEditOutcome>> HandleAsync(WorkflowTagBulkEdit request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).EditTagsAsync(HttpContext, request, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.EditTagsAsync(HttpContext, request, cancellationToken)
+            : WorkflowLibraryEndpointCommands.EditTagsAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request, cancellationToken);
 }
 
 [Get("views")]
@@ -235,7 +241,9 @@ public sealed class ViewListEndpoint : ApiEndpoint<ListWorkflowViews, WorkflowLi
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryViewList";
     public override Task<WorkflowLibraryViewsView> HandleAsync(ListWorkflowViews request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).ListViewsAsync(HttpContext, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.ListViewsAsync(HttpContext, cancellationToken)
+            : WorkflowLibraryEndpointCommands.ListViewsAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), cancellationToken);
 }
 
 [Post("views")]
@@ -244,7 +252,9 @@ public sealed class ViewCreateEndpoint : ApiEndpoint<CreateWorkflowView, Workflo
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryViewCreate";
     public override Task<WorkflowLibraryViewView> HandleAsync(CreateWorkflowView request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).SaveViewAsync(HttpContext, null, request.ToInput(), request.OperationKey, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.SaveViewAsync(HttpContext, null, request.ToInput(), request.OperationKey, cancellationToken)
+            : WorkflowLibraryEndpointCommands.SaveViewAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), null, request.ToInput(), request.OperationKey, cancellationToken);
 }
 
 [Put("views/{viewId}")]
@@ -253,7 +263,9 @@ public sealed class ViewUpdateEndpoint : ApiEndpoint<SaveWorkflowView, WorkflowL
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryViewUpdate";
     public override Task<WorkflowLibraryViewView> HandleAsync(SaveWorkflowView request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).SaveViewAsync(HttpContext, request.ViewId, request.ToInput(), null, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.SaveViewAsync(HttpContext, request.ViewId, request.ToInput(), null, cancellationToken)
+            : WorkflowLibraryEndpointCommands.SaveViewAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.ViewId, request.ToInput(), null, cancellationToken);
 }
 
 [Delete("views/{viewId}")]
@@ -276,7 +288,9 @@ public sealed class FavoritePutEndpoint : ApiEndpoint<SetWorkflowFavorite>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryFavoritePut";
     public override Task HandleAsync(SetWorkflowFavorite request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).SetFavoriteAsync(HttpContext, request.DefinitionId, true, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.SetFavoriteAsync(HttpContext, request.DefinitionId, true, cancellationToken)
+            : WorkflowLibraryEndpointCommands.SetFavoriteAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.DefinitionId, true, cancellationToken);
 }
 
 [Delete("definitions/{definitionId}/favorite")]
@@ -285,5 +299,7 @@ public sealed class FavoriteDeleteEndpoint : ApiEndpoint<SetWorkflowFavorite>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryFavoriteDelete";
     public override Task HandleAsync(SetWorkflowFavorite request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).SetFavoriteAsync(HttpContext, request.DefinitionId, false, cancellationToken);
+        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
+            ? builtin.SetFavoriteAsync(HttpContext, request.DefinitionId, false, cancellationToken)
+            : WorkflowLibraryEndpointCommands.SetFavoriteAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.DefinitionId, false, cancellationToken);
 }

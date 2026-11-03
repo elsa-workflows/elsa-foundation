@@ -12,7 +12,7 @@ import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { useDialogFocus } from "./useDialogFocus";
 
-export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
+export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
   context?: StudioEndpointContext;
   title?: string;
   submitLabel?: string;
@@ -28,6 +28,8 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   onClose(): void;
   onRetryCatalog?(): void;
   onSubmit(): void;
+  /** The saved templates this dialog offers (those it can use now), so the page can disclose them to Weaver. */
+  onTemplates?(templates: WorkflowTemplate[]): void;
 }) {
   const [templates, setTemplates] = useState<Array<{ template: WorkflowTemplate; reason?: string }>>([]);
   const [templateError, setTemplateError] = useState("");
@@ -40,6 +42,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
     }).catch(() => { if (active) setTemplateError("Saved templates could not be loaded. Close and reopen this dialog to retry; built-in starters remain available."); });
     return () => { active = false; };
   }, [context, catalog]);
+  useEffect(() => { onTemplates?.(templates.filter(item => !item.reason).map(item => item.template)); }, [onTemplates, templates]);
   const dialogRef = useRef<HTMLElement>(null);
   useDialogFocus(dialogRef, creating ? null : onClose);
   const submitErrorRef = useRef<HTMLDivElement>(null);

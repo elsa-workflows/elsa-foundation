@@ -111,4 +111,44 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         Assert.Equal(updated.Revision, (await library.FindViewByOperationKeyAsync("save-finance", "alice"))!.Revision);
         Assert.Equal(updated.Id, (await library.SaveViewAsync(null, Input(), "alice", false, "save-finance")).Id);
     }
+
+    [Fact]
+    public async Task Library_the_writers_operation_key_stays_server_generated_and_a_repeated_keyed_create_touches_no_fence()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-key-ledger"); await using var host = LibraryHost(database.ConnectionString);
+        using var scope = host.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await db.Database.MigrateAsync();
+        var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var tag = await library.CreateTagAsync(new("Ledger"), "alice", "client-ledger-key");
+        var view = await library.SaveViewAsync(null, new("Ledger view", new()), "alice", false, "client-ledger-view-key");
+        // FR-021, last clause: the designOperation ledger and the audit carry the writer's own fresh key, never the client's.
+        var ledger = await db.Operations.AsNoTracking().ToArrayAsync();
+        Assert.Equal(2, ledger.Length);
+        Assert.All(ledger, row => Assert.DoesNotContain("client-ledger", row.OperationKey));
+        Assert.Contains(ledger, row => row.OperationKey.StartsWith("create-tag-", StringComparison.Ordinal));
+        Assert.Contains(ledger, row => row.OperationKey.StartsWith("save-view-", StringComparison.Ordinal));
+        Assert.All(await db.LibraryAudit.AsNoTracking().ToArrayAsync(), row => Assert.DoesNotContain("client-ledger", row.OperationKey));
+        // A repeat resolves by rereading the key: no ledger row, audit row or hierarchy-fence change.
+        var fence = (await db.LibraryFences.AsNoTracking().SingleAsync()).Revision;
+        Assert.Equal(tag.Id, (await library.CreateTagAsync(new("Ledger"), "alice", "client-ledger-key")).Id);
+        Assert.Equal(view.Id, (await library.SaveViewAsync(null, new("Ledger view", new()), "alice", false, "client-ledger-view-key")).Id);
+        Assert.Equal(fence, (await db.LibraryFences.AsNoTracking().SingleAsync()).Revision);
+        Assert.Equal(2, await db.Operations.CountAsync());
+    }
+
+    [Fact]
+    public async Task Library_concurrent_keyed_view_creates_with_one_key_resolve_to_exactly_one_view()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-view-key-race");
+        await using var host = LibraryHost(database.ConnectionString);
+        using (var setup = host.CreateScope()) await setup.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().Database.MigrateAsync();
+        async Task<WorkflowLibraryView> SaveAsync()
+        {
+            using var scope = host.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>().SaveViewAsync(null, new("Raced view", new(SearchTerm: "pay")), "alice", false, "race-view-key");
+        }
+        var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => SaveAsync()));
+        Assert.Single(results.Select(view => view.Id).Distinct());
+        using var read = host.CreateScope();
+        Assert.Equal(1, await read.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().LibraryViews.CountAsync());
+    }
 }

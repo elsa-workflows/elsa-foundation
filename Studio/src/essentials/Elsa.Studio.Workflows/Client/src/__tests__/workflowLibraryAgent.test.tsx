@@ -8,7 +8,8 @@ import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
 import { useWorkflowPageAgent } from "../workflow-editor/useWorkflowLibraryAgent";
 import {
-  applyCreateDialogPrefill, applyListStateChange, buildLibraryContent, buildTemplateListContent, libraryAttachment, libraryContextLimit, libraryKind,
+  applyCreateDialogPrefill, applyListStateChange, buildLibraryContent, buildTemplateListContent, createDialogAttachment, createDialogKind, libraryAttachment,
+  libraryContextLimit, libraryKind,
   pageBindingProblem, type LibraryContextInput
 } from "../workflow-editor/workflowLibraryAgent";
 import type { WorkflowDefinitionBrowseLocation } from "../workflow-editor/workflowDefinitionBrowseLocation";
@@ -112,7 +113,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
     }
     const root = createRoot(document.createElement("div"));
     flushSync(() => root.render(<Page />));
-    const snapshot = controller.library!.snapshots.get(libraryKind)!;
+    const [snapshotKey, snapshot] = [...controller.library!.snapshots].find(([key]) => key.startsWith(libraryKind + ":"))!;
     const contract = agent.toolContracts.list().find(item => item.id === "workflow_library_set_list_state")!;
     const change = { search: "invoice" };
     const invocation = { invocationId: "i-1", client: snapshot.client, target: snapshot.target, expiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -133,7 +134,42 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
     expect(state.search).toBe(" pay ");
     expect(controller.library!.revert!(data.undoToken)).toContain("can no longer be reverted");
     flushSync(() => root.unmount());
-    expect(controller.library!.snapshots.has(libraryKind)).toBe(false);
+    expect(controller.library!.snapshots.has(snapshotKey)).toBe(false);
+  });
+});
+
+describe("two mounted pages of one kind (spec 1193 FR-023)", () => {
+  it("keep their own contexts and handlers: unmounting one never removes the other's", async () => {
+    const agent = createAgentRegistry();
+    const controller = registerWorkflowAgent(agent);
+    const states: Record<string, CreateWorkflowDraft> = {};
+    function Dialog({ id }: { id: string }) {
+      const [draft, setDraft] = useState<CreateWorkflowDraft>({ name: id, description: "", rootActivityVersionId: null });
+      states[id] = draft;
+      useWorkflowPageAgent<CreateWorkflowDraft | null>({
+        controller, clientId: agent.clientId, kind: createDialogKind, toolId: "workflow_create_dialog_prefill", resultType: "workflows.create-dialog-prefill", describe: "filled",
+        build: (value, client) => value ? createDialogAttachment(value, [], client) : null, apply: change => applyCreateDialogPrefill(draft, change, []),
+        current: () => draft, restore: value => { if (value) setDraft(value); }
+      });
+      return null;
+    }
+    const first = createRoot(document.createElement("div")), second = createRoot(document.createElement("div"));
+    flushSync(() => first.render(<Dialog id="library" />));
+    flushSync(() => second.render(<Dialog id="templates" />));
+    const dialogs = () => [...controller.library!.snapshots].filter(([key]) => key.startsWith(createDialogKind + ":")).map(([, value]) => value);
+    expect(dialogs()).toHaveLength(2);
+    const libraryDialog = dialogs().find(item => (item.content as { name: string }).name === "library")!;
+    flushSync(() => second.unmount());
+    expect(dialogs()).toEqual([libraryDialog]);
+    const contract = agent.toolContracts.list().find(item => item.id === "workflow_create_dialog_prefill")!;
+    const invocation = { invocationId: "i-2", client: libraryDialog.client, target: libraryDialog.target, expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      arguments: { baseRevision: libraryDialog.target!.revision, change: { name: "Onboard" } } } as unknown as StudioAgentPreparedInvocation;
+    let result: StudioAgentClientExecutionResult | undefined;
+    await new Promise<void>(resolve => flushSync(() => { void contract.executeClient!(invocation).then(value => { result = value; resolve(); }); }));
+    flushSync(() => undefined);
+    expect(result!.outcome).toBe("applied");
+    expect(states.library.name).toBe("Onboard");
+    flushSync(() => first.unmount());
   });
 });
 

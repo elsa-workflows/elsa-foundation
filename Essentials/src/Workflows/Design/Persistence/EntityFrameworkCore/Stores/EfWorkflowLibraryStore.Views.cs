@@ -90,8 +90,10 @@ internal sealed partial class EfWorkflowLibraryStore
         {
             return await WriteAsync(key, "workflow.view.save.v1", new { id, name, content, input.Shared, input.Revision, subjectId, operationKey = keyHash }, async token =>
             {
-                if (keyHash is not null && await KeyedViewRowAsync(keyHash, EfDesignSupport.LookupHash(subjectId), subjectId, token) is { } raced)
-                    return KeyedView(raced, fingerprint!);
+                // Another create under this key committed first: abandon this write (no fence touch, no audit) and let the
+                // reread below return that create's view.
+                if (keyHash is not null && await KeyedViewRowAsync(keyHash, EfDesignSupport.LookupHash(subjectId), subjectId, token) is not null)
+                    throw new KeyedCreateRaced();
                 await ValidateQueryReferencesAsync(query, token);
                 var row = id is null ? null : await Scoped(db.LibraryViews).SingleOrDefaultAsync(candidate => candidate.Id == id, token)
                     ?? Missing<WorkflowLibraryViewEntity>(id!);

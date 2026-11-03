@@ -25,7 +25,7 @@ export interface WorkflowLibraryAgentController {
 
 export interface WorkflowAgentController {
   snapshot: StudioAgentContextAttachment | null;
-  /** The library pages' contexts and working-state handlers. */
+  /** The library pages' contexts (by kind and page generation) and working-state handlers (by tool and page generation). */
   library?: WorkflowLibraryAgentController;
   execute: ((invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => Promise<StudioAgentClientExecutionResult>) | null;
   undo: ((token: string) => Promise<string>) | null;
@@ -99,7 +99,8 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
       inputSchema: { type: "object" }, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" },
       invocationModes: ["proposal"], resultRendererIds: [rendererId],
       async executeClient(invocation, signal) {
-        const handler = controller.library?.handlers.get(id);
+        // The originating page instance, by the reviewed invocation's own client generation.
+        const handler = controller.library?.handlers.get(`${id}:${invocation.client?.generationId ?? ""}`);
         if (!handler) return { outcome: "refused", summary: "The originating library page is unavailable. Nothing was applied." };
         return handler(invocation, signal);
       }

@@ -43,8 +43,9 @@ export function WorkflowTemplatesPage(props: Props) {
     const library = props.weaver?.library;
     if (!library || templateId || loading || !supported) return;
     const attachment = templateListAttachment(search, null, listed, { clientId: ai.clientId, generationId: listGeneration.current });
-    library.snapshots.set(templateListKind, attachment);
-    return () => { if (library.snapshots.get(templateListKind) === attachment) library.snapshots.delete(templateListKind); };
+    const key = `${templateListKind}:${listGeneration.current}`;
+    library.snapshots.set(key, attachment);
+    return () => { if (library.snapshots.get(key) === attachment) library.snapshots.delete(key); };
   }, [ai.clientId, listed, loading, props.weaver, search, supported, templateId]);
   // Spec 1193 FR-023: the open "Use template" dialog's values; a prefill may choose a listed template, and Create stays the user's.
   const dialogTemplates = useMemo(() => templates.map(item => ({ id: item.id, name: item.name, description: item.description, revision: item.revision, content: item.content })), [templates]);

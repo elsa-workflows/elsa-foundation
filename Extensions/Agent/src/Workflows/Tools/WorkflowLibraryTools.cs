@@ -165,13 +165,30 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
             return Failure("agent.workflow.library_arguments_invalid", "Name at least one tag to add or remove, each as {tag, value?}; nothing was changed.", 400);
         if (!permissions.CanAssignTags)
             return Failure("agent.workflow.permission_denied", "Tag assignment permission is required to change workflow tags; nothing was changed.", 403);
-        var tags = await library.ListTagsAsync(actor, null, cancellationToken);
-        if (!tags.Succeeded || tags.Value is null) return Outcome(tags.Status, tags.Message);
+        // Each named tag is looked up by its own name, never by the first page of the catalog: the library searches by the
+        // normalized name's prefix, ordered by normalized name, so the exact name is the first of its matches.
+        var found = new Dictionary<string, WorkflowLibraryTagSnapshot?>(StringComparer.Ordinal);
+        foreach (var name in add.Select(item => item.Tag).Concat(remove.Select(item => item.Tag)))
+        {
+            var normalized = Normalize(name);
+            if (found.ContainsKey(normalized)) continue;
+            var page = await library.ListTagsAsync(actor, name, cancellationToken);
+            if (!page.Succeeded || page.Value is null) return Outcome(page.Status, page.Message);
+            var exact = page.Value.Where(tag => Same(tag.Name, name)).ToArray();
+            if (exact.Length > 1) return Failure("agent.workflow.library_clarify", $"Several tags are named '{name}'; ask which one. Nothing was changed.", 400);
+            found[normalized] = exact.SingleOrDefault();
+        }
         var frozenAdd = new List<object>(); var frozenRemove = new List<object>(); var creates = new List<object>(); var preview = new List<object>();
+        // The same tag (or tag value) named twice, in any letter case or Unicode form, is one change, and a new tag is created once.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (name, value, adding) in add.Select(item => (item.Tag, item.Value, true)).Concat(remove.Select(item => (item.Tag, item.Value, false))))
         {
-            var matches = tags.Value.Where(tag => Same(tag.Name, name)).ToArray();
-            if (matches.Length == 0)
+            var identity = (adding ? "+" : "-") + Normalize(name) + "\0" + (value is null ? "" : Normalize(value));
+            if (!seen.Add(identity)) continue;
+            if (seen.Contains((adding ? "-" : "+") + identity[1..]))
+                return Failure("agent.workflow.library_clarify", $"The tag '{name}' is both added and removed; ask which is meant. Nothing was changed.", 400);
+            var existing = found[Normalize(name)];
+            if (existing is null)
             {
                 // Only an assignment may create, only a marker tag, and only under tag-management authority.
                 if (!adding) return Failure("agent.workflow.library_not_found", $"No tag named '{name}' exists to remove; nothing was changed.", 404);
@@ -185,7 +202,7 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
                 preview.Add(new { change = "create-and-add", tag = name, value = (string?)null });
                 continue;
             }
-            var tag = matches[0];
+            var tag = existing;
             string? valueId = null;
             if (tag.Mode == "controlled")
             {
@@ -233,9 +250,10 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
             creations.Add(new { name, status = result.Status, tagId = result.Value?.Id, result.Message });
             if (!result.Succeeded || result.Value is null)
             {
-                var none = JsonSerializer.SerializeToElement(new { kind = "tags", status = "refused", creations, targets = Array.Empty<object>() }, JsonOptions);
-                return (created.Count == 0 ? "refused" : "partial",
-                    $"Creating the tag '{name}' was {result.Status}: {result.Message} No workflow tags were changed.", none, []);
+                // An earlier creation in this change is persisted, so the change is partial; otherwise nothing changed.
+                var stopped = created.Count == 0 ? "refused" : "partial";
+                var none = JsonSerializer.SerializeToElement(new { kind = "tags", status = stopped, creations, targets = Array.Empty<object>() }, JsonOptions);
+                return (stopped, $"Creating the tag '{name}' was {result.Status}: {result.Message} No workflow tags were changed.", none, []);
             }
             created[key] = result.Value.Id;
         }
@@ -271,8 +289,8 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
     }
 
     // The library compares tag and value names by their normalized form (NFKC, upper invariant).
-    private static bool Same(string? left, string? right) => left is not null && right is not null &&
-        string.Equals(left.Trim().Normalize(NormalizationForm.FormKC).ToUpperInvariant(), right.Trim().Normalize(NormalizationForm.FormKC).ToUpperInvariant(), StringComparison.Ordinal);
+    private static string Normalize(string value) => value.Trim().Normalize(NormalizationForm.FormKC).ToUpperInvariant();
+    private static bool Same(string? left, string? right) => left is not null && right is not null && string.Equals(Normalize(left), Normalize(right), StringComparison.Ordinal);
 }
 
 /// <summary>Sets or clears the actor's favorite on visible workflows: an idempotent set, reported per workflow.</summary>

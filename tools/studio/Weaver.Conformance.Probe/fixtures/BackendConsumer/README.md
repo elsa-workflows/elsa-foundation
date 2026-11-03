@@ -63,3 +63,14 @@ password-hinted input (`passphrase`, neither sensitive nor a credential, which t
 named so that no probe redactor rewrites it), and,
 only when every entry is requested, one that is listed but not addable. The designer's catalog GET and Weaver's
 `IActivityAuthoringCatalog` both read through it. The seam supplies no other service and changes no product code.
+
+`QualificationLibraryResponses.cs` is a test-only host feature for the spec 1193 workflow-library inventory (SC-008). No
+baseline shell selects it. `library_journeys.py` selects it through the ordinary native feature apply with a private
+absolute `ModeFile` and `LogFile`, and deselects it afterwards. It replaces the single `IWorkflowLibraryCommands`
+registration with a wrapper over the host's actual commands. With the mode `{"drop":"create-tag"}` (or `"save-view"`) a
+keyed tag (or view) creation is committed by the actual library, then its response is lost once per operation key: the
+wrapper appends `{kind, operationKey, committedId}` to the log and throws. The Weaver tool must then resolve the outcome by
+rereading the key, and the driver proves exactly one tag (or view) exists with the logged identity. `{"drop":"none"}`
+delegates every call unchanged. While it is selected, the library endpoints that have a Core counterpart also reach the
+actual commands through this wrapper (spec 1193 D4: one decision for both paths); the driver keeps the mode `none` for its
+own owner writes and reads. The seam changes no product code.

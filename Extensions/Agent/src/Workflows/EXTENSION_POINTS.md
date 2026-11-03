@@ -249,12 +249,17 @@ renderer `weaver.workflows.library-result`, disclosed by `workflows.library-cont
 Each goes through `IWorkflowLibraryCommands` (Workflows Design Core, D4) for the session's own actor and tenant, returns
 `RequiresApproval` from preparation so review holds in every mode including `full-auto`, and names only rows of the admitted
 list. Tag edits bind each target by its current organization revision; favorites and folder moves are idempotent sets (a
-move applies to all targets or none). A tag that does not exist is created first, only as a marker tag, only with the
-library's tag-management flag, and the review shows the creation. Tag creation and view creation carry a client operation
+move applies to all targets or none). Each named tag is looked up by its own name (the library's
+normalized-prefix search, matched exactly), so a tag past the catalog's first page is found; a tag named twice in any
+letter case is one change, and one both added and removed is a clarification. A tag that does not exist is created first,
+only as a marker tag, only with the library's tag-management flag, and the review shows the creation. Tag creation and view creation carry a client operation
 key frozen at preparation; when the create's response is lost, the outcome is an authoritative reread by that key, so a
 retry resolves to exactly one tag or view (SC-008). A shared view needs the view-sharing flag; an update is the applied view
-bound by its revision. Results carry one outcome per target: `applied` only when every target applied, `partial` otherwise,
-and a change that altered nothing is a refusal with no receipt. Delete and permanent delete are not offered.
+bound by its revision. Results carry one outcome per target and one overall `status`: `applied` only when every target applied
+and every named tag was created, `partial` when something persisted but not everything (for instance a tag created whose
+assignment then failed), and a change that altered nothing is a refusal with no receipt. A partial result keeps its
+`ServerPersisted` receipt (something did persist, so the engine must not call it uncertain or refused), and its payload
+and summary say partial and which targets were not changed; it is never presented as applied. Delete and permanent delete are not offered.
 
 **Page working-state tools** (`Mutating`, `ReviewRequired`, `ExecutionLocation.ClientWorkingState`, reviewed in every mode):
 `workflow_library_set_list_state` (result `workflows.list-state`) changes only the visible list's search, folder, tag filters,

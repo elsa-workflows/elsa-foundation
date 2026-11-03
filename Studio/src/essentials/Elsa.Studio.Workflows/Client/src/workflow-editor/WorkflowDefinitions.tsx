@@ -1,5 +1,6 @@
 import { qualifyStudioBackendPath, useStudioWorkspaceTab, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowTemplate } from "../workflowTemplates";
 import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment, createDialogKind, libraryAttachment, libraryKind } from "./workflowLibraryAgent";
 import { useWorkflowPageAgent } from "./useWorkflowLibraryAgent";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
@@ -155,7 +156,8 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const [librarySupportError, setLibrarySupportError] = useState<string | null>(null);
   const [libraryPermissions, setLibraryPermissions] = useState<WorkflowOrganizationPermissions>({});
   const [tagCatalog, setTagCatalog] = useState<WorkflowTag[]>([]);
-  const [libraryViews, setLibraryViews] = useState<WorkflowLibraryView[]>([]);
+  const [libraryViews, setLibraryViews] = useState<WorkflowLibraryView[] | null>(null);
+  const [dialogTemplates, setDialogTemplates] = useState<WorkflowTemplate[]>([]);
   const [organizationTarget, setOrganizationTarget] = useState<{ id: string; name: string } | null>(null);
   const [bulkTagTargets, setBulkTagTargets] = useState<string[] | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -652,11 +654,16 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const selectedIds = selectionMatchesScope && isCurrentData ? selectedDefinitionIds : new Set<string>();
   // Spec 1193 FR-020: the visible list as Weaver context, bounded to what the user sees, at the revision of its visible state.
   // Only current data is disclosed; while a request is pending the page has no list to describe.
-  const appliedView = browseLocation.viewId ? libraryViews.find(view => view.id === browseLocation.viewId) ?? null : null;
+  const appliedView = browseLocation.viewId ? libraryViews?.find(view => view.id === browseLocation.viewId) ?? null : null;
+  // An applied view is disclosed with its identity, owner kind and revision only once the view list is read (or the list
+  // is not disclosed at all until then); a list without a view needs no wait.
+  const viewKnown = !browseLocation.viewId || libraryViews !== null;
+  const offeredTemplates = useMemo(() => dialogTemplates.map(template => ({ id: template.id, name: template.name, description: template.description,
+    revision: template.revision, content: template.content })), [dialogTemplates]);
   useWorkflowPageAgent<WorkflowDefinitionBrowseLocation>({
     controller: weaver, clientId: ai.clientId, kind: libraryKind, toolId: "workflow_library_set_list_state", resultType: "workflows.list-state",
     describe: "Changed the visible workflow list on this page; nothing was saved.",
-    build: (location, client) => isCurrentData ? libraryAttachment({
+    build: (location, client) => isCurrentData && viewKnown ? libraryAttachment({
       location, view: appliedView && location.viewId === appliedView.id ? { id: appliedView.id, name: appliedView.name, shared: appliedView.shared, revision: appliedView.revision, canEdit: appliedView.canEdit !== false } : null,
       rows: definitions.map(definition => ({ id: definition.id, name: definition.name, folderId: definition.folderId ?? null, tags: definition.tags ?? [],
         favorite: definition.favorite === true, publicationState: definition.publicationState ?? null })),
@@ -670,8 +677,8 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   useWorkflowPageAgent<CreateWorkflowDraft | null>({
     controller: weaver, clientId: ai.clientId, kind: createDialogKind, toolId: "workflow_create_dialog_prefill", resultType: "workflows.create-dialog-prefill",
     describe: "Filled in the open New workflow dialog; create the workflow with its Create action.",
-    build: (draft, client) => draft ? createDialogAttachment(draft, [], client) : null,
-    apply: change => createDraft ? applyCreateDialogPrefill(createDraft, change, []) : null,
+    build: (draft, client) => draft ? createDialogAttachment(draft, offeredTemplates, client) : null,
+    apply: change => createDraft ? applyCreateDialogPrefill(createDraft, change, offeredTemplates) : null,
     current: () => createDraft,
     restore: draft => setCreateDraft(draft)
   });
@@ -942,6 +949,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
             suggestMetadataAction={suggestMetadataAction}
             onChange={nextDraft => { if (isCurrentGeneration()) setCreateDraft(nextDraft); }}
             onClose={() => { if (isCurrentGeneration()) setCreateDraft(null); }}
+            onTemplates={setDialogTemplates}
             onRetryCatalog={() => void loadCatalog()}
             onSubmit={submitCreate}
           />

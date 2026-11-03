@@ -111,8 +111,9 @@ internal sealed partial class EfWorkflowLibraryStore
         {
             return await WriteAsync(key, "workflow.tag.create.v1", new { input, actorId, operationKey = keyHash }, async token =>
             {
-                if (keyHash is not null && await TagRows.SingleOrDefaultAsync(row => row.OperationKey == keyHash, token) is { } raced)
-                    return KeyedTag(raced, fingerprint!);
+                // Another create under this key committed first: abandon this write (no fence touch, no audit) and let the
+                // reread below return that create's tag.
+                if (keyHash is not null && await TagRows.AnyAsync(row => row.OperationKey == keyHash, token)) throw new KeyedCreateRaced();
                 if (await TagRows.AnyAsync(row => row.NameHash == hash, token)) Conflict("A tag with this name already exists.");
                 if (await TagRows.CountAsync(token) >= MaximumTags) throw new ArgumentException($"The tag catalog limit is {MaximumTags}.");
                 var now = DateTimeOffset.UtcNow;

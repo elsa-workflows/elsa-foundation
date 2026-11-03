@@ -25,11 +25,13 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   onChange(next: WorkflowDefinitionBrowseLocation): void;
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
-  /** The visible library views, so the page can disclose the applied view's identity, owner kind and revision. */
+  /** The visible library views once read, so the page can disclose the applied view's identity, owner kind and revision. */
   onViews?(views: WorkflowLibraryView[]): void;
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
+  // Null until the view list has been read: the page then does not disclose a view it cannot yet identify.
+  const [loadedViews, setLoadedViews] = useState<WorkflowLibraryView[] | null>(null);
   const [permissions, setPermissions] = useState<WorkflowOrganizationPermissions>({});
   const [catalogCursor, setCatalogCursor] = useState<string | null>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -59,6 +61,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     if (support.views) void listWorkflowViews(context).then(response => {
       if (generation !== generationRef.current) return;
       setViews(response.items);
+      setLoadedViews(response.items);
       setPermissions(current => ({ ...current, ...response.permissions }));
     }).catch(caught => {
       if (generation === generationRef.current) setError(message(caught, "Couldn't read saved views."));
@@ -67,7 +70,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
-  useEffect(() => { onViews?.(views); }, [onViews, views]);
+  useEffect(() => { if (loadedViews) onViews?.(loadedViews); }, [onViews, loadedViews]);
   const missingFilterTags = !catalogLoading ? JSON.stringify([...new Set((location.tagFilters ?? []).map(filter => filter.tagId))].filter(id => !tags.some(tag => tag.id === id))) : "[]";
   useEffect(() => {
     const ids = JSON.parse(missingFilterTags) as string[];

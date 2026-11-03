@@ -31,6 +31,7 @@ from authorization_journeys import SECTION as AUTHORIZATION_SECTION, qualify_wor
 from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, qualify_workflow_truth_seams, truth_principals
 from batch_journeys import SECTION as BATCH_SECTION, qualify_workflow_batch
 from explain_journeys import SECTION as EXPLAIN_SECTION, qualify_workflow_explain
+from library_journeys import SECTION as LIBRARY_SECTION, library_principal, qualify_workflow_library
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -109,6 +110,10 @@ def _seed_principals(run):
         principals.append({"subject": subject, "tenant": tenant, "username": user, "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(BASE_GRANTS)})
     # Spec 1193 T012: three dedicated workflow actors, appended so the original indexes keep their meaning.
     principals.extend(truth_principals(principals, lambda prefix, tenant, grants: {
+        "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
+        "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
+    # Spec 1193 T036: the library actor (tag assignment without tag management or view sharing), appended likewise.
+    principals.extend(library_principal(principals, lambda prefix, tenant, grants: {
         "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
         "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
     path = run.profiles["backend"]["published"] / "appsettings.json"
@@ -674,9 +679,13 @@ def qualify_distributions(run):
         # Spec 1193 T028: explanation and troubleshooting of the active draft, its credential-disclosure control, a canary
         # search over every retained file and the packaged editor journey, through the same test-only catalog seam.
         qualify_workflow_explain(runtime)
+        # Spec 1193 T036: the workflow library (reviewed writes, lost responses resolved by their operation keys, a limited
+        # actor, organization disabled) and Reusable Workflow Templates, through a test-only lost-response seam the driver
+        # selects for the library inventory alone.
+        qualify_workflow_library(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION)})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION, LIBRARY_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)
