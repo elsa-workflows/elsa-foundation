@@ -42,8 +42,16 @@ internal static class EtlConnectorRecordCodec
         EtlRuntimeRecordCodec.ValidateInvocation(invocation);
         if (invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)
             throw new ArgumentException("Connector storage requires a connector-format artifact.");
-        return EtlArtifactV2Json.Read(invocation.Artifact.Pipeline);
+        var pipeline = EtlArtifactV2Json.Read(invocation.Artifact.Pipeline);
+        // A continuous shard's retained window bounds its pages instead (spec 1196), so every page-sequence check in
+        // this store sees no authored limit. The pinned artifact is unchanged; this copy is never written back.
+        return pipeline.Continuous is null
+            ? pipeline
+            : pipeline with { Http = pipeline.Http with { MaxPagesPerPartition = ContinuousPageSequenceBound } };
     }
+
+    /// <summary>The page-sequence bound of a continuous shard: its lifetime page count, not its retained pages.</summary>
+    internal const int ContinuousPageSequenceBound = int.MaxValue;
 
     internal static string ValidateBindings(EtlPipelineV2 pipeline, EtlConnectorRunBindings bindings, int maximumPartitions)
     {

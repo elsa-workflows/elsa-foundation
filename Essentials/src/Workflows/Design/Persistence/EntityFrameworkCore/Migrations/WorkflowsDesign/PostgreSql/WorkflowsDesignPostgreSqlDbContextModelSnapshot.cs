@@ -825,6 +825,17 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("character varying(256)")
                         .UseCollation("C");
 
+                    b.Property<string>("OperationFingerprint")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
                     b.Property<string>("OwnerHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -866,6 +877,9 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.HasIndex("ScopeKey", "OwnerHash");
 
                     b.HasIndex("ScopeKey", "Shared");
+
+                    b.HasIndex("ScopeKey", "OwnerHash", "OperationKey")
+                        .IsUnique();
 
                     b.ToTable("elsa_workflow_library_views", (string)null);
                 });
@@ -1064,6 +1078,17 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("character varying(512)")
                         .UseCollation("C");
 
+                    b.Property<string>("OperationFingerprint")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
                     b.Property<string>("Revision")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -1091,6 +1116,9 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "NameHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "OperationKey")
                         .IsUnique();
 
                     b.ToTable("elsa_workflow_tags", (string)null);

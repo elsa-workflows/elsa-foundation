@@ -53,6 +53,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.AddScoped<IWorkflowTemplateStore, EfWorkflowTemplateStore>();
         services.AddScoped<EfWorkflowLibraryStore>();
         services.AddScoped<IWorkflowLibraryStore>(provider => provider.GetRequiredService<EfWorkflowLibraryStore>());
+        services.AddScoped<IWorkflowFolderDeletionStore>(provider => provider.GetRequiredService<EfWorkflowLibraryStore>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerIndexObserver, WorkflowLibraryPublicationObserver>());
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
@@ -121,6 +122,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(WorkflowsDesignMySqlDbContext),
         typeof(IWorkflowTemplateStore),
         typeof(IWorkflowLibraryStore),
+        typeof(IWorkflowFolderDeletionStore),
         typeof(EfWorkflowLibraryStore),
         typeof(IDesignAtomicWriter),
         typeof(IWorkflowDefinitionLookup),

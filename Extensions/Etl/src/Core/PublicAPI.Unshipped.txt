@@ -2147,3 +2147,6 @@ Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt
 Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.AcknowledgeAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.ReceiveAsync(string! connectionString, string! queue, int maxMessages, System.Func<System.ReadOnlyMemory<byte>, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<bool>>! accept, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt!>
 Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.Count.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!
