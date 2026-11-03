@@ -972,8 +972,8 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
     /// <summary>
     /// When set, the listing also returns the items a claim delivered at or after this time: delivered under a fencing
     /// token (<see cref="RuntimePostCommitOutboxItem.DeliveryFencingToken"/> above zero), with
-    /// <see cref="RuntimePostCommitOutboxItem.DeliveredAt"/> no earlier than it. A claim-free delivery, which only the
-    /// drain that owns the execution makes, is never returned (#3661).
+    /// <see cref="RuntimePostCommitOutboxItem.DeliveredAt"/> no earlier than it. A claim-free delivery, which a drain that
+    /// owns or owned the execution makes, is never returned (#3661).
     /// </summary>
     public DateTimeOffset? DeliveredByClaimSince { get; }
 
