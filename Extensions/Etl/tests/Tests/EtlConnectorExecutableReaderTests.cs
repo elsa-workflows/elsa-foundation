@@ -70,6 +70,9 @@ public sealed class EtlConnectorExecutableReaderTests
             With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ID", EtlColumnType.Int64, true)], ["id"])))).Code);
         Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
             With([new EtlColumn("id", EtlColumnType.Int64, true)], ["id", "id"])))).Code);
+        // The key columns are required, so a key value is never null.
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, false)], ["id"])))).Code);
         // The key is one to eight columns.
         var nine = Enumerable.Range(0, 9).Select(index => new EtlColumn(index == 0 ? "id" : $"k{index}", EtlColumnType.Int64, true)).ToArray();
         Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(

@@ -16,18 +16,20 @@ Source: the branch `agent/claude/2908-sql-source`, stacked on `agent/claude/2908
 | FR-007: Studio | Vitest `connector-pipeline-editor`: the SQL source kind, binding, table, columns and key; an existing key's order kept and a renamed key column carried through in place; continuous mode dropped and not offered.<br>Vitest `runInspection`: inspection's "SQL table snapshot" label and its digest wording.<br>Playwright `etl-connector-authoring`: authoring the kind, binding, table and key and saving it, the continuous option hidden, and axe at 320 and 1024 px. |
 
 At `7f7b177d7` (review round 6):
-- the container suite passed, 45 of 45 (one of the three since round 5 is spec 1197's disabled-index test);
+- the container suite passed, 45 of 45, locally (one of the three since round 5 is spec 1197's disabled-index test);
 - the architecture suite passed, 614 of 614.
 
 At `68ba92078` (review round 7), which changes no runtime or engine code after `7f7b177d7`:
 - the ETL suite passed, 1235 of 1235;
 - Studio ETL Vitest passed, 119 of 119;
-- the ETL connector Playwright spec passed, 14 of 14. CI's full tier runs the container suite on the PR head.
+- the ETL connector Playwright spec passed, 14 of 14.
+
+**SC-007 is pending.** CI runs only on pull requests into `main`, and this PR targets `agent/claude/2908-sql-destination` (#3699), so no `Build & test` or `Full tier` run exists for it yet. Once #3699 merges, the PR retargets `main` and CI runs the container suite in its full tier.
 
 ## Bite-proofs
 
 [`bite-proofs.json`](bite-proofs.json) has 36 entries, each naming the tests that failed:
-- **15 recorded at `51fa1a20b`.** The table-identifier entry was re-recorded at `2fee631a8`, so that it lists all three failing theory rows. 14 bite: the compiler's table, column and key rules; snapshot reuse; transient classification; the float refusal; the size limit; the batch builder's digest-free pin check; the source binding role; the preparer's kind check; the worker's identifier re-check; the codec's digest and hash rules; SQL Server's `SNAPSHOT` level.
+- **15 recorded at `51fa1a20b`.** The table-identifier entry was re-recorded at `2fee631a8`, so that it lists all three failing theory rows. 14 bite: the compiler's table identifier, case-insensitive column distinctness and key-required rules; snapshot reuse; transient classification; the float refusal; the size limit; the batch builder's digest-free pin check; the source binding role; the preparer's kind check; the worker's identifier re-check; the codec's digest and hash rules; SQL Server's `SNAPSHOT` level.
 - **8 recorded at `f606d68cc`, for review round 1.** All bite: adoption of a concurrently published snapshot; the preparer's digest-free pin check; raw UTF-8 text; the catch-all rejection; the worker's case-insensitive column and repeated-key checks; null SQL entries; the `date` format.
 - **3 recorded at `2fee631a8`, for review round 2.** All bite: the interval refusal, the time-of-day format and the SQL column limit.
 - **4 for review round 3.**
@@ -46,6 +48,10 @@ At `68ba92078` (review round 7), which changes no runtime or engine code after `
 - **The worker's transient warning.** It is not asserted.
 - **The execution's transient return.** Without it, recording would throw, the lease would lapse, and preparation would run again, so the observable behaviour is the same.
 - **The command timeout of 0.** It is not tested; no test reads for longer than a driver's default timeout. Nothing bounds a read blocked on a lock; the README states it.
+- **Guards tested but not bite-proven:**
+  - the compiler's column identifier format, its repeated-key check and its undeclared-key check (the key-required, case-collision, key-count and identifier-length rules are bite-proven);
+  - the worker re-check's column identifier format, key count, and key declared and required (its table identifier, case collision and repeated key are bite-proven);
+  - the executable reader's SQL column count against `MaxFields`, and the record codec's index bound for a SQL snapshot.
 - **Untested guards:**
   - the preparer's SQL shape check (`etl.pipeline-invalid` for missing columns or key, too many columns, or an empty table name);
   - the batch builder's other `SourceAnchor` conditions (kind, alias, handle and revision; only the digest condition is bite-proven);
