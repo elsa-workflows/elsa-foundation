@@ -285,11 +285,25 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
   `getVariable('o').x = 1`) is also an explicit write: the JSON-backed view records the change, so the variable gets
   an intent without any comparison. Elsa 3's nested mutation therefore still converts inside RunJavaScript. In C#,
   changing a copy without `Set` is not a write (question 1).
+  - **Visibility** (@FransVanEk, 2026-10-30, accepting write-through in scripts). Publication and inspection show which
+    variables a script step writes; decision 3 already works out the may-write set. A warning is recorded when a script
+    changes a read value without assigning it (`variables.order.total = 1` with no `variables.order = …`), so such a
+    write is never unnoticed. A script that only wants a local copy copies explicitly (`{...variables.order}`), and the
+    documentation says so.
 - **C3. The write keeps what the step did not touch.** An intent is assembled as the base JSON plus the step's
   changes, so untouched members keep their stored text. It is applied as one whole-value intent, as decision 6 says.
   This is a change within one step, not the cross-branch field patch rejected under *Alternatives considered*.
+  - **Replace or partial update** (reconciliation row 11b). Assigning a whole value (`variables.x = v`,
+    `setVariable('x', v)`, C# `Set(target, value)`) replaces it: the step said what the value is. Changing a member
+    through the script view (`variables.order.total = 1`) is a partial update: base plus that change. A whole-value
+    write never loses members silently: when C# writes back a value read as a type that dropped members of the stored
+    value (ADR 0046 V6's declared loss), a warning names the dropped members. A C# step that needs a partial update
+    reads the value as JSON (`JsonNode` or the JSON view, question 3) instead of a narrower type.
 - **C4. A no-op assignment writes nothing.** Equality is equality of meaning in ADR 0091's canonical form, not of
-  text, so notation, escaping and key order do not make a value different.
+  text, so notation, escaping and key order do not make a value different. **Conflict checking comes first**
+  (reconciliation row 11c): a read-then-write is checked against its base version (C5) before C4 drops a no-op, so a
+  write that only looks like a no-op because another branch already wrote the same value is still a lost update
+  (ADR 0092 decision 2).
 - **C5. Read-then-write conflicts use versions.** Decision 7 checks the variable versions the step read, which
   [ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411) records in the read set, instead of comparing
   serialized values. Its digest, for the 0 → 1 → 0 case, compares meaning, not text.
@@ -424,6 +438,10 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - Elsa 3 `setVariable`, `set<Name>()` and nested mutation convert inside RunJavaScript and stay refused in
   expressions.
 - Serialization cost is measured against a large payload.
+- Under the amendment (reconciliation row 11d): the JSON-backed view records nested changes, including through an
+  alias, and keeps untouched members' text; publication lists each script step's written variables; a change
+  without assignment is warned about; a narrower C# type written back warns about the members it drops; a conflicted
+  write that would be a no-op is still reported as a lost update.
 
 ## Open questions
 
