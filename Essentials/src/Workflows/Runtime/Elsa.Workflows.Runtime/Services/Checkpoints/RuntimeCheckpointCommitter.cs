@@ -204,8 +204,9 @@ public sealed class RuntimeCheckpointCommitter
                 // applied, so this commit is not an attempt and the dispatch keeps its delayed release. Only this commit's
                 // mark is withdrawn: an earlier non-retaining commit of the same dispatch, even one a coalescing segment
                 // only buffered and its refused fold did not persist, still counts, because the flush can persist it.
-                // EF also turns a timeout or provider failure of a model admission into this signal; withdrawing the mark
-                // there restores the release and retry those had before #3683, which the store's commit replay settles.
+                // EF also turns a timeout, lease or provider failure of a model admission into this signal, and some of
+                // those can surface after the write committed. Withdrawing the mark there keeps the release and retry
+                // they had before #3683; a retry of a landed admission then ends in a replay conflict, as before (#3698).
                 // Any other exception, a TimeoutException from a commit that may have landed included, keeps the mark.
                 checkpointAttempt.Withdraw();
                 throw;

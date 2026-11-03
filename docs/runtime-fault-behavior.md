@@ -253,8 +253,8 @@ non-retaining checkpoint; `RetryNow` re-enqueues it, as for any fault. A step wh
 its claim is unchanged: the exception propagates and nothing is recorded.
 
 A checkpoint store's own refusal is not an attempt. A store throws `RuntimeSchedulerWorkUnavailableException`
-to refuse a commit without applying it, its transaction rolled back, and the committer then withdraws
-that commit's attempt, so a step whose only non-retaining commit was refused this way keeps the delayed
+to refuse a commit, normally without applying it (EF's model admission can also raise it after the write
+landed; see below), and the committer then withdraws that commit's attempt, so a step whose only non-retaining commit was refused this way keeps the delayed
 release above. The withdrawal takes back only that commit: a step that sent another non-retaining
 checkpoint earlier in the same dispatch stays marked and is handled as a fault, even when that earlier
 checkpoint was only buffered and the refused commit was the fold that would have persisted it, because
@@ -269,8 +269,9 @@ checkpoint, which `WorkflowStartSchedulerWorkHandler` queues as a `Checkpoint` s
 `BpmnNativeWorkCheckpointEnricher` stamps with `ExpectedModelExecution`, so it does open a frame. When the authorizing model decision changed, EF
 refuses it with `runtime.model.native-admission-unavailable` ("cross-model admission remains owed"), and
 because a refusal is not an attempt the step is released and retried, as it was before #3683. EF raises
-the same code for a timeout or provider failure of that admission; a retry then replays the commit if it
-had landed. Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`
+the same code for a timeout, lease or provider failure of that admission. Some of those can surface after the
+write committed; the step is then still released, as before #3683, and its retry ends in a replay-conflict
+incident because the rebuilt commit differs from the landed one (#3698). Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`
 and the BPMN enricher's own checks, run before the committer records the attempt. Handlers throw it
 before any commit or after only a retaining claim: `ResumeBookmark` before its commit or after only its
 retaining trigger claim; `InvokeActivity`, parent completion and structural callback evaluation after
