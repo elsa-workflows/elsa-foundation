@@ -1183,10 +1183,17 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 // An engine lifecycle outcome (denied/refused/uncertain, no receipt) discloses no owner result
                 // data, so withdrawn mutation authority cannot withhold it from its originating turn. It still
                 // requires the owning module's current read/disclosure decision for exactly this outcome and target.
-                var allowed = DefaultAgentActionProposalExecutor.IsLifecycleResult(result, tool.Descriptor)
-                    ? (await contextCollector.CollectAsync(session.Policy, new(session.Id, string.Empty, new Dictionary<string, string>())
-                        { Disclosure = new(session.Id, [], [result], continuation) { IsHistorical = historical } }, token)).Succeeded
-                    : (await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, access.Target, token)).Allowed;
+                bool allowed;
+                if (DefaultAgentActionProposalExecutor.IsLifecycleResult(result, tool.Descriptor))
+                {
+                    var owner = await contextCollector.CollectAsync(session.Policy, new(session.Id, string.Empty, new Dictionary<string, string>())
+                        { Disclosure = new(session.Id, [], [result], continuation) { IsHistorical = historical } }, token);
+                    // An owner that could not decide is not a denial: keep the collector's own unavailable outcome (503), so
+                    // a paused continuation keeps its pause and a later prompt can retry. Every other refusal stays 403.
+                    if (AgentContextOwnerMarkers.IsUnavailable(owner.Error)) return new(null, owner.Error);
+                    allowed = owner.Succeeded;
+                }
+                else allowed = (await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, access.Target, token)).Allowed;
                 var policy = await policyEvaluator.EvaluateCapabilityAsync(session.Policy, tool.Descriptor.Name, token);
                 if (!allowed || !policy.Allowed)
                     return AgentResult<AgentContextContribution>.Failure("agent.result.disclosure_denied", "Current authority or host policy withholds the retained outcome details. Its accepted effect remains recorded and will not be repeated.", 403);

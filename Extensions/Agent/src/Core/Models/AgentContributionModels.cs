@@ -128,8 +128,11 @@ public sealed record AgentContributionDiagnostic(string ContributorId, string Co
     /// <c>agent.context.incomplete</c>; this diagnostic's <see cref="Message"/> is never forwarded.
     /// </summary>
     /// <remarks>
-    /// Honoured only on a diagnostic an installed context source returns under its own descriptor id; the engine clears it
-    /// on any other diagnostic, and engine (<c>host</c>) diagnostics never carry it. The code must be the owner's dotted
+    /// Honoured only on a diagnostic an installed context source returns under its own descriptor id, which the engine records
+    /// as it collects. The engine clears it on any other diagnostic, including one another <c>AgentContextCollecting</c>
+    /// handler adds to the event's collection, and engine (<c>host</c>) diagnostics never carry it. The unavailable outcome
+    /// also holds when the owner is asked about a retained lifecycle outcome (denied, refused or uncertain), so a paused
+    /// continuation keeps its pause. The code must be the owner's dotted
     /// identifier (ASCII letters, digits, <c>.</c>, <c>_</c> or <c>-</c>, at most 128 characters) outside the reserved
     /// <c>agent.</c> namespace; any other code keeps the ordinary incomplete-context failure. Omitted from the wire when unset.
     /// </remarks>

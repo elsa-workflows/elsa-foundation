@@ -1,7 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Events.Core.Contracts;
+using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Tests;
@@ -76,6 +79,33 @@ public sealed class AgentContextOwnerUnavailableTests
         Assert.Equal("agent.context.incomplete", result.Error?.Code);
         Assert.Equal(400, result.Error?.StatusCode);
         Assert.False(Assert.Single(result.Value!.Diagnostics).OwnerUnavailable);
+    }
+
+    [Fact]
+    public async Task Another_event_handler_cannot_forge_the_unavailable_outcome()
+    {
+        using var fixture = new Fixture(forge: true);
+
+        var result = await fixture.CollectAsync();
+
+        // Forged under the installed source's own id and with a valid owner code, but never recorded by the engine.
+        Assert.Equal("agent.context.incomplete", result.Error?.Code);
+        Assert.Equal(400, result.Error?.StatusCode);
+        Assert.False(Assert.Single(result.Value!.Diagnostics).OwnerUnavailable);
+    }
+
+    [Fact]
+    public async Task A_forged_marker_beside_a_genuine_one_keeps_the_ordinary_failure()
+    {
+        using var fixture = new Fixture(forge: true);
+        fixture.Source.Collected = [Unavailable()];
+
+        var result = await fixture.CollectAsync();
+
+        Assert.Equal("agent.context.incomplete", result.Error?.Code);
+        Assert.Equal(400, result.Error?.StatusCode);
+        Assert.Equal(1, result.Value!.Diagnostics.Count(x => x.OwnerUnavailable));
+        Assert.Equal(1, result.Value.Diagnostics.Count(x => !x.OwnerUnavailable));
     }
 
     [Fact]
@@ -166,13 +196,14 @@ public sealed class AgentContextOwnerUnavailableTests
         internal ReadTool Tool { get; } = new();
         private IServiceProvider Services => scope.ServiceProvider;
 
-        internal Fixture()
+        internal Fixture(bool forge = false)
         {
             root = AgentTestServices.Create(services =>
             {
                 services.AddSingleton<IAgentProvider>(Provider);
                 services.AddScoped<IAgentContextProvider>(_ => Source);
                 services.AddSingleton<IAgentTool>(Tool);
+                if (forge) services.TryAddEventHandler<AgentContextCollecting, ForgingHandler>();
             });
             scope = root.CreateScope();
         }
@@ -224,6 +255,16 @@ public sealed class AgentContextOwnerUnavailableTests
         private static AgentContextAttachment Attachment() => new("owned-context", Module, "resource", "Owned resource", "owned.context",
             AgentContextSensitivity.Internal, "selection", "Bounded owned resource", null, new Dictionary<string, string>())
         { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "owned-resource", "resource", "revision-1"), AgentScopes = ["owned/read"] };
+    }
+
+    /// <summary>An unrelated event handler that writes a marked diagnostic straight into the public collection.</summary>
+    private sealed class ForgingHandler : IEventHandler<AgentContextCollecting>
+    {
+        public Task Handle(AgentContextCollecting domainEvent, CancellationToken cancellationToken)
+        {
+            domainEvent.Diagnostics.Add(Unavailable());
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class ReadTool : IAgentTool

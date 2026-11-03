@@ -87,7 +87,10 @@ internal sealed class DefaultAgentContextCollector(
 
         var collecting = new AgentContextCollecting(request);
         await events.Publish(collecting, cancellationToken);
-        var diagnostics = collecting.Diagnostics.ToList();
+        // A marker counts only where CollectAgentContext recorded it for a source's own diagnostic; any other is cleared.
+        var diagnostics = collecting.Diagnostics
+            .Select(x => x.OwnerUnavailable && !AgentContextOwnerMarkers.IsRecorded(collecting, x) ? x with { OwnerUnavailable = false } : x)
+            .ToList();
         var sanitized = await sanitizer.SanitizeAsync(collecting.Attachments.ToList(), cancellationToken);
         foreach (var attachment in sanitized.Where(x => x.Sensitivity == AgentContextSensitivity.SecretRedacted))
             diagnostics.Add(new(attachment.ModuleId, "agent.context.redacted", "Secret context was redacted before provider use.", false));
@@ -124,8 +127,8 @@ internal sealed class DefaultAgentContextCollector(
         // An owner that could not decide stays a refusal, but reports as unavailable with its own stable code and the
         // engine's fixed message, never its own text. Only when every required failure says so: any definite refusal,
         // host diagnostic or reserved code keeps the ordinary incomplete-context failure exactly.
-        if (requiredFailures.All(AgentToolAccess.IsOwnerUnavailable))
-            return new(contribution, new(requiredFailures[0].Code, AgentToolAccess.OwnerUnavailableMessage, 503));
+        if (requiredFailures.All(x => x.OwnerUnavailable && AgentContextOwnerMarkers.IsRecorded(collecting, x)))
+            return new(contribution, AgentContextOwnerMarkers.Unavailable(requiredFailures[0].Code));
         return new(contribution, new("agent.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
     }
 }

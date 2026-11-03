@@ -213,6 +213,79 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
     private static Task<AgentSession> Session(IAgentSessionService sessions)
         => sessions.CreateAsync(new("tenant", "actor", "conversation", DeterministicAgentProvider.Id, "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
 
+    [Theory]
+    [InlineData("refused")]
+    [InlineData("denied")]
+    [InlineData("uncertain")]
+    public async Task An_owner_that_cannot_decide_keeps_the_paused_lifecycle_continuation_for_a_retry(string outcome)
+    {
+        var harness = Harness.Create(receipt: outcome != "uncertain");
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, outcome);
+        var callsBefore = harness.Provider.Inputs.Count;
+        var owner = Assert.IsType<InMemoryAgentSessionService>(harness.Sessions(scope));
+        var pauseBefore = Assert.IsType<AgentSessionClaim>(owner.FindPause(session.Id));
+        var sourceBefore = Assert.Single(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status;
+        harness.Source.Unavailable = true;
+
+        var stopped = await Collect(scope, session.Id);
+
+        Assert.Equal(callsBefore, harness.Provider.Inputs.Count);
+        Assert.Equal(new AgentError(GatedSource.UnavailableCode, "The owning module could not establish current authority for this operation.", 503),
+            Assert.Single(stopped, x => x.Kind == AgentStreamEventKind.Error).Error);
+        // The pause, its claim and its source prompt are kept: an outage is retryable, not a refusal of the continuation.
+        Assert.NotNull(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.Same(pauseBefore, owner.FindPause(session.Id));
+        var messages = await harness.Sessions(scope).ListMessagesAsync(session.Id);
+        Assert.Equal(sourceBefore, Assert.Single(messages, x => x.Role == AgentRole.User).Status);
+        Assert.DoesNotContain(messages, x => x.Status == AgentMessageStatus.Failed);
+
+        harness.Source.Unavailable = false;
+        var resumed = await Collect(scope, session.Id);
+
+        Assert.Equal(AgentStreamEventKind.Completed, resumed[^1].Kind);
+        AssertLifecycle(Assert.Single(harness.Provider.Inputs[^1].PendingToolResults), outcome, proposal);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+    }
+
+    [Fact]
+    public async Task A_denying_owner_still_releases_the_paused_lifecycle_continuation_as_refused()
+    {
+        var harness = Harness.Create();
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        harness.Authority.Read = false;
+
+        var denied = await Collect(scope, session.Id);
+
+        Assert.Equal(new AgentError("agent.result.disclosure_denied",
+                "Current authority or host policy withholds the retained outcome details. Its accepted effect remains recorded and will not be repeated.", 403),
+            Assert.Single(denied, x => x.Kind == AgentStreamEventKind.Error).Error);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.Equal(AgentMessageStatus.Failed, Assert.Single(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task History_admission_of_a_retained_lifecycle_outcome_reports_an_unavailable_owner_as_503(bool unavailable)
+    {
+        var harness = Harness.Create();
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        Assert.Equal(AgentStreamEventKind.Completed, (await Collect(scope, session.Id))[^1].Kind);
+        await harness.Sessions(scope).AddMessageAsync(session.Id, new(AgentRole.User, "and now?", AgentMessageStatus.Pending, null, [], []));
+        if (unavailable) harness.Source.Unavailable = true; else harness.Authority.Read = false;
+
+        var events = await Collect(scope, session.Id);
+
+        var error = Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error).Error;
+        Assert.Equal(unavailable ? (GatedSource.UnavailableCode, 503) : ("agent.result.disclosure_denied", 403), (error?.Code, error?.StatusCode));
+    }
+
     private static async Task<List<AgentStreamEvent>> Collect(IServiceScope scope, string sessionId)
     {
         var events = new List<AgentStreamEvent>();
@@ -242,6 +315,20 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
         public IAgentSessionService Sessions(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
         public IAgentProposalService Proposals(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
 
+        /// <summary>Settles the proposal into the named engine lifecycle outcome, leaving the originating turn paused.</summary>
+        public async Task SettleAsync(IServiceScope scope, AgentSession session, AgentActionProposal proposal, string outcome)
+        {
+            var proposals = Proposals(scope);
+            if (outcome == "denied") Assert.True((await proposals.DenyAsync(proposal.Id, session.ActorId, "no")).Succeeded);
+            else
+            {
+                Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+                if (outcome == "refused") Authority.Withdrawn.Add(DeterministicAgentProvider.MutatingToolName);
+                await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+            }
+            AssertLifecycle(Assert.IsType<AgentToolResult>(await proposals.FindResultAsync(proposal.Id)), outcome, proposal);
+        }
+
         public async Task<(AgentSession Session, AgentActionProposal Proposal)> ProposeAsync(IServiceScope scope)
         {
             var session = await Session(Sessions(scope));
@@ -267,13 +354,19 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
     private sealed class GatedSource(NativeAuthority authority) : IAgentContextProvider
     {
         public const string Id = "gated.source";
+        public const string UnavailableCode = "gated.authority.unavailable";
         public int ResultChecks { get; private set; }
+        /// <summary>The owner cannot currently decide (an outage), as distinct from refusing.</summary>
+        public bool Unavailable { get; set; }
         public AgentContextProviderDescriptor Descriptor { get; } = new(Id, GatedTool.Module, Id, [], ["1"], [GatedTool.Target.ResourceType]);
         public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(new AgentContextContribution([], []));
         public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
         {
             ResultChecks += request.Results.Count;
+            if (Unavailable)
+                return ValueTask.FromResult(new AgentContextContribution([],
+                    [new(Id, UnavailableCode, "Owner store is down: private detail.", true) { OwnerUnavailable = true }]));
             return ValueTask.FromResult(authority.Read
                 ? new AgentContextContribution(request.Context, [])
                 : new([], [new(Id, "gated.read_denied", "Current read authority is required.", true)]));
