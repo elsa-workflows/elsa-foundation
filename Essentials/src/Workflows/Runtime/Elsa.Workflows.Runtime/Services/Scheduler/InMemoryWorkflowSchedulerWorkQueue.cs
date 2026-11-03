@@ -7,7 +7,8 @@ using System.Text;
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 [RuntimeDefaultRegistration]
-public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IWorkflowSchedulerWorkVisibilityReader
+public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection,
+    IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
 {
     private readonly object _syncRoot = new();
     private readonly HashSet<string> _deletedWorkflowExecutionIds = new(StringComparer.Ordinal);
@@ -410,6 +411,34 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
             state.Revision = checked(state.Revision + 1);
             return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(
                 RuntimeSchedulerWorkClaimTransitionResult.Applied());
+        }
+    }
+
+    public ValueTask<bool> DeferAsync(
+        string workflowExecutionId,
+        string workItemId,
+        DateTimeOffset now,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            // A claim that has not lapsed keeps its item; its owner decides what happens to it.
+            if (!_claimsByScopedId.TryGetValue(new SchedulerWorkItemKey(workflowExecutionId, workItemId), out var state) ||
+                (state.OwnerId is not null && IsHidden(state, now)))
+                return new ValueTask<bool>(false);
+
+            // The same end state as a claim and its release, with the token advanced once to fence a lapsed claimant.
+            state.OwnerId = null;
+            state.ClaimedAt = null;
+            state.FencingToken = checked(state.FencingToken + 1);
+            state.Revision = checked(state.Revision + 1);
+            state.VisibleAfter = visibleAt;
+            return new ValueTask<bool>(true);
         }
     }
 

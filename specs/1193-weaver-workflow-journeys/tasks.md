@@ -6,21 +6,21 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 ## Slice A: Read-path hardening (story 5)
 
-- [ ] T001 Add the Design fault renderer, which maps `WorkflowDefinitionAuthorizationException` to 503 with `workflow.authorization.unavailable`, and add the optional `errorCode` to `WorkflowDesignError` (FR-001, D1).
-- [ ] T002 Record built-in read evidence in `WorkflowDefinitionDetailsReader`, and accept it only in `HttpWorkflowDefinitionAuthorizer` for the same request, definition and tenant (FR-002).
-- [ ] T003 Map the exception to the unavailable outcome in `WorkflowResourceAuthority`. Keep the owner-unavailable code through `AgentToolInvoker` and context admission, with every other denial unchanged (FR-001, D1).
-- [ ] T004 [P] Tests: unavailable versus denied, no cause in the body, read counts, replacement reader cannot produce evidence, evidence for one definition does not satisfy another, manage still checked, tool outcome. Re-run the existing boundary tests unchanged.
-- [ ] T005 Update the Design Api catalog for the failure semantics (FR-034).
-- [ ] T006 Probe case `workflow-authorization-unavailable` on both adapters, and a normal-host Playwright journey for unavailable versus denied (FR-036, SC-006).
+- [x] T001 Add the Design fault renderer, which maps `WorkflowDefinitionAuthorizationException` to 503 with `workflow.authorization.unavailable`, and add the optional `errorCode` to `WorkflowDesignError` (FR-001, D1).
+- [x] T002 Record built-in read evidence in `WorkflowDefinitionDetailsReader`, and accept it only in `HttpWorkflowDefinitionAuthorizer` for the same request, definition and tenant (FR-002).
+- [x] T003 Map the exception to the unavailable outcome in `WorkflowResourceAuthority`. Keep the owner-unavailable code through `AgentToolInvoker` and context admission, with every other denial unchanged (FR-001, D1).
+- [x] T004 [P] Tests: unavailable versus denied, no cause in the body, read counts, replacement reader cannot produce evidence, evidence for one definition does not satisfy another, manage still checked, tool outcome. Re-run the existing boundary tests unchanged.
+- [x] T005 Update the Design Api catalog for the failure semantics (FR-034).
+- [x] T006 Probe case `workflow-authorization-unavailable` on both adapters, and a normal-host Playwright journey for unavailable versus denied (FR-036, SC-006).
 
 ## Slice B: Truth seams (story 4)
 
-- [ ] T007 Remove the seven legacy contracts, implementations, registrations and models (D3, FR-006), and make `DefaultWorkflowAgentContextProvider` `internal sealed`.
-- [ ] T008 Add `IActivityAuthoringCatalog` to `Elsa.Activities.Design.Core`, implemented in the Api over `IActivityAuthoringCatalogReader` with a single-registration guard and a catalog entry. Consume it from an internal catalog reader with the Read gate. A missing contract is reported as unavailable (FR-003, D4, R1).
-- [ ] T009 Add the `workflow.catalog` and `workflow.permissions` attachments in `CollectAsync`, add them to `ContextKinds`, and re-admit them each turn. Gate tool availability on the permissions (FR-004, FR-031).
-- [ ] T010 [P] Composition test: no placeholder type in the composed host or the packaged consumer (SC-003).
-- [ ] T011 [P] Update the Agent Workflows catalog's "Legacy domain seams" section, with the SemVer notes (FR-033, FR-034).
-- [ ] T012 Probe case `workflow-truth-seams`, and a normal-host journey for a read-only actor (FR-036).
+- [x] T007 Remove the seven legacy contracts, implementations, registrations and models (D3, FR-006), and make `DefaultWorkflowAgentContextProvider` `internal sealed`.
+- [x] T008 Add `IActivityAuthoringCatalog` to `Elsa.Activities.Design.Core`, implemented in the Api over `IActivityAuthoringCatalogReader` with a single-registration guard and a catalog entry. Consume it from an internal catalog reader with the Read gate. A missing contract is reported as unavailable (FR-003, D4, R1).
+- [x] T009 Add the `workflow.catalog` and `workflow.permissions` attachments in `CollectAsync`, add them to `ContextKinds`, and re-admit them each turn. Gate tool availability on the permissions (FR-004, FR-031).
+- [x] T010 [P] Composition test: no placeholder type in the composed host or the packaged consumer (SC-003).
+- [x] T011 [P] Update the Agent Workflows catalog's "Legacy domain seams" section, with the SemVer notes (FR-033, FR-034).
+- [x] T012 Probe case `workflow-truth-seams`, and a normal-host journey for a read-only actor (FR-036).
 
 ## Slice C: Draft authoring (stories 2, 3)
 
@@ -33,7 +33,7 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 - [x] T019 Studio risk recheck that fails closed (FR-012).
 - [x] T020 `workflows.batch-result` renderer (Weaver Workflows).
 - [x] T021 [P] Server and Vitest tests: the armed capture timer, a hand edit inside the capture delay, autosave across Undo and Redo, the 50-entry history cap, and the NIST vectors for the hash (SC-002, SC-004).
-- [ ] T022 Probe case `workflow-batch` and its negative controls, and a Playwright journey.
+- [x] T022 Probe case `workflow-batch` and its negative controls, and a Playwright journey.
 
 ## Slice D: Explain and troubleshoot (story 1)
 
