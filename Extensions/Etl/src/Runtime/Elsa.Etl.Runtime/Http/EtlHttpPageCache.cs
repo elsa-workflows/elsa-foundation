@@ -319,7 +319,8 @@ internal sealed class EtlHttpPageCache
     private (string Identity, string RequestHash) RequestIdentity(long pageSequence, EtlHttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (pageSequence < 0 || pageSequence >= _policy.MaxPagesPerPartition ||
+        // A continuous shard's retained window bounds its pages instead of its page sequence (spec 1196).
+        if (pageSequence < 0 || !_continuous && pageSequence >= _policy.MaxPagesPerPartition ||
             !StringComparer.Ordinal.Equals(request.ShardId, _shardIds[_partitionOrdinal]))
             throw Refused("etl.http.page-request-invalid");
 

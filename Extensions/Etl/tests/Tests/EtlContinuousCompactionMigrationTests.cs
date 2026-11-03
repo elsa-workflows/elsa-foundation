@@ -83,7 +83,7 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Equal((EtlRunStatus.Succeeded, 8L), (run.Status, run.AcceptedRecords));
         // Only records appended after the resume are delivered here, each once.
         Assert.Equal(["Gus", "Hana"], (await ReadConnectorRouteAsync(endpoint, files.OutputRoot, "/output", http: true))
-            .Select(record => record.GetProperty("name").GetString()).Order().ToArray());
+            .Select(record => record.GetProperty("name").GetString()!).Order().ToArray());
         Assert.Empty(await ForeignKeyViolationsAsync(database));
     }
 
