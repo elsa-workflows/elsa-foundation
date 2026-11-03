@@ -694,8 +694,12 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     build: (draft, client) => draft && dialogTemplates !== null ? createDialogAttachment(draft, offeredTemplates, client) : null,
     apply: change => createDraft ? applyCreateDialogPrefill(createDraft, change, offeredTemplates) : null,
     current: () => createDraft,
-    restore: draft => setCreateDraft(draft)
+    // A revert may reopen a closed dialog (even after an authority reset): it then reads its catalog and templates afresh.
+    restore: draft => { setCreateDraft(draft); if (draft) void loadCatalog(); }
   });
+  // However the dialog closes (Close, a create, an authority reset), its read templates go with it, so a reopened dialog
+  // never discloses the previous session's templates before it has read its own.
+  useEffect(() => { if (createDraft === null) setDialogTemplates(null); }, [createDraft]);
   const selectedCount = selectedIds.size;
   const selectedVisibleCurrentCount = visibleDefinitionIds.filter(id => selectedIds.has(id)).length;
   const allCurrentVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCurrentCount === visibleDefinitionIds.length;
