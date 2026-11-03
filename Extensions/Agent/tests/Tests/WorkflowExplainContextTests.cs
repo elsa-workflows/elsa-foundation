@@ -320,6 +320,22 @@ public sealed partial class WorkflowExplainContextTests
     }
 
     [Fact]
+    public void An_unrelated_InvalidOperationException_is_not_disguised_as_malformed_text()
+    {
+        // Only a malformed name or string read is refused; any other failure surfaces as itself, never as a silent refusal.
+        var caller = WorkflowAgentTests.Snapshot() with { Content = new ThrowingContent() };
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => WorkflowAgentSnapshot.TryRead(caller, out _, out _));
+        Assert.Equal(ThrowingContent.Message, thrown.Message);
+    }
+
+    private sealed class ThrowingContent
+    {
+        internal const string Message = "An unrelated programming error.";
+        public string WorkflowDefinitionId => throw new InvalidOperationException(Message);
+    }
+
+    [Fact]
     public void Scope_paths_run_through_parallel_branches_as_through_any_container()
     {
         // A Parallel-like container: each branch is a member of its many slot, and a container inside a branch nests on.

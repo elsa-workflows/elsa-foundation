@@ -316,6 +316,22 @@ BROWSER_OBSERVATIONS = {"explainCompleted": True, "selectedExpressionType": "Var
                         "maskedTyped": True, "maskedWithheld": True, "canaryAbsentInPage": True, "draftUnchanged": True, "owningWrites": 0}
 
 
+def require_stream_capture(evidence):
+    """The canary searches over the browser's agent streams count only when the streams were captured: every captured row
+    without a capture or validation error, and at least one actual agent event stream (not a non-SSE response)."""
+    refs = [ref for ref in evidence if isinstance(ref, dict) and Path(str(ref.get("path", ""))).name == "agent-streams.json"]
+    check(len(refs) == 1, "The explanation Studio journey retained no single agent stream capture")
+    path = Path(refs[0]["path"])
+    check(path.is_file() and sha(path) == refs[0].get("sha256"), "The agent stream capture is missing or changed")
+    rows = json.loads(path.read_text())
+    check(isinstance(rows, list) and all(isinstance(row, dict) for row in rows), "Malformed agent stream capture")
+    check(all(row.get("captureError") is None and row.get("captureValidationError") is None for row in rows),
+          "An agent stream was not captured completely, so its absence of the canary proves nothing")
+    check(any(row.get("captureMethod") not in (None, "not-sse") and isinstance(row.get("rawBody"), str) and row["rawBody"].startswith("data: ")
+              for row in rows), "No actual agent event stream was captured to search")
+    return len(rows)
+
+
 def require_explain_browser(observed, commands, rows, *, provider):
     """The editor's own journey, checked against the adapter trace for each read the browser retained."""
     check(provider in PROVIDERS, "Unknown adapter")
@@ -325,6 +341,7 @@ def require_explain_browser(observed, commands, rows, *, provider):
     check(same(observed.get("observations"), BROWSER_OBSERVATIONS), "The explanation Studio journey observed another outcome")
     check(isinstance(observed.get("ownerBefore"), dict) and isinstance(observed.get("ownerAfter"), dict)
           and isinstance(observed.get("evidence"), list) and observed["evidence"], "The explanation Studio journey retained no owner evidence")
+    require_stream_capture(observed["evidence"])
     selected = observed.get("commands")
     check(isinstance(selected, dict) and sorted(selected) == sorted(BROWSER_STEPS) and len(set(selected.values())) == len(BROWSER_STEPS),
           "The explanation journey must retain one distinct read per step")
