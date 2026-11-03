@@ -38,34 +38,34 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
             .Take(take).ToArray();
 
     /// <summary>
-    /// Resolves the current revision for a new run and checks that it allows the exchange or, for role <c>Source</c>, the queue.
+    /// Resolves the current revision for a new run and checks that it allows the entity: the exchange or, for role <c>Source</c>, the queue.
     /// </summary>
-    public HostRabbitMqResolvedBinding ResolveCurrent(EtlScope scope, string alias, string role, string exchange)
+    public HostRabbitMqResolvedBinding ResolveCurrent(EtlScope scope, string alias, string role, string entity)
     {
         var current = _bindings.Where(item => item.IsCurrent && Matches(item, scope, alias, role)).ToArray();
         if (current.Length == 0) throw Unavailable();
         if (current.Length > 1) throw new EtlBindingException("etl.binding-ambiguous", "An ETL host RabbitMQ binding has ambiguous revisions.");
-        return Resolve(current[0], exchange);
+        return Resolve(current[0], entity);
     }
 
-    /// <summary>Resolves the exact pinned revision for a running run and checks its handle and exchange.</summary>
-    public HostRabbitMqResolvedBinding ResolveExact(EtlScope scope, string alias, string role, string revision, string handle, string exchange)
+    /// <summary>Resolves the exact pinned revision for a running run and checks its handle and entity.</summary>
+    public HostRabbitMqResolvedBinding ResolveExact(EtlScope scope, string alias, string role, string revision, string handle, string entity)
     {
         var pinned = _bindings.Where(item => Matches(item, scope, alias, role) && item.Revision == revision).ToArray();
         if (pinned.Length != 1) throw RevisionUnavailable();
-        var resolved = Resolve(pinned[0], exchange);
+        var resolved = Resolve(pinned[0], entity);
         return StringComparer.Ordinal.Equals(resolved.Handle, handle) ? resolved : throw RevisionUnavailable();
     }
 
-    private HostRabbitMqResolvedBinding Resolve(EtlHostRabbitMqBindingOptions binding, string exchange)
+    private HostRabbitMqResolvedBinding Resolve(EtlHostRabbitMqBindingOptions binding, string entity)
     {
         // The publisher parses every binding's target, and a source also needs the consumer; Elsa.Etl.RabbitMq registers both.
         var source = binding.Role == "Source";
         if (_publisher is null || source && _consumer is null)
             throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ publisher or consumer is installed.");
-        if (source && !binding.AllowedQueues.Contains(exchange, StringComparer.Ordinal))
+        if (source && !binding.AllowedQueues.Contains(entity, StringComparer.Ordinal))
             throw new EtlBindingException("etl.rabbitmq-queue-not-allowed", "The RabbitMQ binding does not allow the queue.");
-        if (!source && !binding.AllowedExchanges.Contains(exchange, StringComparer.Ordinal))
+        if (!source && !binding.AllowedExchanges.Contains(entity, StringComparer.Ordinal))
             throw new EtlBindingException("etl.rabbitmq-exchange-not-allowed", "The RabbitMQ binding does not allow the exchange.");
         if (string.IsNullOrWhiteSpace(binding.ConnectionString))
             throw Unavailable();

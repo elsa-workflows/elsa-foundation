@@ -124,7 +124,7 @@ provides the consumer. The runtime never declares queues.
   again. Records carry no message id, so destinations should be idempotent (a keyed SQL destination is) or tolerate
   duplicates.
 - **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
-  `MaxSnapshotBytes`, or the run's retained input (the snapshot, its index of 24 bytes per record and the lookup) past
+  `MaxSnapshotBytes`, or the run's retained input (the snapshot, its index of 24 bytes per record plus one and the lookup) past
   `http.maxRetainedInputBytes`; the rest stay queued. A single message larger than that fails preparation with
   `etl.snapshot-too-large` and stays queued. Each message is one record: a body that is not JSON, or not a JSON object, is
   routed to errors as `etl.jsonl.record-invalid` or `etl.jsonl.record-not-object` and still acknowledged.
@@ -296,6 +296,6 @@ Native invocation/result delivery and native cancellation now have real durable 
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 
-Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot (for a RabbitMQ source, under a random per-attempt key rather than a deterministic one); process loss can leave attempt staging. Retention must account for these deterministic candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
+Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot (for a RabbitMQ source, under a random per-attempt key rather than a deterministic one); process loss can leave attempt staging. Retention must account for these candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
 
 Physical effects remain at least once. Lease expiry cannot terminate a worker or release its live buffers. Only the fenced manifest/cursor transaction makes output authoritative. Logical payload allowances are not a heap/RSS limit, and retained chunks are not automatically removed or compensated.
