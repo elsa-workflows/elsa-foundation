@@ -75,8 +75,10 @@ internal sealed partial class EfEtlRuntimeStore
             .ElementAtOrDefault(partition.PartitionOrdinal)
             ?? throw new InvalidDataException("The connector partition is outside its prepared input.");
 
-        long metadataBytes = 0, outputBytes = 0, nextBatchOrdinal = 0, settledCount = 0;
-        long acceptedRecords = 0, rejectedRecords = 0, filteredRecords = 0;
+        // A compacted continuous shard's history starts at its compacted summary (spec 1196).
+        long metadataBytes = 0, outputBytes = 0, nextBatchOrdinal = partition.CompactedBatchCount, settledCount = partition.CompactedBatchCount;
+        long acceptedRecords = partition.CompactedAcceptedRecords, rejectedRecords = partition.CompactedRejectedRecords,
+            filteredRecords = partition.CompactedFilteredRecords;
         long nextFileOrdinal = initialPosition is EtlConnectorFilePosition file ? file.StartOrdinal : 0;
         long? lastHttpPageSequence = null;
         var nextHttpItem = 0;
@@ -117,7 +119,7 @@ internal sealed partial class EfEtlRuntimeStore
                             throw new InvalidDataException("The connector HTTP batch history moved to an earlier page.");
                         if (lastHttpPageSequence is null || range.PageSequence > lastHttpPageSequence.Value)
                         {
-                            var firstUnverifiedPage = lastHttpPageSequence is { } lastPage ? checked(lastPage + 1) : 0;
+                            var firstUnverifiedPage = lastHttpPageSequence is { } lastPage ? checked(lastPage + 1) : partition.CompactedPageCount;
                             await ValidateAcceptedHttpPagesAsync(partition, firstUnverifiedPage, range.PageSequence, cancellationToken);
                             nextHttpItem = 0;
                         }
