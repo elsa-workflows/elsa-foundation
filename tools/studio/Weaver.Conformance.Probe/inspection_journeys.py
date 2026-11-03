@@ -145,6 +145,16 @@ def other_hash(value):
 
 # ---- The probe's own reads of the owning APIs' answers. ----
 
+def member(value, name):
+    """A JSON object's property as the runtime's web serializer binds it: case-insensitively, the last match winning (json.loads
+    already keeps the last of exact duplicates)."""
+    if not isinstance(value, dict): return None
+    found = None
+    for key, item in value.items():
+        if isinstance(key, str) and key.lower() == name.lower(): found = item
+    return found
+
+
 def normalize_port(port):
     """A flowchart connection port as the runtime normalizes it."""
     return port.strip() if isinstance(port, str) and port.strip() else "Done"
@@ -164,11 +174,13 @@ def flatten_version(state):
                                       if isinstance(item, dict) and item.get("referenceKey")}})
         payload = ((node.get("structure") or {}).get("payload")) if isinstance(node.get("structure"), dict) else None
         if not isinstance(payload, dict): return
-        for item in payload.get("connections") or []:
-            source, target = item.get("source") or {}, item.get("target") or {}
+        # Read as the runtime binds them: property names in any letter case, the last matching one winning.
+        for item in member(payload, "connections") or []:
+            source, target = member(item, "source") or {}, member(item, "target") or {}
             # Ports as the flowchart reads them (FlowchartEndpoint.NormalizePort): a blank port is Done, a port is trimmed.
-            connections.append((node["nodeId"], source.get("nodeId"), normalize_port(source.get("port")), target.get("nodeId"), normalize_port(target.get("port"))))
-        for child in payload.get("activities") or []:
+            connections.append((node["nodeId"], member(source, "nodeId"), normalize_port(member(source, "port")),
+                                member(target, "nodeId"), normalize_port(member(target, "port"))))
+        for child in member(payload, "activities") or []:
             visit(child, [*scope, node["nodeId"]])
     visit(root, [])
     return activities, sorted(connections, key=lambda item: tuple(value or "" for value in item))
