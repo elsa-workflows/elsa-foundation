@@ -53,13 +53,32 @@ console.log(JSON.stringify(safeFailureFrames({stack})));
             self.assertNotIn("private-value", (destination / "report.json").read_text())
         self.assertEqual({"kind": "Unavailable", "frames": []}, safe_browser_failure({"failureDiagnostic": {"kind": "Bearer private-value"}}))
 
+    def test_fatal_exception_or_rejection_retains_only_safe_receipt_and_still_exits_failed(self):
+        source = (Path(__file__).parent / "browser.mjs").read_text()
+        functions = source[source.index("function safeFailureFrames("):source.index("function diagnosticUrl(")]
+        monitor = next(line for line in source.splitlines() if line.startswith('process.on("uncaughtExceptionMonitor"'))
+        for terminal in ('throw new Error("Bearer private-value");', 'void Promise.reject(new Error("Bearer private-value"));'):
+            with self.subTest(terminal=terminal), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                script = 'import fs from "node:fs"; import path from "node:path";\nconst config={output:' + json.dumps(str(root)) + '};\n' + functions + monitor + '\n' + terminal
+                file = root / "browser.mjs"; file.write_text(script)
+                result = subprocess.run(["node", str(file)], capture_output=True, text=True)
+                self.assertEqual(1, result.returncode)
+                self.assertIn("private-value", result.stderr)  # Normal fatal behavior stays intact.
+                text = (root / "failure-diagnostic.json").read_text()
+                diagnostic = json.loads(text)
+                self.assertEqual("Error", diagnostic["kind"])
+                self.assertTrue(diagnostic["frames"])
+                self.assertNotIn("private-value", text)
+                self.assertNotIn(str(root), text)
+
     def test_failed_process_exports_safe_location_and_reraises_original_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "observation"; output.mkdir()
-            (output / "observation.json").write_text(json.dumps({"failureDiagnostic": {
-                "kind": "AssertionError", "frames": [{"file": "browser.mjs", "line": 1300, "column": 9}]},
-                "failure": {"message": "Bearer private-value"}}))
+            (output / "failure-diagnostic.json").write_text(json.dumps({
+                "kind": "AssertionError", "frames": [{"file": "browser.mjs", "line": 1300, "column": 9}],
+                "message": "Bearer private-value"}))
             original = RuntimeError("original browser failure")
             runtime = JourneyRuntime.__new__(JourneyRuntime)
             runtime.sign_in = Mock(); runtime.provider = "copilot"; runtime.output = Mock(return_value=root)

@@ -293,7 +293,7 @@ class JourneyRuntime:
                          env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
         except RuntimeError:
             try:
-                self.run.report["browserFailureDiagnostic"] = safe_browser_failure(json.loads((output / "observation.json").read_text()))
+                self.run.report["browserFailureDiagnostic"] = safe_browser_failure({"failureDiagnostic": json.loads((output / "failure-diagnostic.json").read_text())})
                 self.run.save()
             except (OSError, ValueError, TypeError):
                 pass  # A missing diagnostic must preserve the original failed journey.

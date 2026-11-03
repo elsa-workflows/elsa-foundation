@@ -54,6 +54,13 @@ function safeFailureFrames(error) {
   }
   return frames;
 }
+function retainFailureDiagnostic(error) {
+  const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
+  try {
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600 });
+  } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
+  return diagnostic;
+}
 function diagnosticUrl(value) {
   try { const url = new URL(value); return url.origin + url.pathname; }
   catch { return "[unavailable URL]"; }
@@ -65,6 +72,7 @@ function retain(name, value) {
 }
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
+process.on("uncaughtExceptionMonitor", retainFailureDiagnostic);
 const browser = await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
@@ -1440,7 +1448,7 @@ try {
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
-  result.failureDiagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error.name) ? error.name : "Error", frames: safeFailureFrames(error) };
+  result.failureDiagnostic = retainFailureDiagnostic(error);
   result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
