@@ -54,7 +54,7 @@ internal abstract class EtlDesignDbContext(DbContextOptions options) : DbContext
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 }
 
-// Keys and hashes compare ordinally on every engine: SQLite's TEXT already does, so its model only gains the comparers.
+// Key columns compare ordinally on every engine: SQLite's TEXT already does, so its model only gains the comparers.
 internal sealed class EtlDesignSqliteDbContext(DbContextOptions<EtlDesignSqliteDbContext> options)
     : EtlDesignDbContext(options)
 {

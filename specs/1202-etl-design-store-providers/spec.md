@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Implemented; [evidence](evidence/README.md)
+**Status**: Implemented — [evidence](evidence/README.md)
 
 **Input**: The [store qualification obligation](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6323246976) of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): [ADR 0073 D1](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md) names SQLite, SQL Server, PostgreSQL and MySQL for first-party durable contracts, and the ETL design and runtime EF bindings support SQLite only. This slice qualifies the design store; the runtime store is the next slice. Part of [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 

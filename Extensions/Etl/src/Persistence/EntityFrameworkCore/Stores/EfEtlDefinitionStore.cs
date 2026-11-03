@@ -191,8 +191,8 @@ internal sealed class EfEtlDefinitionStore(
         if (!StringComparer.Ordinal.Equals(validated.ArtifactJson, recompiledEnvelope.ArtifactJson))
             return new(EtlPublicationStatus.InvalidArtifact, null);
 
-        // On SQLite the transaction below serialises writers; elsewhere a lost race is a serialization failure or a deadlock,
-        // so the whole unit runs again, and a real competitor then settles through the existing-publication check.
+        // A lost race is a transient write conflict (a serialization failure, a deadlock, a lock timeout, or a busy or locked
+        // SQLite database), so the whole unit runs again, and a real competitor then settles through the existing-publication check.
         return await PublishRetry.RunAsync(dbContext,
             () => PublishOnceAsync(identity, scope, definitionId, expectedRevision, artifact, validated, cancellationToken),
             conflict =>
