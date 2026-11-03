@@ -37,6 +37,7 @@ public sealed class WorkflowVersionAgentTests
             content.GetProperty("versionId").GetString(), content.GetProperty("version").GetString(), content.GetProperty("activityCount").GetInt32()));
         Assert.Equal(["v1", "v2", "v3"], content.GetProperty("versions").EnumerateArray().Select(item => item.GetProperty("versionId").GetString()));
         Assert.False(content.GetProperty("versionsTruncated").GetBoolean());
+        Assert.False(content.GetProperty("activitiesTruncated").GetBoolean());
         // Identity only: no authored value is part of the context.
         Assert.DoesNotContain("value-", admitted.Content!.ToString(), StringComparison.Ordinal);
         Assert.Single(contribution.Attachments, item => item.ContentType == WorkflowVersionContext.GuidanceKind && item.Origin == AgentContextOrigin.InstalledGuidance);
@@ -337,6 +338,17 @@ public sealed class WorkflowVersionAgentTests
         Assert.Equal((WorkflowDefinitionAuthorizationException.UnavailableCode, true), (Assert.Single(known.Violations).Code, known.Violations.Single().OwnerUnavailable));
         Assert.Equal(0, host.Reader.Reads);
         Assert.Contains("connectionsChanged", WorkflowReadVersionTool.Contract.Description);
+    }
+
+    [Fact]
+    public async Task A_version_larger_than_the_walk_is_admitted_as_truncated_not_complete()
+    {
+        using var host = new Host(owner: new Owner("definition-4"));
+        var admitted = (await host.CollectAsync(Reference("definition-4", "t1"))).Attachments;
+        var content = (JsonElement)Assert.Single(admitted, item => item.ContentType == WorkflowVersionContext.VersionKind).Content!;
+        Assert.True(content.GetProperty("activitiesTruncated").GetBoolean());
+        Assert.False(content.GetProperty("readingIncomplete").GetBoolean());
+        Assert.Equal(WorkflowVersionStructure.WalkLimit, content.GetProperty("activityCount").GetInt32());
     }
 
     [Fact]
@@ -647,7 +659,10 @@ public sealed class WorkflowVersionAgentTests
                 ["ConnectionMetadata"] = new Dictionary<string, object> { ["a:Done->b"] = new { isDefault = true } }
             })),
             // A container no installed handler reads.
-            ["u1"] = Version("u1", "definition-3", "3.0.0", Flow("flow", [Flow("opaque", [Leaf("hidden", "x")], null, "Acme.Unknown")], null, "Acme.Flow"))
+            ["u1"] = Version("u1", "definition-3", "3.0.0", Flow("flow", [Flow("opaque", [Leaf("hidden", "x")], null, "Acme.Unknown")], null, "Acme.Flow")),
+            // More activities than the walk reads.
+            ["t1"] = Version("t1", "definition-4", "1.0.0", Flow("flow",
+                Enumerable.Range(0, WorkflowVersionStructure.WalkLimit + 1).Select(index => Leaf($"n{index}", "x")).ToArray(), null, "Acme.Flow"))
         };
 
         public int Lookups { get; private set; }

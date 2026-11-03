@@ -149,14 +149,14 @@ internal static class WorkflowVersionContext
 
     /// <summary>The server's admitted read of one exact version: its identity, its activity count and the definition's versions.</summary>
     internal static AgentContextAttachment Attachment(WorkflowVersionDetails version, IReadOnlyList<WorkflowDefinitionVersionSummary> versions,
-        int activityCount, bool readingIncomplete, AgentContextSensitivity sensitivity, AgentClientBinding? client)
+        int activityCount, bool activitiesTruncated, bool readingIncomplete, AgentContextSensitivity sensitivity, AgentClientBinding? client)
     {
         // The newest versions, as the store lists them oldest first by version precedence.
         var listed = versions.Skip(Math.Max(0, versions.Count - VersionListLimit)).Select(item => new { versionId = item.Id, version = item.Version, createdAt = item.CreatedAt }).ToArray();
         var content = JsonSerializer.SerializeToElement(new
         {
             definitionId = version.DefinitionId, definitionName = Bound(version.DefinitionName, 256), versionId = version.VersionId, version = version.Version,
-            activityCount, readingIncomplete, versions = listed, versionsTruncated = versions.Count > listed.Length
+            activityCount, activitiesTruncated, readingIncomplete, versions = listed, versionsTruncated = versions.Count > listed.Length
         }, JsonOptions);
         return new($"{VersionKind}:{version.VersionId}", "workflow-version", version.VersionId, $"Workflow version v{Bound(version.Version, 64)}", VersionKind,
             sensitivity, "selection",

@@ -108,7 +108,7 @@ internal sealed class WorkflowVersionContextProvider(
             return (null, new(Descriptor.Id, WorkflowVersionContext.StructureUnavailableCode,
                 "The activity structure service is unavailable, so the workflow version cannot be read.", true) { OwnerUnavailable = true });
         var flattened = WorkflowVersionStructure.Flatten(read.Version!.State.RootActivity, structure);
-        return (WorkflowVersionContext.Attachment(read.Version, read.Versions!, flattened.Activities.Count, flattened.Incomplete, sensitivity, reference.Client), null);
+        return (WorkflowVersionContext.Attachment(read.Version, read.Versions!, flattened.Activities.Count, flattened.Truncated, flattened.Incomplete, sensitivity, reference.Client), null);
     }
 
     private AgentContributionDiagnostic? Refusal(WorkflowVersionContext.Outcome outcome) => outcome switch

@@ -58,7 +58,7 @@ def version_item(attachment, version):
             "content": {"definitionId": DEFINITION["id"], "definitionName": DEFINITION["name"], "versionId": version["id"], "version": version["version"],
                         "createdAt": "2026-11-03T00:00:00Z", "activityCount": len(activities),
                         "versions": [{"versionId": item["id"], "version": item["version"], "createdAt": item["createdAt"]} for item in LISTED],
-                        "versionsTruncated": False}}
+                        "versionsTruncated": False, "activitiesTruncated": False}}
 
 
 EXECUTABLE = {"artifactId": "artifact-1", "artifactHash": "abc123", "rootActivityType": "Elsa.Activities.Flowchart.Activities.Flowchart",
@@ -382,15 +382,10 @@ class BrowserTests(unittest.TestCase):
                         require_browser(self.observed(provider, journey, observations), commands, rows(provider, tool, calls=2), provider=provider, journey=journey)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class VersionSeedCanaryTests(unittest.TestCase):
     """Witness dbe305ff2: the canary must be in every seeded version input, never in the batch seed."""
 
     def test_every_seeded_version_text_carries_the_canary(self):
-        from owner_resources import version_states
         write = {"activityVersionId": "write-v1"}
         flowchart = {"activityVersionId": "flow-v1", "activityTypeKey": "Elsa.Flowchart",
                      "authoringTemplate": {"structure": {"kind": "elsa.flowchart.structure"}},
@@ -400,3 +395,7 @@ class VersionSeedCanaryTests(unittest.TestCase):
         texts = [leaf["inputs"][0]["value"]["value"] for state in states for leaf in state["rootActivity"]["structure"]["payload"]["activities"]]
         self.assertTrue(texts)
         self.assertTrue(all("vcanary-0123456789abcdef" in text for text in texts))
+
+
+if __name__ == "__main__":
+    unittest.main()
