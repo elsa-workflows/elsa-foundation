@@ -1783,7 +1783,10 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "activity.contract.reference");
     for (const [code, , expectedField] of pointers) {
       click(rendered.container.querySelector<HTMLButtonElement>(`[aria-label='Focus ${code}']`)!);
-      await waitFor(() => expect((document.activeElement as HTMLElement)?.dataset.contractField).toBe(expectedField));
+      await waitFor(() => {
+        expect((document.activeElement as HTMLElement)?.dataset.contractField).toBe(expectedField);
+        expect(buttonByText(rendered.container, "Return to diagnostic")).toBeTruthy();
+      });
       click(buttonByText(rendered.container, "Return to diagnostic"));
     }
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.contract.emitted']")!);
