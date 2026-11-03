@@ -133,8 +133,31 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Empty(consumer.Ready);
     }
 
+    [Fact]
+    public async Task A_queue_drains_into_a_sql_destination_typed_by_the_source_fields()
+    {
+        await using var files = new RuntimeFiles("");
+        var target = $"Data Source={Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "target.db")};Pooling=False";
+        ExecuteSql(target, "CREATE TABLE people (id INTEGER NOT NULL, name TEXT NOT NULL, CONSTRAINT people_key UNIQUE (id))");
+        var consumer = new TestRabbitMqConsumer("""{"id":1,"name":"Ada"}""", """{"id":2,"name":"Bram"}""");
+        var host = await StartRabbitMqSourceHostAsync(files, consumer, sqlTarget: target);
+        var pipeline = EtlRabbitMqSourceTests.Pipeline() with
+        {
+            Routes = new(new EtlSqlDestination("people-out", "people", ["id"]), new EtlJsonlDestination("errors"))
+        };
+
+        var run = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-to-sql", pipeline));
+
+        // The SQL route types its parameters from the source fields: id binds as an integer, name as text.
+        Assert.Equal((EtlRunStatus.Succeeded, 2L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(["1|Ada|integer|text", "2|Bram|integer|text"],
+            QuerySql(target, "SELECT id, name, typeof(id), typeof(name) FROM people ORDER BY id"));
+        Assert.Equal(["receive 2", "record Applied", "ack 2"], consumer.Log);
+    }
+
     private static async Task<Microsoft.Extensions.Hosting.IHost> StartRabbitMqSourceHostAsync(RuntimeFiles files,
-        TestRabbitMqConsumer consumer, bool refuseRecord = false, TimeSpan holdAfterRecord = default, bool replayRecord = false) =>
+        TestRabbitMqConsumer consumer, bool refuseRecord = false, TimeSpan holdAfterRecord = default, bool replayRecord = false,
+        string? sqlTarget = null) =>
         await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
             configureServices: services =>
             {
@@ -143,12 +166,23 @@ public sealed partial class EtlRuntimeJourneyTests
                 services.Replace(ServiceDescriptor.Scoped<IEtlConnectorRuntimeStore>(provider =>
                     new PreparationRecordingStore(provider.GetRequiredService<IEtlRuntimeStore>(), consumer, refuseRecord, holdAfterRecord,
                         replayRecord)));
+                if (sqlTarget is not null)
+                    services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine());
             },
-            configureRuntime: runtime => runtime.RabbitMqBindings.Add(new EtlHostRabbitMqBindingOptions
+            configureRuntime: runtime =>
             {
-                TenantId = files.Scope.TenantId, PersistencePartition = files.Scope.PersistencePartition, Alias = "events-in",
-                Role = "Source", Revision = "v1", ConnectionString = "amqp://etl:secret@broker/etl", AllowedQueues = ["people"]
-            }));
+                runtime.RabbitMqBindings.Add(new EtlHostRabbitMqBindingOptions
+                {
+                    TenantId = files.Scope.TenantId, PersistencePartition = files.Scope.PersistencePartition, Alias = "events-in",
+                    Role = "Source", Revision = "v1", ConnectionString = "amqp://etl:secret@broker/etl", AllowedQueues = ["people"]
+                });
+                if (sqlTarget is not null)
+                    runtime.SqlBindings.Add(new EtlHostSqlBindingOptions
+                    {
+                        TenantId = files.Scope.TenantId, PersistencePartition = files.Scope.PersistencePartition, Alias = "people-out",
+                        Role = "MainOutput", Revision = "v1", Provider = "sqlite", ConnectionString = sqlTarget, AllowedTables = ["people"]
+                    });
+            });
 
     /// <summary>
     /// Notes the preparation record in the consumer's log, refuses it, or commits it twice so the store replays it, so tests
