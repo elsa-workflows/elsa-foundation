@@ -85,6 +85,21 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     [Fact]
+    public async Task A_preparation_record_the_store_replays_still_acknowledges_the_messages()
+    {
+        await using var files = new RuntimeFiles("");
+        var consumer = new TestRabbitMqConsumer("""{"id":1,"name":"Ada"}""");
+        // The store already holds this record, as when a commit's answer was lost and the same attempt commits again.
+        var host = await StartRabbitMqSourceHostAsync(files, consumer, replayRecord: true);
+
+        var run = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-replayed", EtlRabbitMqSourceTests.Pipeline()));
+
+        Assert.Equal((EtlRunStatus.Succeeded, 1L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(["receive 1", "record Replay", "ack 1"], consumer.Log);
+        Assert.Empty(consumer.Ready);
+    }
+
+    [Fact]
     public async Task A_failed_acknowledgement_does_not_fail_the_recorded_run_and_leaves_the_messages_to_the_broker()
     {
         await using var files = new RuntimeFiles("");
@@ -119,14 +134,15 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     private static async Task<Microsoft.Extensions.Hosting.IHost> StartRabbitMqSourceHostAsync(RuntimeFiles files,
-        TestRabbitMqConsumer consumer, bool refuseRecord = false, TimeSpan holdAfterRecord = default) =>
+        TestRabbitMqConsumer consumer, bool refuseRecord = false, TimeSpan holdAfterRecord = default, bool replayRecord = false) =>
         await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
             configureServices: services =>
             {
                 services.AddSingleton<IEtlRabbitMqPublisher>(new TestRabbitMqPublisher());
                 services.AddSingleton<IEtlRabbitMqConsumer>(consumer);
                 services.Replace(ServiceDescriptor.Scoped<IEtlConnectorRuntimeStore>(provider =>
-                    new PreparationRecordingStore(provider.GetRequiredService<IEtlRuntimeStore>(), consumer, refuseRecord, holdAfterRecord)));
+                    new PreparationRecordingStore(provider.GetRequiredService<IEtlRuntimeStore>(), consumer, refuseRecord, holdAfterRecord,
+                        replayRecord)));
             },
             configureRuntime: runtime => runtime.RabbitMqBindings.Add(new EtlHostRabbitMqBindingOptions
             {
@@ -134,15 +150,20 @@ public sealed partial class EtlRuntimeJourneyTests
                 Role = "Source", Revision = "v1", ConnectionString = "amqp://etl:secret@broker/etl", AllowedQueues = ["people"]
             }));
 
-    /// <summary>Notes the preparation record in the consumer's log, or refuses it, so tests see when acknowledgement happens.</summary>
+    /// <summary>
+    /// Notes the preparation record in the consumer's log, refuses it, or commits it twice so the store replays it, so tests
+    /// see when acknowledgement happens.
+    /// </summary>
     private sealed class PreparationRecordingStore(IEtlRuntimeStore runtime, TestRabbitMqConsumer consumer, bool refuse,
-        TimeSpan holdAfterRecord)
+        TimeSpan holdAfterRecord, bool replay)
         : ForwardingEtlConnectorRuntimeStore(runtime, (IEtlConnectorRuntimeStore)runtime)
     {
         public override async ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease,
             EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default)
         {
             var status = refuse ? EtlStoreStatus.Conflict : await Connector.CommitConnectorPreparationAsync(lease, prepared, cancellationToken);
+            if (replay)
+                status = await Connector.CommitConnectorPreparationAsync(lease, prepared, cancellationToken);
             consumer.Note("record " + status);
             if (holdAfterRecord > TimeSpan.Zero)
                 await Task.Delay(holdAfterRecord, CancellationToken.None);
