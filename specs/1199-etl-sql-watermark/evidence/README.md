@@ -20,13 +20,13 @@ At `827bff877` (review round 4):
 - the container suite passed, 50 of 50;
 - the architecture suite passed, 614 of 614.
 
-Studio ETL Vitest passed 120 of 120 at `fe4aca2e8`; Studio has not changed since.
+Studio ETL Vitest passed 120 of 120 at `fe4aca2e8`; Studio has not changed since. Round 5 (`53afd3d5e`) changed only documentation, and the architecture suite passed 614 of 614 there.
 
 The Playwright spec passed 14 of 14 at `6f57b43f1`. Since then, Studio changed only the watermark help text, which the spec does not assert.
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has 13 entries, and all bite. Two, recorded at `827bff877`, cover the kept NULL watermark on PostgreSQL and on SQL Server. One, recorded at `4ebc5a198`, covers the refusal of a snapshot line that is not a JSON object. Three, recorded at `fe4aca2e8`, cover the `WHERE` clause on PostgreSQL and on SQL Server (each made inclusive, which the container test catches) and the integrity mapping of a corrupt snapshot. One, recorded at `6f57b43f1`, covers the source handle in the checkpoint key. The other 6, recorded at `bc5fdb4da`, are:
+[`bite-proofs.json`](bite-proofs.json) has 14 entries, and all bite. One, recorded at `53afd3d5e`, covers the high-watermark read skipping NULL watermarks. Two, recorded at `827bff877`, cover the kept NULL watermark on PostgreSQL and on SQL Server. One, recorded at `4ebc5a198`, covers the refusal of a snapshot line that is not a JSON object. Three, recorded at `fe4aca2e8`, cover the `WHERE` clause on PostgreSQL and on SQL Server (each made inclusive, which the container test catches) and the integrity mapping of a corrupt snapshot. One, recorded at `6f57b43f1`, covers the source handle in the checkpoint key. The other 6, recorded at `bc5fdb4da`, are:
 - the compiler's and the worker's watermark rules;
 - the reader's floor;
 - the recorded high watermark;

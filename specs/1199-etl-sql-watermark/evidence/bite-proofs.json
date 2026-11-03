@@ -185,6 +185,20 @@
    "original": " OR {Quote(watermarkColumn)} IS NULL",
    "mutated_text": "",
    "sourceRevision": "827bff87774a15381fa663fc46ce10bf9130fa41"
+  },
+  {
+   "mutation": "high-watermark-reads-null",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "value.ValueKind == JsonValueKind.Number &&",
+   "mutated_text": "",
+   "sourceRevision": "53afd3d5ec593bdd76a1f91dbdec52b96c51f7b0"
   }
  ]
 }
