@@ -149,7 +149,7 @@ Relevant implementation: [Studio registry](../../Studio/src/essentials/Elsa.Stud
 [services](../../Extensions/Agent/src/Core/Services/DefaultAgentServices.cs),
 [turn lifecycle](../../Extensions/Agent/src/Core/Services/AgentTurnServices.cs),
 [registrations](../../Extensions/Agent/src/Core/Extensions/AgentServiceCollectionExtensions.cs) and
-[workflow defaults](../../Extensions/Agent/src/Workflows/Services/WorkflowAgentServices.cs).
+[workflow defaults](../../Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/Services/WorkflowAgentServices.cs).
 
 ## Validation and limits
 

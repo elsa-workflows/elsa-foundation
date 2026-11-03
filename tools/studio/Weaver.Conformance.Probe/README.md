@@ -270,6 +270,48 @@ the nonmodal dock overlaps page controls (the c58c9f149 witness saw it intercept
 open page dialog overlaps the dock. `require_workflow_library` refuses a missing, failed,
 duplicated or changed record; `witness_manifest()` counts the four cases.
 
+### Workflow versions and Executables (spec 1193 T041)
+
+Then `inspection_journeys.py` runs four cases, `{copilot,anthropic}-workflow-{versions,executables}`. The packaged backend
+also references and selects `Elsa.Agent.Workflows.Runtime` (shell feature `FoundationWorkflowsRuntimeAgent`). Each case seeds
+one definition through the design API's own relations (`owner_resources.seed_versioned_workflow`): three versions promoted
+from the draft after ordinary draft replacements (a -> b; a -> b -> c with b's text changed; a -> c), the second published
+twice through the publishing API (its default slot, then side by side in `qualification-side`), so its content-addressed
+Executable carries two Source References. The caller sends only references (`workflows.version`: definition and version id;
+`workflows.executable`: artifact id bound to its Artifact Hash); the admitted context, read from `data.message.context` and
+repeated in every admission, must be the server's own read of exactly that resource:
+
+- `workflow_read_version` returns that version's activities by scope path (input names only) and connections, equal to the
+  version API's; with `compareToVersionId` it returns its own comparison (`computedBy: workflow_read_version`), equal to the
+  probe's comparison of the two version reads (added: in the version only; removed: in the compared version only) for the
+  aspects the probe models (`activityVersion`, `scope`, `inputs`, inputs compared as whole authored inputs), and complete;
+  the server's other aspects (`structure`, `childOrder`, `outputs`, `intrinsic`, `placement`) are tolerated, not asserted;
+- every seeded input value carries a per-run canary (`valueCanary`), which must be absent from the admitted context, the
+  turn's frames and the actual adapter's request rows of every version and Executable read: names only, never values;
+- `workflow_read_executable` returns the identity, Artifact Hash, graph, Source References (both publications') and
+  dependencies, equal to `GET runtime/workflows/executables/{artifactId}`;
+- an edit request with only the version or Executable in context (a build-mode, full-auto turn requesting
+  `workflow.propose-change` too): the engine admits no mutating workflow tool for that target, so the adapter is offered
+  the read tool and none of the module's mutating tools (`MUTATING_TOOLS`, listed explicitly); the read completes on its
+  pinned order, nothing is proposed, and the version, the draft and the Executable read back byte-equal;
+- refused at admission with the module's own text: an unknown version, another definition's version, an actor without
+  `workflows/design:read`; a stale Artifact Hash, an unknown artifact, an actor without `workflows/runtime:read`; a
+  comparison against another definition's version is refused at preparation;
+- deployment shapes: with `FoundationWorkflowsAgent` deselected a version reference, and with
+  `FoundationWorkflowsRuntimeAgent` deselected an Executable reference, is refused by the engine as no installed module
+  admitting the kind (`agent.context.kind_unsupported`); each feature is selected again afterwards. These controls run in the
+  packaged combined host; the AppDomain-wide Design-only and Runtime-only shapes (no `Elsa.Workflows.Design*` assembly in a
+  Runtime-only host) are proven by started-shell tests (`WorkflowDesignOnlyHostTests` in `Elsa.Agent.Tests`,
+  `WorkflowRuntimeOnlyHostTests` in `Elsa.Agent.Workflows.Runtime.Tests`), not by this probe.
+
+The packaged Studio journeys: `workflow-version-history` opens the editor's Properties, selects the published version and
+uses its Explain action (the prompt names `workflow_read_version`); `workflow-executable-inspector` opens the Executable
+Inspector and uses its Explain action (the prompt names `workflow_read_executable`). Each checks that the accepted message
+admitted the server's read of exactly the shown resource, that the turn completed, and that no owner changed. Every control is
+activated through the keyboard. Frame orders reuse the pinned read order (`explain_journeys.READ_FRAMES`) and refusal
+order (`batch_journeys.REFUSED_FRAMES`). `require_workflow_inspection` refuses a missing, failed, duplicated or changed
+record; `witness_manifest()` counts the four cases.
+
 ### Restart inventory over the packaged durable store (#3441 T031)
 
 After the autonomy matrix, the same complete witness appends the

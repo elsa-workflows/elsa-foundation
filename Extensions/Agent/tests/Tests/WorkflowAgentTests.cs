@@ -352,10 +352,12 @@ public sealed class WorkflowAgentTests
         var tools = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync())
             .Where(tool => tool.Descriptor.ModuleId == source.Descriptor.ModuleId).ToArray();
 
-        // Three working-draft tools disclosed by the workflow context; the six library tools (slice E) by the library context.
+        // Three working-draft tools disclosed by the workflow context; the six library tools (slice E) by the library context;
+        // the read-only version tool (slice F) by the version context.
         Assert.Equal(3, tools.Count(tool => tool.Descriptor.DisclosureSourceId == source.Descriptor.Id));
         Assert.Equal(6, tools.Count(tool => tool.Descriptor.DisclosureSourceId == WorkflowLibraryContext.ContextSourceId));
-        Assert.Equal(9, tools.Length);
+        Assert.Equal(1, tools.Count(tool => tool.Descriptor.DisclosureSourceId == WorkflowVersionContext.ContextSourceId));
+        Assert.Equal(10, tools.Length);
     }
 
     [Theory]

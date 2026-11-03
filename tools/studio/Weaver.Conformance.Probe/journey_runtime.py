@@ -64,12 +64,31 @@ def browser_inputs(config):
     summary = {key: config[key] for key in ("journey", "provider", "studioOrigin", "backendOrigin")}
     summary["driverSha256"] = sha(TOOL / "browser.mjs")
     if "workflow" in config:
-        fields = ("definitionId", "activityId", "draftId", "definitionPath", "draftPath", "validationPath")
-        summary["workflow"] = {key: config["workflow"][key] for key in fields}
+        # Every workflow field is optional (a journey that inspects a version, an Executable or a run carries only what it
+        # addresses), but at least one identity must be present and every field present is validated.
+        workflow = config["workflow"]
+        identities = ("definitionId", "draftId", "activityId")
+        paths = ("definitionPath", "draftPath", "validationPath")
+        summary["workflow"] = {key: workflow[key] for key in (*identities, *paths) if key in workflow}
+        check(any(key in workflow for key in identities) or "executable" in workflow or "run" in workflow,
+              "Browser summary requires an actual native workflow, Executable or Run identity")
         check(all(isinstance(value, str) and value for value in summary["workflow"].values()), "Browser summary requires actual native workflow identities and paths")
         check(all(summary["workflow"][key].startswith("/") and not summary["workflow"][key].startswith("//")
                   and "?" not in summary["workflow"][key] and "#" not in summary["workflow"][key]
-                  for key in ("definitionPath", "draftPath", "validationPath")), "Browser summary paths must be local native paths without auth/query metadata")
+                  for key in paths if key in summary["workflow"]), "Browser summary paths must be local native paths without auth/query metadata")
+        # A present identity must be an actual one: {"executable": None} or {"run": None} is refused, never skipped.
+        executable = workflow.get("executable")
+        if "executable" in workflow:
+            check(isinstance(executable, dict) and all(isinstance(executable.get(key), str) and executable[key] for key in ("artifactId", "artifactHash", "path"))
+                  and executable["path"].startswith("/") and not executable["path"].startswith("//") and "?" not in executable["path"] and "#" not in executable["path"],
+                  "Browser summary requires the actual Executable identity, hash and local path")
+            summary["workflow"]["executable"] = {key: executable[key] for key in ("artifactId", "artifactHash", "path")}
+        run = workflow.get("run")
+        if "run" in workflow:
+            check(isinstance(run, dict) and isinstance(run.get("workflowExecutionId"), str) and run["workflowExecutionId"]
+                  and isinstance(run.get("path"), str) and run["path"].startswith("/") and not run["path"].startswith("//")
+                  and "?" not in run["path"] and "#" not in run["path"], "Browser summary requires the actual Run identity and local path")
+            summary["workflow"]["run"] = {"workflowExecutionId": run["workflowExecutionId"], "path": run["path"]}
     return summary
 
 

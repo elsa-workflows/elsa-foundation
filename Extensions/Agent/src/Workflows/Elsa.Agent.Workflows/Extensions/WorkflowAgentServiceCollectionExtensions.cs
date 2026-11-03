@@ -38,6 +38,11 @@ public static class WorkflowAgentServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowLibrarySetListStateTool>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowCreateDialogPrefillTool>());
 
+        // One exact persisted version, read-only (spec 1193 slice F): the context source reads it through Workflows Design Core
+        // (IWorkflowVersionReader) under the owning definition authorizer, and registers no fallback for either.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, WorkflowVersionContextProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowReadVersionTool>());
+
         return services;
     }
 }

@@ -86,7 +86,7 @@ Today `AgentToolInvoker` turns every refusal into `agent.tool.forbidden`, and `C
 
 ### D2. The Runtime-side package
 
-The new package is `Elsa.Agent.Workflows.Runtime`, at `Extensions/Agent/src/Workflows.Runtime/`, with the shell feature `FoundationWorkflowsRuntimeAgent`. It references Agent, Agent Core and `Elsa.Workflows.Runtime.Core` only (D4), and never Design. Its tests live in a new `Elsa.Agent.Workflows.Runtime.Tests` project, which composes no Design assembly, so the Runtime-only proof can hold AppDomain-wide. The package is added to the package conformance consumers and to the qualification host's combined and Runtime-only shapes.
+The new package is `Elsa.Agent.Workflows.Runtime`, at `Extensions/Agent/src/Workflows/Runtime/`, with the shell feature `FoundationWorkflowsRuntimeAgent`. The architecture guard's domain-tree convention (`Project_paths_match_domain_tree_convention`) derives that path from the name, and makes `Workflows/` a container, so slice F also moves `Elsa.Agent.Workflows` to `Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/` (its package and assembly names are unchanged) and puts the tests at `Extensions/Agent/tests/Workflows/Runtime/Tests/`. It references Agent, Agent Core and `Elsa.Workflows.Runtime.Core` only (D4), and never Design. Its tests live in a new `Elsa.Agent.Workflows.Runtime.Tests` project, which composes no Design assembly, so the Runtime-only proof holds AppDomain-wide. The deployment shapes are proven as follows (SC-009): the started Runtime-only host (`WorkflowRuntimeOnlyHostTests`) activates a real CShells shell with only `WorkflowsRuntimeApi` and `FoundationWorkflowsRuntimeAgent`, reads a seeded Executable from the runtime's own stores through the real `WorkflowExecutableInspection`, asserts that no `Elsa.Workflows.Design*` assembly (nor `Elsa.Agent.Workflows`) is loaded, and refuses draft and version references as `agent.context.kind_unsupported`; the started Design-only host (`WorkflowDesignOnlyHostTests` in `Elsa.Agent.Tests`) activates a shell with `WorkflowsDesignApi` and `FoundationWorkflowsAgent`, reads a version through the real `WorkflowVersionReader` and refuses the Executable reference the same way; the combined shape is composed by `WorkflowDeploymentShapeTests` and by the Workbench (`shells.json`, `shells.baseline.json` and the Docker compose shells), and is exercised natively by the conformance probe, whose packaged host also deselects each agent feature in turn for the absence controls. The package is added to the package conformance consumers.
 
 ### D3. The legacy contracts in `Elsa.Agent.Workflows`
 
@@ -194,7 +194,7 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 - **Probe**: `workflow-explain`, with a canary search over every disclosed payload and audit record.
 - **Packaged consumer limits**: its catalog has no Parallel activity (`Elsa.Activities.ControlFlow.Parallel` is not a consumer package), so the probe's parallel branches are a flowchart fan-out (a's Done port to b and to the nested flowchart), and scope paths through a Parallel container are proven by component tests (`WorkflowExplainContextTests`). It has no graph activity definition either, so graph activity references are proven by component tests only (server admission and Studio's bridge, sharing `workflowExplainSnapshot.json`); the spec's acceptance evidence records the same.
 - **Size**: the snapshot is sized against the host's 32 KiB per-attachment budget on the admitted projection; drafts above it (about 126 activities on a chained flowchart) cannot be disclosed at all. The follow-up is [#3710](https://github.com/elsa-workflows/elsa-foundation/issues/3710).
-- **Catalogs** (FR-034): the "Explain and troubleshoot" section of `Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`, its link from `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, and the Agent Workflows README.
+- **Catalogs** (FR-034): the "Explain and troubleshoot" section of `Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md`, its link from `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, and the Agent Workflows README.
 
 ## Slice E: Library, create-dialog intent and templates
 
@@ -211,7 +211,7 @@ Concrete file seams are recorded in [research.md](research.md).
 
 ## Slice F: Versions and Executables
 
-- **Versions** (Agent Workflows): `workflows.version` v1 and a read-only version tool over `IWorkflowVersionReader` (D4), bound to exact version identities, with a two-version comparison through the owning design services. Edit requests are refused with a pointer to the draft.
+- **Versions** (Agent Workflows): `workflows.version` v1 and a read-only version tool over `IWorkflowVersionReader` (D4), bound to exact version identities, with Weaver's own two-version comparison computed over two reads from the owning design services and labelled as such (R6). Edit requests are refused with a pointer to the draft.
 - **Executables** (`Elsa.Agent.Workflows.Runtime`, over `IWorkflowExecutableInspection` from D4): `workflows.executable` v1 and `workflow_read_executable`, which returns identity, Artifact Hash, graph and the visible Source References. The explain-executable prompt is restored against this tool.
 - **Deployment shapes**: the Design-only, Runtime-only and combined hosts each start and report unsupported journeys as unavailable. The Runtime-only proof asserts, AppDomain-wide, that no `Elsa.Workflows.Design*` assembly is loaded. It therefore needs its own test project, `Elsa.Agent.Workflows.Runtime.Tests`, because `Elsa.Agent.Tests` loads Design assemblies.
 - **Normal host**: Playwright journeys for the version history and the Executable Inspector.
@@ -251,7 +251,12 @@ Concrete file seams are recorded in [research.md](research.md).
 | The `workflows.library-context` source with the `workflows.library`, `workflows.create-dialog`, `workflows.template-list`, `workflows.library-organization` and `workflows.library-guidance` kinds; the `workflows.template-editor` kind of `workflows.context`; the tools `workflow_library_assign_tags`, `workflow_library_set_favorite`, `workflow_library_move_to_folder`, `workflow_library_save_view`, `workflow_library_set_list_state` and `workflow_create_dialog_prefill`; the capabilities `workflow.library-explain` and `workflow.library-organize`; and a template target for `workflow_apply_operation_batch`, whose preview then names `templateId` and `templateRevision` instead of the definition and draft | E | Minor, additive |
 | `workflow.permissions` for a template target names `templateId` (reference and content) instead of `workflowDefinitionId` | E | Minor, additive (a new target kind) |
 | Studio Workflows: the optional `agentResource` of `WorkflowEditorDocumentAdapter` and of the context bridge, the optional `library` state of `WorkflowAgentController`, `onViews` of `WorkflowLibraryControls`, the `workflows.library-view` context provider, the `workflows.library-state` tool slot with its two client tool contracts and the `workflows.agent.page-revert` result control; Weaver Workflows: the `weaver.workflows.library-result`, `weaver.workflows.list-state-result` and `weaver.workflows.create-dialog-result` renderers | E | Minor, additive |
-| The new `Elsa.Agent.Workflows.Runtime` package | F | Minor |
+| `IWorkflowVersionReader` and `WorkflowVersionDetails` in `Elsa.Workflows.Design.Core`, implemented by the internal `WorkflowVersionReader` in the Design API with a single-registration guard | F | Minor, additive |
+| `IWorkflowExecutableInspection` and the `WorkflowExecutableInspection*` models in `Elsa.Workflows.Runtime.Core` (recorded in its `PublicAPI.Unshipped.txt`), implemented by the internal `WorkflowExecutableInspection` in the Runtime API with a single-registration guard | F | Minor, additive |
+| The `workflows.version-context` source with the `workflows.version` and `workflows.version-guidance` kinds, the tool `workflow_read_version` with result kind `workflows.version`, and the capability `workflow.version-explain` (Agent Workflows) | F | Minor, additive |
+| The source location of the `Elsa.Agent.Workflows` project, moved into `Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/` (package id, assembly and namespaces unchanged) | F | None (not public surface) |
+| The package `Elsa.Agent.Workflows.Runtime` with the shell feature `FoundationWorkflowsRuntimeAgent`, the `workflows.executable-context` source with the `workflows.executable` and `workflows.executable-guidance` kinds, the tool `workflow_read_executable` with result kind `workflows.executable`, and the capability `workflow.executable-explain` | F | Minor, additive |
+| Weaver Workflows: the restored `weaver.workflows.explain-executable` prompt (against `workflow_read_executable`) and the new `weaver.workflows.explain-version` prompt; Studio Workflows: the `workflows.executable-inspector` and `workflows.version-history` context providers, the version selection in the editor's Versions list, the optional `weaver` controller on the Executable Inspector page, and the new public exports `workflowExecutableAttachment` and `workflowVersionAttachment` of `@elsa-workflows/studio-workflows` (Weaver Workflows builds its prompt attachments with them) | F | Minor, additive |
 | The new `.Core` contracts of D4 | B, E, F, G | Minor, additive |
 | The Preview property `AgentViolation.OwnerUnavailable`, and its 503 mapping in the tool invoker, proposal execution and context admission | A | Minor |
 
@@ -266,8 +271,8 @@ specs/1193-weaver-workflow-journeys/
 
 Essentials/src/Workflows/Design/Api/          # A, E
 Essentials/src/Workflows/Design/Persistence/  # E (EF operation key)
-Extensions/Agent/src/Workflows/               # A–E, F (versions)
-Extensions/Agent/src/Workflows.Runtime/       # F, G (new)
+Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/  # A–E, F (versions); moved into Workflows/ by slice F
+Extensions/Agent/src/Workflows/Runtime/       # F, G (new)
 Studio/src/essentials/Elsa.Studio.Workflows/  # C, D, E, G
 Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/  # C, D, E, F
 tools/studio/Weaver.Conformance.Probe/        # every slice

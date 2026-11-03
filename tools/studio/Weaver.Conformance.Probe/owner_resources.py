@@ -227,3 +227,115 @@ def seed_personal_layout(http, output):
     observed, _ = http.json(endpoint, headers=headers)
     check(observed == saved and saved["value"] == request["value"] and bool(saved["revision"]), "The native personal owner did not confirm the exact document")
     return {"document": observed, "evidence": [request_ref, saved_ref, _retain(output, "owner-readback", observed)]}
+
+
+# Spec 1193 slice F (T041). One definition with three persisted versions, each promoted from the draft through the owning
+# design API's own promote relation after an ordinary draft replacement, and the second one published twice through the
+# publishing API (its default slot, then side by side in a named slot), so its content-addressed Executable carries two
+# Source References. The versions are flowcharts of Write Lines only:
+#   v1: a -> b
+#   v2: a -> b -> c, with b's text changed (published)
+#   v3: a -> c (b removed)
+VERSION_NODES = {"root": "versions-flow", "a": "versions-a", "b": "versions-b", "c": "versions-c"}
+SIDE_BY_SIDE_SLOT = "qualification-side"
+
+
+def version_states(write, flowchart, canary=""):
+    """The three authored states, in the wire shape the design API accepts (and Studio saves). Every authored text carries the
+    canary, so a disclosed input value is detectable wherever it would appear."""
+    container = _container(flowchart)
+    n = VERSION_NODES
+    def leaf(node_id, text):
+        return {"nodeId": node_id, "activityVersionId": write["activityVersionId"], "outputs": [], "structure": None,
+                "inputs": [{"referenceKey": "text", "value": {"value": (text + " " + canary).strip(), "expressionType": "Literal"}}]}
+    def connection(source, target):
+        return {"id": source + "-" + target, "source": {"nodeId": source, "port": "Done"}, "target": {"nodeId": target}}
+    def state(children, connections):
+        payload = json.loads(json.dumps(container["payload"]))
+        payload.update(activities=children, connections=connections, startNodeId=n["a"])
+        root = {"nodeId": n["root"], "activityVersionId": flowchart["activityVersionId"], "inputs": [], "outputs": [],
+                "structure": {"kind": container["kind"], "schemaVersion": "1.0.0", "payload": payload}}
+        return {"variables": [], "inputs": [], "outputs": [], "rootActivity": root}
+    return [state([leaf(n["a"], "First"), leaf(n["b"], "Second")], [connection(n["a"], n["b"])]),
+            state([leaf(n["a"], "First"), leaf(n["b"], "Second, revised"), leaf(n["c"], "Third")],
+                  [connection(n["a"], n["b"]), connection(n["b"], n["c"])]),
+            state([leaf(n["a"], "First"), leaf(n["c"], "Third")], [connection(n["a"], n["c"])])]
+
+
+def seed_versioned_workflow(http, output, *, publish=True):
+    """Create the definition, promote three versions, and (with publish) publish the second twice. Retains every read."""
+    output = _new_output(output)
+    activities, activity_capability = capability_links(http, "elsa.api.activity-design", output / "activities")
+    workflows, workflow_capability = capability_links(http, "elsa.api.workflow-design", output / "workflows")
+    check(all(key in workflows for key in ("workflow-definitions", "workflow-drafts", "workflow-draft-promote-exact-version", "workflow-versions")),
+          "The native version witness needs the real create, draft, promote and version relations")
+    evidence = [activity_capability, workflow_capability]
+    catalog, _ = http.json(owner_path(http, activities["activity-catalog"]))
+    evidence.append(_retain(output, "activity-catalog", catalog))
+    def entry(type_key):
+        matches = [item for item in catalog["activities"] if item["activityTypeKey"] == type_key and item.get("available") is True]
+        check(len(matches) == 1 and bool(matches[0]["activityVersionId"]), "The actual catalog must uniquely supply " + type_key)
+        return matches[0]
+    write, flowchart = entry(BATCH_WRITE_LINE), entry(BATCH_FLOWCHART)
+    canary = "vcanary-" + uuid.uuid4().hex[:16]
+    states = version_states(write, flowchart, canary)
+    request = {"operationKey": str(uuid.uuid4()), "name": "Weaver versions witness " + uuid.uuid4().hex[:8],
+               "description": "Owned spec 1193 version and Executable qualification.", "initialState": states[0],
+               "layout": [{"nodeId": node, "x": 120 + 300 * index, "y": 160} for index, node in enumerate(("versions-a", "versions-b", "versions-c"))],
+               "activityPresentation": []}
+    evidence.append(_retain(output, "create-request", request))
+    definitions_path = owner_path(http, workflows["workflow-definitions"])
+    created, _ = http.json(definitions_path, request, method="POST")
+    evidence.append(_retain(output, "created", created))
+    definition_id, draft_id = created["definition"]["id"], created["draft"]["id"]
+    check(created["draft"]["definitionId"] == definition_id and bool(draft_id), "Native create returned inconsistent owning identities")
+    definition_path = definitions_path.rstrip("/") + "/" + quote(definition_id, safe="")
+    draft_path = owner_path(http, workflows["workflow-drafts"], draftId=draft_id)
+    promote_path = owner_path(http, workflows["workflow-draft-promote-exact-version"], draftId=draft_id)
+    versions = []
+    for index, state in enumerate(states):
+        if index:
+            replaced, _ = http.json(draft_path, {"operationKey": str(uuid.uuid4()), "state": state, "layout": request["layout"], "activityPresentation": []},
+                                    method="PUT")
+            evidence.append(_retain(output, "draft-" + str(index + 1), replaced))
+        promoted, _ = http.json(promote_path, {"operationKey": str(uuid.uuid4())}, method="POST", expected=201)
+        evidence.append(_retain(output, "promoted-" + str(index + 1), promoted))
+        check(isinstance(promoted.get("id"), str) and promoted["id"] and promoted["definition"]["id"] == definition_id
+              and promoted["id"] not in [item["id"] for item in versions], "The owner did not promote a new version of the seeded definition")
+        observed, _ = http.json(owner_path(http, workflows["workflow-versions"], versionId=promoted["id"]))
+        evidence.append(_retain(output, "version-" + str(index + 1), observed))
+        check(observed["id"] == promoted["id"] and observed["version"] == promoted["version"], "The version API does not read the promoted version back")
+        versions.append(observed)
+    listed, _ = http.json(definition_path + "/versions")
+    evidence.append(_retain(output, "version-list", listed))
+    check(sorted(item["id"] for item in listed) == sorted(item["id"] for item in versions), "The version list differs from the promoted versions")
+    seed = {"definitionId": definition_id, "draftId": draft_id, "definitionPath": definition_path, "draftPath": draft_path,
+            "versionPath": workflows["workflow-versions"], "versions": versions, "list": listed, "nodes": dict(VERSION_NODES),
+            "writeLine": {"activityVersionId": write["activityVersionId"], "activityTypeKey": write["activityTypeKey"]},
+            "flowchart": {"activityVersionId": flowchart["activityVersionId"], "activityTypeKey": flowchart["activityTypeKey"]},
+            "valueCanary": canary, "evidence": evidence}
+    if publish:
+        publishing, publishing_capability = capability_links(http, "elsa.api.publishing", output / "publishing")
+        runtime, runtime_capability = capability_links(http, "elsa.api.runtime", output / "runtime")
+        check("workflow-publish" in publishing and "workflow-executable" in runtime, "The native Executable witness needs the publish and Executable relations")
+        evidence += [publishing_capability, runtime_capability]
+        published = versions[1]
+        publish_path = owner_path(http, publishing["workflow-publish"], versionId=published["id"])
+        publications = []
+        for name, body in (("default", {}), ("side-by-side", {"action": "sideBySide", "slotName": SIDE_BY_SIDE_SLOT})):
+            publication, _ = http.json(publish_path, body, method="POST", expected=201)
+            evidence.append(_retain(output, "publication-" + name, publication))
+            publications.append(publication)
+        check(len({item["artifactId"] for item in publications}) == 1 and len({item["artifactHash"] for item in publications}) == 1
+              and len({item["sourceReferenceId"] for item in publications}) == 2,
+              "The two publications of one version must reference one content-addressed Executable through two Source References")
+        artifact_id = publications[0]["artifactId"]
+        executable_path = owner_path(http, runtime["workflow-executable"], artifactId=artifact_id)
+        executable, _ = http.json(executable_path)
+        evidence.append(_retain(output, "executable", executable))
+        references = {item["sourceReferenceId"] for item in executable.get("references") or []}
+        check(executable["artifactId"] == artifact_id and executable["artifactHash"] == publications[0]["artifactHash"]
+              and {item["sourceReferenceId"] for item in publications} <= references, "The Executable API does not list both publications' Source References")
+        seed.update(publishedVersionId=published["id"], publications=publications, artifactId=artifact_id, artifactHash=executable["artifactHash"],
+                    executablePath=executable_path, executable=executable, executableLink=runtime["workflow-executable"])
+    return seed

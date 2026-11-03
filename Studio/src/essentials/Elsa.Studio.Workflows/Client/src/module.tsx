@@ -53,6 +53,7 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
 export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
+export { workflowExecutableAttachment, workflowVersionAttachment } from "./workflowAgentContext";
 
 /** A screen that edits one resource named by a query parameter; its list view (no parameter) may open in several tabs. */
 function workspaceResource(kind: string, parameter: string): StudioRouteWorkspaceOptions {
@@ -185,7 +186,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-executable-inspector", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/executables/:artifactId",
         label: "Executable Inspector",
-        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
+        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.agent} weaver={weaver} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-instances", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],

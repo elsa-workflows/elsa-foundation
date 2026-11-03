@@ -10,9 +10,11 @@ The owning Studio workflow module applies the approved change through its native
 
 The workflow library, the new-workflow create dialog and Reusable Workflow Templates have their own context source and tools: reviewed tag, favorite, folder and view changes through the library's own commands with per-target outcomes and operation-key recovery, reviewed changes to the visible list and the open create dialog, and template batches against the template editor. See [Library, create dialog and templates](EXTENSION_POINTS.md#library-create-dialog-and-templates-spec-1193-slice-e).
 
+A persisted workflow version has its own context source and read-only tool: the page names one exact version, the server reads it through `IWorkflowVersionReader` under the owning definition authorizer, and `workflow_read_version` returns its activities by scope path and its own structural comparison with another exact version. Versions are never changed. Executable and Run support lives in the Runtime-side package [`Elsa.Agent.Workflows.Runtime`](../Runtime/README.md). See [Versions](EXTENSION_POINTS.md#versions-spec-1193-slice-f).
+
 ## Cross-domain contributions
 
-See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IAgentContextProvider`, `IAgentCapabilityProvider`, `IAgentTool` and `IAgentClientTool` contributions, and [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) for their generic lifecycle.
+See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IAgentContextProvider`, `IAgentCapabilityProvider`, `IAgentTool` and `IAgentClientTool` contributions, and [Agent foundation](../../Elsa.Agent/EXTENSION_POINTS.md) for their generic lifecycle.
 
 
 Current context and retained results are re-admitted by `workflows.context` under the native

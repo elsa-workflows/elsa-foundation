@@ -9846,3 +9846,159 @@ Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary
 Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary.CanRetainCompletionEvidence(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore! journal, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool
 Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.CursorEncryptionKey.get -> string?
 Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.CursorEncryptionKey.set -> void
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableInspection
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableInspection.GetAsync(string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails?>
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Deconstruct(out string! Source, out string? SourcePort, out string! Target, out string? TargetPort) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Source.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Source.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.SourcePort.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.SourcePort.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Target.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Target.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.TargetPort.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.TargetPort.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.WorkflowExecutableInspectionConnection(string! Source, string? SourcePort, string! Target, string? TargetPort) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.ArtifactHash.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.ArtifactHash.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.ArtifactId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.ArtifactId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.Deconstruct(out string! ArtifactId, out string! ArtifactHash) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.WorkflowExecutableInspectionDependency(string! ArtifactId, string! ArtifactHash) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.ArtifactHash.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.ArtifactHash.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.ArtifactId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.ArtifactId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.Deconstruct(out string! ArtifactId, out string! ArtifactHash, out System.DateTimeOffset CreatedAt, out string! RootActivityType, out string! RootActivityVersion, out int NodeCount, out int LiveSourceReferenceCount, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode! RootActivity, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference!>! SourceReferences, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency!>! Dependencies) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.Dependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.Dependencies.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.LiveSourceReferenceCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.LiveSourceReferenceCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.NodeCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.NodeCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.RootActivity.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.RootActivity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.RootActivityType.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.RootActivityType.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.RootActivityVersion.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.RootActivityVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.SourceReferences.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.SourceReferences.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.WorkflowExecutableInspectionDetails(string! ArtifactId, string! ArtifactHash, System.DateTimeOffset CreatedAt, string! RootActivityType, string! RootActivityVersion, int NodeCount, int LiveSourceReferenceCount, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode! RootActivity, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference!>! SourceReferences, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency!>! Dependencies) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Deconstruct(out string! Name, out string! Source, out bool IsSensitive) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.IsSensitive.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.IsSensitive.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Name.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Name.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Source.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Source.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.WorkflowExecutableInspectionInput(string! Name, string! Source, bool IsSensitive) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ActivityType.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ActivityType.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ActivityTypeVersion.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ActivityTypeVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.AuthoredActivityId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.AuthoredActivityId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Connections.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Connections.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Deconstruct(out string! ExecutableNodeId, out string! AuthoredActivityId, out string! ActivityType, out string! ActivityTypeVersion, out string? StructureKind, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput!>! Inputs, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot!>! Slots, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection!>! Connections) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ExecutableNodeId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Inputs.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Inputs.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Slots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Slots.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.StructureKind.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.StructureKind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.WorkflowExecutableInspectionNode(string! ExecutableNodeId, string! AuthoredActivityId, string! ActivityType, string! ActivityTypeVersion, string? StructureKind, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput!>! Inputs, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot!>! Slots, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection!>! Connections) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Deconstruct(out string! Name, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode!>! Nodes) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Name.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Name.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Nodes.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Nodes.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.WorkflowExecutableInspectionSlot(string! Name, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode!>! Nodes) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.ArtifactVersion.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.ArtifactVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Deconstruct(out string! SourceReferenceId, out string! Scope, out string? SourceKind, out string? SourceId, out string? SourceVersion, out string! DefinitionId, out string! DefinitionVersionId, out string! ArtifactVersion, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset? PublishedAt, out System.DateTimeOffset? ExpiresAt, out System.DateTimeOffset? DeletedAt, out bool Live) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.DefinitionVersionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.DefinitionVersionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.DeletedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.DeletedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.ExpiresAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Live.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Live.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.PublishedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.PublishedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Scope.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Scope.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceKind.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceKind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceReferenceId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceReferenceId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceVersion.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.SourceVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.WorkflowExecutableInspectionSourceReference(string! SourceReferenceId, string! Scope, string? SourceKind, string? SourceId, string? SourceVersion, string! DefinitionId, string! DefinitionVersionId, string! ArtifactVersion, System.DateTimeOffset CreatedAt, System.DateTimeOffset? PublishedAt, System.DateTimeOffset? ExpiresAt, System.DateTimeOffset? DeletedAt, bool Live) -> void
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionConnection? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDependency? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionDetails? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionInput? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionNode? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? right) -> bool

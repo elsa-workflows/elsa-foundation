@@ -122,6 +122,8 @@ builder.Services.AddCShellsAspNetCore(shells => shells.WithHostAssemblies()
         typeof(Elsa.Agent.FoundationAgentAbstractionsFeature).Assembly,
         typeof(Elsa.Agent.Api.FoundationAgentApiFeature).Assembly,
         typeof(Elsa.Agent.Workflows.FoundationWorkflowsAgentFeature).Assembly,
+        // Spec 1193 slice F: the Runtime-side Weaver workflows package (the Executable context and read tool).
+        typeof(Elsa.Agent.Workflows.Runtime.FoundationWorkflowsRuntimeAgentFeature).Assembly,
         typeof(Elsa.Agent.GitHubCopilot.GitHubCopilotAgentFeature).Assembly,
         typeof(Elsa.Agent.Anthropic.AnthropicAgentFeature).Assembly,
         // #3441: discoverable, enabled only when the restart inventory configures durable recovery.
