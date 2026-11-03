@@ -150,7 +150,7 @@ Negative cases:
 5. **Given** a revoke, **When** it is reviewed, **Then** the review states that the revoked version's value cannot be restored and that rotating reactivates the secret with a new value. It also lists the resources that reference the secret, as an advisory list (FR-006).
 6. **Given** a delete, **When** it is reviewed, **Then** the review states that the delete cannot be undone, and lists the same advisory references.
 7. **Given** a revoke or delete, **When** it is prepared, **Then** it needs `secrets:delete`, and is refused unless the irrecoverable class is enabled. The reviewed revision is checked before any side effect. A delete's receipt is an absence readback: the secret is hidden.
-8. **Given** the inline secret a connection owns, **When** a revoke or delete is proposed from the Secrets page, **Then** it is refused, as the native page refuses it.
+8. **Given** the inline secret a connection owns, **When** a revoke or delete is proposed from the Secrets page, **Then** Weaver refuses it, which is stricter than the native page: the Secrets module has no notion of connection ownership and allows the operation. The refusal relies on the owning connection that `ISecretReferenceExtension` reports, because the operation would break that connection irrecoverably. The user can still act on the native page or remove the binding from the connection first.
 9. **Given** the partial delete, **When** the outcome is recorded, **Then** it is *uncertain*, and it is never replayed.
 10. **Given** a request to create, rename, reveal, rotate, import or export, **When** Weaver receives it, **Then** Weaver refuses on the grounds in FR-001.
 
