@@ -7,7 +7,7 @@ import unittest
 
 from artifacts import sha
 from batch_journeys import OUTCOME_ROWS, PROPOSAL_FRAMES, REFUSED_FRAMES, UNOFFERED_ERROR, UNOFFERED_FRAMES, UNOFFERED_MESSAGE
-from library_journeys import (ASSIGN_TOOL, DELETE_TOOL, DISABLED_REASON, EXPECTED_CASES, LIBRARY_BROWSER, LIBRARY_LIMITED, LIBRARY_LIMITED_GRANTS,
+from library_journeys import (frozen_drop, ASSIGN_TOOL, DELETE_TOOL, DISABLED_REASON, EXPECTED_CASES, LIBRARY_BROWSER, LIBRARY_LIMITED, LIBRARY_LIMITED_GRANTS,
                               LIBRARY_NATIVE, LIBRARY_OBSERVATIONS, LIST_TOOL, ORGANIZATION_KIND, REFUSALS, TEMPLATE_BROWSER, TEMPLATE_KIND,
                               TEMPLATE_NATIVE, TEMPLATE_OBSERVATIONS, UNAVAILABLE_DIAGNOSTIC, VIEW_TOOL, dialog_attachment, library_attachment,
                               library_manifest_gaps, library_principal, require_admitted, require_browser, require_continuation, require_dropped,
@@ -183,6 +183,35 @@ class TurnTests(unittest.TestCase):
         for kind, key, committed in (("create-tag", "k2", "tag-1"), ("create-tag", "k1", "tag-2"), ("save-view", "k1", "tag-1")):
             with self.assertRaises(RuntimeError): require_dropped(lines, kind=kind, operation_key=key, committed_id=committed)
         with self.assertRaises(RuntimeError): require_dropped(lines * 2, kind="create-tag", operation_key="k1", committed_id="tag-1")
+
+
+class FrozenEvidenceTests(unittest.TestCase):
+    def test_a_lost_response_is_retained_as_its_own_frozen_copy_never_the_shared_append_only_log(self):
+        # The 072001a53 witness: the first drop's evidence referenced the seam's log, which the second drop then appended to,
+        # so the case's final evidence check found a changed file. Each observation now keeps its own copy.
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            log = root / "dropped-private.log"
+            log.write_text(json.dumps({"kind": "create-tag", "operationKey": "k1", "committedId": "tag-1"}) + "\n")
+            def save(output, name, value):
+                path = Path(output) / (name + ".json")
+                self.assertFalse(path.exists())
+                path.write_text(json.dumps(value))
+                return {"path": str(path), "sha256": sha(path)}
+            first = root / "turn-1"; first.mkdir()
+            entry, tag_ref = frozen_drop(save, first, log, kind="create-tag", operation_key="k1", committed_id="tag-1")
+            self.assertEqual("tag-1", entry["committedId"])
+            stale = {"path": str(log), "sha256": sha(log)}
+            with log.open("a") as handle: handle.write(json.dumps({"kind": "save-view", "operationKey": "k2", "committedId": "view-1"}) + "\n")
+            second = root / "turn-2"; second.mkdir()
+            _, view_ref = frozen_drop(save, second, log, kind="save-view", operation_key="k2", committed_id="view-1")
+            # The shared log changed under the first reference; each frozen copy still matches its own hash.
+            self.assertNotEqual(stale["sha256"], sha(log))
+            for ref in (tag_ref, view_ref):
+                self.assertEqual(ref["sha256"], sha(Path(ref["path"])))
+            self.assertEqual(1, len(json.loads(Path(tag_ref["path"]).read_text())["entries"]))
+            with self.assertRaises(RuntimeError):
+                frozen_drop(save, root, log, kind="create-tag", operation_key="other", committed_id="tag-1")
 
 
 class BrowserAndGateTests(unittest.TestCase):
