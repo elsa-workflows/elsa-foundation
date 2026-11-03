@@ -52,7 +52,7 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.clearA
 it.each([false, true])("save normalization is not another Undo entry (capture already fired: %s)", async captured => {
   extract();
   if (captured) await vi.advanceTimersByTimeAsync(historyCaptureDelayMs + 1);
-  await persistence.saveDraft(doc.state.draft!); await settle();
+  await persistence.saveDraft(doc.state.draft!, "Saved"); await settle();
   expect(firstStep()).toBe("block");
   expect(doc.state.draft!.activityPresentation).toEqual([{ nodeId: "block", displayName: "Prepare shipment" }]);
   flushSync(() => history.undo());
@@ -72,7 +72,7 @@ it("a stale save response cannot replace a newer edit or rebase its history", as
   const extracted = structuredClone(doc.state.draft!);
   let acknowledge!: (saved: WorkflowDraft) => void;
   vi.mocked(updateDraft).mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve; }));
-  const saving = persistence.saveDraft(extracted); await Promise.resolve(); await Promise.resolve();
+  const saving = persistence.saveDraft(extracted, "Saved"); await Promise.resolve(); await Promise.resolve();
   flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, activityPresentation: [{ nodeId: "block", displayName: "Later name" }], layout: [{ nodeId: "block", x: 50, y: 60 }] })));
   await vi.advanceTimersByTimeAsync(historyCaptureDelayMs + 1);
   acknowledge(serverCopy(extracted)); await saving; flushSync(() => {});
@@ -85,7 +85,7 @@ it("a stale save response cannot replace a newer edit or rebase its history", as
 
 it("a validation-only save response does not add an author edit", async () => {
   vi.mocked(updateDraft).mockImplementationOnce(async (_context, draft) => ({ ...serverCopy(draft), validationErrors: [{ type: "test-warning", message: "Review this draft", severity: "Warning" }] }));
-  await persistence.saveDraft(doc.state.draft!); await settle();
+  await persistence.saveDraft(doc.state.draft!, "Saved"); await settle();
   expect(doc.state.draft!.validationErrors[0].message).toBe("Review this draft");
   expect(history.canUndoNow).toBe(false);
 });
