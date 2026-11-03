@@ -21,6 +21,7 @@ Source: the branch `agent/claude/2908-etl-compaction`. Each section names the re
 | FR-003: identities | `Generation_zero_keeps_the_finite_page_identity_and_every_later_generation_is_distinct` |
 | FR-006, FR-007: a null predecessor only at the base | `A_null_predecessor_outside_a_compacted_base_is_refused_by_the_claim_audit` |
 | FR-011, SC-007: finite runs unchanged | `A_finite_http_shard_keeps_its_whole_history_and_no_compacted_summary_across_claims`, plus the whole suite |
+| US3 scenario 3: a resumed run compacts every shard | `A_claim_compacts_every_shard_of_the_run_so_peers_history_cannot_exhaust_a_shared_budget`: one claim on the spec 1192 fixture compacts both shards (review round 1). |
 | SC-006: real processes | `Continuous_worker_processes_killed_repeatedly_keep_a_bounded_window_and_every_record_once`: 4 workers killed before acceptance, page limit 3, 24 records, each exactly once |
 
 **Changed existing tests**, each for a stated reason:
@@ -29,7 +30,21 @@ Source: the branch `agent/claude/2908-etl-compaction`. Each section names the re
 
 ## Bite-proofs
 
-Recorded in [`bite-proofs.json`](bite-proofs.json). Each mutation makes its focused tests fail, and the restore makes them pass.
+There are 17, recorded in [`bite-proofs.json`](bite-proofs.json), each with the names of the tests that failed.
+- 10 were recorded at `ed57e6657`.
+- 7 were recorded at `b97f1013d`: the ones a build error interrupted, the retargeted compaction mutation and the peer-compaction mutation.
+
+Each mutation makes its focused tests fail, and the restore makes them pass. They cover:
+- skipped compaction, of the claimed shard and of peers;
+- compaction of a finite shard;
+- compacted bytes kept and compacted records dropped;
+- the generation missing from the key, from the increment, from the lease and from the identity;
+- the page bound applied by the store and by the cache;
+- an unchecked base predecessor;
+- route bodies and left pages kept;
+- the inspector's compacted effects;
+- the migration check left unrelaxed;
+- the chain rebuilt from the seed instead of the base.
 
 **Tested without a bite-proof, or not tested:**
 - **Untested requirements.** The final caught-up path leaving the generation unchanged (FR-002). Reading a legacy shared body (FR-003, US3 scenario 3; the fixture has no cached page). The cycle refusal limited to the window (FR-009). The per-partition inspection effect counts (FR-008; only the run-level total is asserted). Each follows from code that the README names.
@@ -40,11 +55,11 @@ Recorded in [`bite-proofs.json`](bite-proofs.json). Each mutation makes its focu
 
 ## Actual Workbench journey
 
-[`compaction_workbench_journey.py`](compaction_workbench_journey.py) runs against an owned Workbench on an ephemeral port:
-- a two-shard feed answers one record per page, against a page limit of 3;
-- a native Flowchart starts the run.
-
-Its summary is in `workbench-journey-summary.json`. The owner's Workbench on port 5095 is never touched.
+[`compaction_workbench_journey.py`](compaction_workbench_journey.py) ran against an owned Workbench on an ephemeral port. It was built from `b97f1013d`; the summary records the working tree as dirty because of one change in this driver, which now opens the WAL-mode database normally instead of through a read-only URI.
+- **Setup:** a two-shard feed answers one record per page, against a page limit of 3, and a native Flowchart starts the run.
+- **Backlog:** each shard accepted 30 pages, ten times the limit. Each then retained 1 page and 2 requests, with a compacted page count of 29. The snapshot root held no files.
+- **Append and complete:** two records were appended while the run was live, and the window stayed the same. Completion settled the run `Succeeded` with 62 accepted and nothing outstanding. The Flowchart resumed through `Done`. Every record was delivered to the JSON Lines route exactly once.
+- **Result:** all eight checks passed ([`workbench-journey-summary.json`](workbench-journey-summary.json)). The owner's Workbench on port 5095 was never touched.
 
 ## Limits
 

@@ -267,8 +267,9 @@ def main() -> int:
                             f"{execution}: the native workflow did not finish.", 180)
 
         def retained_state():
-            # Read-only snapshot of the live runtime database and snapshot root, never written by this driver.
-            with sqlite3.connect(f"file:{root / 'etl-runtime.db'}?mode=ro", uri=True) as db:
+            # A snapshot of the live runtime database and snapshot root; this driver only reads. A read-only URI cannot
+            # open a WAL-mode database whose shared-memory file the host owns, so the connection is opened normally.
+            with sqlite3.connect(root / "etl-runtime.db", timeout=30) as db:
                 pages = dict(db.execute("SELECT PartitionOrdinal, COUNT(*) FROM elsa_etl_connector_http_pages GROUP BY 1").fetchall())
                 requests = dict(db.execute("SELECT PartitionOrdinal, COUNT(*) FROM elsa_etl_connector_http_requests GROUP BY 1").fetchall())
                 batches = dict(db.execute("SELECT PartitionOrdinal, COUNT(*) FROM elsa_etl_connector_batches GROUP BY 1").fetchall())
