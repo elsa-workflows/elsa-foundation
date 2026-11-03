@@ -14,16 +14,16 @@ Source: the branch `agent/claude/2908-sql-watermark`, stacked on `agent/claude/2
 | SC-006: the migration | The existing migration and model tests apply every migration to a new database and check for pending model changes. |
 | FR-006: Studio | Vitest `connector-pipeline-editor` (the selector offers required `int64` columns, follows a rename and drops a column that no longer qualifies) and Playwright `etl-connector-authoring` (the watermark is saved). |
 
-At `bc5fdb4da`:
-- the ETL suite passed, 1241 of 1241;
+At `6f57b43f1` (review round 1):
+- the ETL suite passed, 1242 of 1242;
 - the container suite passed, 50 of 50;
-- the architecture suite passed, 614 of 614.
-
-At `cf47717ff`, Studio ETL Vitest passed 120 of 120 and the Playwright spec 14 of 14.
+- the architecture suite passed, 614 of 614;
+- Studio ETL Vitest passed, 120 of 120;
+- the Playwright spec passed, 14 of 14.
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has 6 entries, all recorded at `bc5fdb4da`, and all bite:
+[`bite-proofs.json`](bite-proofs.json) has 7 entries, and all bite. One, recorded at `6f57b43f1`, covers the source handle in the checkpoint key. The other 6, recorded at `bc5fdb4da`, are:
 - the compiler's and the worker's watermark rules;
 - the reader's floor;
 - the recorded high watermark;
@@ -38,7 +38,6 @@ At `cf47717ff`, Studio ETL Vitest passed 120 of 120 and the Playwright spec 14 o
   - the first-checkpoint insert;
   - the `PreparedJson is null` return in the raise;
   - the high-watermark maximum in `ReadHighWatermarkAsync`;
-  - the source handle in the checkpoint key;
   - the artifact's null-omission of `watermark`;
   - the Studio watermark filtering and rename handling.
 - **Untested:** the compiler's text budget for the watermark.
@@ -50,7 +49,7 @@ At `cf47717ff`, Studio ETL Vitest passed 120 of 120 and the Playwright spec 14 o
 - one row is then updated and one inserted, both with higher versions;
 - the second run reads only those two, with source record count 2.
 
-All six checks pass on both engines. The summaries are [`workbench-journey-summary.json`](workbench-journey-summary.json) and [`workbench-journey-summary.sqlserver.json`](workbench-journey-summary.sqlserver.json). They were recorded at `cf47717ff`, with the journey script itself still uncommitted, so they record a dirty tree.
+All six checks pass on both engines. The summaries are [`workbench-journey-summary.json`](workbench-journey-summary.json) and [`workbench-journey-summary.sqlserver.json`](workbench-journey-summary.sqlserver.json). They were recorded at `6f57b43f1` on a clean tree. The first runs, at `cf47717ff`, passed the same checks.
 
 ## Limits
 

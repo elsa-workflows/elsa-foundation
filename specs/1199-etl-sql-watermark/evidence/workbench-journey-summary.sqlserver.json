@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "spec": "1199-etl-sql-watermark",
   "engine": "sqlserver",
-  "sourceRevision": "cf47717ffb3404b7a9c6fe330773f4c5d7e84f0d",
-  "workingTreeDirty": true,
-  "workbenchAssemblySha256": "1214d83d24b2d203b344f2c6f245346a3fad3ccb50d29cd5a77520463103da11",
-  "hostProcessId": 2986,
+  "sourceRevision": "6f57b43f15915d2dd100fb95f09d47f6cd98766e",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "9d4ae2887fb8fc544566a169f9f961c33a3cc99b176e58a73b11f93b7ed9e3fc",
+  "hostProcessId": 17546,
   "cases": {
     "first": {
-      "runId": "etl-451aada67af8215cbcc0821530c7c025025f5b06cc3103e11ca027c575ff29ec",
-      "definition": "sql-watermark-a68bb79f",
-      "selection": "etl1:sql-watermark-a68bb79f:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
+      "runId": "etl-a5ae524154ad6d9ca12ef17e705ef3939534f6f0da603fdf000378a8d2e8ce61",
+      "definition": "sql-watermark-d4025785",
+      "selection": "etl1:sql-watermark-d4025785:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -50,9 +50,9 @@
       "hostPathOrSecretInInspection": false
     },
     "second": {
-      "runId": "etl-07268c4a0fefc48793c4cb179f68ee28ec3a49c4b254740d34cb2c826a640af9",
-      "definition": "sql-watermark-a68bb79f",
-      "selection": "etl1:sql-watermark-a68bb79f:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
+      "runId": "etl-fcaceefab41cdb450399b57f56e145bd7ceb979442a3d373eee244e61542aa8b",
+      "definition": "sql-watermark-d4025785",
+      "selection": "etl1:sql-watermark-d4025785:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -93,7 +93,7 @@
       "hostPathOrSecretInInspection": false
     }
   },
-  "baseUrl": "http://127.0.0.1:50521",
+  "baseUrl": "http://127.0.0.1:55930",
   "catalogSqlBindings": [
     [
       "warehouse",
