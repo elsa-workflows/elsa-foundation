@@ -68,6 +68,9 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
     {
         if (destination is EtlJsonlDestination file)
             return File(scope, file.Binding, role);
+        if (destination is EtlCsvDestination csv)
+            // Output folder approvals are format-neutral; the pin records the declared output format.
+            return File(scope, csv.Binding, role) with { Kind = EtlConnectorKind.Csv };
         if (destination is not EtlHttpDestination endpoint)
             throw Unavailable();
         CheckUnambiguous(scope, endpoint.Binding, role.ToString());

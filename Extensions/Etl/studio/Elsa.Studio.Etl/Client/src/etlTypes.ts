@@ -134,7 +134,7 @@ export interface EtlRoutes {
   errors: EtlDestination;
 }
 
-export type EtlDestination = EtlJsonlDestination | EtlHttpDestination;
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination;
 
 export interface EtlJsonlDestination {
   kind: "jsonl";
@@ -143,6 +143,12 @@ export interface EtlJsonlDestination {
 
 export interface EtlHttpDestination {
   kind: "http";
+  binding: string;
+}
+
+/** A host-approved output folder receiving one RFC 4180 CSV file, with a header row, per published batch. */
+export interface EtlCsvDestination {
+  kind: "csv";
   binding: string;
 }
 

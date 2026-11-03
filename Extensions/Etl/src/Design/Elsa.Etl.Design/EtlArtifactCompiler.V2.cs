@@ -155,6 +155,7 @@ internal sealed partial class EtlArtifactCompiler
         {
             case EtlJsonlDestination file: ValidateAlias(file.Binding, path + ".binding", diagnostics); break;
             case EtlHttpDestination http: ValidateAlias(http.Binding, path + ".binding", diagnostics); break;
+            case EtlCsvDestination csv: ValidateAlias(csv.Binding, path + ".binding", diagnostics); break;
             default:
                 diagnostics.Add(destination is null ? "destination.required" : "destination.unsupported", path, "A supported output destination is required.");
                 break;
@@ -237,6 +238,7 @@ internal sealed partial class EtlArtifactCompiler
     {
         EtlJsonlDestination file => AddText(file.Binding, ref budget),
         EtlHttpDestination http => AddText(http.Binding, ref budget),
+        EtlCsvDestination csv => AddText(csv.Binding, ref budget),
         _ => true
     };
 }

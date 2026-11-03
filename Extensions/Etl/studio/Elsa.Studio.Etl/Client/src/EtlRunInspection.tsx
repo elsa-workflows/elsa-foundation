@@ -52,8 +52,8 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
       <h3>Connector output progress</h3>
       <dl className="etl-facts">
         <dt>Source type</dt><dd>{kindLabel(run.connector.sourceKind)}</dd>
-        <dt>Main output type</dt><dd>{kindLabel(run.connector.mainKind)}</dd>
-        <dt>Error output type</dt><dd>{kindLabel(run.connector.errorKind)}</dd>
+        <dt>Main output type</dt><dd>{outputKindLabel(run.connector.mainKind)}</dd>
+        <dt>Error output type</dt><dd>{outputKindLabel(run.connector.errorKind)}</dd>
         <dt>Main route bodies accepted</dt><dd>{run.connector.acceptedMainEffects}</dd>
         <dt>Error route bodies accepted</dt><dd>{run.connector.acceptedErrorEffects}</dd>
       </dl>
@@ -90,6 +90,11 @@ function sourceRecordCountLabel(run: EtlRunDetailView) {
 
 function isHttpKind(kind: string) {
   return kind === "http";
+}
+
+/** An output's kind; a CSV output is a file, while a CSV source keeps the plain "CSV" label. */
+function outputKindLabel(kind: string) {
+  return kind === "csv" ? "CSV file" : kindLabel(kind);
 }
 
 function kindLabel(kind: string) {
@@ -170,7 +175,7 @@ function OwedOutput({ owed }: { owed: NonNullable<EtlRunConnectorPartitionView["
 
 function EffectProgress({ label, effect }: { label: string; effect: EtlRunEffectView }) {
   return <div>
-    <strong>{label} ({kindLabel(effect.kind)})</strong>
+    <strong>{label} ({outputKindLabel(effect.kind)})</strong>
     <p>{effect.recordCount} records; {effectStateLabel(effect.state)}.</p>
     {effect.retry ? <RetryProgress retry={effect.retry} /> : null}
   </div>;

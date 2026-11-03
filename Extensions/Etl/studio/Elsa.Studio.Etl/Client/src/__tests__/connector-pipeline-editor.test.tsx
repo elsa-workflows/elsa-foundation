@@ -142,6 +142,22 @@ describe("connector pipeline editor", () => {
     });
   });
 
+  it("routes either outcome to a CSV file that selects from the output folder approvals", () => {
+    const editor = renderEditor();
+    setSelect(control<HTMLSelectElement>(editor.host, "Accepted records destination kind"), "csv");
+    editor.render();
+    expect(editor.pipeline.routes.main).toEqual({ kind: "csv", binding: "output" });
+    const accepted = control<HTMLSelectElement>(editor.host, "Accepted records binding");
+    expect(Array.from(accepted.options).map(option => option.value)).toEqual(["", "output", "output-jsonl"]);
+    expect(accepted.options[1].textContent).toContain("Accepted file output");
+    setSelect(accepted, "output-jsonl");
+    editor.render();
+    setSelect(control<HTMLSelectElement>(editor.host, "Rejected records destination kind"), "csv");
+    editor.render();
+    expect(editor.pipeline.routes).toEqual({ main: { kind: "csv", binding: "output-jsonl" }, errors: { kind: "csv", binding: "errors" } });
+    expect(editor.host.textContent).toContain("Choose HTTP, JSONL or CSV independently");
+  });
+
   it("edits all lossless byte controls without rounding and locks every control in read-only mode", () => {
     const editor = renderEditor();
     const exact = "9223372036854775807";

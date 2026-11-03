@@ -19,7 +19,7 @@ native run; hosts without the slot or the runtime capability show no link.
 The structured editor supports the v1 file topology in [spec 255](../../../../specs/255-finite-file-etl/spec.md)
 and the v2 connector topology in [spec 996](../../../../specs/996-http-etl/spec.md) and
 [spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md). Connector drafts select HTTP, CSV or JSON Lines sources,
-optional CSV lookup, and HTTP or JSONL routes through scoped alias/role/kind choices.
+optional CSV lookup, and HTTP, JSONL or CSV routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)) through scoped alias/role/kind choices.
 Its local draft is separate from the saved revision. Validation and explicit publication operate on the saved
 revision/version/hash tuple. Published artifacts are read-only. Binding choices are scoped aliases, never
 host paths. Integer and decimal literals retain their JSON numeric representation through the lossless client.

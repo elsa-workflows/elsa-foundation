@@ -115,6 +115,19 @@ public sealed class EtlArtifactCompilerV2Tests
     }
 
     [Fact]
+    public void Csv_destinations_compile_on_either_route_and_validate_their_alias()
+    {
+        var p = EtlV2TestPipelines.Create() with { Routes = new(new EtlCsvDestination("output"), new EtlCsvDestination("errors")) };
+
+        var artifact = Assert.IsType<EtlArtifact>(Compile(p).Artifact);
+        var restored = EtlArtifactV2Json.Read(artifact.Pipeline);
+        Assert.IsType<EtlCsvDestination>(restored.Routes.Main);
+        Assert.Equal("csv", artifact.Pipeline.GetProperty("routes").GetProperty("errors").GetProperty("kind").GetString());
+        Assert.Empty(Compile(p with { Routes = new(new EtlCsvDestination("output"), new EtlHttpDestination("errors")) }).Diagnostics);
+        AssertRejected(p with { Routes = new(new EtlCsvDestination("/srv/out"), new EtlCsvDestination("errors")) }, "binding.alias.invalid");
+    }
+
+    [Fact]
     public void Invalid_variants_aliases_and_pagination_are_refused()
     {
         var p = EtlV2TestPipelines.Create();

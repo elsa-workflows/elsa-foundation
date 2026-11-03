@@ -90,11 +90,16 @@ public sealed record EtlRoutes(
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]
 [JsonDerivedType(typeof(EtlJsonlDestination), "jsonl")]
 [JsonDerivedType(typeof(EtlHttpDestination), "http")]
+[JsonDerivedType(typeof(EtlCsvDestination), "csv")]
 public abstract record EtlDestination;
 
 /// <summary>A host-bound JSON Lines file destination.</summary>
 /// <param name="Binding">The host-approved destination alias.</param>
 public sealed record EtlJsonlDestination([property: JsonRequired] string Binding) : EtlDestination;
+
+/// <summary>A host-bound CSV file destination: one RFC 4180 file with a header row per published batch.</summary>
+/// <param name="Binding">The host-approved destination alias.</param>
+public sealed record EtlCsvDestination([property: JsonRequired] string Binding) : EtlDestination;
 
 /// <summary>A host-bound HTTP JSON destination.</summary>
 /// <remarks>The binding is a host-approved alias; the destination URL and credentials are never authored here.</remarks>
