@@ -37,10 +37,12 @@ def main():
     immutable = SimpleNamespace(source=driver_source, report=run.report)
     run.assert_immutable_inputs = lambda: ConformanceRun.assert_immutable_inputs(immutable)
     run.source = product_source
-    run.report.update(source=product_source, diagnosticDriverSource=driver_source, diagnosticOnly=True)
+    run.report.update(source=product_source, diagnosticDriverSource=driver_source, diagnosticOnly=True, diagnosticCpuRate=4)
     original = JourneyRuntime.browser
 
     def bounded(runtime, records, name, journey, **options):
+        if journey == "consumed-intent-remount":
+            options["extra"] = {**(options.get("extra") or {}), "diagnosticCpuRate": 4}
         value = original(runtime, records, name, journey, **options)
         if journey == "consumed-intent-remount":
             raise DiagnosticComplete()
@@ -64,6 +66,7 @@ def main():
         diagnostic = safe_browser_failure({"failureDiagnostic": run.report.get("browserFailureDiagnostic")})
         print(json.dumps({"status": status, "source": run.source, "driverSource": driver_source, "independentPackageWitness": False,
                           "scope": "original nine-case prefix and consumed-intent-remount only",
+                          "diagnosticCpuRate": 4,
                           "failureDiagnostic": diagnostic}))
     return exit_code
 
