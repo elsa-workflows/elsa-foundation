@@ -132,18 +132,22 @@ table that answers every point.
    or `**Status**: Approved` for an initial spec approval. Later spec changes retain the appropriate
    [lifecycle status](../reference/spec-lifecycle.md), including `Implemented` when delivery finishes. An approving
    coordinator asks the author to make this edit instead of committing to the PR. A status line alone is not agreement.
-2. Every human approver in the approval plan who is not an author approves the **current head commit**, including
-   that status edit. Earlier approvals do not count. Only a current, non-dismissed `APPROVED` review on that commit
-   counts; a later changes-requested review must be resolved by a fresh approval.
+2. Every human approver in the approval plan who is not an author approves the **final text**, including that status
+   edit: an `APPROVED` review on the current head commit, or on an earlier commit whose text is still the same (see
+   below). A later changes-requested review must be resolved by a fresh approval.
 3. An author includes anyone who committed to the PR, as the normal merge rules require. A human author named in
    the approval plan records their agreement in a PR comment naming the final commit, without self-approving.
    A bot's publishing identity or approval never substitutes for a human approver's agreement.
 4. The coordinator records the agreed commit on the board and marks the PR ready for the normal
    [merge path](merging.md). Code Review still checks the final commit and its CI; it does not decide the architecture.
 
-Any new commit, including another status-only edit, requires fresh approvals and author confirmations on that head.
-A changed approval plan also needs fresh agreement under that plan. Keep the PR in draft, or return it to draft,
-until that agreement is complete. If an already agreed PR changes, mark its board row in review again; dependent
+**Substantive changes need renewed agreement.** An approval stays valid for a later commit as long as the files the PR
+changes (the ADR or spec text, and the approval plan in its description) are identical to the approved commit:
+`git diff <approved commit> <head> -- <the PR's changed files>` is empty. So a merge of `main` that only resolves a
+conflict elsewhere keeps the approvals, and the coordinator records which commits were compared. Any change to those
+files, including a status-only edit, needs fresh approvals and author confirmations on the new head. A changed
+approval plan also needs fresh agreement under that plan. Keep the PR in draft, or return it to draft, until that
+agreement is complete. If an already agreed PR changes, mark its board row in review again; dependent
 work may use only the version actually agreed. Agreement and merge remain separate steps.
 
 **Scope.** Every ADR, ADR amendment and spec whose topic is on an initiative's board is agreed through that initiative,
