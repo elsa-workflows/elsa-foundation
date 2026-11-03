@@ -16,10 +16,12 @@ Source: the branch `agent/claude/2908-sql-source`, stacked on `agent/claude/2908
 | FR-007: Studio | Vitest `connector-pipeline-editor`: the SQL source kind, binding, table, columns and key; an existing key's order kept and a renamed key column carried through in place; continuous mode dropped and not offered.<br>Vitest `runInspection`: inspection's "SQL table snapshot" label and its digest wording.<br>Playwright `etl-connector-authoring`: authoring the kind, binding, table and key and saving it, the continuous option hidden, and axe at 320 and 1024 px. |
 
 At `7f7b177d7` (review round 6):
-- the ETL suite passed, 1233 of 1233;
 - the container suite passed, 45 of 45 (one of the three since round 5 is spec 1197's disabled-index test);
-- the architecture suite passed, 614 of 614;
-- Studio ETL Vitest passed, 118 of 118;
+- the architecture suite passed, 614 of 614.
+
+At `68ba92078` (review round 7), which changes no runtime or engine code after `7f7b177d7`:
+- the ETL suite passed, 1235 of 1235;
+- Studio ETL Vitest passed, 119 of 119;
 - the ETL connector Playwright spec passed, 14 of 14. CI's full tier runs the container suite on the PR head.
 
 ## Bite-proofs
