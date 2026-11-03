@@ -1,6 +1,6 @@
 {
  "spec": "1198-etl-sql-source",
- "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day. Review round 5 adds 3 entries, recorded at 6b1c8b1c6: the transformer's and output processor's SQL source branches, and the refusal of infinite dates.",
+ "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day. Review round 5 adds 3 entries, recorded at 6b1c8b1c6: the transformer's and output processor's SQL source branches, and the refusal of infinite dates. Review round 6 adds 2 entries, recorded at 7f7b177d7: extreme dates refused only where the engine maps infinity to them, and a zoned time of day with a precision.",
  "results": [
   {
    "mutation": "source-table-identifier-unchecked",
@@ -477,6 +477,34 @@
    "original": "case DateTime extreme when extreme == DateTime.MaxValue || extreme == DateTime.MinValue: break;\n                    case DateOnly extreme when extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue: break;\n                    case DateTimeOffset extreme when extreme == DateTimeOffset.MaxValue || extreme == DateTimeOffset.MinValue: break;",
    "mutated_text": "",
    "sourceRevision": "6b1c8b1c6e881ff1b17e6e1d9cb3d43388ec3716"
+  },
+  {
+   "mutation": "extremes-refused-on-every-engine",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~Extreme_dates_are_real_values",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.Extreme_dates_are_real_values_on_sql_server_and_are_kept"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "case DateTime extreme when infiniteExtremes && (extreme == DateTime.MaxValue || extreme == DateTime.MinValue): break;\n                    case DateOnly extreme when infiniteExtremes && (extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue): break;",
+   "mutated_text": "case DateTime extreme when (extreme == DateTime.MaxValue || extreme == DateTime.MinValue): break;\n                    case DateOnly extreme when (extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue): break;",
+   "sourceRevision": "7f7b177d7bc8bb6de1fc5b57edf57eb8b3da1e30"
+  },
+  {
+   "mutation": "zoned-time-with-precision-written",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_zoned_time_of_day",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_zoned_time_of_day_is_refused_rather_than_given_a_placeholder_date(type: \"timetz(0)\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "IsTimeType(dataTypeName) && dataTypeName.EndsWith(\" with time zone\", StringComparison.OrdinalIgnoreCase);",
+   "mutated_text": "dataTypeName.StartsWith(\"time with\", StringComparison.OrdinalIgnoreCase);",
+   "sourceRevision": "7f7b177d7bc8bb6de1fc5b57edf57eb8b3da1e30"
   }
  ]
 }
