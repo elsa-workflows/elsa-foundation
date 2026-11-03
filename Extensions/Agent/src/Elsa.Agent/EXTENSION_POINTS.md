@@ -70,14 +70,14 @@ Within one admission call, the retained outcomes are evaluated in order, and eva
 Only when no outcome is refused definitely is the first outage returned.
 
 Across admissions the first error is returned, a 503 included. History admission of recorded messages and disclosures runs before the continuation's or tool's own outcomes, and each step can stop the turn. The final collection, with host context policy and the module sources, runs only when every retained outcome of that admission is admitted. The marker counts only on a diagnostic that the engine's own `CollectAgentContext` recorded for a source under that source's descriptor id. It is cleared on any other diagnostic, including one another `AgentContextCollecting` handler adds to the event. Every other required refusal, including a mix of definite and unavailable ones, keeps `agent.context.incomplete` with 400. The marker is omitted from the wire unless set.
-- **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetContextSource` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
+- **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`, `internal sealed`; its server-produced `workflow.catalog` and `workflow.permissions` kinds are read again for every turn, see its [truth seams](../Workflows/EXTENSION_POINTS.md#truth-seams-spec-1193)) *(cross-domain)*; external `WidgetContextSource` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentCapabilityProvider` *(Core — `Elsa.Agent.Core`)*
 
 - **Kind:** Source. [Signature](../Core/Contracts/AgentContracts.cs): `GetCapabilitiesAsync(): ValueTask<IReadOnlyCollection<AgentCapability>>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, MyCapabilitySource>())`.
 - **Consumed by:** the single `CollectAgentCapabilities` handler for `AgentCapabilitiesCollecting`. Advertise demonstrated supported journeys and limitations; discovery is not a permission grant.
-- **Known implementations:** `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetCapabilities` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteCapabilities` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
+- **Known implementations:** `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`, `internal sealed`) *(cross-domain)*; external `WidgetCapabilities` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteCapabilities` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentTool` *(Core — `Elsa.Agent.Core`)*
 

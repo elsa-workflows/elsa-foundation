@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -116,6 +116,14 @@ page.on("response", response => {
   moduleOwnerReads.push(observation);
   pendingOwnerReads.push(response.text().then(rawBody => Object.assign(observation, { rawBody, completed: true }))
     .catch(error => { observation.error = error.message; }));
+});
+// Spec 1193 T012: the read-only actor holds exactly the grants its journey needs, so any refused backend read names a
+// missing grant precisely instead of surfacing later as a missing control.
+const refusedReads = [];
+if (config.journey === "workflow-read-only") page.on("response", response => {
+  const url = new URL(response.url());
+  if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
+    refusedReads.push({ path: url.pathname, status: response.status() });
 });
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
 function observeResourceInteractions({ route }) {
@@ -1423,6 +1431,75 @@ async function consumedIntentRemount() {
   await screenshot("native-remount-without-replay");
 }
 
+// The reads the read-only journey depends on: owner-link discovery, the definition and its draft validations, the
+// activity catalog and the expression descriptors the editor loads. Any other refused read (for example runtime
+// executables or publishing profiles the reader is not granted) is retained as evidence and does not fail the journey.
+function requireJourneyReads() {
+  const essential = refusedReads.filter(item => item.path === "/capabilities" || item.path === config.workflow.definitionPath
+    || item.path.startsWith("/design/activities/") || item.path.startsWith("/design/workflows/") || item.path.includes("expression"));
+  need(essential.length === 0, "The read-only actor was refused backend reads it needs: " + essential.map(item => item.status + " " + item.path).join(", "));
+}
+// Spec 1193 T012: a read-only actor (workflows/design:read and activities/design:read, never manage) explains the
+// workflow through the owning catalog and permissions, and is never offered the layout change: no proposal, no node
+// move, no owning write. The protocol commands are retained per command; the driver checks the adapter trace.
+async function workflowReadOnly() {
+  const { definitionId, activityId, definitionPath } = config.workflow ?? {};
+  need(definitionId && activityId && definitionPath, "The read-only journey needs exact owning IDs and the discovered readback path.");
+  owningDraftPath = config.workflow.draftPath;
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId));
+  const activity = page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(activityId) + "]");
+  await expect(activity).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  const position = await activity.getAttribute("style");
+  requireJourneyReads();
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const ask = async (toolName, args, name) => {
+    command(toolName, args);
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    return accepted(message, name + "-message");
+  };
+  const explained = await ask("workflow_read_graph", {}, "explain");
+  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  const admitted = explained.value.data?.message?.context;
+  need(Array.isArray(admitted), "The accepted message carries no admitted context.");
+  const permissions = admitted.find(item => item.contentType === "workflow.permissions");
+  const catalog = admitted.find(item => item.contentType === "workflow.catalog");
+  expect(permissions?.content).toMatchObject({ workflowDefinitionId: definitionId, read: "allowed", manage: "denied",
+    tools: ["workflow_read_graph"], capabilities: ["workflow.explain"] });
+  expect(catalog?.content).toMatchObject({ status: "available" });
+  need(Array.isArray(catalog.content.entries) && catalog.content.entries.length > 0, "The reader's catalog has no entries.");
+  await expect(dock().locator(".agent-context-chip", { hasText: "Workflow permissions" })).toBeVisible();
+  const answer = dock().locator('.weaver-message[data-role="assistant"]').last();
+  await expect(answer).toHaveAttribute("data-status", "completed");
+  await expect(answer).toContainText("Tool outcome received");
+  result.evidence.push(retain("explain-outcome", { status: await answer.getAttribute("data-status"), text: await answer.innerText() }));
+  await screenshot("read-only-explained");
+
+  // The layout tool is not offered to this actor, so the actual adapter cannot call it: the turn ends without a proposal.
+  const refused = await ask("workflow_set_designer_position", { activityId, x: 480, y: 320 }, "layout");
+  const ended = page.locator('.weaver-alert, .weaver-message[data-role="assistant"][data-status="failed"]').first();
+  await expect(ended).toBeVisible();
+  result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), acceptedMessageId: refused.value.data?.message?.id ?? null }));
+  await expect(dock().locator(".agent-proposal")).toHaveCount(0);
+  await expect(activity).toHaveAttribute("style", position);
+  const after = await owner("owner-after", definitionPath);
+  result.ownerAfter = after.receipt;
+  expect(after.value.draft).toEqual(before.value.draft);
+  expect(owningWrites).toEqual([]);
+  need(!requests.some(item => /\/(approve|execute|acknowledgements)$/.test(new URL(item.url).pathname)), "A read-only actor reached a review or effect boundary.");
+  // Every refused read is retained; only a read this journey depends on fails it. Studio may degrade an optional one.
+  result.evidence.push(retain("refused-reads", refusedReads));
+  requireJourneyReads();
+  await screenshot("read-only-layout-not-offered");
+  result.observations = { permissionsDisclosed: { manage: "denied", tools: permissions.content.tools }, catalogAvailable: true,
+    explainCompleted: true, layoutOffered: false, proposalCount: 0, nodeMoved: false, draftUnchanged: true, owningWrites: 0 };
+}
+
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1431,6 +1508,7 @@ try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
+  else if (config.journey === "workflow-read-only") await workflowReadOnly();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -1452,7 +1530,8 @@ try {
 } catch (error) {
   result.status = "failed";
   result.failureDiagnostic = retainFailureDiagnostic(error);
-  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
+  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}),
+    ...(config.journey === "workflow-read-only" && refusedReads.length ? { refusedReads: refusedReads.map(item => item.status + " " + item.path) } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
   try { await failureDom(); } catch (diagnosticError) {

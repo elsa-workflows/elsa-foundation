@@ -13,7 +13,8 @@ internal sealed class WorkflowSetDesignerPositionTool(IAgentToolAuthorizer autho
     public const string ToolName = "workflow_set_designer_position";
     public const string ResultType = "workflows.layout-change";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    public AgentToolDescriptor Descriptor { get; } = new(ToolName, "Set activity position",
+    // Static so the context source can report the same host decision the engine applies to this tool's advertisement.
+    internal static AgentToolDescriptor Contract { get; } = new(ToolName, "Set activity position",
         "Proposes a reviewed position change for an existing activity in the exact open workflow working state. Does not save or publish.",
         AgentToolMutability.Mutating, AgentRisk.ReviewRequired,
         """{"type":"object","required":["activityId","x","y"],"properties":{"activityId":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"additionalProperties":false}""",
@@ -23,6 +24,8 @@ internal sealed class WorkflowSetDesignerPositionTool(IAgentToolAuthorizer autho
         ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.agent.layout-result",
         DisclosureSourceId = "workflows.context"
     };
+
+    public AgentToolDescriptor Descriptor => Contract;
 
     public ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target,
         CancellationToken cancellationToken = default)
