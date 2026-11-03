@@ -134,7 +134,18 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await advanced.getByRole("textbox", { name: /^Maximum model calls/ }).scrollIntoViewIfNeeded();
   await capture(page, info, "advanced-settings");
   await advanced.locator("summary").press("Enter");
-  await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+  const tabs = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+  await expect(tabs.getByRole("tab")).toHaveText(["Designer", "Inputs (0)", "Outputs (0)", "Outcomes (1)"]);
+  for (const kind of ["input", "output"] as const) {
+    await tabs.getByRole("tab", { name: kind === "input" ? "Inputs (0)" : "Outputs (0)", exact: true }).click();
+    await expect(page.getByText(`No ${kind}s yet`, { exact: true })).toBeVisible();
+    await capture(page, info, `${kind}s`);
+    const view = page.locator(".ad-public-interface-view");
+    await view.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
+    await expect(view.getByRole("textbox", { name: `${kind === "input" ? "Input" : "Output"} name`, exact: true })).toBeFocused();
+    await view.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+  await tabs.getByRole("tab", { name: "Outcomes (1)", exact: true }).click();
   const outcome = page.getByRole("region", { name: "Done", exact: true });
   await expect(outcome.getByText("Emitted", { exact: true })).toBeVisible();
   await expect(outcome.getByRole("checkbox")).toHaveCount(0);

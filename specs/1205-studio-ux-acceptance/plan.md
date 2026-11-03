@@ -22,3 +22,7 @@ The strict Agent/creation assertions intentionally cover fixes in unmerged PRs #
 ## Pilot refinement
 
 Independent inspection of the composed narrow Connections capture found names wrapping one character per line after the earlier collection patch. Preserve the name column's readable minimum width within the existing horizontal table scroller and add a real-row width/height regression. Expand captures to show model and advanced controls inside Studio's inner scroll container; page-level fullPage images alone do not cover that content. This is a reproduced pilot defect and targeted prevention, not a new redesign.
+
+## Concurrent prerequisite refinement
+
+PR #3774 gained an owner-approved separate-tab refinement at c9a9c19cf while the pilot ran. The earlier accepted integration pilot therefore does not qualify that latest prerequisite. Update the composed journey to Designer/Inputs/Outputs/Outcomes with counts, inspect both empty Add/Cancel experiences and requalify the latest exact prerequisite head. Do not accept a fallback to the old combined label.
