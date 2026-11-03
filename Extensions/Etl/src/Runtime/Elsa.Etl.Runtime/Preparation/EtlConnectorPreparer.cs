@@ -24,7 +24,16 @@ internal sealed record EtlConnectorPreparationResult(EtlConnectorPreparedRun? Pr
 
     /// <summary>The driver failure behind a transient result, for the caller's log; never persisted or exposed.</summary>
     public Exception? TransientCause { get; init; }
+
+    /// <summary>
+    /// A RabbitMQ source's received, unacknowledged messages (spec 1201): the caller acknowledges them only once the prepared
+    /// run is recorded, and otherwise disposes the receipt so the broker requeues them.
+    /// </summary>
+    public IEtlRabbitMqReceipt? Receipt { get; init; }
 }
+
+/// <summary>A source the preparer read could not be reached for now; preparation records nothing and runs again.</summary>
+internal sealed class EtlSourceTransientException(Exception cause) : Exception("A source read failed transiently.", cause);
 
 /// <summary>Retains and validates only the file-backed connector inputs pinned by one admitted v2 invocation.</summary>
 /// <remarks>HTTP source collections are deliberately not snapshotted before dispatch. The object root is created only when admitted preparation runs.</remarks>
@@ -39,6 +48,8 @@ internal sealed class EtlConnectorPreparer
 
     /// <summary>The host SQL bindings a SQL source reads through; without them a SQL source is unavailable.</summary>
     internal HostSqlBindings? SqlBindings { get; init; }
+
+    internal HostRabbitMqBindings? RabbitMqBindings { get; init; }
 
     public EtlConnectorPreparer(HostFileBindings bindings, string hostApprovedSnapshotRoot)
         : this(bindings, hostApprovedSnapshotRoot, new FileChunkPublisherFactory())
@@ -77,6 +88,10 @@ internal sealed class EtlConnectorPreparer
         if (!TryReadAdmission(admission, out var pipeline, out var sourcePin, out var lookupPin, out var diagnostic))
             return new(null, diagnostic);
 
+        // Messages a RabbitMQ source received stay unacknowledged; unless they reach the caller with a prepared run, disposing
+        // the receipt lets the broker requeue them (spec 1201).
+        IEtlRabbitMqReceipt? receipt = null;
+        var handedOver = false;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -92,6 +107,9 @@ internal sealed class EtlConnectorPreparer
                     pipeline.Limits.MaxSnapshotBytes,
                     pipeline.Source is EtlJsonlSource ? _jsonlPublisher : _csvPublisher, cancellationToken);
             }
+            if (pipeline.Source is EtlRabbitMqSource queue)
+                sourceChunk = await PublishRabbitMqSnapshotAsync(admission, pipeline, queue, received => receipt = received,
+                    cancellationToken);
             long? sourceWatermark = null;
             if (pipeline.Source is EtlSqlSource sql)
             {
@@ -125,13 +143,18 @@ internal sealed class EtlConnectorPreparer
                     ReadIndexRecordCount(index));
             }
 
-            return new(new EtlConnectorPreparedRun(file, lookup) { SourceWatermark = sourceWatermark }, null);
+            handedOver = true;
+            return new(new EtlConnectorPreparedRun(file, lookup) { SourceWatermark = sourceWatermark }, null) { Receipt = receipt };
         }
         catch (EtlConnectorPreparationFailure failure)
         {
             return new(null, failure.Diagnostic);
         }
         catch (EtlSqlTransientException exception)
+        {
+            return new(null, null) { TransientCause = exception.InnerException };
+        }
+        catch (EtlSourceTransientException exception)
         {
             return new(null, null) { TransientCause = exception.InnerException };
         }
@@ -168,6 +191,56 @@ internal sealed class EtlConnectorPreparer
         {
             return Failed("etl.source-index-too-large");
         }
+        finally
+        {
+            if (!handedOver && receipt is not null)
+                await receipt.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Receives a RabbitMQ source's messages without acknowledging them and writes their bodies as a JSON Lines snapshot
+    /// (spec 1201). The snapshot's identity is unique to the attempt: a predecessor's snapshot holds messages the broker
+    /// requeued when its connection closed, so reusing it would read them twice.
+    /// </summary>
+    private async ValueTask<EtlChunk> PublishRabbitMqSnapshotAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,
+        EtlRabbitMqSource queue, Action<IEtlRabbitMqReceipt> received, CancellationToken cancellationToken)
+    {
+        var revision = admission.Bindings.Source.Revision;
+        var identity = JsonSerializer.Serialize(new
+        {
+            FormatVersion = 2,
+            Kind = "connector-input-snapshot",
+            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
+            Role = EtlFileRole.Source.ToString(),
+            PinHandle = revision.Handle,
+            Attempt = Guid.NewGuid().ToString("N")
+        });
+        var maxBytes = pipeline.Limits.MaxSnapshotBytes;
+        var bindings = RabbitMqBindings ?? throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ bindings are configured.");
+        var binding = bindings.ResolveExact(admission.Invocation.Scope, queue.Binding, EtlFileRole.Source.ToString(),
+            revision.Revision, revision.Handle, queue.Queue);
+        var consumer = binding.Consumer ?? throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ consumer is installed.");
+        IEtlRabbitMqReceipt receipt;
+        try
+        {
+            receipt = await consumer.ReceiveAsync(binding.ConnectionString, queue.Queue, queue.MaxMessages, maxBytes, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not (EtlConnectorPreparationFailure or EtlBindingException))
+        {
+            throw consumer.Classify(exception) == EtlRabbitMqErrorKind.Transient
+                ? new EtlSourceTransientException(exception)
+                : new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.rabbitmq-read-rejected", exception));
+        }
+        received(receipt);
+        if (receipt.FirstMessageTooLarge)
+            throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.snapshot-too-large"));
+        return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
+            (destination, ct) => EtlRabbitMqSnapshotWriter.WriteAsync(receipt.Bodies, destination, ct), cancellationToken);
     }
 
     private async ValueTask<EtlChunk> PublishInputSnapshotAsync(EtlConnectorRunAdmission admission,
@@ -350,13 +423,15 @@ internal sealed class EtlConnectorPreparer
             pipeline = EtlArtifactV2Json.Read(admission.Invocation.Artifact.Pipeline);
             ValidatePolicy(pipeline);
             var source = admission.Bindings.Source;
-            if (source?.Revision is null || source.Kind is not (EtlConnectorKind.Csv or EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql) ||
+            if (source?.Revision is null || source.Kind is not (EtlConnectorKind.Csv or EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql or
+                    EtlConnectorKind.RabbitMq) ||
                 !StringComparer.Ordinal.Equals(source.Revision.Alias, pipeline.Source switch
                 {
                     EtlCsvSource csv => csv.Binding,
                     EtlHttpJsonSource http => http.Binding,
                     EtlJsonlSource jsonl => jsonl.Binding,
                     EtlSqlSource sql => sql.Binding,
+                    EtlRabbitMqSource queue => queue.Binding,
                     _ => null
                 }))
                 throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.binding-unavailable"));
@@ -366,6 +441,7 @@ internal sealed class EtlConnectorPreparer
                 EtlCsvSource => EtlConnectorKind.Csv,
                 EtlJsonlSource => EtlConnectorKind.Jsonl,
                 EtlSqlSource => EtlConnectorKind.Sql,
+                EtlRabbitMqSource => EtlConnectorKind.RabbitMq,
                 _ => EtlConnectorKind.Http
             };
             if (source.Kind != expectedSourceKind)
@@ -376,8 +452,8 @@ internal sealed class EtlConnectorPreparer
                 if (!EtlConnectorCsvSupport.IsHash(source.Revision.ExpectedSha256))
                     throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.binding-unavailable"));
             }
-            // A SQL source's content is unknown until it is read, so its pin carries no digest.
-            if (pipeline.Source is EtlSqlSource && (source.Revision.ExpectedSha256 is not null ||
+            // A SQL source's or a queue's content is unknown until it is read, so its pin carries no digest.
+            if (pipeline.Source is EtlSqlSource or EtlRabbitMqSource && (source.Revision.ExpectedSha256 is not null ||
                     !EtlConnectorCsvSupport.IsHash(source.Revision.Handle) || string.IsNullOrWhiteSpace(source.Revision.Revision)))
                 throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.binding-unavailable"));
 
@@ -395,7 +471,7 @@ internal sealed class EtlConnectorPreparer
             }
 
             if (pipeline.Source is EtlHttpJsonSource && admission.Bindings.HttpShardIds is not { Count: > 0 } ||
-                pipeline.Source is EtlCsvSource or EtlJsonlSource or EtlSqlSource && admission.Bindings.HttpShardIds is { Count: > 0 })
+                pipeline.Source is EtlCsvSource or EtlJsonlSource or EtlSqlSource or EtlRabbitMqSource && admission.Bindings.HttpShardIds is { Count: > 0 })
                 throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
 
             return true;
@@ -434,6 +510,10 @@ internal sealed class EtlConnectorPreparer
             throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
         if (pipeline.Source is EtlSqlSource sql && (sql.Columns is null || sql.Columns.Count is 0 ||
                 sql.Columns.Count > limits.MaxFields || sql.Key is not { Count: > 0 } || string.IsNullOrEmpty(sql.Table)))
+            throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
+        if (pipeline.Source is EtlRabbitMqSource queue && (queue.Fields is null || queue.Fields.Count is 0 ||
+                queue.Fields.Count > limits.MaxFields || string.IsNullOrEmpty(queue.Queue) ||
+                queue.MaxMessages is < 1 or > EtlRabbitMqSource.MaxMessagesLimit))
             throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
         if (pipeline.Lookup is { } lookup &&
             (lookup.Schema is null || lookup.Schema.Count is 0 || lookup.Schema.Count > limits.MaxFields))

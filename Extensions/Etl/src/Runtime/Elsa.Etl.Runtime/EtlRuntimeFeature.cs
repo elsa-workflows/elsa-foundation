@@ -87,7 +87,8 @@ public class EtlRuntimeFeature : IShellFeature
         var sqlBindings = SqlBindings.ToArray();
         services.AddScoped(provider => new HostSqlBindings(sqlBindings, provider.GetServices<IEtlSqlEngine>()));
         var rabbitMqBindings = RabbitMqBindings.ToArray();
-        services.AddScoped(provider => new HostRabbitMqBindings(rabbitMqBindings, provider.GetServices<IEtlRabbitMqPublisher>()));
+        services.AddScoped(provider => new HostRabbitMqBindings(rabbitMqBindings, provider.GetServices<IEtlRabbitMqPublisher>(),
+            provider.GetServices<IEtlRabbitMqConsumer>()));
         services.AddScoped(provider => new HostConnectorBindings(
             provider.GetRequiredService<HostFileBindings>(), provider.GetRequiredService<HostHttpBindings>(),
             options.MaxPartitions, provider.GetRequiredService<HostSqlBindings>(), provider.GetRequiredService<HostRabbitMqBindings>()));
@@ -104,7 +105,8 @@ public class EtlRuntimeFeature : IShellFeature
             provider.GetRequiredService<HostFileBindings>(), options.SnapshotRoot,
             provider.GetRequiredService<IFileChunkPublisherFactory>())
         {
-            SqlBindings = provider.GetRequiredService<HostSqlBindings>()
+            SqlBindings = provider.GetRequiredService<HostSqlBindings>(),
+            RabbitMqBindings = provider.GetRequiredService<HostRabbitMqBindings>()
         });
         services.AddScoped<EtlHttpTransport>();
         // Resolve this optional execution path only after the worker discovers a connector-capable store.

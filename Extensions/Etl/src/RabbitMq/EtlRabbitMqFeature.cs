@@ -19,5 +19,6 @@ public class EtlRabbitMqFeature : IShellFeature
         // One instance for the process: it holds at most one blocked connection per target while a broker's resource alarm
         // lasts, and further publications to that target must see it.
         services.AddSingleton<IEtlRabbitMqPublisher, RabbitMqEtlPublisher>();
+        services.AddSingleton<IEtlRabbitMqConsumer, RabbitMqEtlConsumer>();
     }
 }

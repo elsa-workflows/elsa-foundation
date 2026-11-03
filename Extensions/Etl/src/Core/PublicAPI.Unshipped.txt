@@ -2121,3 +2121,30 @@ static Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.operator ==(Elsa.Etl.Core.Runtim
 static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator !=(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator ==(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(string! effectId) -> string!
+Elsa.Etl.Core.EtlRabbitMqSource
+Elsa.Etl.Core.EtlRabbitMqSource.Binding.get -> string!
+Elsa.Etl.Core.EtlRabbitMqSource.Binding.init -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Deconstruct(out string! Binding, out string! Queue, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, out int MaxMessages) -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Equals(Elsa.Etl.Core.EtlRabbitMqSource? other) -> bool
+Elsa.Etl.Core.EtlRabbitMqSource.EtlRabbitMqSource(string! Binding, string! Queue, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, int MaxMessages) -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Fields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>!
+Elsa.Etl.Core.EtlRabbitMqSource.Fields.init -> void
+Elsa.Etl.Core.EtlRabbitMqSource.MaxMessages.get -> int
+Elsa.Etl.Core.EtlRabbitMqSource.MaxMessages.init -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Queue.get -> string!
+Elsa.Etl.Core.EtlRabbitMqSource.Queue.init -> void
+const Elsa.Etl.Core.EtlRabbitMqSource.MaxMessagesLimit = 100000 -> int
+override Elsa.Etl.Core.EtlRabbitMqSource.<Clone>$() -> Elsa.Etl.Core.EtlRabbitMqSource!
+override Elsa.Etl.Core.EtlRabbitMqSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlRabbitMqSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlRabbitMqSource.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlRabbitMqSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+static Elsa.Etl.Core.EtlRabbitMqSource.operator !=(Elsa.Etl.Core.EtlRabbitMqSource? left, Elsa.Etl.Core.EtlRabbitMqSource? right) -> bool
+static Elsa.Etl.Core.EtlRabbitMqSource.operator ==(Elsa.Etl.Core.EtlRabbitMqSource? left, Elsa.Etl.Core.EtlRabbitMqSource? right) -> bool
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.Classify(System.Exception! exception) -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.ReceiveAsync(string! connectionString, string! queue, int maxMessages, long maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt!>
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.AcknowledgeAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.Bodies.get -> System.Collections.Generic.IReadOnlyList<System.ReadOnlyMemory<byte>>!
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.FirstMessageTooLarge.get -> bool

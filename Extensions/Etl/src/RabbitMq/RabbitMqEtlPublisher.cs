@@ -163,7 +163,10 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
         return EtlRabbitMqPublishOutcome.Confirmed;
     }
 
-    public EtlRabbitMqErrorKind Classify(Exception exception) => exception switch
+    public EtlRabbitMqErrorKind Classify(Exception exception) => ClassifyFailure(exception);
+
+    /// <summary>Classifies a driver failure for the publisher and the consumer alike.</summary>
+    internal static EtlRabbitMqErrorKind ClassifyFailure(Exception exception) => exception switch
     {
         AuthenticationFailureException => EtlRabbitMqErrorKind.Rejected,
         BrokerUnreachableException { InnerException: AuthenticationFailureException } => EtlRabbitMqErrorKind.Rejected,
@@ -179,7 +182,7 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
             ? EtlRabbitMqErrorKind.Transient
             : RejectedReplyCodes.Contains(reason.ReplyCode) ? EtlRabbitMqErrorKind.Rejected : EtlRabbitMqErrorKind.Transient;
 
-    private static ConnectionFactory Factory(string connectionString, TimeSpan? roundTrip = null) => new()
+    internal static ConnectionFactory Factory(string connectionString, TimeSpan? roundTrip = null) => new()
     {
         Uri = new Uri(connectionString),
         AutomaticRecoveryEnabled = false,

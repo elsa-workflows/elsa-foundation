@@ -48,10 +48,13 @@ internal sealed class EtlConnectorExecution(
                     new(view.Run.Invocation.Artifact.DefinitionId, sql.Binding, view.Bindings.Source.Revision.Handle, sql.Table, column), token)
                 : null;
             var prepared = await preparer.PrepareAsync(new(view.Run.Invocation, view.Bindings), token, floor);
+            // A RabbitMQ source's messages stay unacknowledged until the prepared run is recorded; every other way out
+            // disposes the receipt, so the broker requeues them (spec 1201).
+            await using var receipt = prepared.Receipt;
             // A transiently unavailable source records nothing; the lapsed lease runs preparation again.
             if (prepared.Transient)
             {
-                logger.LogWarning("ETL run {RunId} could not read its SQL source ({Failure}); preparation retries after its lease lapses.",
+                logger.LogWarning("ETL run {RunId} could not read its source ({Failure}); preparation retries after its lease lapses.",
                     lease.RunId, prepared.TransientCause?.GetType().Name);
                 return;
             }
@@ -61,6 +64,8 @@ internal sealed class EtlConnectorExecution(
                 return;
             }
             var status = await store.CommitConnectorPreparationAsync(lease, prepared.Prepared!, token);
+            if (status is EtlStoreStatus.Applied or EtlStoreStatus.Replay && receipt is not null)
+                await AcknowledgeAsync(lease, receipt, token);
             if (status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay or EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal))
                 await SettleAsync(lease, new("etl.connector-preparation-refused"), token);
         }
@@ -73,6 +78,23 @@ internal sealed class EtlConnectorExecution(
         {
             await using var retainedPermit = permit;
             await heartbeat.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Acknowledges a recorded snapshot's messages. A failed acknowledgement leaves them unacknowledged; the broker requeues them
+    /// and a later run reads them again, the at-least-once window of spec 1201, so it is logged rather than failing this run.
+    /// </summary>
+    private async ValueTask AcknowledgeAsync(EtlPreparationLease lease, IEtlRabbitMqReceipt receipt, CancellationToken token)
+    {
+        try
+        {
+            await receipt.AcknowledgeAsync(token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !token.IsCancellationRequested)
+        {
+            logger.LogWarning("ETL run {RunId} recorded its RabbitMQ snapshot but could not acknowledge its messages ({Failure}); the broker redelivers them to a later run.",
+                lease.RunId, exception.GetType().Name);
         }
     }
 

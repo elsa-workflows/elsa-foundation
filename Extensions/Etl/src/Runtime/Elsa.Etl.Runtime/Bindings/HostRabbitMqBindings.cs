@@ -6,10 +6,11 @@ using Elsa.Etl.Core.Runtime;
 namespace Elsa.Etl.Runtime.Bindings;
 
 /// <summary>
-/// Trusted host RabbitMQ bindings for RabbitMQ destinations (spec 1200). A pinned handle hashes the target the publisher
-/// parses out of the AMQP URI and the allowed exchanges, never the URI or its password.
+/// Trusted host RabbitMQ bindings for RabbitMQ destinations (spec 1200) and sources (spec 1201). A pinned handle hashes the
+/// target the publisher parses out of the AMQP URI and the allowed exchanges and queues, never the URI or its password.
 /// </summary>
-internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOptions> options, IEnumerable<IEtlRabbitMqPublisher> publishers)
+internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOptions> options, IEnumerable<IEtlRabbitMqPublisher> publishers,
+    IEnumerable<IEtlRabbitMqConsumer>? consumers = null)
 {
     private readonly EtlHostRabbitMqBindingOptions[] _bindings = options.ToArray();
     private readonly IEtlRabbitMqPublisher? _publisher = publishers.ToArray() switch
@@ -17,6 +18,12 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
         [] => null,
         [var single] => single,
         _ => throw new InvalidOperationException("More than one ETL RabbitMQ publisher is registered.")
+    };
+    private readonly IEtlRabbitMqConsumer? _consumer = (consumers ?? []).ToArray() switch
+    {
+        [] => null,
+        [var single] => single,
+        _ => throw new InvalidOperationException("More than one ETL RabbitMQ consumer is registered.")
     };
 
     public bool ContainsBinding(EtlScope scope, string alias, string role) =>
@@ -30,7 +37,9 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
             .OrderBy(item => item.Alias, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal)
             .Take(take).ToArray();
 
-    /// <summary>Resolves the current revision for a new run and checks that it allows the exchange.</summary>
+    /// <summary>
+    /// Resolves the current revision for a new run and checks that it allows the exchange or, for role <c>Source</c>, the queue.
+    /// </summary>
     public HostRabbitMqResolvedBinding ResolveCurrent(EtlScope scope, string alias, string role, string exchange)
     {
         var current = _bindings.Where(item => item.IsCurrent && Matches(item, scope, alias, role)).ToArray();
@@ -50,9 +59,13 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
 
     private HostRabbitMqResolvedBinding Resolve(EtlHostRabbitMqBindingOptions binding, string exchange)
     {
-        if (_publisher is null)
-            throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ publisher is installed.");
-        if (!binding.AllowedExchanges.Contains(exchange, StringComparer.Ordinal))
+        // The publisher parses every binding's target, and a source also needs the consumer; Elsa.Etl.RabbitMq registers both.
+        var source = binding.Role == "Source";
+        if (_publisher is null || source && _consumer is null)
+            throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ publisher or consumer is installed.");
+        if (source && !binding.AllowedQueues.Contains(exchange, StringComparer.Ordinal))
+            throw new EtlBindingException("etl.rabbitmq-queue-not-allowed", "The RabbitMQ binding does not allow the queue.");
+        if (!source && !binding.AllowedExchanges.Contains(exchange, StringComparer.Ordinal))
             throw new EtlBindingException("etl.rabbitmq-exchange-not-allowed", "The RabbitMQ binding does not allow the exchange.");
         if (string.IsNullOrWhiteSpace(binding.ConnectionString))
             throw Unavailable();
@@ -77,9 +90,10 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
             target.Port,
             target.VirtualHost,
             target.User,
-            AllowedExchanges = binding.AllowedExchanges.Order(StringComparer.Ordinal).ToArray()
+            AllowedExchanges = binding.AllowedExchanges.Order(StringComparer.Ordinal).ToArray(),
+            AllowedQueues = binding.AllowedQueues.Order(StringComparer.Ordinal).ToArray()
         })));
-        return new(binding.Alias, binding.Revision, handle, _publisher, binding.ConnectionString);
+        return new(binding.Alias, binding.Revision, handle, _publisher, binding.ConnectionString) { Consumer = _consumer };
     }
 
     private static bool Matches(EtlHostRabbitMqBindingOptions item, EtlScope scope, string alias, string role) =>
@@ -98,5 +112,8 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
 internal sealed record HostRabbitMqResolvedBinding(string Alias, string Revision, string Handle, IEtlRabbitMqPublisher Publisher,
     string ConnectionString)
 {
+    /// <summary>The consumer a source binding reads with; null when none is installed.</summary>
+    public IEtlRabbitMqConsumer? Consumer { get; init; }
+
     public override string ToString() => nameof(HostRabbitMqResolvedBinding);
 }
