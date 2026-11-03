@@ -176,6 +176,33 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A newer Elsa 3 version with the same content compiles to the artifact the slot already serves, so PublishWorkflow
+    /// answers with that publication (WasCreated false): this start published nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_newer_version_the_slot_already_serves_as_its_artifact_counts_as_already_published()
+    {
+        WriteHttpHello(1, "http.json");
+        var host = await Elsa3ImportHost.StartAsync(withHttp: true, reconcileFolder: _folder.FullName);
+        try
+        {
+            var before = await host.PublicationRecordsAsync("http-hello");
+            var unchanged = HttpHello(1);
+            unchanged["id"] = "http-hello-v2";
+            unchanged["version"] = 2;
+            var applied = await ApplyWithoutPublishingAsync(host, unchanged);
+            var version = Assert.Single(applied.Workflows!);
+
+            Assert.Equal(WorkflowPublicationStatus.AlreadyPublished, await PublishInScopeAsync(host, version));
+            Assert.Equal(before.Count, (await host.PublicationRecordsAsync("http-hello")).Count);
+        }
+        finally
+        {
+            await host.DisposeAsync();
+        }
+    }
+
     [Fact]
     public async Task A_candidate_the_slot_never_switched_to_does_not_count_as_published()
     {
