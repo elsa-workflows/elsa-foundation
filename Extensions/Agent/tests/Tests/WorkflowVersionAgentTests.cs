@@ -121,7 +121,8 @@ public sealed class WorkflowVersionAgentTests
         Assert.Equal("Activities", rows["inner"].GetProperty("slot").GetString());
         Assert.Equal(["text"], rows["a"].GetProperty("inputs").EnumerateArray().Select(item => item.GetString()));
         var connection = Assert.Single(version.GetProperty("connections").EnumerateArray());
-        Assert.Equal(("flow", "a", "Done", "nested", (string?)null), (connection.GetProperty("container").GetString(), connection.GetProperty("source").GetString(),
+        // A target without a port is the Done outcome, as the flowchart reads it.
+        Assert.Equal(("flow", "a", "Done", "nested", (string?)"Done"), (connection.GetProperty("container").GetString(), connection.GetProperty("source").GetString(),
             connection.GetProperty("sourcePort").GetString(), connection.GetProperty("target").GetString(), connection.GetProperty("targetPort").GetString()));
         Assert.Equal(JsonValueKind.Null, data.GetProperty("comparison").ValueKind);
         Assert.DoesNotContain("value-", data.GetRawText(), StringComparison.Ordinal);
@@ -229,6 +230,29 @@ public sealed class WorkflowVersionAgentTests
         // Metadata for no connection or child stays the container's own structure.
         var flow = Assert.Single(comparison.GetProperty("activitiesChanged").EnumerateArray());
         Assert.Equal(("flow", "structure"), (flow.GetProperty("nodeId").GetString(), Assert.Single(flow.GetProperty("aspects").EnumerateArray()).GetString()));
+    }
+
+    [Fact]
+    public async Task Connections_are_normalized_as_the_runtime_reads_them()
+    {
+        using var host = new Host(owner: new Owner("definition-5"));
+        var prepared = await host.PrepareAsync((await host.CollectAsync(Reference("definition-5", "p2"))).Attachments,
+            new Dictionary<string, object?> { ["compareToVersionId"] = "p1" });
+        Assert.True(prepared.Succeeded, prepared.Error?.Message);
+        var data = prepared.Value!.Preview.Data;
+        var comparison = data.GetProperty("comparison");
+        // Omitted, blank and padded ports, a blank id, a padded id and other letter case are the same two connections.
+        Assert.Empty(comparison.GetProperty("connectionsAdded").EnumerateArray());
+        Assert.Empty(comparison.GetProperty("connectionsRemoved").EnumerateArray());
+        // The id-less connection's metadata attached under the runtime's key, so its default flag change is reported on it.
+        var changed = Assert.Single(comparison.GetProperty("connectionsChanged").EnumerateArray());
+        Assert.Equal(("a:Done->b", "metadata"), (changed.GetProperty("connectionId").GetString(), Assert.Single(changed.GetProperty("aspects").EnumerateArray()).GetString()));
+        Assert.Empty(comparison.GetProperty("activitiesChanged").EnumerateArray());
+        var rows = data.GetProperty("version").GetProperty("connections").EnumerateArray().Select(row => (row.GetProperty("connectionId").GetString(),
+            row.GetProperty("sourcePort").GetString(), row.GetProperty("targetPort").GetString())).ToArray();
+        Assert.Equal([("a:Done->b", "Done", "Done"), ("twin", "Done", "Done")], rows);
+        Assert.Equal("Done", WorkflowVersionStructure.NormalizePort(null));
+        Assert.Equal("True", WorkflowVersionStructure.NormalizePort(" True "));
     }
 
     [Fact]
@@ -556,6 +580,26 @@ public sealed class WorkflowVersionAgentTests
                 },
                 connectionMetadata = new Dictionary<string, object> { ["a:Done->b"] = new { isDefault = true } },
                 nodeMetadata = new Dictionary<string, object> { ["not-a-child"] = new { policyKind = "WaitAll" } }
+            })),
+            // The same connections written the ways the runtime accepts: an omitted, a blank and a padded port are Done, a padded
+            // id is trimmed and a blank one is none, and property names in any case. Metadata keyed by the normalized key attaches.
+            ["p1"] = Version("p1", "definition-5", "7.0.0", Container("flow", [Leaf("a", "same"), Leaf("b", "same")], new
+            {
+                connections = new object[]
+                {
+                    new { source = new { nodeId = "a", port = "Done" }, target = new { nodeId = "b", port = "Done" } },
+                    new { id = "twin", source = new { nodeId = "b", port = "Done" }, target = new { nodeId = "a" } }
+                },
+                connectionMetadata = new Dictionary<string, object> { ["a:Done->b"] = new { isDefault = false } }
+            })),
+            ["p2"] = Version("p2", "definition-5", "8.0.0", Container("flow", [Leaf("a", "same"), Leaf("b", "same")], new Dictionary<string, object>
+            {
+                ["Connections"] = new object[]
+                {
+                    new Dictionary<string, object> { ["Id"] = "  ", ["Source"] = new Dictionary<string, object> { ["NodeId"] = "a" }, ["Target"] = new Dictionary<string, object> { ["nodeId"] = "b", ["Port"] = "   " } },
+                    new Dictionary<string, object> { ["id"] = " twin ", ["source"] = new Dictionary<string, object> { ["nodeId"] = "b", ["port"] = " Done " }, ["target"] = new Dictionary<string, object> { ["nodeId"] = "a" } }
+                },
+                ["ConnectionMetadata"] = new Dictionary<string, object> { ["a:Done->b"] = new { isDefault = true } }
             })),
             // A container no installed handler reads.
             ["u1"] = Version("u1", "definition-3", "3.0.0", Flow("flow", [Flow("opaque", [Leaf("hidden", "x")], null, "Acme.Unknown")], null, "Acme.Flow"))

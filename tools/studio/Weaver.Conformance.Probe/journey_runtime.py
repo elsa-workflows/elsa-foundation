@@ -76,14 +76,15 @@ def browser_inputs(config):
         check(all(summary["workflow"][key].startswith("/") and not summary["workflow"][key].startswith("//")
                   and "?" not in summary["workflow"][key] and "#" not in summary["workflow"][key]
                   for key in paths if key in summary["workflow"]), "Browser summary paths must be local native paths without auth/query metadata")
+        # A present identity must be an actual one: {"executable": None} or {"run": None} is refused, never skipped.
         executable = workflow.get("executable")
-        if executable is not None:
+        if "executable" in workflow:
             check(isinstance(executable, dict) and all(isinstance(executable.get(key), str) and executable[key] for key in ("artifactId", "artifactHash", "path"))
                   and executable["path"].startswith("/") and not executable["path"].startswith("//") and "?" not in executable["path"] and "#" not in executable["path"],
                   "Browser summary requires the actual Executable identity, hash and local path")
             summary["workflow"]["executable"] = {key: executable[key] for key in ("artifactId", "artifactHash", "path")}
         run = workflow.get("run")
-        if run is not None:
+        if "run" in workflow:
             check(isinstance(run, dict) and isinstance(run.get("workflowExecutionId"), str) and run["workflowExecutionId"]
                   and isinstance(run.get("path"), str) and run["path"].startswith("/") and not run["path"].startswith("//")
                   and "?" not in run["path"] and "#" not in run["path"], "Browser summary requires the actual Run identity and local path")

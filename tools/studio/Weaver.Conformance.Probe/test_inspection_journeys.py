@@ -8,7 +8,7 @@ import unittest
 from artifacts import sha
 from batch_journeys import OUTCOME_ROWS, REFUSED_FRAMES
 from explain_journeys import READ_FRAMES
-from inspection_journeys import (require_values_withheld, ADMISSION_REFUSAL, COMPUTED_BY, EXECUTABLE_BROWSER, EXECUTABLE_KIND, EXECUTABLE_NATIVE, EXECUTABLE_OBSERVATIONS,
+from inspection_journeys import (normalize_port, require_values_withheld, ADMISSION_REFUSAL, COMPUTED_BY, EXECUTABLE_BROWSER, EXECUTABLE_KIND, EXECUTABLE_NATIVE, EXECUTABLE_OBSERVATIONS,
                                  EXECUTABLE_TOOL, EXPECTED_CASES, MUTATING_TOOLS, TEXTS, VERSION_BROWSER, VERSION_KIND, VERSION_NATIVE, VERSION_OBSERVATIONS,
                                  VERSION_TOOL, BATCH_TOOL, executable_attachment, expected_comparison, flatten_executable, flatten_version,
                                  inspection_manifest_gaps, other_hash, require_admission_refused, require_browser, require_executable_context,
@@ -130,6 +130,11 @@ class Response:
         return self.value
 
 
+class PortTests(unittest.TestCase):
+    def test_ports_are_normalized_as_the_flowchart_reads_them(self):
+        self.assertEqual(["Done", "Done", "Done", "True"], [normalize_port(value) for value in (None, "", "   ", " True ")])
+
+
 class AttachmentTests(unittest.TestCase):
     def test_references_carry_identity_only_and_bind_the_executable_to_its_hash(self):
         value = version_attachment("wf-1", "version-2", "2.0.0")
@@ -149,13 +154,13 @@ class AttachmentTests(unittest.TestCase):
         activities, connections = flatten_version(STATES[1])
         self.assertEqual([N["root"], N["a"], N["b"], N["c"]], [row["nodeId"] for row in activities])
         self.assertEqual([[], [N["root"]], [N["root"]], [N["root"]]], [row["scopePath"] for row in activities])
-        self.assertEqual([(N["root"], N["a"], "Done", N["b"], None), (N["root"], N["b"], "Done", N["c"], None)], connections)
+        self.assertEqual([(N["root"], N["a"], "Done", N["b"], "Done"), (N["root"], N["b"], "Done", N["c"], "Done")], connections)
         changes = expected_comparison(STATES[1], STATES[0])
         self.assertEqual(([N["c"]], [], {N["b"]: {"aspects": ["inputs"], "inputs": ["text"]}}), (changes["added"], changes["removed"], changes["changed"]))
-        self.assertEqual([(N["root"], N["b"], "Done", N["c"], None)], changes["connectionsAdded"])
+        self.assertEqual([(N["root"], N["b"], "Done", N["c"], "Done")], changes["connectionsAdded"])
         later = expected_comparison(STATES[2], STATES[0])
         self.assertEqual(([N["c"]], [N["b"]], {}), (later["added"], later["removed"], later["changed"]))
-        self.assertEqual([(N["root"], N["a"], "Done", N["b"], None)], later["connectionsRemoved"])
+        self.assertEqual([(N["root"], N["a"], "Done", N["b"], "Done")], later["connectionsRemoved"])
 
 
 class VersionTurnTests(unittest.TestCase):

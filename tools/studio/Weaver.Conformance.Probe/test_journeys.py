@@ -194,6 +194,14 @@ class JourneyBoundariesTests(unittest.TestCase):
         with self.assertRaises(RuntimeError): browser_inputs({**base, "workflow": {"definitionPath": "/design/workflows/definitions/d"}})
         with self.assertRaises(RuntimeError):
             browser_inputs({**base, "workflow": {"executable": {"artifactId": "a", "artifactHash": "h", "path": "/x?token=1"}}})
+        # A present identity is never null or a non-object: it would otherwise pass as "some identity" and export nothing.
+        for key, value in (("executable", None), ("run", None), ("executable", "artifact"), ("run", [])):
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                browser_inputs({**base, "workflow": {key: value}})
+            with self.subTest(key=key, value=value, beside="definition"), self.assertRaises(RuntimeError):
+                browser_inputs({**base, "workflow": {**version, key: value}})
+        run = {"run": {"workflowExecutionId": "run-1", "path": "/runtime/workflows/instances/run-1"}}
+        self.assertEqual({"run"}, set(browser_inputs({**base, "workflow": run})["workflow"]))
 
     def test_semantic_refusal_requires_native_failure_and_correlated_completion(self):
         result = {"toolCallId": "native-call", "toolName": "declared_tool", "succeeded": False,
