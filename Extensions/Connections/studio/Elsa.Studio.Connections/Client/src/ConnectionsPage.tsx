@@ -26,6 +26,7 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const loadRequestRef = useRef(0);
   const operationRef = useRef<object | null>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
+  const focusAfterCreate = useRef(false);
   currentContextRef.current = context;
   const contextIsLoaded = loadedContext === context;
   const visibleItems = contextIsLoaded ? items : [];
@@ -78,6 +79,15 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     void load("");
     return invalidateRequests;
   }, [load, invalidateRequests]);
+
+  useEffect(() => {
+    if (!creating && focusAfterCreate.current) {
+      focusAfterCreate.current = false;
+      // Dialog cleanup can restore its opener before React removes the empty result.
+      // Restore to the stable search field after that commit, without refocusing on later loads.
+      searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    }
+  }, [creating]);
 
   async function runAction(action: ConnectionAction, connection: ConnectionMetadata) {
     if (operationRef.current) return;
@@ -132,6 +142,6 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { focusAfterCreate.current = true; setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
   </StudioPage>;
 }

@@ -19,14 +19,12 @@ export function ConnectionCreateDialog({
   context,
   descriptors,
   onCancel,
-  onCreated,
-  restoreFocus
+  onCreated
 }: {
   context: StudioEndpointContext;
   descriptors: ConnectionDescriptorsResponse;
   onCancel(): void;
   onCreated(connection: ConnectionMetadata): void;
-  restoreFocus?(): void;
 }) {
   const [name, setName] = useState("");
   const [typeName, setTypeName] = useState(() => initialTypeName(descriptors));
@@ -125,7 +123,7 @@ export function ConnectionCreateDialog({
     && !invalidPlacement
     && validCredentials;
 
-  useDialogFocus(dialogRef, contextIsCurrent && !submitting ? onCancel : null, true, restoreFocus);
+  useDialogFocus(dialogRef, contextIsCurrent && !submitting ? onCancel : null);
 
   useEffect(() => {
     if (!error || submitting) return;
