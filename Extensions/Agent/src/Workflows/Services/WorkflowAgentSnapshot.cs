@@ -50,6 +50,19 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
 
     internal static bool TryRead(AgentContextAttachment attachment, [NotNullWhen(true)] out WorkflowAgentSnapshot? snapshot, out string error)
     {
+        // Malformed UTF-16 (a lone surrogate escape) throws wherever a name or string is read (JsonProperty.Name,
+        // GetString); such a snapshot is refused like any other malformed one, never a failed collection.
+        try { return TryReadCore(attachment, out snapshot, out error); }
+        catch (InvalidOperationException)
+        {
+            snapshot = null;
+            error = "The workflow snapshot holds malformed text.";
+            return false;
+        }
+    }
+
+    private static bool TryReadCore(AgentContextAttachment attachment, [NotNullWhen(true)] out WorkflowAgentSnapshot? snapshot, out string error)
+    {
         snapshot = null;
         error = "The workflow snapshot requires an exact definition, draft, revision and client generation.";
         if (attachment.ModuleId != ModuleId || attachment.ContentType != "workflow.definition" || attachment.SchemaVersion != "1" ||

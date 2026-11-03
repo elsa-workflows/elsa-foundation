@@ -202,7 +202,7 @@ cases.
 Next, `explain_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-explain`) against the same
 nested shape, seeded with b's text bound to a workflow variable that does not exist, so the owner's draft validation
 reports it by activity and input; the seed also holds one activity of the `QualificationBatchCatalog` seam's
-password-hinted activity, with no value. With that seam selected, the native unsaved working state adds a JavaScript
+password-hinted activity (input `passphrase`, a name no probe redactor rewrites), with no value. With that seam selected, the native unsaved working state adds a JavaScript
 expression on the nested activity and two credential activities: one holding a credential literal, one bound to a
 visible Secret Reference. Four native read turns (`workflow_read_graph`, each in its own
 `auto-read-only` session, in each adapter's own pinned frame order) select the credential literal, the invalid input,
@@ -220,11 +220,14 @@ graph activity references are covered by the server and Studio unit tests.
 Then the admin runs the actual packaged Studio journey `workflow-explain` with a fresh normal-login state: with autosave
 turned off for that editor, the invalid activity is selected and read (its input's Variable expression, the unavailable
 interpretation and the designer's own diagnostic for it are admitted); a hand edit moves an activity, and the next read
-is attributed to a new revision with the moved position, equal to the editor's own export. Then the driver types a random
+is attributed to a new revision with the moved position, equal to the editor's own export. (Before the first read the
+journey waits until the designer's panel names the seeded unresolved variable: its structural checks render at once, the
+server's draft validations later, and the snapshot discloses what the panel shows.) Then the driver types a random
 credential canary into the password-hinted input's own masked field (Studio offers a credential input only the secret
 picker), as an unsaved edit, and the next read must disclose that input only as withheld; nothing is saved. The canary
-exists only in Studio's working state: it is searched for in every request and response the page exchanged with the
-agent API, the browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
+exists only in Studio's working state: it is searched for, in memory and unredacted, in every request the page sent to
+the agent API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
+agent stream it received; then in the browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
 adapter traces, HTTP receipts, owner reads, browser captures), and must appear in none, so a regression in Studio's
 withholding fails the case. `require_workflow_explain` refuses a missing, failed, duplicated or changed
 record, a missing turn or control, or a canary search that found anything; `witness_manifest()` counts the two cases

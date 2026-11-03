@@ -120,7 +120,10 @@ internal static class WorkflowActivityCatalog
         {
             referenceKey = Bounded(input.ReferenceKey), name = Bounded(input.Name), type = Bounded(input.Type),
             displayName = BoundedOrNull(input.DisplayName, 256), isRequired = input.IsRequired, isSensitive = input.IsSensitive,
-            isCredential = input.IsCredential
+            isCredential = input.IsCredential, uiHint = BoundedOrNull(input.UiHint, 64),
+            // What the designer masks (sensitive, credential or password-hinted), so the catalog and the snapshot's withheld
+            // values agree for a password-hinted input the owner does not declare sensitive.
+            isMasked = input.IsMasked
         }).ToArray()
     };
 

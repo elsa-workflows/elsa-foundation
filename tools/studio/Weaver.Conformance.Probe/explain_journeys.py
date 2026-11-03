@@ -464,7 +464,8 @@ def _browser(runtime, name, seed, canary):
     # The canary travels in the private configuration only (never browser-inputs evidence): the driver types it into the
     # masked field, so it exists only in Studio's working state.
     workflow.update(nodes=n, explain={"property": "text", "expressionType": "Variable", "diagnosticType": UNRESOLVED_VARIABLE,
-                                      "interpretation": INTERPRETATION, "moveNode": n["a"], "maskedNode": PASSWORD_ACTIVITY["nodeId"],
+                                      "interpretation": INTERPRETATION, "moveNode": n["a"], "diagnosticMarker": EXPLAIN_MISSING_VARIABLE,
+                                      "maskedNode": PASSWORD_ACTIVITY["nodeId"],
                                       "maskedProperty": PASSWORD_ACTIVITY["input"], "maskedLabel": PASSWORD_ACTIVITY["label"], "canary": canary})
     config = {"journey": BROWSER_JOURNEY, "provider": runtime.provider, "studioOrigin": runtime.studio_origin,
               "backendOrigin": runtime.backend_origin, "storageState": identity["storageState"],

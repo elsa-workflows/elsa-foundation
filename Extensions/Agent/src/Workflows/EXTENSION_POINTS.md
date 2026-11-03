@@ -24,8 +24,9 @@ The module reads two owning domains through their `.Core` contracts only, and re
 - **Activity catalog.** `workflow.catalog` schema `1` (origin `AuthoritativeRead`, no target, no tool scopes) is the
   [`IActivityAuthoringCatalog`](../../../../Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md#iactivityauthoringcatalog-contract--elsaactivitiesdesigncore)
   answer for the request actor and tenant: every entry the designer lists, addable or not, with its `available` flag and
-  reason, activity type and exact version identity, and declared inputs with `isRequired`, `isSensitive` and
-  `isCredential`. It is bounded to 28 KiB of entries in the owner's order; when entries do not fit it says so with
+  reason, activity type and exact version identity, and declared inputs with `isRequired`, `isSensitive`,
+  `isCredential`, `uiHint` and `isMasked` (what the designer masks: sensitive, a credential or hinted `password`; slice D,
+  so a password-hinted input reads as masked here as it is withheld in the snapshot). It is bounded to 28 KiB of entries in the owner's order; when entries do not fit it says so with
   `truncated`, `totalCount` and `includedCount`, and reports `budgetBytes`, `includedBytes` and `nextEntryBytes`, so a
   reader can check that the prefix stopped only because the next entry would not fit. `status` is `available`, `denied` (the actor lacks
   `activities/design:read`; no entries) or `unavailable`. A missing, ambiguous or failing catalog owner is
@@ -181,7 +182,9 @@ says so.
   structure's version). A graph activity's body belongs to its definition and is never inlined. Studio lists only
   design-authored versions (catalog provenance `ActivityDefinitionDraft`): the native witness on 999942f18 showed that
   recommended definitions also give CLR rows (Flowchart, WriteLine) a definition identity, which must not make them graph
-  activities. The server cannot confirm provenance (the Core catalog entry carries none), so this rule is Studio's.
+  activities. A Json-sourced provider-defined composite is not listed either: the catalog view carries no provider identity
+  to tell it from a plain Json activity (labelling it would need the catalog to disclose the provider). The server cannot
+  confirm provenance (the Core catalog entry carries none), so this rule is Studio's.
 - **Scope paths** (FR-014). `workflow_read_graph` returns the admitted snapshot plus `addresses`: for each activity, its
   `scopePath` (the container ids from the root to the container that holds it, as an Operation Batch names a scope) and
   its `slot`; the root's path is empty. The addresses are bounded to 24 KiB, and `addressesTruncated` says when some were

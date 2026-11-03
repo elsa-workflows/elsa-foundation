@@ -238,7 +238,8 @@ Concrete file seams are recorded in [research.md](research.md).
 | The removed explain-executable prompt and the test-only `getExecutableDetail` export of Weaver Workflows; slice F restores the prompt against its registered tool | D | Major (pre-GA cleanup) |
 | The active-draft snapshot's optional `diagnostics`, `diagnosticsOmitted`, `selectedActivity` and `graphActivities`, the read result's `addresses`, and the optional diagnostic `agent.workflow.property_context_unverified` | D | Minor, additive |
 | The removed explain-instance prompt of Weaver Workflows; slice G restores it against the Run context and tool | D | Major (pre-GA cleanup) |
-| `ActivityAuthoringCatalogInput.UiHint` and the computed `IsMasked` in `Elsa.Activities.Design.Core` | D | Minor, additive (init-only property; the positional constructor is unchanged) |
+| `ActivityAuthoringCatalogInput.UiHint` and the computed `IsMasked` in `Elsa.Activities.Design.Core` | D | Minor, additive (init-only property; the positional constructor is unchanged). Record value equality now includes `UiHint`: two inputs that differ only in their hint are no longer equal |
+| `workflow.catalog` v1 inputs gain `uiHint` and `isMasked` | D | Minor, additive |
 | The removed `ai-context-providers` and `ai-tools` capability tags of the Weaver Workflows Studio module manifest | D | Patch (correction): the tags described contributions the module never registered. The module's scope (frontend) and every contribution it does register are unchanged; a host that filtered modules by those tags found a module without such contributions |
 | The operation-key overloads on `IWorkflowLibraryStore` | E | Minor, additive |
 | The new `Elsa.Agent.Workflows.Runtime` package | F | Minor |

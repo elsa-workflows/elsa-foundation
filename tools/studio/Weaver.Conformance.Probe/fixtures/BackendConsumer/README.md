@@ -59,6 +59,7 @@ ordinary native feature apply and deselect it afterwards. The
 host's CLR-reconciled catalog has no credential input, no password-hinted input and no activity its availability policy
 excludes, so the seam replaces the single `IActivityAuthoringCatalogReader` registration with a wrapper over the host's
 actual `ActivityAuthoringCatalogReader` that adds activities first: one with a credential input (`apiKey`), one with a
-password-hinted input (`password`, neither sensitive nor a credential, which the designer masks only for its hint), and,
+password-hinted input (`passphrase`, neither sensitive nor a credential, which the designer masks only for its hint;
+named so that no probe redactor rewrites it), and,
 only when every entry is requested, one that is listed but not addable. The designer's catalog GET and Weaver's
 `IActivityAuthoringCatalog` both read through it. The seam supplies no other service and changes no product code.

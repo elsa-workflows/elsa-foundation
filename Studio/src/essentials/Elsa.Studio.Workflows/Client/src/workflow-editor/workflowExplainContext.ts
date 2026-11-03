@@ -141,8 +141,11 @@ export const designAuthoredSourceKind = "ActivityDefinitionDraft";
 /**
  * The graph activities the draft uses (FR-014), by their activity definition identity and exact version, with the indexes
  * of the activities that use each. A graph activity's body is its definition's, so it is never inlined here. Only
- * design-authored versions count: a source-owned (CLR or Json) activity also has a definition identity, and recommended
- * definitions decorate its catalog row with it, but its behavior is code, not a graph.
+ * design-authored versions count (provenance `ActivityDefinitionDraft`). A CLR activity also has a definition identity,
+ * which recommended definitions decorate its catalog row with, but its behavior is code. A Json-sourced row may be a
+ * provider-defined composite or a plain activity, and the catalog view carries no provider identity to tell them apart,
+ * so it is not listed either: listing a plain activity as a graph activity is the error this rule prevents. Nothing is
+ * inlined either way; a Json composite is only not labelled as a graph activity.
  */
 export function collectGraphActivityReferences(activities: Array<{ id: string }>, versionOf: (nodeId: string) => string | undefined,
   catalogByVersion: Map<string, ActivityCatalogItem>): WorkflowGraphActivityReference[] {

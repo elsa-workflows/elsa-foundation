@@ -126,7 +126,7 @@ UNRESOLVED_VARIABLE = "Expressions/UnresolvedVariable"
 # journey types a credential canary into that masked input as an unsaved edit, so the canary only ever exists in Studio's
 # working state. The seam's entries are not persisted versions, so the owner's validation also reports it as unknown.
 PASSWORD_ACTIVITY = {"activityVersionId": "qualification-password-activity-v1", "activityTypeKey": "Qualification.PasswordActivity",
-                     "input": "password", "label": "Qualification password", "nodeId": "batch-masked"}
+                     "input": "passphrase", "label": "Qualification passphrase", "nodeId": "batch-masked"}
 
 
 def seed_batch_workflow(http, output, *, explain=False):

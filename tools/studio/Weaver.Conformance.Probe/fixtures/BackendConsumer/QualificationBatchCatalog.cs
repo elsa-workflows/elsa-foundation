@@ -45,7 +45,8 @@ sealed class BatchCatalogReader(IActivityAuthoringCatalogReader actual) : IActiv
         // Neither sensitive nor a credential: only its password hint makes the designer mask it (spec 1193 slice D).
         var password = Entry(QualificationBatchCatalogFeature.PasswordVersionId, QualificationBatchCatalogFeature.PasswordTypeKey,
             "Qualification password activity", true, null,
-            [new("password", "Password", "String", CollectionKind.Single, "Qualification password", "A password-hinted input the designer masks.", 0, null,
+            // Named so that no probe redactor (password, apiKey, ...) rewrites it: a leak of its value must stay findable.
+            [new("passphrase", "Passphrase", "String", CollectionKind.Single, "Qualification passphrase", "A password-hinted input the designer masks.", 0, null,
                 true, false, true, "password", null, null, null, false, false)]);
         // A not-addable entry is listed only when the caller asks for every entry, as the designer's own filter does.
         var excluded = Entry(QualificationBatchCatalogFeature.ExcludedVersionId, QualificationBatchCatalogFeature.ExcludedTypeKey,

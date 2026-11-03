@@ -2,14 +2,19 @@
 import copy
 import json
 from pathlib import Path
+import re
+import shutil
+import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 
-from artifacts import sha
+from agent_transport import AgentTransport
+from artifacts import TOOL, sha
 from batch_journeys import CREDENTIAL
 from explain_journeys import (BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CONTROL, CONTROL_ERROR, EXPECTED_CASES, INTERPRETATION, JAVASCRIPT,
                               LITERAL_NODE, READ_FRAMES, READ_TOOL, SECRET_NODE, SECRET_REFERENCE, TURNS, admitted_selection, designer_diagnostics,
-                              expected_addresses, explain_manifest_gaps, explain_snapshot, property_context, require_disclosure_refused,
+                              _no_canary, expected_addresses, explain_manifest_gaps, explain_snapshot, property_context, require_disclosure_refused,
                               require_explain_browser, require_explain_turn, require_no_canary_in_evidence, require_workflow_explain,
                               synthetic_browser, synthetic_native, synthetic_search, working_state)
 from owner_resources import EXPLAIN_MISSING_VARIABLE, PASSWORD_ACTIVITY, UNRESOLVED_VARIABLE
@@ -28,7 +33,7 @@ SEED = {"definitionId": "wf-1", "draftId": "draft-1",
 CATALOG = {"write-v1": [{"referenceKey": "text", "name": "Text", "type": "String", "isSensitive": False, "isCredential": False}],
            "flow-v1": [],
            CREDENTIAL["activityVersionId"]: [{"referenceKey": CREDENTIAL["input"], "name": "ApiKey", "type": "String", "isSensitive": True, "isCredential": True}],
-           PASSWORD_ACTIVITY["activityVersionId"]: [{"referenceKey": "password", "name": "Password", "type": "String", "uiHint": "password",
+           PASSWORD_ACTIVITY["activityVersionId"]: [{"referenceKey": "passphrase", "name": "Passphrase", "type": "String", "uiHint": "password",
                                                      "isSensitive": False, "isCredential": False}]}
 CANARY = "CANARY-CREDENTIAL-" + "5" * 32
 COMMAND = "command-1"
@@ -128,7 +133,7 @@ class ExplainSnapshotTests(unittest.TestCase):
         self.assertEqual((["batch-flow"], SEED["flowchart"]["slot"]), addresses[PASSWORD_ACTIVITY["nodeId"]])
 
     def test_a_password_hinted_input_is_masked_and_the_seeded_one_holds_no_value(self):
-        state = {"version": PASSWORD_ACTIVITY["activityVersionId"], "inputs": {"password": {"expression": {"type": "Literal", "value": CANARY}}}}
+        state = {"version": PASSWORD_ACTIVITY["activityVersionId"], "inputs": {"passphrase": {"expression": {"type": "Literal", "value": CANARY}}}}
         value = property_context("p", state, CATALOG[PASSWORD_ACTIVITY["activityVersionId"]])["properties"][0]
         self.assertEqual((True, {"kind": "withheld", "expressionType": "Literal"}), (value["isSensitive"], value["value"]))
         self.assertEqual({}, working_state(SEED, CANARY)[PASSWORD_ACTIVITY["nodeId"]]["inputs"])
@@ -242,6 +247,48 @@ class CanarySearchTests(unittest.TestCase):
             with self.assertRaises(RuntimeError): require_no_canary_in_evidence(refs + [{"path": str(leaked), "sha256": sha(leaked)}], CANARY, root)
             with self.assertRaises(RuntimeError): require_no_canary_in_evidence([{"path": str(clean), "sha256": "0" * 64}], CANARY, root)
             with self.assertRaises(RuntimeError): require_no_canary_in_evidence([], CANARY, root)
+
+
+class RedactorLeakTests(unittest.TestCase):
+    """The probe's redactors rewrite credential-named keys before evidence is retained. The seam's masked input is named so
+    that none of them does: a leak of its value in the activity node's own wire shape stays findable by both searches."""
+    def leak(self):
+        key = PASSWORD_ACTIVITY["input"]
+        return {"activity": {"nodeId": PASSWORD_ACTIVITY["nodeId"], key: {"typeName": "String", "expression": {"type": "Literal", "value": CANARY}}},
+                "text": json.dumps({key: CANARY}), "query": "/x?" + key + "=" + CANARY}
+
+    def test_no_redactor_names_the_masked_input(self):
+        key = PASSWORD_ACTIVITY["input"].lower()
+        browser = (TOOL / "browser.mjs").read_text()
+        trace = (TOOL / "fixtures" / "ProviderProtocolFixtures" / "ProtocolFiles.cs").read_text()
+        source = (TOOL / "agent_transport.py").read_text()
+        names = set(re.findall(r'name\.Equals\("([^"]+)"', trace))
+        for pattern in re.findall(r"\(\?:([a-z|_\[\]?-]+)\)", browser + trace + source, flags=re.IGNORECASE):
+            names |= {item.lower() for item in pattern.split("|")}
+        self.assertTrue({"password", "apikey"} <= {name.lower() for name in names})
+        self.assertNotIn(key, {name.lower() for name in names})
+
+    def test_a_leak_in_the_node_wire_shape_survives_the_browser_redactor(self):
+        node = shutil.which("node")
+        if node is None: self.skipTest("Node is required for the browser redactor")
+        source = (TOOL / "browser.mjs").read_text()
+        start, end = source.index("const secretKey ="), source.index("function safeFailureFrames")
+        script = source[start:end] + "\nprocess.stdout.write(JSON.stringify(redact(" + json.dumps(self.leak()) + ")));"
+        output = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(3, output.count(CANARY))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "agent-requests.json"
+            path.write_text(output)
+            with self.assertRaises(RuntimeError):
+                require_no_canary_in_evidence([{"path": str(path), "sha256": sha(path)}], CANARY, directory)
+
+    def test_a_leak_in_the_node_wire_shape_survives_the_transport_redactor_and_the_trace_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            transport = AgentTransport(SimpleNamespace(bearer=None, base="http://127.0.0.1"), Path(directory) / "transport")
+            redacted = transport._redact(self.leak())
+            self.assertEqual(3, json.dumps(redacted).count(CANARY))
+            with self.assertRaises(RuntimeError):
+                _no_canary(CANARY, [{"kind": "copilot.request", "data": redacted}])
 
 
 class ExplainGateTests(unittest.TestCase):

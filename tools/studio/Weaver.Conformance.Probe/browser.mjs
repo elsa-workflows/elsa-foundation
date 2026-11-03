@@ -125,6 +125,23 @@ if (config.journey === "workflow-read-only") page.on("response", response => {
   if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
     refusedReads.push({ path: url.pathname, status: response.status() });
 });
+// Spec 1193 T028: every exchange the page has with the agent API, raw and in memory only (never retained, so no redactor
+// rewrites it): each request's URL and body, whatever its method, and each non-stream response body. Stream bodies are
+// the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
+const agentTraffic = [], agentResponseReads = [];
+if (config.journey === "workflow-explain") {
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.origin === backend && url.pathname.startsWith("/_elsa/agent/"))
+      agentTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
+  });
+  page.on("response", response => {
+    const url = new URL(response.url());
+    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
+    agentResponseReads.push(response.text().then(body => agentTraffic.push({ url: response.url(), status: response.status(), body }))
+      .catch(error => agentTraffic.push({ url: response.url(), unreadable: error.message })));
+  });
+}
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
@@ -1735,8 +1752,12 @@ async function workflowExplain() {
   await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
   const before = await owner("owner-before", definitionPath);
   result.ownerBefore = before.receipt;
+  // Wait on the editor's own state: the designer's structural checks render at once, the server's draft validations
+  // arrive later, and the snapshot discloses whatever the panel shows when the question is sent (observed natively on
+  // 04cd44f7c). The seeded unresolved variable is named in the panel only once the server's validations are in.
   const panel = page.locator(".wf-validation");
-  await expect(panel).not.toContainText("No validation errors");
+  need(typeof explain.diagnosticMarker === "string" && explain.diagnosticMarker, "The explanation journey needs the seeded diagnostic's marker.");
+  await expect(panel).toContainText(explain.diagnosticMarker, { timeout: 30000 });
   result.evidence.push(retain("validation-panel", { text: await panel.innerText() }));
   // Autosave off, through the editor's own menu; the hand edit below then stays in the unsaved working state.
   await nativeEnter("autosave-menu", page.getByRole("button", { name: "More workflow actions", exact: true }), "More workflow actions");
@@ -1831,8 +1852,14 @@ async function workflowExplain() {
   const withheld = (maskedContent.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.maskedProperty);
   need(withheld?.isSensitive === true && withheld.value?.kind === "withheld" && Object.keys(withheld.value).sort().join() === "expressionType,kind",
     "The typed masked value was not disclosed only as withheld: " + JSON.stringify(withheld?.value?.kind ?? null));
-  // In-page search: nothing the page sent to or received from the agent API carries the canary.
-  need(!JSON.stringify(requests).includes(canary) && !JSON.stringify(masked).includes(canary), "The typed canary left the browser's working state.");
+  // In-page search, raw and unredacted: no request the page sent to the agent API (any method, URL and query included), no
+  // response body it read, and no byte of any agent stream it received carries the canary.
+  await Promise.all(agentResponseReads);
+  const streamed = (await streamCapture()).map(item => item.rawBody ?? "");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")) && streamed.length > 0,
+    "The in-page search observed no agent message or stream to search.");
+  need(!JSON.stringify(agentTraffic).includes(canary) && !streamed.some(body => body.includes(canary)) && !JSON.stringify(masked).includes(canary),
+    "The typed canary left the browser's working state.");
   need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
   const after = await owner("owner-after", definitionPath);
   result.ownerAfter = after.receipt;

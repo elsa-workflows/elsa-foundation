@@ -244,6 +244,21 @@ public sealed partial class WorkflowExplainContextTests
     }
 
     [Fact]
+    public async Task The_catalog_discloses_what_the_designer_masks_so_it_agrees_with_withheld_snapshot_values()
+    {
+        using var host = new Host();
+        var contribution = await host.CollectAsync(Draft());
+
+        var catalog = Assert.IsType<JsonElement>(Assert.Single(contribution.Attachments, item => item.ContentType == WorkflowActivityCatalog.ContentType).Content);
+        var inputs = catalog.GetProperty("entries")[0].GetProperty("inputs").EnumerateArray().ToDictionary(item => item.GetProperty("name").GetString()!);
+        Assert.Equal(("password", false, true), (inputs["Password"].GetProperty("uiHint").GetString(), inputs["Password"].GetProperty("isSensitive").GetBoolean(),
+            inputs["Password"].GetProperty("isMasked").GetBoolean()));
+        Assert.True(inputs["ApiKey"].GetProperty("isMasked").GetBoolean());
+        Assert.False(inputs["Text"].GetProperty("isMasked").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, inputs["Text"].GetProperty("uiHint").ValueKind);
+    }
+
+    [Fact]
     public async Task Property_context_is_bound_to_the_structures_exact_version_and_the_activitys_own_type()
     {
         // Without the structure the selected node's version is unbound, so a client could name an older version whose input
@@ -268,6 +283,33 @@ public sealed partial class WorkflowExplainContextTests
         using var host = new Host();
         var content = Draft();
         content["diagnostics"] = new JsonArray(Diagnostic("error", null, "b", null, "MARKER"));
+        var text = content.ToJsonString().Replace("MARKER", "\\ud800", StringComparison.Ordinal);
+        var caller = WorkflowAgentTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
+
+        var contribution = await host.Source.CollectAsync(WorkflowAgentTests.Request(caller) with { SessionId = host.SessionId });
+
+        Assert.DoesNotContain(contribution.Attachments, item => item.ContentType == "workflow.definition");
+        Assert.Contains(contribution.Diagnostics, item => item.Code == "agent.workflow.context_invalid" && item.Required);
+    }
+
+    [Theory]
+    [InlineData("diagnostic")]
+    [InlineData("structure")]
+    [InlineData("property")]
+    public async Task A_lone_surrogate_in_a_field_name_refuses_the_snapshot_instead_of_failing_the_collection(string where)
+    {
+        // JsonProperty.Name throws on it, as GetString does on a value: every read refuses it as malformed instead.
+        using var host = new Host();
+        var content = Draft(selected: "a");
+        content["diagnostics"] = new JsonArray(Diagnostic("error", null, "b", null, "Invalid."));
+        content["selectedActivity"] = Selected("a", "version-write-line", Property("Text", "Text", "String", false, false, Expression("Literal", "x", false, 1)));
+        JsonObject target = where switch
+        {
+            "diagnostic" => content["diagnostics"]![0]!.AsObject(),
+            "structure" => content["structure"]!.AsObject(),
+            _ => content["selectedActivity"]!["properties"]![0]!.AsObject()
+        };
+        target["MARKER"] = 1;
         var text = content.ToJsonString().Replace("MARKER", "\\ud800", StringComparison.Ordinal);
         var caller = WorkflowAgentTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
 
