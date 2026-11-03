@@ -85,7 +85,8 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
       focusAfterCreate.current = false;
       // Dialog cleanup can restore its opener before React removes the empty result.
       // Restore to the stable search field after that commit, without refocusing on later loads.
-      searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+      if (!document.activeElement || document.activeElement === document.body)
+        searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
     }
   }, [creating]);
 
