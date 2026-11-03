@@ -3,6 +3,62 @@
  "note": "Each entry names the revision it was recorded at. All entries bite.",
  "results": [
   {
+   "mutation": "preparer-snapshot-bound",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_failed_or_transient",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_failed_or_transient_receive_prepares_nothing_and_a_too_large_message_is_left_queued"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                    if (snapshotBytes > maxBytes ||\n",
+   "mutated_text": "                    if (false ||\n",
+   "sourceRevision": "212f2ae6e90a600e824b09702386d1ef544fba25"
+  },
+  {
+   "mutation": "driver-disposes-on-failure",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlConsumer.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_drain_that_fails_partway",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqConsumerProviderTests.A_drain_that_fails_partway_or_a_dropped_connection_returns_the_taken_messages_to_the_queue"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        catch\n        {\n            await connection.DisposeAsync();\n            throw;",
+   "mutated_text": "        catch\n        {\n            throw;",
+   "sourceRevision": "212f2ae6e90a600e824b09702386d1ef544fba25"
+  },
+  {
+   "mutation": "preparer-retained-bound",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_drain_stops_within_the_retained",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_drain_stops_within_the_retained_input_budget_so_a_backlog_drains_over_several_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "(records + 2) * EtlConnectorCsvSupport.IndexEntrySize > maxRetainedBytes",
+   "mutated_text": "(records + 2) * EtlConnectorCsvSupport.IndexEntrySize > long.MaxValue",
+   "sourceRevision": "212f2ae6e90a600e824b09702386d1ef544fba25"
+  },
+  {
+   "mutation": "preparer-retained-index",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_drain_stops_within_the_retained",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_drain_stops_within_the_retained_input_budget_so_a_backlog_drains_over_several_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "(records + 2) * EtlConnectorCsvSupport.IndexEntrySize > maxRetainedBytes",
+   "mutated_text": "0 * EtlConnectorCsvSupport.IndexEntrySize > maxRetainedBytes",
+   "sourceRevision": "212f2ae6e90a600e824b09702386d1ef544fba25"
+  },
+  {
    "mutation": "driver-maximum",
    "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlConsumer.cs",
    "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
