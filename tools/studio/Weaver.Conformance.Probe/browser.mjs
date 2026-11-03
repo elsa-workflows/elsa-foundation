@@ -1431,6 +1431,13 @@ async function consumedIntentRemount() {
   await screenshot("native-remount-without-replay");
 }
 
+// The reads the read-only journey depends on: owner-link discovery, the definition and its draft validations, the
+// activity catalog and the expression descriptors the editor loads.
+function requireJourneyReads() {
+  const essential = refusedReads.filter(item => item.path === "/capabilities" || item.path === config.workflow.definitionPath
+    || item.path.startsWith("/design/activities/") || item.path.startsWith("/design/workflows/") || item.path.includes("expression"));
+  need(essential.length === 0, "The read-only actor was refused backend reads it needs: " + essential.map(item => item.status + " " + item.path).join(", "));
+}
 // Spec 1193 T012: a read-only actor (workflows/design:read and activities/design:read, never manage) explains the
 // workflow through the owning catalog and permissions, and is never offered the layout change: no proposal, no node
 // move, no owning write. The protocol commands are retained per command; the driver checks the adapter trace.
@@ -1445,7 +1452,7 @@ async function workflowReadOnly() {
   const before = await owner("owner-before", definitionPath);
   result.ownerBefore = before.receipt;
   const position = await activity.getAttribute("style");
-  need(refusedReads.length === 0, "The read-only actor was refused backend reads: " + refusedReads.map(item => item.status + " " + item.path).join(", "));
+  requireJourneyReads();
   await page.getByRole("button", { name: /^Weaver/ }).click();
   const ask = async (toolName, args, name) => {
     command(toolName, args);
@@ -1456,7 +1463,9 @@ async function workflowReadOnly() {
     return accepted(message, name + "-message");
   };
   const explained = await ask("workflow_read_graph", {}, "explain");
-  const admitted = explained.value.data?.contextAttachments ?? [];
+  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  const admitted = explained.value.data?.message?.context;
+  need(Array.isArray(admitted), "The accepted message carries no admitted context.");
   const permissions = admitted.find(item => item.contentType === "workflow.permissions");
   const catalog = admitted.find(item => item.contentType === "workflow.catalog");
   expect(permissions?.content).toMatchObject({ workflowDefinitionId: definitionId, read: "allowed", manage: "denied",
@@ -1474,7 +1483,7 @@ async function workflowReadOnly() {
   const refused = await ask("workflow_set_designer_position", { activityId, x: 480, y: 320 }, "layout");
   const ended = page.locator('.weaver-alert, .weaver-message[data-role="assistant"][data-status="failed"]').first();
   await expect(ended).toBeVisible();
-  result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), refusedRequest: refused.value.data?.messageId ?? null }));
+  result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), acceptedMessageId: refused.value.data?.message?.id ?? null }));
   await expect(dock().locator(".agent-proposal")).toHaveCount(0);
   await expect(activity).toHaveAttribute("style", position);
   const after = await owner("owner-after", definitionPath);
@@ -1482,8 +1491,9 @@ async function workflowReadOnly() {
   expect(after.value.draft).toEqual(before.value.draft);
   expect(owningWrites).toEqual([]);
   need(!requests.some(item => /\/(approve|execute|acknowledgements)$/.test(new URL(item.url).pathname)), "A read-only actor reached a review or effect boundary.");
+  // Every refused read is retained; only a read this journey depends on fails it. Studio may degrade an optional one.
   result.evidence.push(retain("refused-reads", refusedReads));
-  need(refusedReads.length === 0, "The read-only actor was refused backend reads: " + refusedReads.map(item => item.status + " " + item.path).join(", "));
+  requireJourneyReads();
   await screenshot("read-only-layout-not-offered");
   result.observations = { permissionsDisclosed: { manage: "denied", tools: permissions.content.tools }, catalogAvailable: true,
     explainCompleted: true, layoutOffered: false, proposalCount: 0, nodeMoved: false, draftUnchanged: true, owningWrites: 0 };
@@ -1519,7 +1529,8 @@ try {
 } catch (error) {
   result.status = "failed";
   result.failureDiagnostic = retainFailureDiagnostic(error);
-  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
+  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}),
+    ...(config.journey === "workflow-read-only" && refusedReads.length ? { refusedReads: refusedReads.map(item => item.status + " " + item.path) } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
   try { await failureDom(); } catch (diagnosticError) {

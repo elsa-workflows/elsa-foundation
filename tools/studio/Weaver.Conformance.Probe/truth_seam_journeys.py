@@ -354,6 +354,16 @@ def _actor(runtime, name, http, seed, *, manage, tenant_only):
                          message.receipt, stream.receipt, trace["receipt"]]}
 
 
+def admitted_context(response):
+    """The context admitted with an accepted message: the wire is {data: {message: {context: [...]}, warnings}}, the
+    shape Studio's agent client reads (agentClient.ts, message.context)."""
+    data = response.get("data") if isinstance(response, dict) else None
+    message = data.get("message") if isinstance(data, dict) else None
+    context = message.get("context") if isinstance(message, dict) else None
+    check(isinstance(context, list), "The accepted message carries no admitted context")
+    return context
+
+
 def _tenant_catalog(runtime, name, http, *, tenant_only):
     """The second tenant's catalogs: the designer's GET and the Weaver catalog admitted with a message over a target-free
     workflow request. No stream is opened, so no turn or provider call follows the admission."""
@@ -371,7 +381,7 @@ def _tenant_catalog(runtime, name, http, *, tenant_only):
                                                        "intent": "Which activities can this tenant use?"}}
     message = transport.message(session, {"content": "Owned workflow truth-seam tenant catalog request", "mode": "explain",
         "requestId": str(uuid.uuid4()), "requestedCapabilities": ["workflow.explain"], "contextAttachments": [request]}).require_status(200)
-    admitted = message.json()["data"].get("contextAttachments") or []
+    admitted = admitted_context(message.json())
     catalogs = [item for item in admitted if isinstance(item, dict) and item.get("contentType") == CATALOG_KIND]
     check(len(catalogs) == 1 and catalogs[0].get("origin") == "authoritativeRead" and catalogs[0].get("target") is None,
           "The second tenant's message admitted no server-read catalog")

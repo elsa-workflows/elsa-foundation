@@ -9,7 +9,7 @@ from artifacts import sha
 from journey_runtime import BASE_GRANTS
 from truth_seam_journeys import (ACTORS, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
                                  SECTION, TENANT_READER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
-                                 require_permissions, require_truth_turn, same_target, require_workflow_truth_seams, synthetic_actors,
+                                 require_permissions, require_truth_turn, same_target, admitted_context, require_workflow_truth_seams, synthetic_actors,
                                  synthetic_registrations, truth_principals, truth_seam_manifest_gaps)
 
 TARGET = {"moduleId": "Elsa.Studio.Workflows", "resourceType": "workflow-definition", "resourceId": "wf-1", "revision": "unsaved-1"}
@@ -357,6 +357,25 @@ class GateTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     require_workflow_truth_seams(self.section({**synthetic_actors(), role: value}), self.root, source="a" * 40)
         self.assertEqual("workflowTruthSeamQualification", SECTION)
+
+
+class AdmittedContextTests(unittest.TestCase):
+    # The accepted-message wire the native API returned in the f32dd0a8f witness for the second tenant's request: the
+    # admitted context lives at data.message.context, beside data.warnings, as Studio's agent client reads it.
+    ACCEPTED = {"data": {"message": {"id": "m-1", "role": "user", "status": "pending", "context": [
+        {"contentType": "workflow.request", "origin": "clientSnapshot", "target": None},
+        {"contentType": "workflow.catalog", "origin": "authoritativeRead", "target": None, "content": {"status": "available"}},
+        {"contentType": "workflow.guidance", "origin": "installedGuidance", "target": None}]}, "warnings": []}}
+
+    def test_the_admitted_context_is_read_where_the_api_puts_it(self):
+        self.assertEqual(["workflow.request", "workflow.catalog", "workflow.guidance"],
+                         [item["contentType"] for item in admitted_context(copy.deepcopy(self.ACCEPTED))])
+
+    def test_another_shape_is_refused_rather_than_read_as_empty(self):
+        for value in ({"data": {"contextAttachments": []}}, {"data": {"message": {}}}, {"data": None}, {}, None,
+                      {"data": {"message": {"context": "not-a-list"}}}):
+            with self.subTest(value=value):
+                with self.assertRaises(RuntimeError): admitted_context(value)
 
 
 class FailureExcerptTests(unittest.TestCase):
