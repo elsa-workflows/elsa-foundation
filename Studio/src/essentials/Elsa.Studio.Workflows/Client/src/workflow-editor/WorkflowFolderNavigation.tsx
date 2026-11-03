@@ -331,7 +331,6 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         const survivorKey = parentId ? `folder:${parentId}` : "unfiled";
         select(survivor);
         setFocusedKey(survivorKey);
-        invalidatePages(preview.childFolderCount > 0 ? [...children.keys()] : []);
         await refreshAfterStructureChange([parentId], survivor, preview.folder.id);
         setStatus(`Deleted folder ${preview.folder.name}`);
         restoreFolderFocus(survivorKey);

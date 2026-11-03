@@ -152,6 +152,24 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Folder_deletion_promotes_a_child_with_the_deleted_parents_name()
+    {
+        await using var database = new TemporarySqliteDatabase("folder-deletion-same-name");
+        await using var host = LibraryHost(database.ConnectionString); using var scope = host.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await db.Database.EnsureCreatedAsync();
+        var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var deletion = scope.ServiceProvider.GetRequiredService<IWorkflowFolderDeletionStore>();
+        var folder = await library.CreateFolderAsync("Demo", null, "alice");
+        var child = await library.CreateFolderAsync("Demo", folder.Id, "alice");
+        var grandchild = await library.CreateFolderAsync("Grandchild", child.Id, "alice");
+        var preview = await deletion.PreviewFolderDeletionAsync(folder.Id);
+        await deletion.DeleteFolderAsync(folder.Id, preview.Revision, false, "alice", "delete");
+        var promoted = Assert.Single((await library.ListFoldersAsync(null)).Items);
+        Assert.Equal(child.Id, promoted.Id); Assert.Equal("Demo", promoted.Name);
+        Assert.Equal(new[] { "Demo" }, (await library.GetFolderAsync(grandchild.Id))!.Ancestors.Select(row => row.Name));
+    }
+
+    [Fact]
     public async Task Folder_deletion_rolls_back_workflows_hierarchy_and_audits_on_provider_failure()
     {
         await using var database = new TemporarySqliteDatabase("folder-deletion-rollback");
@@ -160,7 +178,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
         var deletion = scope.ServiceProvider.GetRequiredService<IWorkflowFolderDeletionStore>();
         var folder = await library.CreateFolderAsync("Demo", null, "alice");
-        var child = await library.CreateFolderAsync("Child", folder.Id, "alice");
+        var child = await library.CreateFolderAsync("Demo", folder.Id, "alice");
         db.Definitions.Add(new WorkflowDefinition { Id = "one", Name = "One", TenantId = "tenant-a" }); await db.SaveChangesAsync();
         await library.MoveDefinitionsAsync(["one"], folder.Id, "alice", "place");
         var preview = await deletion.PreviewFolderDeletionAsync(folder.Id);

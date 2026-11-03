@@ -732,10 +732,27 @@ public sealed class WorkflowLibraryApiContractTests
         services.AddSingleton<IWorkflowDefinitionAuthorizer>(new DeletionAuthorizer());
     }
 
-    private sealed class DeletionAuthorizer : IWorkflowDefinitionAuthorizer
+    [Fact]
+    public async Task Folder_deletion_honors_a_replacement_definition_authorizers_refusal()
     {
-        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
-        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IWorkflowDefinitionAuthorizer>();
+            services.AddSingleton<IWorkflowDefinitionAuthorizer>(new DeletionAuthorizer(false));
+        });
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.Forbidden, preview.StatusCode);
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":true,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    private sealed class DeletionAuthorizer(bool allowed = true) : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(allowed);
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(allowed);
     }
 
     private static Task<Host> StartAsync(LibraryProbe store, Action<IServiceCollection>? configure = null,

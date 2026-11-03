@@ -106,6 +106,43 @@ internal static class WorkflowLibraryNativeWitness
             Assert.Null(await library.GetOrganizationAsync("alpha")); Assert.Null(await library.GetFolderAsync(folderId));
             Assert.Empty((await library.ListTagsAsync()).Items); Assert.Empty(await library.ListViewsAsync("alice"));
         }
+        foreach (var deleteWorkflows in new[] { false, true })
+            await RunDeletionAsync(fixture.ConnectionString, provider, tenant + "-delete-" + deleteWorkflows, deleteWorkflows);
+    }
+
+    private static async Task RunDeletionAsync(string connection, string provider, string tenant, bool deleteWorkflows)
+    {
+        string childId;
+        await using (var host = Host(connection, provider, tenant))
+        {
+            using var scope = host.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+            var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+            var deletion = scope.ServiceProvider.GetRequiredService<IWorkflowFolderDeletionStore>();
+            var folder = await library.CreateFolderAsync("Demo", null, "alice");
+            var child = await library.CreateFolderAsync("Demo", folder.Id, "alice"); childId = child.Id;
+            db.Definitions.AddRange(new WorkflowDefinition { Id = "one", Name = "One", TenantId = tenant },
+                new WorkflowDefinition { Id = "deleted", Name = "Deleted", TenantId = tenant });
+            await db.SaveChangesAsync();
+            await library.MoveDefinitionsAsync(["one", "deleted"], folder.Id, "alice", "place");
+            var deleted = await db.Definitions.SingleAsync(row => row.TenantId == tenant && row.Id == "deleted");
+            deleted.DeletedAt = DateTimeOffset.UnixEpoch; await db.SaveChangesAsync();
+            var preview = await deletion.PreviewFolderDeletionAsync(folder.Id);
+            await library.CreateFolderAsync("Grandchild", child.Id, "alice");
+            await Assert.ThrowsAsync<WorkflowLibraryConflictException>(() => deletion.DeleteFolderAsync(folder.Id,
+                preview.Revision, deleteWorkflows, "alice", "stale-delete"));
+            preview = await deletion.PreviewFolderDeletionAsync(folder.Id);
+            await deletion.DeleteFolderAsync(folder.Id, preview.Revision, deleteWorkflows, "alice", "delete");
+        }
+        await using var restart = Host(connection, provider, tenant);
+        using var verify = restart.CreateScope();
+        var read = verify.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var readDb = verify.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        Assert.Equal(childId, Assert.Single((await read.ListFoldersAsync(null)).Items).Id);
+        Assert.Null((await read.GetOrganizationAsync("one"))!.FolderId);
+        Assert.Null((await read.GetOrganizationAsync("deleted"))!.FolderId);
+        Assert.Equal(deleteWorkflows, (await readDb.Definitions.SingleAsync(row => row.TenantId == tenant && row.Id == "one")).DeletedAt is not null);
+        Assert.Equal(DateTimeOffset.UnixEpoch, (await readDb.Definitions.SingleAsync(row => row.TenantId == tenant && row.Id == "deleted")).DeletedAt);
     }
 
     private static ServiceProvider Host(string connection, string provider, string tenant)

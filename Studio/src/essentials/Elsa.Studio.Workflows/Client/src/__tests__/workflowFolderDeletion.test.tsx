@@ -14,6 +14,41 @@ function preview(revision = "preview-1", workflowCount = 2) {
 }
 
 describe("workflow folder deletion", () => {
+  it("preserves loaded promoted and unrelated expanded branches", async () => {
+    const child = { ...folder, id: "child", name: "Child", parentId: folder.id };
+    const grandchild = { ...folder, id: "grandchild", name: "Grandchild", parentId: child.id };
+    const finance = { ...folder, id: "finance", name: "Finance" };
+    const invoices = { ...folder, id: "invoices", name: "Invoices", parentId: finance.id };
+    let removed = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/preview")) return response(preview());
+      if (url.pathname.endsWith("/remove")) { removed = true; return new Response(null, { status: 204 }); }
+      if (url.pathname.endsWith("/folders/demo")) return response({ folder, ancestors: [] });
+      if (url.pathname.endsWith("/folders")) {
+        const parentId = url.searchParams.get("parentId");
+        return response({ items: parentId === "demo" ? [child] : parentId === "child" ? [grandchild] : parentId === "finance" ? [invoices] : removed ? [{ ...child, parentId: null }, finance] : [folder, finance] });
+      }
+      return response({ items: [] });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions?folderId=demo", fetchMock, capabilities());
+    await waitForCondition(() => expect(button(container, "Expand Demo")).not.toBeNull());
+    await click(button(container, "Expand Demo"));
+    await waitForText(container, "Child");
+    await click(button(container, "Expand Child"));
+    await waitForText(container, "Grandchild");
+    await click(button(container, "Expand Finance"));
+    await waitForText(container, "Invoices");
+    await click(button(container, "Delete"));
+    await waitForText(container, "2 active workflows");
+    await click(button(container, "Delete folder"));
+    await waitForText(container, "Deleted folder Demo");
+    expect(container.textContent).toContain("Grandchild");
+    expect(container.textContent).toContain("Invoices");
+    expect(button(container, "Collapse Child")).not.toBeNull();
+    expect(button(container, "Collapse Finance")).not.toBeNull();
+  });
+
   it.each([false, true])("previews all contents independently of browse filters and submits deleteWorkflows=%s", async deleteWorkflows => {
     const commits: unknown[] = [];
     const requests: URL[] = [];

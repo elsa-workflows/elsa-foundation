@@ -73,7 +73,7 @@ export function WorkflowFolderDeletionDialog({ context, folder, onClose, onDelet
           {error ? <p className="wf-dialog-error" role="alert">{error} <button type="button" disabled={busy || loading} onClick={() => void reload()}>Reload preview</button></p> : null}
           {preview ? <>
             <p>This folder contains {count} active {count === 1 ? "workflow" : "workflows"}.
-              {count > 0 ? ` ${deleteWorkflows ? "They will be deleted and can be restored from the Deleted view." : `They will be moved to ${destination}.`}` : ""}</p>
+              {count > 0 ? ` ${deleteWorkflows ? `They will be deleted and can be restored from the Deleted view. Restored workflows will appear in ${destination}.` : `They will be moved to ${destination}.`}` : ""}</p>
             {preview.deletedWorkflowCount > 0 ? <p>{preview.deletedWorkflowCount} already deleted {preview.deletedWorkflowCount === 1 ? "workflow will" : "workflows will"} be moved to {destination} and remain restorable.</p> : null}
             {preview.childFolderCount > 0 ? <p>{preview.childFolderCount} {preview.childFolderCount === 1 ? "subfolder will" : "subfolders will"} move to {preview.parent ? `the parent folder “${preview.parent.name}”` : "the top level"}. Their hierarchy and workflows will be preserved.</p> : null}
             {count > 0 ? <label className="wf-folder-delete-choice"><input type="checkbox" checked={deleteWorkflows} disabled={busy} onChange={event => setDeleteWorkflows(event.target.checked)} /> Also delete {count === 1 ? "the workflow" : `the ${count} workflows`} directly in this folder</label> : null}

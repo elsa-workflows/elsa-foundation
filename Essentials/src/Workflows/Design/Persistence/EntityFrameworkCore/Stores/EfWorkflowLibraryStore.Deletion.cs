@@ -66,11 +66,20 @@ internal sealed partial class EfWorkflowLibraryStore
             var children = contents.Descendants.Where(row => row.ParentId == folderId).ToArray();
             if (children.Length > 0 && await (from child in FolderRows
                     join sibling in FolderRows on child.NameHash equals sibling.NameHash
-                    where child.ParentId == folderId && sibling.ParentKey == folder.ParentKey
+                    where child.ParentId == folderId && sibling.Id != folderId && sibling.ParentKey == folder.ParentKey
                     select sibling).AnyAsync(token))
                 Conflict("A child folder has the same name as a folder at the destination. Rename or move it before deleting this folder.");
 
             var now = DateTimeOffset.UtcNow;
+            TrackDeletionRow(folder);
+            if (children.Any(child => child.NameHash == folder.NameHash))
+            {
+                // Vacate the selected folder's sibling name before promoting a same-named child.
+                // Both saves remain in the atomic writer's transaction; a failure rolls back this
+                // temporary reservation along with all moves and audit facts.
+                folder.NameHash = EfDesignSupport.LookupHash(NewId("deleting-folder-"));
+                await db.SaveChangesAsync(token);
+            }
             foreach (var descendant in contents.Descendants)
             {
                 TrackDeletionRow(descendant);
@@ -113,7 +122,7 @@ internal sealed partial class EfWorkflowLibraryStore
                 definition.LastModifiedAt = now;
             }
             Audit(folderId, actorId, "folder.delete", operationKey, contents.Preview, null);
-            TrackDeletionRow(folder); db.Folders.Remove(folder);
+            db.Folders.Remove(folder);
             return true;
         }, cancellationToken);
     }
