@@ -715,6 +715,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.Inspection.Api",
+          "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
           "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
         },
@@ -13946,6 +13951,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.Inspection.Api",
+          "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.JsonSchema",
           "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj"
         },
@@ -23358,6 +23368,75 @@
       ]
     },
     {
+      "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj",
+      "name": "Elsa.Agent.Specialists.Inspection.Api",
+      "kind": "source",
+      "domain": "Elsa.Agent",
+      "sub_domain": "Specialists.Inspection.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Agent.Specialists.Inspection.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Api",
+          "path": "Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Core",
+          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.1"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj",
       "name": "Elsa.Agent.Specialists.JsonSchema",
       "kind": "source",
@@ -24219,6 +24298,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Specialists",
           "path": "Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Inspection.Api",
+          "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
         },
         {
           "type": "internal",
