@@ -255,7 +255,7 @@ terminal eviction or a reaper does not wait for a drain that keeps making progre
 continuation another worker holds (see "Waiting too long" above). A Cancel that reaches the mailbox while it passivates
 answers `Deferred` and runs nothing; a Cancel that resolves the mailbox only then waits for the passivation and runs on
 a fresh mailbox. A drain that yielded to a passivation is not re-driven on that
-mailbox: the next owner, or the sweep, continues from its checkpoint. A passivation that is cancelled before it takes
+mailbox: the resumption sweep delivers its flushed continuations and re-drives the execution, on its next owner. A passivation that is cancelled before it takes
 the mailbox re-drives a drain that yielded to it, as a withdrawn Cancel does. Distributed placement uses the configured
 local mailbox on the owning node. A Cancel sent through another node takes effect once the owner's next placement pump
 sweep that lists the execution delivers it to that mailbox, usually within `SweepInterval` (default 10 seconds). The

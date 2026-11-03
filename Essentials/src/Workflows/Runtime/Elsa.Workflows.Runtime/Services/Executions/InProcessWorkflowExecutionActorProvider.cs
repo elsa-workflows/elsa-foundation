@@ -531,7 +531,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // A running drain yields to the passivation at its next step, as it does to a waiting Cancel, so a drain that
             // keeps making progress still ends its turn and a hand-off releases placement while it holds the lease (#3678).
             // The yielded segment flushes its continuations durably and undelivered. This actor is no longer Active, so it
-            // does not re-drive them: the next owner, or the resumption sweep, does.
+            // does not re-drive them: the resumption sweep delivers them and re-drives the execution, on its next owner.
             var pendingHandoff = _drainControls is null ? null : _drainControl.Wait();
             SetStatus(WorkflowExecutionActorStatus.Passivating);
 
