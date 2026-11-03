@@ -70,6 +70,10 @@ public sealed class EtlConnectorExecutableReaderTests
             With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ID", EtlColumnType.Int64, true)], ["id"])))).Code);
         Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
             With([new EtlColumn("id", EtlColumnType.Int64, true)], ["id", "id"])))).Code);
+        // A watermark is a declared, required Int64 column (spec 1199).
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("name", EtlColumnType.String, true)], ["id"]) is var named
+                ? named with { Source = ((EtlSqlSource)named.Source) with { Watermark = "name" } } : named))).Code);
         // The key columns are required, so a key value is never null.
         Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
             With([new EtlColumn("id", EtlColumnType.Int64, false)], ["id"])))).Code);
