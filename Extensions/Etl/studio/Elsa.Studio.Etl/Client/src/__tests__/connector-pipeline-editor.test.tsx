@@ -231,6 +231,22 @@ describe("connector pipeline editor", () => {
     expect(editor.pipeline.source).toMatchObject({ key: ["full_name", "id"] });
   });
 
+  it("follows the edited row when a rename briefly shares another column's name", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.source = {
+      kind: "sql", binding: "people-db", table: "people",
+      columns: [{ name: "code", type: "string", required: true }, { name: "codeId", type: "string", required: true }], key: ["codeId"]
+    };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+
+    for (const value of ["code", "codeK", "codeKey"]) {
+      setInput(control<HTMLInputElement>(editor.host, "Source table columns field 2 name"), value);
+      editor.render();
+    }
+
+    expect(editor.pipeline.source).toMatchObject({ key: ["codeKey"] });
+  });
+
   it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
     const editor = renderEditor();
     expect(editor.pipeline.continuous).toBeUndefined();

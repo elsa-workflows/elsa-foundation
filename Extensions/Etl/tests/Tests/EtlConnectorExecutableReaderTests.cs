@@ -30,6 +30,8 @@ public sealed class EtlConnectorExecutableReaderTests
     [InlineData("people;drop", "id", "id")]
     [InlineData("people", "full name", "full name")]
     [InlineData("people", "id", "missing")]
+    [InlineData("p234567890123456789012345678901234567890123456789012345678901234", "id", "id")]
+    [InlineData("people", "c234567890123456789012345678901234567890123456789012345678901234", "c234567890123456789012345678901234567890123456789012345678901234")]
     public void Reader_refuses_a_sql_source_whose_identifiers_or_key_the_compiler_would_refuse(string table, string column, string key)
     {
         using var runtime = CreateRuntime(_ => { });
@@ -68,6 +70,12 @@ public sealed class EtlConnectorExecutableReaderTests
             With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ID", EtlColumnType.Int64, true)], ["id"])))).Code);
         Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
             With([new EtlColumn("id", EtlColumnType.Int64, true)], ["id", "id"])))).Code);
+        // The key is one to eight columns.
+        var nine = Enumerable.Range(0, 9).Select(index => new EtlColumn(index == 0 ? "id" : $"k{index}", EtlColumnType.Int64, true)).ToArray();
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With(nine, nine.Select(column => column.Name).ToArray())))).Code);
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true)], [])))).Code);
     }
 
     [Fact]

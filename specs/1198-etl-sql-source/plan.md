@@ -19,8 +19,8 @@ This slice adds a finite `sql` source:
 
 - **Packages and dependencies.** No new package or reference. The contract stays driver-free.
 - **Wrapping** (framework §2.23.5). The snapshot reader wraps driver exceptions, classified by the engine, as a preparation failure or a transient exception with the original as the cause; the preparer maps those to its result.
-- **Naming** (§E6). `EtlSqlSource`, `EtlSqlSnapshotReader` and `EtlSqlTransientException` stay within four components (R1). `EtlSqlSource` is an explicit R4 exception: it is a declaration record, not a "returns on request" extension point, and it joins the persisted `EtlSource` family (`EtlCsvSource`, `EtlHttpJsonSource`, `EtlJsonlSource`), whose names and `kind` discriminators the artifact format fixes.
-- **Public API** (§4.2). `IEtlSqlEngine` gains three required members; it is unshipped (`PublicAPI.Unshipped.txt`), so this is not a breaking change.
+- **Naming** (§E6). `EtlSqlSource`, `EtlSqlSnapshotReader` and `EtlSqlTransientException` stay within four components (R1). `EtlSqlSource` is an explicit R4 exception: it is a declaration record, not a "returns on request" extension point, and it is named for consistency with the existing `EtlSource` family (`EtlCsvSource`, `EtlHttpJsonSource`, `EtlJsonlSource`); the artifact format fixes only the `kind` discriminators.
+- **Public API** (§4.2). `IEtlSqlEngine` gains four required members (`SnapshotIsolation`, `SnapshotSetup`, `SelectSnapshot`, `ExtremeDatesAreInfinite`); it is unshipped (`PublicAPI.Unshipped.txt`), so this is not a breaking change.
 - **Compatibility.**
   - Existing artifacts and identities are byte-identical.
   - No migration: the prepared file input and file positions are reused.
@@ -34,7 +34,7 @@ This slice adds a finite `sql` source:
 
 - **`Elsa.Etl.Core`**
   - `EtlSqlSource` (JSON kind `sql`).
-  - `IEtlSqlEngine`: `SnapshotIsolation`, `SnapshotSetup` and `SelectSnapshot`.
+  - `IEtlSqlEngine`: `SnapshotIsolation`, `SnapshotSetup`, `SelectSnapshot` and `ExtremeDatesAreInfinite`.
   - PublicAPI.
 - **`Elsa.Etl.Design`**
   - `ValidateSqlSource`, which reuses `IsSqlIdentifier`.

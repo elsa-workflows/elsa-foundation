@@ -152,15 +152,15 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
 }
 
 /**
- * The key after a column edit, in the same order: an edit that keeps the row count (a rename or type change) carries
- * each key column through its row, and any edit drops a key column that is gone or no longer required.
+ * The key after a column edit, in the same order. A rename follows the edited row only, so a name another row briefly
+ * shares mid-edit never moves the key to that row; any edit drops a key column that is gone or no longer required.
  */
 function keyAfterColumnEdit(source: EtlSqlSource, columns: EtlColumn[]): string[] {
-  const renamed = columns.length === source.columns.length
-    ? source.key.map(name => {
-      const row = source.columns.findIndex(column => column.name === name);
-      return row >= 0 ? columns[row].name : name;
-    })
+  const edited = columns.length === source.columns.length
+    ? columns.findIndex((column, row) => column.name !== source.columns[row].name)
+    : -1;
+  const renamed = edited >= 0
+    ? source.key.map(name => name === source.columns[edited].name ? columns[edited].name : name)
     : source.key;
   return renamed.filter(name => columns.some(column => column.name === name && column.required));
 }

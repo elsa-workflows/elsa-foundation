@@ -93,7 +93,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
 - **FR-001** `EtlSqlSource(Binding, Table, Columns, Key)` is a new source of kind `sql`; `Columns` are `EtlColumn` declarations. Existing artifacts and identities are byte-identical.
 - **FR-002** The compiler enforces the identifier and key rules in Edge Cases, and the source column count against `MaxFields`.
 - **FR-003** SQL bindings accept the role `Source`. Source and destination bindings share `EtlRuntimeFeature.SqlBindings`, and binding resolution pins a `Sql` source revision with no expected digest.
-- **FR-004** `IEtlSqlEngine` gains the snapshot read: the isolation level, a statement selecting the columns ordered by the key, and a session statement that makes the transaction read-only where the engine supports it.
+- **FR-004** `IEtlSqlEngine` gains the snapshot read: the isolation level, a statement selecting the columns ordered by the key, a session statement that makes the transaction read-only where the engine supports it, and whether the driver maps infinite dates to the extreme values.
 - **FR-005** The connector preparer, for a `sql` source:
   1. looks for a published input snapshot under the run's snapshot identity, and reuses it when present;
   2. otherwise opens a connection, begins a transaction at the engine's snapshot isolation, streams the ordered rows, converts each value by its declared type, and writes one JSON object per row through the JSON Lines snapshot publisher;
