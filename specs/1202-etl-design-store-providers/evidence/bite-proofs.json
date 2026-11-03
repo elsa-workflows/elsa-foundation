@@ -144,8 +144,8 @@
     "Elsa.Etl.Persistence.ProviderTests.EtlDefinitionStoreSqlServerTests.Concurrent_publications_of_one_draft_record_one_artifact_and_settle_without_a_provider_failure"
    ],
    "restored": "Passed!  - Failed: 0, Passed: 3",
-   "original": "new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient)",
-   "mutated_text": "new(1, EfWriteConflict.Transient)",
+   "original": "private static readonly EfWriteRetry PublishRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);",
+   "mutated_text": "private static readonly EfWriteRetry PublishRetry = new(1, EfWriteConflict.Transient);",
    "sourceRevision": "84b61a306fade9d8f23f151d613c82300e23e8f9"
   }
  ]
