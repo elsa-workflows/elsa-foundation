@@ -120,6 +120,7 @@ public sealed partial class EtlRuntimeStoreTests
         var bindingJson = EtlConnectorRecordCodec.ValidateBindings(pipeline, admission.Bindings, 128);
         var scope = EtlRuntimeRecordCodec.Scope(admission.Invocation.Scope);
         var run = EtlRuntimeRecordCodec.RunRecord(admission.Invocation,
+            EtlRuntimeRecordCodec.EncodeIdentity(admission.Invocation.RunId, "run id"),
             EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation), null, now.UtcTicks);
 
         var initialRequest = new EtlHttpRequest("shard-a", null);
