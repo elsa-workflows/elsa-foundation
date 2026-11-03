@@ -1,7 +1,8 @@
-import React from "react";
+import React, { Suspense } from "react";
 import type {
   ElsaStudioModuleApi,
   StudioAgentContextAttachment,
+  StudioAgentResultRendererContribution,
   StudioAgentResultRendererProps,
   StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
@@ -128,11 +129,81 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
+  // The resource-owning module id, so the host selects it for workflow results (its renderer lookup matches the
+  // result's resource module). The Undo it shows is Studio Workflows' own designer-history control, found by id.
+  api.agent.resultRenderers.add({
+    id: "weaver.workflows.batch-result", moduleId: "Elsa.Studio.Workflows",
+    displayName: "Workflow change", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
+    component: (props: StudioAgentResultRendererProps) => (
+      <WorkflowBatchResult {...props} undoControl={api.agent.resultRenderers.list().find(item => item.id === workflowBatchUndoControlId)} />
+    )
+  });
+
   api.agent.resultRenderers.add({
     id: "weaver.workflows.workflow-proposal-renderer", moduleId: "Elsa.Studio.Workflows",
     displayName: "Workflow proposal", resultTypes: ["workflows.proposal"], schemaVersions: ["1"],
     component: ({ result }: StudioAgentResultRendererProps) => <WorkflowProposalRenderer proposal={(isRecord(result) && isRecord(result.data) ? result.data : result) as WorkflowProposalSummary} />
   });
+}
+
+/** The Studio Workflows control that owns the batch's designer-history Undo; embedded by id, never re-implemented. */
+export const workflowBatchUndoControlId = "workflows.agent.batch-undo";
+
+interface BatchOperationLabel { index?: number; kind?: string; summary?: string; risk?: string; reasons?: string[] }
+
+/**
+ * The review and result card of a reviewed Operation Batch (spec 1193 FR-011, FR-012): each operation with its risk
+ * label, the batch's highest risk and complexity label, what applying clears, the outcome in product words, and the
+ * whole-change Undo that Studio Workflows owns through designer history.
+ */
+export function WorkflowBatchResult({ undoControl, ...props }: StudioAgentResultRendererProps & { undoControl?: StudioAgentResultRendererContribution }) {
+  const { proposal, preparedInvocation, toolResult } = props;
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  const operations = Array.isArray(data.operations) ? data.operations.filter(isRecord) as BatchOperationLabel[] : [];
+  const risk = typeof data.risk === "string" ? data.risk : preparedInvocation?.risk;
+  const UndoControl = undoControl?.component;
+  return (
+    <section aria-label="Workflow change" className="weaver-workflow-batch">
+      <p><strong>{batchOutcome(proposal, toolResult)}</strong></p>
+      <p>
+        <span data-risk={risk}>{riskLabel(risk)}</span>
+        {data.highComplexity === true ? <> · <span data-complexity="high">High complexity: applied whole or not at all, never split</span></> : null}
+      </p>
+      {operations.length ? (
+        <ol aria-label="Operations">
+          {operations.map((operation, position) => (
+            <li key={operation.index ?? position} data-risk={operation.risk}>
+              <span>{riskLabel(operation.risk)}</span>{" "}
+              <span>{operation.summary ?? operation.kind ?? "Operation"}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      <p>The last test-run result and published-artifact association are cleared; Undo does not restore them. Saving and publishing remain your explicit actions.</p>
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
+      {UndoControl && toolResult?.succeeded ? <Suspense fallback={null}><UndoControl {...props} /></Suspense> : null}
+    </section>
+  );
+}
+
+function batchOutcome(proposal: unknown, toolResult: StudioAgentResultRendererProps["toolResult"]) {
+  if (toolResult?.succeeded && toolResult.receipt?.scope === "clientWorkingState") return "Applied locally to the unsaved draft — not saved or published";
+  const status = isRecord(proposal) && typeof proposal.status === "string" ? proposal.status : "";
+  switch (status) {
+    case "awaiting-approval": case "edited": return "Proposed — awaiting your review";
+    case "approved": case "awaiting-client": return "Approved — not yet applied";
+    case "denied": case "rejected": case "refused": case "expired": case "cancelled": return "Refused — nothing changed";
+    case "uncertain": return "Uncertain — the editor could not confirm the change; it is never replayed";
+    default: return toolResult && !toolResult.succeeded ? "Refused — nothing changed" : "Proposed — awaiting your review";
+  }
+}
+
+function riskLabel(risk: unknown) {
+  return risk === "destructive" ? "Destructive" : risk === "reviewRequired" ? "Review required" : "Unclassified — review carefully";
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
 }
 
 export function WorkflowProposalRenderer({ proposal }: { proposal: WorkflowProposalSummary }) {

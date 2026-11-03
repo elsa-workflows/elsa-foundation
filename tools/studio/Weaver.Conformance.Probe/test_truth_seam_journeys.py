@@ -7,7 +7,7 @@ import unittest
 
 from artifacts import sha
 from journey_runtime import BASE_GRANTS
-from truth_seam_journeys import (ACTORS, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
+from truth_seam_journeys import (ACTORS, BATCH_TOOL, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
                                  SECTION, TENANT_MANAGER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
                                  require_permissions, require_truth_turn, require_workflow_truth_seams, synthetic_actors,
                                  synthetic_registrations, truth_principals, truth_seam_manifest_gaps)
@@ -43,7 +43,7 @@ DENIED = {"status": "denied", "reason": "The actor may not read the activity aut
 def permissions_content(manage):
     return {"workflowDefinitionId": "wf-1", "revision": "unsaved-1", "read": "allowed", "manage": "allowed" if manage else "denied",
             "capabilities": ["workflow.explain", "workflow.propose-change"] if manage else ["workflow.explain"],
-            "tools": [READ_TOOL, LAYOUT_TOOL] if manage else [READ_TOOL]}
+            "tools": [READ_TOOL, LAYOUT_TOOL, BATCH_TOOL] if manage else [READ_TOOL]}
 
 
 def admitted(manage=True):
@@ -61,7 +61,7 @@ def frames(manage=True):
             {"kind": "completed", "payload": {}}]
 
 
-def rows(provider="copilot", tools=(READ_TOOL, LAYOUT_TOOL)):
+def rows(provider="copilot", tools=(READ_TOOL, LAYOUT_TOOL, BATCH_TOOL)):
     return [{"kind": provider + ".request", "data": {"commandId": COMMAND, "tools": [{"name": name} for name in tools] + [{"name": "acme_other"}]}},
             {"kind": provider + ".call", "data": {"commandId": COMMAND, "toolName": READ_TOOL}},
             {"kind": provider + ".return", "data": {"commandId": COMMAND}}]
@@ -76,7 +76,7 @@ class TurnTests(unittest.TestCase):
         for provider in ("copilot", "anthropic"):
             with self.subTest(provider=provider):
                 observed = self.check(provider=provider)
-                self.assertEqual(sorted([READ_TOOL, LAYOUT_TOOL]), observed["advertised"])
+                self.assertEqual(sorted([READ_TOOL, LAYOUT_TOOL, BATCH_TOOL]), observed["advertised"])
                 self.assertEqual("allowed", observed["permissions"]["manage"])
                 self.assertEqual(len(owner_entries()), observed["catalog"]["totalCount"])
 
@@ -156,7 +156,7 @@ class CatalogTests(unittest.TestCase):
 class PermissionTests(unittest.TestCase):
     def test_permissions_follow_the_owners_answers_and_the_offered_tools_follow_them(self):
         self.assertEqual("allowed", require_permissions(permissions_content(True), manage=True, read_status=200, manage_status=200,
-                                                        advertised=sorted([READ_TOOL, LAYOUT_TOOL]), target=TARGET)["manage"])
+                                                        advertised=sorted([READ_TOOL, LAYOUT_TOOL, BATCH_TOOL]), target=TARGET)["manage"])
         self.assertEqual("denied", require_permissions(permissions_content(False), manage=False, read_status=200, manage_status=403,
                                                        advertised=[READ_TOOL], target=TARGET)["manage"])
 

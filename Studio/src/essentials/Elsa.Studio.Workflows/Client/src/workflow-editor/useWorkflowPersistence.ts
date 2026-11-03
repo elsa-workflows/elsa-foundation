@@ -7,6 +7,7 @@ import { autosaveDelayMs } from "./constants";
 import { describeWorkflowError, getDraftSignature } from "./editorHelpers";
 import type { WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
+import type { WorkflowLineageHold } from "./useDraftHistory";
 
 interface WorkflowPersistenceParams {
   context: StudioEndpointContext;
@@ -16,13 +17,22 @@ interface WorkflowPersistenceParams {
   editDraft(recipe: WorkflowDraftRecipe): void;
   setStatus(value: string): void;
   setError(value: WorkflowErrorInput): void;
+  /**
+   * The designer-history autosave hold for reviewed Operation Batches (spec 1193 FR-010): autosave is skipped while the
+   * current history position's line holds a batch the user has not explicitly saved, and an explicit save that covers
+   * the live draft marks the batches of that line as saved.
+   */
+  lineageHold?: WorkflowLineageHold;
 }
 
 // Owns draft persistence: the serialised save queue (so concurrent saves apply in order), the
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
+export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError, lineageHold }: WorkflowPersistenceParams) {
+  const lineageHoldRef = useRef(lineageHold);
+  lineageHoldRef.current = lineageHold;
+  const lineageHeld = lineageHold?.held ?? false;
   const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
   const [autosavePaused, setAutosavePaused] = useState(false);
   const reviewHoldRef = useRef(false);
@@ -65,8 +75,12 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     // reviewed edit, even when that old request only starts after the new hold was acquired.
     const requestedReviewGeneration = reviewHoldGenerationRef.current;
     const requestedSignature = getDraftSignature(draftSnapshot);
+    // The batches this save would cover: the live line's, captured when the save is requested and only when it asks to
+    // save the live draft. A save of an older snapshot covers none.
+    const requestedLive = latestDraftRef.current;
+    const coveredBatches = requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : [];
     const queuedSave = async () => {
-      if (savedStatus === "Autosaved" && reviewHoldRef.current) return draftSnapshot;
+      if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
       setError("");
       inFlightSavesRef.current += 1;
@@ -80,6 +94,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
         if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
+        if (savedStatus !== "Autosaved" && coversLiveDraft) lineageHoldRef.current?.markSaved(coveredBatches);
         // Reconcile the just-persisted draft: if the live draft still matches what we sent, adopt the
         // server copy wholesale; otherwise the author kept editing, so only fold in the fresh validation.
         editDraft(({ draft: current }) => {
@@ -119,19 +134,19 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   }, [saveDraft]);
 
   useEffect(() => {
-    if (!autosaveEnabled || autosavePaused || reviewHeld || !draft) return;
+    if (!autosaveEnabled || autosavePaused || reviewHeld || lineageHeld || !draft) return;
 
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
     setStatus("Autosaving...");
     const timeoutId = window.setTimeout(() => {
-      if (reviewHoldRef.current) return;
+      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) return;
       void saveDraft(draft, "Autosaved").catch(() => undefined);
     }, autosaveDelayMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, reviewHeld, draft, saveDraft, setStatus]);
+  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

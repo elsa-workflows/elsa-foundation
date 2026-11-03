@@ -49,7 +49,7 @@ public sealed class WorkflowTruthSeamTests
         var granted = Content(permissions);
         Assert.Equal("allowed", granted.GetProperty("read").GetString());
         Assert.Equal("allowed", granted.GetProperty("manage").GetString());
-        Assert.Equal(["workflow_read_graph", "workflow_set_designer_position"], Strings(granted, "tools"));
+        Assert.Equal(["workflow_read_graph", "workflow_set_designer_position", "workflow_apply_operation_batch"], Strings(granted, "tools"));
         Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(granted, "capabilities"));
     }
 
@@ -243,7 +243,7 @@ public sealed class WorkflowTruthSeamTests
         // The owner still allows managing the workflow; only the host policy withholds the tool. The capability is admitted
         // by its own id, as the Agent API admits it, so it stays.
         Assert.Equal("allowed", reported.GetProperty("manage").GetString());
-        Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
+        Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowApplyOperationBatchTool.ToolName], Strings(reported, "tools"));
         Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(reported, "capabilities"));
         var policies = host.Services.GetRequiredService<IAgentPolicyEvaluator>();
         var policy = AgentPolicy.Default with { DeniedCapabilityIds = [WorkflowSetDesignerPositionTool.ToolName] };
@@ -276,7 +276,7 @@ public sealed class WorkflowTruthSeamTests
             if ((await policies.EvaluateCapabilityAsync(policy, id)).Allowed) admitted.Add(id);
         Assert.Equal(admitted.Order(), Strings(reported, "capabilities").Order());
         var tools = new List<string>();
-        foreach (var name in new[] { WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName })
+        foreach (var name in new[] { WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName, WorkflowApplyOperationBatchTool.ToolName })
             if ((await policies.EvaluateCapabilityAsync(policy, name)).Allowed) tools.Add(name);
         Assert.Equal(tools, Strings(reported, "tools"));
     }
