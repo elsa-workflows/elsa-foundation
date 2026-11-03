@@ -45,6 +45,7 @@
     <Project Path="Extensions/Etl/src/Core/Elsa.Etl.Core.csproj" />
     <Project Path="Extensions/Etl/src/Api/Elsa.Etl.Api.csproj" />
     <Project Path="Extensions/Etl/src/RabbitMq/Elsa.Etl.RabbitMq.csproj" />
+    <Project Path="Extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/src/Design/">
     <Project Path="Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />

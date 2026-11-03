@@ -3,6 +3,7 @@ using Elsa.Etl.Core;
 using Elsa.Etl.Design;
 using Elsa.Etl.Design.Stores;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
@@ -13,6 +14,8 @@ internal sealed class EfEtlDefinitionStore(
     IEtlArtifactCompiler artifactCompiler,
     IEtlArtifactCompilerV2? artifactCompilerV2 = null) : IEtlDefinitionStore, IEtlDefinitionStoreV2
 {
+    private static readonly EfWriteRetry PublishRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);
+
     public async ValueTask<EtlDefinitionDraft?> FindDraftAsync(
         EtlScope scope,
         string definitionId,
@@ -174,6 +177,29 @@ internal sealed class EfEtlDefinitionStore(
         if (!StringComparer.Ordinal.Equals(validated.ArtifactJson, recompiledEnvelope.ArtifactJson))
             return new(EtlPublicationStatus.InvalidArtifact, null);
 
+        // On SQLite the transaction below serialises writers; elsewhere a lost race is a serialization failure or a deadlock,
+        // so the whole unit runs again, and a real competitor then settles through the existing-publication check.
+        return await PublishRetry.RunAsync(dbContext,
+            () => PublishOnceAsync(identity, scope, definitionId, expectedRevision, artifact, validated, cancellationToken),
+            conflict =>
+            {
+                // The database kept refusing: a persistence failure, not evidence of a competing writer.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(conflict!);
+                return ValueTask.FromResult<EtlPublicationResult>(null!);
+            },
+            cancellationToken);
+    }
+
+    private async ValueTask<EtlPublicationResult> PublishOnceAsync(
+        IdentitySet identity,
+        EtlScope scope,
+        string definitionId,
+        long expectedRevision,
+        EtlArtifact artifact,
+        EtlDefinitionRecordCodec.ValidatedArtifact validated,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
         var existing = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
         if (existing is not null)
             return ExistingPublicationResult(existing, scope, definitionId, validated);
@@ -233,7 +259,9 @@ internal sealed class EfEtlDefinitionStore(
             await transaction.CommitAsync(cancellationToken);
             return new(EtlPublicationStatus.Published, artifact);
         }
-        catch (DbUpdateException)
+        // A lost race propagates to the retry; disposing the transaction rolls it back, which an explicit rollback of one
+        // the server already aborted could not.
+        catch (DbUpdateException exception) when (!EfRelationalExceptionClassifier.IsWriteConflict(exception, EfWriteConflict.Transient))
         {
             await transaction.RollbackAsync(cancellationToken);
             dbContext.ChangeTracker.Clear();

@@ -20,10 +20,11 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
         var afterKey = afterDefinitionId is null ? null : EtlDefinitionRecordCodec.Definition(afterDefinitionId).Key;
         var query = dbContext.Drafts.AsNoTracking().Where(row => row.ScopeKey == scopeIdentity.Key);
         if (afterKey is not null)
-            query = query.Where(row => EF.Functions.Collate(row.DefinitionKey, "BINARY").CompareTo(afterKey) > 0);
+            // The key column's binary collation makes this seek, and the order below, ordinal on every engine.
+            query = query.Where(row => row.DefinitionKey.CompareTo(afterKey) > 0);
 
         var rows = await query
-            .OrderBy(row => EF.Functions.Collate(row.DefinitionKey, "BINARY"))
+            .OrderBy(row => row.DefinitionKey)
             .Take(take)
             .Select(row => new DraftMetadata(
                 row.ScopeKey,
