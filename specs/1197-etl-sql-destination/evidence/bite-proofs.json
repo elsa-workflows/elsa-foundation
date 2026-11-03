@@ -1,0 +1,220 @@
+{
+  "spec": "1197-etl-sql-destination",
+  "note": "Each entry names the revision it was recorded at. The first run's pg-deadlock-not-transient mutation did not bite: the explicit SQLSTATE list was redundant with Npgsql's IsTransient, so the list was removed and the remaining guard re-proven.",
+  "results": [
+    {
+      "mutation": "ledger-skipped",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlSqlRouteWriter.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlRouteWriterTests|DisplayName~killed_after_its_sql_commit",
+      "mutated": "Failed!  - Failed:     4, Passed:     4",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_worker_killed_after_its_sql_commit_and_before_the_record_is_replayed_without_writing_twice",
+        "Elsa.Etl.Tests.EtlSqlRouteWriterTests.A_batch_upserts_its_records_with_a_ledger_row_and_a_redelivery_writes_nothing",
+        "Elsa.Etl.Tests.EtlSqlRouteWriterTests.A_missing_ledger_without_creation_fails_and_a_concurrent_creation_counts_as_created",
+        "Elsa.Etl.Tests.EtlSqlRouteWriterTests.The_same_effect_with_different_content_is_a_conflict"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     8",
+      "original": "            if (!await InsertLedgerAsync(connection, transaction, delivery, cancellationToken))",
+      "mutated_text": "            if (false && !await InsertLedgerAsync(connection, transaction, delivery, cancellationToken))",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "hash-not-compared",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlSqlRouteWriter.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlRouteWriterTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     6",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlRouteWriterTests.The_same_effect_with_different_content_is_a_conflict"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     7",
+      "original": "        return StringComparer.Ordinal.Equals(recorded, delivery.ContentHash)",
+      "mutated_text": "        return true",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "transient-not-yielded",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlSqlRouteWriter.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlRouteWriterTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     6",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlRouteWriterTests.A_transient_failure_yields_without_writing_and_the_next_attempt_applies"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     7",
+      "original": "                EtlSqlErrorKind.Transient => EtlSqlWriteOutcome.Yield,",
+      "mutated_text": "",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "key-index-unchecked",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlSqlRouteWriter.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlServerProviderTests.A_table_without_a_unique_key",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_table_without_a_unique_key_fails_closed_and_commits_nothing"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            if (Convert.ToInt64(keys, CultureInfo.InvariantCulture) == 0)",
+      "mutated_text": "            if (false)",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "ledger-race-not-tolerated",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlSqlRouteWriter.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~Concurrent_first_deliveries",
+      "mutated": "Failed!  - Failed:     2, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.Concurrent_first_deliveries_both_create_or_find_the_ledger_and_each_effect_applies_once",
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.Concurrent_first_deliveries_both_create_or_find_the_ledger_and_each_effect_applies_once"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     2",
+      "original": "        catch (DbException exception) when (engine.Classify(exception) is EtlSqlErrorKind.AlreadyExists or EtlSqlErrorKind.DuplicateKey)",
+      "mutated_text": "        catch (DbException exception) when (false)",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "identifier-rule-skipped",
+      "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlDestinationTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlDestinationTests.Columns_must_be_identifiers_that_stay_distinct_ignoring_case"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     9",
+      "original": "        if (!names.All(IsSqlIdentifier) || names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != names.Length)",
+      "mutated_text": "        if (false)",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "key-may-be-optional",
+      "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlDestinationTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlDestinationTests.The_key_must_be_one_to_eight_distinct_fields_mapped_from_required_source_fields"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     9",
+      "original": "mapped.TryGetValue(field, out var column) && column.Required &&",
+      "mutated_text": "mapped.TryGetValue(field, out var column) &&",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "error-route-sql-allowed",
+      "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlDestinationTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlDestinationTests.Only_the_main_route_can_deliver_to_sql"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     9",
+      "original": "        if (pipeline.Routes?.Errors is EtlSqlDestination)\n",
+      "mutated_text": "        if (false)\n",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "handle-hashes-secret",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostSqlBindings.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlDestinationTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_a_table_it_does_not_allow"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     9",
+      "original": "            binding.Revision,\n            Provider = engine.Provider,",
+      "mutated_text": "            binding.Revision,\n            binding.ConnectionString,\n            Provider = engine.Provider,",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "table-allow-list-skipped",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostSqlBindings.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlDestinationTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_a_table_it_does_not_allow"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     9",
+      "original": "        if (!binding.AllowedTables.Contains(table, StringComparer.OrdinalIgnoreCase))",
+      "mutated_text": "        if (false)",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "sql-route-unrecorded",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "DisplayName~keyed_table_with_one_ledger_row",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_csv_pipeline_upserts_its_accepted_records_into_a_keyed_table_with_one_ledger_row_per_batch"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        var recorded = await _store.RecordConnectorFilePublicationAsync(lease, batchId, routeId,\n            route.Body with { Key = EtlRuntimeIdentity.ConnectorSqlEffectKey(route.EffectId) }, cancellationToken);",
+      "mutated_text": "        var recorded = EtlStoreStatus.Applied;",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "sql-recorded-under-file-key",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "DisplayName~keyed_table_with_one_ledger_row",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_csv_pipeline_upserts_its_accepted_records_into_a_keyed_table_with_one_ledger_row_per_batch"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            Key = planned.Kind == EtlConnectorKind.Sql\n",
+      "mutated_text": "            Key = false\n",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "sql-effect-mechanism-missing",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorOutputStore.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "DisplayName~keyed_table_with_one_ledger_row",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_csv_pipeline_upserts_its_accepted_records_into_a_keyed_table_with_one_ledger_row_per_batch"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql => 2,",
+      "mutated_text": "        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => 2,",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "engine-not-required",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostSqlBindings.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "DisplayName~without_its_engine_package",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_sql_destination_without_its_engine_package_is_refused_at_admission"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (!_engines.TryGetValue(binding.Provider, out var engine))\n            throw new EtlBindingException(\"etl.sql-unavailable\", \"No ETL SQL engine is installed for the binding's provider.\");",
+      "mutated_text": "        _engines.TryGetValue(binding.Provider, out var engine);",
+      "sourceRevision": "95d02a433ec54ca45cefdf9b32099632dd0807d4"
+    },
+    {
+      "mutation": "pg-transient-not-classified",
+      "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~Deadlocks_serialization_failures",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.Deadlocks_serialization_failures_and_lost_connections_are_transient_and_constraint_errors_are_not"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        NpgsqlException { IsTransient: true } => EtlSqlErrorKind.Transient,",
+      "mutated_text": "",
+      "sourceRevision": "a8f339cd2f012a70c817759b024d89aa13f47db5"
+    }
+  ]
+}

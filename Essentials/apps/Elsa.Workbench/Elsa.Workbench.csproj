@@ -107,6 +107,8 @@
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Api\Elsa.Etl.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Elsa.Etl.Runtime\Elsa.Etl.Runtime.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Persistence\EntityFrameworkCore\Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Sql\PostgreSql\Elsa.Etl.Sql.PostgreSql.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Sql\SqlServer\Elsa.Etl.Sql.SqlServer.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Design\Elsa.Etl.Workflows.Design.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Runtime\Elsa.Etl.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />

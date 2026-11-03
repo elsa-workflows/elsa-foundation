@@ -1620,6 +1620,22 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.etl.sql.postgresql": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Npgsql": "[10.0.3, )"
+        }
+      },
+      "elsa.etl.sql.sqlserver": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Microsoft.Data.SqlClient": "[7.0.2, )"
+        }
+      },
       "elsa.etl.workflows.design": {
         "type": "Project",
         "dependencies": {
