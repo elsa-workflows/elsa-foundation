@@ -41,7 +41,7 @@ At `68ba92078` (review round 7), Studio ETL Vitest passed 119 of 119 and the ETL
 
 **Did not bite, by design:**
 - **PostgreSQL's isolation level.** In PostgreSQL a single `SELECT` already reads one snapshot under `READ COMMITTED`. `REPEATABLE READ READ ONLY` is kept for a future read of more than one statement.
-- **SQL Server's isolation level and the mid-read change test.** On SQL Server only the snapshot-disabled database test bites the level. The mid-read change test passes under `READ COMMITTED` too, because the drivers may already have buffered the rows. It proves that a change committed while the read is paused never reaches the run, and that the writer is not blocked, but not the level itself.
+- **The mid-read change test, as a proof of the isolation level.** It passes under `READ COMMITTED` on both engines, because the drivers may already have buffered the rows. It proves that a change committed while the read is paused never reaches the run, and that the writer is not blocked, but not the level. On SQL Server the level is bite-proven by the snapshot-disabled database test instead.
 - **The `date` and time-of-day formats on PostgreSQL.** Npgsql returns `DateOnly` and `TimeOnly`, which separate branches write, so the mutated branches serve only SQL Server.
 
 **Tested without a bite-proof, or not tested:**
@@ -66,6 +66,7 @@ At `68ba92078` (review round 7), Studio ETL Vitest passed 119 of 119 and the ETL
 - **The "a SQL source cannot have HTTP shards" checks** in the preparer and the record codec, and the reader's column-count check against the result set. They are not tested.
 - **Process-level kill and reuse on PostgreSQL or SQL Server.** It is not run. The worker fixture writes through the SQLite test engine.
 - **A change after preparation and before the partitions run, on PostgreSQL or SQL Server.** It is proven on the SQLite test engine, at the preparer and batch builder (`A_change_committed_after_preparation_does_not_reach_the_batches`), and through worker processes for a change between publication and the preparation record (the kill test). The run reads the retained snapshot whatever the engine.
+- **Two SQL source branches without a SQL-specific test:** the compiler's artifact size pre-check (`artifact.too-large` is tested through an oversized mapping only), and `etl.binding-ambiguous` for a SQL source alias that a file or HTTP approval also uses.
 - **The read-only snapshot setup** (`SET TRANSACTION READ ONLY` on PostgreSQL) is not tested; no test attempts a write inside the read.
 - **A transient read through a lease re-claim** is proven at the preparer only.
 

@@ -52,7 +52,7 @@ This slice adds a finite `sql` source:
 - **`Elsa.Etl.Persistence.EntityFrameworkCore`**: `EtlConnectorRecordCodec` binding and preparation validation for a `sql` source.
 - **`Elsa.Etl.Runtime.Api`**: the source input view.
 - **Engines.**
-  - PostgreSQL: REPEATABLE READ with `SET TRANSACTION READ ONLY`.
+  - PostgreSQL: REPEATABLE READ with `SET TRANSACTION READ ONLY` and an `ACCESS SHARE` table lock before the snapshot.
   - SQL Server: SNAPSHOT, with error 3952 classified as rejected.
 - **Studio**
   - the source kind;
