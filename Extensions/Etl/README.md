@@ -137,7 +137,9 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   order under concurrent writers: a run can read value 101 while the transaction holding 100 is still open, and row 100,
   committed later, is then skipped. A per-row version counter is not a watermark either. Use a column whose values
   become visible in increasing order, for example one written by a single writer or by a job that stamps rows after
-  their transactions commit; otherwise load the table with snapshot reads. Running the definition repeatedly, for
+  their transactions commit; otherwise load the table with snapshot reads. Such a job should leave unstamped rows at a
+  value at or below every checkpoint, such as 0, not NULL: NULL rows are rejected as record errors on every run until
+  they are stamped, so the error route fills with rows a later run delivers. Running the definition repeatedly, for
   example from a scheduled workflow, loads the table incrementally; rows deleted from the source are not propagated.
 - **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
   retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope

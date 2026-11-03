@@ -116,7 +116,8 @@ public sealed record EtlConnectorPreparedRun(EtlPreparedCsvInput? File, EtlObjec
 {
     /// <summary>
     /// The highest watermark in a SQL source's snapshot (spec 1199), raised into the source checkpoint when the run completes;
-    /// null when the source has no watermark column or the snapshot has no rows. Omitted from JSON when null.
+    /// null when the source has no watermark column or the snapshot has no row with a non-null watermark. Omitted from JSON
+    /// when null.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? SourceWatermark { get; init; }

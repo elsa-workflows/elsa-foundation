@@ -27,8 +27,8 @@ An author names an `Int64` watermark column whose values become visible in incre
 **Acceptance Scenarios**:
 
 1. **Given** no completed run of the definition, **When** a run reads the source, **Then** it reads every row, and on completion the checkpoint holds the run's highest watermark.
-2. **Given** a checkpoint, **When** a run reads the source, **Then** it reads only rows whose watermark is greater than the checkpoint, and on completion the checkpoint rises to the run's highest watermark.
-3. **Given** no row above the checkpoint, **When** a run reads the source, **Then** it completes with no records and the checkpoint is unchanged.
+2. **Given** a checkpoint, **When** a run reads the source, **Then** it reads only rows whose watermark is greater than the checkpoint (and any whose watermark is NULL, which it rejects), and on completion the checkpoint rises to the run's highest watermark.
+3. **Given** no row above the checkpoint and none with a NULL watermark, **When** a run reads the source, **Then** it completes with no records and the checkpoint is unchanged.
 4. **Given** a run that completes with records rejected to the error route (a business error with `etl.rows-rejected`), **When** it settles, **Then** the checkpoint advances, as every record was routed.
 
 ### User Story 2 — Never skip rows after a failure (Priority: P1)

@@ -107,7 +107,8 @@ public sealed record EtlSqlSource(
 {
     /// <summary>
     /// The optional required <see cref="EtlColumnType.Int64"/> column whose high watermark a completed run records, so the
-    /// next run reads only rows above it (spec 1199); null reads every row.
+    /// next run reads only rows above it, and rows whose watermark is NULL, which it rejects as record errors (spec 1199); null
+    /// reads every row.
     /// </summary>
     /// <remarks>A null watermark is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
     public string? Watermark { get; init; }
