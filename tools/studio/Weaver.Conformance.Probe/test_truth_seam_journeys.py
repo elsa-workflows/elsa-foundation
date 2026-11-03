@@ -382,14 +382,29 @@ class FailureExcerptTests(unittest.TestCase):
     def test_an_unexpected_error_body_names_its_cause_without_secrets(self):
         from runtime import failure_excerpt
         body = json.dumps({"errors": {"generalErrors": ["The requested workflow definition is not readable."]},
-                           "accessToken": "private-token-value"}).encode() + b" Bearer private-bearer"
+                           "detail": "Retry with Bearer private-bearer or access_token=private-token-value",
+                           "accessToken": "private-token-value"}).encode()
         excerpt = failure_excerpt(403, body)
         self.assertIn("not readable", excerpt)
         self.assertNotIn("private-token-value", excerpt)
         self.assertNotIn("private-bearer", excerpt)
         self.assertEqual("", failure_excerpt(200, b"{}"))
         self.assertEqual("", failure_excerpt(403, b""))
-        self.assertLessEqual(len(failure_excerpt(500, b"x" * 5000)), 620)
+
+    def test_server_errors_and_non_json_bodies_contribute_nothing(self):
+        from runtime import failure_excerpt
+        page = b"System.InvalidOperationException: private store connection string Host=db;Password=x\n   at Private.Frame()"
+        self.assertEqual("", failure_excerpt(500, page))
+        self.assertEqual("", failure_excerpt(503, json.dumps({"detail": "private cause"}).encode()))
+        self.assertEqual("", failure_excerpt(403, page))
+        self.assertEqual("", failure_excerpt(403, b"[\"not an object\"]"))
+
+    def test_a_secret_crossing_the_bound_is_redacted_before_truncation(self):
+        from runtime import failure_excerpt
+        detail = "x" * 390 + " Bearer " + "s" * 200
+        excerpt = failure_excerpt(400, json.dumps({"detail": detail}).encode())
+        self.assertNotIn("sss", excerpt)
+        self.assertLessEqual(len(excerpt), len("; body: ") + 400)
 
 
 if __name__ == "__main__":

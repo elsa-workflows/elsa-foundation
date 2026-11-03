@@ -1432,7 +1432,8 @@ async function consumedIntentRemount() {
 }
 
 // The reads the read-only journey depends on: owner-link discovery, the definition and its draft validations, the
-// activity catalog and the expression descriptors the editor loads.
+// activity catalog and the expression descriptors the editor loads. Any other refused read (for example runtime
+// executables or publishing profiles the reader is not granted) is retained as evidence and does not fail the journey.
 function requireJourneyReads() {
   const essential = refusedReads.filter(item => item.path === "/capabilities" || item.path === config.workflow.definitionPath
     || item.path.startsWith("/design/activities/") || item.path.startsWith("/design/workflows/") || item.path.includes("expression"));
