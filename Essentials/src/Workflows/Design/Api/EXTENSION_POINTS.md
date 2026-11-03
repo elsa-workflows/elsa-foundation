@@ -85,7 +85,7 @@ Only a registered port advertises `workflow-folder-deletion-preview` (GET) and
 `workflow-folder-delete` (POST), and both disappear when organization is disabled.
 
 Preview returns authoritative bounded direct workflow targets, affected descendant folders,
-destination and an opaque revision. The API checks Read/Manage on affected resources, ancestor
+destination and an opaque revision. The API checks Read/Manage on canonical returned resource identities, ancestor
 visibility and the selected `IWorkflowDefinitionAuthorizer` before returning count-only inventory.
 Commit repeats authorization and the provider must validate the preview again inside its atomic
 hierarchy transaction. Never trust client-supplied counts or browser filters. EF limits direct

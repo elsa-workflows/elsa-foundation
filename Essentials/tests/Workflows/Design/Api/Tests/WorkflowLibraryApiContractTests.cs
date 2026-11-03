@@ -732,6 +732,35 @@ public sealed class WorkflowLibraryApiContractTests
         services.AddSingleton<IWorkflowDefinitionAuthorizer>(new DeletionAuthorizer());
     }
 
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("POST")]
+    public async Task Folder_deletion_authorizes_the_canonical_folder_when_a_provider_resolves_an_alias(string method)
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services =>
+        {
+            AllowDeletion(services);
+            services.AddSingleton<IPermissionResourceHandler>(new DeletionPolicy("invoices"));
+        });
+        using var response = await SendAsync(host, method, method == "GET" ? "/design/workflows/folders/INVOICES/deletion-preview" :
+            "/design/workflows/folders/INVOICES/delete", "library-all", method == "GET" ? null :
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":true,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_commits_the_previewed_canonical_identity()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services => AllowDeletion(services));
+        using var response = await SendAsync(host, "POST", "/design/workflows/folders/INVOICES/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("invoices", probe.FolderId);
+    }
+
     [Fact]
     public async Task Folder_deletion_honors_a_replacement_definition_authorizers_refusal()
     {

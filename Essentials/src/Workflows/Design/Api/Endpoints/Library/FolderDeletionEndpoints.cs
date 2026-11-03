@@ -36,7 +36,7 @@ public sealed class FolderDeletionEndpoint(IWorkflowLibraryStore? library = null
         var preview = await FolderDeletionAccess.PreviewAsync(HttpContext, store, request.FolderId, cancellationToken);
         if (string.IsNullOrWhiteSpace(request.PreviewRevision) || request.PreviewRevision != preview.Revision)
             throw new WorkflowLibraryConflictException("Folder contents changed. Reload the deletion preview and confirm again.");
-        await store!.DeleteFolderAsync(request.FolderId, request.PreviewRevision, request.DeleteWorkflows, actor!,
+        await store!.DeleteFolderAsync(preview.Folder.Id, request.PreviewRevision, request.DeleteWorkflows, actor!,
             request.OperationKey, cancellationToken);
     }
 }

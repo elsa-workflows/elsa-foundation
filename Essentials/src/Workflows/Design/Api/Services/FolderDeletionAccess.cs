@@ -21,6 +21,9 @@ internal static class FolderDeletionAccess
         if (detail is not null)
             await WorkflowLibraryAccess.RequireFolderReadAsync(context, detail.Ancestors.Select(folder => folder.Id), token);
         var preview = await store.PreviewFolderDeletionAsync(folderId, token);
+        // A provider can resolve aliases (for example GUID casing on SQL Server).
+        // Resource policies must decide on the stored identity before exposing inventory.
+        await RequireAsync(new(FolderId: preview.Folder.Id));
         await RequireAsync(new(FolderId: preview.Parent?.Id));
         foreach (var folder in preview.Descendants)
             await RequireAsync(new(FolderId: folder.Id));
