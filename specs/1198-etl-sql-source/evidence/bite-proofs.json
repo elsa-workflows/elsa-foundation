@@ -1,6 +1,6 @@
 {
  "spec": "1198-etl-sql-source",
- "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day. Review round 5 adds 3 entries, recorded at 6b1c8b1c6: the transformer's and output processor's SQL source branches, and the refusal of infinite dates. Review round 6 adds 2 entries, recorded at 7f7b177d7: extreme dates refused only where the engine maps infinity to them, and a zoned time of day with a precision. Review round 9 adds 1 entry, recorded at b6a886089: the worker's re-check that key columns are required. Review round 9 also adds 1 entry recorded at 23f8b1855: PostgreSQL locks the table before taking the snapshot, so a read behind a truncate-and-reload is not empty. Review round 10 adds 1 entry, recorded at 42572d6af: the read falls back to no table lock where PostgreSQL refuses it.",
+ "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day. Review round 5 adds 3 entries, recorded at 6b1c8b1c6: the transformer's and output processor's SQL source branches, and the refusal of infinite dates. Review round 6 adds 2 entries, recorded at 7f7b177d7: extreme dates refused only where the engine maps infinity to them, and a zoned time of day with a precision. Review round 9 adds 1 entry, recorded at b6a886089: the worker's re-check that key columns are required. Review round 9 also adds 1 entry recorded at 23f8b1855: PostgreSQL locks the table before taking the snapshot, so a read behind a truncate-and-reload is not empty. Review round 10 adds 1 entry, recorded at 42572d6af: the read falls back to no table lock where PostgreSQL refuses it. Review round 11 adds 2 entries: at 63408195e, the fallback only for a lock the engine refused (a timed-out lock does not fall back), and at 63408195e, the catch that maps a value the driver cannot materialise to etl.sql-column-type-unsupported.",
  "results": [
   {
    "mutation": "source-table-identifier-unchecked",
@@ -547,6 +547,35 @@
    "original": "catch (DbException exception) when (engine.Classify(exception) != EtlSqlErrorKind.Transient)",
    "mutated_text": "catch (DbException exception) when (false && engine.Classify(exception) != EtlSqlErrorKind.Transient)",
    "sourceRevision": "42572d6af804036c576f56d5d660cd1a77b2a3ac"
+  },
+  {
+   "mutation": "any-lock-error-falls-back",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_lock_wait_cut_short",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_lock_wait_cut_short_by_a_statement_timeout_fails_the_read_rather_than_reading_unlocked"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "catch (DbException exception) when (engine.IsLockRefusal(exception))",
+   "mutated_text": "catch (DbException exception) when (engine.Classify(exception) != EtlSqlErrorKind.Transient)",
+   "sourceRevision": "63408195e632c1f59d6b51c2000e82c69d803e9a"
+  },
+  {
+   "mutation": "value-materialisation-uncaught",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_decimal_beyond_dotnet_range",
+   "mutated": "Failed!  - Failed: 2, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_decimal_beyond_dotnet_range_is_refused_and_an_empty_table_reads_no_rows",
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_decimal_beyond_dotnet_range_is_refused_and_an_empty_table_reads_no_rows"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "catch (Exception exception) when (exception is InvalidCastException or OverflowException or NotSupportedException or IOException or",
+   "mutated_text": "catch (Exception exception) when (false && exception is InvalidCastException or OverflowException or NotSupportedException or IOException or",
+   "sourceRevision": "63408195e632c1f59d6b51c2000e82c69d803e9a"
   }
  ]
 }
