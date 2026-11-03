@@ -6,26 +6,31 @@ Source: the branch `agent/claude/2908-sql-source`, stacked on `agent/claude/2908
 
 | Requirement | Test |
 |---|---|
-| FR-001, FR-002: model, compatibility and compiler rules | `EtlSqlSourceTests`:<br>• the round trip and the `sql` kind;<br>• table and column identifiers, including distinctness ignoring case;<br>• a key of 1 to 8 distinct required columns;<br>• a continuous SQL source refused;<br>• null column or key entries make an unreadable artifact.<br>Existing artifact bytes are pinned by the golden hashes in `EtlV2ArtifactIdentityTests`. |
+| FR-001, FR-002: model, compatibility and compiler rules | `EtlSqlSourceTests`:<br>• the round trip and the `sql` kind;<br>• table and column identifiers, including distinctness ignoring case;<br>• a key of 1 to 8 distinct required columns (9 refused), and identifiers of at most 63 characters (64 refused);<br>• the column count against `MaxFields`;<br>• a continuous SQL source refused;<br>• null column or key entries make an unreadable artifact.<br>Existing artifact bytes are pinned by the golden hashes in `EtlV2ArtifactIdentityTests`. |
 | FR-003: bindings | `A_source_binding_resolves_a_digest_free_pin_and_refuses_a_table_it_does_not_allow`. |
 | FR-004, FR-005: the snapshot read (SQLite test engine) | `EtlSqlSourceTests`:<br>• rows in key order, NULLs, non-ASCII text kept as raw UTF-8;<br>• an empty table;<br>• an unsupported or floating-point column, named, and a missing column;<br>• a published snapshot reused after the table changed, with no second read;<br>• a snapshot a lapsed predecessor publishes mid-read is adopted;<br>• a SQL pin carrying a digest refused at preparation;<br>• a transient failure records nothing and carries its cause, then the next attempt prepares (SC-004 is proven at the preparer; no run-level test drives a transient read through a lease re-claim);<br>• a rejected read, a missing table, and a provider exception outside `DbException` (rejected, not retried);<br>• the snapshot size limit. |
 | FR-006: processing as JSON Lines | `A_prepared_snapshot_is_processed_as_json_lines_and_a_required_null_is_a_record_error`.<br>`A_row_beyond_the_record_limit_is_a_record_error_not_a_failed_preparation`.<br>`A_snapshot_that_no_longer_matches_its_recorded_hash_is_refused`: `etl.snapshot-integrity-failed`, and `etl.binding-unavailable` for a digested pin.<br>The worker's re-check: `Reader_refuses_a_sql_source_whose_identifiers_or_key_the_compiler_would_refuse` and `Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key`. |
-| The real worker and store (SQLite test engine) | `A_sql_source_reads_its_table_once_and_runs_it_across_two_partitions`: three accepted records, a NULL name on the error route, two partitions, a `Sql` pin without a digest.<br>`An_empty_sql_table_settles_as_success_with_no_records`.<br>`A_column_the_declaration_cannot_hold_fails_the_run_before_any_partition_exists`.<br>`A_sql_source_without_its_engine_package_is_refused_at_admission`. |
+| The real worker and store (SQLite test engine) | `A_sql_source_reads_its_table_once_and_runs_it_across_two_partitions`: three accepted records and one rejected (the NULL name), two partitions, a `Sql` pin without a digest. It compares names, not order; `A_prepared_snapshot_is_processed_as_json_lines…` checks ordinals.<br>`An_empty_sql_table_settles_as_success_with_no_records`.<br>`A_column_the_declaration_cannot_hold_fails_the_run_before_any_partition_exists`.<br>`A_sql_source_without_its_engine_package_is_refused_at_admission`. |
 | US3, SC-003: real worker processes (SQLite test engine) | `A_worker_killed_after_publishing_its_snapshot_is_replaced_and_the_replacement_reuses_that_snapshot`:<br>• the worker is killed at the new `BeforePreparationCommit` gate;<br>• the table changes;<br>• the survivor's run delivers the original rows;<br>• the recorded preparation is the predecessor's snapshot, byte for byte.<br>The worker processes write through the SQLite test engine. Reuse happens before any engine call, so it does not depend on the engine. |
-| SC-001, SC-002, SC-004: real engines | Container suite `Elsa.Etl.Sql.ProviderTests` (35 tests, 15 for this spec), on PostgreSQL 16 and SQL Server 2022:<br>• 16-, 32- and 64-bit integers on PostgreSQL (which has no 8-bit type), 8-, 32- and 64-bit on SQL Server, an exact decimal and a decimal read from an integer column;<br>• a boolean, a GUID, non-ASCII text (raw UTF-8), a timestamp, a zoned timestamp and a date (`yyyy-MM-dd`), with NULLs, in key order;<br>• an empty table;<br>• a floating-point column and a decimal beyond .NET range refused;<br>• a missing table rejected;<br>• an unreachable database classified as transient;<br>• a change committed while the read is paused part-way through 20,000 rows never reaches the snapshot, and the writer is not blocked;<br>• a time of day as ISO 8601 text, and on PostgreSQL an interval refused;<br>• SQL Server: a database without snapshot isolation rejected, and an unpaired surrogate already replaced by the driver. |
+| SC-001, SC-002, SC-004: real engines, at the reader | Container suite `Elsa.Etl.Sql.ProviderTests` (37 tests, 17 for this spec), on PostgreSQL 16 and SQL Server 2022. These tests drive `EtlSqlSnapshotReader` directly; preparation and runs on the real engines are the Workbench journeys below:<br>• 16-, 32- and 64-bit integers on PostgreSQL (which has no 8-bit type), 8-, 32- and 64-bit on SQL Server, an exact decimal and a decimal read from an integer column;<br>• a boolean, a GUID, non-ASCII text (raw UTF-8), a timestamp, a zoned timestamp and a date (`yyyy-MM-dd`), with NULLs, in key order;<br>• an empty table, and a 200,000-row table beyond the snapshot limit, which fails with the limit;<br>• a floating-point column and a decimal beyond .NET range refused;<br>• a missing table rejected;<br>• an unreachable database classified as transient (no test classifies a driver timeout);<br>• a change committed while the read is paused part-way through 20,000 rows never reaches the snapshot, and the writer is not blocked;<br>• a time of day as ISO 8601 text, and on PostgreSQL an interval refused;<br>• SQL Server: a database without snapshot isolation rejected, and an unpaired surrogate already replaced by the driver. |
 | FR-007: Studio | Vitest (`connector-pipeline-editor`, `runInspection`) and Playwright (`etl-connector-authoring`):<br>• the SQL source kind, binding, table, columns and key;<br>• continuous mode dropped and not offered;<br>• inspection's "SQL table snapshot" label and its digest wording;<br>• axe at 320 and 1024 px. |
 
-At `2fee631a8` (review round 2):
-- the ETL suite passed, 1230 of 1230;
-- the container suite passed, 35 of 35;
-- the architecture suite passed, 614 of 614, after the round's last fix, a catalog link depth. At `004033fa1`, Studio ETL Vitest passed 117 of 117 and the ETL connector Playwright spec passed 14 of 14; the later commits do not touch Studio. CI's full tier runs the container suite on the PR head.
+At `1cc03a3d4` (review round 3):
+- the ETL suite passed, 1231 of 1231;
+- the container suite passed, 37 of 37;
+- the architecture suite passed, 614 of 614.
+
+At `004033fa1`, Studio ETL Vitest passed 117 of 117 and the ETL connector Playwright spec passed 14 of 14. Later commits change only the Studio `EXTENSION_POINTS.md` text, not its code. CI's full tier runs the container suite on the PR head.
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has 26 entries, each naming the tests that failed:
+[`bite-proofs.json`](bite-proofs.json) has 30 entries, each naming the tests that failed:
 - **15 recorded at `51fa1a20b`.** The table-identifier entry was re-recorded at `2fee631a8`, so that it lists all three failing theory rows. 14 bite: the compiler's table, column and key rules; snapshot reuse; transient classification; the float refusal; the size limit; the batch builder's digest-free pin check; the source binding role; the preparer's kind check; the worker's identifier re-check; the codec's digest and hash rules; SQL Server's `SNAPSHOT` level.
 - **8 recorded at `f606d68cc`, for review round 1.** All bite: adoption of a concurrently published snapshot; the preparer's digest-free pin check; raw UTF-8 text; the catch-all rejection; the worker's case-insensitive column and repeated-key checks; null SQL entries; the `date` format.
 - **3 recorded at `2fee631a8`, for review round 2.** All bite: the interval refusal, the time-of-day format and the SQL column limit.
+- **4 for review round 3.**
+  - 2 bite, recorded at `1cc03a3d4`: the 8-column key bound and the 63-character identifier bound.
+  - 2 do not bite, recorded on `ce00cc26d` with the round's changes not yet committed: keeping the original failure when closing a cancelled reader throws, and the cancel itself. Closing did not throw on either driver at 200,000 rows, so both are defensive.
 
 **Did not bite, by design:**
 - **PostgreSQL's isolation level.** In PostgreSQL a single `SELECT` already reads one snapshot under `READ COMMITTED`. `REPEATABLE READ READ ONLY` is kept for a future read of more than one statement.
@@ -36,18 +41,22 @@ At `2fee631a8` (review round 2):
 - **The worker's transient warning.** It is not asserted.
 - **The execution's transient return.** Without it, recording would throw, the lease would lapse, and preparation would run again, so the observable behaviour is the same.
 - **The command timeout of 0.** It is not tested; no test reads for longer than a driver's default timeout.
-- **Cancelling the command before an early failure disposes the reader.** It is not tested: no test measures a drain.
 - **The engine's session setup before the snapshot transaction.** It is not tested. Neither first-party engine's setup affects a read.
 - **The mapping of an over-long line to `etl.snapshot-too-large`.** It is not tested.
+- **A type whose assembly is missing** (SqlClient's spatial and hierarchy types) is mapped to `etl.sql-column-type-unsupported`. It is not tested.
 - **The runtime API's `SourceInput` for a SQL source.** It is covered only by the Workbench journey's inspection check.
 - **A worker claiming a run whose engine is missing.** Only admission is tested.
 - **Process-level kill and reuse on PostgreSQL or SQL Server.** It is not run. The worker fixture writes through the SQLite test engine.
+- **A change after preparation and before the partitions run, on PostgreSQL or SQL Server.** It is proven through the worker on the SQLite test engine. The run reads the retained snapshot whatever the engine.
+- **A transient read through a lease re-claim** is proven at the preparer only.
 
 ## Actual Workbench journey
 
-[`sql_source_workbench_journey.py`](sql_source_workbench_journey.py) starts its own PostgreSQL 16 container and its own Workbench on ephemeral ports. The summary is in [`workbench-journey-summary.json`](workbench-journey-summary.json). It was re-run at `2fee631a8`, the head of review round 2; the tree then held only this round's evidence, uncommitted, so the summary records it as dirty. The first run, at `51fa1a20b`, passed the same checks.
+[`sql_source_workbench_journey.py`](sql_source_workbench_journey.py) starts its own database container and its own Workbench on ephemeral ports. With `--engine postgresql`, the container is PostgreSQL 16. With `--engine sqlserver`, it is SQL Server 2022, with a database that allows snapshot isolation.
 
-A SQL → SQL pipeline (`people` into `people_copy`) runs twice from native Flowcharts. The source changes between the runs. All six checks pass:
+Both ran at `1cc03a3d4` on a clean tree. Their summaries are [`workbench-journey-summary.json`](workbench-journey-summary.json) (PostgreSQL) and [`workbench-journey-summary.sqlserver.json`](workbench-journey-summary.sqlserver.json) (SQL Server). Earlier PostgreSQL runs at `51fa1a20b` and `2fee631a8` passed the same checks.
+
+A SQL → SQL pipeline (`people` into `people_copy`, on the same engine) runs twice from native Flowcharts. The source changes between the runs. All six checks pass on each engine:
 - the catalog lists both SQL bindings, `Source` and `MainOutput`;
 - the first run copies the four rows through `Done`;
 - the second run reads the changed table (an update, a delete and an insert) through `Done`. The copy holds the new values, plus the deleted source row, because a SQL destination upserts and never deletes;
@@ -65,5 +74,5 @@ These are stated in the ETL README:
 - **Equal keys.** Rows with equal keys keep the engine's order.
 - **Floating-point columns** are refused.
 - **SQL Server** needs `ALLOW_SNAPSHOT_ISOLATION ON`, and its driver replaces an unpaired surrogate in `nvarchar` text with U+FFFD.
-- **Outages.** A transient outage pauses preparation, with a logged warning, until the database returns. A misconfiguration the engine classifies as transient (for example a wrong SQL Server database name, error 4060) also pauses rather than fails.
+- **Outages.** A transient outage pauses preparation, with a logged warning naming the exception type, until the database returns. A misconfiguration the engine classifies as transient (for example a wrong SQL Server database name, error 4060) also pauses rather than fails.
 - **Memory.** A single value is materialised by the driver before the size check.
