@@ -275,16 +275,20 @@ change detection on top. It is needed for one feature only: changing a read obje
 **The amendment.** The goal stays: a step is a unit of work, its changes commit with the step, and a fault or cancel
 saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (decision 7). What changes:
 
-- **C1. A read creates no write.** There is no automatic change tracking: a read returns a value, in a script ADR
-  0046's JSON-backed view, in C# a copy. Actual reads are still recorded in ADR 0092's read set, for protection and
-  conflict checking; only change tracking goes. Reading a variable again in the same step returns the step's current
+- **C1. A read creates no write.** A read returns a value: in a script plain JavaScript values (ADR 0046 V9), in C# a
+  copy. A variable a script only read is found unchanged by the comparison of C2 and writes nothing. Actual reads are
+  still recorded in ADR 0092's read set, for protection and conflict checking; only tracking every read goes. Reading a variable again in the same step returns the step's current
   value, so read-your-writes stays. This replaces "A read returns a tracked instance", and every read becomes what
   decision 2 calls a read-only read.
 - **C2. A write is explicit.** A step changes a variable by assigning it: `variables.x = v`, `setVariable('x', v)`,
   `context.Variables.Set(target, value)`. In a script, changing a read value (`variables.order.total = 1`,
-  `getVariable('o').x = 1`) is also an explicit write: the JSON-backed view records the change, so the variable gets
-  an intent without any comparison. Elsa 3's nested mutation therefore still converts inside RunJavaScript. In C#,
-  changing a copy without `Set` is not a write (question 1).
+  `getVariable('o').x = 1`) is also an explicit write. After the script, each variable it read is compared with a
+  fresh conversion of its original JSON, JavaScript with JavaScript (copy, compare, patch, ADR 0046 V9), and each
+  changed path becomes part of the variable's intent. This is not the comparison this amendment rejects: both sides
+  went through the same conversion, so a read never looks like a change. The `variables` root records a whole
+  assignment (`variables.order = …`) itself, so a replace is told apart from a change to a member. Elsa 3's nested
+  mutation therefore still converts inside RunJavaScript. In C#, changing a copy without `Set` is not a write
+  (question 1).
   - **Visibility** (@FransVanEk, 2026-10-30, accepting write-through in scripts). Publication and inspection show which
     variables a script step writes; decision 3 already works out the may-write set. A warning is recorded when a script
     changes a read value without assigning it (`variables.order.total = 1` with no `variables.order = …`), so such a
@@ -295,10 +299,10 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
   This is a change within one step, not the cross-branch field patch rejected under *Alternatives considered*.
   - **Replace or partial update** (reconciliation row 11b). Assigning a whole value (`variables.x = v`,
     `setVariable('x', v)`, C# `Set(target, value)`) replaces it: the step said what the value is. Changing a member
-    through the script view (`variables.order.total = 1`) is a partial update: base plus that change. A whole-value
+    in a script (`variables.order.total = 1`, found by the comparison of C2) is a partial update: base plus that change. A whole-value
     write never loses members silently: when C# writes back a value read as a type that dropped members of the stored
     value (ADR 0046 V6's declared loss), a warning names the dropped members. A C# step that needs a partial update
-    reads the value as JSON (`JsonNode` or the JSON view, question 3) instead of a narrower type.
+    reads the value as JSON (`JsonNode`, question 3) instead of a narrower type.
 - **C4. A no-op assignment writes nothing.** Equality is equality of meaning in ADR 0091's canonical form, not of
   text, so notation, escaping and key order do not make a value different. **Conflict checking comes first**
   (reconciliation row 11c): a read-then-write is checked against its base version (C5) before C4 drops a no-op, so a
@@ -337,13 +341,13 @@ on the board then reads "an output capture wins over a step write".
   never get it.
 - *Alternatives considered*: "Values: variables are immutable values, changed only by assigning" was rejected because
   C# authors expect to mutate what they read. This amendment adopts it for C# unless question 1 says otherwise, and
-  keeps mutation in scripts through the view.
+  keeps mutation in scripts through copy, compare, patch (C2).
 - *Consequences*, cost: no serialization of read variables at commit; only written variables are serialized.
 - Open question 1 (a script read-only read) is gone: every read is read-only.
 
 **What it touches elsewhere.**
-- **ADR 0046 amendment (#3422), V9:** the script's copy is the JSON-backed view with a change layer, and changes leave
-  the script only as explicit writes (C2).
+- **ADR 0046 amendment (#3422), V9:** scripts get plain JavaScript values; copy, compare, patch finds their changes,
+  which leave the script only as explicit writes (C2).
 - **ADR 0089 amendment (#3420), A3:** the recorded reads are what C5 checks against.
 - **ADR 0091 (#3408):** decision 3 rules out comparing stored text; its canonical form gives the equality of C4 and
   the digest of C5.
@@ -358,8 +362,10 @@ on the board then reads "an output capture wins over a step write".
 2. **What decision 6 compares.** Did "the serialized form of its base" mean the stored text, or a snapshot of the
    value as read (what EF Core does)?
 3. **`Get<T>`.** What is `T` for a dynamic value, and which serializer options read it? Is dropping unknown members
-   acceptable as a declared loss (ADR 0046 V6), or should a dynamic value be `JsonNode` or a JSON view?
-4. **The change layer.** Do you accept the JSON-backed view's change layer in scripts instead of a comparison?
+   acceptable as a declared loss (ADR 0046 V6), or should a dynamic value be `JsonNode`?
+4. **Finding a script's changes** (changed on 3 November). Do you accept copy, compare, patch (ADR 0046 V9): compare
+   JavaScript with JavaScript after the script and patch only changed paths, instead of the JSON-backed view's change
+   layer proposed on 29 October?
 5. **Assembling the write.** Is "base JSON plus the step's changes, applied as one whole-value intent" (C3) acceptable?
 6. **Conflicts.** Do you agree that decision 7's base becomes ADR 0092's version, with a digest that compares meaning?
 
@@ -438,8 +444,8 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - Elsa 3 `setVariable`, `set<Name>()` and nested mutation convert inside RunJavaScript and stay refused in
   expressions.
 - Serialization cost is measured against a large payload.
-- Under the amendment (reconciliation row 11d): the JSON-backed view records nested changes, including through an
-  alias, and keeps untouched members' text; publication lists each script step's written variables; a change
+- Under the amendment (reconciliation row 11d): copy, compare, patch finds nested changes, including through an
+  alias, keeps untouched members' text, and reports a lost digit that reaches a write; publication lists each script step's written variables; a change
   without assignment is warned about; a narrower C# type written back warns about the members it drops; a conflicted
   write that would be a no-op is still reported as a lost update.
 
