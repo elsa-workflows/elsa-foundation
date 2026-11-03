@@ -1588,15 +1588,25 @@ async function workflowBatch() {
     await settled();
     return { summary: sent.summary, working };
   };
+  // A hand edit's ordinary autosave: the owning write happened and the editor reports no save pending.
+  const settledAutosave = async (writesBefore, what) => {
+    await expect.poll(() => owningWrites.length, { timeout: 15000, message: "The " + what + " was never autosaved." }).toBeGreaterThan(writesBefore);
+    await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  };
   const sameDraft = async (name, expected) => expect((await owner(name, definitionPath)).value.draft).toEqual(expected);
 
   // Control 1: a hand edit after the proposal changes the working-state revision; the selection stays as reviewed.
   await select(nodes.nested, "stale-select");
   const stale = await request(batch, "staleEdit");
+  const writesBeforeStaleEdit = owningWrites.length;
   await drag(nodes.nested, 60, 40, "stale-hand-edit");
   await expect(node(nodes.nested)).toHaveClass(/\bselected\b/);
   const staleOutcome = await refused(stale, "staleEdit", /revision changed after review, so this change is stale/);
   need(JSON.stringify(staleOutcome.working.layout) !== JSON.stringify(initial.layout), "The hand edit after the proposal was not in the working state.");
+  // The hand edit is ordinary unsaved work until its debounced autosave lands; Studio rightly refuses to navigate away
+  // from unsaved work, so the remount below needs it settled. Wait on the editor's own write and save state.
+  await settledAutosave(writesBeforeStaleEdit, "stale hand edit");
+  expect((await owner("owner-after-stale-autosave", definitionPath)).value.draft.layout).toEqual(staleOutcome.working.layout);
   // Control 2: a selection change rotates the editor binding before dispatch.
   const selection = await request(batch, "selectionChange");
   await select(nodes.a, "selection-change");
@@ -1604,8 +1614,13 @@ async function workflowBatch() {
   await refused(selection, "selectionChange", /selection changed\. Nothing was applied/);
   // Control 3: the editor remounts inside the same document; the dock and its proposal survive, the binding does not.
   const remount = await request(batch, "remount");
+  // Nothing unsaved may be pending, or the native navigation guard keeps the editor (correctly) and nothing remounts.
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const writesBeforeRemount = owningWrites.length;
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
-  await expect(node(nodes.a)).toHaveCount(0);
+  await expect(node(nodes.a), "Studio kept the editor open: its navigation guard refused to leave (unsaved or pending work), "
+    + "save status '" + (await page.locator(".wf-editor-save-status").innerText().catch(() => "")) + "'").toHaveCount(0);
+  need(owningWrites.length === writesBeforeRemount, "Leaving the editor for the remount wrote the owning draft.");
   await page.goBack();
   await expect(node(nodes.a)).toBeVisible();
   need(await page.evaluate(() => performance.timeOrigin) === timeOrigin, "The remount control reloaded the document instead of remounting the editor.");
@@ -1614,8 +1629,7 @@ async function workflowBatch() {
   // The batch. A hand edit just before the request is part of its base revision; its ordinary autosave settles first.
   const writesBeforeHandEdit = owningWrites.length;
   await drag(nodes.nested, 40, 30, "base-hand-edit");
-  await expect.poll(() => owningWrites.length, { timeout: 15000 }).toBeGreaterThan(writesBeforeHandEdit);
-  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  await settledAutosave(writesBeforeHandEdit, "base hand edit");
   const base = await workingDraft("working-before-batch");
   const ownerBase = (await owner("owner-before-batch", definitionPath)).value.draft;
   const nestedRow = rows => rows.find(row => row.nodeId === nodes.nested);
