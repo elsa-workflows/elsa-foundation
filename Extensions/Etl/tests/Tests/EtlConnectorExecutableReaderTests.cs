@@ -26,6 +26,31 @@ public sealed class EtlConnectorExecutableReaderTests
         Assert.Equal(artifact.Pipeline.GetRawText(), EtlArtifactV2Json.Write(reader.Read(artifact)).GetRawText());
     }
 
+    [Theory]
+    [InlineData("people;drop", "id", "id")]
+    [InlineData("people", "full name", "full name")]
+    [InlineData("people", "id", "missing")]
+    public void Reader_refuses_a_sql_source_whose_identifiers_or_key_the_compiler_would_refuse(string table, string column, string key)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with
+        {
+            Source = new EtlSqlSource("people-db", table, [new EtlColumn(column, EtlColumnType.Int64, true)], [key]),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, column)],
+            Filters = []
+        };
+
+        // A worker re-checks what the compiler enforced, because the dialect quotes these identifiers (spec 1198).
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+        Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline with
+        {
+            Source = new EtlSqlSource("people-db", "dbo.people", [new EtlColumn("id", EtlColumnType.Int64, true)], ["id"]),
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")]
+        })));
+    }
+
     [Fact]
     public void Reader_refuses_http_policy_above_independent_host_ceiling()
     {

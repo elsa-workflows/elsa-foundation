@@ -82,6 +82,28 @@ host, port, database and user, never the password.
 - **Ledger retention.** The runtime never deletes ledger rows. Delete only the rows of terminal runs: deleting a running
   run's row can allow a second write.
 
+## SQL snapshot reads
+
+[Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
+its declared columns and a key of one to eight required columns. Add an `EtlRuntimeFeature.SqlBindings` entry with role
+`Source`, as for destinations; `AllowedTables` must name the table.
+
+- **One point in time.** Preparation reads the declared columns once, ordered by the key, in a single transaction:
+  `REPEATABLE READ READ ONLY` on PostgreSQL and `SNAPSHOT` on SQL Server, which needs `ALLOW_SNAPSHOT_ISOLATION ON` for the
+  database (`etl.sql-read-rejected` otherwise). The rows are retained as a JSON Lines input snapshot, and from there the
+  run is a JSON Lines run: its partitions, positions and replay are unchanged, every partition sees the same rows, and no
+  connection is held while records are processed. A unique key keeps record numbers reproducible; rows with equal keys
+  keep the order the engine returns.
+- **Recovery.** A worker that dies after publishing the snapshot is replaced by one that reuses it, so a run never reads a
+  second, different point in time. A transient read failure (a connection loss or timeout) records nothing, and
+  preparation runs again once its lease lapses, so an outage pauses the run.
+- **Types.** `String` accepts text, GUIDs and date or time values (ISO 8601 invariant text); `Int64` accepts 8- to
+  64-bit integers; `Decimal` accepts exact decimals within .NET `decimal` range and integers; `Boolean` accepts booleans
+  (`bit` on SQL Server). Any other value, including a floating-point column, fails preparation with
+  `etl.sql-column-type-unsupported`, naming the column. A NULL in a required column is a record error on the error route.
+- **Limits.** The snapshot is bounded by `MaxSnapshotBytes` (`etl.snapshot-too-large`). A SQL source is finite only.
+  Watermark (incremental) reads, authored queries and log CDC are not supported.
+
 ## Continuous HTTP runs
 
 [Spec 1192](../../specs/1192-etl-continuous-http/spec.md) lets an HTTP pipeline run continuously: set

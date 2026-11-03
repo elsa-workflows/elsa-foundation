@@ -105,7 +105,7 @@ partition's releasable reservation for permanent exhaustion.
 ## SQL engines
 
 **`IEtlSqlEngine`** — adapter keyed by provider name (§2.7), layer: Core contract, no default implementation
-([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)).
+([specs 1197](../../../../specs/1197-etl-sql-destination/spec.md) and [1198](../../../../specs/1198-etl-sql-source/spec.md)).
 
 ```csharp
 public interface IEtlSqlEngine
@@ -122,11 +122,14 @@ public interface IEtlSqlEngine
     string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row);
     string Parameter(string column, int row);
     EtlSqlErrorKind Classify(Exception exception);
+    IsolationLevel SnapshotIsolation { get; }
+    string? SnapshotSetup { get; }
+    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 }
 ```
 
-- **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction); an engine never commits or retries.
+- **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction), and its snapshot reader owns the read (one transaction at `SnapshotIsolation`, ordered by the key, retained as JSON Lines); an engine never commits or retries.
 - **Registration:** `services.AddSingleton<IEtlSqlEngine, …>()` from an engine feature.
-- **When to implement:** to deliver to another engine. Supply connections, a target without secrets for the pinned handle, dialect text, and exception classification.
-- **What depends on it:** `HostSqlBindings` and `EtlSqlRouteWriter` in `Elsa.Etl.Runtime`.
+- **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, and exception classification.
+- **What depends on it:** `HostSqlBindings`, `EtlSqlRouteWriter` and `EtlSqlSnapshotReader` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).
