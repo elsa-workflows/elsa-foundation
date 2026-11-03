@@ -3,7 +3,7 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md)
 
 ## Phase 1 — Model and compiler
-- [x] T001 `EtlRabbitMqDestination`, `EtlConnectorKind.RabbitMq` (appended), `ConnectorRabbitMqEffectKey`, PublicAPI. Test: existing artifact bytes and identities unchanged.
+- [x] T001 `EtlRabbitMqDestination`, `EtlConnectorKind.RabbitMq` (appended), `ConnectorRabbitMqEffectKey`, PublicAPI. Tests: the existing kinds keep their integer values, and an artifact without the destination carries no `rabbitmq` kind.
 - [x] T002 Compiler and executable-reader rules: main route only, exchange and routing-key names. Tests.
 
 ## Phase 2 — Contract and writer

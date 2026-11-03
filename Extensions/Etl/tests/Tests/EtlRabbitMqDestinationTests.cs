@@ -81,6 +81,12 @@ public sealed class EtlRabbitMqDestinationTests
             bindings.ResolveExact(Scope, "events", "MainOutput", "v1", new string('0', 64), "etl.orders")).Code);
         Assert.Equal("etl.binding-unavailable", Assert.Throws<EtlBindingException>(() =>
             new HostRabbitMqBindings([Binding("not a uri")], [new TestRabbitMqPublisher()]).ResolveCurrent(Scope, "events", "MainOutput", "etl.orders")).Code);
+        // Two current revisions of one alias are ambiguous, and an alias approved by two catalogs is refused at admission.
+        var second = Binding("amqp://etl:secret@broker/sales");
+        second.Revision = "v2";
+        Assert.Equal("etl.binding-ambiguous", Assert.Throws<EtlBindingException>(() =>
+            new HostRabbitMqBindings([Binding("amqp://etl:secret@broker/sales"), second], [new TestRabbitMqPublisher()])
+                .ResolveCurrent(Scope, "events", "MainOutput", "etl.orders")).Code);
         Assert.Equal("etl.rabbitmq-unavailable", Assert.Throws<EtlBindingException>(() =>
             new HostRabbitMqBindings([Binding("amqp://etl:secret@broker/sales")], []).ResolveCurrent(Scope, "events", "MainOutput", "etl.orders")).Code);
     }

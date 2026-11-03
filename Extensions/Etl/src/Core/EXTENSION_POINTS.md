@@ -159,7 +159,7 @@ public interface IEtlRabbitMqPublisher
 ```
 
 - **What it is.** An adapter that isolates the RabbitMQ driver. The runtime's writer owns the protocol: one message per record with a stable id and effect headers, and what each outcome means. The publisher connects, publishes the messages in order on one confirming channel (persistent, mandatory, `application/json`), returns `Confirmed` only when the broker confirmed every message, `Unroutable` on a return and `Nacked` on a negative acknowledgement, and classifies other failures as transient or rejected.
-- **Registration:** `services.AddSingleton<IEtlRabbitMqPublisher, …>()` from `EtlRabbitMqFeature` in `Elsa.Etl.RabbitMq`. More than one registration is refused.
+- **Registration:** `services.AddSingleton<IEtlRabbitMqPublisher, …>()` from `EtlRabbitMqFeature` in `Elsa.Etl.RabbitMq`. Register at most one: with two, building the runtime's connector bindings throws `InvalidOperationException`, so no ETL attempt runs, as for two SQL engines with one provider name.
 - **When to implement:** to publish through another client or transport with the same confirm semantics. `DescribeTarget` must exclude the password, because its result is hashed into the binding's pinned handle.
 - **What depends on it:** `HostRabbitMqBindings` and `EtlRabbitMqRouteWriter` in `Elsa.Etl.Runtime`.
 

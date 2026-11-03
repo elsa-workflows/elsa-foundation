@@ -16,6 +16,7 @@ public class EtlRabbitMqFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        // The publisher holds no state: each publication opens and disposes its own connection, so one instance serves all.
         services.AddSingleton<IEtlRabbitMqPublisher, RabbitMqEtlPublisher>();
     }
 }
