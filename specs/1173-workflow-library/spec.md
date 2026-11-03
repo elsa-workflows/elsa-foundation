@@ -105,3 +105,7 @@ Concurrent sibling creation or hierarchy moves; cycles and depth overflow; a fol
 - Explicit-selection operations are bounded to 100 definitions initially; future reviewed jobs can extend that limit without changing ordinary selection semantics.
 - Views default to personal; sharing permission is separate. Organization never acts as an access boundary.
 - The repository's retired timing benchmark program remains retired; scale is qualified with bounded work and deterministic correctness evidence.
+
+## Tag catalog navigation refinement (#3712)
+
+Tag management uses a dedicated searchable collection with bounded continuation, active/retired status and separate create/edit URLs. Selecting a tag opens its editor; back navigation returns to the collection. Existing FR-004 vocabulary, permission, revision and value-identity contracts remain authoritative. Direct edit/create navigation checks server-issued management permission. No backend or assignment behavior changes.

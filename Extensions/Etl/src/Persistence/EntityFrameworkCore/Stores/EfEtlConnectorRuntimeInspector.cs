@@ -83,7 +83,10 @@ internal sealed partial class EfEtlRuntimeStore
             // Claim metadata describes the last persisted owner/fence even after its lease expires.
             // Callers can compare the separately reported expiry with their clock.
             var hasClaim = row.Owner is not null;
-            var count = effectCounts.GetValueOrDefault(row.PartitionOrdinal);
+            var retainedCount = effectCounts.GetValueOrDefault(row.PartitionOrdinal);
+            // Compacted batches keep counting through the partition's summary (spec 1196).
+            var count = (Main: checked(retainedCount.Main + row.CompactedMainEffects),
+                Errors: checked(retainedCount.Errors + row.CompactedErrorEffects));
             var file = position as EtlConnectorFilePosition;
             EtlConnectorHttpProgress? http = null;
             var idle = false;
@@ -123,7 +126,13 @@ internal sealed partial class EfEtlRuntimeStore
             Main = group.Sum(row => row.MainEffectKind == null ? 0L : 1L),
             Errors = group.Sum(row => row.ErrorEffectKind == null ? 0L : 1L)
         }).SingleOrDefaultAsync(cancellationToken);
-        return counts is null ? (0, 0) : (counts.Main, counts.Errors);
+        // Compacted batches keep counting through each partition's summary (spec 1196).
+        var compacted = await db.ConnectorPartitions.AsNoTracking()
+            .Where(row => row.ScopeKey == scopeKey && row.RunKey == runKey)
+            .GroupBy(_ => 1)
+            .Select(group => new { Main = group.Sum(row => row.CompactedMainEffects), Errors = group.Sum(row => row.CompactedErrorEffects) })
+            .SingleOrDefaultAsync(cancellationToken);
+        return (checked((counts?.Main ?? 0) + (compacted?.Main ?? 0)), checked((counts?.Errors ?? 0) + (compacted?.Errors ?? 0)));
     }
 
     private static EtlConnectorRetryInspection FetchInspection(EtlConnectorHttpSourceFetch fetch)

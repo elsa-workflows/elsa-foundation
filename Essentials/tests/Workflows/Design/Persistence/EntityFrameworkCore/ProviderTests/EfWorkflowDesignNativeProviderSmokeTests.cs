@@ -31,6 +31,9 @@ public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSq
     public Task PostgreSql_workflow_library_organization_is_durable_and_bounded() => WorkflowLibraryNativeWitness.RunAsync(fixture, "PostgreSql");
 
     [SkippableFact]
+    public Task PostgreSql_workflow_library_operation_keys_resolve_to_exactly_one_tag_or_view() => WorkflowLibraryNativeWitness.RunOperationKeysAsync(fixture, "PostgreSql");
+
+    [SkippableFact]
     public Task PostgreSql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
         CreateContext,
@@ -69,6 +72,9 @@ public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerF
     public Task SqlServer_workflow_library_organization_is_durable_and_bounded() => WorkflowLibraryNativeWitness.RunAsync(fixture, "SqlServer");
 
     [SkippableFact]
+    public Task SqlServer_workflow_library_operation_keys_resolve_to_exactly_one_tag_or_view() => WorkflowLibraryNativeWitness.RunOperationKeysAsync(fixture, "SqlServer");
+
+    [SkippableFact]
     public Task SqlServer_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
         CreateContext,
@@ -99,6 +105,9 @@ public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture f
 {
     [SkippableFact]
     public Task MySql_workflow_library_organization_is_durable_and_bounded() => WorkflowLibraryNativeWitness.RunAsync(fixture, "MySql");
+
+    [SkippableFact]
+    public Task MySql_workflow_library_operation_keys_resolve_to_exactly_one_tag_or_view() => WorkflowLibraryNativeWitness.RunOperationKeysAsync(fixture, "MySql");
 
     [SkippableFact]
     public Task MySql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(

@@ -101,6 +101,15 @@ is only for a settled continuous run. `EtlConnectorRunInspection.Continuous` / `
 `EtlConnectorPartitionInspection.NextPollAt` are init-only, so existing inspector implementations keep compiling;
 `NextPollAt` is set only for an idle partition and equals its `NotBefore`.
 
+A continuous provider also keeps each shard's state bounded ([spec 1196](../../../../specs/1196-etl-continuous-compaction/spec.md)).
+`RecordConnectorHttpCaughtUpAsync` increments the shard's poll generation (not on the `Final` path), and a claim copies
+it onto `EtlConnectorPartitionLease.PollGeneration`, which is 0 for every finite shard. Page-cache keys use the
+`ConnectorHttpPageId` overload with that generation; generation 0 is the finite identity. Every claim in a continuous
+run deletes, for every shard of the run, the rows below the predecessor of its current request before the claim commits
+(budgets are per run, so compacting only the claimed shard is not enough), keeps lifetime counts
+through a compacted summary, and audits retained history from that base. A provider must not apply the authored
+`MaxPagesPerPartition` to a continuous shard's page sequence.
+
 Connector providers distinguish temporary outstanding-capacity pressure (`BudgetExceeded`) from a transition
 that cannot fit the retained-input/output/metadata limits (`PermanentBudgetExceeded`). The worker yields for
 temporary pressure and settles a safe fenced diagnostic for a proven permanent shortage. Terminal failure keeps

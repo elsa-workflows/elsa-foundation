@@ -75,6 +75,7 @@
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
+          "FoundationWorkflowsRuntimeAgent": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityOidc": {},
           "GitHubCopilotAgent": {

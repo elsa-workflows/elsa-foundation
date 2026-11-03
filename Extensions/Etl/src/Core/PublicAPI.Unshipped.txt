@@ -2121,3 +2121,6 @@ static Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.operator ==(Elsa.Etl.Core.Runtim
 static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator !=(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator ==(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(string! effectId) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

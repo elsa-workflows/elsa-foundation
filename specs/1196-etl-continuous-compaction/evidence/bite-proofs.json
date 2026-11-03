@@ -1,0 +1,227 @@
+{
+  "spec": "1196-etl-continuous-compaction",
+  "note": "Each entry names the revision it was recorded at; entries re-recorded at the later revision supersede the earlier run.",
+  "results": [
+    {
+      "mutation": "finite-compacted",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompaction.cs",
+      "filter": "DisplayName~finite_http_shard_keeps",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_finite_http_shard_keeps_its_whole_history_and_no_compacted_summary_across_claims"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (pipeline.Continuous is null || row.CurrentRequestSequence is not { } current) return;",
+      "mutated_text": "if (row.CurrentRequestSequence is not { } current) return;",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "compacted-bytes-kept",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompaction.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "row.PageBytes = checked(row.PageBytes - pages.Bytes);",
+      "mutated_text": "row.PageBytes = checked(row.PageBytes - 0);",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "compacted-records-dropped",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompaction.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "row.CompactedAcceptedRecords = checked(row.CompactedAcceptedRecords + accepted);",
+      "mutated_text": "row.CompactedAcceptedRecords = checked(row.CompactedAcceptedRecords + 0);",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "generation-not-in-key",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/EtlHttpPageCache.cs",
+      "filter": "DisplayName~stalled_attempts_late_page",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_stalled_attempts_late_page_never_reaches_a_later_poll_of_the_same_cursor"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "pageSequence, request, _pollGeneration),",
+      "mutated_text": "pageSequence, request, 0),",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "generation-not-incremented",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs",
+      "filter": "DisplayName~stalled_attempts_late_page",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_stalled_attempts_late_page_never_reaches_a_later_poll_of_the_same_cursor"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        partition.PollGeneration = checked(partition.PollGeneration + 1);\n",
+      "mutated_text": "",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "lease-generation-missing",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeStore.cs",
+      "filter": "DisplayName~stalled_attempts_late_page",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_stalled_attempts_late_page_never_reaches_a_later_poll_of_the_same_cursor"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            PollGeneration = row.PollGeneration\n",
+      "mutated_text": "            PollGeneration = 0\n",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "generation-identity-ignored",
+      "file": "Extensions/Etl/src/Core/Runtime/EtlRuntimeIdentity.cs",
+      "filter": "DisplayName~Generation_zero_keeps",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Generation_zero_keeps_the_finite_page_identity_and_every_later_generation_is_distinct"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        return pollGeneration == 0\n",
+      "mutated_text": "        return true\n",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "store-page-bound-applied",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlConnectorRecordCodec.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        return pipeline.Continuous is null\n",
+      "mutated_text": "        return true\n",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "cache-page-bound-applied",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/EtlHttpPageCache.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (pageSequence < 0 || !_continuous && pageSequence >= _policy.MaxPagesPerPartition ||",
+      "mutated_text": "if (pageSequence < 0 || pageSequence >= _policy.MaxPagesPerPartition ||",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "base-predecessor-unchecked",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHistory.cs",
+      "filter": "DisplayName~null_predecessor_outside",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_null_predecessor_outside_a_compacted_base_is_refused_by_the_claim_audit"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if ((retained.PreviousPageSequence is null) != (retained.PageSequence == 0 || retained.PageSequence == basePage))",
+      "mutated_text": "if (false)",
+      "sourceRevision": "ed57e6657efa155d60c2c9f5009e14e718e8b902"
+    },
+    {
+      "mutation": "compaction-skipped",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeStore.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (state.Pipeline.Continuous is not null)\n            foreach (var partition in await db.ConnectorPartitions",
+      "mutated_text": "        if (false)\n            foreach (var partition in await db.ConnectorPartitions",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    },
+    {
+      "mutation": "route-bodies-kept",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                        output.DeleteRetainedRouteBodies(retained.Output);\n",
+      "mutated_text": "",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    },
+    {
+      "mutation": "left-page-kept",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                    if (LeftPage(left, next))\n                        await DeleteEndedFilesAsync(() => acquirer.DeleteLeftPageAsync(admission, left, token));\n",
+      "mutated_text": "",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    },
+    {
+      "mutation": "inspector-compacted-effects",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeInspector.cs",
+      "filter": "DisplayName~far_more_pages",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_continuous_run_accepts_far_more_pages_than_its_page_limit_with_a_bounded_window_per_shard"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "return (checked((counts?.Main ?? 0) + (compacted?.Main ?? 0))",
+      "mutated_text": "return (checked((counts?.Main ?? 0) + 0)",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    },
+    {
+      "mutation": "migration-check-not-relaxed",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/Runtime/20261103090000_ConnectorContinuousCompaction.cs",
+      "filter": "DisplayName~spec_1192_continuous_run_migrates",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_spec_1192_continuous_run_migrates_keeps_its_rows_and_compacts_its_history"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "CHECK ((PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0",
+      "mutated_text": "CHECK ((PageSequence = 0 AND PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    },
+    {
+      "mutation": "peer-compaction-skipped",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeStore.cs",
+      "filter": "DisplayName~compacts_every_shard",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_claim_compacts_every_shard_of_the_run_so_peers_history_cannot_exhaust_a_shared_budget"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                await CompactConnectorHttpHistoryAsync(partition, candidate.Connector, state.Pipeline, cancellationToken);",
+      "mutated_text": "                await CompactConnectorHttpHistoryAsync(row, candidate.Connector, state.Pipeline, cancellationToken);",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    },
+    {
+      "mutation": "chain-rebuilt-from-seed",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHistory.cs",
+      "filter": "DisplayName~spec_1192_continuous_run_migrates",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_spec_1192_continuous_run_migrates_keeps_its_rows_and_compacts_its_history"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "var expectedRequest = basePage == 0 ? new EtlHttpRequest(http.Request.ShardId, null) : baseRequest!;",
+      "mutated_text": "var expectedRequest = new EtlHttpRequest(http.Request.ShardId, null);",
+      "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902"
+    }
+  ]
+}

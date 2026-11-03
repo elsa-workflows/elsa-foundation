@@ -35,6 +35,15 @@ public sealed record CreateWorkflowFolder(string Name, string? ParentId = null);
 public sealed record RenameWorkflowFolder(string FolderId, string Name, string? Revision = null);
 public sealed record MoveWorkflowFolder(string FolderId, string? ParentId = null, string? Revision = null);
 public sealed record DeleteEmptyWorkflowFolder(string FolderId, string? Revision = null);
+public sealed record GetFolderDeletionPreview(string FolderId);
+public sealed record DeleteWorkflowFolder(string FolderId, string PreviewRevision, bool DeleteWorkflows, string OperationKey);
+public sealed record FolderDeletionView(WorkflowFolder Folder, WorkflowFolder? Parent, int WorkflowCount,
+    int DeletedWorkflowCount, int ChildFolderCount, string Revision)
+{
+    public static FolderDeletionView From(FolderDeletionPreview preview) => new(preview.Folder, preview.Parent,
+        preview.Workflows.Count(workflow => !workflow.Deleted), preview.Workflows.Count(workflow => workflow.Deleted),
+        preview.Descendants.Count(folder => folder.ParentId == preview.Folder.Id), preview.Revision);
+}
 public sealed record MoveWorkflowDefinitions(IReadOnlyList<string> DefinitionIds, string? FolderId = null, string? OperationKey = null);
 public sealed record ListWorkflowLibrary(string? SearchTerm = null, string State = "active", string? FolderId = null,
     bool Unfiled = false, bool IncludeDescendants = false, string? TagFilters = null, bool FavoritesOnly = false,
@@ -50,7 +59,22 @@ public sealed record SaveWorkflowTag(string TagId, string Name, string? Descript
 {
     public WorkflowTagInput ToInput() => new(Name, Description, Mode, Cardinality, Deprecated, Values, Revision);
 }
+/// <summary>The tag create body: the tag input plus an optional client operation key (spec 1193 FR-021), additive to the former body.</summary>
+/// <remarks>The same key with the same input returns the tag that key created; with different input it is a 409. A store
+/// without key support answers a keyed create with 501.</remarks>
+public sealed record CreateWorkflowTag(string Name, string? Description = null, string Mode = "marker",
+    string Cardinality = "single", bool Deprecated = false, IReadOnlyList<WorkflowTagValue>? Values = null,
+    string? Revision = null, string? OperationKey = null)
+{
+    public WorkflowTagInput ToInput() => new(Name, Description, Mode, Cardinality, Deprecated, Values, Revision);
+}
 public sealed record ListWorkflowViews;
+/// <summary>The view create body: the view input plus an optional client operation key (spec 1193 FR-021), additive to the former body.</summary>
+public sealed record CreateWorkflowView(string Name, WorkflowLibraryQuery Query, bool Shared = false,
+    IReadOnlyList<string>? Columns = null, string? Revision = null, string? OperationKey = null)
+{
+    public WorkflowLibraryViewInput ToInput() => new(Name, Query, Shared, Columns, Revision);
+}
 public sealed record SaveWorkflowView(string ViewId, string Name, WorkflowLibraryQuery Query, bool Shared = false,
     IReadOnlyList<string>? Columns = null, string? Revision = null)
 {

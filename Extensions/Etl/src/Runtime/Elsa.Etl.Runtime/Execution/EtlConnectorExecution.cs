@@ -76,6 +76,20 @@ internal sealed class EtlConnectorExecution(
         }
     }
 
+    private static bool LeftPage(EtlConnectorPartitionLease before, EtlConnectorPartitionLease after) =>
+        before.Position is EtlConnectorHttpPosition left && after.Position is EtlConnectorHttpPosition current &&
+        current.PageSequence > left.PageSequence;
+
+    /// <summary>Deletion is best effort: a file left behind costs disk until a later cleanup, never correctness.</summary>
+    private async ValueTask DeleteEndedFilesAsync(Func<ValueTask> delete)
+    {
+        try { await delete(); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning("ETL connector files whose use ended were left in place after {FailureType}.", exception.GetType().Name);
+        }
+    }
+
     public async ValueTask ExecutePartitionAsync(EtlConnectorPartitionLease initialLease,
         CancellationToken cancellationToken = default)
     {
@@ -96,11 +110,12 @@ internal sealed class EtlConnectorExecution(
             await using var builder = await EtlConnectorInputBatchBuilder.OpenAsync(options.SnapshotRoot,
                 admission, view.Prepared, lease.PartitionOrdinal, token);
             EtlCachedHttpPage? page = null;
+            var acquirer = new EtlHttpSourceAcquirer(store, http, transport, options.SnapshotRoot, clock);
+            var continuous = pipeline.Continuous is not null;
             if (lease.Position is EtlConnectorHttpPosition position)
             {
                 if (position.Exhausted) return;
-                var acquired = await new EtlHttpSourceAcquirer(store, http, transport, options.SnapshotRoot, clock)
-                    .AcquireAsync(admission, lease, token);
+                var acquired = await acquirer.AcquireAsync(admission, lease, token);
                 if (acquired.FailureCode is { } failure)
                 {
                     await SettleAsync(lease, new(failure), token);
@@ -112,7 +127,13 @@ internal sealed class EtlConnectorExecution(
                 if (page.Descriptor.RecordCount == 0)
                 {
                     var advanced = await store.AdvanceEmptyHttpPageAsync(lease, token);
-                    if (advanced.Lease is { } updated) Volatile.Write(ref lease, updated);
+                    if (advanced.Lease is { } updated)
+                    {
+                        var left = lease;
+                        Volatile.Write(ref lease, updated);
+                        if (continuous && LeftPage(left, updated))
+                            await DeleteEndedFilesAsync(() => acquirer.DeleteLeftPageAsync(admission, left, token));
+                    }
                     else if (advanced.Status is not (EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal or
                                  EtlStoreStatus.BudgetExceeded or EtlStoreStatus.Conflict))
                         await SettleAsync(lease, new("etl.http.empty-page-transition-refused"), token);
@@ -166,7 +187,22 @@ internal sealed class EtlConnectorExecution(
                 await SettleAsync(lease, new("etl.connector-acceptance-retention-limit"), token);
                 return;
             }
-            if (accepted.Lease is { } next) Volatile.Write(ref lease, next);
+            if (accepted.Lease is { } next)
+            {
+                var left = lease;
+                Volatile.Write(ref lease, next);
+                // A continuous run deletes files once the committed transition ended their use (spec 1196).
+                if (continuous)
+                {
+                    await DeleteEndedFilesAsync(() =>
+                    {
+                        output.DeleteRetainedRouteBodies(retained.Output);
+                        return ValueTask.CompletedTask;
+                    });
+                    if (LeftPage(left, next))
+                        await DeleteEndedFilesAsync(() => acquirer.DeleteLeftPageAsync(admission, left, token));
+                }
+            }
             else if (accepted.Status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay or EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal))
                 await SettleAsync(lease, new("etl.connector-batch-acceptance-conflict"), token);
         }
