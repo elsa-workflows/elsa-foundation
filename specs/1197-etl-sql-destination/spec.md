@@ -118,7 +118,7 @@ An author picks a SQL binding for the main route in Studio, names the table and 
   - identifier quoting;
   - the single-row upsert, ledger DDL, ledger insert and unique-key catalog query;
   - the classification of an exception as transient, duplicate key, already exists, missing object, missing constraint or rejection;
-  - a key count of -1 when the target is not a base table (missing, or a view on SQL Server).
+  - a key count of -1 when the target is not a base table (missing, a view, or another non-table relation).
 - **FR-005** The route body of a `sql` route is the batch's mapped records as a JSON array, retained like an HTTP body. The effect identity and body hash are as for other routes.
 - **FR-006** The runtime's writer handles one route body in one transaction:
   1. ensure the ledger;

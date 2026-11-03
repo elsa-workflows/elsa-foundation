@@ -72,7 +72,7 @@ host, port, database and user, never the password.
   unique constraint or index on exactly those columns (`etl.sql-key-constraint-missing` otherwise). Columns are the output
   field names, which must be identifiers distinct ignoring case. Identifiers are quoted exactly as authored
   (case-sensitive on PostgreSQL), and `AllowedTables` compares them exactly. The target must be a base table: a missing
-  table is a rejection, and so is a view on SQL Server, while on PostgreSQL a view fails as a missing key. A key repeated
+  table, a view or another non-table target is a rejection on both engines. A key repeated
   in a batch resolves under the database's collation, the later record winning. Across concurrently processed partitions
   or shards, the winner for a shared key is unspecified.
 - **Failures.** A deterministic refusal (a type the column rejects, a NOT NULL or permission error, a missing table)

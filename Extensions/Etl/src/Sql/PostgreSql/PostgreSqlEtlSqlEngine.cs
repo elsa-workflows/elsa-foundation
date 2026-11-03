@@ -41,7 +41,9 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     public string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns)
     {
         var keys = string.Join(", ", keyColumns.Order(StringComparer.Ordinal).Select(column => $"'{column}'"));
-        return $"SELECT CASE WHEN to_regclass('{Quote(table)}') IS NULL THEN -1 ELSE (" +
+        // Only an ordinary or partitioned table is a target: a missing table, a view or a materialized view counts -1.
+        return $"SELECT CASE WHEN (SELECT c.relkind FROM pg_class c WHERE c.oid = to_regclass('{Quote(table)}')) IS DISTINCT FROM 'r' " +
+               $"AND (SELECT c.relkind FROM pg_class c WHERE c.oid = to_regclass('{Quote(table)}')) IS DISTINCT FROM 'p' THEN -1 ELSE (" +
                $"SELECT COUNT(*) FROM pg_index i WHERE i.indrelid = to_regclass('{Quote(table)}') AND i.indisunique AND i.indpred IS NULL " +
                $"AND i.indnkeyatts = {keyColumns.Count} AND (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a " +
                "WHERE a.attrelid = i.indrelid AND a.attnum = ANY((i.indkey::int2[])[0:i.indnkeyatts - 1])) = " +

@@ -107,6 +107,21 @@ public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
         Assert.Empty(await fixture.QueryAsync($"SELECT effect_id FROM {_ledger}"));
     }
 
+    [SkippableFact]
+    public async Task A_view_as_target_is_a_rejection_on_every_engine()
+    {
+        await CreateTableAsync(keyed: true);
+        var view = "view_" + Guid.NewGuid().ToString("N")[..12];
+        await fixture.ExecuteAsync($"CREATE VIEW {view} AS SELECT id, name, score FROM {_table}");
+
+        var failure = await Assert.ThrowsAsync<EtlEffectException>(() => new EtlSqlRouteWriter(fixture.Engine, TimeProvider.System)
+            .WriteAsync(new EtlSqlRouteDelivery(fixture.ConnectionString, _ledger, true, view, ["id"], Columns,
+                Encoding.UTF8.GetBytes("[{\"id\":1,\"name\":\"Ada\"}]"), "effect-1", "run", "batch-1", new string('a', 64)), default).AsTask());
+
+        Assert.Equal("etl.sql-write-rejected", failure.Code);
+        Assert.Empty(await fixture.QueryAsync($"SELECT id FROM {_table}"));
+    }
+
     private async Task CreateTableAsync(bool keyed)
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
