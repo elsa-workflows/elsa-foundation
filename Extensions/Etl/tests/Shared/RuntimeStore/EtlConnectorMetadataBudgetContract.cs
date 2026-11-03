@@ -12,12 +12,12 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Http_request_ledger_and_metadata_counters_match_persisted_utf8_documents_and_replays()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("metadata-ledger", new("tenant", "metadata-ledger"), httpShardIds: ["shard"]);
@@ -102,7 +102,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Tiny_metadata_limit_refuses_preparation_without_persisting_partition_or_request_rows()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var defaults = EtlV2TestPipelines.Create();
@@ -135,7 +135,7 @@ public sealed partial class EtlRuntimeStoreTests
         const string partitionId = "metadata-begin-limit";
         var limit = await MeasurePreparedMetadataBudgetAsync(runId, partitionId);
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = database.CreateStore(context, clock);
@@ -181,7 +181,7 @@ public sealed partial class EtlRuntimeStoreTests
         var limits = await MeasureTwoShardBeginBudgetsAsync(firstRun, "metadata-cross-shard-limit");
         Assert.True(limits.AfterSecondBegin > limits.AfterFirstBegin);
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = database.CreateStore(context, clock);
@@ -229,7 +229,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.True(measured.AfterFirstPage < measured.AfterSecondBegin);
 
         pipeline = pipeline with { Http = http with { MaxRetainedMetadataBytes = measured.AfterSecondBegin - 1 } };
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -263,35 +263,6 @@ public sealed partial class EtlRuntimeStoreTests
             .Where(request => request.PageSequence == 1).Select(request => request.FetchJson).SingleAsync());
     }
 
-    [Fact]
-    public async Task Request_ledger_keys_cannot_be_rewritten_after_a_page_references_them()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        await using var context = database.CreateContext();
-        var store = database.CreateStore(context);
-        var admission = ConnectorAdmission("immutable-request-ledger", new("tenant", "immutable-request-ledger"), httpShardIds: ["shard"]);
-        var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
-        var originalRequestHash = EtlRuntimeIdentity.HttpRequestHash(Assert.IsType<EtlConnectorHttpPosition>(lease.Position).Request);
-        var attached = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "page-0", 10, 0, "cursor-1"));
-        Assert.Equal(EtlStoreStatus.Applied, attached.Status);
-
-        var request = await context.ConnectorHttpRequests.SingleAsync(row => row.PageSequence == 0);
-        request.RequestHash = new string('d', 64);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync());
-        context.ChangeTracker.Clear();
-
-        request = await context.ConnectorHttpRequests.AsNoTracking().SingleAsync(row => row.PageSequence == 0);
-        var tableName = $"\"{EtlRuntimeEfModule.ConnectorHttpRequestTableName}\"";
-        var update = $"UPDATE {tableName} SET \"RequestHash\" = {{0}} WHERE \"ScopeKey\" = {{1}} AND \"RunKey\" = {{2}} AND \"PartitionOrdinal\" = {{3}} AND \"PageSequence\" = {{4}}";
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlRawAsync(update,
-            new string('d', 64), request.ScopeKey, request.RunKey, request.PartitionOrdinal, request.PageSequence));
-
-        Assert.Equal(originalRequestHash,
-            (await context.ConnectorHttpRequests.AsNoTracking().SingleAsync(row => row.PageSequence == 0)).RequestHash);
-        Assert.Equal(originalRequestHash,
-            (await context.ConnectorHttpPages.AsNoTracking().SingleAsync(page => page.PageSequence == 0)).RequestHash);
-    }
-
     [Theory]
     [InlineData("renew")]
     [InlineData("release")]
@@ -299,7 +270,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("advance")]
     public async Task Hot_http_transitions_use_bounded_indexed_lookups_after_history_grows(string operation)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         EtlConnectorPartitionLease lease;
         await using (var seedContext = database.CreateContext())
         {
@@ -346,7 +317,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Expired_http_page_attachment_rolls_back_metadata_and_ledger_accounting()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         string priorPosition;
@@ -399,7 +370,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Expired_http_page_advance_rolls_back_new_request_and_metadata_accounting()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         string priorPosition;
@@ -445,9 +416,9 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(priorMetadataBytes, await AssertMetadataAccountingAsync(verificationContext));
     }
 
-    private static async Task<long> MeasurePreparedMetadataBudgetAsync(string runId, string partitionId)
+    private protected async Task<long> MeasurePreparedMetadataBudgetAsync(string runId, string partitionId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context, new MutableTimeProvider());
         var admission = ConnectorAdmission(runId, new("tenant", partitionId), httpShardIds: ["shard"]);
@@ -455,10 +426,10 @@ public sealed partial class EtlRuntimeStoreTests
         return await AssertMetadataAccountingAsync(context);
     }
 
-    private static async Task<(long AfterFirstBegin, long AfterSecondBegin)> MeasureTwoShardBeginBudgetsAsync(
+    private protected async Task<(long AfterFirstBegin, long AfterSecondBegin)> MeasureTwoShardBeginBudgetsAsync(
         string runId, string partitionId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = database.CreateStore(context, clock);
@@ -473,10 +444,10 @@ public sealed partial class EtlRuntimeStoreTests
         return (afterFirst, afterSecond);
     }
 
-    private static async Task<(long AfterFirstPage, long AfterSecondBegin, long HistoricalFetchBytes)>
+    private protected async Task<(long AfterFirstPage, long AfterSecondBegin, long HistoricalFetchBytes)>
         MeasureHistoricalHttpRequestMetadataBudgetAsync(string runId, string partitionId, EtlPipelineV2 pipeline)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -499,7 +470,7 @@ public sealed partial class EtlRuntimeStoreTests
         return (afterFirstPage, afterSecondBegin, historical.FetchMetadataBytes);
     }
 
-    private static async Task<long> AssertMetadataAccountingAsync(EtlRuntimeSqliteDbContext context)
+    private protected static async Task<long> AssertMetadataAccountingAsync(EtlRuntimeDbContext context)
     {
         var partitions = await context.ConnectorPartitions.AsNoTracking().ToListAsync();
         var requests = await context.ConnectorHttpRequests.AsNoTracking().ToListAsync();
@@ -532,9 +503,9 @@ public sealed partial class EtlRuntimeStoreTests
         return actualRunBytes;
     }
 
-    private static int Utf8Bytes(string value) => Encoding.UTF8.GetByteCount(value);
+    private protected static int Utf8Bytes(string value) => Encoding.UTF8.GetByteCount(value);
 
-    private static void AssertBoundedHistoryLookup(string command)
+    private protected static void AssertBoundedHistoryLookup(string command)
     {
         Assert.True(command.Contains("WHERE", StringComparison.OrdinalIgnoreCase), command);
         Assert.True(command.Contains("PartitionOrdinal", StringComparison.OrdinalIgnoreCase), command);
@@ -543,13 +514,13 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.False(command.Contains("SUM(", StringComparison.OrdinalIgnoreCase), command);
     }
 
-    private static bool HasIndexedEquality(string command, string column)
+    private protected static bool HasIndexedEquality(string command, string column)
     {
         var pattern = "(?:\"|`|\\[)?" + Regex.Escape(column) + "(?:\"|`|\\])?\\s*=\\s*[@:$]";
         return Regex.IsMatch(command, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
-    private sealed class SqlCaptureInterceptor : DbCommandInterceptor
+    private protected sealed class SqlCaptureInterceptor : DbCommandInterceptor
     {
         private readonly ConcurrentQueue<string> _commands = new();
 

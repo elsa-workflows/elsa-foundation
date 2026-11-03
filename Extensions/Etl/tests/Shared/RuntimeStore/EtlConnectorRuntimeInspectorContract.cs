@@ -8,15 +8,15 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
-    private const int HttpEffectMechanism = 1;
-    private const int FileEffectMechanism = 2;
+    private protected const int HttpEffectMechanism = 1;
+    private protected const int FileEffectMechanism = 2;
 
     [Fact]
     public async Task Connector_inspection_is_scoped_and_pages_partitions_in_ascending_bounded_order()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var options = new EtlRuntimeStoreOptions(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30),
@@ -87,7 +87,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_inspection_tracks_retry_publication_acknowledgement_and_settled_effect_counts_once()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var runtime = database.CreateStore(context, clock);
@@ -178,7 +178,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_inspection_reads_the_existing_request_for_an_exhausted_final_http_page()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var inspector = (IEtlConnectorRuntimeInspector)database.CreateStore(context);
@@ -213,7 +213,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_inspection_does_not_count_retained_effects_when_cancellation_preserves_owed_work()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -244,65 +244,4 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Single(await context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
-    public async Task Connector_inspection_rejects_effect_kind_columns_that_disagree_with_retained_output()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        await using var context = database.CreateContext();
-        var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
-        var admission = ConnectorAdmission("inspection-corrupt-kind", new("tenant-a", "inspection-corrupt-kind"), httpShardIds: ["shard-a"]);
-        var (_, batch, _) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
-        // The column holds the delivery mechanism (1 HTTP, 2 file) since spec 1191's CSV delivery; these values predate it unchanged.
-        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET MainEffectKind = {FileEffectMechanism} WHERE BatchId = {batch.BatchId}");
-
-        var inspector = (IEtlConnectorRuntimeInspector)database.CreateStore(context);
-        await Assert.ThrowsAsync<InvalidDataException>(() => inspector.ListConnectorPartitionsAsync(
-            admission.Invocation.Scope, admission.Invocation.RunId, -1, 1).AsTask());
-    }
-
-    [Fact]
-    public async Task Connector_inspection_effect_migration_backfills_route_kinds_without_rewriting_retained_output()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Runtime.Tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        await using var database = new TestDatabase(directory);
-        await using var context = database.CreateContext();
-        await context.Database.OpenConnectionAsync();
-        var migrator = await SeedConnectorBatchThroughOutputsAsync(context);
-        await migrator.MigrateAsync("20261021140000_ConnectorHttpDeliveryAttempts");
-
-        const string batchId = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-        var descriptor = new EtlConnectorBatchDescriptor(batchId,
-            new EtlConnectorHttpBatchRange(0, new string('b', 64), new string('d', 64), 0, 2), 12, new string('e', 64));
-        var descriptorJson = EtlConnectorRecordCodec.Write(descriptor);
-        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET DescriptorJson = {descriptorJson}, DescriptorDigest = {EtlRuntimeRecordCodec.HashText(descriptorJson)} WHERE BatchId = {batchId}");
-        await migrator.MigrateAsync("20261021150000_ConnectorBatchAcceptance");
-        await migrator.MigrateAsync("20261021160000_ConnectorSourceFetch");
-
-        var main = new EtlConnectorRouteOutput(EtlConnectorKind.Http,
-            new EtlObjectReference("retained-main", EtlRuntimeRecordCodec.HashText("main"), 17), 1,
-            EtlRuntimeRecordCodec.HashText("main-effect"));
-        var errors = new EtlConnectorRouteOutput(EtlConnectorKind.Jsonl,
-            new EtlObjectReference("retained-errors", EtlRuntimeRecordCodec.HashText("errors"), 19), 1,
-            EtlRuntimeRecordCodec.HashText("error-effect"));
-        var outputJson = EtlConnectorRecordCodec.Write(new EtlConnectorBatchOutput(1, 1, 0, main, errors));
-        var outputDigest = EtlRuntimeRecordCodec.HashText(outputJson);
-        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET OutputJson = {outputJson}, OutputDigest = {outputDigest}, OutputBytes = 36, RecordCount = 2 WHERE BatchId = {batchId}");
-
-        await migrator.MigrateAsync("20261021170000_ConnectorInspectionEffects");
-
-        var mainKind = await context.Database.SqlQuery<int?>($"SELECT MainEffectKind AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        var errorKind = await context.Database.SqlQuery<int?>($"SELECT ErrorEffectKind AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        var migratedOutput = await context.Database.SqlQuery<string>($"SELECT OutputJson AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        var migratedDigest = await context.Database.SqlQuery<string>($"SELECT OutputDigest AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        var migratedBytes = await context.Database.SqlQuery<long>($"SELECT OutputBytes AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        var migratedSchema = await context.Database.SqlQuery<string>($"SELECT SchemaVersion AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        // The migration backfill wrote the delivery mechanism: HTTP delivery and JSONL file publication.
-        Assert.Equal(HttpEffectMechanism, mainKind);
-        Assert.Equal(FileEffectMechanism, errorKind);
-        Assert.Equal(outputJson, migratedOutput);
-        Assert.Equal(outputDigest, migratedDigest);
-        Assert.Equal(36, migratedBytes);
-        Assert.Equal(EtlRuntimeEfModule.SchemaVersion, migratedSchema);
-    }
 }

@@ -7,12 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Http_batch_reservation_is_stable_replayable_and_owned_after_reacquisition()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -85,7 +85,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("stale-position")]
     public async Task Http_batch_reservation_requires_a_valid_range_at_the_current_page(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission($"connector-http-reservation-invalid-{defect}",
@@ -138,7 +138,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("bytes")]
     public async Task Http_batch_reservation_enforces_run_wide_outstanding_quotas(string quota)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var defaults = EtlV2TestPipelines.Create();
         var pipeline = defaults with
@@ -182,7 +182,7 @@ public sealed partial class EtlRuntimeStoreTests
     public async Task Http_batch_metadata_budget_refusal_does_not_persist_the_reservation()
     {
         var (metadataLimit, expectedBaseline, expectedDescriptorBytes) = await MeasureHttpBatchMetadataLimitAsync();
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var defaults = EtlV2TestPipelines.Create();
         var pipeline = defaults with { Http = defaults.Http with { MaxRetainedMetadataBytes = metadataLimit } };
@@ -214,7 +214,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_batch_reservation_expiry_after_save_rolls_back_the_reservation()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);
@@ -247,7 +247,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Cancellation_preserves_an_owed_http_batch_and_refuses_further_reservations()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -282,7 +282,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Csv_v2_file_range_can_be_reserved_and_recovered_as_the_same_owed_batch()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var pipeline = CsvMixedRoutePipeline();
@@ -322,7 +322,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Single(await recoveryContext.ConnectorBatches.AsNoTracking().ToListAsync());
     }
 
-    private static EtlConnectorBatchDescriptor HttpBatch(EtlConnectorRunAdmission admission, EtlConnectorPreparedRun prepared,
+    private protected static EtlConnectorBatchDescriptor HttpBatch(EtlConnectorRunAdmission admission, EtlConnectorPreparedRun prepared,
         EtlConnectorPartitionLease lease, int endItemExclusive, long inputBytes, string? marker = null)
     {
         var range = CurrentHttpRange(lease, 0, endItemExclusive);
@@ -330,7 +330,7 @@ public sealed partial class EtlRuntimeStoreTests
             EtlRuntimeRecordCodec.HashText(marker ?? "canonical-http-input"));
     }
 
-    private static EtlConnectorHttpBatchRange CurrentHttpRange(EtlConnectorPartitionLease lease,
+    private protected static EtlConnectorHttpBatchRange CurrentHttpRange(EtlConnectorPartitionLease lease,
         int startItem, int endItemExclusive)
     {
         var position = Assert.IsType<EtlConnectorHttpPosition>(lease.Position);
@@ -339,7 +339,7 @@ public sealed partial class EtlRuntimeStoreTests
             page?.Body.ContentHash ?? EtlRuntimeFixtures.Hash, startItem, endItemExclusive);
     }
 
-    private static EtlConnectorBatchDescriptor ConnectorBatch(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorBatchDescriptor ConnectorBatch(EtlConnectorRunAdmission admission,
         EtlConnectorPreparedRun prepared, EtlConnectorPartitionLease lease, EtlConnectorBatchRange range,
         long inputBytes, string inputHash)
     {
@@ -347,12 +347,12 @@ public sealed partial class EtlRuntimeStoreTests
         return new(id, range, inputBytes, inputHash);
     }
 
-    private static async Task<long> RetainedMetadataBytesAsync(EtlRuntimeDbContext context) =>
+    private protected static async Task<long> RetainedMetadataBytesAsync(EtlRuntimeDbContext context) =>
         (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes;
 
-    private static async Task<(long Limit, long Baseline, int DescriptorBytes)> MeasureHttpBatchMetadataLimitAsync()
+    private protected async Task<(long Limit, long Baseline, int DescriptorBytes)> MeasureHttpBatchMetadataLimitAsync()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("connector-http-metadata-limit", new("tenant-a", "http-metadata-limit"), httpShardIds: ["shard-a"]);

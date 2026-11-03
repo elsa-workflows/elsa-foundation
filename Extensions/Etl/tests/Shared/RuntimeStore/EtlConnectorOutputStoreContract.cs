@@ -9,12 +9,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Connector_output_plan_is_stable_across_replay_and_partition_recovery()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("connector-output-recovery", new("tenant-a", "output-recovery"), CsvMixedRoutePipeline());
@@ -77,7 +77,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_connector_output_recovers_with_its_retained_page_and_batch()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("connector-http-output-recovery", new("tenant-a", "http-output-recovery"),
@@ -109,7 +109,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Fully_filtered_connector_output_retains_a_bodyless_plan()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("connector-output-filtered", new("tenant-a", "output-filtered"), CsvMixedRoutePipeline());
@@ -141,7 +141,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("body-length")]
     public async Task Connector_output_store_rejects_invalid_output_plans_atomically(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission($"connector-output-invalid-{defect}", new("tenant-a", $"output-invalid-{defect}"), CsvMixedRoutePipeline());
@@ -197,7 +197,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("cancelled")]
     public async Task Connector_output_store_refuses_a_stale_or_terminal_lease(string state)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -236,7 +236,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_output_store_rolls_back_when_lease_expires_after_save()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);
@@ -267,7 +267,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_output_body_budget_is_run_wide_and_replay_does_not_charge_it_twice()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var defaults = CsvMixedRoutePipeline();
         var pipeline = defaults with { Limits = defaults.Limits with { MaxRetainedOutputBytes = 8 } };
@@ -306,7 +306,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_batch_output_budget_counts_both_route_bodies_together()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var defaults = CsvMixedRoutePipeline();
         var pipeline = defaults with { Limits = defaults.Limits with { MaxOutputBatchBytes = 10 } };
@@ -333,7 +333,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         var measurement = await MeasureOutputMetadataBoundaryAsync();
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var defaults = CsvMixedRoutePipeline();
         var pipeline = defaults with
@@ -370,7 +370,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("null-plan")]
     public async Task Connector_corrupt_output_plan_digest_or_accounting_is_rejected_on_recovery(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission($"connector-output-corrupt-{defect}", new("tenant-a", $"output-corrupt-{defect}"), CsvMixedRoutePipeline());
@@ -423,7 +423,7 @@ public sealed partial class EtlRuntimeStoreTests
             await recoveryStore.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "recovery-worker"));
     }
 
-    private static async Task<IReadOnlyList<EtlConnectorPartitionLease>> StartOutputCsvRunAsync(
+    private protected static async Task<IReadOnlyList<EtlConnectorPartitionLease>> StartOutputCsvRunAsync(
         IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission, long recordCount = 4)
     {
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);
@@ -440,7 +440,7 @@ public sealed partial class EtlRuntimeStoreTests
         return leases;
     }
 
-    private static EtlConnectorBatchDescriptor OutputTestBatch(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorBatchDescriptor OutputTestBatch(EtlConnectorRunAdmission admission,
         EtlConnectorPreparedRun prepared, EtlConnectorPartitionLease lease, int recordCount = 2)
     {
         var position = Assert.IsType<EtlConnectorFilePosition>(lease.Position);
@@ -449,7 +449,7 @@ public sealed partial class EtlRuntimeStoreTests
             inputBytes: 11, inputHash: EtlRuntimeRecordCodec.HashText($"output-test-input-{lease.PartitionOrdinal}"));
     }
 
-    private static EtlConnectorBatchOutput CreateOutput(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorBatchOutput CreateOutput(EtlConnectorRunAdmission admission,
         EtlConnectorBatchDescriptor batch, long accepted, long rejected, long filtered,
         string suffix, long mainBytes = 17, long errorBytes = 19,
         EtlConnectorKind errorKind = EtlConnectorKind.Jsonl)
@@ -461,7 +461,7 @@ public sealed partial class EtlRuntimeStoreTests
         return new(accepted, rejected, filtered, main, errors);
     }
 
-    private static EtlConnectorRouteOutput OutputRoute(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorRouteOutput OutputRoute(EtlConnectorRunAdmission admission,
         EtlConnectorBatchDescriptor batch, EtlOutputRoute route, EtlConnectorKind kind,
         string key, string contentHash, long byteLength, long records)
     {
@@ -469,21 +469,21 @@ public sealed partial class EtlRuntimeStoreTests
         return new(kind, body, records, RouteEffectId(admission, batch, route, body, records));
     }
 
-    private static string RouteEffectId(EtlConnectorRunAdmission admission,
+    private protected static string RouteEffectId(EtlConnectorRunAdmission admission,
         EtlConnectorBatchDescriptor batch, EtlOutputRoute route, EtlObjectReference body, long records) =>
         EtlRuntimeIdentity.ConnectorEffectId(admission, batch.BatchId, route, body.ContentHash, body.ByteLength, records);
 
-    private static long BodyBytes(EtlConnectorBatchOutput output) =>
+    private protected static long BodyBytes(EtlConnectorBatchOutput output) =>
         (output.Main?.Body.ByteLength ?? 0) + (output.Errors?.Body.ByteLength ?? 0);
 
-    private static string CorruptHash(string hash) => (hash[0] == 'a' ? "b" : "a") + hash[1..];
+    private protected static string CorruptHash(string hash) => (hash[0] == 'a' ? "b" : "a") + hash[1..];
 
-    private static string OutputMetadataDigest(string json) =>
+    private protected static string OutputMetadataDigest(string json) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
 
-    private static async Task<(long Limit, long Baseline, int PlanBytes)> MeasureOutputMetadataBoundaryAsync()
+    private protected async Task<(long Limit, long Baseline, int PlanBytes)> MeasureOutputMetadataBoundaryAsync()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("connector-output-metadata-quota", new("tenant-a", "output-metadata-quota"), CsvMixedRoutePipeline());

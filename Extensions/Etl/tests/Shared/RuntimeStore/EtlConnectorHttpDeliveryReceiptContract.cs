@@ -6,12 +6,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Timely_http_success_receipt_reconciles_after_deadline_and_survives_store_reopen()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var defaults = EtlV2TestPipelines.Create();
         var pipeline = defaults with { Http = defaults.Http with { DeadlineSeconds = 10, RequestTimeoutSeconds = 10, MaxDelaySeconds = 10 } };
@@ -93,7 +93,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Cancellation_that_commits_before_a_timely_http_receipt_is_reconciled_preserves_terminal_state()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("http-cancel-before-receipt-reconcile",
             new("tenant-a", "http-cancel-before-receipt-reconcile"), httpShardIds: ["shard"]);

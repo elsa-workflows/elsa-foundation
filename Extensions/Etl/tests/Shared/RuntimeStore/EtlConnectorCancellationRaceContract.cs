@@ -7,12 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Cancellation_that_commits_first_refuses_late_http_ack_acceptance_and_source_progress()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("http-cancel-first-race", new("tenant-a", "http-cancel-first-race"),
             httpShardIds: ["shard-a", "shard-b"]);
@@ -123,7 +123,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Final_http_acceptance_that_commits_first_cannot_be_overwritten_by_cancellation()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("http-success-first-race", new("tenant-a", "http-success-first-race"),
             httpShardIds: ["shard"]);
@@ -165,7 +165,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Cancellation_that_commits_before_final_http_acceptance_preserves_ready_owed_batch_and_journal()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("http-cancel-ready-race", new("tenant-a", "http-cancel-ready-race"),
             httpShardIds: ["shard"]);
@@ -243,7 +243,7 @@ public sealed partial class EtlRuntimeStoreTests
         }
     }
 
-    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch)>
+    private protected static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch)>
         PrepareFinalHttpSuccessBatchAsync(IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission,
             string workerId, int deliveryRequestNumber)
     {
@@ -265,7 +265,7 @@ public sealed partial class EtlRuntimeStoreTests
         return (lease, batch);
     }
 
-    private static async Task<string> SnapshotCancellationAccountingAsync(EtlRuntimeDbContext context)
+    private protected static async Task<string> SnapshotCancellationAccountingAsync(EtlRuntimeDbContext context)
     {
         context.ChangeTracker.Clear();
         var run = await context.Runs.AsNoTracking().SingleAsync();
@@ -282,7 +282,7 @@ public sealed partial class EtlRuntimeStoreTests
         });
     }
 
-    private static async Task<string> ReadHttpTerminalRaceSnapshotAsync(EtlRuntimeDbContext context) =>
+    private protected static async Task<string> ReadHttpTerminalRaceSnapshotAsync(EtlRuntimeDbContext context) =>
         JsonSerializer.Serialize(new
         {
             Accounting = await SnapshotCancellationAccountingAsync(context),

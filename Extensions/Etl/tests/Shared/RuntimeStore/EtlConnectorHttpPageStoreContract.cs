@@ -5,12 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Http_page_attachment_is_immutable_idempotent_and_position_guarded()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-page-immutable", new EtlScope("tenant-a", "http-page-immutable"), httpShardIds: ["shard-a"]);
@@ -47,7 +47,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("empty-continuation")]
     public async Task Http_page_attachment_rejects_invalid_metadata_without_retaining_it(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var defaults = EtlV2TestPipelines.Create();
@@ -92,7 +92,7 @@ public sealed partial class EtlRuntimeStoreTests
         else if (defect == "continuation-bound")
             pipeline = pipeline with { Http = pipeline.Http with { MaxContinuationBytes = 2 } };
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission($"http-page-next-{defect}", new EtlScope("tenant-a", $"http-page-next-{defect}"), pipeline, ["shard-a"]);
@@ -121,7 +121,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Empty_http_pages_advance_without_accepting_records_and_success_waits_for_exhaustion()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -171,7 +171,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Advancing_nonempty_http_page_conflicts()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-page-nonempty", new EtlScope("tenant-a", "http-page-nonempty"), httpShardIds: ["shard-a"]);
@@ -195,7 +195,7 @@ public sealed partial class EtlRuntimeStoreTests
         {
             Http = EtlV2TestPipelines.Create().Http with { MaxPageBytes = 10, MaxRetainedInputBytes = 15, MaxContinuationBytes = 8 }
         };
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-retention-budget", new EtlScope("tenant-a", "http-retention-budget"), pipeline, ["shard-a"]);
@@ -215,7 +215,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_page_retention_aggregates_shards_and_remains_isolated_by_scope()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var scope = new EtlScope("tenant-a", "http-multi-shard");
@@ -242,7 +242,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task New_http_partition_lease_recovers_the_retained_page()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-page-recovery", new EtlScope("tenant-a", "http-page-recovery"), httpShardIds: ["shard-a"]);
@@ -263,7 +263,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_page_attachment_rejects_stale_owner_and_expiry_during_save_rolls_back()
     {
-        await using (var database = await TestDatabase.CreateAsync())
+        await using (var database = await CreateDatabaseAsync())
         await using (var context = database.CreateContext())
         {
             var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
@@ -281,7 +281,7 @@ public sealed partial class EtlRuntimeStoreTests
             Assert.Empty(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
         }
 
-        await using (var database = await TestDatabase.CreateAsync())
+        await using (var database = await CreateDatabaseAsync())
         {
             var clock = new MutableTimeProvider();
             var expire = new ConnectorExpireAfterSave(clock);
@@ -307,7 +307,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Empty_http_page_advance_expiring_during_save_rolls_back()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);
@@ -332,7 +332,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Cancelled_connector_rejects_http_page_attachment_and_advance_as_terminal()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -350,7 +350,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Empty(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
     }
 
-    private static async Task<IReadOnlyList<EtlConnectorPartitionLease>> StartHttpRunAsync(
+    private protected static async Task<IReadOnlyList<EtlConnectorPartitionLease>> StartHttpRunAsync(
         IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission, string workerId)
     {
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);
@@ -365,7 +365,7 @@ public sealed partial class EtlRuntimeStoreTests
         return leases;
     }
 
-    private static async Task CaptureHttpPageForAttachmentAsync(
+    private protected static async Task CaptureHttpPageForAttachmentAsync(
         IEtlConnectorRuntimeStore store, EtlConnectorPartitionLease lease, EtlRetainedHttpPage page)
     {
         var begin = await store.BeginConnectorHttpSourceAsync(lease, Guid.NewGuid().ToString("N"));
@@ -376,7 +376,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(EtlStoreStatus.Applied, captured.Status);
     }
 
-    private static async Task ExhaustAndReleaseHttpPartitionAsync(IEtlConnectorRuntimeStore store, EtlConnectorPartitionLease lease)
+    private protected static async Task ExhaustAndReleaseHttpPartitionAsync(IEtlConnectorRuntimeStore store, EtlConnectorPartitionLease lease)
     {
         var page = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "other-empty-page", 5, 0));
         Assert.Equal(EtlStoreStatus.Applied, page.Status);
@@ -386,7 +386,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(exhausted.Lease));
     }
 
-    private static EtlRetainedHttpPage RetainedPage(EtlConnectorPartitionLease lease, string key,
+    private protected static EtlRetainedHttpPage RetainedPage(EtlConnectorPartitionLease lease, string key,
         long byteLength, int recordCount, string? nextContinuation = null)
     {
         var position = Assert.IsType<EtlConnectorHttpPosition>(lease.Position);

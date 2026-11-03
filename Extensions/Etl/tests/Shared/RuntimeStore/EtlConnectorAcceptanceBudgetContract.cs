@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
-    private const int AcceptanceBudgetContinuationLength = 4096;
+    private protected const int AcceptanceBudgetContinuationLength = 4096;
 
     [Fact]
     public async Task Http_acceptance_uses_reserved_metadata_when_dispatch_fills_the_run_budget()
@@ -20,7 +20,7 @@ public sealed partial class EtlRuntimeStoreTests
         var requestId = DeliveryRequestId(91);
         var metadataLimit = await MeasureAcceptanceBudgetAfterHttpBeginAsync(runId, requestId);
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId, metadataLimit);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -81,7 +81,7 @@ public sealed partial class EtlRuntimeStoreTests
         var metadataLimit = checked(measured.BeforeReservation + measured.DescriptorBytes + measured.AcceptanceReserve - (exactFit ? 0 : 1));
         Assert.True(measured.BeforeReservation + measured.DescriptorBytes <= metadataLimit);
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId, metadataLimit);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -121,7 +121,7 @@ public sealed partial class EtlRuntimeStoreTests
     public async Task Legacy_zero_acceptance_reserve_is_topped_up_on_output_replay()
     {
         const string runId = "acceptance-reserve-legacy-replay";
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -159,7 +159,7 @@ public sealed partial class EtlRuntimeStoreTests
         const string runId = "acceptance-reserve-legacy-replay-full";
         var metadataLimit = await MeasureLegacyAcceptanceReplayLimitAsync(runId);
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId, metadataLimit, ["shard-a", "shard-b"]);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -192,7 +192,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.True(measured.BeginDelta > 0);
         var metadataLimit = checked(measured.BeforeBegin + measured.BeginDelta - 1);
 
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId, metadataLimit);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -216,7 +216,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(measured.BeforeBegin - removedReserve, afterRows.ConnectorMetadataBytes);
     }
 
-    private static EtlConnectorRunAdmission AcceptanceBudgetAdmission(string runId, long? metadataLimit = null,
+    private protected static EtlConnectorRunAdmission AcceptanceBudgetAdmission(string runId, long? metadataLimit = null,
         IReadOnlyList<string>? shardIds = null)
     {
         var pipeline = EtlV2TestPipelines.Create();
@@ -225,9 +225,9 @@ public sealed partial class EtlRuntimeStoreTests
         return ConnectorAdmission(runId, new("tenant-a", runId), pipeline, shardIds ?? ["shard-a"]);
     }
 
-    private static string AcceptanceBudgetContinuation() => new('c', AcceptanceBudgetContinuationLength);
+    private protected static string AcceptanceBudgetContinuation() => new('c', AcceptanceBudgetContinuationLength);
 
-    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorPreparedRun Prepared)>
+    private protected static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorPreparedRun Prepared)>
         AttachLegacyAcceptanceBudgetPageAsync(EtlRuntimeDbContext context, IEtlConnectorRuntimeStore store,
             EtlConnectorRunAdmission admission, EtlConnectorPartitionLease initialLease, string suffix)
     {
@@ -304,16 +304,16 @@ public sealed partial class EtlRuntimeStoreTests
         return (lease, run.Prepared!);
     }
 
-    private static EtlConnectorBatchDescriptor AcceptanceBudgetBatch(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorBatchDescriptor AcceptanceBudgetBatch(EtlConnectorRunAdmission admission,
         EtlConnectorPreparedRun prepared, EtlConnectorPartitionLease lease, string marker) =>
         HttpAcceptanceBatch(admission, prepared, lease, 0, 2, $"acceptance-budget-{marker}");
 
-    private static async Task<AcceptanceReserveBudgetFixture> PrepareLegacyAcceptanceBudgetOutputAsync(
+    private protected static async Task<AcceptanceReserveBudgetFixture> PrepareLegacyAcceptanceBudgetOutputAsync(
         EtlRuntimeDbContext context, IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission, string workerId) =>
         await PrepareLegacyAcceptanceBudgetOutputAsync(context, store, admission,
             Assert.Single(await StartHttpRunAsync(store, admission, workerId)), "only");
 
-    private static async Task<AcceptanceReserveBudgetFixture> PrepareLegacyAcceptanceBudgetOutputAsync(
+    private protected static async Task<AcceptanceReserveBudgetFixture> PrepareLegacyAcceptanceBudgetOutputAsync(
         EtlRuntimeDbContext context, IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission,
         EtlConnectorPartitionLease initialLease, string suffix)
     {
@@ -326,9 +326,9 @@ public sealed partial class EtlRuntimeStoreTests
         return new(lease, batch, output);
     }
 
-    private static async Task<long> MeasureAcceptanceBudgetAfterHttpBeginAsync(string runId, string requestId)
+    private protected async Task<long> MeasureAcceptanceBudgetAfterHttpBeginAsync(string runId, string requestId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -339,10 +339,10 @@ public sealed partial class EtlRuntimeStoreTests
         return await RetainedMetadataBytesAsync(context);
     }
 
-    private static async Task<(long BeforeReservation, long DescriptorBytes, long AcceptanceReserve)> MeasureAcceptanceBatchReservationAsync(
+    private protected async Task<(long BeforeReservation, long DescriptorBytes, long AcceptanceReserve)> MeasureAcceptanceBatchReservationAsync(
         string runId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -360,9 +360,9 @@ public sealed partial class EtlRuntimeStoreTests
         return (before, Encoding.UTF8.GetByteCount(EtlConnectorRecordCodec.Write(batch)), acceptanceReserve);
     }
 
-    private static async Task<long> MeasureLegacyAcceptanceReplayLimitAsync(string runId)
+    private protected async Task<long> MeasureLegacyAcceptanceReplayLimitAsync(string runId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId, shardIds: ["shard-a", "shard-b"]);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -373,10 +373,10 @@ public sealed partial class EtlRuntimeStoreTests
         return await RetainedMetadataBytesAsync(context);
     }
 
-    private static async Task<(long BeforeBegin, long BeginDelta)> MeasureAcceptanceHttpBeginDeltaAsync(
+    private protected async Task<(long BeforeBegin, long BeginDelta)> MeasureAcceptanceHttpBeginDeltaAsync(
         string runId, string requestId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var admission = AcceptanceBudgetAdmission(runId);
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
@@ -388,7 +388,7 @@ public sealed partial class EtlRuntimeStoreTests
         return (before, await RetainedMetadataBytesAsync(context) - before);
     }
 
-    private static async Task<long> RemoveLegacyAcceptanceReserveAsync(EtlRuntimeDbContext context, int partitionOrdinal)
+    private protected static async Task<long> RemoveLegacyAcceptanceReserveAsync(EtlRuntimeDbContext context, int partitionOrdinal)
     {
         context.ChangeTracker.Clear();
         var batch = await context.ConnectorBatches.SingleAsync(row => row.PartitionOrdinal == partitionOrdinal);
@@ -405,7 +405,7 @@ public sealed partial class EtlRuntimeStoreTests
         return reserve;
     }
 
-    private static async Task<AcceptanceReserveBudgetRows> ReadAcceptanceBudgetRowsAsync(
+    private protected static async Task<AcceptanceReserveBudgetRows> ReadAcceptanceBudgetRowsAsync(
         EtlRuntimeDbContext context, int partitionOrdinal)
     {
         context.ChangeTracker.Clear();
@@ -417,10 +417,10 @@ public sealed partial class EtlRuntimeStoreTests
             connector.RetainedMetadataBytes);
     }
 
-    private sealed record AcceptanceReserveBudgetFixture(EtlConnectorPartitionLease Lease,
+    private protected sealed record AcceptanceReserveBudgetFixture(EtlConnectorPartitionLease Lease,
         EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output);
 
-    private sealed record AcceptanceReserveBudgetRows(long AcceptanceMetadataBytes, long BatchMetadataBytes,
+    private protected sealed record AcceptanceReserveBudgetRows(long AcceptanceMetadataBytes, long BatchMetadataBytes,
         string? OutputJson, string? HttpDeliveryJson, string PositionJson, string? OwedBatchId,
         long PartitionBatchMetadataBytes, long PartitionMetadataBytes, long ConnectorMetadataBytes);
 }

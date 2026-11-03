@@ -5,12 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Http_page_history_prevents_return_to_an_earlier_request()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("request-history", new("tenant", "history"), httpShardIds: ["shard"]);
@@ -32,7 +32,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Corrupt_older_page_json_cannot_remove_request_membership_and_fresh_claim_refuses_run()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("altered-chain", new("tenant", "history"), httpShardIds: ["shard"]);
@@ -66,7 +66,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData(true)]
     public async Task Two_maximum_continuations_fit_the_retained_position_and_recover(bool escapedBase64)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var pipeline = EtlV2TestPipelines.Create();
@@ -102,7 +102,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("false-exhaustion")]
     public async Task Corrupt_http_page_history_cannot_authorize_progress(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("history-corruption", new("tenant", "history"), httpShardIds: ["shard"]);

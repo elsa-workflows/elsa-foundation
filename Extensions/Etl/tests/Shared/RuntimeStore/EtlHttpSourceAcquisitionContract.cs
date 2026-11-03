@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Source_acquisition_fetches_real_pages_and_retains_empty_page_continuation()
@@ -21,7 +21,7 @@ public sealed partial class EtlRuntimeStoreTests
         await using var server = await EtlHttpLoopbackServer.StartAsync((request, _) =>
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, request.RawTarget.Contains("cursor=")
                 ? "{\"records\":[{\"id\":1,\"name\":\"Ada\"}]}" : "{\"records\":[],\"next\":\"a+b &c\"}")));
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server);
         var lease = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker"));
 
         var empty = await fixture.AcquireAsync(lease);
@@ -53,7 +53,7 @@ public sealed partial class EtlRuntimeStoreTests
                 ? "{\"records\":[{\"id\":1,\"name\":\"Ada\"}]}" : "{\"records\":[],\"next\":\"?page=2\"}")));
         var pipeline = EtlV2TestPipelines.Create();
         pipeline = pipeline with { Source = ((EtlHttpJsonSource)pipeline.Source) with { Pagination = new EtlNextLinkPagination("/next") } };
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server, pipeline: pipeline);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server, pipeline: pipeline);
         var lease = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker"));
 
         var first = await fixture.AcquireAsync(lease);
@@ -77,7 +77,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, "{\"records\":[]}")));
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server);
         var original = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "original"));
         var begin = await fixture.Store.BeginConnectorHttpSourceAsync(original, Guid.NewGuid().ToString("N"));
         var position = Assert.IsType<EtlConnectorHttpPosition>(original.Position);
@@ -123,7 +123,7 @@ public sealed partial class EtlRuntimeStoreTests
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200,
                 Interlocked.Increment(ref requests) == 1 ? originalBody : changedBody)));
         var clock = new MutableTimeProvider();
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server, clock: clock);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server, clock: clock);
         var original = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "original"));
         var begin = await fixture.Store.BeginConnectorHttpSourceAsync(original, Guid.NewGuid().ToString("N"));
         var permit = Assert.IsType<EtlHttpSourceFetchAttempt>(begin.Permit);
@@ -199,7 +199,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, "{\"records\":[]}")));
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server);
         var original = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker"));
         var first = await fixture.AcquireAsync(original);
         Assert.Null(first.FailureCode);
@@ -227,7 +227,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, "{\"records\":[]}")));
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server, ["a", "b"]);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server, ["a", "b"]);
         var leases = await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker");
         var initial = leases[0];
         var acquired = await fixture.AcquireAsync(initial);
@@ -255,7 +255,7 @@ public sealed partial class EtlRuntimeStoreTests
             ValueTask.FromResult(request.RawTarget.StartsWith("/a", StringComparison.Ordinal)
                 ? new EtlHttpLoopbackResponse(429, "", headers: new Dictionary<string, string> { ["Retry-After"] = "120" })
                 : new EtlHttpLoopbackResponse(200, "{\"records\":[]}")));
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server, ["a", "b"]);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server, ["a", "b"]);
         var leases = await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker");
 
         var waiting = await fixture.AcquireAsync(leases[0]);
@@ -278,7 +278,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, "not-json-secret-value")));
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server);
         var lease = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker"));
 
         var failure = await fixture.AcquireAsync(lease);
@@ -303,7 +303,7 @@ public sealed partial class EtlRuntimeStoreTests
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, "{\"records\":[],\"next\":\"/not-approved\"}")));
         var pipeline = EtlV2TestPipelines.Create();
         pipeline = pipeline with { Source = ((EtlHttpJsonSource)pipeline.Source) with { Pagination = new EtlNextLinkPagination("/next") } };
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server, pipeline: pipeline);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server, pipeline: pipeline);
         var lease = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "worker"));
 
         var failure = await fixture.AcquireAsync(lease);
@@ -328,7 +328,7 @@ public sealed partial class EtlRuntimeStoreTests
             await release.Task.WaitAsync(token);
             return new EtlHttpLoopbackResponse(200, "{\"records\":[]}");
         });
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server);
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server);
         var original = Assert.Single(await StartHttpRunAsync(fixture.Store, fixture.Admission, "original"));
         var inFlight = fixture.AcquireAsync(original).AsTask();
         try
@@ -358,10 +358,10 @@ public sealed partial class EtlRuntimeStoreTests
         }
     }
 
-    private sealed class HttpAcquisitionFixture : IAsyncDisposable
+    private protected sealed class HttpAcquisitionFixture : IAsyncDisposable
     {
-        public required TestDatabase Database { get; init; }
-        public required EtlRuntimeSqliteDbContext Context { get; init; }
+        public required IEtlRuntimeTestDatabase Database { get; init; }
+        public required EtlRuntimeDbContext Context { get; init; }
         public required EfEtlRuntimeStore Store { get; init; }
         public required HostHttpBindings Bindings { get; init; }
         public required EtlPipelineV2 Pipeline { get; init; }
@@ -370,7 +370,7 @@ public sealed partial class EtlRuntimeStoreTests
         public required TimeProvider Clock { get; init; }
         public required EtlHttpTransport Transport { get; init; }
 
-        public static async Task<HttpAcquisitionFixture> CreateAsync(EtlHttpLoopbackServer server, string[]? shards = null,
+        public static async Task<HttpAcquisitionFixture> CreateAsync(EtlRuntimeStoreContract owner, EtlHttpLoopbackServer server, string[]? shards = null,
             EtlPipelineV2? pipeline = null, TimeProvider? clock = null)
         {
             clock ??= TimeProvider.System;
@@ -389,7 +389,7 @@ public sealed partial class EtlRuntimeStoreTests
             var admission = ConnectorAdmission("source-acquisition", scope, pipeline, shards);
             admission = admission with { Bindings = admission.Bindings with
             { Source = new(EtlConnectorKind.Http, new("source", "v1", binding.Handle, null)) } };
-            var database = await TestDatabase.CreateAsync();
+            var database = await owner.CreateDatabaseAsync();
             var context = database.CreateContext();
             var fixture = new HttpAcquisitionFixture { Database = database, Context = context, Store = database.CreateStore(context, clock), Clock = clock, Transport = new(clock),
                 Bindings = bindings, Pipeline = pipeline, Admission = admission };

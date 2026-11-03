@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Connector_admission_snapshots_pins_and_replays_only_the_same_revision()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -50,7 +50,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Legacy_preparation_skips_connector_runs_and_legacy_commit_cannot_consume_connector_lease()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -78,7 +78,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Preadmission_refusal_cannot_terminalize_an_admitted_connector_run()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -99,7 +99,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_partitions_keep_distinct_shards_and_expired_replacement_invalidates_failure_authority()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context, clock, partitionLease: TimeSpan.FromSeconds(10));
@@ -154,7 +154,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Csv_preparation_without_lookup_creates_typed_file_ranges_for_mixed_destinations()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -188,7 +188,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData(true)]
     public async Task Empty_file_preparation_settles_terminal_success_with_the_commit(bool jsonl)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -218,7 +218,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Jsonl_preparation_creates_file_ranges_and_bounds_its_sentinel_index()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var connector = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var scope = new EtlScope("tenant-a", "partition-jsonl");
@@ -243,7 +243,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("shards")]
     public async Task Jsonl_storage_refuses_invalid_preparation_and_bindings(string variant)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var connector = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var scope = new EtlScope("tenant-a", "partition-jsonl-invalid");
@@ -277,7 +277,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("index")]
     public async Task Invalid_connector_prepared_input_leaves_no_durable_readiness_or_partitions(string failure)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
@@ -308,18 +308,18 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Empty(await context.ConnectorPartitions.ToListAsync());
     }
 
-    private static EtlConnectorRunAdmission ConnectorAdmission(string runId, EtlScope scope,
+    private protected static EtlConnectorRunAdmission ConnectorAdmission(string runId, EtlScope scope,
         EtlPipelineV2? pipeline = null, IReadOnlyList<string>? httpShardIds = null) =>
         EtlRuntimeFixtures.ConnectorAdmission(runId, scope, pipeline, httpShardIds);
 
-    private static EtlConnectorPreparedRun ConnectorPreparedFile(long recordCount = 4,
+    private protected static EtlConnectorPreparedRun ConnectorPreparedFile(long recordCount = 4,
         long sourceByteLength = 128, long? indexByteLength = null, bool jsonl = false) =>
         new(new EtlPreparedCsvInput(
             new EtlObjectReference(jsonl ? "source.jsonl" : "source.csv", EtlRuntimeFixtures.Hash, sourceByteLength),
             new EtlObjectReference("source.index", EtlRuntimeFixtures.Hash, indexByteLength ?? checked((recordCount + 1) * 24)),
             recordCount), null);
 
-    private static EtlPipelineV2 CsvMixedRoutePipeline(long maxSnapshotBytes = 1024L * 1024 * 1024)
+    private protected static EtlPipelineV2 CsvMixedRoutePipeline(long maxSnapshotBytes = 1024L * 1024 * 1024)
     {
         var pipeline = EtlV2TestPipelines.Create();
         return pipeline with
@@ -338,7 +338,7 @@ public sealed partial class EtlRuntimeStoreTests
         };
     }
 
-    private static EtlPipelineV2 JsonlMixedRoutePipeline() => CsvMixedRoutePipeline() with
+    private protected static EtlPipelineV2 JsonlMixedRoutePipeline() => CsvMixedRoutePipeline() with
     {
         Source = new EtlJsonlSource("source", [new EtlJsonField("id", "/id", EtlColumnType.Int64, Required: true)])
     };

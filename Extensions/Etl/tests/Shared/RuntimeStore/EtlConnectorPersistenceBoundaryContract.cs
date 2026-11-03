@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Connector_and_file_capabilities_share_the_same_scoped_provider()
@@ -29,7 +29,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("release")]
     public async Task Connector_transition_expiring_during_save_rolls_back(string transition)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);
@@ -76,7 +76,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("null-request")]
     public async Task Connector_corrupt_partition_cannot_be_claimed_or_settle_success(string corruption)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("boundary", new EtlScope("tenant-a", "boundary"), httpShardIds: ["shard-a"]);
@@ -108,7 +108,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_retained_input_overcount_is_rejected()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("retention", new EtlScope("tenant-a", "boundary"), CsvMixedRoutePipeline());
@@ -124,7 +124,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_cancel_retains_work_and_disallows_new_claims_and_renewals()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("cancel", new EtlScope("tenant-a", "boundary"));
@@ -147,7 +147,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("pages")]
     public async Task Connector_invalid_admission_creates_neither_run_nor_marker(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var pipeline = EtlV2TestPipelines.Create();
@@ -160,7 +160,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Empty(await context.ConnectorRuns.ToListAsync());
     }
 
-    private sealed class ConnectorExpireAfterSave(MutableTimeProvider clock) : SaveChangesInterceptor
+    private protected sealed class ConnectorExpireAfterSave(MutableTimeProvider clock) : SaveChangesInterceptor
     {
         public bool Armed { get; set; }
         public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)

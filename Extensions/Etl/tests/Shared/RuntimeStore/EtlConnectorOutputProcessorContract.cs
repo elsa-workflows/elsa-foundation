@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Theory]
     [InlineData(204, false)]
@@ -78,7 +78,7 @@ public sealed partial class EtlRuntimeStoreTests
                 }
             };
 
-            await using var database = await TestDatabase.CreateAsync();
+            await using var database = await CreateDatabaseAsync();
             await using var context = database.CreateContext();
             var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
             var lease = Assert.Single(await StartOutputCsvRunAsync(store, admission, recordCount: 2));
@@ -204,7 +204,7 @@ public sealed partial class EtlRuntimeStoreTests
                 }
             };
 
-            await using var database = await TestDatabase.CreateAsync();
+            await using var database = await CreateDatabaseAsync();
             await using var context = database.CreateContext();
             var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
             var lease = Assert.Single(await StartOutputCsvRunAsync(store, admission, recordCount: 2));
@@ -243,7 +243,7 @@ public sealed partial class EtlRuntimeStoreTests
         }
     }
 
-    private sealed class TestChunkPublisherFactory : IFileChunkPublisherFactory
+    private protected sealed class TestChunkPublisherFactory : IFileChunkPublisherFactory
     {
         public IFileChunkPublisher Create(EtlFileChunkFormat format) => new FileChunkStore(format switch
         {

@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Connector_store_rejects_continuation_policy_above_supported_ceiling()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var defaults = EtlV2TestPipelines.Create();
@@ -32,7 +32,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_store_accepts_continuation_policy_at_supported_ceiling()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var defaults = EtlV2TestPipelines.Create();

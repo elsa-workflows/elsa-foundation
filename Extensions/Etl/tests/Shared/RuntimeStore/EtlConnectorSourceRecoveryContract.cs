@@ -5,12 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Source_recovery_closes_uncertain_attempt_and_captures_its_exact_permit_without_attaching_page()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("source-recovery", new("tenant-a", "source-recovery"), httpShardIds: ["shard-a"]);
         EtlConnectorPartitionLease oldLease;
@@ -88,7 +88,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Source_reservation_is_aggregate_and_capture_releases_unused_capacity_for_another_partition()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var defaults = EtlV2TestPipelines.Create();
@@ -136,7 +136,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Source_begin_lease_expiry_during_save_rolls_back_journal_and_capacity_reservation()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);

@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Published_file_route_allows_remaining_http_retry_to_defer_its_partition()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -48,7 +48,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("page-count")]
     public async Task Accepted_connector_history_corruption_cannot_be_claimed(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("accepted-history", new("tenant", "accepted-history"), httpShardIds: ["shard"]);

@@ -13,7 +13,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("null-predecessor")]
     public async Task Database_request_chain_constraints_reject_incomplete_history(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateSqliteDatabaseAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("request-constraints", new("tenant", "request-constraints"), httpShardIds: ["shard"]);

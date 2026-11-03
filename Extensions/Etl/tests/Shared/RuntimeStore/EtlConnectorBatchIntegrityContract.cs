@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public void Connector_batch_identity_binds_source_range_scope_and_destination_revision()
@@ -49,7 +49,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("position")]
     public async Task Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var admission = ConnectorAdmission("batch-corrupt", new("tenant-a", "batch-corrupt"), httpShardIds: ["shard"]);
         await using (var context = database.CreateContext())
         {
@@ -96,7 +96,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_batch_replay_requires_unexpired_authority_without_refunding_owed_work()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock, partitionLease: TimeSpan.FromSeconds(30));
@@ -125,7 +125,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_claim_prioritizes_recovering_owed_work_over_new_partitions()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("owed-first", new("tenant-a", "owed-first"), httpShardIds: ["first", "second"]);

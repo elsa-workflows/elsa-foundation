@@ -2,7 +2,7 @@ using Elsa.Etl.Core.Runtime;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public void Connector_effect_identity_binds_batch_route_destination_and_exact_payload()

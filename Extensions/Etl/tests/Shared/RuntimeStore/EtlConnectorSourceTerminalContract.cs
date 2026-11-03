@@ -6,14 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Terminal_run_rejects_source_operations_without_changing_journal_or_accounting(bool succeeded)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context, new MutableTimeProvider());
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -53,7 +53,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(before, await ReadSourceTerminalSnapshotAsync(context));
     }
 
-    private static async Task<string> ReadSourceTerminalSnapshotAsync(EtlRuntimeDbContext context)
+    private protected static async Task<string> ReadSourceTerminalSnapshotAsync(EtlRuntimeDbContext context)
     {
         context.ChangeTracker.Clear();
         // Scalar EF rows have no navigation properties. Compare the full retained state, including

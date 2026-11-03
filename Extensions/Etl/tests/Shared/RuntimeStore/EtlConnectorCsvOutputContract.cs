@@ -14,9 +14,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Etl.Tests;
 
 /// <summary>Spec 1191: CSV route bodies through the real output processor and store.</summary>
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
-    private static readonly string[] CsvOutputFields = ["id", "name"];
+    private protected static readonly string[] CsvOutputFields = ["id", "name"];
 
     [Fact]
     public async Task Csv_routes_retain_header_and_rows_then_publish_verified_csv_files()
@@ -204,34 +204,23 @@ public sealed partial class EtlRuntimeStoreTests
             Assert.False(Directory.Exists(fixture.MainRoot) && Directory.EnumerateFiles(fixture.MainRoot).Any());
     }
 
-    [Fact]
-    public async Task A_csv_route_stored_with_the_http_mechanism_is_refused_on_read()
-    {
-        await using var fixture = await CsvOutputFixture.StartAsync(this, long.MaxValue / 4, Accepted(1, 1, "Ada"));
-        Assert.True((await fixture.TransformAsync()).Succeeded);
-        await fixture.Context.Database.ExecuteSqlRawAsync("UPDATE elsa_etl_connector_batches SET MainEffectKind = 1");
-
-        await Assert.ThrowsAsync<InvalidDataException>(async () => await fixture.Inspector.ListConnectorPartitionsAsync(
-            fixture.Admission.Invocation.Scope, fixture.Admission.Invocation.RunId, -1, 1));
-    }
-
-    private static byte[] CsvRow(long id, string name) =>
+    private protected static byte[] CsvRow(long id, string name) =>
         EtlCsvRouteWriter.RecordRow(Encoding.UTF8.GetBytes($"{{\"id\":{id},\"name\":{System.Text.Json.JsonSerializer.Serialize(name)}}}\n"), 2);
 
-    private static EtlConnectorInputRecord Accepted(long index, long id, string name) => new(index, 5,
+    private protected static EtlConnectorInputRecord Accepted(long index, long id, string name) => new(index, 5,
         new EtlTypedRow((int)index, new Dictionary<string, EtlTypedValue>
         {
             ["id"] = new(EtlColumnType.Int64, id), ["name"] = new(EtlColumnType.String, name)
         }), null);
 
-    private static EtlConnectorInputRecord Error(long index, string code, string? field) =>
+    private protected static EtlConnectorInputRecord Error(long index, string code, string? field) =>
         new(index, 5, null, new EtlRowError((int)index, field, code));
 
     /// <summary>A prepared one-partition run whose routes are CSV files (or an HTTP error array) under one temp root.</summary>
-    private sealed class CsvOutputFixture : IAsyncDisposable
+    private protected sealed class CsvOutputFixture : IAsyncDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "elsa-etl-csv-output-" + Guid.NewGuid().ToString("N"));
-        private TestDatabase? _database;
+        private IEtlRuntimeTestDatabase? _database;
         private EtlHttpLoopbackServer? _endpoint;
         private EtlHttpTransport? _transport;
         private EtlConnectorOutputProcessor _processor = null!;
@@ -243,25 +232,25 @@ public sealed partial class EtlRuntimeStoreTests
         public string SnapshotRoot => Path.Combine(_root, "snapshots");
         public string MainRoot => Path.Combine(_root, "main");
         public string ErrorRoot => Path.Combine(_root, "errors");
-        public EtlRuntimeSqliteDbContext Context { get; private set; } = null!;
+        public EtlRuntimeDbContext Context { get; private set; } = null!;
         public IEtlConnectorRuntimeInspector Inspector => (IEtlConnectorRuntimeInspector)_store;
         public EtlConnectorRunAdmission Admission { get; private set; } = null!;
 
-        public static Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreTests _, long outputLimit,
+        public static Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreContract _, long outputLimit,
             params EtlConnectorInputRecord[] records) => StartAsync(_, outputLimit, httpErrors: false, records);
 
-        public static Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreTests _, long outputLimit, bool httpErrors,
+        public static Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreContract _, long outputLimit, bool httpErrors,
             params EtlConnectorInputRecord[] records) => StartAsync(_, outputLimit, httpErrors, EtlConnectorKind.Csv, records);
 
-        public static async Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreTests _, long outputLimit, bool httpErrors,
+        public static async Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreContract _, long outputLimit, bool httpErrors,
             EtlConnectorKind mainKind, params EtlConnectorInputRecord[] records)
         {
             var fixture = new CsvOutputFixture();
-            await fixture.InitializeAsync(outputLimit, httpErrors, mainKind, records);
+            await fixture.InitializeAsync(_, outputLimit, httpErrors, mainKind, records);
             return fixture;
         }
 
-        private async Task InitializeAsync(long outputLimit, bool httpErrors, EtlConnectorKind mainKind, EtlConnectorInputRecord[] records)
+        private async Task InitializeAsync(EtlRuntimeStoreContract owner, long outputLimit, bool httpErrors, EtlConnectorKind mainKind, EtlConnectorInputRecord[] records)
         {
             Directory.CreateDirectory(_root);
             var scope = new EtlScope("tenant-csv", "csv-output");
@@ -316,7 +305,7 @@ public sealed partial class EtlRuntimeStoreTests
                 }
             };
 
-            _database = await TestDatabase.CreateAsync();
+            _database = await owner.CreateDatabaseAsync();
             Context = _database.CreateContext();
             _store = (IEtlConnectorRuntimeStore)_database.CreateStore(Context);
             _lease = Assert.Single(await StartOutputCsvRunAsync(_store, Admission, recordCount: records.Length));

@@ -7,15 +7,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
-    private const long HttpInFlightReceiptReservationBytes = 512;
-    private const long HttpWaitingReceiptReservationBytes = 256;
+    private protected const long HttpInFlightReceiptReservationBytes = 512;
+    private protected const long HttpWaitingReceiptReservationBytes = 256;
 
     [Fact]
     public async Task Http_delivery_begin_persists_a_permit_before_transport_and_replays_a_lost_reply()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-delivery-permit", new("tenant-a", "http-delivery-permit"), httpShardIds: ["shard"]);
@@ -49,7 +49,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Expired_http_attempt_is_recorded_as_unknown_before_retrying_with_the_same_effect()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock, partitionLease: TimeSpan.FromSeconds(30));
@@ -88,7 +88,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_delivery_begin_rolls_back_if_lease_expires_after_save()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);
@@ -115,7 +115,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("cancelled")]
     public async Task Http_delivery_begin_refuses_stale_or_cancelled_ownership_without_retaining_an_attempt(string state)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var store = (IEtlConnectorRuntimeStore)runtime;
@@ -150,7 +150,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_delivery_recovers_partial_route_ack_and_retry_after_across_reopened_stores()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("http-delivery-partial-recovery", new("tenant-a", "http-delivery-partial-recovery"), httpShardIds: ["shard-a", "shard-b"]);
         var retryAt = clock.GetUtcNow().AddSeconds(10);
@@ -242,7 +242,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_delivery_rejects_a_receipt_for_another_effect_without_changing_retained_work()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-delivery-wrong-receipt", new("tenant-a", "http-delivery-wrong-receipt"), httpShardIds: ["shard"]);
@@ -263,7 +263,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_delivery_completion_replays_identical_receipt_and_refuses_conflicting_receipt_after_store_reopen()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("http-delivery-completion-replay", new("tenant-a", "http-delivery-completion-replay"), httpShardIds: ["shard"]);
         EtlConnectorPartitionLease lease;
@@ -322,7 +322,7 @@ public sealed partial class EtlRuntimeStoreTests
     public async Task Http_delivery_metadata_budget_refusal_is_atomic()
     {
         var baseline = await MeasureHttpDeliveryMetadataBaselineAsync();
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var defaults = EtlV2TestPipelines.Create();
         var pipeline = defaults with { Http = defaults.Http with { MaxRetainedMetadataBytes = baseline } };
@@ -354,7 +354,7 @@ public sealed partial class EtlRuntimeStoreTests
         const string runId = "http-delivery-receipt-budget";
         var requestId = DeliveryRequestId(40);
         var measuredTotal = await MeasureHttpDeliveryBeginMetadataAsync(runId, requestId);
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         await using var context = database.CreateContext();
         var defaults = EtlV2TestPipelines.Create();
@@ -407,7 +407,7 @@ public sealed partial class EtlRuntimeStoreTests
     [InlineData("digest")]
     public async Task Corrupt_http_delivery_metadata_cannot_be_recovered(string defect)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using (var context = database.CreateContext())
         {
             var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
@@ -436,16 +436,16 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Null(partition.ExpiresAtUtcTicks);
     }
 
-    private static string DeliveryRequestId(int value) => value.ToString("x32");
+    private protected static string DeliveryRequestId(int value) => value.ToString("x32");
 
-    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
+    private protected static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
         PrepareHttpOutputBatchAsync(IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission, string workerId)
     {
         var initialLease = Assert.Single(await StartHttpRunAsync(store, admission, workerId));
         return await PrepareHttpOutputBatchAsync(store, admission, initialLease, admission.Invocation.RunId);
     }
 
-    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
+    private protected static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
         PrepareHttpOutputBatchAsync(IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission,
             EtlConnectorPartitionLease initialLease, string? suffix = null)
     {
@@ -456,7 +456,7 @@ public sealed partial class EtlRuntimeStoreTests
         return await PrepareHttpOutputBatchAsync(store, admission, lease, run.Prepared!, suffix);
     }
 
-    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
+    private protected static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
         PrepareLegacyHttpOutputBatchAsync(EtlRuntimeDbContext context, IEtlConnectorRuntimeStore store,
             EtlConnectorRunAdmission admission, EtlConnectorPartitionLease initialLease, string suffix)
     {
@@ -464,7 +464,7 @@ public sealed partial class EtlRuntimeStoreTests
         return await PrepareHttpOutputBatchAsync(store, admission, lease, prepared, suffix);
     }
 
-    private static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
+    private protected static async Task<(EtlConnectorPartitionLease Lease, EtlConnectorBatchDescriptor Batch, EtlConnectorBatchOutput Output)>
         PrepareHttpOutputBatchAsync(IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission,
             EtlConnectorPartitionLease lease, EtlConnectorPreparedRun prepared, string? suffix)
     {
@@ -479,9 +479,9 @@ public sealed partial class EtlRuntimeStoreTests
         return (lease, batch, output);
     }
 
-    private static async Task<long> MeasureHttpDeliveryMetadataBaselineAsync()
+    private protected async Task<long> MeasureHttpDeliveryMetadataBaselineAsync()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("http-delivery-metadata-limit", new("tenant-a", "http-delivery-metadata-limit"), httpShardIds: ["shard"]);
@@ -490,9 +490,9 @@ public sealed partial class EtlRuntimeStoreTests
         return await RetainedMetadataBytesAsync(context);
     }
 
-    private static async Task<long> MeasureHttpDeliveryBeginMetadataAsync(string runId, string requestId)
+    private protected async Task<long> MeasureHttpDeliveryBeginMetadataAsync(string runId, string requestId)
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -504,7 +504,7 @@ public sealed partial class EtlRuntimeStoreTests
         return await RetainedMetadataBytesAsync(context);
     }
 
-    private static async Task<(long RunMetadataBytes, long OutstandingRecords, long OutstandingBytes,
+    private protected static async Task<(long RunMetadataBytes, long OutstandingRecords, long OutstandingBytes,
         long PartitionMetadataBytes, long BatchMetadataBytes, long RetainedOutputBytes,
         string? DeliveryJson, string? DeliveryDigest, string PositionJson, bool Settled,
         long AcceptedBatchCount, long AcceptedRecords, long RejectedRecords, long FilteredRecords,

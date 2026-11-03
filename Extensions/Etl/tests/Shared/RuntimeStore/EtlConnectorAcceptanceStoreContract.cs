@@ -7,12 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Mixed_route_acceptance_requires_exact_file_publication_and_http_ack_and_settles_once()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var pipeline = CsvMixedRoutePipeline() with
@@ -91,7 +91,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Http_partial_and_full_page_batches_recover_and_final_fully_filtered_acceptance_terminalizes()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("accept-http-pages", new("tenant-a", "accept-http-pages"), httpShardIds: ["shard-a"]);
@@ -228,7 +228,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Expiry_after_acceptance_save_rolls_back_progress_and_automatic_terminal()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var expire = new ConnectorExpireAfterSave(clock);
         await using var context = database.CreateContext(expire);
@@ -282,7 +282,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Final_rejected_http_page_acceptance_publishes_business_error_terminal()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var pipeline = EtlV2TestPipelines.Create() with
@@ -323,7 +323,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Single(await context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    private static async Task AcknowledgeHttpRouteAsync(IEtlConnectorRuntimeStore store,
+    private protected static async Task AcknowledgeHttpRouteAsync(IEtlConnectorRuntimeStore store,
         EtlConnectorPartitionLease lease, string batchId, EtlOutputRoute route, int requestNumber)
     {
         var begun = await store.BeginConnectorHttpDeliveryAsync(lease, batchId, route, DeliveryRequestId(requestNumber));
@@ -334,7 +334,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, completed.Delivery!.Phase);
     }
 
-    private static EtlConnectorBatchDescriptor HttpAcceptanceBatch(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorBatchDescriptor HttpAcceptanceBatch(EtlConnectorRunAdmission admission,
         EtlConnectorPreparedRun prepared, EtlConnectorPartitionLease lease, int startItem,
         int endItemExclusive, string marker)
     {
@@ -346,7 +346,7 @@ public sealed partial class EtlRuntimeStoreTests
             inputHash: EtlRuntimeRecordCodec.HashText(marker));
     }
 
-    private static EtlConnectorBatchOutput HttpOutput(EtlConnectorRunAdmission admission,
+    private protected static EtlConnectorBatchOutput HttpOutput(EtlConnectorRunAdmission admission,
         EtlConnectorBatchDescriptor batch, long accepted, long rejected, long filtered, string suffix)
     {
         var main = accepted == 0 ? null : OutputRoute(admission, batch, EtlOutputRoute.Main,
@@ -356,10 +356,10 @@ public sealed partial class EtlRuntimeStoreTests
         return new(accepted, rejected, filtered, main, errors);
     }
 
-    private static EtlObjectReference FilePublication(EtlConnectorRouteOutput route) =>
+    private protected static EtlObjectReference FilePublication(EtlConnectorRouteOutput route) =>
         route.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(route.EffectId) };
 
-    private static async Task<AcceptanceState> ReadAcceptanceStateAsync(EtlRuntimeDbContext context, int partitionOrdinal)
+    private protected static async Task<AcceptanceState> ReadAcceptanceStateAsync(EtlRuntimeDbContext context, int partitionOrdinal)
     {
         var partition = await context.ConnectorPartitions.AsNoTracking().SingleAsync(row => row.PartitionOrdinal == partitionOrdinal);
         var run = await context.Runs.AsNoTracking().SingleAsync();
@@ -371,7 +371,7 @@ public sealed partial class EtlRuntimeStoreTests
             connector.RetainedMetadataBytes, connector.RetainedOutputBytes);
     }
 
-    private sealed record AcceptanceState(string PositionJson, string? PartitionOwedBatchId, bool Completed,
+    private protected sealed record AcceptanceState(string PositionJson, string? PartitionOwedBatchId, bool Completed,
         long AcceptedBatchCount, long PartitionAcceptedRecords, long PartitionRejectedRecords, long PartitionFilteredRecords,
         int RunStatus, long RunAcceptedRecords, long RunRejectedRecords, long RunFilteredRecords,
         long OutstandingRecords, long OutstandingBytes, long RunRevision, long PartitionRevision,

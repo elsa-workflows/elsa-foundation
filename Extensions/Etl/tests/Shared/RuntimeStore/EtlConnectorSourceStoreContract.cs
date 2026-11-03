@@ -5,12 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-public sealed partial class EtlRuntimeStoreTests
+public abstract partial class EtlRuntimeStoreContract
 {
     [Fact]
     public async Task Captured_source_progress_capacity_transfers_to_acceptance_without_a_second_charge()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
         var admission = ConnectorAdmission("source-transfer", new("tenant", "source-transfer"), httpShardIds: ["a"]);
@@ -52,7 +52,7 @@ public sealed partial class EtlRuntimeStoreTests
         };
         var baseline = EtlV2TestPipelines.Create();
         var pipeline = baseline with { Http = baseline.Http with { MaxContinuationBytes = 65_536 } };
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, new MutableTimeProvider());
         var admission = ConnectorAdmission("source-opaque", new("tenant", "source-opaque"), pipeline, ["a"]);
@@ -82,7 +82,7 @@ public sealed partial class EtlRuntimeStoreTests
         var baseline = EtlV2TestPipelines.Create();
         var pipeline = baseline with { Http = baseline.Http with { MaxContinuationBytes = 64, MaxPageBytes = 128 } };
         long limit;
-        await using (var measurement = await TestDatabase.CreateAsync())
+        await using (var measurement = await CreateDatabaseAsync())
         {
             await using var db = measurement.CreateContext();
             var measuringStore = (IEtlConnectorRuntimeStore)measurement.CreateStore(db, new MutableTimeProvider());
@@ -92,7 +92,7 @@ public sealed partial class EtlRuntimeStoreTests
             limit = (await db.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes;
         }
         pipeline = pipeline with { Http = pipeline.Http with { MaxRetainedMetadataBytes = limit - (exactFit ? 0 : 1) } };
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -136,7 +136,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Source_permit_reserves_capacity_before_dispatch_and_capture_is_required_for_attachment()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -165,7 +165,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Timely_invalid_200_receipt_survives_late_store_reconciliation_and_journal_round_trip()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
@@ -196,7 +196,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Source_waiting_survives_store_recreation_and_does_not_block_another_partition()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var clock = new MutableTimeProvider();
         var admission = ConnectorAdmission("source-wait", new("tenant-a", "source-wait"), httpShardIds: ["a", "b"]);
         var retryAt = clock.GetUtcNow().AddSeconds(20);
