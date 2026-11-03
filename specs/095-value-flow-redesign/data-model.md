@@ -101,20 +101,22 @@ Definition of one independently bindable plain `[ActivityInput]` property.
 | `Key` | Stable, case-sensitive contract key; independent of CLR property name |
 | `Name` | Current author/editor display name |
 | `Type` | Portable value type descriptor |
-| `Required` | Whether omission is invalid |
-| `Nullable` | Whether an explicit `null` (and, when optional, canonical `Absent`) is valid independently of requiredness |
-| `Default` | Optional pinned default `ValueEnvelope` |
+| `Required` | Whether omission is invalid, even when a declared default exists |
+| `Nullable` | Whether an explicit `null` is valid independently of requiredness |
+| `Default` | Optional pinned default `ValueEnvelope`, used only for an omitted optional input |
 | `Policy` | Minimum value-protection policy |
 | `EditorMetadata` | Ordering, category, UI hint, options, and provider metadata |
 
 An omitted binding, explicit null, and a literal default are distinct authored states. Publication
-must reject omission for a required input, lower it to the pinned literal default when one exists,
-or preserve accepted optional omission as an `Absent` literal for nullable targets. Requiredness and
-nullability are independent: a required nullable input accepts explicit `null` but not omission. A
-non-nullable input without a binding or pinned default is invalid, and explicit `null` is invalid for
-that input. The executable and complete invocation snapshot remain authoritative; hydration
-deterministically maps optional nullable `Absent` to null instead of consulting transient CLR property
-initializers.
+must reject omission for a required input even when a declared default exists. Optional omission follows
+[ADR 0045 §2](../../docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#2-compile-role-specific-input-bindings):
+the declared default first, otherwise explicit `null` for a nullable target or the type default for a non-nullable
+target. An optional non-nullable target without a usable non-null type default needs a declared default.
+Accepted optional omission becomes a concrete literal binding, not an `Absent` value in the completed input set.
+Explicit `null` stays valid for nullable targets; for non-nullable targets, only the pinned default-on-null policy
+can substitute a usable non-null type default. A declared default never replaces explicit `null`.
+The executable and complete invocation snapshot remain authoritative; hydration never consults transient CLR
+property initializers for defaults.
 
 CLR catalog rows persisted before nullable metadata was introduced retain `Nullable = unknown`; they
 are not mutated in place. Same-version reconciliation may treat an incoming CLR row as compatible
@@ -362,8 +364,10 @@ Complete materialized input set pinned before any CLR activity construction or u
 Invariants:
 
 - The keys exactly equal the pinned contract's normalized input set.
-- Every required key carries a non-`Absent`, type/policy-compatible value; an optional key may carry
-  `Absent`.
+- Every key carries a non-`Absent`, type/policy-compatible value after contract-driven completion. An omitted
+  optional nullable input without a declared default carries `ExplicitNull`; an omitted optional non-nullable
+  input without a declared default carries its usable non-null type default. Authored omission remains distinct
+  from explicit null, but it does not survive as `Absent` in this completed input set.
 - Durable execution accepts only persistable envelopes.
 - The snapshot is created while transitioning Scheduled → Running and committed atomically with the
   first attempt and the post-commit invocation intent.

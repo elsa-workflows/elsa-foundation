@@ -139,7 +139,9 @@ For each expression input the runtime MUST:
    body's return or Script completion value under
    [ADR 0083](../../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md);
 5. apply the workflow's pinned undefined policy at the JavaScript-to-workflow boundary (ADR 0045 §2
-   amendment, D-11), then coerce and validate the declared result type;
+   amendment, D-11), then coerce and validate the declared result type using the pinned default-on-null policy
+   where applicable; the two policies are independent and undefined-as-null alone does not permit null for a
+   non-nullable target;
 6. validate result persistability/protection policy; and
 7. include the final input value in the complete invocation snapshot before activity activation.
 

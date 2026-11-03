@@ -148,6 +148,10 @@ a visible policy, never through where it came from.
   - the policy acts only at the boundary. It does not change JavaScript's own semantics, and it does not rewrite a
     string an explicit `JSON.stringify` produced. These conversion diagnostics describe boundary materialization,
     not serialization already performed inside the script.
+- **The two policies are independently selectable.** Apply undefined-as-null at the JavaScript boundary first,
+  then check target nullability and apply default-on-null if selected. Undefined-as-null alone does not allow
+  `null` into a non-nullable target. For example, an `undefined` result becomes `0` for a non-nullable integer only
+  when both policies are selected.
 - **A binding's value does not require a `return` statement.** Expression bindings produce their expression value;
   statement bindings can produce an explicit return value or a Script completion value, as
   [ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md) defines. For example, both `args.amount * 2` and
@@ -170,10 +174,10 @@ a visible policy, never through where it came from.
     same.
   - This replaces the converted-definition marker considered for issues #3170 and #3172.
 
-The implementing spec's acceptance scenarios cover these precedence rules, both binding forms and function-body
-script activities, nested objects and arrays (including sparse holes and their diagnostics), and every admission
-path above. In particular, an omitted required member with a declared default must still be refused before any
-activity executes or workflow-execution work is scheduled.
+The implementing spec's acceptance scenarios cover these precedence rules, all four combinations of the two
+policies, both binding forms and function-body script activities, nested objects and arrays (including sparse holes
+and their diagnostics), and every admission path above. In particular, an omitted required member with a declared
+default must still be refused before any activity executes or workflow-execution work is scheduled.
 
 ### 3. Materialize and pin inputs before activation
 
