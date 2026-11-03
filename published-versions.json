@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f06480a783fab5f669a7af96ae35bc5be50ccf18",
+  "last_publish_commit": "af947767a9600944cd9529c17860691f53d3640e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -109,8 +109,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.38-preview",
-      "commit": "bfe9083349949b0cc8ebf1d3651df60ea2ca7767"
+      "version": "4.0.39-preview",
+      "commit": "af947767a9600944cd9529c17860691f53d3640e"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
@@ -224,8 +224,8 @@
     },
     {
       "package_id": "Elsa.Agent.Workflows.Runtime",
-      "version": "4.0.0-preview",
-      "commit": "f06480a783fab5f669a7af96ae35bc5be50ccf18"
+      "version": "4.0.1-preview",
+      "commit": "af947767a9600944cd9529c17860691f53d3640e"
     },
     {
       "package_id": "Elsa.Api.AspNetCore",
@@ -584,8 +584,8 @@
     },
     {
       "package_id": "Elsa.Modularity.Api",
-      "version": "4.0.19-preview",
-      "commit": "7d2b4bc6b191f0c5abd3c8ad4378afeed6d05a73"
+      "version": "4.0.20-preview",
+      "commit": "af947767a9600944cd9529c17860691f53d3640e"
     },
     {
       "package_id": "Elsa.Modularity.Core",
@@ -834,13 +834,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.37-preview",
-      "commit": "f06480a783fab5f669a7af96ae35bc5be50ccf18"
+      "version": "4.0.38-preview",
+      "commit": "af947767a9600944cd9529c17860691f53d3640e"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.67-preview",
-      "commit": "f06480a783fab5f669a7af96ae35bc5be50ccf18"
+      "version": "4.0.68-preview",
+      "commit": "af947767a9600944cd9529c17860691f53d3640e"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
