@@ -3,6 +3,20 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there.",
  "results": [
   {
+   "mutation": "design-clear-before-rollback",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_publication_whose_rollback_throws",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_publication_whose_rollback_throws_leaves_nothing_for_a_later_save_to_publish"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            dbContext.ChangeTracker.Clear();\n            await transaction.RollbackAsync(cancellationToken);\n",
+   "mutated_text": "            await transaction.RollbackAsync(cancellationToken);\n            dbContext.ChangeTracker.Clear();\n",
+   "sourceRevision": "ae9f0310536b83a5a7623884fcd06e274daaa957"
+  },
+  {
    "mutation": "design-update-reports-own-revision",
    "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
