@@ -69,5 +69,5 @@ These are stated in the ETL README:
 - Budgets must fit one peak window per shard.
 - A continuous shard's lifetime page sequence is bounded at 2³¹ − 1.
 - File deletion is best effort.
-- Every claim compacts every shard of the run, so a shard whose rows break the compaction's safety check (which needs corruption) refuses every claim of the run, not only its own.
+- Every claim compacts every shard of the run, so a shard whose rows break the compaction's safety check (which needs corruption) fails every claim whose candidate is in its run, even a peer's. Claims pick the first eligible shard in a fixed order, so this stalls claims across the scope, as a corrupt candidate's own audit already did.
 - The first claim after upgrading a long-running spec 1192 run compacts every shard's whole history in a single write transaction. Peers' renewals wait on it, and a slow one can cost a lease. This happens once and loses nothing.

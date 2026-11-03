@@ -89,9 +89,11 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
   draining shard compares host clocks, which must agree, as leases already require. Each caught-up poll increments the
   shard's poll generation, which is part of its page-cache key, so a stalled worker's late page never reaches a later
   poll; that orphaned page stays on disk. Because every claim compacts every shard, a shard
-  whose rows fail the compaction's safety check (which needs corruption) refuses every claim of its run. The first claim
-  after upgrading a long-running run compacts every shard's whole history in one write transaction, which peers' lease
-  renewals wait on; this happens once and loses nothing.
+  whose rows fail the compaction's safety check (which needs corruption) fails every claim whose candidate is in its run,
+  even when the candidate is a peer. Claims pick the first eligible shard in a fixed order, so this stalls claims across
+  the scope, as a corrupt candidate's own audit already did. The first claim after upgrading a long-running run compacts
+  every shard's whole history in one write transaction; peers' lease renewals wait on it, and a slow one can cost a
+  lease. This happens once and loses nothing.
 
 ## Implemented boundaries
 
