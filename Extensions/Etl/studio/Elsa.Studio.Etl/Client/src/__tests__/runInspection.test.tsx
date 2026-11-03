@@ -161,6 +161,13 @@ describe("ETL run inspection", () => {
     expect(source).not.toContain("Not available");
   });
 
+  it("labels a RabbitMQ main route as an exchange", () => {
+    const base = fixture();
+    const run = { ...base, connector: { sourceKind: "csv", mainKind: "rabbitMq", errorKind: "jsonl", acceptedMainEffects: 2, acceptedErrorEffects: 0 } };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Main output typeRabbitMQ exchange");
+  });
+
   it("renders file and HTTP connector positions and keeps acknowledged output visibly pending", () => {
     const retry = {
       phase: "waiting", attemptCount: 3, deadline: "2026-10-20T12:00:00Z",

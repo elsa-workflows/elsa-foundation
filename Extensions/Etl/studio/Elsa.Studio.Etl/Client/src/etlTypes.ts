@@ -156,7 +156,7 @@ export interface EtlRoutes {
   errors: EtlDestination;
 }
 
-export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination | EtlSqlDestination;
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination | EtlSqlDestination | EtlRabbitMqDestination;
 
 export interface EtlJsonlDestination {
   kind: "jsonl";
@@ -185,6 +185,18 @@ export interface EtlSqlDestination {
   table: string;
   /** One to eight output fields mapped from required source fields. */
   key: string[];
+}
+
+/**
+ * A host-approved RabbitMQ exchange receiving one persistent JSON message per record, recorded once the broker confirmed
+ * every message of the batch; delivery is at least once with stable message ids (main route only).
+ */
+export interface EtlRabbitMqDestination {
+  kind: "rabbitmq";
+  binding: string;
+  /** The exchange, or empty for the default exchange. */
+  exchange: string;
+  routingKey: string;
 }
 
 export interface EtlConnectorLimits {
@@ -259,7 +271,7 @@ export interface EtlBindingSummary {
 
 /** A current v2 connector alias without endpoint, storage, or credential details. */
 export interface EtlConnectorBindingSummary extends EtlBindingSummary {
-  kind: "csv" | "http" | "jsonl" | "sql";
+  kind: "csv" | "http" | "jsonl" | "sql" | "rabbitMq";
 }
 
 export interface EtlDefinitionSummaryView {

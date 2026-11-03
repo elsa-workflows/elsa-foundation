@@ -2057,3 +2057,67 @@ Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Deconstruct(out string! Def
 Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.EtlConnectorSourceWatermarkKey(string! DefinitionId, string! SourceAlias, string! SourceHandle, string! Table, string! Column) -> void
 Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.get -> string!
 Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.init -> void
+Elsa.Etl.Core.EtlRabbitMqDestination
+Elsa.Etl.Core.EtlRabbitMqDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlRabbitMqDestination.Binding.init -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.Deconstruct(out string! Binding, out string! Exchange, out string! RoutingKey) -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.Equals(Elsa.Etl.Core.EtlRabbitMqDestination? other) -> bool
+Elsa.Etl.Core.EtlRabbitMqDestination.EtlRabbitMqDestination(string! Binding, string! Exchange, string! RoutingKey) -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.Exchange.get -> string!
+Elsa.Etl.Core.EtlRabbitMqDestination.Exchange.init -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.RoutingKey.get -> string!
+Elsa.Etl.Core.EtlRabbitMqDestination.RoutingKey.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorKind.RabbitMq = 4 -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind.Rejected = 1 -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind.Transient = 0 -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRabbitMqMessage!
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Body.get -> System.ReadOnlyMemory<byte>
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Body.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Deconstruct(out string! MessageId, out System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! Headers, out System.ReadOnlyMemory<byte> Body) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Equals(Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.EtlRabbitMqMessage(string! MessageId, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! Headers, System.ReadOnlyMemory<byte> Body) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Headers.get -> System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>!
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Headers.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.MessageId.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.MessageId.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome.Confirmed = 0 -> Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome.Nacked = 2 -> Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome.Unroutable = 1 -> Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRabbitMqTarget!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Deconstruct(out string! Host, out int Port, out string! VirtualHost, out string! User) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Equals(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.EtlRabbitMqTarget(string! Host, int Port, string! VirtualHost, string! User) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Host.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Host.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Port.get -> int
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Port.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.User.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.User.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.VirtualHost.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.VirtualHost.init -> void
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher.Classify(System.Exception! exception) -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher.DescribeTarget(string! connectionString) -> Elsa.Etl.Core.Runtime.EtlRabbitMqTarget!
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher.PublishAsync(string! connectionString, string! exchange, string! routingKey, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlRabbitMqMessage!>! messages, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome>
+override Elsa.Etl.Core.EtlRabbitMqDestination.<Clone>$() -> Elsa.Etl.Core.EtlRabbitMqDestination!
+override Elsa.Etl.Core.EtlRabbitMqDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlRabbitMqDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlRabbitMqDestination.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlRabbitMqDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+static Elsa.Etl.Core.EtlRabbitMqDestination.operator !=(Elsa.Etl.Core.EtlRabbitMqDestination? left, Elsa.Etl.Core.EtlRabbitMqDestination? right) -> bool
+static Elsa.Etl.Core.EtlRabbitMqDestination.operator ==(Elsa.Etl.Core.EtlRabbitMqDestination? left, Elsa.Etl.Core.EtlRabbitMqDestination? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.operator !=(Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? left, Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.operator ==(Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? left, Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator !=(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator ==(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(string! effectId) -> string!

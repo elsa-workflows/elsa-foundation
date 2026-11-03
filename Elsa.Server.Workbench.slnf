@@ -158,6 +158,7 @@
       "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj",
       "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj",
       "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj",
+      "Extensions/Etl/src/RabbitMq/Elsa.Etl.RabbitMq.csproj",
       "Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj",
       "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj",
       "Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj",
