@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "spec": "1199-etl-sql-watermark",
   "engine": "postgresql",
-  "sourceRevision": "fe4aca2e8380f0f8efa8666fcaff985b1e545948",
+  "sourceRevision": "827bff87774a15381fa663fc46ce10bf9130fa41",
   "workingTreeDirty": false,
-  "workbenchAssemblySha256": "af69156d6c3657d660fbe104943d65cb695ffa7da4e462e04cdad436fae34235",
-  "hostProcessId": 24663,
+  "workbenchAssemblySha256": "0d8c307fce2a36fbd20ac50b67499e2a076f27d3ed4f9c36e29bed3b0379dab2",
+  "hostProcessId": 42793,
   "cases": {
     "first": {
-      "runId": "etl-1ed082c9a2f720e3e58915c8c2947c3632b493c169830044ec0f5022d209c1ca",
-      "definition": "sql-watermark-b97bd75a",
-      "selection": "etl1:sql-watermark-b97bd75a:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
+      "runId": "etl-0cbac5817d54e1345f777f6890317e5265d7c77f175b9892911008b57f697909",
+      "definition": "sql-watermark-f447d804",
+      "selection": "etl1:sql-watermark-f447d804:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -50,9 +50,9 @@
       "hostPathOrSecretInInspection": false
     },
     "second": {
-      "runId": "etl-afe6e720458b177fb63fa9f30459b7cbeccd8b5aa59cdc42b8f590529625a779",
-      "definition": "sql-watermark-b97bd75a",
-      "selection": "etl1:sql-watermark-b97bd75a:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
+      "runId": "etl-338f31833834c85c5dea0bd4e57fe26f22a37ec06a39582bfb2f05f61a3279ed",
+      "definition": "sql-watermark-f447d804",
+      "selection": "etl1:sql-watermark-f447d804:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -93,7 +93,7 @@
       "hostPathOrSecretInInspection": false
     }
   },
-  "baseUrl": "http://127.0.0.1:58133",
+  "baseUrl": "http://127.0.0.1:64236",
   "catalogSqlBindings": [
     [
       "warehouse",

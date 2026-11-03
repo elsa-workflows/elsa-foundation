@@ -157,6 +157,34 @@
    "original": "if (document.RootElement.ValueKind != JsonValueKind.Object)",
    "mutated_text": "if (document.RootElement.ValueKind == JsonValueKind.Undefined)",
    "sourceRevision": "4ebc5a1983c5da5eb920799ed415c79c3ab31f78"
+  },
+  {
+   "mutation": "postgresql-where-drops-null",
+   "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": " OR {Quote(watermarkColumn)} IS NULL",
+   "mutated_text": "",
+   "sourceRevision": "827bff87774a15381fa663fc46ce10bf9130fa41"
+  },
+  {
+   "mutation": "sqlserver-where-drops-null",
+   "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": " OR {Quote(watermarkColumn)} IS NULL",
+   "mutated_text": "",
+   "sourceRevision": "827bff87774a15381fa663fc46ce10bf9130fa41"
   }
  ]
 }
