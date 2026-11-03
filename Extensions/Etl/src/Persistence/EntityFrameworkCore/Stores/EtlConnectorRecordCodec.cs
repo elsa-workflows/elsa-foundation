@@ -62,6 +62,8 @@ internal static class EtlConnectorRecordCodec
             pipeline.Http.MaxPageBytes > pipeline.Http.MaxRetainedInputBytes ||
             pipeline.Http.MaxContinuationBytes > pipeline.Http.MaxPageBytes || !EtlHttpRetryPolicy.IsValid(pipeline.Http))
             throw new ArgumentException("The connector storage limits are invalid.");
+        if (EtlContinuousRunPolicy.FindViolation(pipeline) is not null)
+            throw new ArgumentException("The continuous run policy is unsupported.");
         switch (pipeline.Source)
         {
             case EtlCsvSource csv:

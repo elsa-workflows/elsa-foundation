@@ -19,8 +19,15 @@ internal sealed partial class EfEtlRuntimeStore
         if (run is null) return null;
 
         var counts = await AcceptedEffectCounts(key.ScopeKey, key.RunKey, cancellationToken);
+        var completionRequested = await db.ConnectorRuns.AsNoTracking()
+            .Where(row => row.ScopeKey == key.ScopeKey && row.RunKey == key.RunKey)
+            .Select(row => row.CompletionRequestedAtUtcTicks).SingleAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new(run, counts.Main, counts.Errors);
+        return new(run, counts.Main, counts.Errors)
+        {
+            Continuous = EtlConnectorRecordCodec.Pipeline(run.Run.Invocation).Continuous is not null,
+            CompletionRequestedAt = completionRequested is { } requested ? EtlRuntimeRecordCodec.ReadUtc(requested) : null
+        };
     }
 
     public async ValueTask<IReadOnlyList<EtlConnectorPartitionInspection>> ListConnectorPartitionsAsync(EtlScope scope,
@@ -79,6 +86,7 @@ internal sealed partial class EfEtlRuntimeStore
             var count = effectCounts.GetValueOrDefault(row.PartitionOrdinal);
             var file = position as EtlConnectorFilePosition;
             EtlConnectorHttpProgress? http = null;
+            var idle = false;
             if (position is EtlConnectorHttpPosition httpPosition)
             {
                 var request = await Requests(row).SingleOrDefaultAsync(item => item.PageSequence == httpPosition.PageSequence, cancellationToken)
@@ -86,6 +94,9 @@ internal sealed partial class EfEtlRuntimeStore
                 var (_, fetch) = ReadHttpRequest(request, pipeline.Http);
                 http = new(httpPosition.PageSequence, httpPosition.NextItem, httpPosition.Page?.RecordCount,
                     httpPosition.Exhausted, fetch is null ? null : FetchInspection(fetch));
+                // A caught-up continuous shard waits with a cleared journal; a retry wait keeps its journal.
+                idle = pipeline.Continuous is not null && fetch is null && owed is null && httpPosition.Page is null &&
+                       !httpPosition.Exhausted && row.NotBeforeUtcTicks is not null;
             }
             else if (file is null)
                 throw new InvalidDataException("The connector partition position is unsupported.");
@@ -93,7 +104,10 @@ internal sealed partial class EfEtlRuntimeStore
             result.Add(new EtlConnectorPartitionInspection(row.PartitionOrdinal, file, http, hasClaim,
                 row.Owner is null ? null : row.Fence, expires,
                 row.NotBeforeUtcTicks is { } notBefore ? EtlRuntimeRecordCodec.ReadUtc(notBefore) : null,
-                owed is null ? null : OwedInspection(owed), count.Main, count.Errors));
+                owed is null ? null : OwedInspection(owed), count.Main, count.Errors)
+            {
+                NextPollAt = idle ? EtlRuntimeRecordCodec.ReadUtc(row.NotBeforeUtcTicks!.Value) : null
+            });
         }
 
         await transaction.CommitAsync(cancellationToken);
