@@ -1205,7 +1205,7 @@ function readValueOutcomePorts(activity: ActivityNode, catalog?: ActivityCatalog
     if (isRecord(wire) && isRecord(wire.value)) {
       if (!["Literal", "Object"].includes(String(wire.value.expressionType))) return null;
       value = wire.value.value;
-    } else if (isRecord(descriptor) && (!descriptor.defaultSyntax || descriptor.defaultSyntax === "Literal")) value = descriptor.defaultValue;
+    } else if (isRecord(descriptor) && (!descriptor.defaultSyntax || ["Literal", "Object"].includes(String(descriptor.defaultSyntax)))) value = descriptor.defaultValue;
   }
   if (typeof value === "string") { try { value = JSON.parse(value); } catch { return null; } }
   if (!Array.isArray(value)) return null;

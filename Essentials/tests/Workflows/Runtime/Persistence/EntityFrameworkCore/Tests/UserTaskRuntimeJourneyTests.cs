@@ -166,6 +166,79 @@ public sealed class UserTaskRuntimeJourneyTests
         finally { directory.Delete(true); }
     }
 
+    [Fact]
+    public async Task External_form_validation_and_nested_response_follow_the_same_durable_wait_contract()
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-external-task-");
+        try
+        {
+            await using var host = Build(Path.Combine(directory.FullName, "runtime.db"), PersistenceMode.Durable, "external",
+                services => services.AddScoped<IUserTaskFormProvider, ExternalPurchaseFormProvider>());
+            var form = new UserTaskForm("external-purchase", "immutable-1", "External purchase", "acme.forms/1", []);
+            Assert.True(await host.Services.GetRequiredService<IUserTaskStore>().TryCreateFormAsync(new("default", form, DateTimeOffset.UtcNow, "author")));
+            var source = await host.PublishAsync(Executable(form.Id, form.Version), "external-task-published");
+            await host.StartPublishedAsync(source, "user-task-run", tenantId: "default", partition: new("default")); await host.SweepUntilQuietAsync();
+            var store = host.Services.GetRequiredService<IUserTaskStore>(); var runtime = host.Services.GetRequiredService<IUserTaskRuntime>();
+            var task = Assert.Single((await store.RecoverAsync(10, null)).Items); await runtime.ReconcileAsync(task);
+            var operations = host.Services.GetRequiredService<IUserTaskOperations>(); task = await operations.GetAsync(task.Id);
+            var invalid = await Assert.ThrowsAsync<UserTaskException>(() => operations.CompleteAsync(task.Id, new(task.Revision, "invalid-external", "Approve", JsonSerializer.SerializeToElement(new { }))).AsTask());
+            Assert.Contains("Approval.AmountUSD", invalid.Errors!.Keys); Assert.NotNull(await host.Services.GetRequiredService<IBookmarkStateStore>().FindAsync(task.WorkflowExecutionId, task.Recipient!.BookmarkId));
+            var data = JsonDocument.Parse("{\"Approval\":{\"AmountUSD\":42,\"CaseSensitiveKey\":\"kept\"}}").RootElement.Clone();
+            var request = new UserTaskCompletion(task.Revision, "external-client", "Approve", data);
+            var pending = await operations.CompleteAsync(task.Id, request); await runtime.ReconcileAsync(pending); await host.SweepUntilQuietAsync(); await runtime.ReconcileAsync(pending);
+            var complete = await operations.CompleteAsync(task.Id, request); Assert.Equal(UserTaskStatus.Completed, complete.Status);
+            Assert.True(JsonElement.DeepEquals(data, complete.Decision!.Response.Data)); Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(form), JsonSerializer.SerializeToElement(complete.Form)));
+            var state = await host.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(task.WorkflowExecutionId, task.InvocationId);
+            Assert.Equal("Approve", state!.Completion!.OutcomeKey); Assert.True(JsonElement.DeepEquals(data, state.Completion.Result.InlineValue!.Value.GetProperty("data")));
+        }
+        finally { directory.Delete(true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Volatile_tasks_require_explicit_development_opt_in(bool allow)
+    {
+        await using var host = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new Elsa.Events.EventsFeature().ConfigureServices(services))
+            .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Workflows.Runtime.Resumption.WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
+            .ConfigureServices(services => {
+                services.Replace(ServiceDescriptor.Scoped<IUserTaskAccess, ActorAccess>());
+                services.Configure<UserTaskOptions>(options => options.AllowVolatileTasksForDevelopment = allow);
+            }).Build(WorkflowExecutionHarness.Identity, "user-task-run", Enumerable.Range(1, 30).Select(x => "volatile-" + x));
+        host.InitializeActivityTypes();
+        var source = await host.PublishAsync(Executable(), "volatile-task");
+        await host.StartPublishedAsync(source, "user-task-run", tenantId: "default", partition: new("default")); await host.SweepUntilQuietAsync();
+        var tasks = (await host.Services.GetRequiredService<IUserTaskStore>().RecoverAsync(10, null)).Items;
+        if (allow)
+        {
+            var task = Assert.Single(tasks); var runtime = host.Services.GetRequiredService<IUserTaskRuntime>();
+            await runtime.ReconcileAsync(task); var operations = host.Services.GetRequiredService<IUserTaskOperations>(); task = await operations.GetAsync(task.Id);
+            var waiting = await host.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(task.WorkflowExecutionId, task.InvocationId);
+            Assert.Equal(ActivityExecutionStatus.Suspended, waiting!.Status);
+            var pending = await operations.CompleteAsync(task.Id, new(task.Revision, "volatile-response", "Approve", JsonSerializer.SerializeToElement(new { })));
+            await runtime.ReconcileAsync(pending); await host.SweepUntilQuietAsync(); await runtime.ReconcileAsync(pending);
+            Assert.Equal(UserTaskStatus.Completed, (await operations.GetAsync(task.Id)).Status);
+        }
+        else Assert.Empty(tasks);
+        var state = await host.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("user-task-run");
+        Assert.Equal(allow ? WorkflowExecutionStatus.Completed : WorkflowExecutionStatus.Faulted, state!.Status);
+    }
+
+    private sealed class ExternalPurchaseFormProvider : IUserTaskFormProvider
+    {
+        public string Provider => "acme.forms/1";
+        public void ValidateDefinition(UserTaskForm form) { if (form.Id != "external-purchase" || form.Version != "immutable-1") throw new UserTaskException("validation", "Unknown immutable external form."); }
+        public async ValueTask<IReadOnlyDictionary<string, string>> ValidateResponseAsync(UserTaskForm form, JsonElement prefill, JsonElement response, bool requireFields, CancellationToken cancellationToken = default)
+        {
+            await Task.Yield(); cancellationToken.ThrowIfCancellationRequested();
+            return !requireFields || response.TryGetProperty("Approval", out var approval) && approval.TryGetProperty("AmountUSD", out var amount) && amount.TryGetDecimal(out var number) && number > 0
+                ? new Dictionary<string, string>() : new Dictionary<string, string> { ["Approval.AmountUSD"] = "Enter a positive external amount." };
+        }
+    }
+
     private sealed class FailJournalRead : DbCommandInterceptor
     {
         private int remaining; public int Failures;
@@ -215,22 +288,25 @@ public sealed class UserTaskRuntimeJourneyTests
         return host;
     }
 
-    private static WorkflowExecutable Executable()
+    private static WorkflowExecutable Executable(string? formId = null, string? formVersion = null)
     {
         var original = ClrActivityContractTestBuilder.BuildContract(typeof(CreateUserTask));
         var contract = new ActivityContract(original.ActivityTypeKey, original.ContractVersion, original.DescriptorKind, original.DescriptorPayload,
             original.Inputs.Values, original.Result, ["Approve", "Reject", "Unmatched"], original.Activation);
         RuntimeInputBinding Literal(string key, object value) => new(key, contract.Inputs[key].Type, ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(contract.Inputs[key].Type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+        var bindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            [nameof(CreateUserTask.Title)] = Literal(nameof(CreateUserTask.Title), "Purchase approval"),
+            [nameof(CreateUserTask.AssigneeId)] = Literal(nameof(CreateUserTask.AssigneeId), "alice"),
+            [nameof(CreateUserTask.Actions)] = Literal(nameof(CreateUserTask.Actions), new[] { "Approve", "Reject" }),
+            [nameof(CreateUserTask.OptionalFormActions)] = Literal(nameof(CreateUserTask.OptionalFormActions), Array.Empty<string>()),
+            [nameof(CreateUserTask.Prefill)] = Literal(nameof(CreateUserTask.Prefill), new { })
+        };
+        if (formId is not null) bindings[nameof(CreateUserTask.FormId)] = Literal(nameof(CreateUserTask.FormId), formId);
+        if (formVersion is not null) bindings[nameof(CreateUserTask.FormVersion)] = Literal(nameof(CreateUserTask.FormVersion), formVersion);
         var node = new ExecutableNode("task-node", "authored-task", UserTaskProtocol.ActivityType, "1.0.0", contract.DescriptorKind, contract.DescriptorPayload,
-            ClrActivityContractTestBuilder.CompleteInputBindings(contract, new Dictionary<string, RuntimeInputBinding>
-            {
-                [nameof(CreateUserTask.Title)] = Literal(nameof(CreateUserTask.Title), "Purchase approval"),
-                [nameof(CreateUserTask.AssigneeId)] = Literal(nameof(CreateUserTask.AssigneeId), "alice"),
-                [nameof(CreateUserTask.Actions)] = Literal(nameof(CreateUserTask.Actions), new[] { "Approve", "Reject" }),
-                [nameof(CreateUserTask.OptionalFormActions)] = Literal(nameof(CreateUserTask.OptionalFormActions), Array.Empty<string>()),
-                [nameof(CreateUserTask.Prefill)] = Literal(nameof(CreateUserTask.Prefill), new { })
-            }), new Dictionary<string, string>(), activityContract: contract);
+            ClrActivityContractTestBuilder.CompleteInputBindings(contract, bindings), new Dictionary<string, string>(), activityContract: contract);
         return new(WorkflowExecutionHarness.Identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>
         {
             [UserTaskProtocol.ResumeTarget] = new(UserTaskProtocol.ResumeTarget, "task-node", "ResumeAsync", new Dictionary<string, string>())

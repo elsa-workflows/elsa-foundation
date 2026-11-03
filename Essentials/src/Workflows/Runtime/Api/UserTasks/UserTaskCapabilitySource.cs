@@ -3,6 +3,7 @@ using Elsa.Api.Capabilities.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -19,7 +20,7 @@ internal sealed class UserTaskCapabilitySource(IServiceProvider services) : IApi
         var ready = journal.IsDurable
             ? physical is not null && services.GetService<IUserTaskPersistenceBoundary>()?.CanRetainCompletionEvidence(journal, physical) == true
             : services.GetService<IOptions<UserTaskOptions>>()?.Value.AllowVolatileTasksForDevelopment == true &&
-                services.GetService<WorkflowExecutionStateStoreBackend>()?.Name == WorkflowExecutionStateStoreBackend.InMemory;
+                physical?.GetType() == typeof(InMemoryWorkflowExecutionStateStore);
         return ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(ready ? [Declaration] : []);
     }
     private static readonly ApiCapabilityDeclaration Declaration = new Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration("elsa.api.user-tasks", 1,

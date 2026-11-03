@@ -7,6 +7,10 @@ import type { ActivityNode } from "../workflowTypes";
 const catalog = { ...writeLine, inputs: [{ referenceKey: "Actions", name: "Actions" }], designFacets: [{ kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: [], dynamicOutcomes: { kind: "valuePerItem", source: "Actions", unmatched: "Unmatched" } } }] };
 const node = (value: unknown): ActivityNode => ({ nodeId: "task", activityVersionId: "task-v1", inputs: [], outputs: [], Actions: { expression: { type: "Literal", value } } });
 describe("authored collection outcome ports", () => {
+  it("reads fixed collection defaults advertised with Object syntax", () => {
+    const defaults = { ...catalog, inputs: [{ referenceKey: "Actions", name: "Actions", defaultSyntax: "Object", defaultValue: '["Approve","Reject"]' }] };
+    expect(getActivitySourcePorts({ nodeId: "task", activityVersionId: "v", inputs: [], outputs: [] }, defaults).map(x => x.name)).toEqual(["Approve", "Reject", "Unmatched"]);
+  });
   it("reflects edits, ordinal distinct names and numeric literals exactly", () => {
     expect(getActivitySourcePorts(node(["Approve", "approve", "承認", "Approve", "", 202]), catalog).map(x => x.name)).toEqual(["Approve", "approve", "承認", "202", "Unmatched"]);
     expect(getActivitySourcePorts(node(["Reject"]), catalog).map(x => x.name)).toEqual(["Reject", "Unmatched"]);

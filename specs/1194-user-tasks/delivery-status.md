@@ -1,81 +1,46 @@
 # Delivery qualification record
 
-Program: [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688). Acceptance: [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577).
+Program [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688), acceptance [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), draft PR [#3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
 
-Research, design and tasks are complete. Implementation is under active qualification and **not yet merged or delivered**. Keep spec status Draft and T005–T026 open until their complete exit evidence exists. This file is a handoff receipt, not an acceptance certificate.
+Design and implementation are present. M2 is complete; integrated qualification and independent review remain active. Neither the Program nor the feature is accepted, merged or closed. Keep the specification Draft until the remaining delivery gates pass.
 
-## Prior stop and authorized resumption
+## Resumption and ownership
 
-The organization [AGENTS.md stop conditions](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#stop-conditions) require stopping after failing the same check three times in a row. The new HTTP fixture check was:
+The initial checkpoint stopped after three successive failures of the new HTTP fixture, under the organization protocol. The owner instructed “Continue 20 more times maximum” on 3 November. Fresh app claims were established and blocking labels removed. Additional attempt 1 of the formerly blocked check passed all four tests: management authority permits inspection after group revocation, while completion remains forbidden. No further retry of that HTTP check was needed. See the PR history for the initial checkpoint and claim receipts.
 
-```sh
-dotnet test Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj --no-restore --filter FullyQualifiedName~UserTaskApiTests -v:minimal
-```
+The packet was renumbered from1190 to1194 after current main and open PRs reserved1190–1193. Historical links pinned to the initial commit remain valid.
 
-Its three attempts failed in sequence:
+## Executed evidence
 
-1. Build: fixture used nonexistent `ResourceOwnership.FoundationOwned`; corrected to `Foundation`.
-2. Startup: fixture replaced the current-subject authorizer without updating its replacement registration marker; corrected using `EnsureReplacementContract` for the replaced identity contracts.
-3. Execution: 3 tests passed, 1 failed. `Trusted_canonical_identity_and_current_membership_control_claims_not_body_or_token_roles`, line 41, expected `NotFound` but received `Forbidden` after role revocation. The fixture grants management permission, so the task remains inspectable while completion is refused. Inspect that fixture/expectation before another run; no change was made after the third failure.
+The following are observed intermediate runs. Final gate comments identify the reviewed head; these results do not certify later changes automatically.
 
-On 3 November the owner instructed “Continue 20 more times maximum”, authorizing continuation past this stop with at most 20 additional attempts of the blocked HTTP check. Fresh claims were established and blocking labels removed. Additional attempt 1 passed all four HTTP tests after correcting the expected status to Forbidden: management permits inspection but never substitutes for current assignment eligibility. No retries beyond attempt 1 have been needed for this check. The PR remains draft until all remaining gates pass.
-
-## Implementation present
-
-- Runtime contracts, conditional journal operations, immutable form versions and basic field validation; trusted identity/current membership/resource authorization; safe task API DTOs, routes, capabilities and errors.
-- EF task/form persistence, CAS, tenant/identity hash predicates, execution deletion retention fence and incremental migrations for SQLite/PostgreSQL/MySQL/SQL Server.
-- Invocation-scoped task staging, captured physical bookmark generation, exact resume validation, accepted-response recovery and canonical committed-completion acknowledgement.
-- Create User Task activity, dynamic authored action ports, optional Studio inbox/detail/form management and property editors, SDK form renderer contribution.
-- Initial lifecycle/persistence/restart/HTTP/mounted UI tests.
-
-## Evidence already observed
-
-These are runs at intermediate source states, **not evidence for the final draft head**:
-
-| Check | Observed result |
+| Boundary | Evidence |
 |---|---|
-| Existing full Runtime API project before the new HTTP tests | 218 passed, 0 failed |
-| UserTaskOperationsTests | 8 passed |
-| EfUserTaskStoreTests, SQLite | 3 passed |
-| UserTaskRuntimeJourneyTests | 2 passed: Durable and Balanced, three host generations over one owned SQLite database |
-| Dynamic outcome port tests | 3 passed, including canonical Object expression roundtrip |
-| Mounted task form/detail tests | 5 passed |
-| User Tasks / affected Workflows TypeScript checks | Passed at the states preceding the latest UI review fixes |
-| Latest new HTTP fixture | 3 passed, 1 failed as above |
+| Lifecycle/concurrency/recovery | Whole Runtime3,221; whole EF1,874 before the latest integration witnesses; latest task-specific EF20 passed. Real overlapping independent SQL contexts, competing claim/complete/cancel, three-generation Durable/Balanced recovery, forged and replaced waits, transient reads before/after bookmark claim, missing-state uncertainty and deletion retention are covered. |
+| Supported databases | PostgreSQL, SQL Server and MySQL task contract tests3/3, required providers with no skips; SQLite in the full EF suite. |
+| Trusted identity/API | Whole Identity559, Runtime API222, real two-user Workbench claim race/release/revocation/reassignment/trusted completion actor journey passed. Canonical user ID survives first-party bearer issuance/refresh; non-user subjects do not gain task authority. |
+| Activity integration | Activities Runtime732 executed/730 listed, DispatchWorkflow380/380, Publishing API914 before the final default-wire regression; native BPMN User Task worker passed. Listed counts can expand at execution for dynamic theories. |
+| Studio | Workflows3,183, Hosting1,054, UserTasks17 mounted tests; module/Workflows/live type checks, builds, CSS/layout guards passed. Normal signed-in1440/390 inbox journeys passed keyboard/axe, required/readonly validation, explicit false, exact data, duplicate receipt and one branch. Actual designer form/activity authoring, all three visual action connections, save/reload, publication and selected-branch execution passed. |
+| Custom forms/client | Real PowerShell authoring/publication/completion client passed all3 configured action paths with exact response outputs. Async external provider now passes the real durable native-wait journey; matching nested custom renderer passes the mounted UI. A separately compiled consumer outside the workspace uses public contracts and the actual packed Studio feature without project references. |
+| Packaging | Actual UserTasks archive verifies dependency metadata and byte-exact compiled JS/CSS/style-entry assets; public-contract consumer loads the packed feature. This is a scoped module/contract proof, not a whole distribution release. |
+| Architecture/composition | Architecture614; locked server solution restore; generated filter check and129-project tier manifest check passed before the final catalog/default additions. |
 
-Archived EF test inputs were restored through the canonical `python3 tools/bpmn/restore_evidence.py` and pinned verification, without modifying user stores. All journey hosts/databases were disposable and owned.
+Provider-suite local limitation: the whole native provider project had247 passes and one PostgreSQL covering-index plan assertion failure. That assertion also failed on the unmodified original base329ec72b. No unrelated planner assertion was changed. Exact-head Linux required-provider CI is still required.
 
-## Review findings addressed in source but still needing regression evidence
+Hosting-suite local result:57/58 passed, with the existing legacy-controls upgrade journey failing. The focused journey passed on unmodified current mainfa8b4a292, then passed on the same branch binaries at lower load. Preserve the initial failure; use whole exact-head CI as the final gate.
 
-- Reconciliation reads raw committed activity/execution state rather than an ambient coalescing session.
-- Claimant, tenant and deletion predicates include ordinal identity hashes for case-insensitive database collations.
-- Required/readonly prefill, non-text empty values, malformed/null fields and whitespace text limits fail validation safely.
-- Paged immutable forms, per-resource task read/action/management checks and protected context-bound inbox cursors.
-- Explicit `IUserTaskPersistenceBoundary` qualifies durable journal/execution retention pairs; unqualified custom combinations refuse staging/recovery.
-- Transient nested provider errors before resume and during accepted-result reread become scheduler-unavailable errors that preserve owed work.
-- Composition startup task rejects duplicate replacement ownership and duplicate form-provider identities.
-- Studio opaque/prototype form keys, clearing optional non-text values, ambiguous completion retry identity, backend-qualified links and stale response ordering.
-- Forms-only entry routing, explicit unanswered/Yes/No boolean choice and workspace-tab detail location/selection fixes.
-- Primitive public API tracking was enabled with its initial baseline. Its new baseline and the latest retention/availability/cursor/startup changes have not yet been built/tested together.
+## Independent review and causal controls
 
-## Work remaining before completion
+Round1 reviewed5d753dcd8107d31b05541b06ea06b9751dc3689e independently for correctness, standards and acceptance. Seven concrete findings were accepted and repaired: mixed-context retention, nonliteral outcomes, pending-receipt outages, stale catalog link, string-valued action defaults, superseded ambiguous retries and skipped assignment pages. The round comment records evidence and no dropped findings.
 
-1. Resumption authorized; the HTTP fixture now passes (additional attempt 1/20). Complete the remaining latest-head and whole-suite evidence.
-2. Add decisive overlapping EF claim/completion races and cancellation/deletion races, forged/generation-replaced wait tests, post-bookmark-claim outage/retry, committed completion before acknowledgement, missing-state uncertainty and encrypted/volatile input/provider refusal tests. Current memory claim test uses synchronous collaborators and is not a real overlap witness.
-3. Qualify populated form outputs and configured action branches through normal authoring/publication; qualify BPMN native-worker reuse, external form provider/renderer and custom-client/package-only host composition.
-4. Add mounted inbox/paging/claim/release/reassignment/forms-only/boolean/navigation/form-authoring/selector tests and browser/keyboard/narrow-layout qualification with real normalized identities.
-5. Complete user/integrator guidance and owning extension-point/recovery cadence catalogs. Validate custom-provider ownership; replace the current EF default-journal recognition by type name with an explicit ownership mechanism if required by review.
-6. Run whole affected projects and compare listed/executed counts; causal red/green controls; architecture restore/guard, generated maps/tier/reference checks, locked solution restore, supported provider suites, Studio typecheck/test/build and composed backend/browser journeys. All remain gates, not implied passes.
-7. Open/retain a draft PR, complete independent exact-head correctness/standards/acceptance review rounds, then ready/required CI/permitted merge, resulting-main rebuild/journeys and Program/feature/parity reconciliation. Do not close either issue prematurely.
+Real authoring subsequently exposed missing dynamic-outcome facets on the catalog wire and specialized scalar editors losing to the generic editor. Both have failing regressions and fixes. Complex new activity defaults must use fixed Object syntax, so JSON text defaults become arrays/objects rather than string values. Existing activity contract surfaces are retained; the new task's intended surface is added to the baseline.
 
-Local detailed logs are in `/tmp/elsa-user-tasks-3577` on the originating machine. Durable evidence is the commands/results and source in this checkpoint and PR; those temporary logs are supplementary.
+Causal controls observed: disabling the accepted-response resume guard makes the forged-resume test fail; restoring it passes. Disabling collection-derived port consumption makes its three tests fail; restoring it passes. New pending-receipt, physical-boundary and UI regressions fail before their fixes and pass after them. The default-wire regression likewise fails with Literal JSON text and passes with the restored Object defaults.
 
-## Resumed qualification
+## Remaining exits
 
-- HTTP UserTaskApiTests: 4 passed on additional attempt 1/20.
-- Runtime whole project: 3,202 passed before the subsequent external-form/cursor tests.
-- EF whole project: 1,874 passed, including the added true-overlap, cancellation, forged resume, missing/replaced wait, post-claim outage and retention tests.
-- Provider User Task contract: PostgreSQL, SQL Server and MySQL passed with required-provider mode (3 passed, no skips).
-- Mounted UI: 11 passed including forms-only navigation, explicit false boolean, route selection, group claim/release, inbox paging and reusable form authoring.
-- Architecture: 613/614 passed; remaining manifest diff is the intentional 11 new User Task endpoints, captured from a composed host. The updated manifest preserves every prior entry.
-- Workbench and normal Studio .NET hosts build successfully. Final whole suites, browser/e2e and review remain pending.
+- Complete latest-source whole suites/count comparison, final architecture/maps/tier/reference/locked restore and exact-head required CI, including full provider/hosting qualification.
+- Finish a clean independent exact-head review round; mark ready, request repository review and merge only under the repository's permitted process.
+- Rebuild resulting main and repeat decisive native/client/browser/restart journeys. Reconcile specification, Program, feature and linked parity/BPMN records before closure.
+
+All normal hosts and integration databases are owned and disposable. Earlier development stores are retained; user hosts/stores were not used. Detailed local logs live under `/tmp/elsa-user-tasks-3577`; durable evidence is the source and commands/results on this PR and Program.

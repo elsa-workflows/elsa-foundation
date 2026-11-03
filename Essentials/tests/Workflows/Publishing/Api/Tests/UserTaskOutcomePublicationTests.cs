@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Reflection;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -7,6 +9,23 @@ using static Elsa.Workflows.Publishing.Api.Tests.SecretBindingCompilerFixture;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class UserTaskOutcomePublicationTests
 {
+    [Fact]
+    public async Task Unedited_catalog_defaults_pin_arrays_and_an_object_instead_of_JSON_text()
+    {
+        // These are the raw string defaults advertised by CLR reconciliation and saved by the real property panel.
+        var authoredDefaults = new[] { nameof(CreateUserTask.Actions), nameof(CreateUserTask.OptionalFormActions), nameof(CreateUserTask.Prefill) }
+            .Select(key => {
+                var declaration = typeof(CreateUserTask).GetProperty(key)!.GetCustomAttribute<ActivityInputAttribute>()!;
+                return new ArgumentState(key, new ArgumentValue(JsonSerializer.SerializeToElement(declaration.DefaultValue), declaration.DefaultSyntax!), null, null, null, null);
+            }).ToArray();
+        var executable = await CompileAsync(Node(typeof(CreateUserTask), authoredDefaults), [typeof(CreateUserTask)], includeDeclaredInputDefaults: true);
+        var bindings = executable.RootActivity.InputBindings;
+        Assert.Equal(JsonValueKind.Array, bindings[nameof(CreateUserTask.Actions)].LiteralValue!.Value.ValueKind);
+        Assert.Equal(2, bindings[nameof(CreateUserTask.Actions)].LiteralValue!.Value.GetArrayLength());
+        Assert.Equal(0, bindings[nameof(CreateUserTask.OptionalFormActions)].LiteralValue!.Value.GetArrayLength());
+        Assert.Equal(JsonValueKind.Object, bindings[nameof(CreateUserTask.Prefill)].LiteralValue!.Value.ValueKind);
+    }
+
     [Fact]
     public async Task Dynamic_action_names_are_refused_before_a_task_can_open()
     {

@@ -22,8 +22,8 @@ export function register(api: ElsaStudioModuleApi) {
       { id: "user-tasks.detail", path: "/user-tasks/:id", label: "Task", requiresBackend: taskCapability, component: () => <DetailRoute api={api} /> },
       { id: "user-tasks", path: "/user-tasks", label: "User Tasks", requiresBackend: taskCapability, component: () => <TasksPage api={api} /> }
     ] });
-  api.propertyEditors.add({ id: "user-tasks.actions", requiresBackend: taskCapability, supportsValidationReporting: true, supports: (descriptor, context) => descriptor.uiHint === "user-task-actions" && context.scope === "collection", component: ActionsEditor });
-  for (const group of [false, true]) api.propertyEditors.add({ id: `user-tasks.${group ? "group" : "user"}`, requiresBackend: taskCapability, supportsValidationReporting: true,
+  api.propertyEditors.add({ id: "user-tasks.actions", requiresBackend: taskCapability, order: 50, supportsValidationReporting: true, supports: (descriptor, context) => descriptor.uiHint === "user-task-actions" && context.scope === "collection", component: ActionsEditor });
+  for (const group of [false, true]) api.propertyEditors.add({ id: `user-tasks.${group ? "group" : "user"}`, requiresBackend: taskCapability, order: 50, supportsValidationReporting: true,
     supports: descriptor => descriptor.uiHint === (group ? "user-task-group" : "user-task-user"), component: props => <AssignmentEditor {...props} api={api} group={group} /> });
-  api.propertyEditors.add({ id: "user-tasks.form", requiresBackend: taskCapability, supportsValidationReporting: true, supports: descriptor => descriptor.uiHint === "user-task-form", component: props => <FormEditor {...props} api={api} /> });
+  api.propertyEditors.add({ id: "user-tasks.form", requiresBackend: taskCapability, order: 50, supportsValidationReporting: true, supports: descriptor => descriptor.uiHint === "user-task-form", component: props => <FormEditor {...props} api={api} /> });
 }

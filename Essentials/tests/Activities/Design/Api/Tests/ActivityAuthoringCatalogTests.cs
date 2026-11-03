@@ -29,6 +29,17 @@ public sealed class ActivityAuthoringCatalogTests
     private const string DeclaredActivityTypeKey = "Acme.Activities.CallService";
 
     [Fact]
+    public async Task Catalog_wire_preserves_dynamic_outcome_facets_needed_for_connected_authored_actions()
+    {
+        var definition = new ActivityDefinition { Id = "task-definition", ActivityTypeKey = "Acme.UserTask" };
+        var payload = JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), dynamicOutcomes = new { kind = "valuePerItem", source = "Actions", unmatched = "Unmatched" } });
+        var version = new ActivityDefinitionVersion("1.0.0", definition.Id) { Id = "task-version", ConsumerKey = "elsa.clr-activity", DesignFacets = [new("elsa.outcomes", "1", payload)] };
+        var view = await CatalogReaderFixture.ListAsync([definition], [version]);
+        var wire = JsonSerializer.SerializeToElement(view, typeof(ActivityAuthoringCatalogView), ActivitiesDesignWire.Context);
+        Assert.Equal("Actions", wire.GetProperty("activities")[0].GetProperty("designFacets")[0].GetProperty("payload").GetProperty("dynamicOutcomes").GetProperty("source").GetString());
+    }
+
+    [Fact]
     public void Activity_design_owns_one_secured_canonical_authoring_catalog()
     {
         var endpoint = FindCatalogEndpoint();

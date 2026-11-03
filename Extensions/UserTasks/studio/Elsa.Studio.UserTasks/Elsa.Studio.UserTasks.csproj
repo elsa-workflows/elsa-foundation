@@ -4,8 +4,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
     <StaticWebAssetBasePath>_content/Elsa.Studio.UserTasks</StaticWebAssetBasePath>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

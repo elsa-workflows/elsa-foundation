@@ -46,3 +46,60 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await testInfo.attach(`user-task-${width}`, { body: await page.screenshot(), contentType: "image/png" });
 });
+
+test("authors reusable forms, assignment and connected action paths in the normal Studio designer", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1100 }); await signIn(page);
+  const base = (JSON.parse(readFileSync(receiptPath!, "utf8")) as Receipt).baseUrl;
+  const who = await (await page.request.get(`${base}/runtime/user-task-identity`)).json();
+  const suffix = String(Date.now()); const formId = `studio-form-${suffix}`; const title = `Studio authored approval ${suffix}`;
+  await page.goto("/user-tasks/forms?backend=legacy");
+  await page.getByLabel("Form ID", { exact: true }).fill(formId); await page.getByLabel("Name", { exact: true }).fill(title);
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  await page.getByLabel("Key", { exact: true }).fill("Reason"); await page.getByLabel("Label", { exact: true }).fill("Reason");
+  await page.getByLabel("Required", { exact: true }).check(); await page.getByRole("button", { name: "Publish form version", exact: true }).click();
+  await expect(page.getByText("The immutable form version is available to new tasks.", { exact: true })).toBeVisible();
+  await page.goto("/workflows/definitions?backend=legacy");
+  await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  await dialog.getByLabel("Display name").fill(title); await dialog.getByRole("radio", { name: "Flowchart", exact: true }).check();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  const palette = page.getByRole("searchbox", { name: "Search activity palette" });
+  await palette.fill("Create User Task"); await page.getByRole("treeitem", { name: /^Create User Task,/ }).click();
+  const taskNode = page.locator(".react-flow__node").filter({ hasText: "Create User Task" });
+  const taskNodeId = await taskNode.getAttribute("data-id"); expect(taskNodeId).toBeTruthy();
+  await expect(page.getByLabel("Action 1", { exact: true })).toHaveValue("Approve");
+  await expect(taskNode.locator('.source[data-handleid="Approve"]')).toBeVisible();
+  await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
+  await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
+  await page.getByLabel("Task form", { exact: true }).selectOption(formId);
+  await page.getByRole("textbox", { name: "Form Version", exact: true }).fill("1");
+  await page.getByRole("button", { name: "Add action", exact: true }).click();
+  await page.getByLabel("Action 3", { exact: true }).fill("Request More Info"); await page.getByLabel("Action 3", { exact: true }).press("Tab");
+  const actions = ["Approve", "Reject", "Request More Info"]; const branchIds: string[] = [];
+  for (const action of actions) {
+    await palette.fill("Write Line"); await page.getByRole("treeitem", { name: /^Write Line,/ }).click();
+    const node = page.locator(".react-flow__node").filter({ hasText: "Write Line" }).last(); branchIds.push((await node.getAttribute("data-id"))!);
+    await page.getByRole("textbox", { name: "Text", exact: true }).fill(`${action} branch`); await page.getByRole("textbox", { name: "Text", exact: true }).press("Tab");
+  }
+  await page.getByRole("button", { name: "Auto-layout", exact: true }).click(); await page.getByRole("button", { name: "Fit View", exact: true }).click();
+  for (const [index, action] of actions.entries()) {
+    await taskNode.locator(`.source[data-handleid="${action}"]`).dragTo(page.locator(`.react-flow__node[data-id="${branchIds[index]}"] .target`));
+  }
+  await expect(page.locator(".react-flow__edge")).toHaveCount(3);
+  const saved = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/design/workflows/drafts/"));
+  await page.getByRole("button", { name: "Save", exact: true }).click(); expect((await saved).ok()).toBe(true); await page.reload();
+  await expect(taskNode.locator('.source[data-handleid="Request More Info"]')).toBeVisible(); await expect(page.locator(".react-flow__edge")).toHaveCount(3);
+  const publication = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publish"));
+  await page.getByRole("button", { name: "Review & publish", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "Publish workflow", exact: true }); await expect(review.getByRole("button", { name: "Publish", exact: true })).toBeEnabled({ timeout: 60_000 });
+  await review.getByRole("button", { name: "Publish", exact: true }).click(); const published = await (await publication).json();
+  await page.getByRole("dialog", { name: "Published", exact: true }).getByRole("button", { name: "Close", exact: true }).click();
+  const start = await page.request.post(`${base}/runtime/workflows/executables/${published.artifactId}/execute`, { data: { sourceReferenceId: published.sourceReferenceId } }); expect(start.ok()).toBe(true);
+  const executionId = (await start.json()).workflowExecutionId; let id = "";
+  await expect.poll(async () => { const response = await page.request.get(`${base}/runtime/user-tasks?view=mine`); const task = (await response.json()).items.find((item: { title: string }) => item.title === title); id = task?.id ?? ""; return id; }, { timeout: 30_000 }).not.toBe("");
+  await page.goto(`/user-tasks/${id}?backend=legacy`); await page.getByLabel(/^Reason/).fill("Authored in Studio"); await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect.poll(async () => (await (await page.request.get(`${base}/runtime/user-tasks/${id}`)).json()).status, { timeout: 30_000 }).toBe("Completed");
+  const run = await (await page.request.get(`${base}/runtime/workflows/instances/${executionId}`)).json(); expect(run.instance.status).toBe("Completed");
+  expect(run.activities.filter((item: { executableNodeId: string; status: string }) => branchIds.includes(item.executableNodeId) && item.status === "Completed").map((item: { executableNodeId: string }) => item.executableNodeId)).toEqual([branchIds[0]]);
+  await testInfo.attach("studio-authored-user-task", { body: await page.screenshot(), contentType: "image/png" });
+});

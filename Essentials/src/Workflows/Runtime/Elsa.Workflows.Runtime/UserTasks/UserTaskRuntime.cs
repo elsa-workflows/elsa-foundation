@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
     IPersistenceOperationScopeFactory scopes, IEnumerable<IUserTaskFormProvider> forms, TimeProvider time,
     CoalescingInner<IWorkflowExecutionStateStore>? physicalExecutions = null,
     CoalescingInner<IActivityExecutionStateStore>? physicalActivities = null,
-    WorkflowExecutionStateStoreBackend? executionBackend = null, IOptions<UserTaskOptions>? taskOptions = null,
+    IOptions<UserTaskOptions>? taskOptions = null,
     IExternalPayloadStore? payloads = null, IUserTaskPersistenceBoundary? taskBoundary = null) : IUserTaskRuntime
 {
     public async ValueTask<UserTaskRecord> StageAsync(UserTaskCreation request, CancellationToken cancellationToken = default)
@@ -155,9 +156,9 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
 
     private void EnsureExactProvider()
     {
-        if (!store.IsDurable && (executionBackend?.Name != WorkflowExecutionStateStoreBackend.InMemory || taskOptions?.Value.AllowVolatileTasksForDevelopment != true))
-            throw Refuse("A durable task journal is required. Volatile tasks require explicit development opt-in with an in-memory Runtime.");
         var rawExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore) ? physicalExecutions?.Value : executions;
+        if (!store.IsDurable && (rawExecutions?.GetType() != typeof(InMemoryWorkflowExecutionStateStore) || taskOptions?.Value.AllowVolatileTasksForDevelopment != true))
+            throw Refuse("A durable task journal is required. Volatile tasks require explicit development opt-in with an in-memory Runtime.");
         var rawActivities = activities.GetType() == typeof(CoalescingActivityExecutionStateStore) ? physicalActivities?.Value : activities;
         if (store.IsDurable && (rawExecutions is null || taskBoundary?.CanRetainCompletionEvidence(store, rawExecutions) != true))
             throw Refuse("The task journal and execution provider have no qualified completion-retention boundary.");

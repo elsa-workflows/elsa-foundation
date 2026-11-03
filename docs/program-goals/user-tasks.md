@@ -23,4 +23,4 @@ Do not mark complete until every #3577 success criterion and Program exit row ha
 
 ## Delivery checkpoint
 
-Research/design and an initial implementation are preserved in the draft delivery PR. Qualification is incomplete; see the [exact failure, intermediate evidence and remaining work](../../specs/1194-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.
+M2 durable lifecycle is complete. Workflow/Studio integration and final qualification are active in draft PR #3691; see the [executed evidence and remaining exits](../../specs/1194-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.

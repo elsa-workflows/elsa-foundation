@@ -3,7 +3,8 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StudioHttpError, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioActivityPropertyEditorContribution, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { register } from "../module";
 import { ActionsEditor, AssignmentEditor } from "../PropertyEditors";
 import { BasicTaskForm } from "../TaskForm";
 import { FormsPage } from "../FormsPage";
@@ -181,4 +182,19 @@ it("renders an explicit external integration and submits its nested case-sensiti
   await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} changed={vi.fn()} />));
   await input(container.querySelector("input")!, "42"); await click("Approve");
   expect(post.mock.calls[0][1].data).toEqual({ Approval: { AmountUSD: 42, CaseSensitiveKey: "kept" } });
+});
+
+it("selects task assignment and form contributions before the generic scalar editor", async () => {
+  const registered: StudioActivityPropertyEditorContribution[] = [];
+  const context = { ...api(), featureAreas: { add: vi.fn() }, propertyEditors: { add: (item: StudioActivityPropertyEditorContribution) => registered.push(item) }, userTaskForms: { add: vi.fn() } } as unknown as ElsaStudioModuleApi;
+  register(context);
+  const fallback: StudioActivityPropertyEditorContribution = { id: "generic.scalar", order: 100, supports: () => true, component: () => <input aria-label="Generic scalar" /> };
+  for (const hint of ["user-task-user", "user-task-group", "user-task-form"]) {
+    const descriptor = { name: "Test", typeName: "String", uiHint: hint }; const propertyContext = { activity: {}, expressionDescriptors: [] };
+    const editor = [...registered, fallback].sort((a, b) => (a.order ?? 500) - (b.order ?? 500)).find(item => item.supports(descriptor, propertyContext))!;
+    expect(editor.id).not.toBe("generic.scalar");
+    const Component = editor.component;
+    await act(async () => root.render(<Component descriptor={descriptor} context={propertyContext} value={null} onChange={vi.fn()} />));
+    expect(container.querySelector("select")).toBeTruthy();
+  }
 });

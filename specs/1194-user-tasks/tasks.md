@@ -11,32 +11,32 @@ Input: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](d
 
 ## Durable task foundation and decision journey — US1/US2 (M2)
 
-- [ ] T005 Add task/form/action/response/history/query models and journal/lifecycle/provider contracts in `Essentials/src/Workflows/Runtime/Core/UserTasks/`; track public API and catalogs.
-- [ ] T006 Implement validated state transitions, conditional memory journal, safe frozen snapshots and basic form rules in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/UserTasks/`.
-- [ ] T007 Implement conditional durable journal/form versions, exact scope/identity validation, bounded authorized paging and fair recovery in existing `Runtime/Persistence/EntityFrameworkCore/`; wire aggregate provider selection, atomic execution-deletion retention fence and four-provider migrations.
-- [ ] T008 Add whole-project lifecycle/persistence tests for competing claims/completions/reassignments, stale writes, terminal protection, immutable history, scope/tenant/casing and restart readback in existing Runtime test projects; run causal controls.
+- [x] T005 Add task/form/action/response/history/query models and journal/lifecycle/provider contracts in `Essentials/src/Workflows/Runtime/Core/UserTasks/`; track public API and catalogs.
+- [x] T006 Implement validated state transitions, conditional memory journal, safe frozen snapshots and basic form rules in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/UserTasks/`.
+- [x] T007 Implement conditional durable journal/form versions, exact scope/identity validation, bounded authorized paging and fair recovery in existing `Runtime/Persistence/EntityFrameworkCore/`; wire aggregate provider selection, atomic execution-deletion retention fence and four-provider migrations.
+- [x] T008 Add whole-project lifecycle/persistence tests for competing claims/completions/reassignments, stale writes, terminal protection, immutable history, scope/tenant/casing and restart readback in existing Runtime test projects; run causal controls.
 
 ## Durable workflow integration — US1/US2 (M3)
 
-- [ ] T009 Implement typed `CreateUserTask` under `Essentials/src/Activities/Primitives/`, literal dynamic action outcomes, frozen form/prefill and deterministic invocation staging.
-- [ ] T010 Implement staged-wait reconciliation, captured physical wait recipient/generation and provider-enforced exact dispatch condition, exact response pre-consumption guard, stable idempotent dispatch, canonical committed-result acknowledgement and cancellation/retirement proof in Runtime `UserTasks/` with fresh partition scopes.
-- [ ] T011 Prove crash/restart boundaries, forged stimuli, duplicate/conflicting responses, exact-wait replacement, no false completion on queue receipts, missing-state uncertainty, completion-before-ack then deletion, and cancellation races in runtime/activity integration tests.
-- [ ] T012 Qualify the published native User Task worker through existing `BpmnNativeServiceBinding`; verify action/response and terminal child behavior without new BPMN semantics.
+- [x] T009 Implement typed `CreateUserTask` under `Essentials/src/Activities/Primitives/`, literal dynamic action outcomes, frozen form/prefill and deterministic invocation staging.
+- [x] T010 Implement staged-wait reconciliation, captured physical wait recipient/generation and provider-enforced exact dispatch condition, exact response pre-consumption guard, stable idempotent dispatch, canonical committed-result acknowledgement and cancellation/retirement proof in Runtime `UserTasks/` with fresh partition scopes.
+- [x] T011 Prove crash/restart boundaries, forged stimuli, duplicate/conflicting responses, exact-wait replacement, no false completion on queue receipts, missing-state uncertainty, completion-before-ack then deletion, and cancellation races in runtime/activity integration tests.
+- [x] T012 Qualify the published native User Task worker through existing `BpmnNativeServiceBinding`; verify action/response and terminal child behavior without new BPMN semantics.
 
 ## Authorized API and reusable forms — US3/US4 (M3)
 
-- [ ] T013 Add normalized current-identity/permission/eligibility adapter, current-target validation and task/form permission contributions under `Runtime/Api/`.
-- [ ] T014 Add task inbox/detail/claim/release/complete/reassign/form-version/assignment-target endpoints, capability relations, revision/request receipts and safe errors under `Runtime/Api/`.
-- [ ] T015 Add composed HTTP identity/tenant/role/revocation/forgery negatives, paging and stale/conflicting mutation tests in existing Runtime API suites.
-- [ ] T016 Supply an external form-provider/rendering witness and custom-client completion fixture, with missing/duplicate-provider refusal tests and immutable-version behavior.
+- [x] T013 Add normalized current-identity/permission/eligibility adapter, current-target validation and task/form permission contributions under `Runtime/Api/`.
+- [x] T014 Add task inbox/detail/claim/release/complete/reassign/form-version/assignment-target endpoints, capability relations, revision/request receipts and safe errors under `Runtime/Api/`.
+- [x] T015 Add composed HTTP identity/tenant/role/revocation/forgery negatives, paging and stale/conflicting mutation tests in existing Runtime API suites.
+- [x] T016 Supply an external form-provider/rendering witness and custom-client completion fixture, with missing/duplicate-provider refusal tests and immutable-version behavior.
 
 ## Studio authoring and inbox — US1/US3/US4 (M4)
 
-- [ ] T017 Add optional `Extensions/UserTasks/studio/Elsa.Studio.UserTasks` module and normal Studio host/solution/workspace composition; publish capability/permission-aware navigation/routes.
-- [ ] T018 Implement My tasks/Group queue/history, detail/form/action/reassignment UI, errors/conflicts/pending/terminal states using shared UI and tokens.
-- [ ] T019 Implement reusable basic form field authoring/version selection and assignment/action property editors through SDK contributions.
-- [ ] T020 Extend generic dynamic outcome facet consumption in Studio `workflowAdapter.ts` with authored literal collection parity/port edit tests.
-- [ ] T021 Add mounted/browser behavior tests for inbox/actions/forms, stale responses, pending/conflicts, current permissions, keyboard and narrow layouts; run module typecheck/test/build and affected Studio suites with causal controls.
+- [x] T017 Add optional `Extensions/UserTasks/studio/Elsa.Studio.UserTasks` module and normal Studio host/solution/workspace composition; publish capability/permission-aware navigation/routes.
+- [x] T018 Implement My tasks/Group queue/history, detail/form/action/reassignment UI, errors/conflicts/pending/terminal states using shared UI and tokens.
+- [x] T019 Implement reusable basic form field authoring/version selection and assignment/action property editors through SDK contributions.
+- [x] T020 Extend generic dynamic outcome facet consumption in Studio `workflowAdapter.ts` with authored literal collection parity/port edit tests.
+- [x] T021 Add mounted/browser behavior tests for inbox/actions/forms, stale responses, pending/conflicts, current permissions, keyboard and narrow layouts; run module typecheck/test/build and affected Studio suites with causal controls.
 
 ## Integrated qualification, guidance and delivery (M5–M6)
 

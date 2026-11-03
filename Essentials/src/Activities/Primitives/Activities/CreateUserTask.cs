@@ -21,15 +21,15 @@ public sealed class CreateUserTask(IUserTaskRuntime tasks) : StatefulActivity<Us
 {
     public const string ActivityType = UserTaskProtocol.ActivityType;
 
-    [ActivityInput, Required] public string Title { get; set; } = "User task";
+    [ActivityInput(DefaultValue = "User task", DefaultSyntax = "Literal"), Required] public string Title { get; set; } = "User task";
     [ActivityInput] public string? Description { get; set; }
     [ActivityInput(UIHint = "user-task-user")] public string? AssigneeId { get; set; }
     [ActivityInput(UIHint = "user-task-group")] public string? GroupId { get; set; }
-    [ActivityInput(UIHint = "user-task-actions", DefaultValue = "[\"Approve\",\"Reject\"]", DefaultSyntax = "Literal"), Required] public ICollection<string> Actions { get; set; } = ["Approve", "Reject"];
-    [ActivityInput] public ICollection<string> OptionalFormActions { get; set; } = [];
+    [ActivityInput(UIHint = "user-task-actions", DefaultValue = "[\"Approve\",\"Reject\"]", DefaultSyntax = "Object"), Required] public ICollection<string> Actions { get; set; } = ["Approve", "Reject"];
+    [ActivityInput(DefaultValue = "[]", DefaultSyntax = "Object")] public ICollection<string> OptionalFormActions { get; set; } = [];
     [ActivityInput(UIHint = "user-task-form")] public string? FormId { get; set; }
     [ActivityInput] public string? FormVersion { get; set; }
-    [ActivityInput] public JsonElement Prefill { get; set; } = JsonSerializer.SerializeToElement(new { });
+    [ActivityInput(DefaultValue = "{}", DefaultSyntax = "Object")] public JsonElement Prefill { get; set; } = JsonSerializer.SerializeToElement(new { });
 
     protected override async ValueTask<ActivityTransition<UserTaskResponse, UserTaskWait>> ExecuteAsync(ActivityExecutionContext context)
     {
