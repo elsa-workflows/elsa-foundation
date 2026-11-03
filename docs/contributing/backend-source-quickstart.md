@@ -226,7 +226,7 @@ revisions; they do not establish that every later checkout or allowed SDK patch 
 | SDK selector and hosted platform checks | Windows/Linux selected SDK `10.0.401`; [main verification for #2455](https://github.com/elsa-workflows/elsa-foundation/issues/2455#issuecomment-6024054462) | Evidence for the recorded runs, not every permitted SDK patch. |
 | Tool restore, focused build, occupied-port recovery, alternate-port smoke, and SQLite reset | macOS 26.6 ARM64, SDK `10.0.300`, Foundation `0e7e7f4b23ba9c55bdb6d9062348f12cf25e4101`; [#2458](https://github.com/elsa-workflows/elsa-foundation/issues/2458#issuecomment-6024342838) | Automated in an existing environment; build used `--no-restore`. The readiness and exact-file removal examples were not executed verbatim in that run. |
 
-The current [backend source platform workflow](../../.github/workflows/backend-source-platform.yml) checks
+The current [backend source platform workflow](../../.github/workflows/ci.yml) checks
 Windows and Linux using the locked-mode build, HTTP launch profile, and source-edit exercise. Check its run
 for your revision when evaluating CI evidence. The source-edit exercise also has its own
 [recorded baseline](backend-source-edit.md#verified-baseline).

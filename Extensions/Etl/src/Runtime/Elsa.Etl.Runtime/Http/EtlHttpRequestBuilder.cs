@@ -146,6 +146,32 @@ internal sealed class EtlHttpRequestBuilder
         }
     }
 
+    /// <summary>Whether a decoded page is a continuous feed's caught-up response: no records and no cursor movement.</summary>
+    /// <remarks>An absent continuation, or one that resolves to the request it answers, does not move the cursor.</remarks>
+    public bool IsCaughtUp(EtlHttpRequest currentRequest, int recordCount, string? decodedContinuation)
+    {
+        ArgumentNullException.ThrowIfNull(currentRequest);
+        if (recordCount != 0)
+            return false;
+        if (string.IsNullOrEmpty(decodedContinuation))
+            return true;
+        try
+        {
+            var currentUri = RequestUri(currentRequest);
+            return _source.Pagination switch
+            {
+                EtlTokenPagination token => BuildTokenUri(_shards[currentRequest.ShardId], token.QueryParameter, decodedContinuation).Equals(currentUri),
+                EtlNextLinkPagination => _endpointPolicy.Resolve(decodedContinuation, currentUri).Equals(currentUri),
+                _ => false
+            };
+        }
+        catch (Exception exception) when (exception is EtlHttpRequestBuilderException or EtlBindingException or
+                                          ArgumentException or UriFormatException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Normalizes a decoded page continuation for durable storage under this exact request.</summary>
     public string? NextContinuation(EtlHttpRequest currentRequest, string? decodedContinuation)
     {
