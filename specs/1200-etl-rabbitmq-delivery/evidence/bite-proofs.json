@@ -1,0 +1,261 @@
+{
+ "spec": "1200-etl-rabbitmq-delivery",
+ "note": "Each entry names the revision it was recorded at. All entries bite.",
+ "results": [
+  {
+   "mutation": "compiler-error-route",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.Only_the_main_route",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.Only_the_main_route_can_publish_to_rabbitmq"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "if (pipeline.Routes?.Errors is EtlRabbitMqDestination)",
+   "mutated_text": "if (false)",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "compiler-exchange-name",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.An_exchange_or_routing_key",
+   "mutated": "Failed!  - Failed: 2, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.An_exchange_or_routing_key_the_broker_cannot_take_is_refused(exchange: \"bad exchange\", routingKey: \"orders\")",
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.An_exchange_or_routing_key_the_broker_cannot_take_is_refused(exchange: \"events/x\", routingKey: \"orders\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 4",
+   "original": "        if (!IsRabbitMqExchange(rabbitMq.Exchange))",
+   "mutated_text": "        if (false)",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "compiler-routing-key",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.An_exchange_or_routing_key",
+   "mutated": "Failed!  - Failed: 2, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.An_exchange_or_routing_key_the_broker_cannot_take_is_refused(exchange: \"events\", routingKey: \"caf\u00e9\")",
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.An_exchange_or_routing_key_the_broker_cannot_take_is_refused(exchange: \"events\", routingKey: \"two words\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 4",
+   "original": "        if (!IsRabbitMqRoutingKey(rabbitMq.RoutingKey))",
+   "mutated_text": "        if (false)",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "compiler-name-length",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.Names_longer",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.Names_longer_than_a_protocol_short_string_are_refused"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "exchange is { Length: <= 255 } &&",
+   "mutated_text": "exchange is not null &&",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "reader-error-route",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~Reader_refuses_a_rabbitmq_destination",
+   "mutated": "Failed!  - Failed: 1, Passed: 3",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_rabbitmq_destination_the_compiler_would_refuse(exchange: \"events\", routingKey: \"orders\", valid: False, onErrorRoute: True)"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 4",
+   "original": "if (pipeline.Routes.Errors is EtlSqlDestination or EtlRabbitMqDestination)",
+   "mutated_text": "if (pipeline.Routes.Errors is EtlSqlDestination)",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "reader-names",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~Reader_refuses_a_rabbitmq_destination",
+   "mutated": "Failed!  - Failed: 2, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_rabbitmq_destination_the_compiler_would_refuse(exchange: \"bad exchange\", routingKey: \"orders\", valid: False, onErrorRoute: False)",
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_rabbitmq_destination_the_compiler_would_refuse(exchange: \"events\", routingKey: \"two words\", valid: False, onErrorRoute: False)"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 4",
+   "original": "        if (pipeline.Routes.Main is EtlRabbitMqDestination main &&",
+   "mutated_text": "        if (false && pipeline.Routes.Main is EtlRabbitMqDestination main &&",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "binding-allowed-exchange",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (!binding.AllowedExchanges.Contains(exchange, StringComparer.Ordinal))",
+   "mutated_text": "        if (false)",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "binding-handle-virtual-host",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            target.VirtualHost,\n",
+   "mutated_text": "",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "binding-handle-user",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            target.User,\n",
+   "mutated_text": "",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "writer-nack-yields",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlRabbitMqRouteWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_negative_acknowledgement",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_negative_acknowledgement_or_a_transient_failure_yields_and_a_refusal_fails_with_a_stable_code"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            EtlRabbitMqPublishOutcome.Nacked => EtlRabbitMqWriteOutcome.Yield,",
+   "mutated_text": "            EtlRabbitMqPublishOutcome.Nacked => EtlRabbitMqWriteOutcome.Confirmed,",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "writer-transient-yields",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlRabbitMqRouteWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_negative_acknowledgement",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_negative_acknowledgement_or_a_transient_failure_yields_and_a_refusal_fails_with_a_stable_code"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            return publisher.Classify(exception) == EtlRabbitMqErrorKind.Transient",
+   "mutated_text": "            return false",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "writer-message-id-index",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlRabbitMqRouteWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.The_writer_publishes",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.The_writer_publishes_one_message_per_record_with_stable_ids_and_headers"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "messages.Add(new EtlRabbitMqMessage(delivery.EffectId + \":\" + index,",
+   "mutated_text": "messages.Add(new EtlRabbitMqMessage(delivery.EffectId,",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "dispatch-records-only-confirmed",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~until_every_message_is_confirmed",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_broker_that_fails_or_refuses_a_message_pauses_the_run_until_every_message_is_confirmed"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (outcome == EtlRabbitMqWriteOutcome.Yield)\n",
+   "mutated_text": "        if (false)\n",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "store-rabbitmq-key",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~confirmed_message",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_csv_pipeline_publishes_each_accepted_record_as_one_confirmed_message"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                EtlConnectorKind.RabbitMq => EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(planned.EffectId),",
+   "mutated_text": "                EtlConnectorKind.RabbitMq => EtlRuntimeIdentity.ConnectorSqlEffectKey(planned.EffectId),",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "driver-rejected-not-found",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_missing_exchange_or_refused_credentials",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_missing_exchange_or_refused_credentials_fail_the_batch_without_retrying"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "[403, 404, 406, 530]",
+   "mutated_text": "[403, 406, 530]",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "driver-return-is-unroutable",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_message_no_queue_matches",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_message_no_queue_matches_is_returned_and_fails_the_batch_as_unroutable"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "exception.IsReturn ? EtlRabbitMqPublishOutcome.Unroutable : EtlRabbitMqPublishOutcome.Nacked",
+   "mutated_text": "EtlRabbitMqPublishOutcome.Nacked",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "driver-mandatory",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_message_no_queue_matches",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_message_no_queue_matches_is_returned_and_fails_the_batch_as_unroutable"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "routingKey, mandatory: true, properties",
+   "mutated_text": "routingKey, mandatory: false, properties",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  },
+  {
+   "mutation": "driver-persistent",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_confirmed_batch_lands",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_confirmed_batch_lands_in_a_bound_queue_as_persistent_json_messages_in_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                DeliveryMode = DeliveryModes.Persistent,\n",
+   "mutated_text": "",
+   "sourceRevision": "78f18b2504ae52768911247b4723b71293e09bb9"
+  }
+ ]
+}

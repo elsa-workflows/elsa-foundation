@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft
+**Status**: Implemented — [PR #3725](https://github.com/elsa-workflows/elsa-foundation/pull/3725); [evidence](evidence/README.md)
 
 **Input**: The delivery half of the fifth criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): "RabbitMQ JSON ingestion/delivery proves manual acknowledgements and publisher confirms around failure/replay boundaries." Ingestion with manual acknowledgements is the next slice. Part of [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
