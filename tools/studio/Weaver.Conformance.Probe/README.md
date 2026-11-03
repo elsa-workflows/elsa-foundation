@@ -144,7 +144,10 @@ actor, every admitted context must carry one server-read `workflow.catalog` and 
 versions, or its marked prefix. The tenant-restricted activity must appear in exactly the first tenant's two answers.
 The permissions must equal the owning design API's answers: the definition GET for read, and the manage-gated promotion
 preflight (200 or 403) for manage. The tools the actual adapter is offered must follow them: the layout tool only for a
-manager. A fourth actor without `activities/design:read` must get a 403 from the designer catalog and a denied
+manager. Each dedicated actor holds exactly the grants its journey reaches (`truth_seam_journeys.py` lists them):
+`api-capabilities:read` for owner-link discovery through `GET /capabilities`, the design read or manage it exercises,
+`activities/design:read` except for the catalog-denied actor, and `expressions:read` for the reader's Studio editor. The
+browser journey fails with the exact paths when Studio is refused any backend read. A fourth actor without `activities/design:read` must get a 403 from the designer catalog and a denied
 catalog with no entries from Weaver. The host's generation observation must report no placeholder type in the loaded
 Agent Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
 journey `workflow-read-only` in `browser.mjs`, with a fresh normal-login state of its own: the accepted message's

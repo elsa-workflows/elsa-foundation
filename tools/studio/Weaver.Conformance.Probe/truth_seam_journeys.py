@@ -52,10 +52,19 @@ PERMISSIONS_KIND = "workflow.permissions"
 
 # The four dedicated principals, appended after the original five so every earlier index keeps its meaning.
 READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED = 5, 6, 7, 8
-READER_GRANTS = [*BASE_GRANTS, "workflows/design:read", "activities/design:read"]
+# Exactly what each actor's journey reaches, beyond the agent and preferences BASE_GRANTS:
+# - api-capabilities:read: GET /capabilities, through which every owner link (activity catalog, workflow definitions,
+#   drafts, validations, expressions) is discovered, by the driver and by Studio alike;
+# - workflows/design:read: the definition GET, its draft validations and the read-graph tool;
+# - workflows/design:manage (managers): definition create in seed_workflow, the promotion preflight and the layout tool,
+#   and it satisfies read;
+# - activities/design:read: the designer catalog GET and Weaver's catalog (never the catalog-denied actor);
+# - expressions:read (reader only): the packaged Studio editor's expression descriptors in the browser journey.
+CAPABILITIES_READ = "api-capabilities:read"
+READER_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:read", "activities/design:read", "expressions:read"]
 # A reader without activity design read: the owner withholds its catalog, and Weaver must disclose none.
-CATALOG_DENIED_GRANTS = [*BASE_GRANTS, "workflows/design:read"]
-MANAGER_GRANTS = [*BASE_GRANTS, "workflows/design:manage", "activities/design:read"]
+CATALOG_DENIED_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:read"]
+MANAGER_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:manage", "activities/design:read"]
 # role -> (principal index, seeded workflow, may manage, sees the tenant-restricted activity; None: no catalog read)
 ACTORS = (("manager", MANAGER, "home", True, True), ("reader", READER, "home", False, True),
           ("tenant-manager", TENANT_MANAGER, "other", True, False), ("catalog-denied", CATALOG_DENIED, "home", False, None))

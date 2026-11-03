@@ -187,7 +187,15 @@ class PrincipalTests(unittest.TestCase):
         self.assertEqual((5, 6, 7, 8), (READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED))
         self.assertTrue(set(BASE_GRANTS) <= set(made[0]["grants"]) and "workflows/design:manage" not in made[0]["grants"])
         self.assertTrue(all({"workflows/design:manage", "activities/design:read"} <= set(item["grants"]) for item in made[1:3]))
-        self.assertEqual(["workflows/design:read"], [key for key in made[3]["grants"] if key not in BASE_GRANTS])
+        # Exactly what each journey reaches beyond BASE_GRANTS, nothing broader: every actor discovers owner links through
+        # GET /capabilities; managers create, preflight and lay out; only the reader's Studio editor reads expressions;
+        # the catalog-denied actor never holds activities/design:read.
+        extra = [sorted(key for key in item["grants"] if key not in BASE_GRANTS) for item in made]
+        self.assertEqual([["activities/design:read", "api-capabilities:read", "expressions:read", "workflows/design:read"],
+                          ["activities/design:read", "api-capabilities:read", "workflows/design:manage"],
+                          ["activities/design:read", "api-capabilities:read", "workflows/design:manage"],
+                          ["api-capabilities:read", "workflows/design:read"]], extra)
+        self.assertTrue(all(len(item["grants"]) == len(set(item["grants"])) and all("*" not in key for key in item["grants"]) for item in made))
         with self.assertRaises(RuntimeError): truth_principals(original[:4], lambda *args: {})
         with self.assertRaises(RuntimeError): truth_principals([{"tenant": "default"}] * 5, lambda *args: {})
 

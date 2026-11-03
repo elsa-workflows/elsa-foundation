@@ -227,6 +227,8 @@ class JourneyBoundariesTests(unittest.TestCase):
             self.assertEqual(9, len(principals))
             reader, manager, tenant_manager, catalog_denied = principals[5:]
             self.assertNotIn("activities/design:read", catalog_denied["exactDirectPermissions"])
+            # Every dedicated actor discovers its owner links through GET /capabilities.
+            self.assertTrue(all("api-capabilities:read" in item["exactDirectPermissions"] for item in principals[5:]))
             self.assertEqual((principals[0]["tenant"], principals[0]["tenant"], principals[2]["tenant"]),
                              (reader["tenant"], manager["tenant"], tenant_manager["tenant"]))
             self.assertIn("workflows/design:read", reader["exactDirectPermissions"])

@@ -95,6 +95,14 @@ page.on("response", response => {
   pendingOwnerReads.push(response.text().then(rawBody => Object.assign(observation, { rawBody, completed: true }))
     .catch(error => { observation.error = error.message; }));
 });
+// Spec 1193 T012: the read-only actor holds exactly the grants its journey needs, so any refused backend read names a
+// missing grant precisely instead of surfacing later as a missing control.
+const refusedReads = [];
+if (config.journey === "workflow-read-only") page.on("response", response => {
+  const url = new URL(response.url());
+  if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
+    refusedReads.push({ path: url.pathname, status: response.status() });
+});
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
@@ -1412,6 +1420,7 @@ async function workflowReadOnly() {
   const before = await owner("owner-before", definitionPath);
   result.ownerBefore = before.receipt;
   const position = await activity.getAttribute("style");
+  need(refusedReads.length === 0, "The read-only actor was refused backend reads: " + refusedReads.map(item => item.status + " " + item.path).join(", "));
   await page.getByRole("button", { name: /^Weaver/ }).click();
   const ask = async (toolName, args, name) => {
     command(toolName, args);
@@ -1448,6 +1457,8 @@ async function workflowReadOnly() {
   expect(after.value.draft).toEqual(before.value.draft);
   expect(owningWrites).toEqual([]);
   need(!requests.some(item => /\/(approve|execute|acknowledgements)$/.test(new URL(item.url).pathname)), "A read-only actor reached a review or effect boundary.");
+  result.evidence.push(retain("refused-reads", refusedReads));
+  need(refusedReads.length === 0, "The read-only actor was refused backend reads: " + refusedReads.map(item => item.status + " " + item.path).join(", "));
   await screenshot("read-only-layout-not-offered");
   result.observations = { permissionsDisclosed: { manage: "denied", tools: permissions.content.tools }, catalogAvailable: true,
     explainCompleted: true, layoutOffered: false, proposalCount: 0, nodeMoved: false, draftUnchanged: true, owningWrites: 0 };
