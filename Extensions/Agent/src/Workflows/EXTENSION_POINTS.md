@@ -41,8 +41,13 @@ The module reads two owning domains through their `.Core` contracts only, and re
   the actor gets explanation only. `tools` follows the engine's advertisement rule for each tool: its own descriptor
   through the host `IAgentToolAuthorizer`, its owner decision, and the session's capability policy for its name
   (`IAgentPolicyEvaluator.EvaluateCapabilityAsync`, which applies `DeniedCapabilityIds`), so it names exactly what the
-  engine will offer. `capabilities` follows the rule the Agent API admits a requested capability with: its own id under
-  that policy, independent of the tools (proposing a change also needs manage). `manage` stays the owner's answer.
+  engine will offer. `capabilities` reports each capability by its own id under that policy, independent of the tools, as the Agent API
+  admits a requested capability; `workflow.propose-change` is reported only when `manage` is `allowed`, which is stricter
+  than the API's admission. `manage` combines the host decision for the layout tool with the owner's answer: when the host
+  `IAgentToolAuthorizer` refuses the layout tool the owner is not asked and `manage` is `denied`, so `denied` does not by
+  itself mean the owner refused. A host that refuses `workflow_read_graph` withholds the whole workflow context with the
+  required `agent.workflow.permission_denied` (disclosure is admitted on the read tool's descriptor); a host cannot keep the
+  workflow context while withholding only the read tool.
 
 Both server reads respect the session's host context policy. When `IAgentPolicyEvaluator.EvaluateContextAsync` does not
 admit a kind (for example a policy whose `AllowedContextKinds` lists only the older workflow kinds), the module does not

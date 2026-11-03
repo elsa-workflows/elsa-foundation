@@ -274,15 +274,17 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         var manage = owner is { Allowed: true } ? "allowed" : owner is not null && WorkflowResourceAuthority.IsUnavailable(owner) ? "unavailable" : "denied";
         // Tools are reported by the engine's own advertisement rule: each tool's own descriptor through the host authorizer,
         // its owner decision and the session's capability policy for its name. The read tool's owner decision is the read
-        // this disclosure was just admitted on, for the same actor, tenant and target.
+        // this disclosure was just admitted on, for the same actor, tenant and target; the host check below repeats the
+        // disclosure gate's own decision and keeps the rule local rather than relying on that gate.
         var tools = new List<string>();
         if ((await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed
             && (await policies.EvaluateCapabilityAsync(session.Policy, WorkflowReadGraphTool.ToolName, cancellationToken)).Allowed)
             tools.Add(WorkflowReadGraphTool.ToolName);
         if (manage == "allowed" && (await policies.EvaluateCapabilityAsync(session.Policy, WorkflowSetDesignerPositionTool.ToolName, cancellationToken)).Allowed)
             tools.Add(WorkflowSetDesignerPositionTool.ToolName);
-        // Capabilities are reported by the rule the Agent API admits a requested capability with: its own id under the
-        // session's capability policy, independent of tool advertisement. Proposing a change also needs the owner's manage.
+        // Capabilities are reported by their own ids under the session's capability policy, as the Agent API admits a
+        // requested capability, independent of tool advertisement. Proposing a change is reported only with manage allowed,
+        // which includes the host decision for the layout tool, so this is stricter than the API's admission.
         var capabilities = new List<string>();
         foreach (var capability in manage == "allowed" ? new[] { "workflow.explain", "workflow.propose-change" } : new[] { "workflow.explain" })
             if ((await policies.EvaluateCapabilityAsync(session.Policy, capability, cancellationToken)).Allowed) capabilities.Add(capability);
