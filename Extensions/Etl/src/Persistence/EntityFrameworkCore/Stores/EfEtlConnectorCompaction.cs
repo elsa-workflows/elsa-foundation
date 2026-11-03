@@ -8,12 +8,13 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 internal sealed partial class EfEtlRuntimeStore
 {
     /// <summary>
-    /// Deletes a claimed continuous shard's rows behind its retained window and folds their counts into the partition's
+    /// Deletes one continuous shard's rows behind its retained window and folds their counts into the partition's
     /// compacted summary (spec 1196). The window keeps the current request and the predecessor page and request with
     /// that page's batches, which the transition checks, the batch audit and a same-fence replay read.
     /// </summary>
     /// <remarks>
-    /// Runs in the claim transaction after the claim audit, so it always precedes the work a lease is charged for. The
+    /// Every claim in a continuous run calls this for every shard, in the claim transaction after the claimed shard's
+    /// audit, so it always precedes the work a lease is charged for; budgets are per run, so peers are compacted too. The
     /// request and page rows form a chain of restrict foreign keys (request k + 1 to page k to request k), so predecessor
     /// pointers at and below the new base are cleared first, then batches, pages and requests are deleted as sets.
     /// </remarks>

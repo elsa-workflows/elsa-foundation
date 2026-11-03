@@ -13,7 +13,7 @@
 
 ## Phase 3 — Compaction (US1, US3)
 - [x] T006 Partition summary columns and the relaxed request check (entity, context, migration with rebuild, snapshot). T001 passes.
-- [x] T007 `CompactConnectorHttpHistoryAsync`, called by every claim of a continuous shard after its audit (research R8).
+- [x] T007 `CompactConnectorHttpHistoryAsync`, called by every claim in a continuous run, for every shard, after the claimed shard's audit (research R8).
 - [x] T008 Base-relative HTTP history audit and batch history audit. Inspector effect counts.
 - [x] T009 No page-sequence bound in continuous runs: the store's pipeline decoder and the page cache.
 - [x] T010 Tests: window, accounting, lifetime counts, finite runs unchanged, a pre-slice run compacted at its first claim. What is not separately tested is listed in the evidence README.

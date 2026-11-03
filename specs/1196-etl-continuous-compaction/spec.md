@@ -82,11 +82,11 @@ In both cases, the accepted records equal the fed records exactly.
 
 1. **Given** an acceptance that committed, **When** the same worker retries it with the same fence, **Then** the store replays the result. Every compaction, whichever shard's claim runs it, keeps each shard's predecessor page and request with that page's batches, which is every row a same-fence replay reads, so a retry always finds its rows.
 2. **Given** a worker killed after the advance commits but before it deletes the page's cached files, **Then** the files are left behind (a bounded leak per crash), and the run continues.
-3. **Given** a continuous run started before this slice, **When** each shard is first claimed on this slice, **Then** that claim compacts the shard's whole history before any budget is charged, and legacy cache files stay readable. A run already at its retention ceiling therefore resumes.
+3. **Given** a continuous run started before this slice, **When** any of its shards is first claimed on this slice, **Then** that claim compacts every shard's whole history before any budget is charged, and legacy cache files stay readable. A run already at its retention ceiling therefore resumes.
 
 ### Edge Cases
 
-- **What the window is.** A claimed shard whose current request is *r* retains:
+- **What the window is.** After any claim of its run, a shard whose current request is *r* retains:
   - request *r* and, if attached, page *r* with its batches;
   - the predecessor page *r* − 1 and request *r* − 1, which the transition checks read, with page *r* − 1's batches, which the batch audit reads.
 

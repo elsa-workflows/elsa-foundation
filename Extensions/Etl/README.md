@@ -88,7 +88,10 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
   idle can keep every connector slot in its scope and delay newer runs. Deciding whether a caught-up response ends a
   draining shard compares host clocks, which must agree, as leases already require. Each caught-up poll increments the
   shard's poll generation, which is part of its page-cache key, so a stalled worker's late page never reaches a later
-  poll; that orphaned page stays on disk.
+  poll; that orphaned page stays on disk. Because every claim compacts every shard, a shard
+  whose rows fail the compaction's safety check (which needs corruption) refuses every claim of its run. The first claim
+  after upgrading a long-running run compacts every shard's whole history in one write transaction, which peers' lease
+  renewals wait on; this happens once and loses nothing.
 
 ## Implemented boundaries
 
