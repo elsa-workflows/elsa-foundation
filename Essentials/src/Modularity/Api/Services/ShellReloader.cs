@@ -28,7 +28,14 @@ public sealed class ShellReloader(IShellRegistry shellRegistry, IShell shell, IL
         var name = shell.Descriptor.Name;
         for (var attempt = 1; ; attempt++)
         {
-            var result = await shellRegistry.ReloadAsync(name, cancellationToken);
+            ReloadResult result;
+            try { result = await shellRegistry.ReloadAsync(name, cancellationToken); }
+            catch (OperationCanceledException) when (attempt > 1)
+            {
+                LogCancelledRetry(name);
+                throw;
+            }
+
             if (result.Error is null) return 1;
             if (attempt < MaxAttempts && IsConfigurationChangedDuringComposition(result.Error))
             {
@@ -36,8 +43,7 @@ public sealed class ShellReloader(IShellRegistry shellRegistry, IShell shell, IL
                 try { await Task.Delay(RetryDelay, cancellationToken); }
                 catch (OperationCanceledException)
                 {
-                    // The features are already saved: say why they are not in effect before the cancellation propagates.
-                    logger?.LogWarning("Reloading shell {ShellName} was cancelled between attempts; the applied features take effect only after a successful reload.", name);
+                    LogCancelledRetry(name);
                     throw;
                 }
                 continue;
@@ -47,6 +53,10 @@ public sealed class ShellReloader(IShellRegistry shellRegistry, IShell shell, IL
             return 0;
         }
     }
+
+    // The features are already saved: say why they are not in effect before a retry's cancellation propagates.
+    private void LogCancelledRetry(string name) =>
+        logger?.LogWarning("Reloading shell {ShellName} was cancelled while retrying; the applied features take effect only after a successful reload.", name);
 
     // CShells exposes no dedicated type for this refusal. Its message is "Configuration changed <phase> shell '<name>'. Retry activation or reload."
     private static bool IsConfigurationChangedDuringComposition(Exception error) =>

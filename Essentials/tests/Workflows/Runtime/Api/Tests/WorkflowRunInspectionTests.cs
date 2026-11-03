@@ -288,12 +288,14 @@ public sealed class WorkflowRunInspectionTests
     [InlineData("notifying-sensitive", true)]
     [InlineData("notifying-plain", false)]
     [InlineData("notifying-blank", true)]
-    [InlineData("child-control", true)]
+    [InlineData("control-sensitive", true)]
+    [InlineData("control-plain", false)]
+    [InlineData("control-blank", true)]
     public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
     {
         const string ChildId = "actexec-child";
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
-        if (child is "sensitive" or "plain" or "completed-sensitive" or "completed-plain" or "notifying-sensitive" or "notifying-plain")
+        if (child is "sensitive" or "plain" or "completed-sensitive" or "completed-plain" or "notifying-sensitive" or "notifying-plain" or "control-sensitive" or "control-plain")
             await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ChildId, RunId, "node-child", "authored-child", "Test.Child", "1.0.0",
                 ActivityExecutionStatus.Faulted, null, 2, Now, Now, null, "checkpoint-2", "checkpoint-2", Now, ActivitySchedulingProvenance.Empty, [], [], [],
                 child.EndsWith("sensitive", StringComparison.Ordinal) ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
@@ -308,8 +310,9 @@ public sealed class WorkflowRunInspectionTests
             // A parent faulting while handling a child's notification records that child, whose payload reached the handler.
             "notifying-sensitive" or "notifying-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = ChildId },
             "notifying-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = "" },
-            // A consumer faulting on a child's control batches names no child.
-            "child-control" => new Dictionary<string, string> { [RuntimeMetadataKeys.FaultSubStatus] = "ChildControlFaulted" },
+            // A child-control consumer's fault, on every arm, records the child whose control batches it received.
+            "control-sensitive" or "control-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlActivityExecutionId] = ChildId },
+            "control-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlActivityExecutionId] = "" },
             _ => new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalActivityExecutionId] = ChildId,

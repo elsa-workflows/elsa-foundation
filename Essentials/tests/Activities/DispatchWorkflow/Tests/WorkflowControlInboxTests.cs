@@ -133,6 +133,13 @@ public sealed class WorkflowControlInboxTests
         Assert.Equal(status, root.Status);
         Assert.Equal(1, Count(root));
         AssertAtomicDecision(fixture, child, root);
+        if (response == "fault")
+        {
+            // Run inspection withholds the consumer's message unless this child is established non-sensitive.
+            var incident = Assert.Single(await fixture.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run.Dispatch.ParentWorkflowExecutionId),
+                item => item.ActivityExecutionId == root.InvocationId);
+            Assert.Equal(child.InvocationId, incident.Metadata[RuntimeMetadataKeys.ChildControlActivityExecutionId]);
+        }
     }
 
     [Fact]

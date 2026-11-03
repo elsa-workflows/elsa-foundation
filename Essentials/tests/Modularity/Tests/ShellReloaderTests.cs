@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Modularity.Api.Services;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -45,8 +46,30 @@ public sealed class ShellReloaderTests
         Assert.Equal(1, registry.Reloads);
     }
 
+    [Fact]
+    public async Task LogsAndPropagatesACancellationWhileRetrying()
+    {
+        var registry = new QueuedReloadRegistry(ConfigurationChanged, null);
+        var logger = new RecordingLogger();
+        using var cancellation = new CancellationTokenSource();
+        registry.BeforeReload = attempt => { if (attempt == 2) cancellation.Cancel(); };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ShellReloader(registry, new NuplaneHostTestComposition.StubShell("Authoring"), logger).ReloadAsync(cancellation.Token));
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("cancelled while retrying", StringComparison.Ordinal));
+    }
+
     private static Task<int> Reload(QueuedReloadRegistry registry) =>
         new ShellReloader(registry, new NuplaneHostTestComposition.StubShell("Authoring")).ReloadAsync();
+
+    private sealed class RecordingLogger : ILogger<ShellReloader>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
 
     private sealed class QueuedReloadRegistry(params Exception?[] outcomes) : IShellRegistry
     {
@@ -54,9 +77,13 @@ public sealed class ShellReloaderTests
 
         public int Reloads { get; private set; }
 
+        public Action<int>? BeforeReload { get; set; }
+
         public Task<ReloadResult> ReloadAsync(string name, CancellationToken cancellationToken = default)
         {
             Reloads++;
+            BeforeReload?.Invoke(Reloads);
+            cancellationToken.ThrowIfCancellationRequested();
             var error = _outcomes.Dequeue();
             return Task.FromResult(new ReloadResult(name, error is null ? new NuplaneHostTestComposition.StubShell(name) : null, null, error));
         }

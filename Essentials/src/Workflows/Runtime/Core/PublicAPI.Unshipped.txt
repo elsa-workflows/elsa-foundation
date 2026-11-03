@@ -6965,6 +6965,7 @@ const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.LoopIterationIte
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.LoopIterationOwnerNodeId = "runtime.loop.iterationOwnerNodeId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildControlActivityExecutionId = "runtime.childControlActivityExecutionId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OperationKey = "runtime.operationKey" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OutputName = "runtime.outputName" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OwnershipFencingToken = "runtime.ownership.fencingToken" -> string!
