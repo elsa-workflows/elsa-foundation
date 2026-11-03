@@ -1,7 +1,52 @@
 {
  "spec": "1201-etl-rabbitmq-source",
- "note": "Each entry names the revision it was recorded at. All entries bite.",
+ "note": "Each entry names the revision it was recorded at, and every entry bit there. An entry with supersededBy mutated code a later round rewrote; the entries it names cover that guard at the current code.",
  "results": [
+  {
+   "mutation": "binding-allowed-queue-entity",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_source_binding",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_source_binding_allows_its_queues_exactly_and_needs_the_consumer"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (source && !binding.AllowedQueues.Contains(entity, StringComparer.Ordinal))",
+   "mutated_text": "        if (false)",
+   "sourceRevision": "b42c7547f1f7f69fea3a2b39bb75797a45a7e028"
+  },
+  {
+   "mutation": "writer-blank-or-bom-is-invalid",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 3, Passed: 7",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"  \", line: \"\\x01\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\", line: \"\\x01\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\ufeff\", line: \"\\x01\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 10",
+   "original": "        if (IsBlank(span) || span.StartsWith(ByteOrderMark))\n            return InvalidRecord;\n",
+   "mutated_text": "        if (span.StartsWith(ByteOrderMark))\n            return InvalidRecord;\n",
+   "sourceRevision": "b42c7547f1f7f69fea3a2b39bb75797a45a7e028"
+  },
+  {
+   "mutation": "writer-repeated-bom-is-invalid",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 2, Passed: 8",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\ufeff\ufeff\", line: \"\\x01\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\ufeff\ufeff{\\\"id\\\":1}\", line: \"\\x01\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 10",
+   "original": "        if (IsBlank(span) || span.StartsWith(ByteOrderMark))\n            return InvalidRecord;\n",
+   "mutated_text": "        if (IsBlank(span))\n            return InvalidRecord;\n",
+   "sourceRevision": "b42c7547f1f7f69fea3a2b39bb75797a45a7e028"
+  },
   {
    "mutation": "preparer-snapshot-bound",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
@@ -127,7 +172,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 1",
    "original": "        if (source && !binding.AllowedQueues.Contains(exchange, StringComparer.Ordinal))",
    "mutated_text": "        if (false)",
-   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8",
+   "supersededBy": "binding-allowed-queue-entity@b42c7547f"
   },
   {
    "mutation": "binding-needs-consumer",
@@ -170,7 +216,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 6",
    "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0 && !IsBlank(span))",
    "mutated_text": "        if (!IsBlank(span))",
-   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8",
+   "supersededBy": "writer-line-break-as-space@7852daed4, writer-invalid-multiline-is-invalid@9411620cf"
   },
   {
    "mutation": "writer-blank",
@@ -185,7 +232,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 6",
    "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0 && !IsBlank(span))",
    "mutated_text": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0)",
-   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8",
+   "supersededBy": "writer-blank-or-bom-is-invalid@b42c7547f"
   },
   {
    "mutation": "preparer-attempt-identity",
@@ -241,7 +289,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 1",
    "original": "                await AcknowledgeAsync(lease, receipt, token);\n",
    "mutated_text": "                await Task.CompletedTask;\n",
-   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8",
+   "supersededBy": "execution-acks@9411620cf"
   },
   {
    "mutation": "processing-view",
@@ -297,7 +346,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 1",
    "original": "                    firstTooLarge = bodies.Count == 0;",
    "mutated_text": "                    firstTooLarge = false;",
-   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8",
+   "supersededBy": "preparer-first-too-large@7852daed4"
   },
   {
    "mutation": "reader-source-queue-name",
@@ -395,7 +445,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 1",
    "original": "                    if (written + line.Length + 1 > maxBytes)\n",
    "mutated_text": "                    if (false)\n",
-   "sourceRevision": "7852daed48020fce957277901b4667d7725bc63e"
+   "sourceRevision": "7852daed48020fce957277901b4667d7725bc63e",
+   "supersededBy": "preparer-snapshot-bound@212f2ae6e"
   },
   {
    "mutation": "writer-strips-bom",
@@ -440,7 +491,8 @@
    "restored": "Passed!  - Failed: 0, Passed: 8",
    "original": "        if (IsBlank(span))\n            return InvalidRecord;\n",
    "mutated_text": "        if (false)\n            return InvalidRecord;\n",
-   "sourceRevision": "9411620cf04c56cdfcd04c668e20071ef6afd435"
+   "sourceRevision": "9411620cf04c56cdfcd04c668e20071ef6afd435",
+   "supersededBy": "writer-blank-or-bom-is-invalid@b42c7547f"
   },
   {
    "mutation": "writer-invalid-multiline-is-invalid",
