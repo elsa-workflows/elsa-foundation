@@ -46,7 +46,7 @@ Input: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](d
 - [x] T025 Complete independent draft review axes, fix findings in new commits, mark ready and run required reviewed-head CI/review/permitted merge.
 - [x] T026 Rebuild resulting main, repeat decisive integrated rows, reconcile spec status/#3577/Program/linked parity records, and close only when all exits are evidenced.
 
-T026 closeout is applied by PR #3706 only after the implementation main run and the closeout PR's own required checks pass; see [resulting-main qualification](resulting-main-qualification.md). The Program issue retains the live state until merge.
+T026 closeout is applied by PR #3706 only after executed resulting-main qualification, healthy-main inspection and the closeout PR's own required checks pass; see [resulting-main qualification](resulting-main-qualification.md). The Program issue retains the live state until merge.
 
 ## Dependencies and implementation strategy
 

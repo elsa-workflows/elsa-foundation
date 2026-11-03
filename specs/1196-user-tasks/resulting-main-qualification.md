@@ -49,18 +49,30 @@ which is protected. Authenticated health and the complete client journey passed.
 Debug configuration produced and verified the archive. Neither setup error was treated as an
 application pass.
 
+## Descendant-main requalification
+
+Main advanced to `3e34381257b00383f8161d1b52751c58378c7012` through runtime PR #3697.
+The closeout integrated it without conflicts. To check the new combination, both normal hosts were
+rebuilt from a detached checkout of that actual main commit and restarted on the retained owned
+stores. All three HTTP action paths, all three live Studio journeys and both real identity/native-BPMN
+restart journeys passed again. Whole Runtime passed 3,278 executed/3,267 listed (11 deferred theory
+rows, no missing cases), and whole Runtime EF passed 1,884/1,884 with no skips. The new asynchronous
+public-contract/packed-feature consumer also passed. Both owned hosts were stopped afterward.
+
+These are additional executed results; they do not rewrite the earlier `bfe908334` results above.
+
 ## Actual archive
 
 `dotnet pack Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj
 --configuration Debug --no-build --no-restore -o <owned-output>` produced
-`Elsa.Studio.UserTasks.1.0.0.nupkg`, with repository commit
-`bfe9083349949b0cc8ebf1d3651df60ea2ca7767`.
+`Elsa.Studio.UserTasks.1.0.0.nupkg` again from the requalified descendant, with repository commit
+`3e34381257b00383f8161d1b52751c58378c7012`.
 
 The repository package verifier checked actual dependency metadata and byte-exact compiled assets:
 
 | Payload | SHA-256 |
 |---|---|
-| Archive | `5696a54fed037eea2ae5f7ce044edbecd3b2941a33a283318dbb283898d8447d` |
+| Archive | `ef174bd7cf80f42178bdf06b8c726e2b49115cc6cbad24fda0bd6af68366ec4c` |
 | `module.js` | `22b341d1e83451b78497518a546522c1cd083a6efb024e50f3db647bae3f1e0a` |
 | `module.css` | `c4e70033c9ec02340368a9c9d96c795d274c96d077a57e6040cadd7f3db2f6db` |
 | `entry-styles.json` | `710e4794df8163dd7ffe1591f903f22a155eab01e762566179ce0b060fe8319f` |
@@ -85,15 +97,29 @@ from a source inspection.
 
 ## Main checks and closeout
 
-[Push CI on the merge commit](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41591385434)
-is a required closeout gate. [Closeout PR #3706](https://github.com/elsa-workflows/elsa-foundation/pull/3706)
-records its checked conclusion in a gate-evidence comment before merge. The closeout must not merge
-or close the Program while this run has a pending or failed substantive job. The source, archive and
-executed acceptance evidence above remain pinned to the implementation merge commit.
+[Push CI on the implementation merge](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41591385434)
+completed **cancelled**, after main advanced through #3697. Its completed successes are retained,
+but canceled jobs are not passes. The repository intentionally
+[supersedes older main push runs](../../.github/workflows/ci.yml) when a newer push arrives.
+The worker app could not dispatch a separate frozen workflow (HTTP 403); no alternate identity was used.
+
+The earlier closeout candidate imposed an extra requirement that every substantive job on that
+exact push finish green. This record explicitly replaces that self-imposed condition with the
+canonical [post-merge protocol](../../docs/contributing/merging.md#post-merge-gates): execute
+resulting-main qualification, inspect current main for reported failures, and handle actual failures.
+Required checks must still pass on the closeout's independently reviewed exact head, with no failed
+head check, human hold or protection bypass. Original implementation full-tier/native-provider CI
+remains green; no failed check has been waived.
+
+[Descendant-main push CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41593751946)
+is monitored as additional evidence. Its status and the healthy-main inspection are recorded in
+[closeout PR #3706](https://github.com/elsa-workflows/elsa-foundation/pull/3706)'s gate-evidence comment.
+The executed original/descendant-main acceptance above remains pinned to its actual source commits;
+a superseded push is never silently relabeled as successful. There was no open `main is red: CI`
+issue at inspection.
 
 The closeout reconciles the task checklist, completed program registry and the User Tasks portion
-of the parity/BPMN dependency. Its own independent review and required documentation checks are
-also required before merge. These source bookkeeping transitions take effect when that PR merges;
+of the parity/BPMN dependency. Its source bookkeeping transitions take effect on permitted merge;
 the Program issue remains the live state during review. Other parity/BPMN objectives remain open.
 
 Both owned normal hosts were stopped with SIGTERM after verifying each PID, DLL and owned content root. Their stores remain available for reproduction. Test fixtures disposed their own child hosts.

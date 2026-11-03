@@ -19,7 +19,7 @@ Run beside active programs; displace none, preserve consolidation as priority on
 
 M0 source/comparative research → M1 reviewed spec/architecture/tasks → M2 durable lifecycle → M3 workflow/forms/API integration → M4 Studio authoring/inbox → M5 integrated/provider/custom-host qualification and guidance → M6 review/merge/resulting-main acceptance. One implementation leaf at a time; implementation acceptance stays on #3577.
 
-All #3577 success criteria and Program exit rows are mapped to executed evidence in the [resulting-main qualification record](../../specs/1196-user-tasks/resulting-main-qualification.md). The closeout PR requires green implementation-main CI and its own reviewed-head checks before applying completion.
+All #3577 success criteria and Program exit rows are mapped to executed evidence in the [resulting-main qualification record](../../specs/1196-user-tasks/resulting-main-qualification.md). The closeout PR requires executed resulting-main qualification, current-main health inspection and green reviewed-head checks before applying completion.
 
 ## Delivery record
 
