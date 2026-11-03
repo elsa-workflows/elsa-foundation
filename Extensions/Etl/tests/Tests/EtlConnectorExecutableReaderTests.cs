@@ -52,6 +52,25 @@ public sealed class EtlConnectorExecutableReaderTests
     }
 
     [Fact]
+    public void Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key()
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        EtlPipelineV2 With(EtlColumn[] columns, string[] key) => defaults with
+        {
+            Source = new EtlSqlSource("people-db", "people", columns, key),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")],
+            Filters = []
+        };
+
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ID", EtlColumnType.Int64, true)], ["id"])))).Code);
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true)], ["id", "id"])))).Code);
+    }
+
+    [Fact]
     public void Reader_refuses_http_policy_above_independent_host_ceiling()
     {
         using var runtime = CreateRuntime(feature => feature.HttpLimits = new EtlHttpHostLimits

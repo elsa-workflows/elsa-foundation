@@ -21,6 +21,9 @@ internal sealed record EtlConnectorPreparationResult(EtlConnectorPreparedRun? Pr
     /// lease lets preparation run again (spec 1198).
     /// </summary>
     public bool Transient => Prepared is null && Diagnostic is null;
+
+    /// <summary>The driver failure behind a transient result, for the caller's log; never persisted or exposed.</summary>
+    public Exception? TransientCause { get; init; }
 }
 
 /// <summary>Retains and validates only the file-backed connector inputs pinned by one admitted v2 invocation.</summary>
@@ -123,9 +126,9 @@ internal sealed class EtlConnectorPreparer
         {
             return new(null, failure.Diagnostic);
         }
-        catch (EtlSqlTransientReadException)
+        catch (EtlSqlTransientReadException exception)
         {
-            return new(null, null);
+            return new(null, null) { TransientCause = exception.InnerException };
         }
         catch (CsvReadException exception)
         {
@@ -221,8 +224,16 @@ internal sealed class EtlConnectorPreparer
         var bindings = SqlBindings ?? throw new EtlBindingException("etl.sql-unavailable", "No ETL SQL bindings are configured.");
         var binding = bindings.ResolveExact(admission.Invocation.Scope, sql.Binding, EtlFileRole.Source.ToString(),
             revision.Revision, revision.Handle, sql.Table);
-        return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
-            (destination, ct) => EtlSqlSnapshotReader.WriteAsync(binding, sql, maxBytes, destination, ct), cancellationToken);
+        try
+        {
+            return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
+                (destination, ct) => EtlSqlSnapshotReader.WriteAsync(binding, sql, maxBytes, destination, ct), cancellationToken);
+        }
+        catch (EtlEffectException exception) when (exception.Code == "etl.effect-conflict")
+        {
+            // A predecessor whose lease lapsed mid-read published first; its point in time is the run's, so adopt it.
+            return await _jsonlPublisher.FindAsync(_snapshotRoot, identity, maxBytes, cancellationToken) ?? throw exception;
+        }
     }
 
     private async ValueTask<EtlChunk> PublishSourceIndexAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,

@@ -5,6 +5,7 @@ using Elsa.Etl.Design;
 using Elsa.Etl.Runtime;
 using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
+using Elsa.Etl.Runtime.Output;
 using Elsa.Etl.Runtime.Preparation;
 using Elsa.Etl.Tests.Support;
 using Microsoft.Data.Sqlite;
@@ -31,8 +32,9 @@ public sealed class EtlSqlSourceTests : IDisposable
     private string ConnectionString => $"Data Source={Path.Combine(_root, "source.db")};Pooling=False";
     private string SnapshotRoot => Path.Combine(_root, "snapshots");
 
+    // Existing artifact bytes and identities are pinned by the golden hashes in EtlV2ArtifactIdentityTests.
     [Fact]
-    public void A_sql_source_compiles_round_trips_and_leaves_existing_pipelines_unchanged()
+    public void A_sql_source_compiles_and_round_trips()
     {
         var artifact = Assert.IsType<EtlArtifact>(Compile(Pipeline()).Artifact);
 
@@ -41,7 +43,6 @@ public sealed class EtlSqlSourceTests : IDisposable
         Assert.Equal(["id"], read.Key);
         Assert.Equal(Columns, read.Columns);
         Assert.Contains("\"kind\":\"sql\"", artifact.Pipeline.GetRawText(), StringComparison.Ordinal);
-        Assert.Equal(Compile(EtlV2TestPipelines.Create()).Artifact!.ContentHash, Compile(EtlV2TestPipelines.Create()).Artifact!.ContentHash);
     }
 
     [Theory]
@@ -144,6 +145,50 @@ public sealed class EtlSqlSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_snapshot_published_concurrently_by_a_lapsed_predecessor_is_adopted_rather_than_failing_the_run()
+    {
+        Execute("INSERT INTO people VALUES (1, 'Ada', '1.5', 1, NULL)");
+        var admission = Admission(Pipeline());
+        var first = await Preparer().PrepareAsync(admission);
+        Execute("UPDATE people SET name = 'changed'");
+
+        // The replacement looks before the predecessor publishes, reads a later point in time, and loses the publication.
+        var replacement = new EtlConnectorPreparer(new HostFileBindings([]), SnapshotRoot, new MissFirstLookupFactory()) { SqlBindings = Sql() };
+        var adopted = await replacement.PrepareAsync(admission);
+
+        Assert.True(adopted.Succeeded, adopted.Diagnostic?.Code);
+        Assert.Equal(first.Prepared!.File!.Source, adopted.Prepared!.File!.Source);
+        Assert.Equal(2, _engine.SnapshotReads);
+    }
+
+    [Fact]
+    public async Task A_sql_pin_that_carries_a_digest_is_refused_at_preparation()
+    {
+        var admission = Admission(Pipeline());
+        var digested = admission with
+        {
+            Bindings = admission.Bindings with
+            {
+                Source = admission.Bindings.Source with { Revision = admission.Bindings.Source.Revision with { ExpectedSha256 = new string('a', 64) } }
+            }
+        };
+
+        Assert.Equal("etl.binding-unavailable", (await Preparer().PrepareAsync(digested)).Diagnostic?.Code);
+        Assert.Equal(0, _engine.SnapshotReads);
+    }
+
+    [Fact]
+    public async Task Non_ascii_text_is_retained_as_raw_utf8_not_escaped()
+    {
+        Execute("INSERT INTO people VALUES (1, 'Привет ☃', NULL, NULL, NULL)");
+
+        var file = (await Preparer().PrepareAsync(Admission(Pipeline()))).Prepared!.File!;
+
+        Assert.Equal("{\"id\":1,\"name\":\"Привет ☃\",\"score\":null,\"active\":null}\n",
+            await File.ReadAllTextAsync(Path.Combine(SnapshotRoot, file.Source.Key)));
+    }
+
+    [Fact]
     public async Task A_transient_read_failure_records_nothing_and_the_next_attempt_prepares()
     {
         Execute("INSERT INTO people VALUES (1, 'Ada', '1.5', 1, NULL)");
@@ -152,6 +197,7 @@ public sealed class EtlSqlSourceTests : IDisposable
 
         var failed = await Preparer().PrepareAsync(admission);
         Assert.True(failed.Transient);
+        Assert.IsType<SqliteEtlSqlEngine.InjectedDbException>(failed.TransientCause);
         Assert.Empty(Directory.Exists(SnapshotRoot) ? Directory.GetFiles(SnapshotRoot, "*.jsonl") : []);
 
         var retried = await Preparer().PrepareAsync(admission);
@@ -198,6 +244,21 @@ public sealed class EtlSqlSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_row_beyond_the_record_limit_is_a_record_error_not_a_failed_preparation()
+    {
+        Execute($"INSERT INTO people VALUES (1, 'Ada', NULL, NULL, NULL), (2, '{new string('x', 200)}', NULL, NULL, NULL)");
+        var pipeline = Pipeline();
+        pipeline = pipeline with { Limits = pipeline.Limits with { MaxRecordBytes = 128 } };
+        var admission = Admission(pipeline);
+        var prepared = (await Preparer().PrepareAsync(admission)).Prepared!;
+
+        await using var builder = await EtlConnectorInputBatchBuilder.OpenAsync(SnapshotRoot, admission, prepared, 0);
+        var batch = (await builder.BuildNextAsync(new EtlConnectorFilePosition(1, 3, 1))).Batch!;
+
+        Assert.Equal([null, "etl.record-too-large"], batch.Records.Select(record => record.Error?.Code));
+    }
+
+    [Fact]
     public async Task A_snapshot_that_no_longer_matches_its_recorded_hash_is_refused()
     {
         Execute("INSERT INTO people VALUES (1, 'Ada', '1.5', 1, NULL)");
@@ -205,7 +266,8 @@ public sealed class EtlSqlSourceTests : IDisposable
         var prepared = (await Preparer().PrepareAsync(admission)).Prepared!;
         var tampered = prepared with { File = prepared.File! with { Source = prepared.File.Source with { ContentHash = new string('0', 64) } } };
 
-        await Assert.ThrowsAnyAsync<Exception>(() => EtlConnectorInputBatchBuilder.OpenAsync(SnapshotRoot, admission, tampered, 0).AsTask());
+        Assert.Equal("etl.snapshot-integrity-failed", (await Assert.ThrowsAsync<EtlConnectorInputBatchBuilderException>(() =>
+            EtlConnectorInputBatchBuilder.OpenAsync(SnapshotRoot, admission, tampered, 0).AsTask())).Diagnostic.Code);
         // A SQL pin never carries a digest; one that does is not a SQL admission.
         var digested = admission with
         {
@@ -214,7 +276,8 @@ public sealed class EtlSqlSourceTests : IDisposable
                 Source = admission.Bindings.Source with { Revision = admission.Bindings.Source.Revision with { ExpectedSha256 = prepared.File!.Source.ContentHash } }
             }
         };
-        await Assert.ThrowsAnyAsync<Exception>(() => EtlConnectorInputBatchBuilder.OpenAsync(SnapshotRoot, digested, prepared, 0).AsTask());
+        Assert.Equal("etl.binding-unavailable", (await Assert.ThrowsAsync<EtlConnectorInputBatchBuilderException>(() =>
+            EtlConnectorInputBatchBuilder.OpenAsync(SnapshotRoot, digested, prepared, 0).AsTask())).Diagnostic.Code);
     }
 
     public void Dispose()
@@ -283,6 +346,27 @@ public sealed class EtlSqlSourceTests : IDisposable
         var result = Compile(pipeline);
         Assert.Null(result.Artifact);
         Assert.Contains(result.Diagnostics, item => item.Code == code);
+    }
+
+    /// <summary>Publishes normally, but the first lookup misses, as when a predecessor publishes after the replacement looked.</summary>
+    private sealed class MissFirstLookupFactory : IFileChunkPublisherFactory
+    {
+        private readonly FileChunkPublisherFactory _inner = new();
+
+        public IFileChunkPublisher Create(EtlFileChunkFormat format) =>
+            format == EtlFileChunkFormat.JsonlSnapshot ? new MissFirstLookup(_inner.Create(format)) : _inner.Create(format);
+    }
+
+    private sealed class MissFirstLookup(IFileChunkPublisher inner) : IFileChunkPublisher
+    {
+        private int _lookups;
+
+        public ValueTask<EtlChunk> PublishAsync(string outputRoot, string effectIdentity, long maxBytes,
+            Func<Stream, CancellationToken, ValueTask> write, CancellationToken cancellationToken = default) =>
+            inner.PublishAsync(outputRoot, effectIdentity, maxBytes, write, cancellationToken);
+
+        public ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes, CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref _lookups) == 1 ? ValueTask.FromResult<EtlChunk?>(null) : inner.FindAsync(outputRoot, effectIdentity, maxBytes, cancellationToken);
     }
 
     private void Execute(string sql)

@@ -94,14 +94,19 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   run is a JSON Lines run: its partitions, positions and replay are unchanged, every partition sees the same rows, and no
   connection is held while records are processed. A unique key keeps record numbers reproducible; rows with equal keys
   keep the order the engine returns.
-- **Recovery.** A worker that dies after publishing the snapshot is replaced by one that reuses it, so a run never reads a
-  second, different point in time. A transient read failure (a connection loss or timeout) records nothing, and
-  preparation runs again once its lease lapses, so an outage pauses the run.
-- **Types.** `String` accepts text, GUIDs and date or time values (ISO 8601 invariant text); `Int64` accepts 8- to
+- **Recovery.** A worker that dies after publishing the snapshot is replaced by one that reuses it, and a replacement that
+  started reading before a lapsed predecessor published adopts that snapshot, so a run never reads a second, different
+  point in time. A transient read failure (a connection loss or an unreachable database) records nothing and logs a
+  warning, and preparation runs again once its lease lapses, so an outage pauses the run. The read has no command
+  timeout; the lease bounds it.
+- **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and time or timestamp values (ISO 8601 invariant
+  text); a `date` column is written as `yyyy-MM-dd`; `Int64` accepts 8- to
   64-bit integers; `Decimal` accepts exact decimals within .NET `decimal` range and integers; `Boolean` accepts booleans
   (`bit` on SQL Server). Any other value, including a floating-point column, fails preparation with
   `etl.sql-column-type-unsupported`, naming the column. A NULL in a required column is a record error on the error route.
-- **Limits.** The snapshot is bounded by `MaxSnapshotBytes` (`etl.snapshot-too-large`). A SQL source is finite only.
+- **Limits.** The snapshot is bounded by `MaxSnapshotBytes` (`etl.snapshot-too-large`); a row longer than
+  `MaxRecordBytes` is a record error, `etl.record-too-large`. A SQL source is finite only. SQL Server's driver replaces
+  an unpaired surrogate in `nvarchar` text with U+FFFD before the run sees it.
   Watermark (incremental) reads, authored queries and log CDC are not supported.
 
 ## Continuous HTTP runs

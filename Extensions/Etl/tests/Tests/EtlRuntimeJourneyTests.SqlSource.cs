@@ -43,6 +43,49 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     [Fact]
+    public async Task An_empty_sql_table_settles_as_success_with_no_records()
+    {
+        await using var files = new RuntimeFiles("");
+        var source = CreateSqlSourceTable(files);
+        ExecuteSql(source, "DELETE FROM people");
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source)));
+        var invocation = ConnectorInvocation(files.Scope, "sql-source-empty", SqlSourcePipeline());
+
+        await files.AdmitAsync(host, invocation);
+        var run = await files.WaitForTerminalAsync(host, invocation.RunId);
+
+        Assert.Equal((EtlRunStatus.Succeeded, 0L, 0L), (run.Status, run.AcceptedRecords, run.RejectedRecords));
+    }
+
+    [Fact]
+    public async Task A_column_the_declaration_cannot_hold_fails_the_run_before_any_partition_exists()
+    {
+        await using var files = new RuntimeFiles("");
+        var source = CreateSqlSourceTable(files);
+        ExecuteSql(source, "ALTER TABLE people ADD COLUMN ratio REAL NULL; UPDATE people SET ratio = 0.5");
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source)));
+        var baseline = SqlSourcePipeline();
+        var pipeline = baseline with
+        {
+            Source = new EtlSqlSource("people-db", "people",
+                [new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ratio", EtlColumnType.Decimal, false)], ["id"]),
+            Mapping = [new("id", EtlFieldOrigin.Source, "id"), new("ratio", EtlFieldOrigin.Source, "ratio")]
+        };
+        var invocation = ConnectorInvocation(files.Scope, "sql-source-float", pipeline);
+
+        await files.AdmitAsync(host, invocation);
+        var run = await files.WaitForTerminalAsync(host, invocation.RunId);
+
+        Assert.Equal(("etl.sql-column-type-unsupported", "ratio"), (run.TerminalResult!.Diagnostic!.Code, run.TerminalResult.Diagnostic.Field));
+        await using var scope = host.Services.CreateAsyncScope();
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().ConnectorPartitions.CountAsync());
+    }
+
+    [Fact]
     public async Task A_sql_source_without_its_engine_package_is_refused_at_admission()
     {
         await using var files = new RuntimeFiles("");

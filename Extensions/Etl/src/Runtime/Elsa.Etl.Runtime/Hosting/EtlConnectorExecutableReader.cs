@@ -123,10 +123,13 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                 break;
             case EtlSqlSource sql:
                 RequireAlias(sql.Binding);
-                // The dialect quotes these identifiers, so a worker re-checks what the compiler enforced (spec 1198).
+                // The dialect quotes these identifiers and the columns key the record, so a worker re-checks the compiler's
+                // identifier, distinctness and key rules (spec 1198).
                 if (sql.Table?.Split('.') is not { Length: 1 or 2 } parts || !parts.All(SqlIdentifier) ||
                     !sql.Columns.All(column => SqlIdentifier(column.Name)) ||
-                    sql.Key is not { Count: >= 1 and <= 8 } || !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)))
+                    sql.Columns.Select(column => column.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != sql.Columns.Count ||
+                    sql.Key is not { Count: >= 1 and <= 8 } || sql.Key.Distinct(StringComparer.Ordinal).Count() != sql.Key.Count ||
+                    !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)))
                     throw Refused("etl.executable.invalid-pipeline");
                 break;
             default: throw Refused("etl.executable.invalid-pipeline");

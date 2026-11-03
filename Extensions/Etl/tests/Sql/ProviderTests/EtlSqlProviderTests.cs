@@ -13,7 +13,7 @@ public abstract partial class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
     private static readonly EtlColumn[] Columns =
         [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("score", EtlColumnType.Decimal, false)];
 
-    private readonly string _table = "people_" + Guid.NewGuid().ToString("N")[..12];
+    private protected readonly string _table = "people_" + Guid.NewGuid().ToString("N")[..12];
     private readonly string _ledger = "ledger_" + Guid.NewGuid().ToString("N")[..12];
 
     protected abstract string CreateTableSql(string table, bool keyed);

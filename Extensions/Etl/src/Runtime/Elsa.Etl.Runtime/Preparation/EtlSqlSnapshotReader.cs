@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
@@ -16,7 +17,9 @@ internal sealed class EtlSqlTransientReadException(Exception cause) : Exception(
 /// </summary>
 internal static class EtlSqlSnapshotReader
 {
-    private static readonly JsonWriterOptions WriterOptions = new() { SkipValidation = false };
+    // Snapshot lines are data read back by the JSON Lines reader, never HTML, so non-ASCII text stays raw UTF-8 instead
+    // of tripling in size as \uXXXX escapes.
+    private static readonly JsonWriterOptions WriterOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private static readonly byte[] LineFeed = [(byte)'\n'];
 
     /// <summary>The JSON Lines source a prepared SQL snapshot is processed as: one field per column, selected by name.</summary>
@@ -47,6 +50,8 @@ internal static class EtlSqlSnapshotReader
             {
                 command.Transaction = transaction;
                 command.CommandText = engine.SelectSnapshot(source.Table, columns, source.Key);
+                // A large ordered read may run longer than the driver's default timeout; the lease token bounds it instead.
+                command.CommandTimeout = 0;
                 // The reader is closed before the commit: PostgreSQL and SQL Server allow one open reader per connection.
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
                 await CopyRowsAsync(reader, source, columns, maxBytes, destination, cancellationToken);
@@ -63,9 +68,14 @@ internal static class EtlSqlSnapshotReader
         }
         catch (Exception exception) when (exception is DbException or InvalidOperationException or TimeoutException)
         {
-            // Snapshot-root I/O failures propagate unwrapped, so the preparer reports them as write failures.
             if (engine.Classify(exception) == EtlSqlErrorKind.Transient)
                 throw new EtlSqlTransientReadException(exception);
+            throw new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.sql-read-rejected", exception));
+        }
+        catch (Exception exception) when (exception is not (IOException or OutOfMemoryException or OperationCanceledException or EtlSqlTransientReadException))
+        {
+            // Any other provider failure is deterministic: retrying the same read would fail the same way. Snapshot-root I/O
+            // failures propagate unwrapped, so the preparer reports them as write failures.
             throw new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.sql-read-rejected", exception));
         }
     }
@@ -80,15 +90,23 @@ internal static class EtlSqlSnapshotReader
         while (await reader.ReadAsync(cancellationToken))
         {
             line.SetLength(0);
-            await using (var writer = new Utf8JsonWriter(line, WriterOptions))
+            try
             {
-                writer.WriteStartObject();
-                for (var index = 0; index < columns.Length; index++)
+                await using (var writer = new Utf8JsonWriter(line, WriterOptions))
                 {
-                    writer.WritePropertyName(columns[index]);
-                    WriteValue(writer, reader, index, source.Columns[index]);
+                    writer.WriteStartObject();
+                    for (var index = 0; index < columns.Length; index++)
+                    {
+                        writer.WritePropertyName(columns[index]);
+                        WriteValue(writer, reader, index, source.Columns[index], maxBytes - written);
+                    }
+                    writer.WriteEndObject();
                 }
-                writer.WriteEndObject();
+            }
+            catch (Exception exception) when (exception is IOException or ArgumentException && exception is not ArgumentNullException)
+            {
+                // A row too large for one in-memory line (the line buffer or a JSON token limit) cannot fit the snapshot.
+                throw Failure("etl.snapshot-too-large");
             }
             line.Write(LineFeed);
             if (line.Length > maxBytes - written)
@@ -98,7 +116,7 @@ internal static class EtlSqlSnapshotReader
         }
     }
 
-    private static void WriteValue(Utf8JsonWriter writer, DbDataReader reader, int index, EtlColumn column)
+    private static void WriteValue(Utf8JsonWriter writer, DbDataReader reader, int index, EtlColumn column, long remainingBytes)
     {
         if (reader.IsDBNull(index))
         {
@@ -110,9 +128,9 @@ internal static class EtlSqlSnapshotReader
         {
             value = reader.GetValue(index);
         }
-        catch (Exception exception) when (exception is InvalidCastException or OverflowException)
+        catch (Exception exception) when (exception is InvalidCastException or OverflowException or NotSupportedException)
         {
-            // A value the provider cannot materialise, such as a numeric beyond decimal range.
+            // A value the provider cannot materialise, such as a numeric beyond decimal range or an unmapped type.
             throw Failure("etl.sql-column-type-unsupported", column.Name);
         }
         switch (column.Type)
@@ -120,8 +138,17 @@ internal static class EtlSqlSnapshotReader
             case EtlColumnType.String:
                 switch (value)
                 {
-                    case string text: writer.WriteStringValue(text); return;
+                    case string text:
+                        // Every character takes at least one byte, so a longer value can never fit what is left.
+                        if (text.Length > remainingBytes)
+                            throw Failure("etl.snapshot-too-large");
+                        writer.WriteStringValue(text);
+                        return;
                     case Guid guid: writer.WriteStringValue(guid.ToString("D", CultureInfo.InvariantCulture)); return;
+                    // Both drivers return DateTime for a date column; write the date alone so it compares as one.
+                    case DateTime date when string.Equals(reader.GetDataTypeName(index), "date", StringComparison.OrdinalIgnoreCase):
+                        writer.WriteStringValue(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                        return;
                     case DateTime dateTime: writer.WriteStringValue(dateTime.ToString("O", CultureInfo.InvariantCulture)); return;
                     case DateTimeOffset offset: writer.WriteStringValue(offset.ToString("O", CultureInfo.InvariantCulture)); return;
                     case DateOnly date: writer.WriteStringValue(date.ToString("O", CultureInfo.InvariantCulture)); return;

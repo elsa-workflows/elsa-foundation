@@ -46,7 +46,7 @@ This slice adds a finite `sql` source:
   - `HostSqlBindings`: role `Source`.
   - `HostConnectorBindings`: the `sql` source.
   - `EtlConnectorInputBatchBuilder`, `EtlRowTransformer`, `EtlConnectorOutputProcessor`, `EtlConnectorExecutableReader`: a `sql` source as JSON Lines fields.
-  - A shared `EtlSqlSourceFields` helper.
+  - `EtlSqlSnapshotReader.AsJsonl` and `ProcessingView`, the JSON Lines view of a SQL source.
 - **`Elsa.Etl.Persistence.EntityFrameworkCore`**: `EtlConnectorRecordCodec` binding and preparation validation for a `sql` source.
 - **`Elsa.Etl.Runtime.Api`**: the source input view.
 - **Engines.**
