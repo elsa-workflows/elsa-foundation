@@ -23,7 +23,8 @@ At `9411620cf` (review round 2), the ETL suite passed 1299 of 1299, the containe
 - **The crash window after the record and before the acknowledgement.** Its outcome, the broker redelivering the messages to a later run, follows from the broker's own semantics, which the container suite proves for an unacknowledged receipt; no test kills a worker inside that window.
 - **A worker process killed before the record.** Equivalent to a receipt closed unacknowledged, which the container suite proves on the broker and the journeys prove through the runtime; no test kills a worker process holding a real broker connection.
 - **Guards tested but not bite-proven:** the driver rejecting a message that does not fit back to the queue (closing the channel would requeue it as well); the batch builder's, record codec's and runtime API's acceptance of a `RabbitMq` source pin; the acknowledgement failure being logged rather than failing the run; and the Studio controls.
-- **Untested:** a failure writing the snapshot itself being reported as a snapshot write failure rather than classified as a broker failure.
+- **Untested:** a failure writing the snapshot itself being reported as a snapshot write failure rather than classified as a broker failure; more than one consumer being registered.
+- **Defensive re-checks, tested through the paths that use them but not bite-proven:** the preparer's re-checks of a RabbitMQ source pin (no digest, a hashed handle) and of the source's fields, queue and maximum; the executable reader's field-count bound and JSON pointer validation for the source; the artifact codec refusing null field entries; the compiler's size budget for the source; and the connector bindings' ambiguity check for a source alias.
 
 ## Actual Workbench journey
 

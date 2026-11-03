@@ -10,8 +10,9 @@ public interface IEtlRabbitMqConsumer
     /// <summary>
     /// Receives up to <paramref name="maxMessages"/> messages from the queue on one channel, in queue order, without
     /// acknowledging them, and hands each body to <paramref name="accept"/> as it arrives; the body is valid only during that
-    /// call. Stops when the queue is empty or at the first body <paramref name="accept"/> refuses, which goes back to the
-    /// queue with every later message.
+    /// call. Stops when the queue is empty, at the first body <paramref name="accept"/> refuses, which goes back to the
+    /// queue with every later message, or, after at least one message, once a time bound well inside the broker's
+    /// <c>consumer_timeout</c> is spent; whatever was not taken stays queued.
     /// </summary>
     ValueTask<IEtlRabbitMqReceipt> ReceiveAsync(string connectionString, string queue, int maxMessages,
         Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>> accept, CancellationToken cancellationToken);

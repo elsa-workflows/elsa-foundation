@@ -23,9 +23,10 @@ namespace Elsa.Etl.RabbitMq;
 internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
 {
     // AMQP reply codes that a retry cannot cure: access refused, not found and precondition failed (a channel error), and
-    // not allowed (a connection error, such as a virtual host the user may not open). RabbitMQ also answers a connection or
-    // channel limit (per virtual host, user or node) with not allowed; a later attempt can pass it, so such a reply is transient.
-    private static readonly HashSet<ushort> RejectedReplyCodes = [403, 404, 406, 530];
+    // not allowed and not implemented (connection errors, such as a virtual host the user may not open, or basic.get on a
+    // stream queue). RabbitMQ also answers a connection or channel limit (per virtual host, user or node) with not allowed; a
+    // later attempt can pass it, so such a reply is transient.
+    private static readonly HashSet<ushort> RejectedReplyCodes = [403, 404, 406, 530, 540];
     private const ushort NotAllowed = 530;
     private const ushort PreconditionFailed = 406;
     // The broker's own limit wording: "connection limit (N) is reached" per virtual host, user or node, "… limit of (N)" for

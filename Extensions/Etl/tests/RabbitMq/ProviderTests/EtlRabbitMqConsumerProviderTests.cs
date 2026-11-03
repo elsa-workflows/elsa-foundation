@@ -114,6 +114,20 @@ public sealed class EtlRabbitMqConsumerProviderTests(EtlRabbitMqBrokerFixture br
         Assert.Equal(EtlRabbitMqErrorKind.Transient, _consumer.Classify(unreachable));
     }
 
+    [SkippableFact]
+    public async Task A_stream_queue_which_basic_get_cannot_read_is_rejected()
+    {
+        Skip.If(broker.SkipReason is not null, broker.SkipReason);
+        await using (var connection = await broker.ConnectAsync())
+        await using (var channel = await connection.CreateChannelAsync())
+            await channel.QueueDeclareAsync(_queue, durable: true, exclusive: false, autoDelete: false,
+                new Dictionary<string, object?> { ["x-queue-type"] = "stream" });
+
+        var stream = await Assert.ThrowsAnyAsync<Exception>(() => _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10, Accept, default).AsTask());
+
+        Assert.Equal(EtlRabbitMqErrorKind.Rejected, _consumer.Classify(stream));
+    }
+
     private static ValueTask<bool> Accept(ReadOnlyMemory<byte> body, CancellationToken cancellationToken) => ValueTask.FromResult(true);
 
     /// <summary>Receives with the runtime's bound: each body counts with its line end, and the first that would not fit is refused.</summary>
