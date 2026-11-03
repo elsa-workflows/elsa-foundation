@@ -26,8 +26,8 @@ internal sealed class WorkflowReadVersionTool(
     public const string ToolName = "workflow_read_version";
     internal const string ResultType = WorkflowVersionContext.VersionKind;
     private static readonly JsonSerializerOptions JsonOptions = WorkflowVersionContext.JsonOptions;
-    /// <summary>The result's bound on its JSON text, under the host's 32 KiB per-attachment budget (#3710).</summary>
-    internal const int ResultBudget = 28 * 1024;
+    /// <summary>The result's bound on its JSON text, well under the host's 32 KiB per-attachment budget (#3710).</summary>
+    internal const int ResultBudget = 24 * 1024;
 
     internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow version",
         "Returns one exact, immutable workflow version named by an admitted workflows.version context (its versionId, or the only one): its activities by scope " +
@@ -46,17 +46,19 @@ internal sealed class WorkflowReadVersionTool(
     public async ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (WorkflowVersionContext.Reader(readers, out var reason) is not { } reader)
+        if (WorkflowVersionContext.Reader(readers, out var reason) is null)
             return new(false, [new(WorkflowVersionContext.ReaderUnavailableCode, reason!) { OwnerUnavailable = true }]);
-        // Availability: the reader is installed. A concrete version is decided by its definition's owner.
+        // Availability: the reader is installed. A concrete version is decided by its definition's owner, named by the server's own target.
         if (target is null) return new(true, []);
-        if (!WorkflowVersionContext.IsTarget(target))
-            return new(false, [new("agent.workflow.resource_required", "One exact workflow version is this tool's only target.")]);
-        var version = await reader.ReadAsync(target.ResourceId!, cancellationToken);
-        if (version is null) return new(false, [new(WorkflowVersionContext.NotFoundCode, WorkflowVersionContext.NotFoundMessage)]);
-        var owner = await WorkflowResourceAuthority.AuthorizeAsync(owners, actorId, tenantId,
-            new(WorkflowVersionContext.ModuleId, WorkflowAgentSnapshot.ResourceType, version.DefinitionId, null), false, cancellationToken);
-        return owner.Allowed || WorkflowResourceAuthority.IsUnavailable(owner) ? owner
+        if (!WorkflowVersionContext.IsTarget(target) || WorkflowVersionContext.DefinitionOf(target) is not { } definitionId)
+            return new(false, [new("agent.workflow.resource_required", "One exact workflow version, as this module read it, is this tool's only target.")]);
+        var owner = await WorkflowVersionContext.OwnerAsync(owners, actorId, tenantId, definitionId, cancellationToken);
+        if (owner == WorkflowVersionContext.Outcome.OwnerUnavailable)
+            return new(false, [new(WorkflowDefinitionAuthorizationException.UnavailableCode, WorkflowResourceAuthority.UnavailableMessage) { OwnerUnavailable = true }]);
+        if (owner == WorkflowVersionContext.Outcome.AuthorityUnavailable)
+            return new(false, [new("agent.workflow.authority_unavailable", "Exactly one owning workflow definition authorizer is required.")]);
+        // The owner's read decision is the authority; the version itself is read, once, only by the preparation.
+        return owner == WorkflowVersionContext.Outcome.Read ? new(true, [])
             : new(false, [new(WorkflowVersionContext.NotFoundCode, WorkflowVersionContext.NotFoundMessage)]);
     }
 
@@ -87,8 +89,8 @@ internal sealed class WorkflowReadVersionTool(
         var reader = WorkflowVersionContext.Reader(readers, out var reason);
         var read = await WorkflowVersionContext.ReadAsync(authorizer, owners, reader, invocation.ActorId, invocation.TenantId, bound.DefinitionId, bound.VersionId, true, cancellationToken);
         if (Refused(read.Outcome, reason) is { } refused) return refused;
-        var compared = compareTo is null ? null
-            : await WorkflowVersionContext.ReadAsync(authorizer, owners, reader, invocation.ActorId, invocation.TenantId, bound.DefinitionId, compareTo, false, cancellationToken);
+        // The compared version belongs to the same, already authorized definition: it is read once, without asking again.
+        var compared = compareTo is null ? null : await WorkflowVersionContext.ReadOwnedAsync(reader!, bound.DefinitionId, compareTo, false, cancellationToken);
         if (compared is not null && Refused(compared.Outcome, reason) is { } comparedRefused) return comparedRefused;
         if (WorkflowVersionContext.Structure(structures) is not { } structure)
             return Failure(WorkflowVersionContext.StructureUnavailableCode, "The activity structure service is unavailable, so the workflow version cannot be read.", 503);
@@ -98,10 +100,10 @@ internal sealed class WorkflowReadVersionTool(
         var theirs = compared is null ? null : WorkflowVersionStructure.Flatten(compared.Version!.State.RootActivity, structure);
         var created = read.Versions!.ToDictionary(item => item.Id, item => item.CreatedAt, StringComparer.Ordinal);
         // The largest list bound whose result fits the budget; each list says when it was cut.
-        JsonElement data = default;
-        foreach (var limit in new[] { WorkflowVersionStructure.ListLimit, 50, 25, 10, 1 })
+        JsonElement? fitted = null;
+        foreach (var limit in new[] { WorkflowVersionStructure.ListLimit, 50, 25, 10, 1, 0 })
         {
-            data = JsonSerializer.SerializeToElement(new
+            var data = JsonSerializer.SerializeToElement(new
             {
                 readOnly = true, definitionId = version.DefinitionId, definitionName = WorkflowVersionContext.Bound(version.DefinitionName, 256),
                 version = Section(version.VersionId, version.Version, created, WorkflowVersionStructure.Describe(mine, limit)),
@@ -112,10 +114,13 @@ internal sealed class WorkflowReadVersionTool(
                 },
                 comparison = theirs is null ? null : WorkflowVersionStructure.Compare(mine, theirs, limit)
             }, JsonOptions);
-            if (data.GetRawText().Length <= ResultBudget) break;
+            if (data.GetRawText().Length <= ResultBudget) { fitted = data; break; }
         }
-        return AgentResult<AgentToolPreparation>.Success(new(WorkflowVersionContext.Target(version.VersionId), data, AgentRisk.ReadOnly,
-            new(ResultType, "1", data), RequiresApproval: false));
+        // Nothing unbounded is returned: if even the smallest reading does not fit, the read is refused.
+        if (fitted is not { } bounded)
+            return Failure("agent.workflow.version_too_large", "The workflow version's read does not fit the context budget even at its smallest bound; nothing was read.", 413);
+        return AgentResult<AgentToolPreparation>.Success(new(WorkflowVersionContext.Target(version.VersionId, version.DefinitionId), bounded, AgentRisk.ReadOnly,
+            new(ResultType, "1", bounded), RequiresApproval: false));
     }
 
     public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
@@ -137,6 +142,7 @@ internal sealed class WorkflowReadVersionTool(
         WorkflowVersionContext.Outcome.Denied => Failure("agent.workflow.permission_denied", WorkflowVersionContext.DeniedMessage, 403),
         WorkflowVersionContext.Outcome.NotFound => Failure(WorkflowVersionContext.NotFoundCode, WorkflowVersionContext.NotFoundMessage, 404),
         WorkflowVersionContext.Outcome.OwnerUnavailable => Failure(WorkflowDefinitionAuthorizationException.UnavailableCode, WorkflowResourceAuthority.UnavailableMessage, 503),
+        WorkflowVersionContext.Outcome.AuthorityUnavailable => Failure("agent.workflow.authority_unavailable", "Exactly one owning workflow definition authorizer is required; workflow versions are unavailable.", 503),
         _ => Failure(WorkflowVersionContext.ReaderUnavailableCode, reason ?? "Workflow versions are unavailable.", 503)
     };
 

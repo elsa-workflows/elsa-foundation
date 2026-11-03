@@ -199,7 +199,7 @@ A user viewing a workflow's version history or the Executable Inspector asks Wea
 **Acceptance Scenarios**:
 
 1. **Given** a selected historical or published version, **When** Weaver reads context, **Then** it is bound to that exact version identity, and its result says which version it describes.
-2. **Given** two versions, **When** the user asks what changed, **Then** the comparison is computed from those exact versions through the owning design services.
+2. **Given** two versions, **When** the user asks what changed, **Then** the comparison is Weaver's own, computed over two reads of those exact versions from the owning design services, and says so.
 3. **Given** an Executable in a host with the Runtime side, **When** Weaver explains it, **Then** a registered read-only Runtime-side tool returns the Executable's identity, Artifact Hash, graph, and the Source References the actor may see.
 4. **Given** a Design-only host, **When** Executable context is requested, **Then** it is explicitly unavailable. **Given** a Runtime-only host, **Then** version and draft journeys are explicitly unavailable.
 5. **Given** a request to change a published or historical version or an Executable, **When** Weaver receives it, **Then** it refuses with zero effect and offers to work on the current draft instead. It never retargets the edit silently.
@@ -352,7 +352,7 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
 
 #### Versions, Executables and Runs
 
-- **FR-026**: Version context and tools MUST be read-only and bound to exact version identities, and MUST be able to compare two exact versions through the owning design services.
+- **FR-026**: Version context and tools MUST be read-only and bound to exact version identities, and MUST be able to compare two exact versions: Weaver's own comparison, computed over two reads from the owning design services (R6), and labelled as such.
 - **FR-027**: Executable and Run context and tools MUST live in a Runtime-side package. They MUST be explicitly unavailable in Design-only hosts, and Design journeys MUST be explicitly unavailable in Runtime-only hosts. The Design-only, Runtime-only and combined deployment shapes MUST all keep working.
 - **FR-028**: A registered read-only Executable tool MUST return an Executable's identity, Artifact Hash, graph, and the Source References the actor may see.
 - **FR-029**: Run context and tools MUST be read-only and bound to one exact Workflow Instance and, where selected, one exact activity execution, under the actor's existing run access. They MUST apply existing execution-evidence redaction. Data that is not captured, pruned, unsupported or not permitted MUST be reported as explicitly unavailable.

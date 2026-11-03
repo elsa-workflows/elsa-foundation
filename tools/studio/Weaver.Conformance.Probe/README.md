@@ -281,7 +281,11 @@ repeated in every admission, must be the server's own read of exactly that resou
 
 - `workflow_read_version` returns that version's activities by scope path (input names only) and connections, equal to the
   version API's; with `compareToVersionId` it returns its own comparison (`computedBy: workflow_read_version`), equal to the
-  probe's comparison of the two version reads (added: in the version only; removed: in the compared version only);
+  probe's comparison of the two version reads (added: in the version only; removed: in the compared version only) for the
+  aspects the probe models (`activityVersion`, `scope`, `inputs`, inputs compared as whole authored inputs), and complete;
+  the server's other aspects (`structure`, `childOrder`, `outputs`, `intrinsic`, `placement`) are tolerated, not asserted;
+- every seeded input value carries a per-run canary (`valueCanary`), which must be absent from the admitted context, the
+  turn's frames and the actual adapter's request rows of every version and Executable read: names only, never values;
 - `workflow_read_executable` returns the identity, Artifact Hash, graph, Source References (both publications') and
   dependencies, equal to `GET runtime/workflows/executables/{artifactId}`;
 - an edit request with only the version or Executable in context (a build-mode, full-auto turn requesting
@@ -295,8 +299,8 @@ repeated in every admission, must be the server's own read of exactly that resou
   `FoundationWorkflowsRuntimeAgent` deselected an Executable reference, is refused by the engine as no installed module
   admitting the kind (`agent.context.kind_unsupported`); each feature is selected again afterwards. These controls run in the
   packaged combined host; the AppDomain-wide Design-only and Runtime-only shapes (no `Elsa.Workflows.Design*` assembly in a
-  Runtime-only host) are proven by the C# composition tests in `Elsa.Agent.Tests` and `Elsa.Agent.Workflows.Runtime.Tests`,
-  not by this probe.
+  Runtime-only host) are proven by started-shell tests (`WorkflowDesignOnlyHostTests` in `Elsa.Agent.Tests`,
+  `WorkflowRuntimeOnlyHostTests` in `Elsa.Agent.Workflows.Runtime.Tests`), not by this probe.
 
 The packaged Studio journeys: `workflow-version-history` opens the editor's Properties, selects the published version and
 uses its Explain action (the prompt names `workflow_read_version`); `workflow-executable-inspector` opens the Executable

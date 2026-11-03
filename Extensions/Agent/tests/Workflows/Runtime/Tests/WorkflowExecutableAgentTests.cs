@@ -3,6 +3,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Workflows.Runtime.Services;
 using Elsa.Agent.Workflows.Runtime.Tools;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using static Elsa.Agent.Workflows.Runtime.Tests.WorkflowRuntimeAgentTestHost;
@@ -196,6 +197,62 @@ public sealed class WorkflowExecutableAgentTests
         Assert.InRange(data.GetProperty("nodesIncluded").GetInt32(), 2, WorkflowReadExecutableTool.NodeLimit);
         Assert.Equal(401, data.GetProperty("nodeCount").GetInt32());
         Assert.True(data.GetRawText().Length <= WorkflowReadExecutableTool.ResultBudget, "The bounded Executable read must fit the host's per-attachment budget.");
+    }
+
+    [Fact]
+    public async Task A_flowchart_with_300_connections_and_long_input_lists_is_bounded_per_node_and_drops_no_connection_silently()
+    {
+        var children = Enumerable.Range(1, 301).Select(index => new WorkflowExecutableInspectionNode($"node-{index}", $"node-{index}", "Elsa.WriteLine", "1.0.0", null,
+            Enumerable.Range(1, 60).Select(input => new WorkflowExecutableInspectionInput($"input-{input}", "Literal", false)).ToArray(), [], [])).ToArray();
+        var connections = Enumerable.Range(1, 300).Select(index => new WorkflowExecutableInspectionConnection($"node-{index}", "Done", $"node-{index + 1}", "In")).ToArray();
+        var executable = Executable() with
+        {
+            NodeCount = 302,
+            RootActivity = new("root", "root", "Elsa.Flowchart", "1.0.0", "elsa.flowchart.structure", [], [new("activities", children)], connections)
+        };
+        using var host = new WorkflowRuntimeAgentTestHost(new(executable));
+        var session = await host.SessionAsync();
+
+        var prepared = await host.PrepareAsync(session, (await host.CollectAsync(session, Reference())).Attachments);
+
+        Assert.True(prepared.Succeeded, prepared.Error?.Message);
+        var data = prepared.Value!.Preview.Data;
+        Assert.True(data.GetRawText().Length <= WorkflowReadExecutableTool.ResultBudget);
+        Assert.True(data.GetProperty("graphTruncated").GetBoolean());
+        var included = new HashSet<string>();
+        void Visit(JsonElement node)
+        {
+            included.Add(node.GetProperty("executableNodeId").GetString()!);
+            foreach (var slot in node.GetProperty("slots").EnumerateArray())
+                foreach (var child in slot.GetProperty("nodes").EnumerateArray()) Visit(child);
+        }
+        var graph = data.GetProperty("graph");
+        Visit(graph);
+        Assert.Equal(included.Count, data.GetProperty("nodesIncluded").GetInt32());
+        // No kept connection names an omitted node, and the omitted ones are counted.
+        var kept = graph.GetProperty("connections").EnumerateArray().ToArray();
+        Assert.All(kept, connection => Assert.True(included.Contains(connection.GetProperty("source").GetString()!) && included.Contains(connection.GetProperty("target").GetString()!)));
+        Assert.Equal(300 - kept.Length, data.GetProperty("connectionsOmitted").GetInt32());
+        Assert.True(graph.GetProperty("connectionsTruncated").GetBoolean());
+        // Each node's inputs are bounded and say so.
+        var first = graph.GetProperty("slots")[0].GetProperty("nodes")[0];
+        Assert.True(first.GetProperty("inputs").GetArrayLength() < 60);
+        Assert.True(first.GetProperty("inputsTruncated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_read_that_cannot_fit_even_its_smallest_bound_is_refused_never_returned_unbounded()
+    {
+        var huge = new string('x', 40 * 1024);
+        using var host = new WorkflowRuntimeAgentTestHost(new(Executable() with { RootActivity = Executable().RootActivity with { ExecutableNodeId = "root" } }));
+        var session = await host.SessionAsync();
+        var admitted = (await host.CollectAsync(session, Reference())).Attachments;
+        host.Inspection.Current = Executable() with { RootActivity = Executable().RootActivity with { AuthoredActivityId = huge } };
+
+        var prepared = await host.PrepareAsync(session, admitted);
+
+        Assert.False(prepared.Succeeded);
+        Assert.Equal(("agent.workflow.executable_too_large", 413), (prepared.Error!.Code, prepared.Error.StatusCode));
     }
 
     [Fact]

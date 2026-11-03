@@ -154,7 +154,8 @@ def flatten_version(state):
     def visit(node, scope):
         inputs = sorted({item.get("referenceKey") for item in node.get("inputs") or [] if isinstance(item, dict) and item.get("referenceKey")})
         activities.append({"nodeId": node["nodeId"], "activityVersionId": node["activityVersionId"], "scopePath": list(scope), "inputs": inputs,
-                           "values": {item["referenceKey"]: json.dumps(item.get("value"), sort_keys=True) for item in node.get("inputs") or []
+                           # The whole authored input, as the server compares the whole authored argument state.
+                           "values": {item["referenceKey"]: json.dumps(item, sort_keys=True) for item in node.get("inputs") or []
                                       if isinstance(item, dict) and item.get("referenceKey")}})
         payload = ((node.get("structure") or {}).get("payload")) if isinstance(node.get("structure"), dict) else None
         if not isinstance(payload, dict): return
@@ -333,6 +334,19 @@ def require_version_activities(data, version):
     return len(expected)
 
 
+ASSERTED_ASPECTS = frozenset({"activityVersion", "scope", "inputs"})
+
+
+def require_values_withheld(canary, accepted, frames, rows, what):
+    """No seeded input value (each carries the canary) reaches the admitted context, the turn's frames or the actual adapter's
+    request rows: names only, never values."""
+    if canary is None: return None
+    check(isinstance(canary, str) and len(canary) >= 12, "A value canary must be a distinctive token")
+    for label, value in (("admitted context", accepted), ("turn frames", frames), ("adapter rows", rows)):
+        check(canary not in json.dumps(value), "A seeded input value reached the " + label + " of " + what)
+    return {"canary": "absent"}
+
+
 def require_comparison(comparison, version, compared):
     """The tool's own comparison of the two exact versions equals the probe's comparison of the two version API reads."""
     expected = expected_comparison(version["state"], compared["state"])
@@ -341,9 +355,15 @@ def require_comparison(comparison, version, compared):
     ids = lambda key: sorted(row.get("nodeId") for row in comparison.get(key) or [] if isinstance(row, dict))
     check(ids("activitiesAdded") == expected["added"] and ids("activitiesRemoved") == expected["removed"],
           "The activities added or removed differ from the two version reads")
-    changed = {row.get("nodeId"): {"aspects": sorted(row.get("aspects") or []), "inputs": sorted(row.get("inputs") or [])}
-               for row in comparison.get("activitiesChanged") or [] if isinstance(row, dict)}
+    # Only the aspects the probe models from the two version API reads are compared; the server also reports structure, child
+    # order, outputs, intrinsic and placement changes, which these seeds do not assert.
+    changed = {}
+    for row in comparison.get("activitiesChanged") or []:
+        if not isinstance(row, dict): continue
+        aspects = sorted(aspect for aspect in row.get("aspects") or [] if aspect in ASSERTED_ASPECTS)
+        if aspects: changed[row.get("nodeId")] = {"aspects": aspects, "inputs": sorted(row.get("inputs") or [])}
     check(changed == expected["changed"], "The activities changed differ from the two version reads: " + json.dumps(changed)[:300])
+    check(comparison.get("incomplete") is False, "The comparison of two flowchart versions must be complete")
     connection = lambda row: (row.get("container"), row.get("source"), row.get("sourcePort"), row.get("target"), row.get("targetPort"))
     check(sorted(connection(row) for row in comparison.get("connectionsAdded") or []) == [tuple(item) for item in expected["connectionsAdded"]]
           and sorted(connection(row) for row in comparison.get("connectionsRemoved") or []) == [tuple(item) for item in expected["connectionsRemoved"]],
@@ -352,7 +372,7 @@ def require_comparison(comparison, version, compared):
             "connectionsAdded": len(expected["connectionsAdded"]), "connectionsRemoved": len(expected["connectionsRemoved"])}
 
 
-def require_version_read(frames, rows, accepted, *, provider, command_id, attachment, version, versions, compared=None):
+def require_version_read(frames, rows, accepted, *, provider, command_id, attachment, version, versions, compared=None, canary=None):
     """One completed version read: the admitted context, this adapter's pinned order, the exact version, and (with compared)
     the tool's own comparison."""
     check(provider in PROVIDERS, "Unknown adapter")
@@ -373,6 +393,7 @@ def require_version_read(frames, rows, accepted, *, provider, command_id, attach
         check(to.get("versionId") == compared["id"] and to.get("version") == compared["version"], "The comparison is not against the requested exact version")
         record.update(comparedTo=compared["id"], comparison=require_comparison(data.get("comparison"), version, compared))
     _called_once(rows, provider, command_id, VERSION_TOOL)
+    if canary is not None: record["values"] = require_values_withheld(canary, accepted, frames, rows, "the version read")
     return record
 
 
@@ -388,7 +409,7 @@ def require_executable_context(item, attachment, executable):
     return content
 
 
-def require_executable_read(frames, rows, accepted, *, provider, command_id, attachment, executable, publications):
+def require_executable_read(frames, rows, accepted, *, provider, command_id, attachment, executable, publications, canary=None):
     """One completed Executable read: the admitted context, this adapter's pinned order, the identity, Artifact Hash, graph and
     Source References as the runtime Executable API reads them, including both publications' references."""
     check(provider in PROVIDERS, "Unknown adapter")
@@ -412,7 +433,8 @@ def require_executable_read(frames, rows, accepted, *, provider, command_id, att
           == sorted((row.get("artifactId"), row.get("artifactHash")) for row in executable.get("dependencies") or []),
           "The read dependencies differ from the runtime API's")
     _called_once(rows, provider, command_id, EXECUTABLE_TOOL)
-    return {"artifactId": executable["artifactId"], "artifactHash": executable["artifactHash"], "nodes": len(expected), "sourceReferences": len(references)}
+    return {"artifactId": executable["artifactId"], "artifactHash": executable["artifactHash"], "nodes": len(expected), "sourceReferences": len(references),
+            **({"values": require_values_withheld(canary, accepted, frames, rows, "the Executable read")} if canary is not None else {})}
 
 
 def require_tool_refused(frames, rows, accepted, *, provider, command_id, tool, kind, check_item, text):
@@ -556,19 +578,20 @@ def _version_native(runtime, name, seed, other):
     check_v2 = lambda item: require_version_context(item, attachment, v2, versions)
     turn = _turn(runtime, name + "-explain", runtime.backend, attachment, VERSION_TOOL, {}, VERSION_CAPABILITY)
     records["explain"] = {"control": "explain", **require_version_read(turn["frames"], turn["rows"], turn["accepted"], provider=runtime.provider,
-                          command_id=turn["commandId"], attachment=attachment, version=v2, versions=versions)}
+                          command_id=turn["commandId"], attachment=attachment, version=v2, versions=versions, canary=seed.get("valueCanary"))}
     evidence += turn["evidence"]
     attachment = version_attachment(seed["definitionId"], v2["id"], v2["version"])
     turn = _turn(runtime, name + "-compare", runtime.backend, attachment, VERSION_TOOL, {"compareToVersionId": v1["id"]}, VERSION_CAPABILITY)
     records["compare"] = {"control": "compare", **require_version_read(turn["frames"], turn["rows"], turn["accepted"], provider=runtime.provider,
-                          command_id=turn["commandId"], attachment=attachment, version=v2, versions=versions, compared=v1)}
+                          command_id=turn["commandId"], attachment=attachment, version=v2, versions=versions, compared=v1, canary=seed.get("valueCanary"))}
     evidence += turn["evidence"]
     # A version is immutable: with only the version in context no mutating workflow tool is admitted, so nothing can change.
     version_path = owner_path(runtime.backend, seed["versionPath"], versionId=v3["id"])
     attachment = version_attachment(seed["definitionId"], v3["id"], v3["version"])
     record, refs = _edit_refused(runtime, name + "-edit-refused", attachment, VERSION_TOOL, VERSION_CAPABILITY,
                                  lambda turn: require_version_read(turn["frames"], turn["rows"], turn["accepted"], provider=runtime.provider,
-                                                                   command_id=turn["commandId"], attachment=attachment, version=v3, versions=versions),
+                                                                   command_id=turn["commandId"], attachment=attachment, version=v3, versions=versions,
+                                                                   canary=seed.get("valueCanary")),
                                  [version_path, seed["definitionPath"]])
     records["edit-refused"], evidence = record, evidence + refs
     # Unavailable at admission: an unknown version, and another definition's version named under this definition.
@@ -608,13 +631,14 @@ def _executable_native(runtime, name, seed):
     attachment = executable_attachment(seed["artifactId"], seed["artifactHash"], publications[0]["sourceReferenceId"])
     turn = _turn(runtime, name + "-explain", runtime.backend, attachment, EXECUTABLE_TOOL, {}, EXECUTABLE_CAPABILITY)
     records["explain"] = {"control": "explain", **require_executable_read(turn["frames"], turn["rows"], turn["accepted"], provider=runtime.provider,
-                          command_id=turn["commandId"], attachment=attachment, executable=executable, publications=publications)}
+                          command_id=turn["commandId"], attachment=attachment, executable=executable, publications=publications,
+                          canary=seed.get("valueCanary"))}
     evidence += turn["evidence"]
     attachment = executable_attachment(seed["artifactId"], seed["artifactHash"])
     record, refs = _edit_refused(runtime, name + "-edit-refused", attachment, EXECUTABLE_TOOL, EXECUTABLE_CAPABILITY,
                                  lambda turn: require_executable_read(turn["frames"], turn["rows"], turn["accepted"], provider=runtime.provider,
                                                                       command_id=turn["commandId"], attachment=attachment, executable=executable,
-                                                                      publications=publications),
+                                                                      publications=publications, canary=seed.get("valueCanary")),
                                  [seed["executablePath"]])
     records["edit-refused"], evidence = record, evidence + refs
     for control, value, text in (("stale-hash", executable_attachment(seed["artifactId"], other_hash(seed["artifactHash"])), TEXTS["executable-stale"]),

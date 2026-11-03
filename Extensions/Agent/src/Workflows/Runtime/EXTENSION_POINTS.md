@@ -37,8 +37,11 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   Executable context or the one `artifactId` names. It reads the Executable again at the bound hash and returns its
   identity, Artifact Hash, compiled graph (each node's executable and authored ids, activity type and version, structure
   kind, input bindings by name, source and sensitivity, never a value or source detail, child slots and connections) depth
-  first and bounded (at most 300 nodes, fewer when the result would exceed 28 KiB, under the host's 32 KiB budget, #3710;
-  `nodesIncluded` and `graphTruncated` say so), the Source References (FR-028: those the Runtime read discloses under
+  first and bounded: at most 300 nodes, each with at most 32 inputs and 64 connections, fewer of each when the result would
+  exceed 24 KiB (well under the host's 32 KiB budget, #3710); a connection is kept only when both its ends are included
+  (`connectionsOmitted` counts the rest), per-node `inputsTruncated` and `connectionsTruncated` and the overall
+  `nodesIncluded` and `graphTruncated` say what was cut, and a read that does not fit even its smallest bound is refused as
+  `agent.workflow.executable_too_large` (413), never returned unbounded, the Source References (FR-028: those the Runtime read discloses under
   `workflows/runtime:read`) and the direct dependencies. Its authorization decides a concrete target by the Executable's
   current existence at the bound hash. Refusals: `agent.workflow.executable_context_required` (409),
   `agent.workflow.executable_stale` (409), `agent.workflow.executable_not_found` (404),
@@ -53,8 +56,8 @@ to offer the source workflow's current draft instead (FR-015); this package offe
 ## Owning contract
 
 [`IWorkflowExecutableInspection`](../../../../../Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) (Workflows Runtime Core,
-D4) is the only Runtime read. Its default in the Workflows Runtime API reads exactly what
-`GET runtime/workflows/executables/{artifactId}` returns.
+D4) is the only Runtime read. Its default in the Workflows Runtime API reads through the same inspector as
+`GET runtime/workflows/executables/{artifactId}` and returns a subset of that response (see its catalog entry).
 
 ## Deployment shapes (SC-009)
 
@@ -64,7 +67,8 @@ D4) is the only Runtime read. Its default in the Workflows Runtime API reads exa
   `Elsa.Agent.Workflows`) is loaded.
 - **Design-only:** without this package an Executable reference is `agent.context.kind_unsupported` and
   `workflow_read_executable` is not offered (`Elsa.Agent.Tests`, `WorkflowDeploymentShapeTests`).
-- **Combined:** both packages compose side by side (`Elsa.Workbench` selects both features).
+- **Combined:** both packages compose side by side (`Elsa.Workbench` and the Docker compose shells select both features). A host that composes the Workflows Runtime API with Weaver must select `FoundationWorkflowsRuntimeAgent`: Studio's Executable Inspector always sends its context, and without this package every turn on that page is refused as `agent.context.kind_unsupported` (see the README's upgrade requirement).
+- **Started hosts:** `WorkflowRuntimeOnlyHostTests` activates a real Runtime-only shell (Workflows Runtime API and this feature only) and reads a seeded Executable through the real `WorkflowExecutableInspection`; `WorkflowDesignOnlyHostTests` activates a real Design-only shell.
 
 ## SemVer
 

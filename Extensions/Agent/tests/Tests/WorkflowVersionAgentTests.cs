@@ -5,6 +5,7 @@ using Elsa.Agent.Workflows;
 using Elsa.Agent.Workflows.Services;
 using Elsa.Agent.Workflows.Tools;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
@@ -30,7 +31,7 @@ public sealed class WorkflowVersionAgentTests
         Assert.Empty(contribution.Diagnostics);
         var admitted = Assert.Single(contribution.Attachments, item => item.ContentType == WorkflowVersionContext.VersionKind);
         Assert.Equal(AgentContextOrigin.AuthoritativeRead, admitted.Origin);
-        Assert.Equal(new AgentResourceTarget(Module, "workflow-version", "v2", "v2"), admitted.Target);
+        Assert.Equal(WorkflowVersionContext.Target("v2", "definition-1"), admitted.Target);
         var content = (JsonElement)admitted.Content!;
         Assert.Equal(("definition-1", "Onboarding", "v2", "2.0.0", 4), (content.GetProperty("definitionId").GetString(), content.GetProperty("definitionName").GetString(),
             content.GetProperty("versionId").GetString(), content.GetProperty("version").GetString(), content.GetProperty("activityCount").GetInt32()));
@@ -108,7 +109,7 @@ public sealed class WorkflowVersionAgentTests
         Assert.True(prepared.Succeeded, prepared.Error?.Message);
         Assert.False(prepared.Value!.RequiresApproval);
         Assert.Equal(AgentRisk.ReadOnly, prepared.Value.Risk);
-        Assert.Equal(new AgentResourceTarget(Module, "workflow-version", "v2", "v2"), prepared.Value.Target);
+        Assert.Equal(WorkflowVersionContext.Target("v2", "definition-1"), prepared.Value.Target);
         var data = prepared.Value.Preview.Data;
         Assert.True(data.GetProperty("readOnly").GetBoolean());
         var version = data.GetProperty("version");
@@ -157,6 +158,83 @@ public sealed class WorkflowVersionAgentTests
         Assert.DoesNotContain("value-", data.GetRawText(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Structural_changes_without_new_activities_are_compared_too()
+    {
+        using var host = new Host(owner: new Owner("definition-3"));
+        var admitted = (await host.CollectAsync(Reference("definition-3", "s2"))).Attachments;
+
+        var prepared = await host.PrepareAsync(admitted, new Dictionary<string, object?> { ["compareToVersionId"] = "s1" });
+
+        Assert.True(prepared.Succeeded, prepared.Error?.Message);
+        var comparison = prepared.Value!.Preview.Data.GetProperty("comparison");
+        Assert.Empty(comparison.GetProperty("activitiesAdded").EnumerateArray());
+        Assert.Empty(comparison.GetProperty("activitiesRemoved").EnumerateArray());
+        var changed = comparison.GetProperty("activitiesChanged").EnumerateArray().ToDictionary(item => item.GetProperty("nodeId").GetString()!,
+            item => item.GetProperty("aspects").EnumerateArray().Select(aspect => aspect.GetString()).ToArray());
+        // The flowchart's start node moved and its children swapped order; a's placement and intrinsic changed. b did not change.
+        Assert.Equal(["childOrder", "structure"], changed["flow"]);
+        Assert.Equal(["intrinsic", "placement"], changed["a"]);
+        Assert.False(changed.ContainsKey("b"));
+        var flow = comparison.GetProperty("activitiesChanged").EnumerateArray().Single(item => item.GetProperty("nodeId").GetString() == "flow");
+        Assert.Equal(["Activities"], flow.GetProperty("reorderedSlots").EnumerateArray().Select(item => item.GetString()));
+        Assert.False(comparison.GetProperty("incomplete").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_container_no_installed_handler_reads_makes_the_reading_explicitly_incomplete()
+    {
+        using var host = new Host(owner: new Owner("definition-3"));
+        var admitted = (await host.CollectAsync(Reference("definition-3", "u1"))).Attachments;
+        Assert.True(((JsonElement)Assert.Single(admitted, item => item.ContentType == WorkflowVersionContext.VersionKind).Content!).GetProperty("readingIncomplete").GetBoolean());
+
+        var prepared = await host.PrepareAsync(admitted, new Dictionary<string, object?> { ["compareToVersionId"] = "s1" });
+
+        Assert.True(prepared.Succeeded, prepared.Error?.Message);
+        var data = prepared.Value!.Preview.Data;
+        Assert.True(data.GetProperty("version").GetProperty("incomplete").GetBoolean());
+        Assert.Contains("opaque", Assert.Single(data.GetProperty("version").GetProperty("incompleteReasons").EnumerateArray()).GetString());
+        // The hidden child is neither listed nor reported as removed or added: the comparison says it could not read it.
+        Assert.DoesNotContain(data.GetProperty("version").GetProperty("activities").EnumerateArray(), item => item.GetProperty("nodeId").GetString() == "hidden");
+        var comparison = data.GetProperty("comparison");
+        Assert.True(comparison.GetProperty("incomplete").GetBoolean());
+        Assert.Contains("incomplete", comparison.GetProperty("note").GetString());
+    }
+
+    [Fact]
+    public async Task The_context_lists_the_newest_versions_and_says_when_older_ones_are_left_out()
+    {
+        using var host = new Host();
+        host.Reader.ManyVersions = true;
+        var content = (JsonElement)Assert.Single((await host.CollectAsync(Reference("definition-1", "v2"))).Attachments,
+            item => item.ContentType == WorkflowVersionContext.VersionKind).Content!;
+        var listed = content.GetProperty("versions").EnumerateArray().Select(item => item.GetProperty("version").GetString()).ToArray();
+        Assert.Equal(WorkflowVersionContext.VersionListLimit, listed.Length);
+        Assert.Equal(("11.0.0", "60.0.0"), (listed[0], listed[^1]));
+        Assert.True(content.GetProperty("versionsTruncated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task During_an_owner_outage_an_unknown_and_an_existing_version_answer_alike_and_nothing_is_read()
+    {
+        using var host = new Host(owner: new Owner(throws: true));
+        var unknown = Assert.Single((await host.CollectAsync(Reference("definition-1", "missing"))).Diagnostics);
+        var existing = Assert.Single((await host.CollectAsync(Reference("definition-1", "v2"))).Diagnostics);
+        Assert.Equal((unknown.Code, unknown.Message, unknown.OwnerUnavailable), (existing.Code, existing.Message, existing.OwnerUnavailable));
+        Assert.Equal(WorkflowDefinitionAuthorizationException.UnavailableCode, existing.Code);
+        Assert.Equal(0, host.Reader.Reads);
+    }
+
+    [Fact]
+    public async Task Zero_or_several_owning_authorizers_are_a_composition_fault_never_a_not_found()
+    {
+        using var host = new Host(configure: services => services.AddSingleton<IWorkflowDefinitionAuthorizer>(new Owner("definition-1")));
+        var refusal = Assert.Single((await host.CollectAsync(Reference("definition-1", "v2"))).Diagnostics);
+        Assert.Equal("agent.workflow.authority_unavailable", refusal.Code);
+        Assert.NotEqual(WorkflowVersionContext.NotFoundCode, refusal.Code);
+        Assert.Equal(0, host.Reader.Reads);
+    }
+
     [Theory]
     [InlineData("no-context", "agent.workflow.version_context_required")]
     [InlineData("caller-copy", "agent.workflow.version_context_required")]
@@ -196,9 +274,13 @@ public sealed class WorkflowVersionAgentTests
     public async Task Tool_authority_for_a_version_is_its_definitions_owner_read()
     {
         using var host = new Host(owner: new Owner("definition-1"));
-        Assert.True((await host.Tool.AuthorizeAsync("actor-1", "tenant-1", WorkflowVersionContext.Target("v2"))).Allowed);
-        Assert.Equal(WorkflowVersionContext.NotFoundCode, Assert.Single((await host.Tool.AuthorizeAsync("actor-1", "tenant-1", WorkflowVersionContext.Target("other-v1"))).Violations).Code);
-        Assert.Equal(WorkflowVersionContext.NotFoundCode, Assert.Single((await host.Tool.AuthorizeAsync("actor-1", "tenant-1", WorkflowVersionContext.Target("missing"))).Violations).Code);
+        // The server's own target names the definition, so authority is the owner's decision, made before (and without) any read.
+        Assert.True((await host.Tool.AuthorizeAsync("actor-1", "tenant-1", WorkflowVersionContext.Target("v2", "definition-1"))).Allowed);
+        Assert.Equal(WorkflowVersionContext.NotFoundCode, Assert.Single((await host.Tool.AuthorizeAsync("actor-1", "tenant-1",
+            WorkflowVersionContext.Target("other-v1", "definition-2"))).Violations).Code);
+        Assert.Equal(0, host.Reader.Reads);
+        // A target without the server's definition route (a caller's) is never this tool's target.
+        Assert.Equal("agent.workflow.resource_required", Assert.Single((await host.Tool.AuthorizeAsync("actor-1", "tenant-1", WorkflowVersionContext.Target("v2"))).Violations).Code);
         Assert.Equal("agent.workflow.resource_required", Assert.Single((await host.Tool.AuthorizeAsync("actor-1", "tenant-1",
             new(Module, WorkflowAgentSnapshot.ResourceType, "definition-1", "r1"))).Violations).Code);
     }
@@ -320,13 +402,24 @@ public sealed class WorkflowVersionAgentTests
     internal sealed class FixtureReader : IWorkflowVersionReader
     {
         public int Reads { get; private set; }
+        /// <summary>Lists 60 versions of definition-1 (oldest first, v2 the newest), more than the context lists.</summary>
+        public bool ManyVersions { get; set; }
 
         private static readonly Dictionary<string, WorkflowVersionDetails> Versions = new()
         {
             ["v1"] = Version("v1", "definition-1", "1.0.0", Flow("flow", [Leaf("a", "value-1"), Leaf("b", "value-b")], ("a", "b"))),
             ["v2"] = Version("v2", "definition-1", "2.0.0", Flow("flow", [Leaf("a", "value-2"), Flow("nested", [Leaf("inner", "value-inner")])], ("a", "nested"))),
             ["v3"] = Version("v3", "definition-1", "3.0.0", Flow("flow", [Leaf("a", "value-3")])),
-            ["other-v1"] = Version("other-v1", "definition-2", "1.0.0", Flow("flow", []))
+            ["other-v1"] = Version("other-v1", "definition-2", "1.0.0", Flow("flow", [])),
+            // definition-3: structural changes that leave every activity's version and inputs alone.
+            ["s1"] = Version("s1", "definition-3", "1.0.0", Flow("flow", [Leaf("a", "same"), Leaf("b", "same")], "a", "Acme.Flow")),
+            ["s2"] = Version("s2", "definition-3", "2.0.0", Flow("flow", [Leaf("b", "same"), Leaf("a", "same") with
+            {
+                ExecutionPlacement = ActivityExecutionPlacement.Background,
+                Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Finish)
+            }], "b", "Acme.Flow")),
+            // A container no installed handler reads.
+            ["u1"] = Version("u1", "definition-3", "3.0.0", Flow("flow", [Flow("opaque", [Leaf("hidden", "x")], null, "Acme.Unknown")], null, "Acme.Flow"))
         };
 
         public ValueTask<WorkflowVersionDetails?> ReadAsync(string versionId, CancellationToken cancellationToken = default)
@@ -336,7 +429,10 @@ public sealed class WorkflowVersionAgentTests
         }
 
         public ValueTask<IReadOnlyList<WorkflowDefinitionVersionSummary>> ListAsync(string definitionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyList<WorkflowDefinitionVersionSummary>>(Versions.Values.Where(item => item.DefinitionId == definitionId)
+            definitionId == "definition-1" && ManyVersions
+                ? ValueTask.FromResult<IReadOnlyList<WorkflowDefinitionVersionSummary>>(Enumerable.Range(1, 60)
+                    .Select(index => new WorkflowDefinitionVersionSummary(index == 60 ? "v2" : $"old-{index}", $"{index}.0.0", DateTimeOffset.UnixEpoch.AddDays(index))).ToArray())
+                : ValueTask.FromResult<IReadOnlyList<WorkflowDefinitionVersionSummary>>(Versions.Values.Where(item => item.DefinitionId == definitionId)
                 .Select(item => new WorkflowDefinitionVersionSummary(item.VersionId, item.Version, new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero))).ToArray());
 
         private static WorkflowVersionDetails Version(string id, string definitionId, string version, ActivityNode root) =>
@@ -346,12 +442,17 @@ public sealed class WorkflowVersionAgentTests
     internal static ActivityNode Leaf(string id, string text) =>
         new(id, "version-write-line", [new ArgumentState("text", new ArgumentValue(JsonSerializer.SerializeToElement(text), "Literal"), null, null, null, null)], []);
 
-    internal static ActivityNode Flow(string id, ActivityNode[] children, params (string Source, string Target)[] connections)
+    internal static ActivityNode Flow(string id, ActivityNode[] children, params (string Source, string Target)[] connections) =>
+        Flow(id, children, null, "Acme.Flow", connections);
+
+    /// <summary>A container whose payload embeds its children as activity nodes (as real structures do), its connections and its start node.</summary>
+    internal static ActivityNode Flow(string id, ActivityNode[] children, string? start, string kind, params (string Source, string Target)[] connections)
     {
-        var node = new ActivityNode(id, "version-flow", [], [], new ActivityNodeStructure("Acme.Flow", "1", JsonSerializer.SerializeToElement(new
+        var node = new ActivityNode(id, "version-flow", [], [], new ActivityNodeStructure(kind, "1", JsonSerializer.SerializeToElement(new
         {
-            children = children.Select(child => child.NodeId).ToArray(),
-            connections = connections.Select(item => new { source = new { nodeId = item.Source, port = "Done" }, target = new { nodeId = item.Target } }).ToArray()
+            activities = children.Select(child => new { nodeId = child.NodeId, activityVersionId = child.ActivityVersionId }).ToArray(),
+            connections = connections.Select(item => new { source = new { nodeId = item.Source, port = "Done" }, target = new { nodeId = item.Target } }).ToArray(),
+            startNodeId = start
         })));
         return FlowHandler.Register(node, children);
     }

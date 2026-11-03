@@ -285,14 +285,17 @@ revision identity is its version identity). The server then reads that exact ver
 `workflows/design:read` (the gate is a read descriptor through `IAgentToolAuthorizer`), the owning
 `IWorkflowDefinitionAuthorizer.CanReadAsync` for the named definition, and `IWorkflowVersionReader.ReadAsync` (Workflows
 Design Core, D4); the version must belong to that definition. It admits `workflows.version` (`AuthoritativeRead`) with the
-definition identity and name, the version identity and label, its activity count and the definition's versions (at most
-50, `versionsTruncated`), plus `workflows.version-guidance`. Required refusals: `agent.workflow.version_context_invalid`;
+definition identity and name, the version identity and label, its activity count (`readingIncomplete` when a container's
+children could not be read) and the definition's newest versions (at most 50, `versionsTruncated`), plus
+`workflows.version-guidance`. Its target is the version identity plus the definition's Studio route, so a later authority
+decision for this server-produced target asks the definition's owner before anything is read. Required refusals: `agent.workflow.version_context_invalid`;
 `agent.workflow.permission_denied` ("Current workflow design read permission is required for the workflow version.");
 `agent.workflow.version_not_found` ("The workflow version is unavailable.") for an unknown version, another definition's
 version and a withheld definition alike, so existence is disclosed no more than the owner discloses it;
-`workflow.authorization.unavailable` (owner threw) and `agent.workflow.version_reader_unavailable` or
-`agent.workflow.version_structure_unavailable` (no or several readers or activity structure services), each marked
-owner-unavailable (503). With no version reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own
+`workflow.authorization.unavailable` (owner threw; during an outage an unknown and an existing version answer alike, and
+nothing is read) and the composition faults `agent.workflow.authority_unavailable` (no or several definition authorizers),
+`agent.workflow.version_reader_unavailable` and `agent.workflow.version_structure_unavailable` (no or several readers or
+activity structure services). The order is always the host's permission, then the owner, then one read. With no version reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own
 retained read and reads it again for the current turn (an immutable version reads back identically), and re-authorizes a
 retained `workflow_read_version` result by its version's definition.
 
@@ -303,12 +306,18 @@ own copy is never the server's read. It returns the version's activities by scop
 the slot the owning activity module's structure handler projects, through `IActivityStructureService`), each with its
 exact catalog version and its input names (never values), and its connections (each container structure's conventional
 `connections` list, by container, source, port, target and port). With `compareToVersionId`, another version of the same
-definition read through the same owner and reader, it adds `comparedTo` and `comparison`: the tool's own structural
-comparison (`computedBy: workflow_read_version`, with a note saying so), listing activities added (only in the version),
-removed (only in the compared version) and changed (`activityVersion`, `scope`, `inputs` with the differing input names, or
-`outputs`), and connections added and removed. Input values are compared without being disclosed. Lists are bounded (at
-most 100 each, smaller when the result would exceed 28 KiB, under the host's 32 KiB budget, #3710) and say when they were
-cut. Its `IAgentToolAuthorization` decides a concrete version target by its definition's owner read. Refusals:
+definition (read once, under the decision already made for that definition), it adds `comparedTo` and `comparison`:
+Weaver's own structural comparison computed over the two reads (`computedBy: workflow_read_version`, with a note saying
+so), listing activities added (only in the version), removed (only in the compared version) and changed, with the aspects
+`activityVersion`, `inputs` (naming the differing inputs), `outputs`, `scope`, `intrinsic`, `placement`, `structure` (the
+container's structure other than its children and connections, such as a flowchart's start node or a switch's cases,
+compared normalized) and `childOrder` (`reorderedSlots`), and connections added and removed. A container whose structure no
+installed handler projects is never read as empty: the reading and the comparison say `incomplete` with
+`incompleteReasons`. Input and output values are compared without being disclosed. Lists are bounded (at most 100 each,
+smaller when the result would exceed 24 KiB, well under the host's 32 KiB budget, #3710) and say when they were cut; a read
+that does not fit even its smallest bound is refused as `agent.workflow.version_too_large` (413). Its
+`IAgentToolAuthorization` decides a concrete version target by its definition's owner read alone, named by the server's own
+target route (a target without it is refused); it reads nothing. Refusals:
 `agent.workflow.version_context_required` (409), `agent.workflow.version_arguments_invalid` (400),
 `agent.workflow.version_not_found` (404), `agent.workflow.permission_denied` (403), `workflow.authorization.unavailable`
 and `agent.workflow.version_reader_unavailable` (503).

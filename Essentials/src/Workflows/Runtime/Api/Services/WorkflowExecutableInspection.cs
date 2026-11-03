@@ -9,8 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Api.Services;
 
 /// <summary>
-/// The default <see cref="IWorkflowExecutableInspection"/>: exactly the read <c>GET runtime/workflows/executables/{artifactId}</c>
-/// makes, through the same inspector, mapped to the Core models. It decides no authority; the endpoint's permission gate and
+/// The default <see cref="IWorkflowExecutableInspection"/>: the read <c>GET runtime/workflows/executables/{artifactId}</c>
+/// makes, through the same inspector, with a subset of its response mapped to the Core models. It decides no authority; the endpoint's permission gate and
 /// the consumer's own run-access check do.
 /// </summary>
 internal sealed class WorkflowExecutableInspection(IWorkflowExecutableInspector inspector) : IWorkflowExecutableInspection
