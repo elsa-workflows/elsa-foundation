@@ -970,21 +970,27 @@ public sealed class RuntimeCoalescingSession
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken)
     {
-        if (SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind) &&
-            _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
+        var deferred = SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind);
+        if (deferred && _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        // A handler can cross a durable boundary before its release. If that deactivated the overlay, its source must
+        // still exist and no later flush persists the release, so persist it now, before the overlay drops the claim.
+        // A durable head that moved refuses the release while this claim still owns the item, so the caller can still
+        // complete it instead of losing both the overlay claim and the durable release.
+        if (deferred && !IsActive && _overlayClaims.TryGetValue(claim, out var inactiveTimeout))
+        {
+            if (await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt, inactiveTimeout), cancellationToken) is not null)
+                return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+            var released = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+            _overlayClaims.TryRemove(claim, out _);
+            return released;
+        }
 
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
         var owned = _overlayClaims.TryRemove(claim, out var visibilityTimeout);
-        if (result.Succeeded && owned && SupportsDeferredOverlayRelease &&
-            RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind))
-        {
+        if (result.Succeeded && owned && deferred)
             _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt, visibilityTimeout);
-            // A handler can cross a durable boundary before reporting unavailable. If it deactivated the overlay,
-            // its source must still exist; persist the release now rather than waiting for an inactive scope's flush.
-            if (!IsActive)
-                await PersistPendingReleasesAsync(cancellationToken);
-        }
         return result;
     }
 
@@ -1221,24 +1227,32 @@ public sealed class RuntimeCoalescingSession
     {
         foreach (var (workItemId, pending) in _pendingReleases.ToArray())
         {
-            // The execution lease still owns this drain. Reconciliation has removed the consumed prefix, so the
-            // released item must now be the durable FIFO head. Never apply its delay to a different queued item.
-            var now = _timeProvider.GetUtcNow();
-            var claim = await _innerQueue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
-                WorkflowExecutionId, pending.Claim.OwnerId, now,
-                pending.VisibilityTimeout), cancellationToken);
-            if (claim is null)
-                throw new InvalidOperationException("The deferred scheduler work could not be claimed durably.");
-            if (!StringComparer.Ordinal.Equals(claim.Item.WorkItemId, workItemId))
-            {
-                await _innerQueue.ReleaseClaimAsync(claim, now, cancellationToken);
-                throw new InvalidOperationException("The durable scheduler head changed before its deferred release.");
-            }
-            var released = await _innerQueue.ReleaseClaimAsync(claim, pending.VisibleAt, cancellationToken);
-            if (released.Status != RuntimeSchedulerWorkClaimTransitionStatus.Succeeded)
-                throw new InvalidOperationException("The deferred scheduler work lost its durable claim before release.");
+            if (await TryPersistReleaseAsync(pending, cancellationToken) is { } failure)
+                throw new InvalidOperationException(failure);
             _pendingReleases.Remove(workItemId);
         }
+    }
+
+    // Returns null once the release is durable, else why it was refused.
+    private async ValueTask<string?> TryPersistReleaseAsync(PendingRelease pending, CancellationToken cancellationToken)
+    {
+        // The execution lease still owns this drain. Reconciliation has removed the consumed prefix, so the
+        // released item must now be the durable FIFO head. Never apply its delay to a different queued item.
+        var now = _timeProvider.GetUtcNow();
+        var claim = await _innerQueue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            WorkflowExecutionId, pending.Claim.OwnerId, now,
+            pending.VisibilityTimeout), cancellationToken);
+        if (claim is null)
+            return "The deferred scheduler work could not be claimed durably.";
+        if (!StringComparer.Ordinal.Equals(claim.Item.WorkItemId, pending.Claim.Item.WorkItemId))
+        {
+            await _innerQueue.ReleaseClaimAsync(claim, now, cancellationToken);
+            return "The durable scheduler head changed before its deferred release.";
+        }
+        var released = await _innerQueue.ReleaseClaimAsync(claim, pending.VisibleAt, cancellationToken);
+        return released.Status == RuntimeSchedulerWorkClaimTransitionStatus.Succeeded
+            ? null
+            : "The deferred scheduler work lost its durable claim before release.";
     }
 
     private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt, TimeSpan VisibilityTimeout);
