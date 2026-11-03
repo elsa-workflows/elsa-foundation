@@ -462,7 +462,7 @@ Evidence categories:
 - **P**: deterministic provider-protocol native evidence. It uses the actual Copilot (delegated) and Anthropic (host-driven) adapters, with packaged consumers on the packaged EF store over SQLite, and drives each journey through the normal host in a real browser (`tools/studio/Weaver.Conformance.Probe`). Its cases are named `{copilot,anthropic}-workflow-<journey>`.
 - **Live**: live-provider evidence. None is claimed.
 
-The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The native proofs ran on `8e5657d39`, slice G's final integrated head with slices E and F and `main`. Commits after it change only this record.
+The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The native proofs ran on `8e5657d39`, slice G's final integrated head with slices E and F and `main`. Commits after it change only this record and merge `main`, adding #3730's Studio tag UX in 5 files.
 
 | #3442 item | Evidence |
 | --- | --- |
