@@ -441,7 +441,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
                 serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
             { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
-                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>() });
+                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>(),
+                HasResumptionRedriver = serviceProvider.GetServices<IWorkflowDispatchDurabilityEvidence>().Any(evidence =>
+                    string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();
