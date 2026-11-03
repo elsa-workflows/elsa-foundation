@@ -308,12 +308,20 @@ and `CapturedAt`. It is owned by the workflow execution record and cannot be mut
 checkpoint.
 
 Admission completes the request from the pinned contract before the start checkpoint (ADR 0045 §2 amendment, D-10):
-- an omitted member takes its declared default;
+- an omitted required member refuses admission even when it has a declared default, whether or not an executed
+  branch would read it;
+- an omitted optional member takes its declared default;
 - an omitted optional member without a default materializes as `null` when its type is nullable, and as its type's
-  default otherwise;
-- an omitted required member refuses admission.
+  default otherwise; an optional non-nullable type without a usable non-null type default needs a declared default,
+  otherwise publication refuses it (`VF-ACT-003`);
+- a supplied explicit `null` is present and stays `null` for a nullable member; for a non-nullable member it is
+  refused unless the pinned workflow-level default-on-null policy can substitute a usable non-null type default,
+  never a declared default.
 
-A later read of a declared member therefore always finds a value.
+Every start path (API, trigger, child workflow, BPMN and test run) MUST pass through this admission step. A rejected
+request MUST execute no activity and schedule no workflow-execution work. A successful admission pins the completed
+request in the start checkpoint; later reads find the captured values instead of applying defaults lazily.
+The implementing spec MUST cover these start paths, including rejection of a required member with a declared default.
 
 ### `ActivityExecutionState` (logical invocation)
 

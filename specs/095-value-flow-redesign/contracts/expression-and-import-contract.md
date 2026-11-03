@@ -135,7 +135,8 @@ For each expression input the runtime MUST:
 1. validate the definition and capability profile;
 2. resolve every parameter binding from one structural/causal runtime view;
 3. type-check, policy-check, and snapshot parameter values;
-4. evaluate exactly once for the new logical invocation;
+4. evaluate exactly once for the new logical invocation, using the expression value or the statement body's return
+   or Script completion value under [ADR 0083](../../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md);
 5. apply the workflow's pinned undefined policy at the JavaScript-to-workflow boundary (ADR 0045 §2
    amendment, D-11), then coerce and validate the declared result type;
 6. validate result persistability/protection policy; and
@@ -145,6 +146,17 @@ Retry and resume do not reevaluate an already pinned input expression. An absent
 parameter fails before evaluator invocation. Evaluator exceptions are wrapped with language,
 executable node, input key, and expression fingerprint while preserving cancellation. Sensitive
 source values and results are redacted according to their effective policy.
+
+At the JavaScript boundary, `undefined` array elements and sparse holes MUST become `null` placeholders under either
+undefined policy setting. Array length and element positions MUST be preserved, and each conversion MUST record a
+diagnostic identifying the affected array path. An originally explicit `null` requires no conversion diagnostic.
+A string produced by explicit `JSON.stringify` MUST remain unchanged; the boundary does not diagnose or rewrite
+conversions that already occurred inside that serialization.
+
+An input binding MUST NOT be rejected solely because its source has no `return` statement: expression values and
+Script completion values are valid results. The undefined policy applies to the value produced under the selected
+form's semantics. A no-return publication check belongs only to function-body script activities whose result is
+consumed, as defined in ADR 0045 §2; it MUST NOT be applied to expression or statement bindings.
 
 ## 5. Elsa 3 importer algorithm
 
