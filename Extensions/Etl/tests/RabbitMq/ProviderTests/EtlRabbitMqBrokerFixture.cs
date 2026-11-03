@@ -59,6 +59,14 @@ public sealed class EtlRabbitMqBrokerFixture : IAsyncLifetime
         return result.ExitCode == 0 ? true : throw new InvalidOperationException("rabbitmqctl failed: " + result.Stderr);
     }
 
+    /// <summary>The number of client connections the broker lists in a blocked or blocking state.</summary>
+    internal async Task<int> BlockedConnectionsAsync()
+    {
+        if (_container is null) return 0;
+        var result = await _container.ExecAsync(["rabbitmqctl", "-q", "list_connections", "state"]);
+        return result.Stdout.Split('\n').Count(line => line.Trim() is "blocked" or "blocking");
+    }
+
     /// <summary>The broker's URI for another virtual host.</summary>
     internal string WithVirtualHost(string virtualHost) => new UriBuilder(ConnectionString) { Path = "/" + Uri.EscapeDataString(virtualHost) }.Uri.ToString();
 

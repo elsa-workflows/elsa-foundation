@@ -102,14 +102,15 @@ public sealed class EtlRabbitMqProviderTests(EtlRabbitMqBrokerFixture broker)
         var limited = await Writer().WriteAsync(Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost(_name) }, default);
         var forbidden = await Assert.ThrowsAsync<EtlEffectException>(() => Writer().WriteAsync(
             Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost("missing-" + _name) }, default).AsTask());
-        // A virtual host the user may not open stays a refusal even when its name says "limit".
-        await broker.ControlAsync("add_vhost", "limits-" + _name);
-        var named = await Assert.ThrowsAsync<EtlEffectException>(() => Writer().WriteAsync(
-            Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost("limits-" + _name) }, default).AsTask());
+        // A virtual host the user may not open stays a refusal even when its name reads like the broker's limit wording.
+        var named = "limit (1) is reached " + _name;
+        await broker.ControlAsync("add_vhost", named);
+        var namedRefusal = await Assert.ThrowsAsync<EtlEffectException>(() => Writer().WriteAsync(
+            Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost(named) }, default).AsTask());
 
         Assert.Equal(EtlRabbitMqWriteOutcome.Yield, limited);
         Assert.Equal("etl.rabbitmq-publish-rejected", forbidden.Code);
-        Assert.Equal("etl.rabbitmq-publish-rejected", named.Code);
+        Assert.Equal("etl.rabbitmq-publish-rejected", namedRefusal.Code);
     }
 
     [SkippableFact]
@@ -128,33 +129,51 @@ public sealed class EtlRabbitMqProviderTests(EtlRabbitMqBrokerFixture broker)
     }
 
     [SkippableFact]
-    public async Task A_broker_under_a_resource_alarm_yields_once_a_confirm_takes_too_long()
+    public async Task A_broker_under_a_resource_alarm_yields_and_holds_at_most_one_blocked_connection_until_it_unblocks()
     {
         Skip.If(broker.SkipReason is not null, broker.SkipReason);
         await DeclareAsync(_name, bind: true);
-        // A disk alarm blocks every publishing connection without closing it.
+        // A disk alarm blocks every publishing connection and stops reading it, without closing it.
         Skip.IfNot(await broker.ControlAsync("set_disk_free_limit", "10000GB"), "The supplied broker cannot be configured.");
+        var cleared = false;
+        // A regression fails the test instead of hanging it.
+        using var guard = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         try
         {
+            var blocked = new EtlRabbitMqRouteWriter(new RabbitMqEtlPublisher(TimeSpan.FromSeconds(3)));
             var started = DateTime.UtcNow;
-            var outcome = await new EtlRabbitMqRouteWriter(new RabbitMqEtlPublisher(TimeSpan.FromSeconds(3)))
-                .WriteAsync(Delivery(_name, "loaded", """[{"id":1}]"""), default);
-            var timedOut = DateTime.UtcNow - started;
+            var first = await blocked.WriteAsync(Delivery(_name, "loaded", """[{"id":1}]"""), guard.Token);
+            var firstTook = DateTime.UtcNow - started;
+            // While the target's connection is held blocked, a further publication yields without opening another.
+            started = DateTime.UtcNow;
+            var second = await blocked.WriteAsync(Delivery(_name, "loaded", """[{"id":2}]"""), guard.Token);
+            var secondTook = DateTime.UtcNow - started;
             // The caller's cancellation ends a blocked publication promptly too, whatever the confirm bound.
             using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(1));
             started = DateTime.UtcNow;
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                Writer().WriteAsync(Delivery(_name, "loaded", """[{"id":2}]"""), stop.Token).AsTask());
-            var cancelled = DateTime.UtcNow - started;
+            try { await Writer().WriteAsync(Delivery(_name, "loaded", """[{"id":3}]"""), stop.Token); }
+            catch (OperationCanceledException) { }
+            var cancelledTook = DateTime.UtcNow - started;
 
-            Assert.Equal(EtlRabbitMqWriteOutcome.Yield, outcome);
-            // The bound plus a short abort, not a polite close that waits out every round trip.
-            Assert.True(timedOut < TimeSpan.FromSeconds(8), $"The timed-out publication took {timedOut}.");
-            Assert.True(cancelled < TimeSpan.FromSeconds(6), $"The cancelled publication took {cancelled}.");
+            Assert.Equal((EtlRabbitMqWriteOutcome.Yield, EtlRabbitMqWriteOutcome.Yield), (first, second));
+            Assert.True(firstTook < TimeSpan.FromSeconds(8), $"The blocked publication took {firstTook}.");
+            Assert.True(secondTook < TimeSpan.FromSeconds(1), $"The publication behind a held connection took {secondTook}.");
+            Assert.True(cancelledTook < TimeSpan.FromSeconds(6), $"The cancelled publication took {cancelledTook}.");
+            // One held connection per publisher and target, not one per attempt.
+            Assert.True(await broker.BlockedConnectionsAsync() <= 2, "More than one blocked connection per publisher was left open.");
+
+            await broker.ControlAsync("set_disk_free_limit", "50MB");
+            cleared = true;
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+            while (await broker.BlockedConnectionsAsync() > 0 && DateTime.UtcNow < deadline)
+                await Task.Delay(250, guard.Token);
+            Assert.Equal(0, await broker.BlockedConnectionsAsync());
+            // Once the broker unblocks, the target publishes again.
+            Assert.Equal(EtlRabbitMqWriteOutcome.Confirmed, await blocked.WriteAsync(Delivery(_name, "loaded", """[{"id":4}]"""), guard.Token));
         }
         finally
         {
-            await broker.ControlAsync("set_disk_free_limit", "50MB");
+            if (!cleared) await broker.ControlAsync("set_disk_free_limit", "50MB");
         }
     }
 
