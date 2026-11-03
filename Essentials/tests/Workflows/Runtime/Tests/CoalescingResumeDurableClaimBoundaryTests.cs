@@ -485,7 +485,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, scheduleEnqueuesInvoke: true,
             invokeUnavailable: unavailable,
             beforeInvokeFault: async () =>
-                await shared.Queue.EnqueueAsync(Work("external-1", WorkflowExecutionCommandKind.NotifyParentActivity, 3)));
+                await shared.Queue.EnqueueAsync(Work("external-1", WorkflowExecutionCommandKind.NotifyParentActivity, 3)),
+            recordPumpablePeeks: true);
         await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: unavailable ? null : RetryDelay);
         await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
 
@@ -525,6 +526,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
                 .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
             Assert.Equal(["external-1"], early.Items.Select(item => item.WorkItemId));
         }
+
+        // A fused span external-1 started would find nothing to pump inline: invoke-1 behind it is still delayed.
+        Assert.Equal([null], probe.PumpablePeeks);
 
         Assert.Single(probe.InvokeSessionActive);
         Assert.Single(probe.ResumeSnapshots);
@@ -972,7 +976,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         bool invokeEnqueuesCompletion = false,
         Action? beforeInvokeCommit = null,
         bool invokeUnavailable = false,
-        Func<ValueTask>? beforeInvokeFault = null)
+        Func<ValueTask>? beforeInvokeFault = null,
+        bool recordPumpablePeeks = false)
     {
         private bool _didDefer;
         private bool _didEnqueueScheduleSuffix;
@@ -996,6 +1001,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public bool InvokeUnavailable => invokeUnavailable;
         // Runs while the faulting invoke still holds its claim, after any commit and before it throws.
         public Func<ValueTask>? BeforeInvokeFault => beforeInvokeFault;
+        // Other work records what a fused span it started would pump inline next, while its own claim is in flight.
+        public bool RecordPumpablePeeks => recordPumpablePeeks;
+        public List<string?> PumpablePeeks { get; } = [];
         // Null resumes normally; otherwise the resume commits through a committer from a DI scope of its own, as
         // WorkflowResumeBookmarkSchedulerWorkHandler does, retaining its item when true, and then faults.
         public bool? ResumeCommitsInOwnScopeThenFaults => resumeCommitsInOwnScopeThenFaults;
@@ -1246,6 +1254,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
                 probe.ScheduleDurableCommitCounts.Add(_commits.ListCommits().Count);
                 return;
             }
+
+            if (probe.RecordPumpablePeeks && sessionAccessor.Current is { } pumpSession && pumpSession.AppliesTo(workItem.WorkflowExecutionId))
+                probe.PumpablePeeks.Add((await pumpSession.PeekNextPumpableOverlayItemAsync(cancellationToken))?.WorkItemId);
 
             var persistedState = await schedulerStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
             var activeClaims = await (innerQueue.Value as IWorkflowSchedulerWorkClaimInspection ??

@@ -496,27 +496,25 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Equal(1, handler.InvocationCount);
     }
 
-    [Fact]
-    public async Task DrainAsync_WithRetryAfterPolicy_WhenAnInactiveCoalescingSegmentRefusesTheRelease_AcksAndPoisonsTheItem()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_WithRetryAfterPolicy_WhenAnInactiveCoalescingSegmentRefusesTheRelease_ThrowsClaimLostWithoutAckOrRecord(
+        bool otherOwnerClaimed)
     {
-        // A handler crosses a durable boundary that deactivates the coalescing overlay, and another owner then claims the
-        // durable copy. The release must persist at once, and cannot, because that claim holds the item. The session used
-        // to drop the overlay claim and then throw, so the fallback ack failed as claim-lost: no record, and the durable
-        // copy stayed queued to fault again. The real session now refuses while the claim still owns the item, so the
-        // item ends acknowledged (its exact durable copy removed) and Poisoned.
+        // A handler crosses a durable boundary that deactivates the coalescing overlay, and the durable copy is then
+        // claimed by another owner or removed. The release must persist at once, and cannot: this drain lost the item.
+        // The fallback acknowledgement used to succeed through the overlay and delete the durable copy by identity, out
+        // from under the other owner's live claim, and then record the step Poisoned. The refusal now fences the overlay
+        // claim, so the acknowledgement is refused too: the drainer throws claim-lost and records nothing, and whatever
+        // holds the durable copy keeps it.
         var inner = new InMemoryWorkflowSchedulerWorkQueue();
         var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
         var queue = new CoalescingWorkflowSchedulerWorkQueue(new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner), accessor);
         var session = new RuntimeCoalescingSession("wfexec-1", inner, new PersistenceModeOptions());
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
         var workItem = NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity);
-        var handler = new AlwaysFaultingSchedulerWorkHandler(beforeFault: async item =>
-        {
-            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
-            session.Deactivate();
-            await ClaimDurableCopyAsOtherOwnerAsync(inner, item);
-            await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
-        });
+        var handler = new AlwaysFaultingSchedulerWorkHandler(beforeFault: item => LoseDurableCopyAfterABoundaryAsync(session, inner, item, otherOwnerClaimed));
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
@@ -526,25 +524,25 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             hasResumptionRedriver: true);
         await inner.EnqueueAsync(workItem);
 
-        RuntimeSchedulerDrainResult result;
+        InvalidOperationException exception;
         using (accessor.Push(session))
-            result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+            exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1)).AsTask());
 
-        Assert.True(result.StoppedOnFault);
+        Assert.Contains("was lost during 'complete' with status 'Stale'", exception.Message);
         Assert.Equal(1, handler.InvocationCount);
-        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
-        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
-        Assert.Null(record.NextRetryAt);
-        Assert.Equal(["work-2"], (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId));
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+        await AssertDurableCopyLeftToItsHolderAsync(inner, otherOwnerClaimed);
     }
 
-    [Fact]
-    public async Task DrainAsync_WhenAnInactiveCoalescingSegmentRefusesAnUnavailableRelease_ThrowsClaimLostAndKeepsTheItemQueued()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_WhenAnInactiveCoalescingSegmentRefusesAnUnavailableRelease_ThrowsClaimLostAndKeepsTheItemQueued(
+        bool otherOwnerClaimed)
     {
-        // The same refusal on the temporarily-unavailable arm. The session used to drop the overlay claim and throw an
-        // InvalidOperationException from its release; it now refuses while the claim still owns the item, so the
-        // drainer throws claim-lost for the refused release. Nothing is acknowledged or poisoned, and the durable copy
-        // stays queued for a later drain to re-drive.
+        // The same refusal on the temporarily-unavailable arm: the drainer throws claim-lost for the refused release.
+        // Nothing is acknowledged or poisoned, and whatever holds the durable copy keeps it.
         var inner = new InMemoryWorkflowSchedulerWorkQueue();
         var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
         var queue = new CoalescingWorkflowSchedulerWorkQueue(new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner), accessor);
@@ -552,13 +550,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
         var handler = new AlwaysFaultingSchedulerWorkHandler(
             _ => new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable."),
-            async item =>
-            {
-                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
-                session.Deactivate();
-                await ClaimDurableCopyAsOtherOwnerAsync(inner, item);
-                await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
-            });
+            item => LoseDurableCopyAfterABoundaryAsync(session, inner, item, otherOwnerClaimed));
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
@@ -574,16 +566,39 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Contains("was lost during 'release after temporary unavailability' with status 'Stale'", exception.Message);
         Assert.Equal(1, handler.InvocationCount);
         Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
-        Assert.Equal(["work-1", "work-2"], (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId).Order(StringComparer.Ordinal));
+        await AssertDurableCopyLeftToItsHolderAsync(inner, otherOwnerClaimed);
     }
 
-    // Another owner takes the durable copy under a live claim, which no delayed release may override. The session reads
-    // the system clock, so the claim is live by that clock.
-    private static async Task ClaimDurableCopyAsOtherOwnerAsync(InMemoryWorkflowSchedulerWorkQueue inner, RuntimeSchedulerWorkItem item)
+    // A retaining boundary deactivates the overlay, and the durable copy then leaves this drain: another owner takes it
+    // under a live claim, which no delayed release may override, or it is removed. The session reads the system clock,
+    // so the claim is live by that clock. Another writer then queues work-2 behind it.
+    private async ValueTask LoseDurableCopyAfterABoundaryAsync(
+        RuntimeCoalescingSession session,
+        InMemoryWorkflowSchedulerWorkQueue inner,
+        RuntimeSchedulerWorkItem item,
+        bool otherOwnerClaimed)
     {
-        var claim = await inner.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
-            item.WorkflowExecutionId, "other-owner", DateTimeOffset.UtcNow, TimeSpan.FromDays(1)));
-        Assert.Equal(item.WorkItemId, claim?.Item.WorkItemId);
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+        session.Deactivate();
+        if (otherOwnerClaimed)
+        {
+            var claim = await inner.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+                item.WorkflowExecutionId, "other-owner", DateTimeOffset.UtcNow, TimeSpan.FromDays(1)));
+            Assert.Equal(item.WorkItemId, claim?.Item.WorkItemId);
+        }
+        else
+        {
+            Assert.True(await inner.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId));
+        }
+        await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
+    }
+
+    private static async Task AssertDurableCopyLeftToItsHolderAsync(InMemoryWorkflowSchedulerWorkQueue inner, bool otherOwnerClaimed)
+    {
+        Assert.Equal(otherOwnerClaimed ? ["work-1", "work-2"] : ["work-2"],
+            (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId).Order(StringComparer.Ordinal));
+        if (otherOwnerClaimed)
+            Assert.Equal(["work-1"], (await inner.ListActiveClaimsAsync("wfexec-1", DateTimeOffset.UtcNow)).Select(claim => claim.Item.WorkItemId));
     }
 
     [Fact]

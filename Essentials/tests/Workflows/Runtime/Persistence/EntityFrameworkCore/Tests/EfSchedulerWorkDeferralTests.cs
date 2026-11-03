@@ -4,8 +4,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using System.Data.Common;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.SchedulerWorkItems;
 
@@ -90,6 +92,59 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
         Assert.True((await fixture.Store.CompleteClaimAsync(head!)).Succeeded);
         Assert.Null(await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-flush", "sweep", visibleAt - TimeSpan.FromTicks(1), lease)));
         Assert.Equal("work-3", (await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-flush", "sweep", visibleAt, lease)))?.Item.WorkItemId);
+    }
+
+    [Fact]
+    public async Task Deferral_refuses_a_claim_another_owner_commits_between_its_read_and_its_update()
+    {
+        // The read sees the row unclaimed; another owner's claim then commits before the update. Only the revision check
+        // on the update stands between that claim and the delay: the update must miss, and the retry must see the live
+        // claim and refuse, leaving the claim's owner, token and deadline as they were.
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var lease = TimeSpan.FromMinutes(1);
+        await using var database = await TestDatabase.CreateAsync();
+        await using var rival = database.Open("tenant-a");
+        await rival.Store.EnqueueAsync(Work("wf-race", "work-1", 1, WorkflowExecutionCommandKind.InvokeActivity));
+        RuntimeSchedulerWorkClaim? competing = null;
+        var interleave = new BeforeFirstUpdate(async () =>
+            competing = await rival.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-race", "rival", now, lease)));
+        await using var fixture = database.Open("tenant-a", interleave);
+
+        Assert.False(await fixture.Store.DeferAsync("wf-race", "work-1", now, now.AddDays(1)));
+
+        Assert.True(interleave.Fired);
+        var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(competing);
+        Assert.Equal(claim.VisibleAfter, Assert.Single(
+            (await rival.Store.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-race"))).Items).VisibleAfter);
+        Assert.True((await rival.Store.CompleteClaimAsync(claim)).Succeeded);
+    }
+
+    // Runs the interleaving once, just before the first UPDATE this context sends, whichever way it is sent.
+    private sealed class BeforeFirstUpdate(Func<Task> interleave) : DbCommandInterceptor
+    {
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            await InterleaveAsync(command);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            await InterleaveAsync(command);
+            return result;
+        }
+
+        private async Task InterleaveAsync(DbCommand command)
+        {
+            if (Fired || !command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+                return;
+            Fired = true;
+            await interleave();
+        }
     }
 
     private sealed class UnavailableOnceHandler : IWorkflowSchedulerWorkHandler

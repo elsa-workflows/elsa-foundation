@@ -29,6 +29,9 @@ public sealed class RuntimeCoalescingSession
     private readonly List<string> _activeFusedScheduleAnchorOrder = [];
     private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
+    // Overlay claims whose durable copy this drain lost; every later transition through them is refused as stale.
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _lostOverlayClaims =
+        new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, DateTimeOffset?> _durableVisibility = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingRelease> _pendingReleases = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durablyConsumedWorkItemIds = new(StringComparer.Ordinal);
@@ -193,7 +196,7 @@ public sealed class RuntimeCoalescingSession
     public bool OwnsOverlayClaim(RuntimeSchedulerWorkClaim claim)
     {
         ArgumentNullException.ThrowIfNull(claim);
-        return _overlayClaims.ContainsKey(claim);
+        return _overlayClaims.ContainsKey(claim) || _lostOverlayClaims.ContainsKey(claim);
     }
 
     /// <summary>Requests a checkpoint flush before the next durable scheduler claim is acquired.</summary>
@@ -925,8 +928,7 @@ public sealed class RuntimeCoalescingSession
         // that seeded the overlay; a new drain must not turn a delayed durable resume into immediately runnable work.
         var heads = await _overlayQueue.ListNextWorkItemsAsync([WorkflowExecutionId], cancellationToken);
         var head = heads.GetValueOrDefault(WorkflowExecutionId);
-        if (head is not null && _durableVisibility.TryGetValue(head.WorkItemId, out var visibleAfter) &&
-            visibleAfter > request.Now)
+        if (head is not null && IsDurablyHidden(head.WorkItemId, request.Now))
             return null;
 
         var claim = await _overlayQueue.ClaimAsync(request, cancellationToken);
@@ -941,6 +943,8 @@ public sealed class RuntimeCoalescingSession
         TimeSpan visibilityTimeout,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var result = await _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         if (result.Claim is not null)
@@ -952,6 +956,8 @@ public sealed class RuntimeCoalescingSession
         RuntimeSchedulerWorkClaim claim,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         if (result.Succeeded && !IsActive && _durableWorkItemIds.Contains(claim.Item.WorkItemId))
@@ -971,18 +977,25 @@ public sealed class RuntimeCoalescingSession
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var deferred = SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind);
         if (deferred && _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
 
         // A handler can cross a durable boundary before its release. If that deactivated the overlay, its source must
         // still exist and no later flush persists the release, so persist it now, before the overlay drops the claim.
-        // A durable copy that is gone or claimed by another owner refuses the release while this claim still owns the
-        // item, so the caller can still complete it instead of losing both the overlay claim and the durable release.
+        // A durable copy that is gone, or that another owner holds under a live claim, means this drain lost the item:
+        // the claim is lost, as on a durable queue. Fence the overlay claim too, so a fallback acknowledgement through
+        // it is refused rather than deleting the durable copy out from under its holder, and nothing is recorded.
         if (deferred && !IsActive && _overlayClaims.ContainsKey(claim))
         {
             if (await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt), cancellationToken) is not null)
+            {
+                _lostOverlayClaims.TryAdd(claim, 0);
+                _overlayClaims.TryRemove(claim, out _);
                 return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+            }
             var released = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
             _overlayClaims.TryRemove(claim, out _);
             return released;
@@ -1039,7 +1052,8 @@ public sealed class RuntimeCoalescingSession
     /// completion pump reads past live claims in true insertion order — the exact order the drain loop would claim
     /// next. The item is not claimed: the session is single-writer and drain-confined, so the pump dispatches it inline
     /// and then removes it with <see cref="ConsumePumpedOverlayItemAsync"/>. An item still in dispatch at a mid-drain
-    /// flush remains a recovery backstop until its exact non-retaining outcome has committed.
+    /// flush remains a recovery backstop until its exact non-retaining outcome has committed. An item whose durable delay
+    /// has not ended stops the pump, as it would stop the drain loop's claim: nothing at or behind it runs inline early.
     /// </summary>
     public async ValueTask<RuntimeSchedulerWorkItem?> PeekNextPumpableOverlayItemAsync(CancellationToken cancellationToken)
     {
@@ -1047,8 +1061,14 @@ public sealed class RuntimeCoalescingSession
         var inFlight = _overlayClaims.Keys
             .Select(claim => claim.Item.WorkItemId)
             .ToHashSet(StringComparer.Ordinal);
-        return await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+        // A flush delays a released item by identity, so its delay can sit behind work another writer queued first (#3690).
+        var next = await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+        return next is not null && IsDurablyHidden(next.WorkItemId, _timeProvider.GetUtcNow()) ? null : next;
     }
+
+    // The visibility the seeding provider read reported; the overlay's item-only pages omit it.
+    private bool IsDurablyHidden(string workItemId, DateTimeOffset now) =>
+        _durableVisibility.TryGetValue(workItemId, out var visibleAfter) && visibleAfter > now;
 
     /// <summary>
     /// Removes an inline-pumped item from the overlay after its dispatch completed. Flush accounting
@@ -1228,8 +1248,9 @@ public sealed class RuntimeCoalescingSession
     {
         foreach (var (workItemId, pending) in _pendingReleases.ToArray())
         {
-            // A refusal means this drain lost the item it owns, removed or claimed by another owner, so it fails the
-            // flush as any other lost tracked work does.
+            // A refusal means this drain lost the item: its durable copy is gone or held under another owner's live
+            // claim. The flush fails as it does when any other tracked work goes missing, although its commit may have
+            // landed; whoever holds the durable copy decides when the item runs.
             if (await TryPersistReleaseAsync(pending, cancellationToken) is { } failure)
                 throw new InvalidOperationException(failure);
             _pendingReleases.Remove(workItemId);

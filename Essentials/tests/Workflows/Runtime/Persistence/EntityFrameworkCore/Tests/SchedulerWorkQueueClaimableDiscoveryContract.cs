@@ -115,6 +115,10 @@ internal static class SchedulerWorkQueueClaimableDiscoveryContract
         Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await queue.CompleteClaimAsync(live)).Status);
         var redelivered = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-deferred", "owner-c", due + Lease, Lease));
         Assert.Equal("work-2", redelivered?.Item.WorkItemId);
+        // The deferral advanced the fencing token itself, as the claim of a claim and release would, so the claim that
+        // redelivers the item is fenced past both the lapsed claim and the deferral; a plain release would leave it one past.
+        Assert.True(redelivered!.FencingToken > live.FencingToken + 1,
+            $"Expected the redelivering claim's token past {live.FencingToken + 1}, saw {redelivered.FencingToken}.");
     }
 
     /// <summary>Queues one item for the execution and claims it at <paramref name="claimedAt"/> for one lease.</summary>

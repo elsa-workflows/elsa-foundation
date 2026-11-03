@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -80,6 +81,27 @@ public sealed class CoalescingSchedulerVisibilityTests
         Assert.Null(await _queue.ClaimAsync(Request("audit")));
     }
 
+    [Fact]
+    public async Task Inline_pump_stops_at_a_durably_delayed_item_behind_the_claimed_head_until_it_is_due()
+    {
+        // A flush delays a released item by identity, so the delay can sit behind work another writer queued first. The
+        // next drain claims that work, and a fused span it starts must not pump the delayed item, or anything behind it,
+        // inline before the delay ends.
+        await _queue.EnqueueAsync(Work("external", WorkflowExecutionCommandKind.ScheduleActivity));
+        await _queue.EnqueueAsync(Work("complete", WorkflowExecutionCommandKind.CompleteActivity));
+        await _queue.EnqueueAsync(Work("later", WorkflowExecutionCommandKind.CompleteActivity));
+        Assert.True(await _queue.DeferAsync(ExecutionId, "complete", _now, _now.AddDays(2)));
+        var time = new FakeTimeProvider(_now);
+        var session = new RuntimeCoalescingSession(ExecutionId, _queue, new PersistenceModeOptions(), null, null, time);
+        var head = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
+        Assert.Equal("external", head.Item.WorkItemId);
+
+        Assert.Null(await session.PeekNextPumpableOverlayItemAsync(default));
+
+        time.SetUtcNow(_now.AddDays(2));
+        Assert.Equal("complete", (await session.PeekNextPumpableOverlayItemAsync(default))?.WorkItemId);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -141,7 +163,7 @@ public sealed class CoalescingSchedulerVisibilityTests
     }
 
     [Fact]
-    public async Task Inactive_release_whose_durable_copy_another_owner_claimed_is_refused_while_the_claim_still_owns_the_item()
+    public async Task Inactive_release_whose_durable_copy_another_owner_claimed_is_refused_and_fences_the_overlay_claim()
     {
         await _queue.EnqueueAsync(Work("resume"));
         var session = Session();
@@ -152,13 +174,18 @@ public sealed class CoalescingSchedulerVisibilityTests
 
         var release = await session.ReleaseOverlayClaimAsync(claim, _now.AddDays(2), default);
 
-        // Refused, not thrown after dropping the claim: the caller can still complete it, and the competing claim keeps
-        // its own visibility rather than receiving the delay.
+        // This drain lost the item. The competing claim keeps its own visibility rather than receiving the delay, and
+        // the overlay claim is fenced: the session still routes it, but refuses every later transition through it, so a
+        // fallback acknowledgement cannot delete the durable copy out from under the competing claim.
         Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, release.Status);
         Assert.True(session.OwnsOverlayClaim(claim));
-        Assert.Equal(competing.VisibleAfter,
-            Assert.Single((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items).VisibleAfter);
-        Assert.True((await _queue.ReleaseClaimAsync(competing, _now)).Succeeded);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await session.CompleteOverlayClaimAsync(claim, default)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale,
+            (await session.RenewOverlayClaimAsync(claim, _now, TimeSpan.FromMinutes(1), default)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await session.ReleaseOverlayClaimAsync(claim, _now, default)).Status);
+        var remaining = Assert.Single((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items);
+        Assert.Equal(competing.VisibleAfter, remaining.VisibleAfter);
+        Assert.True((await _queue.CompleteClaimAsync(competing)).Succeeded);
     }
 
     [Fact]
