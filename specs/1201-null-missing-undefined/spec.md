@@ -51,6 +51,9 @@ variable reads; the Elsa 3 converter option; the stored representation of explic
 - Literal and computed variable names in general (S-4, ADR 0089). This spec defines only the outcome of a computed name
   that matches nothing.
 - Absent or blank Elsa 3 members whose converted value differs (#3281, S-0).
+- Related, not a dependency: [#3728](https://github.com/elsa-workflows/elsa-foundation/issues/3728), a general Elsa 4
+  defect (the input contract is not applied on every start path). If it is still open when S-2 is built, S-2's
+  admission step (FR-008, FR-009) fixes it as part of this work; if it is fixed first, S-2 extends that fix.
 - Studio editing surfaces beyond what FR-024 names.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -145,6 +148,13 @@ diagnostic**. A workflow may select the **undefined-as-null** policy, under whic
    `null`; array elements already become `null`.
 6. **Given** the policy, **When** a script returns a string from `JSON.stringify`, **Then** that string is not
    rewritten.
+7. **Given** no policy and a script activity whose result is bound to a variable or output, **When** the script has no
+   `return` statement, **Then** publication refuses it with a fix instruction; **When** it ends on a path without a
+   value at run time, **Then** the step faults with the same instruction.
+8. **Given** a script activity whose result is not bound, **When** it returns nothing, **Then** it completes and nothing
+   is written.
+9. **Given** the policy and a bound result, **When** the script returns nothing, **Then** the result is `null` and the
+   binding writes it (what Elsa 3 did).
 
 ---
 
@@ -209,6 +219,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - An explicit `null` for a nullable input that has a declared default stays `null`; defaults apply only to omission.
 - An input binding that produces `undefined` and a script activity that completes without returning a value are
   distinct cases (FR-019, FR-020).
+- A script that returns on some paths only (`if (x) return y;`) passes publication; the run-time check of FR-020
+  catches the path without a value.
 - The default-on-null policy applies to a `null` produced by any source: a literal, a variable, an expression, or a
   request member.
 - A required and nullable input accepts an explicit `null`; requiredness concerns presence, not value.
@@ -245,7 +257,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
   publication requires today (`VF-ACT-003`).
 - **FR-007**: An omitted required activity input MUST still fail publication (`VF-ACT-003`).
 - **FR-008**: An omitted required workflow input MUST be refused when the workflow instance is admitted, before the start
-  checkpoint, with a diagnostic naming the member. No step runs and no work item is scheduled.
+  checkpoint, with a diagnostic naming the member. No step runs and no work item is scheduled. This
+  holds on every start path (API, triggers, BPMN, test runs, child workflows).
 - **FR-009**: After admission, every declared workflow input MUST have a value, so a later read never fails because a
   member was omitted.
 
@@ -255,10 +268,10 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-011**: Every store and wire format that persists a declared member MUST round-trip both states unchanged.
 
 **Default-on-null policy (D-10)**
-- **FR-012**: A workflow MUST be able to select the default-on-null policy. Proposed: one workflow-level setting; a
-  per-input setting is added only once a case needs it (open question Q1).
+- **FR-012**: A workflow MUST be able to select the default-on-null policy, as one workflow-level setting (Q1). A
+  per-input setting is added only once a case needs it.
 - **FR-013**: Under the policy, a `null` for a non-nullable target MUST be replaced by the target type's default
-  (`default(T)` for value types and enums, Elsa 3's behaviour) (open question Q2), and the invocation record MUST show
+  (`default(T)` for value types and enums, Elsa 3's behaviour) (Q2), and the invocation record MUST show
   that the value was substituted. A target type without a non-null default (FR-006) still fails with `VF-ACT-004`.
 - **FR-014**: The policy MUST never replace a `null` for a nullable target.
 
@@ -271,16 +284,20 @@ omitted; after resume, the first reads explicit null and the invocation record s
   MUST materialize as `null`, and an `undefined`-valued property MUST be kept as `null` at every depth. The policy acts
   only at the boundary: it MUST NOT change JavaScript semantics or rewrite a string `JSON.stringify` produced.
 - **FR-019**: An input binding that produces no value MUST be governed by FR-015 and FR-018.
-- **FR-020**: A script activity that completes without returning a value MUST produce an absent result by default, so
-  a capture of that result writes nothing; under undefined-as-null it MUST produce `null`, which a capture writes
-  (open question Q3).
+- **FR-020**: A script activity whose result is bound to a variable or output MUST produce a value (Q3). Without
+  undefined-as-null, a script with no `return` statement MUST be refused at publication, and a run that ends without a
+  value (no `return`, or `return undefined`) MUST fault the step; both name the activity and say to return a value or
+  remove the binding. Under undefined-as-null the result MUST be `null`, which the binding writes. A script whose result
+  is not bound MAY return nothing, and nothing is written.
 
 **Policies recorded on the workflow (D-11)**
 - **FR-021**: Both policies MUST be recorded on the workflow definition, pinned in the executable, and part of its
   artifact hash (ADR 0038). They MUST NOT depend on whether the workflow was converted.
 - **FR-022**: The Elsa 3 converter feature MUST have exactly one option that selects the policies Elsa 3 parity needs
-  (undefined-as-null and default-on-null), and MUST record them on every workflow it converts while the option is on
-  (open question Q4 on its default).
+  (undefined-as-null and default-on-null), and MUST record them on every workflow it converts while the option is on.
+  The option is on by default (Q4) and acts only on workflows the converter produces: Elsa 3 imports and Elsa 3 JSON
+  reconciled at engine start. Native Elsa 4 workflows, new or reconciled, start with both policies off; an author may
+  switch either on per workflow.
 - **FR-023**: The undefined-to-null lowering spec 262 added to converted expressions MUST be replaced by the recorded
   policy, so the converter no longer rewrites scripts for this purpose.
 - **FR-024**: The workflow definition API and the exported workflow JSON MUST expose both policies, so Studio and
@@ -291,6 +308,12 @@ omitted; after resume, the first reads explicit null and the invocation record s
   and MUST record a warning with the read marked absent.
 - **FR-026**: In Liquid, a missing variable MUST read as nil, and the same warning MUST be recorded.
 - **FR-027**: A literal variable name that matches nothing MUST remain a publish diagnostic.
+
+**Inputs that cannot hold null (Q5)**
+- **FR-029**: A `null` for an input whose type has no non-null default (for example a non-nullable `String`) MUST be
+  refused with `VF-ACT-004` and guidance, under any policy. Where an Elsa 4 activity handles `null` correctly, its
+  input MUST be declared nullable instead; the built-in activities whose Elsa 3 counterparts accepted `null` are
+  audited for this.
 
 **Diagnostics**
 - **FR-028**: Every warning and refusal in this spec MUST have a stable diagnostic code and name the member, path or
@@ -309,14 +332,16 @@ omitted; after resume, the first reads explicit null and the invocation record s
 
 ## Open questions for the approvers
 
-ADR 0045 §2 leaves these to this spec. Each has a proposal; none blocks drafting.
+ADR 0045 §2 leaves Q1 to Q4 to this spec; Q5 came from the code survey. Each has a proposal and @j03y-nxxbz's position.
+All three approvers answer them on the PR, and the PR's reconciliation table records the answers.
 
-| # | Question | Proposal |
-|---|---|---|
-| Q1 | Where is default-on-null set: workflow, per input, or both? | Workflow only, until a case needs per input (simplest default, advanced later). |
-| Q2 | Which default does it use: declared or type default? | Type default: it is what Elsa 3 did, and a declared default is about omission, not about a null value. A non-nullable `String` keeps failing: Elsa 3 passed `null` into it, which Elsa 4's contract cannot express. |
-| Q3 | A script activity that returns nothing: absent or `null`? | Absent by default (the capture writes nothing); `null` under undefined-as-null (Elsa 3's `Result = null`). |
-| Q4 | Is the converter option on by default? | On: the converter's rule is faithful or refuse, and without the policies converted workflows can fail where Elsa 3 ran. |
+| # | Question | Proposal | @j03y-nxxbz |
+|---|---|---|---|
+| Q1 | Where is default-on-null set: workflow, per input, or both? | Workflow only, until a case needs per input (simplest default, advanced later). | Agrees |
+| Q2 | Which default does it use: declared or type default? | Type default: it is what Elsa 3 did, and a declared default is about omission, not about a null value. | Agrees |
+| Q3 | A script activity whose result is bound returns nothing: what happens? | Refuse: at publication when there is no `return`, at run time on a path without a value, with a fix instruction. `null` under undefined-as-null. An unbound result may return nothing. | Proposed it (replaces "absent, the binding writes nothing") |
+| Q4 | Is the converter option on by default? | On, for workflows the converter produces only. Native Elsa 4 workflows always start with both policies off. | Agrees, with that scope |
+| Q5 | A `null` for an input that cannot hold null and has no type default (non-nullable `String`): what happens? | Refuse (`VF-ACT-004`) with guidance under any policy; declare the input nullable where an Elsa 4 activity handles `null`; audit the built-in activities. Rejected: substituting `""` (changes what Elsa 3 did) and passing `null` through (breaks the contract). | Agrees |
 
 ## Success Criteria *(mandatory)*
 

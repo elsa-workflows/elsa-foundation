@@ -70,13 +70,14 @@ admission.
 | D-1 | Intrinsic `value` takes the target's nullability | R-5. `name` / `outcome` stay non-nullable strings. |
 | D-2 | Variable nullability from the type | R-5: nullable unless a non-nullable value type. Verified in T004. |
 | D-3 | Workflow input nullability pinned | R-4. Hashed only when `true`. |
-| D-4 | One admission step | R-3. `WorkflowStartSchedulerWorkHandler` runs it on every start, before the start checkpoint. |
+| D-4 | One admission step | R-3. The input contract checked once in `WorkflowStartDispatcher` for every start, plus D-10's completion, before the start checkpoint. Fixes #3728 if still open; no dependency on it. |
 | D-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; undefined policy also pinned on each JavaScript binding. |
 | D-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
 | D-7 | Jint replacer | R-7. Warnings `js-undefined-dropped`, `js-nonfinite-null`; policy turns `undefined` into `null`. |
-| D-8 | Script activity without a return | R-8, Q3. Absent by default, `null` under the policy. |
+| D-8 | Script activity without a return | R-8, Q3. Bound result: refused at publication without `return`, step faults at run time without a value; `null` under the policy. Unbound: nothing written. |
 | D-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | D-10 | Computed read miss | R-10. `undefined` plus `variable-not-found` warning; read set marks the name absent. |
+| D-12 | Inputs that cannot hold null | R-12, Q5. `VF-ACT-004` under any policy; audit built-in activities. |
 | D-11 | Diagnostic codes | [contracts/null-policies.md](contracts/null-policies.md). |
 
 ## Project Structure

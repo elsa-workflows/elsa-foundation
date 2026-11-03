@@ -17,7 +17,7 @@ ADR 0091 decision 8: these two states are the null representation for declared m
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `DefaultOnNull` | bool | `false` | `null` for a non-nullable target becomes the type default (value types and enums). |
-| `UndefinedAsNull` | bool | `false` | An `undefined` JavaScript result or property becomes `null`; a script activity without a return gives `null`. |
+| `UndefinedAsNull` | bool | `false` | An `undefined` JavaScript result or property becomes `null`; a bound script activity result that returns nothing gives `null` instead of a refusal. |
 
 ## `WorkflowExecutable.ValuePolicies` (new, pinned)
 

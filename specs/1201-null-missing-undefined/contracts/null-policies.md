@@ -21,6 +21,7 @@ Omitted `nullHandling` means both `false`. The block round-trips through export 
 | `VF-WF-REQ-001` | error | Admission: omitted required workflow input | input |
 | `VF-WF-REQ-002` | error | Admission: explicit `null` for a non-nullable workflow input without `DefaultOnNull` | input |
 | `VF-VAL-NULL-DEFAULTED` | info | `DefaultOnNull` substituted a type default (recorded on the invocation) | node, input, default |
+| `JS-SCRIPT-NO-RESULT` | error | A script activity's result is bound and the script has no `return` (publication) or ends without a value (run time), without `UndefinedAsNull` | activity, bound target |
 | `JS-UNDEFINED-DROPPED` | warning | An `undefined` property was dropped (no `UndefinedAsNull`) | node, input, JSON path |
 | `JS-NONFINITE-NULL` | warning | `NaN` or `±Infinity` became `null` | node, input, JSON path |
 | `VAR-NOT-FOUND` | warning | A computed variable name matched nothing; read marked absent | node, variable name |

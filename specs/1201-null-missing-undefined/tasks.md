@@ -58,13 +58,14 @@ red without the change.
 
 **Independent test**: `composition-bulk-dispatch-sub-workflow` starts with no input and completes.
 
-- [ ] T013 [US2] Add `WorkflowRequestAdmission` in
-  `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/WorkflowRequestAdmission.cs`: validate
-  through `IWorkflowExecutableInputValidator`, refuse `null` for non-nullable inputs without `DefaultOnNull`, then
-  complete every declared member (R-3)
-- [ ] T014 [US2] Run admission from `WorkflowStartSchedulerWorkHandler` before the start checkpoint, and seed an
-  envelope for every declared member in `RuntimeWorkflowStateSeed.BuildSeedChanges`
-- [ ] T015 [US2] Tests for each US2 acceptance scenario, including a refused start that schedules nothing
+- [ ] T013 [US2] Check #3728. If it is open, move the input contract check into `WorkflowStartDispatcher` so every
+  start runs it, remove the separate calls in the test-run handler and `DispatchWorkflow`, and close #3728 from the
+  delivery PR; if it is fixed, start from that check. Then extend it: refuse `null` for non-nullable inputs without
+  `DefaultOnNull`, and complete every declared member without a declared default with `ExplicitNull` or its type
+  default (R-3)
+- [ ] T014 [US2] Seed an envelope for every declared member in `RuntimeWorkflowStateSeed.BuildSeedChanges`
+- [ ] T015 [US2] Tests for each US2 acceptance scenario on each start path (API, trigger, BPMN, test run, child
+  workflow), including a refused start that schedules nothing
 - [ ] T016 [US2] Behavioural test: a JavaScript condition reads an omitted optional input as `null`
   (`Essentials/tests/Activities/Behavioral/Tests`)
 
@@ -98,10 +99,11 @@ red without the change.
   `null` (R-7). Check that the byte, depth and node limits still count the output
 - [ ] T023 [US4] Under `AsNull`, an `undefined` binding result materializes as `null` in
   `JintPortableJavaScriptEvaluator` for both binding forms; without it the ADR 0083 error stays
-- [ ] T024 [US4] Script activity: `JintJavaScriptScriptEvaluator` returns `Absent` for `undefined` by default and
-  `ExplicitNull` under the policy (R-8); an `Absent` result capture writes nothing
-- [ ] T025 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten and
-  `undefined` at depth three
+- [ ] T024 [US4] Script activity with a bound result (R-8): refuse a script without a `return` statement at publication,
+  and fault the step in `JintJavaScriptScriptEvaluator` when the run produces `undefined`, both with a fix instruction;
+  `ExplicitNull` under the policy; an unbound result writes nothing
+- [ ] T025 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
+  `undefined` at depth three, and a script that returns on some paths only
 
 ## Phase 8: User Story 5 - Converted workflows carry their policies (P2)
 
@@ -135,12 +137,15 @@ red without the change.
 - [ ] T035 [P] Docs: workflow settings authoring reference (`nullHandling`), glossary rows for *default-on-null* and
   *undefined-as-null*, Elsa 3 Mapping README and migration readiness guide (spec 262 and 267 sections)
 - [ ] T036 Rerun the #3052 JTest measurement and post it on #3052 (SC-002, SC-003)
+- [ ] T038 [P] Q5 audit (R-12): list built-in activity inputs that cannot hold `null` and whose Elsa 3 counterparts
+  accepted it; declare each nullable where the Elsa 4 activity handles `null`, with a test, and record the rest in the
+  Elsa 3 migration readiness guide
 - [ ] T037 Close #3280, #3288, #3172 and #3170 from the delivery PR; set this spec's **Status** to `Implemented` in
   that PR
 
 ## Dependencies
 
-- T001 gates everything. Phase 2 blocks every story.
+- T001 gates everything. Phase 2 blocks every story. #3728 is not a prerequisite (T013 covers it if it is open).
 - US1, US2 and US7 (P1) can run in parallel after Phase 2. US3 needs T019/T020's policy from T006. US4 needs T008.
   US5 needs US3 and US4 (the policies it records must work). US6 is independent after Phase 2.
 - MVP: Phases 1–5.

@@ -44,8 +44,10 @@
   `IWorkflowExecutableInputValidator`, then completes the request: declared default, else `ExplicitNull` when nullable,
   else the type default. A member with none of these was refused at publication (FR-006). The seed then writes an
   envelope for every declared member.
-- **Rationale**: the validator exists but is not on every path; making the start handler the single gate meets FR-008
-  ("before the start checkpoint") and FR-009 (every declared member has a value).
+- **Rationale**: the validator exists but is not on every path. Running it once in `WorkflowStartDispatcher`, which
+  every start passes through, and adding D-10's completion there meets FR-008 ("before the start checkpoint") and
+  FR-009 (every declared member has a value). This also fixes #3728; if #3728 is fixed first, S-2 extends that fix
+  instead. S-2 does not wait for it.
 - **Alternatives**: materialize on first read (rejected by ADR 0045 §2: admission, not a later step); fix each caller
   (rejected: misses new start paths).
 
@@ -94,10 +96,14 @@
 
 ## R-8 Script activity without a return value
 
-- **Decision** (Q3 proposal): `JintJavaScriptScriptEvaluator` returns an `Absent` result for `undefined` by default, so
-  the output capture writes nothing; under undefined-as-null it returns `ExplicitNull`.
-- **Rationale**: keeps "no value" distinct from `null` (D-10) and matches Elsa 3 (`Result = null`) only when the
-  workflow asks for it.
+- **Decision** (Q3): when the script activity's result is bound, publication refuses a script with no `return`
+  statement (the JavaScript analyzer already parses the body), and `JintJavaScriptScriptEvaluator` faults the step when
+  the run produces `undefined`. Both carry a fix instruction. Under undefined-as-null the result is `ExplicitNull`.
+  When the result is not bound, `undefined` produces no value and nothing is written.
+- **Rationale**: a bound result that is never produced is a bug in the script; this matches ADR 0083's rule for
+  bindings. Elsa 3's `Result = null` stays available through the policy.
+- **Alternatives**: an absent result that the binding skips (rejected in review: it silently keeps the old value);
+  always `null` (rejected: hides the missing `return`).
 
 ## R-9 Converter option
 
@@ -118,6 +124,13 @@
   Liquid: research found no computed variable access in the portable Liquid handler (an undeclared root throws); FR-026
   applies once S-4 adds `variables` to Liquid, and S-2 adds only the shared diagnostic code.
 - **Rationale**: row 10 (#3420 question 3). S-4 replaces the accessor and keeps the outcome.
+
+## R-12 Inputs that cannot hold null (Q5)
+
+- **Decision**: `null` for a type without a non-null default stays `VF-ACT-004` under any policy. T038 audits the
+  built-in activities whose Elsa 3 counterparts accepted `null` for such inputs, and declares an input nullable where
+  the Elsa 4 activity handles `null`.
+- **Rationale**: faithful or refuse; the activity contract is fixed at its source instead of being worked around.
 
 ## R-11 Elsa 3 input requiredness
 
