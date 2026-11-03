@@ -1,0 +1,3 @@
+# Qualification evidence
+
+A candidate records archive identity/version/hash, source/provenance and required dependency/resource observations. A child observation records command/exit, complete report path/hash, stage/diagnostic, denial audit and retained original inputs. A causal failure keeps failed status with separate expected-failure recognition. The aggregate passes only when all required positive/control/restored outcomes are verified; failed setup or unrun/native-refused profiles fail it. These are internal build receipts; existing probe report shapes remain authoritative and no production model is introduced.

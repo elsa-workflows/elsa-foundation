@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "task": "T045 bounded coded-error/terminal-retry EF increment; T045 and T029 remain open",
+  "sourceParentCommit": "5f87f3a7ce4b671ed850311f60d2a0a586421611",
+  "filesSha256": {
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnCalledWorkflowControlEfTests.cs": "931b3d4f9ae7bce556169ee57442b16728891f624df69b507d8d63e2310c33fe",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnRuntimeFixture.cs": "e359704394ca16a5dc38d9f273c4e777c355f8b040227b36f23a0f663a44fd4b",
+    "Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs": "c8ed0975477b89a177991108dfa5221a660970f8cc38118f6f6203608754076f",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs": "b2e176eb3bd6d1e1ac928abbb41eba51ca0fe76b8227e5b2ad5dfc3f93c037ad",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs": "2141d1a62ad804fa83f10739a47d474011b1834e3a81fa1c49f46c0ed93e73c3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/DispatchWorkflowResumeGuard.cs": "10a849d77858fbcb5d4897fb11b4d6648afd015dd42e6ee855781bedd6712de5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "2342a7d9ff3aa55821884ca45fa3b6f92f732a6b54a4815e1df9f9868e457d66",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Models/WorkflowDispatchParentResumePayload.cs": "52c27dfa63584f69f2a8659e54f8638142df09500ba028c57062e69716cd0017",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Models/DispatchWorkflowResult.cs": "01978e8b4240b23ddef381d53871991f1dfa48bcc1ee38bd63fa6788ac523117",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Constants/DispatchWorkflowConstants.cs": "3c003cbcc10821b7d3005f5f70edf78034073b17ce0bf3adbba205ab4b9df5b3",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "e5b927efaf48caee929132475b7b0062ff30bba973746a43df4f9e5e6d9105ae",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "47aef1e9f8c740999704659682bad26b86983e54a68566ba9d5ed333bd75c771",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs": "b00159a39d5712f7e00a1119ea6311e6b180f81fe95468de1b698638e359139b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "specs/1006-bpmn-library-adoption/tasks.md": "12ec00a2c5e56062d7ffeaf4eab10ff047a70dc9754cc5413cfd4e40517a97c8",
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.md": "44f9ca29cec8a993923047c78267c8414e969d3e61c9a8e419fca7ec101b9998"
+  },
+  "binariesSha256": {
+    "Bpmn.Model.dll": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+    "Bpmn.Semantics.dll": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+    "Elsa.Activities.Bpmn.dll": "e7373ffc0b17bb1b0473dd27dc90e27f844607cb5b1780eae4962846613692f8",
+    "Elsa.Activities.Runtime.dll": "cfa486b05c4bbfa7875b2843cf45a64a8bef9260e39e0709f38c95205f9d942c",
+    "Elsa.Activities.Runtime.Core.dll": "ea1d0c82e4be675573133ae92eeceacc7c925875f4315c777c4c8ff549fb6c0b",
+    "Elsa.Workflows.Runtime.Core.dll": "e2ff2c52c8e377381e80f928a817e8250c66b0f8231d2c23d726cf3ea3111498",
+    "Elsa.Workflows.Runtime.dll": "adb6eee61a284fcd72ae028bbed0ca5c867299063ab088b0d69eb584eb147125",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "60f6c51248c93567216ab0ff19dfaded581b63572ffc09e5e154bed054b9283d",
+    "Elsa.Activities.DispatchWorkflow.Runtime.dll": "4fb1676e09d2085d3218ae952f49d1c9dda99852a72773f967ba2bc9f44d5354",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll": "542e385084a7240217b03dc8e4fee184ff60a20fa65bc916ee9cbd345f18c03b"
+  },
+  "releasedPackages": [
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "checks": [
+    {
+      "name": "actual called coded errors through three EF providers",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "0aab0d3069b78ed904e6129d5b3733664f7a7ef693352d28a314d7ff0788c583"
+    },
+    {
+      "name": "whole Runtime EF",
+      "passed": 1682,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "356a7bde08c828b035cd69e78d45fc79def4ae58c91cdf64ed5eab0a1e7005cd"
+    }
+  ],
+  "newDiscoveredCases": 4,
+  "matrix": {
+    "persistenceModes": [
+      "Durable",
+      "Balanced"
+    ],
+    "authoredErrorCodes": [
+      "ORDER",
+      "OTHER"
+    ],
+    "callerBoundaryCode": "ORDER",
+    "providerGenerations": 3,
+    "sourceRecordedResults": [
+      "FailedRetryable before caller delivery",
+      "FailedRetryable after caller checkpoint committed before ACK",
+      "Delivered after third-provider duplicate retry"
+    ]
+  },
+  "qualification": {
+    "actualPublishedExecutableAndSourceRecords": true,
+    "actualSeparateDispatchWorkflowAndBpmnChildRoot": true,
+    "normalProducerOutboxResumeInboxAndLibraryInterpreter": true,
+    "originalProviderDisposedBeforeEachRecovery": true,
+    "persistedModePositivelyAsserted": true,
+    "childFaultedWorkflowPinAndModeRecheckedOnEveryFactRead": true,
+    "callerExpectedTerminalWorkflowPinAndModeRecheckedAcrossFinalRetry": true,
+    "sourceComputedFromCommittedControlAndIndependentlyReadWithIdenticalIntent": true,
+    "terminalOrdinalZeroAndEmptyNotificationBatch": true,
+    "actualSafeDiagnosticsSeparateFromAuthoredError": true,
+    "actualCallerTerminalInboxConsumedExactAddressAndParentReceipt": true,
+    "callerCommitObservedInConcreteEfBeforeSourceAckWithPositiveDeliveringFence": true,
+    "originalCalledWorkflowRootFaultAndBlockingIncidentRetained": true,
+    "caughtCallerCompletesWithoutIncidentAndUnmatchedCallerKeepsAuthoredClassification": true,
+    "fullCallerAndChildActivityIncidentDocumentsFrozenAcrossThirdProviderRetry": true,
+    "callerPhysicalBookmarksEmptyAndNeitherWorkflowPoisoned": true
+  },
+  "mutations": {
+    "sourceRestored": true,
+    "sourceSha256": {
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9"
+    },
+    "mutants": [
+      {
+        "name": "force-matching-authored-error",
+        "failed": 2,
+        "passed": 2,
+        "skipped": 0,
+        "compileFailure": false,
+        "logSha256": "e2b773c6094fa6a8709e26ff43b2cfd81430ed257c58cb15e0269a2cbf6c0583"
+      },
+      {
+        "name": "drop-called-authored-error",
+        "failed": 4,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "logSha256": "6873c2bf0be51083688ba7ac461c2da270d800a430f60bed4b46435343778540"
+      }
+    ]
+  },
+  "mutationLimits": [
+    "Force ORDER: both OTHER cases fail expected Faulted versus actual Completed after real recovered caller routing; both ORDER controls pass.",
+    "Drop authored ErrorCode: both ORDER cases fail expected Completed versus actual Faulted; both OTHER cases fail absent propagated authored fault.type. Six failures/two companion passes across both variants.",
+    "The initial mutation harness expected two failures for dropping ErrorCode; full classification checks correctly also rejected both OTHER cases. Expected counts were corrected without weakening tests."
+  ],
+  "initialUnqualifiedFailures": [
+    {
+      "qualified": false,
+      "reason": "Compile-only wrong fixture property name, corrected to ActivityStates.",
+      "logSha256": "e185c421fbb6bf9e83c7d9cebe571bb68822cdd62209c886951bb408af79c5c7"
+    },
+    {
+      "qualified": false,
+      "reason": "Four EF ownership composition failures: persistence wrappers installed before selecting EF. Moved mode wrapping after provider selection.",
+      "logSha256": "1b85b3e0b6c3c9708a022b7fee80040145a503ebc2efcec563feb2e7ae7733fe"
+    },
+    {
+      "qualified": false,
+      "reason": "Four null terminal-cut failures: manually built call had CLR FullName instead of canonical published key.",
+      "logSha256": "93eab613f98fd69f3795fca8b28123df1215630e6830002e9f4ae859c5e951be"
+    },
+    {
+      "qualified": false,
+      "reason": "Four same null-cut diagnostic failures: actual child root refused caller invocation differs. Canonical identity fixed in fixture; production boundary guard unchanged.",
+      "logSha256": "d2a8caa9d8e7452e62a2b1f168480e6147772481a31266bf321ac671df069a99"
+    }
+  ],
+  "scopeLimits": [
+    "Executable builders supply compiler output: pin, consumer declaration, input contract and resume map; not public authoring compiler/HTTP import proof.",
+    "Service-provider restart and controlled before/after-effect timeout, not process kill.",
+    "Final duplicate uses normal consumed/terminal resume recognition; no second BPMN adapter evaluation claimed.",
+    "Complete activity/incident document equality and separate physical bookmark absence; not whole-workflow bytes or positive bookmark generation witness.",
+    "Remaining T045 escalation/ordering/concurrent binding/cancellation/empty terminal barrier, split-terminal controls and no-capability legacy recovery plus actual Workbench remain open."
+  ],
+  "oldCapturedCheckpointsUnchanged": {
+    "deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+      "receiptSha256": "f1829d951f4d48104800d77a291e12f33f228a91f1079185de8c0d84af4ca111"
+    },
+    "listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+      "receiptSha256": "276a402ca42780be010162a9cc0fd39b739dc1f170f44bda0a6bb591d1cec7c6"
+    },
+    "listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "receiptSha256": "ed4c3c8577655ee70b53ab8c9c59098460390ef34ae1f3db196459faefae5e73"
+    },
+    "parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1",
+      "receiptSha256": "1056c29067953c365127bd71a500604d50f0e6305535977d83059fef1ddb8c68"
+    },
+    "parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "receiptSha256": "91738281dd197a5c8e62794914c18d158638e32a9daa26b36369be8ef01ccb25"
+    },
+    "queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+      "receiptSha256": "c6aa235d7649d6733ca0f6a352bd6ec3af0867dc9ea8b280a5c1084fe77332d5"
+    },
+    "queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+      "receiptSha256": "0bbc348c2306da431780d6fe03bb060f195b6bfdac9d2972ed5acf7baa6e728b"
+    },
+    "resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+      "receiptSha256": "9ebbfc0c3fbb3d8ce573ffcad810b815d547234d491c5b4d80e8dd8a61850d79"
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.md": {
+      "sha256": "b92f48d2834db3710e1d577d825cadcbc01d36a5a9a733a0dedcdc46f5bf5a47"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.json": {
+      "sha256": "8b6338efdb1fd0df5249bd084fb2225b11bfa2df65aa309db64374dcd33511d4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.md": {
+      "sha256": "957d261394ee1bc9fed0cfb6bd999ef186ed1ff023bbd4abad28784c68ead1ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.json": {
+      "sha256": "aea0a590025f4d65c9b563d44b0b4774c4992103b77a822da5fed01bd0ce6c15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.md": {
+      "sha256": "ba62cb1f2422815b2ad451384bd8e2dfa06fe7e9ee2d508d0a7c8af3c9cd7976"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.json": {
+      "sha256": "9b98cfcc71a21a537e4577537dac3bbb41b2511c563bcc3a7ff8aa8458a88f56"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": {
+      "sha256": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.json": {
+      "sha256": "7d45e6d512a09779ae38a88bc977370b307620d5811c860e0497c07eb0030e0c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": {
+      "sha256": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.json": {
+      "sha256": "8c2494c50096b654b70050be62d9e39322572eb237156fbb5cd42d1e9072e081"
+    }
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "oldCaptureWriterInvoked": false,
+  "reviewFindingsFixed": [
+    "Repeat child workflow Faulted/pin/mode on every recovery read; retain caller expected terminal status/pin/mode in final-retry projection."
+  ],
+  "reviews": {
+    "type": "three independent bounded component audits; not full PR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "remainingGates": [
+    "Remaining T045 matrix and actual Workbench; T029 ordinary compensation",
+    "Final real current Studio; T032 deletion and T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full-PR/required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent #2898/#2907/program production acceptance; Orleans/task-runner deferred"
+  ]
+}

@@ -21,7 +21,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfActivityExecutionStoresTests
+public sealed partial class EfActivityExecutionStoresTests
 {
     [Fact]
     public async Task Browsing_keeps_nested_parallel_and_reusable_parent_contexts_separate()

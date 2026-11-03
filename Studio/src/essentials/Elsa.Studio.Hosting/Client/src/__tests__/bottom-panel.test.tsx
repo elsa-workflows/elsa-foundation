@@ -112,6 +112,8 @@ describe("bottom panel default", () => {
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
     const stored: Record<string, string> = {
       "elsa-studio-theme": "drift",
+      "elsa-studio-workspace-style": "focus",
+      "elsa-studio-color-scheme": "meridian",
       "elsa-studio-theme-mode": "dark",
       "elsa-studio-nav-mode": "top",
       "elsa-studio-sidebar-collapsed": "true",

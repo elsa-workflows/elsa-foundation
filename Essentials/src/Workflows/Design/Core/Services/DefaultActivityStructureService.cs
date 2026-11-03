@@ -33,6 +33,14 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public ActivityStructureInputProjection ProjectInputs(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectInputs(activity)
+            : ActivityStructureInputProjection.Empty;
+    }
+
     public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId)
     {
         ArgumentNullException.ThrowIfNull(activity);

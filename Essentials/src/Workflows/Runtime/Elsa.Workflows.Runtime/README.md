@@ -4,6 +4,32 @@
 checkpointing, durable runtime state, scheduling, recovery, and runtime alterations. It does not load Design
 definitions at execution time.
 
+Direct model hosting (spec1017) is in progress. Model state and accepted-input receipts participate in the
+existing fenced checkpoint transaction through the Runtime EF provider; native commits without a model
+participant retain their wire and fingerprint. The EF artifact provider also stores native/model material with
+actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots.
+The explicit `ActivitiesBpmnHosting` feature supplies the released-library driver and authenticated model commands.
+Its [declared profiles](../../../Activities/Bpmn/Elsa.Activities.Bpmn/README.md) cover human parallel work,
+one closed native service worker with typed outcomes and bounded incident retry, interrupting duration boundaries,
+and named native Event catches. Native `RunBpmn` uses that same model lifecycle and retains its exact parent result
+until consumption and settlement are proven. New model admission defaults off.
+Model input uses a protected queue format that predecessor readers reject. The drainer refuses unselected
+model/unknown work before claiming it. EF validates the exact head on its existing claim read; coalescing
+forwards that validation. Accepted first inputs retain their material before the first model checkpoint. Native
+and model dispatch share lease/heartbeat/release mechanics while preserving native lifecycle and fault policies.
+See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
+[current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
+
+Actual owned-host journeys use EF SQLite and the built-in single-node actor. The
+[runtime-only/admission-off receipt](../../../../../specs/1017-direct-bpmn-hosting/evidence/retention/runtime-only-rollback/README.md)
+recovers accepted native workers with Design unavailable and new admission disabled; retained dependency pins
+survive source retirement and collection. The separate
+[provider/storage matrix](../../../../../specs/1017-direct-bpmn-hosting/evidence/providers/model-storage/README.md)
+qualifies common persistence contracts and migrations on all four engines. Actual legacy/Studio compatibility
+retains [its own executing sources](../../../../../specs/1017-direct-bpmn-hosting/evidence/final-compatibility/README.md).
+These receipts do not establish non-SQLite upgraded-host recovery, clustered placement or first-class direct-model
+Studio acceptance under #2907. Final integration review and required CI remain delivery gates.
+
 ## Activation channels
 
 An activation slot belongs to one `(definitionId, slotName)` pair. A declared channel gives the same slot name

@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "task": "T045 existing resumption prerequisite; concurrent-host run remains unqualified",
+  "sourceParentCommit": "9a179f4818cf261903ca7d5ebaccaac6ca238eca",
+  "filesSha256": {
+    "Essentials/src/Tasks/Schedules/ScheduledTaskExecution.cs": "912696fb5307e74d894773c4b841c72ab4f24ab8546acc3be34e96b2fc0daca8",
+    "Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj": "b2d23122e7f18bd3dc3bb5ff037cdb71db860aed3811a1c319779c7907f2e9c5",
+    "Essentials/src/Tasks/Schedules/packages.lock.json": "1ce56f520ea7b0d720db5f6f01550fff6c392cf520f85578772708b60b336cc2",
+    "Essentials/src/Tasks/Schedules/AdaptiveIntervalSchedule.cs": "9215c6f3232e95235e51586f252c545ec8310c16da023f8a56622e00374c6756",
+    "Essentials/src/Tasks/Schedules/IntervalSchedule.cs": "e9e0580cf330149f01559e8be9591021ed93651289771924a792745542c153e2",
+    "Essentials/src/Tasks/Schedules/CronSchedule.cs": "2c3a4b2552508d366568eed004ce20a2bfac4323ed97af4e2f0f0fe9e94e2e76",
+    "Essentials/src/Tasks/Schedules/BackoffSweepWorkerTask.cs": "c7dd9fb365b7ef0014b7fef83e18d7f19a1813809aac5e8f683751209e8c55b3",
+    "Essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs": "2d48a0346532f85c9013f692ab651a0f509f4a7af8efd50881322ba089c1950c",
+    "Essentials/src/Tasks/Elsa.Tasks/Services/TaskStateManager.cs": "8bc027f5331b842e0618d2d0f97cd7798bb786a62c79950a85464ca077c710e1",
+    "Essentials/src/Tasks/Elsa.Tasks/TasksFeature.cs": "6933df1950ed2c4dec211d501e9c5ad33454d0c3040868313564f6619d2c1c45",
+    "Essentials/src/Workflows/Runtime/Resumption/RuntimeResumptionPumpTask.cs": "b71fdb4f80a095b1d5658ed8cc4d598beb750958d44bc03aade1045f8edfb931",
+    "Essentials/src/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs": "c8c4cdf6c22a8dd969e32be4a7800c9a2eec047753fcc5a0adc7e5b67ffde574",
+    "Essentials/tests/Tasks/Tests/TaskScheduleTests.cs": "79ef549b37794ef95a26bb56bd0a616d0ac95d06c3080831df0d873b31acd9a8",
+    "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj": "df630908cab31183eda9f2ba3455e8f0c4176be8766f7a4c24b45a12f12af408",
+    "Essentials/tests/Tasks/Tests/packages.lock.json": "2381c5054f2f59d53fd9e12796ecda76f5f583a52f576c3f111858a123c55ce1",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "global.json": "a647fbc942871cef23ce38ef75c362bd02269b0bb634aa348a4537cadc926c3f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "b5ba247b976fa3c6c463e08cfb21f920d430ee1b146a99334068f3605ee7d498",
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer-recovery.md": "aa062847370d8a6640aead89cc29bf0cca60818f3e853d96fc5491d87d054acc"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/async-observation.txt": {
+      "sha256": "a9f0b8fc2201788e8d06f13fdce9164281c6b6ea58b5349478a5eca056a7778f",
+      "bytes": 3817
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/diagnostic-scope.json": {
+      "sha256": "6b2070b98730c98ad417ea83020da86824b87720bd3e7c4be628e5f2f4b1a415",
+      "bytes": 1077
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/green-results.json": {
+      "sha256": "b3a338078936e0d53d5bc67cbe37f7c68c240a7863d0b9bea22eab86ca12e813",
+      "bytes": 16757
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/native-timer-observation.txt": {
+      "sha256": "1506a7c42d4acbe8a17d112d2e45281d73336543e34dc006ee4c38a7ddcb6ed1",
+      "bytes": 3426
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/pending-source-observation.json": {
+      "sha256": "6e263fb4b09bc1e2ea4e70e0f7e886e79c4f3739efc571e7af25465bfae91971",
+      "bytes": 1186
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/pump-observation.txt": {
+      "sha256": "dddc34c6729bcc77d2beae8df391662a8b53472136ec3b645d9337cc5e0b3c54",
+      "bytes": 4021
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/red-results.json": {
+      "sha256": "182592a879afa64ec72a1c5e78eef595ed01a9d6fdfff2b17f293053576277dd",
+      "bytes": 1523
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/restore-old-finite-callback.patch": {
+      "sha256": "19a9cff5a8fd4d13d95a7854bd818823390641abe9b54ee95861b5068188d514",
+      "bytes": 706
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/test-binaries.json": {
+      "sha256": "f3174f4bf78516be91b0c328df5eeb931e6aa0d8ea859d4a153160ed902530bd",
+      "bytes": 4127
+    },
+    "specs/1006-bpmn-library-adoption/evidence/finite-timer/timer-observation.txt": {
+      "sha256": "f071bbb3f23877eaaa97634c977f0d89e764fa8cfb02b959b2f4825c71a92b2e",
+      "bytes": 6426
+    }
+  },
+  "productionChange": "Internal recurring finite-timer callback handles every overdue finite remainder as due; configured infinity remains explicit. System TimeProvider default and internal deterministic test seam.",
+  "publicApiChanged": false,
+  "rootDependenciesChanged": false,
+  "actualTimerRegression": {
+    "oldBranchFailed": 2,
+    "oldBranchPassed": 1,
+    "fullFixedTasksPassed": 71,
+    "fullFixedTasksFailed": 0,
+    "fullFixedTasksSkipped": 0,
+    "actualSystemThreadingTimer": true,
+    "controlledMonotonicElapsed": true,
+    "firstActionRearmsSecondAction": true,
+    "explicitInfiniteAndEarlyFireTwins": true
+  },
+  "hostObservationInterpretation": "Actual unarmed finite resumption timer and pending due unclaimed notification are consistent with the sentinel-collision branch. Exact live elapsed was not captured; source bug is separately demonstrated by deterministic actual-timer regressions.",
+  "actualConcurrentHostQualified": false,
+  "rawPrivateHeapNeverPublishedAndDeleted": true,
+  "failedOwnedHostAndControllerExited": true,
+  "unfinishedConcurrentToolingIncludedInThisDeliverable": false,
+  "historicalDatabaseCapturesUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/legacy/deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.sqlite.gz": {
+      "compressedSha256": "101c56c6730d43fb75609fc2ddd8b8933e053ad8d8df9e7ef61f2387ba984ba2",
+      "databaseSha256": "32bab40972d5a8f686db0f099d1a2c5f625f9dfa419af479cf5a38776a33fe7a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "324434f3b08bfbf5ed4140b3d3036cb17c43e6b5e5fb7e11182610a5ed39a46b",
+      "databaseSha256": "d507c063aabd7b38c57f3e8d62c0b9c9b02c807ee0614b48df67aa6314c8d469"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+      "databaseSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz": {
+      "compressedSha256": "bcf934af937cf21823624e0a94c7bc634b7a227f8e30940953e1d4c06c1d5843",
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "d89330ade54f818bb19ea65c26371381404fc71efd47820014bff786acb3c050",
+      "databaseSha256": "f8d863e2a90c8a90d78e149d265346e25157dfc42b870d37b7222ba7be5aa087"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-runtime.sqlite.gz": {
+      "compressedSha256": "01a1f61c6970bdbb9cffe25deaf1451b99ae053b0f3d2d8d61a4e993003a7626",
+      "databaseSha256": "4bb165f9325cf092377056a13227bae1240750ba11927e4e06cf5a95f6b61a8f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/design.sqlite.gz": {
+      "compressedSha256": "b4ca2421b3fcbfddafcc2ef4679945ee19f09c7766310bac4da75e7cab93e454",
+      "databaseSha256": "de000465e0b78cfa777d12507b73ab6da09ccea5a2b4d22fd81eb46ef4232673"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "ef0cdf0a0b289630bc0d578977c946925451d59989b657892eb3ac5551cd55c6",
+      "databaseSha256": "7e4d5d42e7716e6289359d0cd00a1b06f9a838ff6253c15966c6a3e43921ba7d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-runtime.sqlite.gz": {
+      "compressedSha256": "0f2f733c9e482a218544918b352fb65b32a37f6a3dff4492b73949a417f3927b",
+      "databaseSha256": "1720cc78c20c7bf03a98c291475f8fd0a5845be514c80344942734b427509640"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-runtime.sqlite.gz": {
+      "compressedSha256": "8116c2433f7e97ca3ead5c6b71429dc6dd5a862b293320fb15f92e3b56dc0b6d",
+      "databaseSha256": "b6c802751da8fc4562e3980737ba2a402f9c2b4d7c7020233becbf57159033d0"
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench-recovery.md": {
+      "sha256": "f3983162e9eda962267f488185af8b470599de57cfad374cfac9ad61cb7e3266"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench-recovery.json": {
+      "sha256": "9679bff3ab3d4c4841805073ac08d9932d92667e1d86b7d691dba858bf2f643c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-called-workbench-recovery.md": {
+      "sha256": "dfc08a32731afccd6244ea4f9c17ed4f1bb7f1c0355314f7688bd128afa281bc"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-called-workbench-recovery.json": {
+      "sha256": "976a2e88c7b5aa8a0774a9ce531c5b50a98c9509f7c9eb9e8aaaa0624ac5936f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-claims-ef-recovery.md": {
+      "sha256": "3da63c23e32031ee4eca95ec68d4a5c7e783540e8978f77047b8880ea4b0f39c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-claims-ef-recovery.json": {
+      "sha256": "c431833915876e87f14e870d9c3a36e5f48116a809e13ca4d89a8217e5fb5c89"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-sibling-isolation-ef-recovery.md": {
+      "sha256": "68de3ac215f0bec96d8a0805c428afe305afc2384e45b3823664a4417c9c9dee"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-sibling-isolation-ef-recovery.json": {
+      "sha256": "ff1048018893b9ad23cd6de935237cbeda5ccbb544f7ba04ead0717fdd6083fa"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-control-ordering-ef-recovery.md": {
+      "sha256": "2be96b85cc6ac52f8cef669aaeabb9ab00a133375c013c847377cdb231e51f24"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-control-ordering-ef-recovery.json": {
+      "sha256": "9806f2cd428502d3a598f5243e5e9d04df37d5bf0a4fdb92309d1c6d3f374228"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-escalation-ef-recovery.md": {
+      "sha256": "1fa9853a54fa900cb385f88220df397f88574cfece31b989e62efc036696879b"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-escalation-ef-recovery.json": {
+      "sha256": "2ee096ba168651be34199ebbd36ead1e0ff00f542d78304c8e9ce2e68a563219"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.md": {
+      "sha256": "44f9ca29cec8a993923047c78267c8414e969d3e61c9a8e419fca7ec101b9998"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.json": {
+      "sha256": "23bdc27c52eb1112b50a5e2fe9537fca90ce9a57e8120116c6f382ef345f212e"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.md": {
+      "sha256": "b92f48d2834db3710e1d577d825cadcbc01d36a5a9a733a0dedcdc46f5bf5a47"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.json": {
+      "sha256": "8b6338efdb1fd0df5249bd084fb2225b11bfa2df65aa309db64374dcd33511d4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.md": {
+      "sha256": "957d261394ee1bc9fed0cfb6bd999ef186ed1ff023bbd4abad28784c68ead1ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.json": {
+      "sha256": "aea0a590025f4d65c9b563d44b0b4774c4992103b77a822da5fed01bd0ce6c15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.md": {
+      "sha256": "ba62cb1f2422815b2ad451384bd8e2dfa06fe7e9ee2d508d0a7c8af3c9cd7976"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.json": {
+      "sha256": "9b98cfcc71a21a537e4577537dac3bbb41b2511c563bcc3a7ff8aa8458a88f56"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": {
+      "sha256": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.json": {
+      "sha256": "7d45e6d512a09779ae38a88bc977370b307620d5811c860e0497c07eb0030e0c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": {
+      "sha256": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.json": {
+      "sha256": "8c2494c50096b654b70050be62d9e39322572eb237156fbb5cd42d1e9072e081"
+    }
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "duplicateSemanticWriterDeleted": false,
+  "reviews": {
+    "type": "three independent bounded source/test audits; no full PR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "remainingGates": [
+    "Rebuilt standard host complete concurrent-call isolation and actual acknowledgment-loss delivery; complete T045 reconciliation",
+    "T029 ordinary compensation and final current Studio",
+    "T032 deletion after remaining actual-host/Studio proof; T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full-PR/green required checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent #2898/#2907/program production acceptance; Orleans/task-runner follow-up deferred"
+  ]
+}

@@ -64,6 +64,8 @@ describe("variable picker", () => {
     reference?: unknown;
     variables?: VisibleVariableView[];
     typeName?: string;
+    collectionKind?: "Single" | "Array" | "HashSet";
+    variableCollectionKind?: "Single" | "Array";
     status?: "loading" | "ready" | "unavailable" | "error";
     retry?: () => void;
     onChange?: ReturnType<typeof vi.fn>;
@@ -73,7 +75,7 @@ describe("variable picker", () => {
       <ActivityPropertiesPanel
         workflowState={{
           variables: [
-            { referenceKey: "k1", name: "Count", type: { alias: "Int32", collectionKind: "Single" }, storageDriverType: null, default: null },
+            { referenceKey: "k1", name: "Count", type: { alias: "Int32", collectionKind: options.variableCollectionKind ?? "Single" }, storageDriverType: null, default: null },
             { referenceKey: "k3", name: "Message", type: { alias: "String", collectionKind: "Single" }, storageDriverType: null, default: null },
             { referenceKey: "k4", name: "Sales order", type: { alias: "Contoso.Sales.Order", collectionKind: "Single" }, storageDriverType: null, default: null },
             { referenceKey: "k5", name: "Shipping order", type: { alias: "Fabrikam.Shipping.Order", collectionKind: "Single" }, storageDriverType: null, default: null }
@@ -98,7 +100,7 @@ describe("variable picker", () => {
         activity={variableActivity(options.reference ?? { referenceKey: "k1", declaringScopeId: "workflow" })}
         descriptor={options.typeName ? {
           ...descriptor,
-          inputs: [{ ...descriptor.inputs[0], typeName: options.typeName }]
+          inputs: [{ ...descriptor.inputs[0], typeName: options.typeName, collectionKind: options.collectionKind }]
         } : descriptor}
         editors={[]}
         expressionEditors={[variableReferenceContribution]}
@@ -126,6 +128,28 @@ describe("variable picker", () => {
     expect(incompatible?.textContent).toContain("Message");
     expect(incompatible?.textContent).toContain("String");
     expect(incompatible?.disabled).toBe(true);
+  });
+
+  it("lets any activity select scalar and object variables for a nullable JSON input", () => {
+    const { container } = renderPicker({ typeName: "System.Text.Json.JsonElement?" });
+    const options = [...container.querySelectorAll<HTMLOptionElement>("optgroup option")];
+    expect(options).toHaveLength(2);
+    expect(options.every(option => !option.disabled)).toBe(true);
+    expect(container.textContent).toContain("JSON?");
+  });
+
+  it("does not widen scalar variables into JSON collection inputs described by element alias", () => {
+    const { container } = renderPicker({ typeName: "System.Text.Json.JsonElement", collectionKind: "Array" });
+    const options = [...container.querySelectorAll<HTMLOptionElement>("optgroup option")];
+    expect(options).toHaveLength(2);
+    expect(options.every(option => option.disabled)).toBe(true);
+  });
+
+  it("does not offer arrays for HashSet inputs because that can remove duplicates", () => {
+    const { container } = renderPicker({ typeName: "Int32", collectionKind: "HashSet", variableCollectionKind: "Array" });
+    const options = [...container.querySelectorAll<HTMLOptionElement>("optgroup option")];
+    expect(options).toHaveLength(2);
+    expect(options.every(option => option.disabled)).toBe(true);
   });
 
   it("keeps distinct fully-qualified aliases incompatible even when their short names match", () => {

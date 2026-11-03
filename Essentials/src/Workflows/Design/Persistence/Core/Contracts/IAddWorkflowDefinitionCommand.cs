@@ -10,6 +10,20 @@ public interface IAddWorkflowDefinitionCommand
         DesignOperationKey operationKey,
         WorkflowDefinition workflowDefinition,
         WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        IReadOnlyCollection<ActivityPresentationRecord> activityPresentation,
+        string? folderId,
+        string actorId,
+        CancellationToken cancellationToken = default) =>
+        folderId is null
+            ? Execute(operationKey, workflowDefinition, draft, layout, activityPresentation, cancellationToken)
+            : Task.FromException<WorkflowDefinitionCreated>(new NotSupportedException(
+                "The configured workflow design backend does not support creating definitions in folders."));
+
+    Task<WorkflowDefinitionCreated> Execute(
+        DesignOperationKey operationKey,
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
         CancellationToken cancellationToken = default);
 
     Task<WorkflowDefinitionCreated> Execute(

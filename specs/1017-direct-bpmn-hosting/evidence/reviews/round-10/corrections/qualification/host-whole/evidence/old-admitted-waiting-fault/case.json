@@ -1,0 +1,94 @@
+{
+  "kind": "actual-old-final-fault-workbench-recovery",
+  "sourceRevision": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "admitted": true,
+  "waiting": true,
+  "pendingParent": false,
+  "parentCancellation": false,
+  "cancellationSourceId": null,
+  "modelExecutionId": "bpmn:759a49f25aafc2f18846e939615e947ade8ed03d0af813339db2423af2e4bc9e",
+  "fixtureSha256": "806f95b5242b70f68fa68c5550732b3339be5cb336f94414be7f0b15ac77b049",
+  "first": 56858,
+  "second": 56911,
+  "firstExit": 137,
+  "secondExit": 137,
+  "runtimeOnly": true,
+  "completedStore": {
+    "file": "completed-runtime.sqlite.gz",
+    "databaseSha256": "70e8b8b881007f9696264fd9525760ba4de22ab070947a708febd9bc9e27ac3f",
+    "gzipSha256": "fc511d0ec5677a1431542f82642d20834a6458693f38635da1f2730949bc7666"
+  },
+  "retainedStore": {
+    "file": "retained-runtime.sqlite.gz",
+    "databaseSha256": "70e8b8b881007f9696264fd9525760ba4de22ab070947a708febd9bc9e27ac3f",
+    "gzipSha256": "fc511d0ec5677a1431542f82642d20834a6458693f38635da1f2730949bc7666"
+  },
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "5cec9a712609e8052612efa57834d5907eb6b6da459d967fbc64ccb16ee2c6e3"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "cb053cfeacd4821fff677bb4b31b63c91123971d77ac8f9c9f2ea61a43280a61"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "a880009e240a6dc1c5c09f02c9a81149096736335b7743e339d4269147ea5609"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "356009b044e8995ce0c837ea25b6c01fdf9acc738dcde60d53243465f496c6a6"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "25b30421581d00d54d3f8e9e1325f829ee96cd9d017aaab049fb2d21186de35a"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "42d7058bdefdf3696b6d70c2c3533eac1e43a749150b0f08f912d8f1b92d3142"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "d2750e0d7c96e8626ba329b89117a040ee49aba0bf5c32a39c6ad39aa46aed51"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "1aeb55a4d252b5b20fc01210e0e884353b3eca496e05ad8bccc633facf41d9fa"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "961059c0beb0ea42f4a38faa212a98ad9afa8d9b02b2ee0ce159691b0c707cc4"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "87fb9dcd0d01896f4272fb5f840cd2c229d5dbf9316db7927de3f15a9091c387"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "5eeec7ffe9f8196a2dfdbf6361a7d0c3b95227b4e6898b80440b195b63d7cd4b"
+    }
+  ],
+  "scopeLimit": "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim."
+}

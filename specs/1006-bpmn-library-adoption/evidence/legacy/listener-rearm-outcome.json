@@ -1,0 +1,223 @@
+{
+  "scenario": "listener-rearm-outcome",
+  "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "capturePatchSha256": "fdcfc6365c407bad175eaa0473ea047ae4f6af02e2a24bfd0ed4e0bb45d2b17f",
+  "runtimeBaselineRevision": "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+  "modelPackage": "0.1.1-preview.19",
+  "interchangePackage": "0.1.1-preview.19",
+  "stateAlias": "Elsa.Bpmn.ExecutionState",
+  "stateVersion": 1,
+  "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+  "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+  "oldHostControl": "fresh provider over a separate exact database copy passed",
+  "facts": {
+    "parentId": "legacy-activity-0",
+    "pendingFault": null,
+    "canceledLoser": false,
+    "queuedLoser": false,
+    "queuedBeforeCancellation": false,
+    "loserQueuedObservation": null,
+    "firstCancellationObservation": null,
+    "activeWork": [
+      {
+        "nodeId": "node-hold",
+        "elementId": "hold",
+        "tokenId": "token:5",
+        "schedulingCause": "element:task",
+        "iterationId": null
+      },
+      {
+        "nodeId": "node-listener",
+        "elementId": "event-scope",
+        "tokenId": "token:15",
+        "schedulingCause": "bpmn.event-subprocess.listener",
+        "iterationId": null
+      },
+      {
+        "nodeId": "node-body",
+        "elementId": "event-scope",
+        "tokenId": "token:18",
+        "schedulingCause": "bpmn.event-subprocess.body",
+        "iterationId": null
+      }
+    ],
+    "children": [
+      {
+        "invocationId": "legacy-activity-1",
+        "node": "node-hold",
+        "status": 3,
+        "iterationId": null,
+        "token": "token:5"
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "node": "node-listener",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:3"
+      },
+      {
+        "invocationId": "legacy-activity-3",
+        "node": "node-listener",
+        "status": 3,
+        "iterationId": null,
+        "token": "token:15"
+      },
+      {
+        "invocationId": "legacy-activity-4",
+        "node": "node-body",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:18"
+      }
+    ],
+    "bookmarkCount": 2,
+    "queuedIds": [
+      "fa286594d87e0e20:complete:legacy-activity-4"
+    ]
+  },
+  "oldControlFacts": {
+    "workflow": 4,
+    "fault": {
+      "code": "LEGACY-OUTCOME-FAULT",
+      "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+      "message": "Actual legacy outcome wait faulted.",
+      "sanitizedStackTrace": null,
+      "isRetryable": false,
+      "metadata": {}
+    },
+    "child": "legacy-activity-3",
+    "iteration": null,
+    "activities": [
+      {
+        "invocationId": "legacy-activity-0",
+        "parentActivityExecutionId": null,
+        "executableNodeId": "node-bpmn",
+        "status": 5,
+        "iterationId": null,
+        "fault": {
+          "code": "bpmn.child.faulted",
+          "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+          "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+          "sanitizedStackTrace": null,
+          "isRetryable": false,
+          "metadata": {}
+        }
+      },
+      {
+        "invocationId": "legacy-activity-1",
+        "parentActivityExecutionId": "legacy-activity-0",
+        "executableNodeId": "node-hold",
+        "status": 3,
+        "iterationId": null,
+        "fault": null
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "parentActivityExecutionId": "legacy-activity-0",
+        "executableNodeId": "node-listener",
+        "status": 4,
+        "iterationId": null,
+        "fault": null
+      },
+      {
+        "invocationId": "legacy-activity-3",
+        "parentActivityExecutionId": "legacy-activity-0",
+        "executableNodeId": "node-listener",
+        "status": 5,
+        "iterationId": null,
+        "fault": {
+          "code": "LEGACY-OUTCOME-FAULT",
+          "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+          "message": "Actual legacy outcome wait faulted.",
+          "sanitizedStackTrace": null,
+          "isRetryable": false,
+          "metadata": {}
+        }
+      },
+      {
+        "invocationId": "legacy-activity-4",
+        "parentActivityExecutionId": "legacy-activity-0",
+        "executableNodeId": "node-body",
+        "status": 4,
+        "iterationId": null,
+        "fault": null
+      }
+    ],
+    "incidents": [
+      {
+        "incidentId": "incident:60e3a5e475350a73:5b15e272e941001e:ActivityReturnedFault",
+        "workflowExecutionId": "wfexec-1",
+        "activityExecutionId": "legacy-activity-0",
+        "executableNodeId": "node-bpmn",
+        "severity": 2,
+        "status": 1,
+        "resolutionOutcome": {
+          "actionKind": "FaultWorkflow",
+          "appliedAt": "2026-10-28T15:23:27.644631+00:00",
+          "strategy": {
+            "alias": "Fault",
+            "version": "1"
+          },
+          "systemSource": null,
+          "metadata": {}
+        },
+        "failureType": "ActivityReturnedFault",
+        "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+        "createdAt": "2026-10-28T15:23:27.644631+00:00",
+        "resolvedAt": null,
+        "metadata": {
+          "runtime.parentCompletionReason": "ParentCompletionEvaluation",
+          "runtime.parentCompletionSchedulerWorkItemId": "c505b99450dc3225:child-fault-parent:legacy-activity-0:child:legacy-activity-3",
+          "runtime.completedChildActivityExecutionId": "legacy-activity-3",
+          "runtime.schedulerWorkItemId": "c505b99450dc3225:child-fault-parent:legacy-activity-0:child:legacy-activity-3",
+          "runtime.commandId": "8bbea9e266e5bfef:child-fault-parent:legacy-activity-0:child:legacy-activity-3",
+          "runtime.activityExecutionId": "legacy-activity-0",
+          "runtime.executableNodeId": "node-bpmn",
+          "runtime.faultSubStatus": "ActivityReturnedFault",
+          "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
+          "runtime.faultMessage": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed."
+        },
+        "isActive": true,
+        "isBlocking": true
+      },
+      {
+        "incidentId": "incident:c505b99450dc3225:c97a30ec9d1612d5:ActivityReturnedFault",
+        "workflowExecutionId": "wfexec-1",
+        "activityExecutionId": "legacy-activity-3",
+        "executableNodeId": "node-listener",
+        "severity": 2,
+        "status": 1,
+        "resolutionOutcome": {
+          "actionKind": "FaultWorkflow",
+          "appliedAt": "2026-10-28T15:23:27.644631+00:00",
+          "strategy": {
+            "alias": "Fault",
+            "version": "1"
+          },
+          "systemSource": null,
+          "metadata": {}
+        },
+        "failureType": "ActivityReturnedFault",
+        "message": "Actual legacy outcome wait faulted.",
+        "createdAt": "2026-10-28T15:23:27.644631+00:00",
+        "resolvedAt": null,
+        "metadata": {
+          "runtime.bookmarkId": "legacy-activity-3:attempt:1:trigger:1",
+          "runtime.resumeTargetId": "node-listener:resume-target:legacy-outcome",
+          "runtime.stimulusType": "test.legacy-outcome",
+          "runtime.stimulusHash": "test.legacy-outcome",
+          "runtime.schedulerWorkItemId": "envelope-resume",
+          "runtime.commandId": "command-resume",
+          "runtime.activityExecutionId": "legacy-activity-3",
+          "runtime.executableNodeId": "node-listener",
+          "runtime.faultSubStatus": "ActivityReturnedFault",
+          "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
+          "runtime.faultMessage": "Actual legacy outcome wait faulted."
+        },
+        "isActive": true,
+        "isBlocking": true
+      }
+    ]
+  }
+}

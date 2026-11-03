@@ -8,9 +8,16 @@ namespace Elsa.Activities.Bpmn.Interchange.Contracts;
 /// mirroring the Elsa3 reusable import flow); <see cref="Import"/> produces a <c>BpmnProcess</c>
 /// activity node.
 /// </summary>
+/// <remarks>Scoped single-implementation replacement contract; shell startup rejects multiple registrations.</remarks>
 public interface IBpmnDocumentImporter
 {
     BpmnImportAnalysis Analyze(string xml, BpmnImportOptions? options = null);
 
     BpmnImportResult Import(string xml, BpmnImportOptions? options = null);
+
+    /// <summary>Analyzes with actual host catalog references; unknown inventory cannot qualify readiness.</summary>
+    Task<BpmnImportAnalysis> AnalyzeAsync(string xml, BpmnImportOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Imports and resolves the binding profile against the visible activity catalog.</summary>
+    Task<BpmnImportResult> ImportAsync(string xml, BpmnImportOptions? options = null, CancellationToken cancellationToken = default);
 }

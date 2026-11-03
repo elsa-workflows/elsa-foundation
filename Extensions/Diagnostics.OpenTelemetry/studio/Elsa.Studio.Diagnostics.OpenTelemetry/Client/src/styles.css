@@ -1,36 +1,23 @@
 .otel-page,
 .otel-panel {
-  --otel-surface: oklch(1 0 0);
-  --otel-surface-subtle: oklch(0.975 0.003 250);
-  --otel-row-hover: color-mix(in srgb, var(--primary) 9%, transparent);
-  --otel-row-selected: color-mix(in srgb, var(--primary) 13%, oklch(1 0 0));
-  --otel-border: oklch(0.9 0.006 250);
-  --otel-input: oklch(0.985 0.003 250);
-  --otel-text: oklch(0.22 0.02 250);
-  --otel-text-muted: oklch(0.49 0.02 250);
-  --otel-accent: var(--primary);
-  --otel-accent-text: color-mix(in srgb, var(--primary) 68%, oklch(0.18 0.02 250));
-  --otel-accent-soft: color-mix(in srgb, var(--primary) 11%, oklch(1 0 0));
-  --otel-success: var(--success);
-  --otel-danger: var(--danger);
+  --otel-surface: var(--studio-surface);
+  --otel-surface-subtle: var(--studio-surface-muted);
+  --otel-row-hover: var(--studio-accent-soft);
+  --otel-row-selected: var(--studio-accent-soft);
+  --otel-border: var(--studio-border);
+  --otel-input: var(--studio-surface);
+  --otel-text: var(--studio-text);
+  --otel-text-muted: var(--studio-text-muted);
+  --otel-accent: var(--studio-accent);
+  --otel-accent-text: var(--studio-accent);
+  --otel-accent-soft: var(--studio-accent-soft);
+  --otel-success: var(--studio-success);
+  --otel-danger: var(--studio-danger);
   height: 100%;
   min-height: 0;
   color: var(--otel-text);
 }
 
-html[data-theme-mode="dark"] .otel-page,
-html[data-theme-mode="dark"] .otel-panel {
-  --otel-surface: var(--card);
-  --otel-surface-subtle: color-mix(in srgb, var(--muted) 72%, var(--card));
-  --otel-row-hover: color-mix(in srgb, var(--primary) 11%, transparent);
-  --otel-row-selected: color-mix(in srgb, var(--primary) 16%, var(--card));
-  --otel-border: var(--border);
-  --otel-input: var(--input);
-  --otel-text: var(--foreground);
-  --otel-text-muted: var(--muted-foreground);
-  --otel-accent-text: color-mix(in srgb, var(--primary) 76%, var(--foreground));
-  --otel-accent-soft: color-mix(in srgb, var(--primary) 13%, var(--card));
-}
 
 .otel-page {
   display: grid;
@@ -43,19 +30,6 @@ html[data-theme-mode="dark"] .otel-panel {
   background: var(--otel-surface);
 }
 
-.otel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid var(--otel-border);
-  border-radius: 6px;
-  background: var(--otel-surface);
-  padding: 12px 14px;
-  box-shadow: var(--shadow-sm);
-}
-
-.otel-header h2,
 .otel-trace-detail-header h3,
 .otel-span-inspector h3,
 .otel-overview h3,
@@ -64,7 +38,6 @@ html[data-theme-mode="dark"] .otel-panel {
   color: var(--otel-text);
 }
 
-.otel-header p,
 .otel-trace-detail-header p,
 .otel-placeholder p,
 .otel-muted {

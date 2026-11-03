@@ -1,0 +1,268 @@
+{
+  "SampleCount": 63473,
+  "SampledBytes": 6954195048,
+  "Types": [
+    {
+      "Key": "System.String",
+      "Value": 3623325424
+    },
+    {
+      "Key": "System.Byte[]",
+      "Value": 817067448
+    },
+    {
+      "Key": "System.Char[]",
+      "Value": 436496528
+    },
+    {
+      "Key": "Entry[System.String,System.String][]",
+      "Value": 171629704
+    },
+    {
+      "Key": "System.Int32[]",
+      "Value": 100970000
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState[]",
+      "Value": 89624552
+    },
+    {
+      "Key": "Node[System.Int32,System.ValueTuple\u00602[System.Nullable\u00601[Microsoft.EntityFrameworkCore.WarningBehavior],System.Nullable\u00601[Microsoft.Extensions.Logging.LogLevel]]]",
+      "Value": 59734112
+    },
+    {
+      "Key": "System.Text.Json.ArgumentState",
+      "Value": 57278816
+    },
+    {
+      "Key": "System.Collections.Generic.Dictionary\u00602[System.String,System.String]",
+      "Value": 51317808
+    },
+    {
+      "Key": "System.Text.Json.ReadStackFrame[]",
+      "Value": 50591640
+    },
+    {
+      "Key": "Entry[System.String,System.Text.Json.Nodes.JsonNode][]",
+      "Value": 50311048
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState",
+      "Value": 44266952
+    },
+    {
+      "Key": "Entry[Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceCacheKey,System.Object][]",
+      "Value": 44257352
+    },
+    {
+      "Key": "\u003C\u003Ec__DisplayClass19_0",
+      "Value": 42833272
+    },
+    {
+      "Key": "System.Int32",
+      "Value": 36839272
+    },
+    {
+      "Key": "Npgsql.NpgsqlParameter",
+      "Value": 26156736
+    },
+    {
+      "Key": "System.Collections.Generic.KeyValuePair\u00602[System.Threading.IAsyncLocal,System.Object][]",
+      "Value": 23521400
+    },
+    {
+      "Key": "System.Func\u00602[Microsoft.Extensions.DependencyInjection.ServiceDescriptor,System.Boolean]",
+      "Value": 22294560
+    },
+    {
+      "Key": "System.Collections.Generic.Dictionary\u00602[System.String,Elsa.Workflows.Runtime.Core.Models.ValueEnvelope]",
+      "Value": 20799888
+    },
+    {
+      "Key": "State[]",
+      "Value": 20704400
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.ActivityExecutionStateEntity",
+      "Value": 20680960
+    },
+    {
+      "Key": "IEnumerableWhereIterator\u00601[Microsoft.Extensions.DependencyInjection.ServiceDescriptor]",
+      "Value": 19939896
+    },
+    {
+      "Key": "System.DateTimeOffset",
+      "Value": 19850840
+    },
+    {
+      "Key": "System.Text.Json.Nodes.JsonValueOfElement",
+      "Value": 19404320
+    },
+    {
+      "Key": "System.String[]",
+      "Value": 18964768
+    }
+  ],
+  "FirstElsaFrame": [
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfActivityExecutionStateStore.ReadCheckedCore(class Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.ActivityExecutionStateEntity,class System.String,class System.String,class System.String,bool)",
+      "Value": 1633251664
+    },
+    {
+      "Key": "\u003Cno Elsa frame\u003E",
+      "Value": 1485594136
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.EfRelationalIdentity.Decode(class System.String)",
+      "Value": 1246115496
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.ActivityExecutionEfSupport.EnsureIdentityProjection(class System.String,class System.String,class System.String,class System.String)",
+      "Value": 252234416
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.WriteCanonical(value class System.Text.Json.JsonElement,class System.Text.Json.Utf8JsonWriter)",
+      "Value": 189223752
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Core.Models.ActivityContract.SortNode(class System.Text.Json.Nodes.JsonNode)",
+      "Value": 142743184
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeStorePageMerger\u002B\u003CMergeAsync\u003Ed__0\u00601[System.__Canon].MoveNext()",
+      "Value": 126650592
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Core.Models.ActivityContract.ComputeFingerprint()",
+      "Value": 99021280
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore\u002B\u003C\u003Ec__DisplayClass12_0\u002B\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext()",
+      "Value": 97905368
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.Compute(class Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit)",
+      "Value": 92521744
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection.RuntimeEfContextRegistration\u002B\u003C\u003Ec__14\u00601[System.__Canon].\u003CAddContext\u003Eb__14_1(class System.IServiceProvider)",
+      "Value": 90555960
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.Coalescing.RuntimeCoalescingDurableValuePageReuseRegistration.CurrentGroupsMatch(class System.Collections.Generic.Dictionary\u00602\u003Cclass System.Type,class Microsoft.Extensions.DependencyInjection.ServiceDescriptor[]\u003E)",
+      "Value": 77318016
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Core.Models.RuntimeModelMetadata.Snapshot(class System.Collections.Generic.IReadOnlyDictionary\u00602\u003Cclass System.String,class System.String\u003E)",
+      "Value": 73920192
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.RuntimeArtifactJson\u002BLosslessUtf16StringConverter.Write(class System.Text.Json.Utf8JsonWriter,class System.String,class System.Text.Json.JsonSerializerOptions)",
+      "Value": 61899432
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointInspectionParticipantStaging.Stage(class Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext,class Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection,class System.String,class System.String,class Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.ActivityExecutionInspectionEntity,class System.String,class Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.ActivityExecutionHierarchyEntity)",
+      "Value": 60887464
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.EfRelationalProviderBinding.UseMigrationsFrom(class Microsoft.EntityFrameworkCore.DbContextOptionsBuilder,class System.String,class System.String,class System.String,class System.Reflection.Assembly,class System.String)",
+      "Value": 58884464
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.RuntimeArtifactJson.Deserialize(class System.String)",
+      "Value": 57675536
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointActivityExecutionParticipantStaging\u002B\u003CStageActivityExecutionsAsync\u003Ed__0.MoveNext()",
+      "Value": 56512048
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfActivityExecutionStateStore\u002B\u003C\u003Ec__DisplayClass14_0.\u003CListAsync\u003Eb__4()",
+      "Value": 46616824
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.Checkpoints.RuntimeCheckpointCommitValidator.ActivityExecutionEnvelopes(class System.String,class Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState)",
+      "Value": 41707056
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.Checkpoints.RuntimeSchedulerPostCommitIntentDispatcher.DeserializeWorkItem(class Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent)",
+      "Value": 40109504
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfActivityExecutionStateStore\u002B\u003C\u003Ec__DisplayClass10_0.\u003CFindAsync\u003Eb__0()",
+      "Value": 35826120
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaWriteGateInterceptor\u002B\u003CCheckAsync\u003Ed__7.MoveNext()",
+      "Value": 34536400
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.EfRelationalProviderBinding.BuildRelationalConfigure(class System.Type,class System.Type,class System.String,class System.Linq.Expressions.ConstantExpression,class System.String)",
+      "Value": 32001712
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfActivityExecutionInspectionStore\u002B\u003C\u003Ec__DisplayClass10_0.\u003CFindAsync\u003Eb__0()",
+      "Value": 28255272
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Services.ActivityAttemptActivationClaimer.PrepareClaim(class System.TimeProvider,class Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem,class Elsa.Workflows.Runtime.Core.Contracts.IActivityCommandPayload,class Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState,value class Elsa.Activities.Runtime.Core.Models.SideEffectProfile,value class Elsa.Workflows.Runtime.Core.Models.ActivityAttemptReason,value class Elsa.Workflows.Runtime.Core.Models.ActivityAttemptReason,class System.String,bool,class Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDelivery)",
+      "Value": 25382464
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.EfRelationalIdentity.CreateOrderKey(class System.String,int32)",
+      "Value": 22389560
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxItems.ValidateContributions(class System.Collections.Generic.IReadOnlyCollection\u00601\u003Cclass Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution\u003E)",
+      "Value": 21867456
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.EfRelationalIdentity.EncodeUtf16CodeUnits(class System.String)",
+      "Value": 18387224
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Services.StructuralParentEvaluationSupport\u002B\u003C\u003Ec__DisplayClass9_0.\u003CCommitDeferredParentActivityAsync\u003Eb__0(class Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem)",
+      "Value": 16660752
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaWriteGateInterceptor.EnsureAdded(class Microsoft.EntityFrameworkCore.DbContextOptionsBuilder)",
+      "Value": 16535480
+    },
+    {
+      "Key": "Elsa.Persistence.EntityFramework.EfSchemaRowContent..ctor(class System.Type,value class System.ReadOnlySpan\u00601\u003Cvalue class System.ValueTuple\u00602\u003Cclass System.String,class System.String\u003E\u003E)",
+      "Value": 15179928
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Extensions.PersistenceModeServiceCollectionExtensions\u002B\u003C\u003Ec__3\u00602[System.__Canon,System.__Canon].\u003CDecorateWithCoalescing\u003Eb__3_2(class System.IServiceProvider)",
+      "Value": 14934712
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Services.WorkflowInvokeActivitySchedulerWorkHandler\u002B\u003CCommitCompletedActivityAsync\u003Ed__18.MoveNext()",
+      "Value": 13749472
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Services.ActivityAttemptActivationClaimer.CompactAttemptHistory(class Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState)",
+      "Value": 13652344
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Extensions.RuntimeCoreServiceCollectionExtensions\u002B\u003C\u003Ec.\u003CAddWorkflowRuntime\u003Eb__0_39(class System.IServiceProvider)",
+      "Value": 13651608
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection.Merge(class Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState,class System.String,value class System.DateTimeOffset,class System.Collections.Generic.IReadOnlyCollection\u00601\u003Cclass System.String\u003E,class System.Collections.Generic.IReadOnlyCollection\u00601\u003Cclass Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBookmarkSummary\u003E,class System.Collections.Generic.IReadOnlyCollection\u00601\u003Cclass Elsa.Workflows.Runtime.Core.Models.ActivityExecutionIncidentSummary\u003E,class System.Collections.Generic.IReadOnlyCollection\u00601\u003Cclass Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionValueSnapshot\u003E,class System.Collections.Generic.IReadOnlyDictionary\u00602\u003Cclass System.String,class System.String\u003E)",
+      "Value": 12166376
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.WorkHandlers.RuntimeCompleteActivityPayloadMemo.Deserialize(class Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem)",
+      "Value": 11518952
+    },
+    {
+      "Key": "Elsa.Workflows.Runtime.Services.Values.RuntimeInputBindingStateProjection.ProjectByMetadataKey(class System.Collections.Generic.IEnumerable\u00601\u003Cclass Elsa.Workflows.Runtime.Core.Models.DurableValueState\u003E,class System.String)",
+      "Value": 10880304
+    },
+    {
+      "Key": "Elsa.Activities.Runtime.Services.SchedulerWorkItems\u002B\u003CNewChildActivityScheduleWorkItems\u003Ed__4.MoveNext()",
+      "Value": 10776912
+    }
+  ]
+}

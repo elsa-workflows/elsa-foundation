@@ -1,6 +1,6 @@
 import { Hammer } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { EmptyState, StudioAlert } from "@elsa-workflows/studio-ui";
+import { EmptyState, StudioAlert, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { isTrusted } from "../extensionBuilderApi";
 import type { BackendManagementUnavailable } from "./contextValue";
 import { ExtensionBuilderProvider, useExtensionBuilder } from "./ExtensionBuilderContext";
@@ -32,13 +32,8 @@ function ExtensionBuilderView() {
     // it as a missing permission (not "backend unavailable", not a login prompt) and does not offer a doomed retry.
     if (managementUnavailable?.kind === "forbidden") {
       return (
-        <section className="extension-builder-page">
-          <div className="extension-builder-header">
-            <div>
-              <h2>Extension Builder</h2>
-              <p>Trusted-team project workspaces, builds, promotion, and runtime recovery.</p>
-            </div>
-          </div>
+        <section className="studio-page extension-builder-page">
+          <StudioPageHeader headingLevel={2} title={<>Extension Builder</>} description={<>Trusted-team project workspaces, builds, promotion, and runtime recovery.</>} />
           <StudioAlert tone="warning">
             {`You do not have permission to use Extension Builder. ${backendManagementUnavailableMessage(managementUnavailable)}`}
           </StudioAlert>
@@ -49,14 +44,8 @@ function ExtensionBuilderView() {
     // ADR 0037: the Studio management bridge reported backend management is not usable. Render an explicit surface
     // that names the real reason and offers a retry, rather than issuing doomed backend requests. No actions render.
     return (
-      <section className="extension-builder-page">
-        <div className="extension-builder-header">
-          <div>
-            <h2>Extension Builder</h2>
-            <p>Trusted-team project workspaces, builds, promotion, and runtime recovery.</p>
-          </div>
-          <button type="button" className="studio-button" onClick={builder.bootstrap}>Retry</button>
-        </div>
+      <section className="studio-page extension-builder-page">
+        <StudioPageHeader headingLevel={2} title={<>Extension Builder</>} description={<>Trusted-team project workspaces, builds, promotion, and runtime recovery.</>} actions={<><StudioButton type="button" className="studio-button" onClick={builder.bootstrap}>Retry</StudioButton></>} />
         <StudioAlert tone="warning">
           {`Extension Builder requires the optional privileged host-management integration. ${backendManagementUnavailableMessage(managementUnavailable)}`}
         </StudioAlert>
@@ -70,13 +59,8 @@ function ExtensionBuilderView() {
 
   if (!isTrusted(capabilities)) {
     return (
-      <section className="extension-builder-page">
-        <div className="extension-builder-header">
-          <div>
-            <h2>Extension Builder</h2>
-            <p>Trusted-team project workspaces, builds, promotion, and runtime recovery.</p>
-          </div>
-        </div>
+      <section className="studio-page extension-builder-page">
+        <StudioPageHeader headingLevel={2} title={<>Extension Builder</>} description={<>Trusted-team project workspaces, builds, promotion, and runtime recovery.</>} />
         <StudioAlert tone="warning">
           You do not have Extension Builder capabilities for this backend. Access is gated by `GetCapabilities`; server enforcement remains authoritative.
         </StudioAlert>
@@ -87,7 +71,7 @@ function ExtensionBuilderView() {
   const stats = buildHomeStats(builder);
 
   return (
-    <section className={inWorkspace ? "extension-builder-page extension-builder-page-workspace" : "extension-builder-page"}>
+    <section className={inWorkspace ? "extension-builder-page extension-builder-page-workspace" : "studio-page extension-builder-page"}>
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 

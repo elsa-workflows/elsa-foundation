@@ -1,0 +1,57 @@
+{
+  "series": "capacity-13waves-r1 + capacity-monitor-r1",
+  "productionLibraries": "63e4c1fc48be2b99505f0c26eb2aae46ff2c5d26",
+  "transfer": "private task storage container, BlockBlob If-None-Match:*, downloaded and verified locally",
+  "archives": [
+    {
+      "host": "runner",
+      "blob": "runner-capacity-monitor-r1-final.tar.xz",
+      "bytes": 145364,
+      "sha256": "c40aec024b5c6b5751a848c4682d132f1afc47869bacc8dd34761a3d73da388d",
+      "files": 8,
+      "status": "passed",
+      "protectedValuesAbsent": true,
+      "localArchiveAndAllFileHashesVerified": true
+    },
+    {
+      "host": "w1",
+      "blob": "w1-capacity-13waves-r1-final.tar.xz",
+      "bytes": 53164,
+      "sha256": "300f24d1c2698758e65a87d6ef16d9b46835c647699902e6ad16bcc906d39968",
+      "files": 70,
+      "status": "passed",
+      "protectedValuesAbsent": true,
+      "localArchiveAndAllFileHashesVerified": true
+    },
+    {
+      "host": "w2",
+      "blob": "w2-capacity-13waves-r1-final.tar.xz",
+      "bytes": 28172,
+      "sha256": "a59acf4ac1c98ba2297c215ab567c49bf57c7998fc742f3916e5c4a3ab748188",
+      "files": 35,
+      "status": "passed",
+      "protectedValuesAbsent": true,
+      "localArchiveAndAllFileHashesVerified": true
+    },
+    {
+      "host": "w3",
+      "blob": "w3-capacity-13waves-r1-final.tar.xz",
+      "bytes": 18084,
+      "sha256": "d53ab1aaac22600fc66e1abebf6e2094d01cb547eb486ac310faf908e0ad0e3a",
+      "files": 20,
+      "status": "passed",
+      "protectedValuesAbsent": true,
+      "localArchiveAndAllFileHashesVerified": true
+    },
+    {
+      "host": "w4",
+      "blob": "w4-capacity-13waves-r1-final.tar.xz",
+      "bytes": 18156,
+      "sha256": "1b392e8b4bf6cedf914b160b7a07731ecbf978f168db00cfb96a96e9a94af96d",
+      "files": 20,
+      "status": "passed",
+      "protectedValuesAbsent": true,
+      "localArchiveAndAllFileHashesVerified": true
+    }
+  ]
+}

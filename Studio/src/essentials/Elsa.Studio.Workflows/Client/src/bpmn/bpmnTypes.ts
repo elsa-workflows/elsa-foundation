@@ -1,6 +1,6 @@
 // Client-side mirror of the `elsa.bpmn.structure` v1.0.0 payload (see the Elsa.Activities.Bpmn module
 // in elsa-foundation, spec 108). Gateways and events are engine-interpreted structure elements; only
-// task-family and subProcess elements bind an Elsa child activity through `childNodeId`.
+// tasks, subprocesses and decision gateways bind an Elsa child through `childNodeId`.
 
 export const bpmnStructureKind = "elsa.bpmn.structure";
 
@@ -77,6 +77,14 @@ export function isGatewayElementType(elementType: string) {
     || elementType === bpmnElementTypes.inclusiveGateway;
 }
 
+export function isDecisionGatewayType(elementType: string) {
+  return elementType === bpmnElementTypes.exclusiveGateway || elementType === bpmnElementTypes.inclusiveGateway;
+}
+
+export function isBpmnDecisionType(activityTypeKey: string | undefined) {
+  return activityTypeKey === "Elsa.Activities.Bpmn.Activities.BpmnDecision";
+}
+
 export function isTerminateEndEvent(element: BpmnElement) {
   return element.elementType === bpmnElementTypes.endEvent
     && (element.eventDefinitions ?? []).some(definition => definition.type === "terminate");
@@ -88,6 +96,8 @@ export interface BpmnShapeDescriptor {
   label: string;
   elementType: string;
   eventDefinitions?: BpmnEventDefinition[];
+  name?: string;
+  properties?: Record<string, string>;
 }
 
 export const bpmnShapePalette: BpmnShapeDescriptor[] = [

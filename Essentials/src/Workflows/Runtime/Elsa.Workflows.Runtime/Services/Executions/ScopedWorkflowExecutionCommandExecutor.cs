@@ -31,6 +31,8 @@ internal sealed class ScopedWorkflowExecutionCommandExecutor(IPersistenceOperati
         await using var scope = await scopeFactory.CreateAsync(
             new PersistenceScope(envelope.Partition.Value),
             cancellationToken);
+        if (scope.ServiceProvider.GetService<RuntimeExecutionProtocolRouter>() is { } protocols)
+            return await protocols.ProcessAsync(envelope, options, cancellationToken);
         var executor = scope.ServiceProvider.GetRequiredService<WorkflowSchedulerCommandRouter>();
         return await executor.ProcessAsync(envelope, options, cancellationToken);
     }

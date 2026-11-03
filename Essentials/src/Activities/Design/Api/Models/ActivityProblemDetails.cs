@@ -11,7 +11,8 @@ public static class ActivityProblemDetails
 {
     public static ActivityProblemDetailsView From(ActivityAuthoringException exception, HttpContext context)
     {
-        if (exception.StatusCode >= StatusCodes.Status500InternalServerError)
+        if (exception.StatusCode >= StatusCodes.Status500InternalServerError &&
+            !(exception.StatusCode == StatusCodes.Status503ServiceUnavailable && exception.ErrorCode == "activity.dependency.unavailable"))
             return Unexpected(context);
 
         return new(

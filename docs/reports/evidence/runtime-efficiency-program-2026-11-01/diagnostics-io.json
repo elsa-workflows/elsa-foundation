@@ -1,0 +1,1294 @@
+{
+  "note": "UTC-aligned one-second iostat intervals; first lifetime report excluded. Device values are arithmetic means, not operation-weighted latency. Sampled waits are observations, not durations.",
+  "windows": [
+    {
+      "case": "diag-durable-on-same-r1",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 1,
+      "rate": 2.75,
+      "samples": 60,
+      "meanCpuIowaitPercent": 7.2,
+      "devices": {
+        "sda": {
+          "w/s": 236.183,
+          "wkB/s": 5891.667,
+          "w_await": 19.418,
+          "f/s": 74.233,
+          "f_await": 0.222,
+          "aqu-sz": 5.133,
+          "%util": 47.21
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 50,
+        "IO:WALSync:active": 4,
+        "Client:ClientRead:idle in transaction": 2,
+        "CPU/none:-:active": 1,
+        "CPU/none:-:idle": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-same-r1",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 2,
+      "rate": 4.367,
+      "samples": 60,
+      "meanCpuIowaitPercent": 11.916,
+      "devices": {
+        "sda": {
+          "w/s": 393.967,
+          "wkB/s": 9054.0,
+          "w_await": 47.662,
+          "f/s": 108.383,
+          "f_await": 0.328,
+          "aqu-sz": 20.517,
+          "%util": 70.55
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 51,
+        "CPU/none:-:active": 5,
+        "IO:WALWrite:idle in transaction": 1,
+        "IO:WALSync:active": 6,
+        "LWLock:WALWrite:active": 4
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-same-r1",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 4,
+      "rate": 5.217,
+      "samples": 61,
+      "meanCpuIowaitPercent": 18.201,
+      "devices": {
+        "sda": {
+          "w/s": 530.993,
+          "wkB/s": 10837.221,
+          "w_await": 135.303,
+          "f/s": 104.023,
+          "f_await": 1.202,
+          "aqu-sz": 72.082,
+          "%util": 85.242
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 45,
+        "IO:WALSync:active": 10,
+        "LWLock:WALWrite:active": 15,
+        "CPU/none:-:active": 2,
+        "CPU/none:-:idle": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-same-r1",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 8,
+      "rate": 5.3,
+      "samples": 61,
+      "meanCpuIowaitPercent": 27.946,
+      "devices": {
+        "sda": {
+          "w/s": 627.493,
+          "wkB/s": 12891.299,
+          "w_await": 199.857,
+          "f/s": 109.15,
+          "f_await": 0.757,
+          "aqu-sz": 122.332,
+          "%util": 92.866
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 56,
+        "IO:WALSync:active": 7,
+        "Client:ClientRead:idle in transaction": 3,
+        "LWLock:WALWrite:active": 44,
+        "CPU/none:-:active": 3,
+        "IO:WALInitSync:active": 1,
+        "CPU/none:-:idle": 1,
+        "IO:WALWrite:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-off-same-r1",
+      "mode": "Durable",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 1,
+      "rate": 2.933,
+      "samples": 60,
+      "meanCpuIowaitPercent": 4.782,
+      "devices": {
+        "sda": {
+          "w/s": 197.93,
+          "wkB/s": 3752.461,
+          "w_await": 7.319,
+          "f/s": 71.911,
+          "f_await": 0.191,
+          "aqu-sz": 1.563,
+          "%util": 39.626
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 52,
+        "Client:ClientRead:idle in transaction": 2,
+        "CPU/none:-:active": 3,
+        "IO:WALInitSync:active": 1,
+        "CPU/none:-:idle": 1,
+        "IO:WALSync:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-off-same-r1",
+      "mode": "Durable",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 2,
+      "rate": 5.5,
+      "samples": 60,
+      "meanCpuIowaitPercent": 7.773,
+      "devices": {
+        "sda": {
+          "w/s": 315.05,
+          "wkB/s": 5895.267,
+          "w_await": 6.145,
+          "f/s": 128.25,
+          "f_await": 0.205,
+          "aqu-sz": 2.042,
+          "%util": 61.088
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 57,
+        "Client:ClientRead:idle in transaction": 3,
+        "IO:WALSync:active": 3,
+        "CPU/none:-:active": 7,
+        "CPU/none:-:idle": 1,
+        "Client:ClientRead:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-off-same-r1",
+      "mode": "Durable",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 4,
+      "rate": 9.067,
+      "samples": 60,
+      "meanCpuIowaitPercent": 10.341,
+      "devices": {
+        "sda": {
+          "w/s": 503.367,
+          "wkB/s": 9114.267,
+          "w_await": 10.882,
+          "f/s": 164.0,
+          "f_await": 0.27,
+          "aqu-sz": 5.65,
+          "%util": 79.597
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 54,
+        "IO:WALSync:active": 10,
+        "LWLock:WALWrite:active": 10,
+        "CPU/none:-:active": 4,
+        "LWLock:WALWrite:idle in transaction": 1,
+        "IO:DataFileExtend:active": 2,
+        "Client:ClientRead:active": 1,
+        "Client:ClientRead:idle in transaction": 2
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-off-same-r1",
+      "mode": "Durable",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 8,
+      "rate": 11.033,
+      "samples": 61,
+      "meanCpuIowaitPercent": 13.974,
+      "devices": {
+        "sda": {
+          "w/s": 584.569,
+          "wkB/s": 11534.042,
+          "w_await": 30.059,
+          "f/s": 136.541,
+          "f_await": 0.396,
+          "aqu-sz": 17.831,
+          "%util": 87.737
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 64,
+        "Client:ClientRead:idle in transaction": 8,
+        "CPU/none:-:active": 8,
+        "IO:WALSync:active": 7,
+        "IO:DataFileExtend:active": 2,
+        "IO:DataFileRead:active": 1,
+        "IO:WALWrite:active": 2,
+        "LWLock:WALWrite:active": 21,
+        "CPU/none:-:idle": 1,
+        "Client:ClientRead:active": 1,
+        "Timeout:VacuumDelay:active": 2,
+        "IO:WALInitSync:active": 1,
+        "CPU/none:-:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-off-same-r1",
+      "mode": "Durable",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 16,
+      "rate": 11.35,
+      "samples": 61,
+      "meanCpuIowaitPercent": 18.766,
+      "devices": {
+        "sda": {
+          "w/s": 613.184,
+          "wkB/s": 13876.327,
+          "w_await": 66.395,
+          "f/s": 101.429,
+          "f_await": 1.805,
+          "aqu-sz": 41.005,
+          "%util": 89.828
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 136,
+        "CPU/none:-:active": 6,
+        "LWLock:WALWrite:active": 71,
+        "IO:WALInitSync:active": 1,
+        "IO:WALSync:active": 7,
+        "Client:ClientRead:idle in transaction": 9,
+        "IO:WALWrite:active": 1,
+        "Timeout:VacuumDelay:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-separate-r2",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 1,
+      "rate": 2.967,
+      "samples": 61,
+      "meanCpuIowaitPercent": 4.65,
+      "devices": {
+        "sda": {
+          "w/s": 177.393,
+          "wkB/s": 2760.349,
+          "w_await": 4.375,
+          "f/s": 72.154,
+          "f_await": 0.185,
+          "aqu-sz": 0.887,
+          "%util": 37.973
+        },
+        "sdb": {
+          "w/s": 82.031,
+          "wkB/s": 2804.789,
+          "w_await": 0.39,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.044,
+          "%util": 0.45
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 51,
+        "Client:ClientRead:active": 1,
+        "IO:WALSync:active": 4,
+        "CPU/none:-:active": 1,
+        "Client:ClientRead:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-separate-r2",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 2,
+      "rate": 5.667,
+      "samples": 60,
+      "meanCpuIowaitPercent": 8.072,
+      "devices": {
+        "sda": {
+          "w/s": 314.136,
+          "wkB/s": 4672.323,
+          "w_await": 6.163,
+          "f/s": 129.21,
+          "f_await": 0.21,
+          "aqu-sz": 2.023,
+          "%util": 60.697
+        },
+        "sdb": {
+          "w/s": 222.426,
+          "wkB/s": 5418.586,
+          "w_await": 0.766,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.194,
+          "%util": 0.916
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 44,
+        "CPU/none:-:idle in transaction": 1,
+        "IO:WALSync:active": 6,
+        "CPU/none:-:active": 6,
+        "CPU/none:-:idle": 1,
+        "Client:ClientRead:idle in transaction": 3
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-separate-r2",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 4,
+      "rate": 9.0,
+      "samples": 61,
+      "meanCpuIowaitPercent": 10.528,
+      "devices": {
+        "sda": {
+          "w/s": 485.89,
+          "wkB/s": 8142.285,
+          "w_await": 11.37,
+          "f/s": 162.463,
+          "f_await": 0.257,
+          "aqu-sz": 5.762,
+          "%util": 78.879
+        },
+        "sdb": {
+          "w/s": 592.001,
+          "wkB/s": 9980.212,
+          "w_await": 1.49,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.894,
+          "%util": 3.573
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 53,
+        "CPU/none:-:active": 3,
+        "IO:WALSync:active": 8,
+        "LWLock:WALWrite:active": 6,
+        "Client:ClientRead:idle in transaction": 2,
+        "Timeout:VacuumDelay:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-separate-r2",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 8,
+      "rate": 10.6,
+      "samples": 61,
+      "meanCpuIowaitPercent": 14.842,
+      "devices": {
+        "sda": {
+          "w/s": 587.296,
+          "wkB/s": 10434.119,
+          "w_await": 33.913,
+          "f/s": 135.34,
+          "f_await": 0.354,
+          "aqu-sz": 20.222,
+          "%util": 87.563
+        },
+        "sdb": {
+          "w/s": 843.586,
+          "wkB/s": 11910.764,
+          "w_await": 3.081,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 2.577,
+          "%util": 6.465
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 49,
+        "LWLock:WALWrite:active": 38,
+        "IO:WALSync:active": 10,
+        "Client:ClientRead:idle in transaction": 5,
+        "CPU/none:-:active": 5,
+        "Timeout:VacuumDelay:active": 1,
+        "IO:DataFileWrite:active": 1,
+        "IO:WALWrite:active": 1,
+        "IO:DataFileRead:active": 1,
+        "CPU/none:-:idle in transaction": 1,
+        "Client:ClientRead:active": 1,
+        "CPU/none:-:idle": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-separate-r2",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 16,
+      "rate": 12.017,
+      "samples": 61,
+      "meanCpuIowaitPercent": 18.948,
+      "devices": {
+        "sda": {
+          "w/s": 623.279,
+          "wkB/s": 13456.131,
+          "w_await": 53.34,
+          "f/s": 121.508,
+          "f_await": 0.523,
+          "aqu-sz": 33.15,
+          "%util": 88.052
+        },
+        "sdb": {
+          "w/s": 1150.098,
+          "wkB/s": 14415.475,
+          "w_await": 6.762,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 4.316,
+          "%util": 12.903
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 96,
+        "Client:ClientRead:idle in transaction": 11,
+        "CPU/none:-:idle": 3,
+        "IO:WALSync:active": 9,
+        "LWLock:WALWrite:active": 76,
+        "Timeout:VacuumDelay:active": 2,
+        "CPU/none:-:active": 5,
+        "Client:ClientRead:active": 1,
+        "IO:DataFileWrite:active": 1,
+        "IO:DataFileExtend:active": 3,
+        "CPU/none:-:idle in transaction": 1,
+        "IO:WALWrite:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-durable-on-separate-r2",
+      "mode": "Durable",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 32,
+      "rate": 12.733,
+      "samples": 66,
+      "meanCpuIowaitPercent": 19.981,
+      "devices": {
+        "sda": {
+          "w/s": 593.516,
+          "wkB/s": 14419.142,
+          "w_await": 71.63,
+          "f/s": 75.264,
+          "f_await": 1.414,
+          "aqu-sz": 43.248,
+          "%util": 88.872
+        },
+        "sdb": {
+          "w/s": 1376.307,
+          "wkB/s": 15544.821,
+          "w_await": 5.079,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 4.972,
+          "%util": 13.306
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 233,
+        "Client:ClientRead:idle in transaction": 27,
+        "LWLock:WALWrite:active": 184,
+        "IO:WALSync:active": 10,
+        "IO:DataFileExtend:active": 10,
+        "CPU/none:-:idle": 1,
+        "IO:DataFileRead:active": 1,
+        "Lock:extend:active": 4,
+        "IO:DataFileWrite:active": 1,
+        "IO:WALInitSync:active": 1
+      },
+      "ungrantedLocksMax": 3
+    },
+    {
+      "case": "diag-balanced-off-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 1,
+      "rate": 4.767,
+      "samples": 60,
+      "meanCpuIowaitPercent": 4.529,
+      "devices": {
+        "sda": {
+          "w/s": 163.033,
+          "wkB/s": 2673.533,
+          "w_await": 4.858,
+          "f/s": 64.083,
+          "f_await": 0.368,
+          "aqu-sz": 0.891,
+          "%util": 37.192
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 53,
+        "IO:WALSync:active": 3,
+        "CPU/none:-:active": 4,
+        "CPU/none:-:idle in transaction": 1,
+        "Client:ClientRead:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-off-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 2,
+      "rate": 9.167,
+      "samples": 60,
+      "meanCpuIowaitPercent": 7.175,
+      "devices": {
+        "sda": {
+          "w/s": 272.033,
+          "wkB/s": 4165.073,
+          "w_await": 5.482,
+          "f/s": 111.377,
+          "f_await": 0.212,
+          "aqu-sz": 1.644,
+          "%util": 56.25
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 62,
+        "Client:ClientRead:idle in transaction": 4,
+        "CPU/none:-:idle in transaction": 1,
+        "IO:WALSync:active": 4,
+        "LWLock:WALWrite:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-off-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 4,
+      "rate": 15.167,
+      "samples": 60,
+      "meanCpuIowaitPercent": 10.734,
+      "devices": {
+        "sda": {
+          "w/s": 468.156,
+          "wkB/s": 8329.83,
+          "w_await": 12.246,
+          "f/s": 158.175,
+          "f_await": 0.281,
+          "aqu-sz": 6.484,
+          "%util": 76.889
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 51,
+        "Client:ClientRead:idle in transaction": 2,
+        "IO:WALSync:active": 6,
+        "LWLock:WALWrite:active": 7,
+        "CPU/none:-:active": 8,
+        "Client:ClientRead:active": 2,
+        "CPU/none:-:idle in transaction": 1,
+        "CPU/none:-:idle": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-off-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 8,
+      "rate": 18.9,
+      "samples": 60,
+      "meanCpuIowaitPercent": 13.82,
+      "devices": {
+        "sda": {
+          "w/s": 578.916,
+          "wkB/s": 9757.626,
+          "w_await": 24.079,
+          "f/s": 173.154,
+          "f_await": 0.364,
+          "aqu-sz": 14.355,
+          "%util": 84.972
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 64,
+        "CPU/none:-:active": 8,
+        "LWLock:WALWrite:active": 18,
+        "IO:WALSync:active": 8,
+        "Client:ClientRead:active": 3,
+        "IO:DataFileRead:active": 1,
+        "CPU/none:-:idle in transaction": 1,
+        "Client:ClientRead:idle in transaction": 2,
+        "CPU/none:-:idle": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-off-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 16,
+      "rate": 22.817,
+      "samples": 63,
+      "meanCpuIowaitPercent": 15.475,
+      "devices": {
+        "sda": {
+          "w/s": 586.024,
+          "wkB/s": 12699.133,
+          "w_await": 37.57,
+          "f/s": 143.917,
+          "f_await": 1.241,
+          "aqu-sz": 22.456,
+          "%util": 86.647
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 154,
+        "LWLock:WALWrite:active": 42,
+        "CPU/none:-:active": 9,
+        "CPU/none:-:idle": 2,
+        "IO:WALSync:active": 10,
+        "Client:ClientRead:active": 2,
+        "CPU/none:-:idle in transaction": 1,
+        "IO:WALWrite:active": 1,
+        "Client:ClientRead:idle in transaction": 1,
+        "Timeout:VacuumDelay:active": 2
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-off-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "Off",
+      "placement": "same-device",
+      "clients": 32,
+      "rate": 22.95,
+      "samples": 62,
+      "meanCpuIowaitPercent": 16.99,
+      "devices": {
+        "sda": {
+          "w/s": 590.732,
+          "wkB/s": 12116.729,
+          "w_await": 50.459,
+          "f/s": 124.232,
+          "f_await": 1.06,
+          "aqu-sz": 31.422,
+          "%util": 85.503
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 316,
+        "Client:ClientRead:idle in transaction": 7,
+        "LWLock:WALWrite:active": 66,
+        "Client:ClientRead:active": 3,
+        "IO:WALSync:active": 11,
+        "CPU/none:-:active": 7,
+        "CPU/none:-:idle": 3,
+        "CPU/none:-:idle in transaction": 2,
+        "Timeout:VacuumDelay:active": 3,
+        "IO:DataFileExtend:active": 1
+      },
+      "ungrantedLocksMax": 1
+    },
+    {
+      "case": "diag-balanced-on-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 1,
+      "rate": 4.25,
+      "samples": 60,
+      "meanCpuIowaitPercent": 8.153,
+      "devices": {
+        "sda": {
+          "w/s": 249.467,
+          "wkB/s": 6218.6,
+          "w_await": 32.24,
+          "f/s": 64.833,
+          "f_await": 0.297,
+          "aqu-sz": 9.539,
+          "%util": 49.42
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 49,
+        "Client:ClientRead:idle in transaction": 3,
+        "IO:WALSync:active": 2,
+        "CPU/none:-:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 2,
+      "rate": 5.9,
+      "samples": 60,
+      "meanCpuIowaitPercent": 14.442,
+      "devices": {
+        "sda": {
+          "w/s": 405.144,
+          "wkB/s": 7994.685,
+          "w_await": 103.085,
+          "f/s": 82.317,
+          "f_await": 0.476,
+          "aqu-sz": 44.767,
+          "%util": 72.051
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 51,
+        "CPU/none:-:active": 1,
+        "Client:ClientRead:idle in transaction": 3,
+        "IO:WALSync:active": 4,
+        "LWLock:WALWrite:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 4,
+      "rate": 6.283,
+      "samples": 60,
+      "meanCpuIowaitPercent": 24.212,
+      "devices": {
+        "sda": {
+          "w/s": 540.382,
+          "wkB/s": 9475.588,
+          "w_await": 202.099,
+          "f/s": 75.59,
+          "f_await": 0.667,
+          "aqu-sz": 110.969,
+          "%util": 87.284
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 62,
+        "LWLock:WALWrite:active": 19,
+        "IO:WALSync:active": 10,
+        "CPU/none:-:idle in transaction": 1,
+        "CPU/none:-:active": 1,
+        "Client:ClientRead:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 8,
+      "rate": 6.783,
+      "samples": 62,
+      "meanCpuIowaitPercent": 29.786,
+      "devices": {
+        "sda": {
+          "w/s": 588.177,
+          "wkB/s": 10090.903,
+          "w_await": 243.542,
+          "f/s": 61.419,
+          "f_await": 1.064,
+          "aqu-sz": 144.275,
+          "%util": 92.613
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 60,
+        "CPU/none:-:idle": 2,
+        "LWLock:WALWrite:active": 37,
+        "IO:WALSync:active": 9,
+        "IO:WALWrite:active": 2,
+        "CPU/none:-:active": 5,
+        "Client:ClientRead:idle in transaction": 2,
+        "CPU/none:-:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-same-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "same-device",
+      "clients": 16,
+      "rate": 6.717,
+      "samples": 63,
+      "meanCpuIowaitPercent": 31.97,
+      "devices": {
+        "sda": {
+          "w/s": 596.477,
+          "wkB/s": 9760.63,
+          "w_await": 248.584,
+          "f/s": 46.663,
+          "f_await": 1.149,
+          "aqu-sz": 148.41,
+          "%util": 93.566
+        },
+        "sdb": {
+          "w/s": 0.0,
+          "wkB/s": 0.0,
+          "w_await": 0.0,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.0,
+          "%util": 0.0
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 134,
+        "LWLock:WALWrite:active": 47,
+        "IO:WALSync:active": 11,
+        "CPU/none:-:idle": 2,
+        "Client:ClientRead:active": 2,
+        "Client:ClientRead:idle in transaction": 9,
+        "CPU/none:-:active": 4
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-separate-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 1,
+      "rate": 4.883,
+      "samples": 60,
+      "meanCpuIowaitPercent": 4.505,
+      "devices": {
+        "sda": {
+          "w/s": 169.133,
+          "wkB/s": 2997.2,
+          "w_await": 4.416,
+          "f/s": 65.233,
+          "f_await": 0.224,
+          "aqu-sz": 0.823,
+          "%util": 36.94
+        },
+        "sdb": {
+          "w/s": 131.8,
+          "wkB/s": 4187.533,
+          "w_await": 0.485,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.086,
+          "%util": 0.633
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 51,
+        "IO:WALSync:active": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-separate-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 2,
+      "rate": 9.183,
+      "samples": 61,
+      "meanCpuIowaitPercent": 7.142,
+      "devices": {
+        "sda": {
+          "w/s": 280.416,
+          "wkB/s": 4664.517,
+          "w_await": 4.737,
+          "f/s": 111.818,
+          "f_await": 0.205,
+          "aqu-sz": 1.406,
+          "%util": 56.28
+        },
+        "sdb": {
+          "w/s": 449.311,
+          "wkB/s": 8759.905,
+          "w_await": 1.23,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 0.586,
+          "%util": 1.337
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 49,
+        "Client:ClientRead:active": 1,
+        "CPU/none:-:active": 6,
+        "IO:WALSync:active": 3,
+        "CPU/none:-:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-separate-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 4,
+      "rate": 14.817,
+      "samples": 60,
+      "meanCpuIowaitPercent": 10.025,
+      "devices": {
+        "sda": {
+          "w/s": 456.317,
+          "wkB/s": 8144.067,
+          "w_await": 9.389,
+          "f/s": 155.367,
+          "f_await": 0.273,
+          "aqu-sz": 4.43,
+          "%util": 74.895
+        },
+        "sdb": {
+          "w/s": 994.35,
+          "wkB/s": 14547.733,
+          "w_await": 2.225,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 2.258,
+          "%util": 3.278
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 66,
+        "LWLock:WALWrite:active": 7,
+        "CPU/none:-:active": 5,
+        "IO:WALSync:active": 4,
+        "Client:ClientRead:idle in transaction": 1
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-separate-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 8,
+      "rate": 19.483,
+      "samples": 60,
+      "meanCpuIowaitPercent": 13.647,
+      "devices": {
+        "sda": {
+          "w/s": 581.559,
+          "wkB/s": 10715.602,
+          "w_await": 23.261,
+          "f/s": 171.941,
+          "f_await": 0.338,
+          "aqu-sz": 13.887,
+          "%util": 84.121
+        },
+        "sdb": {
+          "w/s": 1545.509,
+          "wkB/s": 19606.218,
+          "w_await": 3.529,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 5.072,
+          "%util": 6.568
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 60,
+        "Client:ClientRead:idle in transaction": 6,
+        "Client:ClientRead:active": 1,
+        "IO:WALSync:active": 9,
+        "CPU/none:-:active": 10,
+        "LWLock:WALWrite:active": 18,
+        "Timeout:VacuumDelay:active": 1,
+        "CPU/none:-:idle": 2
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-separate-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 16,
+      "rate": 22.617,
+      "samples": 61,
+      "meanCpuIowaitPercent": 14.341,
+      "devices": {
+        "sda": {
+          "w/s": 585.322,
+          "wkB/s": 12489.337,
+          "w_await": 32.841,
+          "f/s": 146.907,
+          "f_await": 0.391,
+          "aqu-sz": 19.714,
+          "%util": 85.164
+        },
+        "sdb": {
+          "w/s": 2061.349,
+          "wkB/s": 23935.598,
+          "w_await": 3.937,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 7.489,
+          "%util": 9.525
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 142,
+        "Client:ClientRead:active": 1,
+        "IO:WALSync:active": 8,
+        "Client:ClientRead:idle in transaction": 3,
+        "CPU/none:-:active": 5,
+        "CPU/none:-:idle": 3,
+        "LWLock:WALWrite:active": 30,
+        "IO:DataFileExtend:active": 1,
+        "IO:WALWrite:active": 1,
+        "Timeout:VacuumDelay:active": 2
+      },
+      "ungrantedLocksMax": 0
+    },
+    {
+      "case": "diag-balanced-on-separate-r2",
+      "mode": "Balanced",
+      "diagnostics": "On",
+      "placement": "separate-device",
+      "clients": 32,
+      "rate": 22.417,
+      "samples": 61,
+      "meanCpuIowaitPercent": 16.537,
+      "devices": {
+        "sda": {
+          "w/s": 588.307,
+          "wkB/s": 12742.64,
+          "w_await": 44.09,
+          "f/s": 121.637,
+          "f_await": 2.722,
+          "aqu-sz": 27.303,
+          "%util": 85.58
+        },
+        "sdb": {
+          "w/s": 2412.278,
+          "wkB/s": 25627.939,
+          "w_await": 5.167,
+          "f/s": 0.0,
+          "f_await": 0.0,
+          "aqu-sz": 9.23,
+          "%util": 16.325
+        }
+      },
+      "postgresObservedWaitSamples": {
+        "Client:ClientRead:idle": 290,
+        "Client:ClientRead:idle in transaction": 14,
+        "CPU/none:-:active": 8,
+        "IO:WALSync:active": 9,
+        "LWLock:WALWrite:active": 47,
+        "Lock:extend:active": 2,
+        "IO:DataFileWrite:active": 1,
+        "IO:DataFileExtend:active": 1,
+        "IO:DataFileRead:active": 1,
+        "CPU/none:-:idle": 1,
+        "IO:WALWrite:active": 1
+      },
+      "ungrantedLocksMax": 2
+    }
+  ]
+}

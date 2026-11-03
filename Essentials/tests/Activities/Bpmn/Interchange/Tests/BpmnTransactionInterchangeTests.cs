@@ -19,7 +19,7 @@ public sealed class BpmnTransactionInterchangeTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     private const string TransactionDocument = """
@@ -76,7 +76,7 @@ public sealed class BpmnTransactionInterchangeTests
         Assert.True(nested.Elements.Single(element => element.ElementId == "thandler").IsForCompensation);
 
         // The imported outer graph is validate-representable (transaction element + cancel boundary).
-        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var graph = BpmnGraphAdapter.Build(BridgeToExecutableNode(structure));
         Assert.NotNull(graph.AttachedCancelBoundary("txn"));
     }
 
@@ -99,7 +99,7 @@ public sealed class BpmnTransactionInterchangeTests
         Assert.Equal(BpmnEventDefinitionTypes.Cancel, reNested.Elements.Single(element => element.ElementId == "tcancel").EventDefinitions.Single().Type);
 
         // The round-tripped structure still validates.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class BpmnTransactionInterchangeTests
         Assert.Empty(structure.Elements.Single(element => element.ElementId == "e").EventDefinitions);
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Degraded && issue.ElementId == "e" && issue.Message.Contains("not inside a transaction", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed class BpmnTransactionInterchangeTests
         Assert.DoesNotContain(structure.SequenceFlows, flow => flow.FlowId == "f3"); // flow cascade-dropped
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "cb" && issue.Message.Contains("not a transaction", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class BpmnTransactionInterchangeTests
         Assert.Single(structure.Elements, element => element.ElementId is "cb1" or "cb2");
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "cb2" && issue.Message.Contains("at most one", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     private static ExecutableNode BridgeToExecutableNode(BpmnAuthoredStructure structure)

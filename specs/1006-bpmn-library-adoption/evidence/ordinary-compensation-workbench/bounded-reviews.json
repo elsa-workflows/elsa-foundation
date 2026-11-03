@@ -1,0 +1,26 @@
+{
+  "sourceParentCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "scope": "Bounded ordinary-compensation/legacy-active-compensation source and artifact audit, combined with existing actual escalation; not full-PR approval.",
+  "reviews": [
+    {
+      "lens": "correctness",
+      "agent": "/root/round4_correctness",
+      "actionableFindings": [],
+      "supportsT029Closure": true
+    },
+    {
+      "lens": "standards",
+      "agent": "/root/round4_standards",
+      "actionableFindings": [],
+      "supportsT029Closure": true
+    },
+    {
+      "lens": "acceptance",
+      "agent": "/root/round4_acceptance",
+      "actionableFindings": [],
+      "supportsT029Closure": true
+    }
+  ],
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6
+}

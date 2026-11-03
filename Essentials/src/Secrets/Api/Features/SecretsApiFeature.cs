@@ -1,3 +1,6 @@
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Models;
 using Elsa.Api.AspNetCore;
 using CShells.AspNetCore.Features;
 using CShells.Features;
@@ -20,13 +23,18 @@ namespace Elsa.Secrets.Api.Features;
 [ShellFeature(
     name: "SecretsApi",
     DisplayName = "Secrets API",
-    Description = "Provides HTTP endpoints for managing and resolving secret metadata."
+    Description = "Provides HTTP endpoints for managing and resolving secret metadata.",
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
 )]
 public class SecretsApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.api.secrets", 1,
+            [new("secrets", "secrets"), new("secret-picker", "secrets/picker")],
+            "SecretsApi"));
         services.AddSecrets();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddPermissionContributor<SecretsPermissionContributor>();

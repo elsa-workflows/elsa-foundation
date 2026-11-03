@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// Proves a fault plus its ordered parent notifications survives EF persistence as one outcome and that a lost outbox
 /// acknowledgement cannot invoke the parent callback twice after a provider restart.
 /// </summary>
-public sealed class CombinedChildOutcomeEfTests : IDisposable
+public sealed partial class CombinedChildOutcomeEfTests : IDisposable
 {
     private const string RecoverySigningKey = "ef-combined-outcome-recovery-signing-key-32";
     private const string HierarchySigningKey = "ef-combined-outcome-hierarchy-signing-key-32";
@@ -262,10 +262,17 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
     private async Task<WorkflowExecutionHarness> StartGenerationAsync(
         IEnumerable<string> activityExecutionIds,
         bool failFirstCombinedOutcome = false,
-        CombinedOutcomeRetryClaimBarrier? claimBarrier = null)
+        CombinedOutcomeRetryClaimBarrier? claimBarrier = null,
+        bool bpmn = false,
+        BpmnCombinedOutcomeAckCut? ackCut = null)
     {
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
+            .WithFeature(services =>
+            {
+                if (bpmn)
+                    new Elsa.Activities.Bpmn.ActivitiesBpmnFeature().ConfigureServices(services);
+            })
             .ConfigureServices(services =>
             {
                 services.AddLogging();
@@ -274,9 +281,19 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
                 services.AddSingleton<IRuntimeSecretResolver, CombinedOutcomeSecretResolver>();
                 services.AddSingleton(_outboxProbe);
                 services.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitIntentDispatcher>(provider =>
-                    new FailFirstCombinedOutcomeDispatcher(
+                {
+                    IRuntimePostCommitIntentDispatcher dispatcher = new FailFirstCombinedOutcomeDispatcher(
                         ActivatorUtilities.CreateInstance<RuntimePostCommitIntentDispatcher>(provider),
-                        provider.GetRequiredService<CombinedOutcomeOutboxProbe>())));
+                        provider.GetRequiredService<CombinedOutcomeOutboxProbe>());
+                    return ackCut is null ? dispatcher : new BpmnCombinedOutcomeAckCutDispatcher(dispatcher, ackCut);
+                }));
+                if (bpmn)
+                {
+                    var original = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(Elsa.Activities.Bpmn.Contracts.IBpmnProcessRuntime));
+                    services.Remove(original);
+                    services.AddScoped<Elsa.Activities.Bpmn.Contracts.IBpmnProcessRuntime>(provider => new ObservedBpmnCombinedOutcomeRuntime(
+                        (Elsa.Activities.Bpmn.Contracts.IBpmnProcessRuntime)ActivatorUtilities.CreateInstance(provider, original.ImplementationType!), _observation));
+                }
                 services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite",

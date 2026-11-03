@@ -1,0 +1,12 @@
+[
+  {
+    "status": 200,
+    "hasAccessToken": true,
+    "crossOrigin": false
+  },
+  {
+    "status": 200,
+    "hasAccessToken": true,
+    "crossOrigin": true
+  }
+]

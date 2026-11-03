@@ -1,0 +1,128 @@
+# Specialist EF turn journal
+
+`Elsa.Agent.Specialists.Persistence.EntityFrameworkCore` implements the specialist conditional turn
+journal. The package carries EF Core and Relational APIs; the host supplies its selected engine.
+Enable shell feature `SpecialistsEntityFrameworkCore`, or register directly:
+
+```csharp
+services.AddSpecialistsEntityFrameworkCore(new()
+{
+    Provider = "Sqlite",
+    ConnectionString = "Data Source=specialists.db"
+});
+```
+
+SQLite, SQL Server, Npgsql PostgreSQL and Oracle MySQL have separate context/migration sets.
+The module uses the shared EF startup policy, named connections, schema selection and pooling.
+The stable history module is `ElsaAgentSpecialists`. Enabling the explicit development in-memory
+feature before or after EF registration cannot replace this database backend.
+
+An application can instead call `modelBuilder.AddSpecialistsModel(Database.ProviderName!)` in its
+own `DbContext`, then `services.AddSpecialistTurnStore<ApplicationDbContext>()`. Its host owns
+migrations. The context needs a public constructor accepting its own `DbContextOptions<TContext>`.
+Writes create fresh owned contexts and commit independently; they do not flush pending application
+changes or enlist in its transaction. Resolve a separate scoped store for each concurrent operation.
+
+The operation index hashes the exact tenant, partition, workflow and operation identity, using a
+structured encoding. Malformed UTF-16 is refused before hashing. Caller-supplied keys must match.
+Identical stage replay preserves the original deadline and ciphertext. The store compares record
+schema, version, lifecycle, fence, admission generation and finite lease/deadline in conditional database writes. It never replaces
+an accepted result, and it refuses unsupported record schemas without mutation.
+
+Physical model requests append unique reservations under the same conditional version/state/fence
+and deadline checks. Concurrent reservations cannot exceed the staged finite request maximum.
+Retained output ceilings and configured resource observations survive response loss and host restart;
+missing usage does not release a reservation. Native runtime checks authenticate the staged request
+maximum before creating its transport authority. This is not a hard input/total-token accounting claim.
+Completing the exact reserved request set records nullable usage and the reported model ID while
+freezing further reservations. Acceptance with reservations requires that completed response. Wrong
+request sets, stale fences, expired completion and later observation replacement are refused. The
+accepted protected receipt uses known single-request output usage or conservative reserved ceilings
+when output usage cannot be attributed; no absent value is treated as zero.
+
+Business input, accepted output and the conversation candidate are protected by the runtime using
+the selected Secrets protector/key ring. Retain the required keys across host restarts. Store
+capabilities describe configuration: file-backed SQLite and the three other supported relational
+providers report durability; temporary, memory and custom-VFS SQLite profiles do not. This is not
+a reachability or credential-durability check.
+
+The specialist test project covers SQLite behavior, native workflow execution, protected pair recovery,
+scope/schema refusals and consumer-owned contexts. `Elsa.Agent.Specialists.ProviderTests` applies the
+actual migrations on PostgreSQL, SQL Server and MySQL and exercises competing stages/claims, live
+leases, acceptance and fresh-host replay. It forces renewal commits between a response/acceptance read
+and its conditional update, verifying safe metadata retries on all three actual database engines. Full tier sets `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`
+for this suite, so an unavailable required database fails rather than skipping.
+
+The conversation table retains owner/version, revision, active turn/fence, uncertainty and the last
+accepted receipt reference. Staging alone does not create a conversation. Claim atomically admits
+one operation at its expected revision. Acceptance advances the revision and stores the turn result
+in one transaction; a conversation CAS/write failure rolls back the turn mutation too. Known failure
+releases the active revision without adding history; unknown outcome blocks further continuation.
+The initial owner is a verified workflow execution in the exact tenant/partition and specialist
+version/template. Cross-workflow ownership policies are not supplied by business input.
+
+Lease generation/expiry are payload fields in the existing record schema; this increment adds no table
+or migration. Each owned mutation validates the current payload, then binds its update to the row's
+version. A rejected row/conversation CAS rolls back and retries a fresh metadata transaction, up to32
+attempts. An exception or unconfirmed commit is never retried. Renewal cannot extend the original
+deadline, and expired dispatch is recorded as OutcomeUnknown without releasing reservations.
+
+New protocol1 records register matching native deliveries through conditional turn metadata writes.
+Concurrent stage/accepted replay is bounded by row versions and preserves the original receipt,
+request deadline and newer conversation history, including uncertainty from another operation.
+The three actual providers qualify eight concurrent registrations/replays and fresh-host restoration.
+A deterministic interceptor also commits one registration between another registration's read/update;
+the metadata CAS retries and preserves both associations.
+No relational schema changed: associations are bounded payload metadata. Cancellation/applied
+settlement and content retention remain part of M3. A fresh service provider/context test proves encrypted pair
+recovery; it is not independent-process or live-model qualification.
+
+See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with
+`bash tools/ef/generate-module-migrations.sh 'Specialists.*DbContext'`; temporarily remove the generated
+migration API entries while their types are absent, then restore the API baseline and build normally.
+
+A runtime acceptance attempt whose acknowledgement is lost can be reconciled through an authoritative
+protected receipt read after rechecking native provenance. This is confirmation of an immutable
+committed result, not a retry of an uncertain write. Before-commit failure or unavailable confirmation
+cannot report native success. Native cancellation after acceptance preserves the journal winner while
+preventing process application. Current operation identity, contract and input-binding fingerprints
+are compared with the protected request at acceptance, cached replay and final typed completion.
+These source-runtime tests exercise both Memory and SQLite; they do not imply packaged or live-model qualification.
+
+`ApplyAsync` is a versioned, metadata-only transition for an exact accepted parent/child delivery.
+It persists one source ID/fingerprint and native completion time, supports exact-original legacy
+readers, and refuses conflicting sources. It neither changes protected content nor replays a
+conversation transition. Native source validation belongs to the runtime handler; these neutral Core
+facts grant no authority. No relational entity or migration changes in this increment.
+
+The cancellation increment adds `elsa_specialist_operations`, an owner-local row keyed by the same
+scope/operation hash as the turn. It retains exact-parent cancellation decisions even before staging;
+it contains no fabricated protected request. Stage, claim takeover and cancellation compare/update
+its version in their fresh owned transaction before touching the turn. A confirmed gate insert/CAS
+loss reopens the transaction; an unconfirmed commit is never retried inside the store. Other model
+mutations keep their turn-row version/fence checks. This avoids relying on a read of an absent
+cancellation row or assuming serializable provider isolation.
+
+Cancellation competes atomically with acceptance through the turn version. AlreadyAccepted preserves
+result/history; an old parent's notification cannot invalidate another parent's claim generation.
+Matching unknown ownership can be explicitly cancelled without clearing a later conversation owner.
+Four pre-GA Initial migrations are regenerated by the normal module tooling; this changes their IDs,
+and does not establish a deployed-data upgrade path. Required PostgreSQL/SQL Server/MySQL tests force
+gate insert, claim, acceptance and successor overlap in both winner orders and restore through a fresh
+host. The earlier forced-registration test now injects before the operation-gate CAS; nesting another
+Stage after acquiring that same gate would test a self-inflicted lock wait instead of a real overlap.
+
+## Host upgrade and rollback boundary
+
+Specialist journal/session compatibility does not override the enclosing runtime's schema family gate.
+The current workflow runtime reads its older native records and the `RuntimeWorkflowExecution` 2.0.0
+family introduced for model-owned work. After normal finalization at 2.0.0, a runtime binary supporting
+only 1.0.0 must refuse activation. Keep a compatible reader/worker installed for admitted specialist
+work; disabling new operations is independent of unloading that reader. A rejected older host must
+leave protected acceptance, conversation and native/source state intact. Resume recovery with the
+compatible runtime, or follow the owning runtime's documented backup/restore process for a downgrade;
+no reverse migration or arbitrary binary rollback is supplied by Specialists.
+
+The [package compatibility witness](../../../../../../tools/agents/conformance/README.md) distinguishes
+a named unchanged-format bidirectional pair from an upgrade with an explicit schema rollback refusal.
+Neither outcome qualifies every host/store, power loss, live inference or a restored backup.

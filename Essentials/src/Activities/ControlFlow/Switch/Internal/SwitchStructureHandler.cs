@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Switch.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
@@ -12,7 +15,7 @@ namespace Elsa.Activities.Switch.Internal;
 /// <c>Elsa.Workflows.Design.Core</c>); the runtime <c>Switch</c> activity class references no Design
 /// types, preserving the runtime/design split.
 /// </summary>
-internal sealed class SwitchStructureHandler : IActivityStructureHandler
+internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivity.StructureSchemaVersion) : IActivityStructureHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -23,9 +26,46 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
 
     public string Kind => SwitchActivity.StructureKind;
 
-    public string SchemaVersion => SwitchActivity.StructureSchemaVersion;
+    public string SchemaVersion => schemaVersion;
 
     public Type AuthoredPayloadType => typeof(SwitchAuthoredStructure);
+
+    public ActivityStructureInputProjection ProjectInputs(ActivityNode activity)
+    {
+        if (SchemaVersion == SwitchActivity.LegacyStructureSchemaVersion)
+            return ActivityStructureInputProjection.Empty;
+        var structure = ReadAuthoredStructure(activity);
+        var inputs = new List<ActivityStructureInput>();
+        foreach (var item in structure.Cases.Where(item => item.Condition is not null && !string.IsNullOrWhiteSpace(item.CaseId)))
+        {
+            var key = SwitchActivity.ConditionInputKey(item.CaseId!);
+            var definition = new InputDefinition(key, $"{item.Match} condition", new TypeReference("Boolean"), null,
+                "Condition", "General", IsNullable: false, Description: "Run this case when its condition is true.",
+                DefaultValue: JsonSerializer.SerializeToElement(false), DefaultSyntax: "Literal");
+            // A present container remains a predicate when cleared. Lower its unbound/null value to
+            // the Boolean default without mutating the authored payload or its storage policy.
+            var state = item.Condition!;
+            if (IsUnboundPredicate(state))
+                state = state with { Value = new(false, "Literal"), Conversion = null };
+            inputs.Add(new(key, definition, state));
+        }
+        if (structure.Cases.Any(item => item.Condition is null))
+            inputs.Add(new(nameof(SwitchActivity.Value), null,
+                activity.Inputs.FirstOrDefault(input => input.ReferenceKey == nameof(SwitchActivity.Value))));
+        return new(inputs, [nameof(SwitchActivity.Value)]);
+    }
+
+    private static bool IsUnboundPredicate(ArgumentState state)
+    {
+        if (!state.IsBound()) return true;
+        // Text editors retain a portable definition when the user clears its source. Keep that
+        // authored shape for undo, while the effective predicate is the unbound Boolean default.
+        return state.Value.Value is JsonElement { ValueKind: JsonValueKind.Object } value
+            && value.TryGetProperty("language", out var language) && language.ValueKind == JsonValueKind.String
+            && string.Equals(language.GetString(), state.Value.ExpressionType, StringComparison.OrdinalIgnoreCase)
+            && value.TryGetProperty("source", out var source) && source.ValueKind == JsonValueKind.String
+            && string.IsNullOrEmpty(source.GetString());
+    }
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
@@ -40,24 +80,31 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);
-        var cases = current.Cases
-            .Select(@case => new SwitchAuthoredCase(@case.Match, SingleBranch(childProjections, SwitchActivity.CaseSlotName(@case.Match))))
-            .ToArray();
-        var @default = SingleBranch(childProjections, SwitchActivity.DefaultSlotName);
-        var structure = new SwitchAuthoredStructure(cases, @default);
+        var payload = activity.Structure is null ? new JsonObject() : JsonNode.Parse(activity.Structure.Payload.GetRawText()) as JsonObject
+            ?? throw new ArgumentException("Switch authored structure must be an object.");
+        var cases = payload["cases"] as JsonArray ?? new JsonArray();
+        foreach (var (item, index) in current.Cases.Select((item, index) => (item, index)))
+        {
+            var branch = SingleBranch(childProjections, SwitchActivity.CaseSlotName(item.Match));
+            if (cases[index] is JsonObject record) record["activity"] = JsonSerializer.SerializeToNode(branch, SerializerOptions);
+        }
+        if (payload["cases"] is null) payload["cases"] = cases;
+        payload["default"] = JsonSerializer.SerializeToNode(SingleBranch(childProjections, SwitchActivity.DefaultSlotName), SerializerOptions);
 
         return activity with
         {
             Structure = new ActivityNodeStructure(
                 SwitchActivity.StructureKind,
-                SwitchActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(structure, SerializerOptions))
+                SchemaVersion,
+                JsonSerializer.SerializeToElement(payload, SerializerOptions))
         };
     }
 
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authoredStructure = ReadAuthoredStructure(activity);
+        if (SwitchCaseRules.StructureErrors(activity, authoredStructure).FirstOrDefault() is { } structureError)
+            throw new ArgumentException(structureError);
 
         // Backstop: reject duplicate case match values at compile time. The design-time
         // SwitchDuplicateCaseValidator already surfaces these as Draft validation errors (which the
@@ -71,13 +118,14 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
 
         var executableStructure = new SwitchExecutableStructure(
             authoredStructure.Cases
-                .Select(@case => new SwitchExecutableCase(@case.Match, @case.Activity?.NodeId))
+                .Select(@case => new SwitchExecutableCase(@case.Match, @case.Activity?.NodeId)
+                { ConditionInputKey = @case.Condition is null ? null : SwitchActivity.ConditionInputKey(@case.CaseId!) })
                 .ToArray(),
             authoredStructure.Default?.NodeId);
 
         return new ActivityNodeStructure(
             SwitchActivity.StructureKind,
-            SwitchActivity.StructureSchemaVersion,
+            SchemaVersion,
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
@@ -89,7 +137,8 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
                          ?? throw new InvalidOperationException("Switch executable structure payload is invalid.");
         var remapped = new SwitchExecutableStructure(
             executable.Cases
-                .Select(@case => new SwitchExecutableCase(@case.Match, Remap(@case.Activity, authoredToExecutableNodeIds)))
+                .Select(@case => new SwitchExecutableCase(@case.Match, Remap(@case.Activity, authoredToExecutableNodeIds))
+                { ConditionInputKey = @case.ConditionInputKey })
                 .ToArray(),
             Remap(executable.Default, authoredToExecutableNodeIds));
         return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));

@@ -1,0 +1,16 @@
+<Project>
+  <Target Name="RefreshStudioStaticWebAssetProjectReferencePaths"
+          BeforeTargets="ResolveReferencedProjectsStaticWebAssetsConfiguration"
+          DependsOnTargets="PrepareProjectReferences">
+    <ItemGroup>
+      <!-- GetTargetFrameworks can retain MSBuildSourceProjectFile from an earlier restore
+           under different path casing. The static-assets SDK prefers that metadata over
+           the reference identity. Use the evaluated reference path so opening Studio as
+           studio on a case-insensitive volume does not break the SDK's path comparison.
+           Do not lowercase paths: distinct files on case-sensitive volumes stay distinct. -->
+      <_MSBuildProjectReferenceExistent Update="@(_MSBuildProjectReferenceExistent)">
+        <MSBuildSourceProjectFile>%(_MSBuildProjectReferenceExistent.FullPath)</MSBuildSourceProjectFile>
+      </_MSBuildProjectReferenceExistent>
+    </ItemGroup>
+  </Target>
+</Project>

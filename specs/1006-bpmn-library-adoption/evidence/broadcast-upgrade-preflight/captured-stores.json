@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "purpose": "FR-015 actual-store legacy inventory only",
+  "sourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "status": "NoLegacyPublishResponsibilityOwed",
+  "limitations": [
+    "Only supplied stores are inventoried; no production-wide or mixed-writer quiescence claim.",
+    "Attempt zero is not evidence that no recipient effect occurred.",
+    "This does not qualify cohort dispatch or upgraded-host recovery."
+  ],
+  "stores": [
+    {
+      "sourceName": "deferred-fault.sqlite.gz",
+      "observationStartedAtUtc": "2026-10-27T00:52:38.058230+00:00",
+      "observationCompletedAtUtc": "2026-10-27T00:52:38.455484+00:00",
+      "sourceKind": "closed-compressed-capture",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "e32fc347d88fff569661d29e81ff76b6ee51b20dbe97d32754bf5b831ae8635a",
+        "Elsa.Workflows.Runtime.Core.dll": "16c1a1b576d8cb98e1085ade59b9adb74852300954688f9dc0e402415bad381d",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "16928b294a5d8e6ec6ab97f8792c5ba823c8c992a65b73b3125fe2d0d9b4e10f",
+        "Elsa.Persistence.EntityFramework.dll": "161ba05e6162b8ffcbed9aa0f21150ab76113634f3e01c7f075d7b4e6f09f853"
+      },
+      "outboxRows": 1,
+      "publishRows": 0,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {},
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "deliveryActivationQualified": false,
+      "publishes": []
+    },
+    {
+      "sourceName": "listener-rearm.sqlite.gz",
+      "observationStartedAtUtc": "2026-10-27T00:52:38.455726+00:00",
+      "observationCompletedAtUtc": "2026-10-27T00:52:38.850513+00:00",
+      "sourceKind": "closed-compressed-capture",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "e32fc347d88fff569661d29e81ff76b6ee51b20dbe97d32754bf5b831ae8635a",
+        "Elsa.Workflows.Runtime.Core.dll": "16c1a1b576d8cb98e1085ade59b9adb74852300954688f9dc0e402415bad381d",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "16928b294a5d8e6ec6ab97f8792c5ba823c8c992a65b73b3125fe2d0d9b4e10f",
+        "Elsa.Persistence.EntityFramework.dll": "161ba05e6162b8ffcbed9aa0f21150ab76113634f3e01c7f075d7b4e6f09f853"
+      },
+      "outboxRows": 8,
+      "publishRows": 0,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {},
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "deliveryActivationQualified": false,
+      "publishes": []
+    },
+    {
+      "sourceName": "parallel-mi.sqlite.gz",
+      "observationStartedAtUtc": "2026-10-27T00:52:38.850767+00:00",
+      "observationCompletedAtUtc": "2026-10-27T00:52:39.230305+00:00",
+      "sourceKind": "closed-compressed-capture",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "e32fc347d88fff569661d29e81ff76b6ee51b20dbe97d32754bf5b831ae8635a",
+        "Elsa.Workflows.Runtime.Core.dll": "16c1a1b576d8cb98e1085ade59b9adb74852300954688f9dc0e402415bad381d",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "16928b294a5d8e6ec6ab97f8792c5ba823c8c992a65b73b3125fe2d0d9b4e10f",
+        "Elsa.Persistence.EntityFramework.dll": "161ba05e6162b8ffcbed9aa0f21150ab76113634f3e01c7f075d7b4e6f09f853"
+      },
+      "outboxRows": 8,
+      "publishRows": 0,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {},
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "deliveryActivationQualified": false,
+      "publishes": []
+    },
+    {
+      "sourceName": "queued-late-fault.sqlite.gz",
+      "observationStartedAtUtc": "2026-10-27T00:52:39.230539+00:00",
+      "observationCompletedAtUtc": "2026-10-27T00:52:39.616040+00:00",
+      "sourceKind": "closed-compressed-capture",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "e32fc347d88fff569661d29e81ff76b6ee51b20dbe97d32754bf5b831ae8635a",
+        "Elsa.Workflows.Runtime.Core.dll": "16c1a1b576d8cb98e1085ade59b9adb74852300954688f9dc0e402415bad381d",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "16928b294a5d8e6ec6ab97f8792c5ba823c8c992a65b73b3125fe2d0d9b4e10f",
+        "Elsa.Persistence.EntityFramework.dll": "161ba05e6162b8ffcbed9aa0f21150ab76113634f3e01c7f075d7b4e6f09f853"
+      },
+      "outboxRows": 5,
+      "publishRows": 0,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {},
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "deliveryActivationQualified": false,
+      "publishes": []
+    },
+    {
+      "sourceName": "queued-loser.sqlite.gz",
+      "observationStartedAtUtc": "2026-10-27T00:52:39.616279+00:00",
+      "observationCompletedAtUtc": "2026-10-27T00:52:39.994895+00:00",
+      "sourceKind": "closed-compressed-capture",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "e32fc347d88fff569661d29e81ff76b6ee51b20dbe97d32754bf5b831ae8635a",
+        "Elsa.Workflows.Runtime.Core.dll": "16c1a1b576d8cb98e1085ade59b9adb74852300954688f9dc0e402415bad381d",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "16928b294a5d8e6ec6ab97f8792c5ba823c8c992a65b73b3125fe2d0d9b4e10f",
+        "Elsa.Persistence.EntityFramework.dll": "161ba05e6162b8ffcbed9aa0f21150ab76113634f3e01c7f075d7b4e6f09f853"
+      },
+      "outboxRows": 5,
+      "publishRows": 0,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {},
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "deliveryActivationQualified": false,
+      "publishes": []
+    },
+    {
+      "sourceName": "resolved-race.sqlite.gz",
+      "observationStartedAtUtc": "2026-10-27T00:52:39.995110+00:00",
+      "observationCompletedAtUtc": "2026-10-27T00:52:40.380989+00:00",
+      "sourceKind": "closed-compressed-capture",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "e32fc347d88fff569661d29e81ff76b6ee51b20dbe97d32754bf5b831ae8635a",
+        "Elsa.Workflows.Runtime.Core.dll": "16c1a1b576d8cb98e1085ade59b9adb74852300954688f9dc0e402415bad381d",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "16928b294a5d8e6ec6ab97f8792c5ba823c8c992a65b73b3125fe2d0d9b4e10f",
+        "Elsa.Persistence.EntityFramework.dll": "161ba05e6162b8ffcbed9aa0f21150ab76113634f3e01c7f075d7b4e6f09f853"
+      },
+      "outboxRows": 6,
+      "publishRows": 0,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {},
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "deliveryActivationQualified": false,
+      "publishes": []
+    }
+  ]
+}

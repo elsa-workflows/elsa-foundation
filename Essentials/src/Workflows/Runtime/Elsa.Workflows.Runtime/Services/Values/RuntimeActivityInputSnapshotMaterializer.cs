@@ -27,10 +27,29 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
     {
         var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
+        cancellationToken.ThrowIfCancellationRequested();
+        // The built-in literal and secret-reference paths need no execution state. Secret values
+        // remain withheld here and are resolved only at activation. Custom implementations keep
+        // their complete context, including custom binding resolvers inside the default materializer.
+        var defaultMaterializer = inputMaterializer as RuntimeActivityInputMaterializer;
+        if (defaultMaterializer is not null &&
+            ((executableNode.ActivityContract?.Inputs.Count == 0 && executableNode.InputBindings.Count == 0) ||
+             defaultMaterializer.UsesExecutionIndependentBindings(executableNode)))
+            return await inputMaterializer.MaterializeSnapshotAsync(
+                executableNode,
+                state.InvocationId,
+                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable),
+                materializedAt,
+                cancellationToken);
+
         var resolvedDurableValueStateStore = durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
         var durableValues = await resolvedDurableValueStateStore.ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
-        var runtimeView = await activityExecutionStateStore.ListAllAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+        // Request and variable bindings still walk the lexical ancestor chain below, including closed
+        // scope boundaries, but do not resolve causal activity results from the complete history.
+        IReadOnlyCollection<ActivityExecutionState> runtimeView = defaultMaterializer?.RequiresActivityHistory(executableNode) == false
+            ? []
+            : await activityExecutionStateStore.ListAllAsync(state.Execution.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var resolvedWorkflowExecutionStateStore = workflowExecutionStateStore
             ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()

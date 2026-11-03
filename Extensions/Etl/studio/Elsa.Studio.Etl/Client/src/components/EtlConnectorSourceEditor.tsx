@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 import type { EtlConnectorBindingSummary, EtlSourceV2 } from "../etlTypes";
-import { EtlHttpJsonSourceFieldsEditor } from "./EtlHttpJsonSourceFieldsEditor";
+import { EtlJsonFieldsEditor } from "./EtlJsonFieldsEditor";
 import { PipelineBindingSelect } from "./PipelineBindingSelect";
 import { SchemaEditor } from "./SchemaEditor";
 
@@ -33,9 +33,13 @@ export function EtlConnectorSourceEditor({
       return;
     }
 
-    const fields = source.kind === "httpJson"
-      ? source.fields
-      : source.schema.map(({ name, type, required }) => ({ name, pointer: `/${escapePointer(name)}`, type, required }));
+    const fields = source.kind === "csv"
+      ? source.schema.map(({ name, type, required }) => ({ name, pointer: `/${escapePointer(name)}`, type, required }))
+      : source.fields;
+    if (kind === "jsonl") {
+      onChange({ kind, binding: source.binding, fields });
+      return;
+    }
     onChange({
       kind,
       binding: source.binding,
@@ -50,7 +54,7 @@ export function EtlConnectorSourceEditor({
       <div className="etl-editor-section-heading">
         <div>
           <h3 id={headingId}>Source connector</h3>
-          <p>Choose a host-approved CSV or HTTP source. Endpoint URLs and credentials are configured by the host.</p>
+          <p>Choose a host-approved CSV, JSON Lines or HTTP source. File paths, endpoint URLs and credentials are configured by the host.</p>
         </div>
       </div>
       <div className="etl-editor-binding-grid">
@@ -59,13 +63,16 @@ export function EtlConnectorSourceEditor({
           <select id={`${headingId}-kind`} value={source.kind} disabled={disabled} onChange={event => changeKind(event.currentTarget.value as EtlSourceV2["kind"])}>
             <option value="httpJson">HTTP JSON</option>
             <option value="csv">CSV file</option>
+            <option value="jsonl">JSON Lines file</option>
           </select>
           <small>The source kind determines which approved connector aliases and field declaration are available.</small>
         </div>
         <PipelineBindingSelect
-          label={source.kind === "csv" ? "Source CSV binding" : "Source HTTP binding"}
+          label={source.kind === "csv" ? "Source CSV binding" : source.kind === "jsonl" ? "Source file binding" : "Source HTTP binding"}
           role="Source"
-          kind={source.kind === "csv" ? "csv" : "http"}
+          // Hosts list source file approvals under the csv kind; a JSON Lines source selects from the same files.
+          kind={source.kind === "httpJson" ? "http" : "csv"}
+          subjectLabel={source.kind === "jsonl" ? "Source file" : undefined}
           value={source.binding}
           bindings={bindings}
           bindingsLoading={bindingsLoading}
@@ -85,7 +92,7 @@ export function EtlConnectorSourceEditor({
           onChange={schema => onChange({ ...source, schema })}
         />
       ) : (
-        <EtlHttpJsonSourceFieldsEditor source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
+        <EtlJsonFieldsEditor source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
       )}
     </section>
   );

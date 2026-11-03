@@ -86,6 +86,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
+- `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` — `RebuildActivityUsageStartupTask` *(cross-domain; order 6, refreshes derived usage after reconciliation; owns its per-shell maintenance lock and logs rebuild/lock failures without failing activation)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
@@ -111,6 +112,7 @@ skeleton. The base owns it once: `ExecuteAsync` runs the derived `SweepAsync`, r
 on success, and on any handled exception increments it and reports through `OnSweepFailed` without
 rethrowing (so a failing sweep cannot crash the host); `CurrentSweepInterval` widens geometrically from
 `SweepInterval` toward `MaxBackoffInterval`, and `GetSchedule` feeds it to an `AdaptiveIntervalSchedule`.
+`GetSchedule` is virtual so a worker can supply deadline-aware scheduling while retaining the shared sweep/failure policy; ordinary workers retain the existing interval schedule.
 
 A derivation supplies the sweep, its failure log message, and optionally: which exceptions feed the
 backoff (`IsHandledSweepException`; everything by default — override to let fatal exceptions escape),
@@ -118,11 +120,16 @@ and which cancellations escape (`ShouldRethrowCancellation`; every `OperationCan
 default; override it to narrow to the worker's own token so a dependency's unrelated timeout backs off
 instead). The protected `ComputeBackoff` is reusable for per-item parking maps.
 
-The eight shipped workers live in other domains: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
+The nine shipped workers live in other domains: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
 `RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`, `ExecutionPlacementPumpTask`,
 `WorkflowAlterationOrchestrationPumpTask` and `HttpEndpointRouteTableConvergencePumpTask` in the
 `Elsa.Workflows.Runtime.*` projects, which keep the `…PumpTask` name until that domain's rename, and
-`ExpiredImportCollectionSweepTask` in the Elsa 3 import extension.
+`ExpiredImportCollectionSweepTask` in the Elsa 3 import extension and internal
+`SpecialistRetentionPumpTask` in `Elsa.Agent.Specialists`. The specialist worker uses
+`IPersistenceScopeRunner` to visit fresh ordinary partitions, keeps independent finite keyset cursors
+for explicit tenant and legacy-null tenant keys, and delegates native/source eligibility plus
+conditional content purge to its scoped pruner. Its baseline interval is five minutes, with one-hour
+maximum failure backoff. See the [specialist runtime catalog](../../../../Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md).
 
 ---
 

@@ -1,0 +1,1413 @@
+{
+  "commit": "ab46bc22a52aa6e456bca6ac0e803c80904de081",
+  "packagedAt": "2026-10-31T14:30:05.528232+00:00",
+  "acceptedResultCount": 71,
+  "measuredCompletedWorkflows": 94406,
+  "accepted": [
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1.json",
+      "sha256": "b870588107b435d8d230ae9c1d3f21e4dedbb1340899f1db8a23dc38c0a7c3fb",
+      "label": "baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1",
+      "count": 763,
+      "seconds": 15.0118093,
+      "timestamp": "2026-10-31T11:46:32.887059+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities1-r2.json",
+      "sha256": "3a42dc99c940be2ea4a5f015f3ed7ec59fe6de35737d3341b5bb8bdf31fece30",
+      "label": "baseline-ProviderPostgreSql-ModeBalanced-Activities1-r2",
+      "count": 545,
+      "seconds": 15.0060014,
+      "timestamp": "2026-10-31T14:00:10.898589+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1.json",
+      "sha256": "3ff64dff04cd8ac62395b452ee6d0ba27b2bfe446fa2add8800ce8bbfc166d90",
+      "label": "baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1",
+      "count": 333,
+      "seconds": 15.0211665,
+      "timestamp": "2026-10-31T11:48:07.35026+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities10-r2.json",
+      "sha256": "e6a68c1276e7f140fa264fc8aef8643e28cd264937326a605a2bf57996f56fd6",
+      "label": "baseline-ProviderPostgreSql-ModeBalanced-Activities10-r2",
+      "count": 297,
+      "seconds": 15.047908,
+      "timestamp": "2026-10-31T14:04:00.788274+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1.json",
+      "sha256": "f0876f57a1c5c32d769f978601081b1419e5bbdde646644beb499d2d3e9c579f",
+      "label": "baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1",
+      "count": 100,
+      "seconds": 39.5674474,
+      "timestamp": "2026-10-31T11:49:23.032377+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities100-r2.json",
+      "sha256": "901bcdc278cdce4db5a85dfe33ea83237be014c83ca1cc638339be92dd57b7d4",
+      "label": "baseline-ProviderPostgreSql-ModeBalanced-Activities100-r2",
+      "count": 100,
+      "seconds": 34.1163966,
+      "timestamp": "2026-10-31T14:23:29.905124+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeDurable-Activities1-r1.json",
+      "sha256": "13eeaf3a5ad11d1d4f1f197432efcae0995a919df74dc6c65517efd6dfb9e887",
+      "label": "baseline-ProviderPostgreSql-ModeDurable-Activities1-r1",
+      "count": 703,
+      "seconds": 15.0204667,
+      "timestamp": "2026-10-31T11:40:49.035412+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeDurable-Activities1-r2.json",
+      "sha256": "3749661378382e3453f743eacb99244a67a52e5d016461782bd9a846b13418d4",
+      "label": "baseline-ProviderPostgreSql-ModeDurable-Activities1-r2",
+      "count": 562,
+      "seconds": 15.0528482,
+      "timestamp": "2026-10-31T14:01:56.743138+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeDurable-Activities10-r1.json",
+      "sha256": "0d8b47a09b83ceaf99a2383829a102c43857f7fcef6d41d7a645e320046f2cf7",
+      "label": "baseline-ProviderPostgreSql-ModeDurable-Activities10-r1",
+      "count": 100,
+      "seconds": 17.1233271,
+      "timestamp": "2026-10-31T11:46:58.475264+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeDurable-Activities10-r2.json",
+      "sha256": "f376dd8d46169aea10d61a0e22ca546ebd5b229d85a8a72a2c2c42224f211a9d",
+      "label": "baseline-ProviderPostgreSql-ModeDurable-Activities10-r2",
+      "count": 100,
+      "seconds": 23.9825899,
+      "timestamp": "2026-10-31T14:10:19.552083+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeDurable-Activities100-r1.json",
+      "sha256": "86d9fe9660dbefc903f9755e357a44fe24f6df81ea497cda9df88ead94ddd3cf",
+      "label": "baseline-ProviderPostgreSql-ModeDurable-Activities100-r1",
+      "count": 30,
+      "seconds": 43.7619782,
+      "timestamp": "2026-10-31T11:53:36.024255+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeDurable-Activities100-r2.json",
+      "sha256": "4a25fa08f17469fe3d68ff19ece2bf24f6574d5114431c69e005725a8312076f",
+      "label": "baseline-ProviderPostgreSql-ModeDurable-Activities100-r2",
+      "count": 30,
+      "seconds": 53.5662452,
+      "timestamp": "2026-10-31T14:22:20.217723+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1.json",
+      "sha256": "96d24e1c07634222e40ecacfe93b62190a42d32af8fb4e190bb1fffb2b458a11",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1",
+      "count": 807,
+      "seconds": 15.0159323,
+      "timestamp": "2026-10-31T11:46:10.300908+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r2.json",
+      "sha256": "a00d0c6e2080c0da9f020b656902c33993a911f68f5f57fbfd8ebf4ccd5ed234",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r2",
+      "count": 664,
+      "seconds": 15.0127867,
+      "timestamp": "2026-10-31T13:59:26.010498+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1.json",
+      "sha256": "5ca16faa99000b77c5270ec7b3eafccfb2a18aaf9cb8658dcbeb8b082244e6df",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1",
+      "count": 330,
+      "seconds": 15.023887,
+      "timestamp": "2026-10-31T11:47:22.244516+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r2.json",
+      "sha256": "ca4fa8e872303cbc4784bd3faf847b522d63c1beb3f36997d8d9327884e57d8a",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r2",
+      "count": 266,
+      "seconds": 15.0034866,
+      "timestamp": "2026-10-31T14:15:43.512219+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1.json",
+      "sha256": "5d4f2f39acab91837c92b5ecff2cea158aef177026d4ccd179fed70e82f8a1bf",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1",
+      "count": 100,
+      "seconds": 22.3915984,
+      "timestamp": "2026-10-31T11:49:56.157617+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r2.json",
+      "sha256": "0571b122081f642d746391b0792daf8dba4a4b649b1e078246ae44a4537e4219",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r2",
+      "count": 100,
+      "seconds": 22.7338231,
+      "timestamp": "2026-10-31T14:17:47.483744+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1.json",
+      "sha256": "60901a853f12a3e1ef379ac67ef193eb2a1854ef0d4856bcaee1f6a2251146e0",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1",
+      "count": 1246,
+      "seconds": 15.0007169,
+      "timestamp": "2026-10-31T11:44:05.455776+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r2.json",
+      "sha256": "d436f62d5fb045035922beddb7a13e3fa4f13917dfd9d60264103213e74bcbe3",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r2",
+      "count": 1235,
+      "seconds": 15.0010708,
+      "timestamp": "2026-10-31T14:01:23.933104+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1.json",
+      "sha256": "df6a628b3e71b4d2c5c6a9b6ab0fd05dcf11c416dae865e39188c0e80f10d7ff",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1",
+      "count": 639,
+      "seconds": 15.0012638,
+      "timestamp": "2026-10-31T11:47:44.54145+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r2.json",
+      "sha256": "c50f3268934f037dacbf8eb4524f01598ea43e7858427c106d95d12c4c9143fa",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r2",
+      "count": 405,
+      "seconds": 15.0053419,
+      "timestamp": "2026-10-31T14:16:28.029248+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1.json",
+      "sha256": "4c2c35a7c36f6a00f0ef1f5a33b3880a6525dc7d1abc6c2a4e8d9352d35084a7",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1",
+      "count": 102,
+      "seconds": 15.02778,
+      "timestamp": "2026-10-31T11:48:30.599393+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r2.json",
+      "sha256": "2f0e4e8a25c9c5e04bf4c95a175dcedd18f4d34166ffca80c4277fdbcd77629e",
+      "label": "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r2",
+      "count": 100,
+      "seconds": 16.065787,
+      "timestamp": "2026-10-31T14:24:05.348255+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency16-r1.json",
+      "sha256": "6d2a488fcc0ed33f6a1b7ffebd84b5c0273a9f7b64810253247f8b2e81ed2dc6",
+      "label": "capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency16-r1",
+      "count": 4537,
+      "seconds": 15.0385063,
+      "timestamp": "2026-10-31T13:05:32.299492+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency64-r1.json",
+      "sha256": "75436746f635a5ebb07084b6b5e7e320a65e43dbdbe77ba7510f2edf2ba8227a",
+      "label": "capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency64-r1",
+      "count": 6064,
+      "seconds": 15.0764598,
+      "timestamp": "2026-10-31T13:19:12.969072+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/capacity-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency64-r1.json",
+      "sha256": "4477184fd103cf9d10fa97a8e0ba3ea4e207be64d673221a9bbe74aec211c672",
+      "label": "capacity-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency64-r1",
+      "count": 2286,
+      "seconds": 15.3071542,
+      "timestamp": "2026-10-31T13:20:40.817771+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/cluster-n1-c8-r1-node0.json",
+      "sha256": "18b85962a8880c10679ca681afaa7eb050bbfdb22abc556026f7a93587208de4",
+      "label": "cluster-n1-c8-r1-node0",
+      "count": 1810,
+      "seconds": 20.0418546,
+      "timestamp": "2026-10-31T14:25:21.953656+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/cluster-n1-c8-r2-node0.json",
+      "sha256": "c243b30f90f4f1c16ddb7de77e33d971564c8db899aa8813b143d14f8a1cccf2",
+      "label": "cluster-n1-c8-r2-node0",
+      "count": 1927,
+      "seconds": 20.0609938,
+      "timestamp": "2026-10-31T14:27:30.965986+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/cluster-n2-c8-r1-node0.json",
+      "sha256": "58baa4bb1e21d066651a236f6a6176786c5d4201042ce9492a29413f4fbaf024",
+      "label": "cluster-n2-c8-r1-node0",
+      "count": 926,
+      "seconds": 20.0490437,
+      "timestamp": "2026-10-31T14:26:07.704172+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/cluster-n2-c8-r1-node1.json",
+      "sha256": "bb460478db24301f4294e9fc1d9bf42af393c909499b65bd4f4a91c1ebe0708f",
+      "label": "cluster-n2-c8-r1-node1",
+      "count": 890,
+      "seconds": 20.0432513,
+      "timestamp": "2026-10-31T14:26:07.704178+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/cluster-n2-c8-r2-node0.json",
+      "sha256": "93b1109a474d0a89395561a9e061c212e5cc0217716cfb3626b7d8a59d689fba",
+      "label": "cluster-n2-c8-r2-node0",
+      "count": 994,
+      "seconds": 20.0421595,
+      "timestamp": "2026-10-31T14:26:52.876853+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/cluster-n2-c8-r2-node1.json",
+      "sha256": "343acd0495172c1bee8070e2426c76f3f163d8b007b23be3b41308e6831eb64f",
+      "label": "cluster-n2-c8-r2-node1",
+      "count": 906,
+      "seconds": 20.0558812,
+      "timestamp": "2026-10-31T14:26:52.876853+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1.json",
+      "sha256": "7eee58050d296eb740e7079c0cf0611e481f06deef4fee5c3c1c58c67e65e7b1",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1",
+      "count": 261,
+      "seconds": 15.0031852,
+      "timestamp": "2026-10-31T11:58:13.691908+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r2.json",
+      "sha256": "d63473d5647af0e02110e6b388163616b6fa6867d250f9a7e72c6c6b4996b0bd",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r2",
+      "count": 286,
+      "seconds": 15.0141337,
+      "timestamp": "2026-10-31T12:06:16.581624+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1.json",
+      "sha256": "2a9e2b36adfb8d6820ffb218dd41b39dc5b071a71b89774a20b4536e4724ec09",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1",
+      "count": 321,
+      "seconds": 15.003578,
+      "timestamp": "2026-10-31T11:58:36.361074+00:00",
+      "variant": "fast"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r2.json",
+      "sha256": "2e3932b9845ea2c5051b28de693c5e557597a075601dc5d241631dc402725f18",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r2",
+      "count": 420,
+      "seconds": 15.01792,
+      "timestamp": "2026-10-31T12:05:43.715658+00:00",
+      "variant": "fast"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1.json",
+      "sha256": "d076d13be488b601586845130b8ba8a91e6669567bfc6423176cc655dc558329",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1",
+      "count": 100,
+      "seconds": 31.9033476,
+      "timestamp": "2026-10-31T11:59:19.251237+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r2.json",
+      "sha256": "d5ca1bfa17b2b73b9156ae20a00b3242b19c419a0b184526ceebe92dd4b65565",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r2",
+      "count": 100,
+      "seconds": 31.588713,
+      "timestamp": "2026-10-31T12:10:49.642853+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1.json",
+      "sha256": "13ddf6bbf27217933c5363a436bd4e60bbee1b066f2af65a73956193d2c32e36",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1",
+      "count": 100,
+      "seconds": 16.7899723,
+      "timestamp": "2026-10-31T11:59:44.514197+00:00",
+      "variant": "fast"
+    },
+    {
+      "file": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r2.json",
+      "sha256": "b259e7dbe8fd023c46cddfc5d48c6c6997d151b25a63b202b23c200c9d4b11c7",
+      "label": "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r2",
+      "count": 100,
+      "seconds": 18.8738626,
+      "timestamp": "2026-10-31T12:08:37.831768+00:00",
+      "variant": "fast"
+    },
+    {
+      "file": "results/local-ProviderMemory-ModeBalanced-Activities10-r1.json",
+      "sha256": "7a660d6b1035891940ae3c2a85878329c0a56bfc6e4504e99e576b680c2c0401",
+      "label": "local-ProviderMemory-ModeBalanced-Activities10-r1",
+      "count": 1568,
+      "seconds": 10.0055204,
+      "timestamp": "2026-10-31T13:46:28.196399+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderMemory-ModeBalanced-Activities100-r1.json",
+      "sha256": "a4fadf6d3debaf517b611b517cce5acc6e694340bd03b75b7c5104e2e671a70b",
+      "label": "local-ProviderMemory-ModeBalanced-Activities100-r1",
+      "count": 193,
+      "seconds": 10.0255556,
+      "timestamp": "2026-10-31T13:47:17.699549+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderMemory-ModeEphemeralNoRecord-Activities1-r1.json",
+      "sha256": "54b4f0cd0171669f046bca45c980052aeb0e7c86ee0d5a2690909b37d6f7b266",
+      "label": "local-ProviderMemory-ModeEphemeralNoRecord-Activities1-r1",
+      "count": 33494,
+      "seconds": 10.000551,
+      "timestamp": "2026-10-31T13:43:27.564888+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderMemory-ModeEphemeralNoRecord-Activities10-r1.json",
+      "sha256": "eea2f3d215bfcd22d5a3d4bf0a4f32c8038736938a03896422d2d4dd4b0b1861",
+      "label": "local-ProviderMemory-ModeEphemeralNoRecord-Activities10-r1",
+      "count": 5890,
+      "seconds": 10.000805,
+      "timestamp": "2026-10-31T13:46:52.710219+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderMemory-ModeEphemeralNoRecord-Activities100-r1.json",
+      "sha256": "33b02a3932ed5cea28f183fb5c1e6bee93e701d88888d1e1db6201053498d756",
+      "label": "local-ProviderMemory-ModeEphemeralNoRecord-Activities100-r1",
+      "count": 517,
+      "seconds": 10.020797,
+      "timestamp": "2026-10-31T13:48:49.618442+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderSqlite-ModeBalanced-Activities1-r1.json",
+      "sha256": "b465147c2639de50e425a70b7058d8cf2c27fedeccda1b24bf2c60bbbd5daf52",
+      "label": "local-ProviderSqlite-ModeBalanced-Activities1-r1",
+      "count": 952,
+      "seconds": 10.0013411,
+      "timestamp": "2026-10-31T13:50:35.684869+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderSqlite-ModeBalanced-Activities10-r1.json",
+      "sha256": "a57e7875c5369de37c8041d427e974a5639759708c58a0a003736be95a239ba1",
+      "label": "local-ProviderSqlite-ModeBalanced-Activities10-r1",
+      "count": 359,
+      "seconds": 10.0089035,
+      "timestamp": "2026-10-31T13:53:42.801985+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderSqlite-ModeBalanced-Activities100-r1.json",
+      "sha256": "006c1fb583125b963af30a6ff2d488a50eae281cddcb54765e6a25c67d3f3baa",
+      "label": "local-ProviderSqlite-ModeBalanced-Activities100-r1",
+      "count": 48,
+      "seconds": 10.1354439,
+      "timestamp": "2026-10-31T13:56:40.398926+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderSqlite-ModeEphemeralNoRecord-Activities1-r1.json",
+      "sha256": "d7efcb9fdbebf65e589e942126030c84e7b10cf288469f6c9ff4a537d5017a6a",
+      "label": "local-ProviderSqlite-ModeEphemeralNoRecord-Activities1-r1",
+      "count": 1915,
+      "seconds": 10.002951,
+      "timestamp": "2026-10-31T13:53:16.199485+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderSqlite-ModeEphemeralNoRecord-Activities10-r1.json",
+      "sha256": "db4c381d1e84ff9490a97304d55f31ca98c630cec973f35782d5453b22d59f15",
+      "label": "local-ProviderSqlite-ModeEphemeralNoRecord-Activities10-r1",
+      "count": 467,
+      "seconds": 10.0025679,
+      "timestamp": "2026-10-31T13:55:04.10779+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/local-ProviderSqlite-ModeEphemeralNoRecord-Activities100-r1.json",
+      "sha256": "4e6f800641957038b6a696118fa8eab45debc5292b68f24cb0917886afd810e2",
+      "label": "local-ProviderSqlite-ModeEphemeralNoRecord-Activities100-r1",
+      "count": 92,
+      "seconds": 10.0174391,
+      "timestamp": "2026-10-31T13:57:21.554543+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r1.json",
+      "sha256": "730a24c6d4660a060564f5907ce277218cdfd645109a2bb6de66b30f23b1b47b",
+      "label": "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r1",
+      "count": 2188,
+      "seconds": 15.0366387,
+      "timestamp": "2026-10-31T12:13:20.648583+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r2.json",
+      "sha256": "8f12d8611856e9ba17ceffb2f33cebf10a276b718152260a90b589ec92c2623c",
+      "label": "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r2",
+      "count": 2028,
+      "seconds": 15.1089965,
+      "timestamp": "2026-10-31T12:50:10.663605+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r1.json",
+      "sha256": "14677d3617e26278bcc62c94080e16b1d3da90b482dc66c9fdbed9c8e5385db7",
+      "label": "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r1",
+      "count": 924,
+      "seconds": 15.03701,
+      "timestamp": "2026-10-31T12:12:47.611672+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r2.json",
+      "sha256": "84f881cf9f98b84c6d421e50685b1740688133f37acfc11bdd5c84920d29787b",
+      "label": "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r2",
+      "count": 777,
+      "seconds": 15.0500682,
+      "timestamp": "2026-10-31T12:47:33.007266+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-ExternalTrue-r1.json",
+      "sha256": "a756db30e29c1391b0bd735d793f1967e68ed440ed3e61bbdf82e0da68a14ed2",
+      "label": "scaling-ProviderPostgreSql-ModeBalanced-Activities10-ExternalTrue-r1",
+      "count": 100,
+      "seconds": 17.7328472,
+      "timestamp": "2026-10-31T12:41:16.827316+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency16-r1.json",
+      "sha256": "df1ddfad5eed036af58a50352bbc4e5f04ce4ccaf51d9c0ea2fade8dd8500c93",
+      "label": "scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency16-r1",
+      "count": 592,
+      "seconds": 15.5016158,
+      "timestamp": "2026-10-31T12:16:09.616746+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency4-r1.json",
+      "sha256": "30d6509b0df4d741f366b51b86a56a8380c3d2472a1b71be25eb4360402b32ac",
+      "label": "scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency4-r1",
+      "count": 202,
+      "seconds": 15.1683179,
+      "timestamp": "2026-10-31T12:15:22.477436+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeDurable-Activities10-ExternalTrue-r1.json",
+      "sha256": "758ee1645876565f38534c00a264cfcb80c361455e259554343fc3fed4accafe",
+      "label": "scaling-ProviderPostgreSql-ModeDurable-Activities10-ExternalTrue-r1",
+      "count": 100,
+      "seconds": 28.0805967,
+      "timestamp": "2026-10-31T12:29:16.57605+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency16-r1.json",
+      "sha256": "176ab90c37512f807dba95ad72d6694df30e26b8c3d64a5af4d860b065b6f52a",
+      "label": "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency16-r1",
+      "count": 3197,
+      "seconds": 15.050332,
+      "timestamp": "2026-10-31T12:24:10.799027+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency4-r1.json",
+      "sha256": "661f607f7f2647a55fc8534b544a587af727ed2c07cbd50ba07f99d30be345b2",
+      "label": "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency4-r1",
+      "count": 1332,
+      "seconds": 15.0051242,
+      "timestamp": "2026-10-31T12:17:56.398498+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-ExternalTrue-r1.json",
+      "sha256": "c4a0f6cf9bcfa7cb2ca83f8018667c0f33fe403a0e811a84b3e2994494b30ce1",
+      "label": "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-ExternalTrue-r1",
+      "count": 100,
+      "seconds": 19.0714811,
+      "timestamp": "2026-10-31T12:45:23.164875+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1.json",
+      "sha256": "01628133658ca45d6ec8e58d30f90e61b35340f8906b3a3844495e509ae3b85b",
+      "label": "sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1",
+      "count": 1060,
+      "seconds": 15.3755756,
+      "timestamp": "2026-10-31T13:21:57.99971+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1.json",
+      "sha256": "fadb1b41b9ff76129e52c6662389cfcd345a3baf225dcc0112f538d747bf2f65",
+      "label": "sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1",
+      "count": 855,
+      "seconds": 15.152693,
+      "timestamp": "2026-10-31T13:21:15.020549+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r1.json",
+      "sha256": "bbcfdf2e603d1955aaec74f29540636dee53bad027c15feb3934e71c49665bd8",
+      "label": "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r1",
+      "count": 809,
+      "seconds": 15.031749,
+      "timestamp": "2026-10-31T12:52:53.061864+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r2.json",
+      "sha256": "ff12a1672359fd199d4c559e051d60745311dcc28444a179562230aeac0f6ed7",
+      "label": "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r2",
+      "count": 905,
+      "seconds": 15.0096778,
+      "timestamp": "2026-10-31T13:04:58.882037+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r1.json",
+      "sha256": "12c81185507a9cdae7e790ca1c7917ac77a258d524c95f89fa8465302dfc928b",
+      "label": "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r1",
+      "count": 985,
+      "seconds": 15.032676,
+      "timestamp": "2026-10-31T12:54:29.039484+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r2.json",
+      "sha256": "8d775e03242949f50a3f65ec23e04f05162474c39ab960a26b15ecb96c92c359",
+      "label": "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r2",
+      "count": 953,
+      "seconds": 15.0211882,
+      "timestamp": "2026-10-31T13:04:25.890361+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap10-r1.json",
+      "sha256": "be0a9c32abff47ab75c2397162108d017564d6cf4d3ae8a6697efdfbf6ca1693",
+      "label": "tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap10-r1",
+      "count": 35,
+      "seconds": 15.4069435,
+      "timestamp": "2026-10-31T13:03:18.234473+00:00",
+      "variant": "baseline"
+    },
+    {
+      "file": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap250-r1.json",
+      "sha256": "a90ca48c0633e93bf4d9db7188d71c64f6d6e73a389007db391ef39e5c4e0bf3",
+      "label": "tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap250-r1",
+      "count": 84,
+      "seconds": 15.0179058,
+      "timestamp": "2026-10-31T13:03:52.315717+00:00",
+      "variant": "baseline"
+    }
+  ],
+  "files": [
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1.json",
+      "sha256": "b870588107b435d8d230ae9c1d3f21e4dedbb1340899f1db8a23dc38c0a7c3fb"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1.config.json",
+      "sha256": "1e8cf82f8c33bd233e6a6b1fa3410e42da3fd407317fbb81479b846119d4413d"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities1-r2.json",
+      "sha256": "3a42dc99c940be2ea4a5f015f3ed7ec59fe6de35737d3341b5bb8bdf31fece30"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeBalanced-Activities1-r2.config.json",
+      "sha256": "ae2275bc227d1b5f2a4c435dcef23b1a4640a20446791fdf9fb6822aca80e5fc"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1.json",
+      "sha256": "3ff64dff04cd8ac62395b452ee6d0ba27b2bfe446fa2add8800ce8bbfc166d90"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1.config.json",
+      "sha256": "e21508bc132e2f2824d105cfbecc6210a123118521547da14840bffe5f931a51"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities10-r2.json",
+      "sha256": "e6a68c1276e7f140fa264fc8aef8643e28cd264937326a605a2bf57996f56fd6"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeBalanced-Activities10-r2.config.json",
+      "sha256": "be8b3081affd886bb64e64a82428123b22ab480e16a28ca7329d6ab5748174bd"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1.json",
+      "sha256": "f0876f57a1c5c32d769f978601081b1419e5bbdde646644beb499d2d3e9c579f"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1.config.json",
+      "sha256": "82f66d530eb571a42157305fee43981b11c3669fc3c50c134c0bb70f2da45c1c"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeBalanced-Activities100-r2.json",
+      "sha256": "901bcdc278cdce4db5a85dfe33ea83237be014c83ca1cc638339be92dd57b7d4"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeBalanced-Activities100-r2.config.json",
+      "sha256": "6227ed6cd7983d7c79e17ac38fab0074863120dd3b5ebea71c8cadc80867020b"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeDurable-Activities1-r1.json",
+      "sha256": "13eeaf3a5ad11d1d4f1f197432efcae0995a919df74dc6c65517efd6dfb9e887"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeDurable-Activities1-r1.config.json",
+      "sha256": "701fa71360c9c8a909518aa560eaf6354e2683dab3847445cca596741fca1006"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeDurable-Activities1-r2.json",
+      "sha256": "3749661378382e3453f743eacb99244a67a52e5d016461782bd9a846b13418d4"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeDurable-Activities1-r2.config.json",
+      "sha256": "0ab1f877270928a8751e3b384a663e515430c0518c4de34c96a8fa4de012ab94"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeDurable-Activities10-r1.json",
+      "sha256": "0d8b47a09b83ceaf99a2383829a102c43857f7fcef6d41d7a645e320046f2cf7"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeDurable-Activities10-r1.config.json",
+      "sha256": "4f1fd14333be9a2fb5179feef0847a4b8825ab37ba28328683c17145dd3cb644"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeDurable-Activities10-r2.json",
+      "sha256": "f376dd8d46169aea10d61a0e22ca546ebd5b229d85a8a72a2c2c42224f211a9d"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeDurable-Activities10-r2.config.json",
+      "sha256": "c5d5dbca29b1761807ec212cf09172110543913b0ab03b1cddc1a13ff4a3cb40"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeDurable-Activities100-r1.json",
+      "sha256": "86d9fe9660dbefc903f9755e357a44fe24f6df81ea497cda9df88ead94ddd3cf"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeDurable-Activities100-r1.config.json",
+      "sha256": "33374faba7737f245b0f3c5741918ebd473d6d4dead6d3760b05f5859df8a3d6"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeDurable-Activities100-r2.json",
+      "sha256": "4a25fa08f17469fe3d68ff19ece2bf24f6574d5114431c69e005725a8312076f"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeDurable-Activities100-r2.config.json",
+      "sha256": "d138b912763c659f63f9907fcf05b56729d7711d203cd3624c1ccdb8541a6c63"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1.json",
+      "sha256": "96d24e1c07634222e40ecacfe93b62190a42d32af8fb4e190bb1fffb2b458a11"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1.config.json",
+      "sha256": "6bc291ece62c26d5d55435f12088bb109401044b1691cf4fde823807c31ed21a"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r2.json",
+      "sha256": "a00d0c6e2080c0da9f020b656902c33993a911f68f5f57fbfd8ebf4ccd5ed234"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r2.config.json",
+      "sha256": "dd95dcf07028300cae714866894b9ac151ab2b1bb55202427118ae37ec271533"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1.json",
+      "sha256": "5ca16faa99000b77c5270ec7b3eafccfb2a18aaf9cb8658dcbeb8b082244e6df"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1.config.json",
+      "sha256": "1874d6707d15433b836c82e86772ea078d2f6c55dec45038a7ddebba5136e7a0"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r2.json",
+      "sha256": "ca4fa8e872303cbc4784bd3faf847b522d63c1beb3f36997d8d9327884e57d8a"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r2.config.json",
+      "sha256": "afe76bae47f9c1bf7e14addc37717623fb20d6057c56f74fb55272d6d9290d15"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1.json",
+      "sha256": "5d4f2f39acab91837c92b5ecff2cea158aef177026d4ccd179fed70e82f8a1bf"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1.config.json",
+      "sha256": "083e53ddbbac1683eb06836ae5a0caf1d5ee96e57e86891f18a5189b3be7fb28"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r2.json",
+      "sha256": "0571b122081f642d746391b0792daf8dba4a4b649b1e078246ae44a4537e4219"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r2.config.json",
+      "sha256": "fad3534be7f0467f28ddb586495e647dd7f444ec9543a7b22d6b98e712818961"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1.json",
+      "sha256": "60901a853f12a3e1ef379ac67ef193eb2a1854ef0d4856bcaee1f6a2251146e0"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1.config.json",
+      "sha256": "04729996bdf53249df34ab0f7935929be1356cc07308be765b4ad9faf8f26ae0"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r2.json",
+      "sha256": "d436f62d5fb045035922beddb7a13e3fa4f13917dfd9d60264103213e74bcbe3"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r2.config.json",
+      "sha256": "bf9b2d8caf1b28d1db94c112a92ea9dab28015e28b5ef785c09753fb9a19ec37"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1.json",
+      "sha256": "df6a628b3e71b4d2c5c6a9b6ab0fd05dcf11c416dae865e39188c0e80f10d7ff"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1.config.json",
+      "sha256": "997ef551dcdae0ee0d36c942a195e5ae9cea7c42ed7dda129d111369fae456f1"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r2.json",
+      "sha256": "c50f3268934f037dacbf8eb4524f01598ea43e7858427c106d95d12c4c9143fa"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r2.config.json",
+      "sha256": "e4d9f20b1e61b9b4799e6410f56afce597f62d426001d9cd9931ac3c964cee2c"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1.json",
+      "sha256": "4c2c35a7c36f6a00f0ef1f5a33b3880a6525dc7d1abc6c2a4e8d9352d35084a7"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1.config.json",
+      "sha256": "5a15325aeaa1e65e42828079edf9695578fa332d06d78330e65e4903da92a4c4"
+    },
+    {
+      "path": "results/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r2.json",
+      "sha256": "2f0e4e8a25c9c5e04bf4c95a175dcedd18f4d34166ffca80c4277fdbcd77629e"
+    },
+    {
+      "path": "configurations/baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r2.config.json",
+      "sha256": "ea468f7decb4ca7ee865d8b879928d737e7bed45f83f5a3c010de65eb5df2c26"
+    },
+    {
+      "path": "results/capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency16-r1.json",
+      "sha256": "6d2a488fcc0ed33f6a1b7ffebd84b5c0273a9f7b64810253247f8b2e81ed2dc6"
+    },
+    {
+      "path": "configurations/capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency16-r1.config.json",
+      "sha256": "421f716235fb29585931bcbae87fc124a0aa4767b2023b58fdcb3ef7ebb51b8a"
+    },
+    {
+      "path": "results/capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency64-r1.json",
+      "sha256": "75436746f635a5ebb07084b6b5e7e320a65e43dbdbe77ba7510f2edf2ba8227a"
+    },
+    {
+      "path": "configurations/capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency64-r1.config.json",
+      "sha256": "a6469bf6f03827d665ddc1ebb418344f4c5f312676eabcd86c92540b52882c11"
+    },
+    {
+      "path": "results/capacity-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency64-r1.json",
+      "sha256": "4477184fd103cf9d10fa97a8e0ba3ea4e207be64d673221a9bbe74aec211c672"
+    },
+    {
+      "path": "configurations/capacity-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency64-r1.config.json",
+      "sha256": "4ab020f0c5938f7bd4a9c1ebafb795c9316af33f9038a252b22cbc292a31a76a"
+    },
+    {
+      "path": "results/cluster-n1-c8-r1-node0.json",
+      "sha256": "18b85962a8880c10679ca681afaa7eb050bbfdb22abc556026f7a93587208de4"
+    },
+    {
+      "path": "configurations/cluster-n1-c8-r1-node0.config.json",
+      "sha256": "9488917aacac6652c59140be63d600a2ff6c1a7c9be92ba8b29bbe04df31c33a"
+    },
+    {
+      "path": "results/cluster-n1-c8-r2-node0.json",
+      "sha256": "c243b30f90f4f1c16ddb7de77e33d971564c8db899aa8813b143d14f8a1cccf2"
+    },
+    {
+      "path": "configurations/cluster-n1-c8-r2-node0.config.json",
+      "sha256": "3cbbad7434bda9eef2d4f18e47aa4b8d70bca4e566eb9e0d50213f9169786ac1"
+    },
+    {
+      "path": "results/cluster-n2-c8-r1-node0.json",
+      "sha256": "58baa4bb1e21d066651a236f6a6176786c5d4201042ce9492a29413f4fbaf024"
+    },
+    {
+      "path": "configurations/cluster-n2-c8-r1-node0.config.json",
+      "sha256": "7086fdd7c722a15eeb3cdbdf447cdf8ce909f0a09c542a89fd9bb00ed07cd579"
+    },
+    {
+      "path": "results/cluster-n2-c8-r1-node1.json",
+      "sha256": "bb460478db24301f4294e9fc1d9bf42af393c909499b65bd4f4a91c1ebe0708f"
+    },
+    {
+      "path": "configurations/cluster-n2-c8-r1-node1.config.json",
+      "sha256": "2e099334e1541a42ede715fc14a24c8a410d3b41a32be6cfabaa528eb2f441dc"
+    },
+    {
+      "path": "results/cluster-n2-c8-r2-node0.json",
+      "sha256": "93b1109a474d0a89395561a9e061c212e5cc0217716cfb3626b7d8a59d689fba"
+    },
+    {
+      "path": "configurations/cluster-n2-c8-r2-node0.config.json",
+      "sha256": "d81317b6804d0f6f7e791f7e64fbf3d9fe939fa425cc8ea84e6110d23c316013"
+    },
+    {
+      "path": "results/cluster-n2-c8-r2-node1.json",
+      "sha256": "343acd0495172c1bee8070e2426c76f3f163d8b007b23be3b41308e6831eb64f"
+    },
+    {
+      "path": "configurations/cluster-n2-c8-r2-node1.config.json",
+      "sha256": "035fa648a19f7af38f957cb81b6fcfe8f201373ac7b571e2c1c5dc241a674c78"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1.json",
+      "sha256": "7eee58050d296eb740e7079c0cf0611e481f06deef4fee5c3c1c58c67e65e7b1"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1.config.json",
+      "sha256": "0b4505816637bd43893020e39163fdf42b73c04a9acdd010ed74431bb57a0acb"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r2.json",
+      "sha256": "d63473d5647af0e02110e6b388163616b6fa6867d250f9a7e72c6c6b4996b0bd"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r2.config.json",
+      "sha256": "0c1b55121a3ed46683b2ab500d26c24431c2566b92f2abb7fc6e1cbb69e9a9b2"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1.json",
+      "sha256": "2a9e2b36adfb8d6820ffb218dd41b39dc5b071a71b89774a20b4536e4724ec09"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1.config.json",
+      "sha256": "1b81e4ffed2cef8d4136797885d9ad0b861c74ee32844fa74e788fb495138c96"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r2.json",
+      "sha256": "2e3932b9845ea2c5051b28de693c5e557597a075601dc5d241631dc402725f18"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r2.config.json",
+      "sha256": "840c481b8b8452124525613cefbc3f173b5d584b60a9868649dbdc06bb1ac520"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1.json",
+      "sha256": "d076d13be488b601586845130b8ba8a91e6669567bfc6423176cc655dc558329"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1.config.json",
+      "sha256": "d6bf34cbf159b85a57faeb12506f04698f582296cc14054cd2436af2a5bfe1c6"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r2.json",
+      "sha256": "d5ca1bfa17b2b73b9156ae20a00b3242b19c419a0b184526ceebe92dd4b65565"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r2.config.json",
+      "sha256": "e408f9e02fa9e94cb9869f3bb8f86002838468c1fbe4621407df35bc3d8550b1"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1.json",
+      "sha256": "13ddf6bbf27217933c5363a436bd4e60bbee1b066f2af65a73956193d2c32e36"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1.config.json",
+      "sha256": "8527ac81e739160ff20e304987e90b525adee28c6d6f1d54f6ea83bc7a2b8520"
+    },
+    {
+      "path": "results/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r2.json",
+      "sha256": "b259e7dbe8fd023c46cddfc5d48c6c6997d151b25a63b202b23c200c9d4b11c7"
+    },
+    {
+      "path": "configurations/experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r2.config.json",
+      "sha256": "e2fcd0ffd04b389094116a580ba691fa6576d6af4711d23a441f1deae57ecdc6"
+    },
+    {
+      "path": "results/local-ProviderMemory-ModeBalanced-Activities10-r1.json",
+      "sha256": "7a660d6b1035891940ae3c2a85878329c0a56bfc6e4504e99e576b680c2c0401"
+    },
+    {
+      "path": "configurations/local-ProviderMemory-ModeBalanced-Activities10-r1.config.json",
+      "sha256": "1c104cd30f6c07d30cb802ef72e46bc5eefb751b08cf9582447577cb10d5a4a1"
+    },
+    {
+      "path": "results/local-ProviderMemory-ModeBalanced-Activities100-r1.json",
+      "sha256": "a4fadf6d3debaf517b611b517cce5acc6e694340bd03b75b7c5104e2e671a70b"
+    },
+    {
+      "path": "configurations/local-ProviderMemory-ModeBalanced-Activities100-r1.config.json",
+      "sha256": "59e792e9d9c36c6c8d7fe391b8f99921fd0e700c803a71f8c7abcb10f4aedd28"
+    },
+    {
+      "path": "results/local-ProviderMemory-ModeEphemeralNoRecord-Activities1-r1.json",
+      "sha256": "54b4f0cd0171669f046bca45c980052aeb0e7c86ee0d5a2690909b37d6f7b266"
+    },
+    {
+      "path": "configurations/local-ProviderMemory-ModeEphemeralNoRecord-Activities1-r1.config.json",
+      "sha256": "55ee7b0d9829bded83ef934a58d869aac91b8b3372573061bdfef56d93d7a463"
+    },
+    {
+      "path": "results/local-ProviderMemory-ModeEphemeralNoRecord-Activities10-r1.json",
+      "sha256": "eea2f3d215bfcd22d5a3d4bf0a4f32c8038736938a03896422d2d4dd4b0b1861"
+    },
+    {
+      "path": "configurations/local-ProviderMemory-ModeEphemeralNoRecord-Activities10-r1.config.json",
+      "sha256": "b27c29d8af8df947d6ccb9a1d8a7cc57df70a28575861b326141d8e58d834a95"
+    },
+    {
+      "path": "results/local-ProviderMemory-ModeEphemeralNoRecord-Activities100-r1.json",
+      "sha256": "33b02a3932ed5cea28f183fb5c1e6bee93e701d88888d1e1db6201053498d756"
+    },
+    {
+      "path": "configurations/local-ProviderMemory-ModeEphemeralNoRecord-Activities100-r1.config.json",
+      "sha256": "fcc2e11a5c552d5b193d94d0242733feab1415bdd82694cc2ad1d39e5fafa414"
+    },
+    {
+      "path": "results/local-ProviderSqlite-ModeBalanced-Activities1-r1.json",
+      "sha256": "b465147c2639de50e425a70b7058d8cf2c27fedeccda1b24bf2c60bbbd5daf52"
+    },
+    {
+      "path": "configurations/local-ProviderSqlite-ModeBalanced-Activities1-r1.config.json",
+      "sha256": "424305b9825043b2e73804c37e4a11fa106aaeee7fc8f041c64b4b4a2731cf54"
+    },
+    {
+      "path": "results/local-ProviderSqlite-ModeBalanced-Activities10-r1.json",
+      "sha256": "a57e7875c5369de37c8041d427e974a5639759708c58a0a003736be95a239ba1"
+    },
+    {
+      "path": "configurations/local-ProviderSqlite-ModeBalanced-Activities10-r1.config.json",
+      "sha256": "507b1d2b7537fb4ef4bce2e74dc7464a2b7cb286a374b6ecba56d16fae5d2119"
+    },
+    {
+      "path": "results/local-ProviderSqlite-ModeBalanced-Activities100-r1.json",
+      "sha256": "006c1fb583125b963af30a6ff2d488a50eae281cddcb54765e6a25c67d3f3baa"
+    },
+    {
+      "path": "configurations/local-ProviderSqlite-ModeBalanced-Activities100-r1.config.json",
+      "sha256": "63342959e5885fc6f72d5696b59df880d7004d95f4a4589d82f284b65c711779"
+    },
+    {
+      "path": "results/local-ProviderSqlite-ModeEphemeralNoRecord-Activities1-r1.json",
+      "sha256": "d7efcb9fdbebf65e589e942126030c84e7b10cf288469f6c9ff4a537d5017a6a"
+    },
+    {
+      "path": "configurations/local-ProviderSqlite-ModeEphemeralNoRecord-Activities1-r1.config.json",
+      "sha256": "9d7d93adef2ca6d490f3d29b4ba39fdf36d656d723a733466a125afbf8115558"
+    },
+    {
+      "path": "results/local-ProviderSqlite-ModeEphemeralNoRecord-Activities10-r1.json",
+      "sha256": "db4c381d1e84ff9490a97304d55f31ca98c630cec973f35782d5453b22d59f15"
+    },
+    {
+      "path": "configurations/local-ProviderSqlite-ModeEphemeralNoRecord-Activities10-r1.config.json",
+      "sha256": "7e781ae8d2f1ab2df66e0944da38ea01a27f36c83701dbe3fc17a4603dfdc4ac"
+    },
+    {
+      "path": "results/local-ProviderSqlite-ModeEphemeralNoRecord-Activities100-r1.json",
+      "sha256": "4e6f800641957038b6a696118fa8eab45debc5292b68f24cb0917886afd810e2"
+    },
+    {
+      "path": "configurations/local-ProviderSqlite-ModeEphemeralNoRecord-Activities100-r1.config.json",
+      "sha256": "27fbcd0806ead3e0ed6f2d8c7113fe8d7989a4d358936c1d298484c41c14bbe0"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r1.json",
+      "sha256": "730a24c6d4660a060564f5907ce277218cdfd645109a2bb6de66b30f23b1b47b"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r1.config.json",
+      "sha256": "204c501a8c6684042ac67796981dcd2dea57e5d6548db97eceda3ff1d2e9c41b"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r2.json",
+      "sha256": "8f12d8611856e9ba17ceffb2f33cebf10a276b718152260a90b589ec92c2623c"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r2.config.json",
+      "sha256": "abc9981df15e84ad3acefd5d882ba0add4ff77c307711a5f6a5c272e4e30de58"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r1.json",
+      "sha256": "14677d3617e26278bcc62c94080e16b1d3da90b482dc66c9fdbed9c8e5385db7"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r1.config.json",
+      "sha256": "4e14a53dfa17f9c8021325bed99ec8c100e2ead7982f30496c77adba72535845"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r2.json",
+      "sha256": "84f881cf9f98b84c6d421e50685b1740688133f37acfc11bdd5c84920d29787b"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r2.config.json",
+      "sha256": "e8ea1b73895967a3050214b0560e567efb4d3ca1ca55f92ae1b6130e35d8768d"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeBalanced-Activities10-ExternalTrue-r1.json",
+      "sha256": "a756db30e29c1391b0bd735d793f1967e68ed440ed3e61bbdf82e0da68a14ed2"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeBalanced-Activities10-ExternalTrue-r1.config.json",
+      "sha256": "deccfa2e539157405c1045bc78f4422c1076a46be7439af621705d902de07ca5"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency16-r1.json",
+      "sha256": "df1ddfad5eed036af58a50352bbc4e5f04ce4ccaf51d9c0ea2fade8dd8500c93"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency16-r1.config.json",
+      "sha256": "4aefc3463fb1b40f44af9b3188b439407c7ecae7722ba3cb6935eebf3e4554d6"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency4-r1.json",
+      "sha256": "30d6509b0df4d741f366b51b86a56a8380c3d2472a1b71be25eb4360402b32ac"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency4-r1.config.json",
+      "sha256": "df98f898ea30e06b8e54a575398ae648d7219baf04bdbcab701ddefff1a68da3"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeDurable-Activities10-ExternalTrue-r1.json",
+      "sha256": "758ee1645876565f38534c00a264cfcb80c361455e259554343fc3fed4accafe"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeDurable-Activities10-ExternalTrue-r1.config.json",
+      "sha256": "d4308bb17c4733fa6a7d280509d208328f5df71a2691cc864c9cd7a36b162d91"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency16-r1.json",
+      "sha256": "176ab90c37512f807dba95ad72d6694df30e26b8c3d64a5af4d860b065b6f52a"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency16-r1.config.json",
+      "sha256": "c48b8db72e1eeb4718d2da0016b2c0d0fce2d19676099ef12ace0a9e9fa1cd6a"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency4-r1.json",
+      "sha256": "661f607f7f2647a55fc8534b544a587af727ed2c07cbd50ba07f99d30be345b2"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency4-r1.config.json",
+      "sha256": "97b2e2b7e9f641beda0ce4ece10cedce5a2184fbab0792642439facc2e35f14b"
+    },
+    {
+      "path": "results/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-ExternalTrue-r1.json",
+      "sha256": "c4a0f6cf9bcfa7cb2ca83f8018667c0f33fe403a0e811a84b3e2994494b30ce1"
+    },
+    {
+      "path": "configurations/scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-ExternalTrue-r1.config.json",
+      "sha256": "71518ea9822c6439e7530d5454ea7bbc7e7a8236d03b5c9b7b0973e44b274b2e"
+    },
+    {
+      "path": "results/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1.json",
+      "sha256": "01628133658ca45d6ec8e58d30f90e61b35340f8906b3a3844495e509ae3b85b"
+    },
+    {
+      "path": "configurations/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1.config.json",
+      "sha256": "97863efa8ad1651d7de85a34910d9e6bb9095e8c3e414bfca4374198e15a36ba"
+    },
+    {
+      "path": "results/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1.json",
+      "sha256": "fadb1b41b9ff76129e52c6662389cfcd345a3baf225dcc0112f538d747bf2f65"
+    },
+    {
+      "path": "configurations/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1.config.json",
+      "sha256": "ed1d5afcb768beeb1db9bf3a3927ad48543451fc5d8a53773af117b4c852aee3"
+    },
+    {
+      "path": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r1.json",
+      "sha256": "bbcfdf2e603d1955aaec74f29540636dee53bad027c15feb3934e71c49665bd8"
+    },
+    {
+      "path": "configurations/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r1.config.json",
+      "sha256": "a08415572de421eace9b60e81bb41b220bced0b190ce10c7f26b89ab3f3977ed"
+    },
+    {
+      "path": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r2.json",
+      "sha256": "ff12a1672359fd199d4c559e051d60745311dcc28444a179562230aeac0f6ed7"
+    },
+    {
+      "path": "configurations/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r2.config.json",
+      "sha256": "a08055ad30f951b8e1146ed6e0584be7427f8f5cc7ead90b5098eefeff4efd48"
+    },
+    {
+      "path": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r1.json",
+      "sha256": "12c81185507a9cdae7e790ca1c7917ac77a258d524c95f89fa8465302dfc928b"
+    },
+    {
+      "path": "configurations/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r1.config.json",
+      "sha256": "bd014c33f9ecebe22464cd44874c1192e22a6597ca9854a776147872bb14429a"
+    },
+    {
+      "path": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r2.json",
+      "sha256": "8d775e03242949f50a3f65ec23e04f05162474c39ab960a26b15ecb96c92c359"
+    },
+    {
+      "path": "configurations/tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r2.config.json",
+      "sha256": "b685732b01d9a4a57ef069603bcdba07d2a991974aa1aac59a82692010d64147"
+    },
+    {
+      "path": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap10-r1.json",
+      "sha256": "be0a9c32abff47ab75c2397162108d017564d6cf4d3ae8a6697efdfbf6ca1693"
+    },
+    {
+      "path": "configurations/tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap10-r1.config.json",
+      "sha256": "0bb1cde90b7c84b20eba7b1041b54f3458f24f1b7d943e2684535e45a4d836b2"
+    },
+    {
+      "path": "results/tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap250-r1.json",
+      "sha256": "a90ca48c0633e93bf4d9db7188d71c64f6d6e73a389007db391ef39e5c4e0bf3"
+    },
+    {
+      "path": "configurations/tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap250-r1.config.json",
+      "sha256": "0fd373e05152e948396ac8499f70af21b9bf28eb792c752c133b836b679c1ed7"
+    },
+    {
+      "path": "environment/baseline.progress.jsonl",
+      "sha256": "ce5b277361bc66d1efe0f753a0d1602902703a3d9fd657683bca605a5c16df46"
+    },
+    {
+      "path": "environment/capacity.progress.jsonl",
+      "sha256": "a9971d9cd05ba1d78f1868176bb1d06fa7bfa5ff56e883c950c1c319c1f4f5c5"
+    },
+    {
+      "path": "environment/cluster.progress.jsonl",
+      "sha256": "79219cd65d4378919b518c8304fd67669c8b11ef9161413ebab4c599bbaf67bb"
+    },
+    {
+      "path": "environment/experiment.progress.jsonl",
+      "sha256": "9fa4e4121dad4447dbe04ea8ea0c5454008bfe50af8ed79c80caa34e043b6a56"
+    },
+    {
+      "path": "environment/local.progress.jsonl",
+      "sha256": "484f948011742725496c84b37df599328f4e0ff637402beda98a8c16aa69bd24"
+    },
+    {
+      "path": "environment/scaling.progress.jsonl",
+      "sha256": "78510b0d2eb1865a132f95866097f65cd7ebd59c89fdfbdc7de9db667c6445e0"
+    },
+    {
+      "path": "environment/sqlite-scaling.progress.jsonl",
+      "sha256": "29ca566469aed4d2e80e5cfb67d1aae0ff4d81bf807afe14f4dd4aaebea75521"
+    },
+    {
+      "path": "environment/tuning.progress.jsonl",
+      "sha256": "acab78fc8a758b9b1d6ce08a4ad1c25d4422c1810b46741ae469ea3d27750b43"
+    },
+    {
+      "path": "environment/harness-exclusions.jsonl",
+      "sha256": "cb3dc1366ba1405c067bf68d9bf9e534d9f1c91ca124d8550962539d5ded0cb6"
+    },
+    {
+      "path": "environment/cluster-n1-c8-r1.environment.json",
+      "sha256": "7c22b4c4dbfe308850dde46f557c63f306087dce2d68f1b2c14723be0f2f6120"
+    },
+    {
+      "path": "environment/cluster-n1-c8-r2.environment.json",
+      "sha256": "fedc6153abe52a829ca7d71136d940eef52a29e7e9424652b7676eeed1c170f6"
+    },
+    {
+      "path": "environment/cluster-n2-c8-r1.environment.json",
+      "sha256": "2aad3db0bbb06e4385015f45bb2ced6f7008e7c28b28ba999f78669d4be8a966"
+    },
+    {
+      "path": "environment/cluster-n2-c8-r2.environment.json",
+      "sha256": "50e62781d249497bd907e94cb1e2ecf2897d4f58946abd6a2dfa293f1a1d9104"
+    },
+    {
+      "path": "environment/environment-policy-change.json",
+      "sha256": "ef8be790c1c500a75e6e266462dcb3dcde96d3349e48e52596a6917e5854c757"
+    },
+    {
+      "path": "environment/environment-policy-timed-window.json",
+      "sha256": "6fca2f491a432091b8c729769f25d41710721605b04315d600cfd43473f975f9"
+    },
+    {
+      "path": "metadata/provenance.json",
+      "sha256": "8e32675a501c4d658b1733e6b8d14074a18c24e6fd1ae50ce36edd6da284f191"
+    },
+    {
+      "path": "metadata/experiment-hashes.json",
+      "sha256": "0941754168bd79426cf22b7b6f0ac07174ea04d5b6a33b3f44429e1b82cfdeb4"
+    },
+    {
+      "path": "metadata/cluster-hashes.json",
+      "sha256": "84f3144d39706ce52cc75f68118c0080f49826965a2c747d92feadd6c8a32305"
+    },
+    {
+      "path": "metadata/local-hashes.json",
+      "sha256": "db07b44cd6717ac29d3def8d63f396392ce9617c3cc9e86bb1459a4100f7a449"
+    },
+    {
+      "path": "metadata/diagnostic-hashes.json",
+      "sha256": "764343818e3787bb08b592bf33526d37203dec5e45eee16f8efecd7bf65d3c08"
+    },
+    {
+      "path": "metadata/sqlite-database-settings.json",
+      "sha256": "d8b9d39940a601d63c96daf1cd7a29c00571e8ad09493cf5b4ac097581feeffd"
+    },
+    {
+      "path": "metadata/database-environment.json",
+      "sha256": "bf64bb90aff1253ad1d7282bc62d017f09daef72ed7402ad5bcf8f2985b99388"
+    },
+    {
+      "path": "metadata/sqlite-native-library.json",
+      "sha256": "1b2c3b61930d11724b65f8a9b09e8560ba67c5719418fd1a39ebdb36713d4384"
+    },
+    {
+      "path": "metadata/allocation-profile.json",
+      "sha256": "edf6f47a120f42eb64cbf262b79f85357bca1b58dc69f49a9cd0d36a681001ff"
+    },
+    {
+      "path": "metadata/schema-maintenance-accounting.json",
+      "sha256": "9669c24f90038c8a284a2ee569f0fe1e3f65f0c40b18e572a77cc9759f9e2fec"
+    },
+    {
+      "path": "metadata/profile.config.json",
+      "sha256": "820ce5143e2652bbbb12ebe2ed1436fac4c0483caae9ee0b86ab04ce9a4c3f3d"
+    },
+    {
+      "path": "metadata/cleanup.json",
+      "sha256": "8faf74d9afdb0ad3b2e3f33413135631320eaf8ef634252eea2af069798b40cd"
+    },
+    {
+      "path": "metadata/audit.json",
+      "sha256": "a130dee14f3ea04381462c7d84009b87c71a00fc6395ee27e30011e703207d59"
+    },
+    {
+      "path": "metadata/build-final.log",
+      "sha256": "ab85eb88adf9e4b9ee32f0a044011c5971c4d37372d715f0b043ce9b0db22624"
+    },
+    {
+      "path": "metadata/build-experiment.log",
+      "sha256": "d64fcc78287b62bef52dc74aaaae24ea3fdadcb2074455a791bebb598b010cfc"
+    },
+    {
+      "path": "metadata/profile-app.log",
+      "sha256": "58d1d1d28f139fad0724772dfda1c8a93842bdcc96d5017ef388ee15428a9287"
+    },
+    {
+      "path": "metadata/profile-trace.log",
+      "sha256": "367616415f366dfe40a2619645b205709364977f52cf37d38b24c593b52fd38e"
+    },
+    {
+      "path": "metadata/Program.baseline.cs.txt",
+      "sha256": "5663274d98cdf8c8a9e067a332eddbca0439191a9a52b74c46b41977d4ea847d"
+    },
+    {
+      "path": "metadata/Program.cluster.cs.txt",
+      "sha256": "450cb9f18e372c2103b7089d3ab934f71285cceeddf947675e20fad4081b6967"
+    },
+    {
+      "path": "metadata/Program.local.cs.txt",
+      "sha256": "b1ab3ca60f21c301973a2640ad213fedd6b67da7b081b0f1ea02dde254e36ad1"
+    },
+    {
+      "path": "metadata/Program.diagnostic.cs.txt",
+      "sha256": "39b8651dbf69591f6d46de8e7ef2b08509f492c4abf50aa3d5b2e3be5f96ebb9"
+    },
+    {
+      "path": "metadata/build-diagnostic.log",
+      "sha256": "d702036a46e0b510f0626f8e2fc226b168cb7e5349a9f47f79168dc7b859cb55"
+    },
+    {
+      "path": "metadata/build-local.log",
+      "sha256": "db4dea9af52730c5d6814fca6f43122734427fbd70cf258a0a30f0b0fbe6e057"
+    },
+    {
+      "path": "metadata/build-cluster.log",
+      "sha256": "fec9017237912707074c9f3f0472a0d4a366407674bdd1ee339d08105364adff"
+    },
+    {
+      "path": "metadata/Perf.csproj",
+      "sha256": "203e4fa19810b7e4f30b4fdf9dd20d3ea698081e403df485927827cc077c1518"
+    },
+    {
+      "path": "logs/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1.log",
+      "sha256": "74610d43d21b444adaec660b3af3b17d6f7202294961e3bd4a7a970c0937608b"
+    },
+    {
+      "path": "logs/sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1.log",
+      "sha256": "ef98b55ddd0a9c282f980280cacf674f7939607e0a71fcfc3c12ef195ecdc3eb"
+    },
+    {
+      "path": "failed/initial-local-ProviderMemory-ModeBalanced-Activities1-r1.json",
+      "sha256": "97ccee3e5281b37ddac3ec49e446b26f25635cd8c78cb08f45382fde66ea96e1"
+    },
+    {
+      "path": "failed/local-ProviderMemory-ModeBalanced-Activities1-r1.json",
+      "sha256": "e768163c482bfe5ba34f5a3367d3fcb50f3f8f3a547a3da0dcc5a19a55997d53"
+    },
+    {
+      "path": "diagnostic/diagnostic-memory-one-c1.json",
+      "sha256": "5ebe9e47f436bc0a7e03c1db5b62646e62d9efdaf25914247c245f1c6e5cb7a3"
+    },
+    {
+      "path": "diagnostic/diagnostic-memory-one-c16.json",
+      "sha256": "6803504e5d5131f19a86f857f58a965520a858c26c3cab592ff944583fc01370"
+    },
+    {
+      "path": "diagnostic/diagnostic-profile.json",
+      "sha256": "f57ffc9f0efbc47cb6ecfd8c4bb0107b7ec8c723e03bb2acac0d0bf1e26abe70"
+    },
+    {
+      "path": "diagnostic/diagnostic-memory-one-c1.config.json",
+      "sha256": "496d4873fe40ad174da8a3abfe242fcbe8f9d742d4ac3d4e547015f614c22065"
+    },
+    {
+      "path": "diagnostic/diagnostic-memory-one-c16.config.json",
+      "sha256": "3394c5319009d6c781b299f41b23bf7d64004cc22091be3ee470f6dbdb9bbd03"
+    }
+  ]
+}

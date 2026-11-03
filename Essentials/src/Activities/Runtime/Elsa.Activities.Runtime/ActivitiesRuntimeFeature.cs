@@ -23,10 +23,12 @@ namespace Elsa.Activities.Runtime;
     DisplayName = "Activities Runtime",
     Description = "Typed activity invocation and completion runtime."
 )]
-public class ActivitiesRuntimeFeature : IShellFeature
+public class ActivitiesRuntimeFeature : Elsa.Events.EventsFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public override void ConfigureServices(IServiceCollection services)
     {
+        // Resume validators use the canonical Events pipeline in composed and direct library hosts alike.
+        base.ConfigureServices(services);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();
@@ -48,6 +50,7 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInvokeActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowParentActivityCompletionSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowNotifyParentActivitySchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowChildControlSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInterventionDecisionSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowResumeBookmarkSchedulerWorkHandler>());
 

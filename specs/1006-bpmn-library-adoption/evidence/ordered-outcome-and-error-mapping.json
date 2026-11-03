@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    "T021 ordered host commands/verdict/state, boundary wrapping and coded-error mapping complete",
+    "T022 actual-host ordered combined semantic matrix complete"
+  ],
+  "sourceParentCommit": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+  "filesSha256": {
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnCombinedOutcomeTests.cs": "ae9276d6db764a6e39adf9140c3acd7376eb8b2be5525c998b7053c16b28faa3",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnCombinedOutcomeTests.ScopeIsolation.cs": "914730930da34ff5893cd99db4d4c8f4594580773a1120dcd403b9915283ba70",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnCodedErrorMappingTests.cs": "d48889b7dda426a092d1b62e5354cdac62df6706f38affd1c35100c2da2ceb6e",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnGraphAdapterTests.cs": "1e2f75dd8f55f2ee1fb1db61a2f2f93bb4fc1cf0148321199e3def8661c8a420",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnMultiInstanceTests.cs": "4f4b97c89ae7b042bf8f73c560d437de40e5360c49c2ded23f2ea582c982c4f4",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnDeliveryBoundaryTests.cs": "c91dc1a0895bc3416121b14bdaed0b8a900c0265baec3740eb70834c70a4f340",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnRuntimeFixture.cs": "e359704394ca16a5dc38d9f273c4e777c355f8b040227b36f23a0f663a44fd4b",
+    "Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs": "c8ed0975477b89a177991108dfa5221a660970f8cc38118f6f6203608754076f",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnGraphAdapter.cs": "20b9a5074a787573224cb42df02eb9155edddd8249b8df1083181cdf35f41ac3",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnVariableReader.cs": "6e519d683d20989ea08cac831d0e28d0f652b8ffac9d7aaae1562ba35954bf13",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStateCodec.cs": "5ced50bd26d1ba79980f7a1d1f6511e6320f0b047c3f889209abe0bbf6e421cc",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Exceptions/BpmnHostException.cs": "3a7cdf19bc423f923bf2411a679fc893fcc1565aa541bc19ab692d020a11ea2a",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnProcessRuntime.cs": "6577c7b44b7cb21829cde7e4c360ddf887926e2cb8f5a1c92bcc068230157f5c",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "specs/1006-bpmn-library-adoption/tasks.md": "b1f665194be273d1ba744c7f9a69a9963b4d68a1ee7cc0945b3d04d7b03ab6ab",
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.md": "ba62cb1f2422815b2ad451384bd8e2dfa06fe7e9ee2d508d0a7c8af3c9cd7976"
+  },
+  "binariesSha256": {
+    "Bpmn.Model.dll": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+    "Bpmn.Semantics.dll": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+    "Elsa.Activities.Bpmn.dll": "fc285f779085ed7d56ca838110fcc456bdf085229f2ce12d2036df3e2272dff7",
+    "Elsa.Activities.Runtime.dll": "006aeecbe23974596810d35d646f75efa07ab16bc546f19dd88c74aa87bf3710",
+    "Elsa.Workflows.Runtime.dll": "a055d8c258be1ec08630acb5b454363eda32899a23a51b2a6fcd285aecb873bb",
+    "Elsa.Activities.Testing.dll": "8f46fb0f86bfdd9a3a82877653080fd9e645cbc94988fccc1f5c61fb653667dd",
+    "Elsa.Activities.Bpmn.Tests.dll": "73be51a84b0cf3c4f91ebaa52c496a49aa434319a65084817d0e075db232d5a9"
+  },
+  "releasedPackages": [
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "checks": [
+    {
+      "name": "actual ordered/isolated/outward/coded/error-boundary focused",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "670e2a63d81a7d3b8261445120fafc61ed94b566be70689c9652b6940a22fbe9"
+    },
+    {
+      "name": "whole BPMN",
+      "passed": 303,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "169a4d7f2b25cf6d98cbb5c0eb9710f7b2176dcfae625a466602d90cb8512993"
+    }
+  ],
+  "newDiscoveredCases": 6,
+  "mutations": {
+    "sourceRestored": true,
+    "sourceSha256": {
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnGraphAdapter.cs": "20b9a5074a787573224cb42df02eb9155edddd8249b8df1083181cdf35f41ac3"
+    },
+    "mutants": [
+      {
+        "name": "use-incident-code-as-authored-error",
+        "failed": 4,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "BpmnCodedErrorMappingTests",
+        "logSha256": "a50aed77f61292c8c363ae50aa0004081030c4f8c6b39e764f5df8d85b492aec"
+      },
+      {
+        "name": "drop-outward-signal-on-final-fault",
+        "failed": 1,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "Outward_ordered_notifications_survive_inner_final_fault",
+        "logSha256": "9eb0a3dc43d0a3664444666244d23d3eeea34d5aa21ae62e1d13930d37d31e5e"
+      },
+      {
+        "name": "first-node-null-iteration",
+        "failed": 1,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "Interrupting_combined_outcome_preserves_other_same_node",
+        "logSha256": "df64157cebd6b1dd1213041d28ae55f3e8f43710269a13090fcf5ca0051266bf"
+      },
+      {
+        "name": "overwrite-first-semantic-fault",
+        "failed": 1,
+        "passed": 2,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "Ordered_signals_then_original_fault_commit_one_verdict",
+        "logSha256": "46207bdccd3092db92d4dbff2815fe997bc33a4a47b22718fed9498f63dc0120"
+      },
+      {
+        "name": "stage-unissued-starts-on-final-fault",
+        "failed": 1,
+        "passed": 2,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "Ordered_signals_then_original_fault_commit_one_verdict",
+        "logSha256": "a5392d53eb8aaccc5756c434b22b3fab4e40f31b15039ab835a230bac4d5dbfb"
+      },
+      {
+        "name": "leak-raw-library-graph-exception",
+        "failed": 1,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "filter": "BpmnGraphAdapterTests",
+        "logSha256": "3b017feea0475618874716b4cfb8cb8642ae6ec5347364e8c7a512102333d093"
+      }
+    ]
+  },
+  "initialUnqualifiedFailures": [
+    {
+      "type": "compile-only",
+      "qualified": false,
+      "reason": "Incorrect NestedProcessNode argument order; corrected with named arguments.",
+      "logSha256": "cfd95fa23146d7769ec34740106d02130281d44894fb94350917306fe832f4f1"
+    },
+    {
+      "type": "one setup failure/four passed",
+      "qualified": false,
+      "reason": "Unsupported reuse of one binding by two elements rejected before waits arm; not isolation proof.",
+      "logSha256": "428f80e47cf5a0ccc7d4aa7c1e24f9982637e3880dda0e731c43719daa49d3ba"
+    },
+    {
+      "type": "one setup failure/four passed",
+      "qualified": false,
+      "reason": "Same unsupported graph with diagnostic root fault output; final graph uses two tokens at one valid bound element.",
+      "logSha256": "95ff4d225af98a759a7215f55a4f9b051def43bcc98deb592a8bab942607a991"
+    }
+  ],
+  "qualification": {
+    "actualFoundationRuntimeAndReleasedBpmnInterpreter": true,
+    "originalNoninterruptingFaultSuppressesUnissuedStartsBeforeGenericApplication": true,
+    "actualReturnedVerdictAndStagedScheduleCancellationRequestsObservedWithoutMutation": true,
+    "firstInterruptRetiresExactReporterAndConsumesSecondNotice": true,
+    "firstSemanticTerminalVerdictRetained": true,
+    "sameNodeSameElementNullIterationConcurrentExactHandlesTokens": true,
+    "selectedInvocationIsNotFirstHistoryMatch": true,
+    "siblingActivityLeafAndPhysicalBookmarkFactsFrozenBeforeAction": true,
+    "siblingCompleteFactsAndBookmarkGenerationScopeRemainEqual": true,
+    "secondInvocationLaterGetsIndependentHandlerAndIncidentAbsorption": true,
+    "bothOutwardCodesAndRawPayloadsReachOuterOutcomeInOriginalOrderDespiteInnerFault": true,
+    "originalLeafAndInnerFaultedStatesRetainedWhileOuterCompletes": true,
+    "fourRealHostAuthoredCategoryFaultTypeVersusIncidentCodeControls": true,
+    "incidentFailureTypeRemainsSeparateFromAuthoredBpmnCode": true,
+    "propagatedParentClassificationContainsOnlyAuthoredBpmnCode": true,
+    "graphWrapperPreservesNodeIdentifierAndOriginalCauseWithActualHostRefusal": true
+  },
+  "supportingBoundaryControls": {
+    "withheldVariable": "Existing Collection_WithheldVariable_FaultsWithTheWithheldValueCode is direct adapter + supplied scoped envelope, explicitly synthetic; whole project passes it. No producer in this slice withholds variables. Not actual upgrade/Studio proof.",
+    "legacyCorruption": "Previously source-bound actual captured EF database rejection and raw-exception controls remain separate; not restamped by this unit-project run."
+  },
+  "mutationLimits": [
+    "Classification mutation fails all four actual-host cases.",
+    "Dropping outward signals faults the actual outer workflow instead of completing.",
+    "First-node/null-iteration mutation reaches selected normal callback and changes another invocation complete durable facts.",
+    "Overwriting first semantic fault fails before coherent returned command application; not claimed as a normally returned replacement verdict.",
+    "Staging starts on final Fault is observed as two requests before runtime can hide/reject the leak.",
+    "Raw graph wrapper mutation fails the direct throw assertion before that mutant executes the host path; normal host path is verified separately."
+  ],
+  "reviewFindingsFixed": [
+    "Compare notification codes as well as ordered raw payloads.",
+    "Use valid two-token/one-element binding shape without weakening the released validator.",
+    "Freeze pre-action complete sibling/wait JSON to avoid object-alias comparison.",
+    "Observe returned verdict and staged commands before generic runtime application.",
+    "Add real authored category/FaultType vs incident.Code controls and original-cause/domain identifier checks."
+  ],
+  "oldCapturedCheckpointsUnchanged": {
+    "deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+      "receiptSha256": "f1829d951f4d48104800d77a291e12f33f228a91f1079185de8c0d84af4ca111"
+    },
+    "listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+      "receiptSha256": "276a402ca42780be010162a9cc0fd39b739dc1f170f44bda0a6bb591d1cec7c6"
+    },
+    "listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "receiptSha256": "ed4c3c8577655ee70b53ab8c9c59098460390ef34ae1f3db196459faefae5e73"
+    },
+    "parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1",
+      "receiptSha256": "1056c29067953c365127bd71a500604d50f0e6305535977d83059fef1ddb8c68"
+    },
+    "parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "receiptSha256": "91738281dd197a5c8e62794914c18d158638e32a9daa26b36369be8ef01ccb25"
+    },
+    "queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+      "receiptSha256": "c6aa235d7649d6733ca0f6a352bd6ec3af0867dc9ea8b280a5c1084fe77332d5"
+    },
+    "queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+      "receiptSha256": "0bbc348c2306da431780d6fe03bb060f195b6bfdac9d2972ed5acf7baa6e728b"
+    },
+    "resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+      "receiptSha256": "9ebbfc0c3fbb3d8ce573ffcad810b815d547234d491c5b4d80e8dd8a61850d79"
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.md": {
+      "sourceRevision": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+      "sha256": "957d261394ee1bc9fed0cfb6bd999ef186ed1ff023bbd4abad28784c68ead1ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.json": {
+      "sourceRevision": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+      "sha256": "aea0a590025f4d65c9b563d44b0b4774c4992103b77a822da5fed01bd0ce6c15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": {
+      "sourceRevision": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+      "sha256": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.json": {
+      "sourceRevision": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+      "sha256": "7d45e6d512a09779ae38a88bc977370b307620d5811c860e0497c07eb0030e0c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": {
+      "sourceRevision": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+      "sha256": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.json": {
+      "sourceRevision": "447637567d9b50ba4aad9a240b42ab5501eb39b9",
+      "sha256": "8c2494c50096b654b70050be62d9e39322572eb237156fbb5cd42d1e9072e081"
+    }
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "oldCaptureWriterInvoked": false,
+  "reviews": {
+    "type": "three independent bounded source/artifact audits; not full PR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "remainingGates": [
+    "T025 native-parent qualification",
+    "T029/T045 binding/called-control and final actual Workbench/current Studio",
+    "T032 semantic writer/duplicate code deletion and T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full-PR/required exact-head checks/protected merge/resulting-main; separate ADR0063",
+    "Independent #2898/#2907/program production acceptance; Orleans/task-runner deferred"
+  ]
+}

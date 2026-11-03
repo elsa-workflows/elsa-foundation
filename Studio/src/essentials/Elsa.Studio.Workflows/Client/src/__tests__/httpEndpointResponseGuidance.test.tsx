@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { NodeProps } from "@xyflow/react";
+import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import { HttpEndpointResponseWarning } from "../HttpEndpointResponseWarning";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { findHttpEndpointResponseWarning } from "../httpEndpointResponseGuidance";
@@ -199,7 +199,7 @@ describe("HTTP endpoint response guidance", () => {
     document.body.appendChild(host);
     const root: Root = createRoot(host);
     flushSync(() => root.render(
-      <WorkflowActivityNode {...({
+      <ReactFlowProvider><WorkflowActivityNode {...({
         id: "endpoint-node",
         selected: false,
         data: {
@@ -212,7 +212,7 @@ describe("HTTP endpoint response guidance", () => {
           suppressFlowPorts: true,
           httpEndpointResponseMode: "Async"
         }
-      } as unknown as NodeProps)} />
+      } as unknown as NodeProps)} /></ReactFlowProvider>
     ));
 
     expect(host.querySelector('[aria-label="HTTP endpoint behavior: Runs in background"]')?.textContent).toBe("Runs in background");

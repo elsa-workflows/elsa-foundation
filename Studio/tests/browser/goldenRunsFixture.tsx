@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -234,11 +235,8 @@ function Fixture() {
   };
 
   const ai = { promptActions: { list: () => [] } } as unknown as StudioAiContributionApi;
-  const page = <ThemeProvider><main className={`wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
-    <header className="wf-page-header">
-      <div><span className="wf-kicker">Workflow management</span><h2>{route.workflowExecutionId ? "Run" : "Runs"}</h2></div>
-      {route.workflowExecutionId ? <div className="wf-page-context"><span>Workflow Instance ID</span><code>{route.workflowExecutionId}</code></div> : null}
-    </header>
+  const page = <ThemeProvider><main className={`studio-page wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
+    {route.workflowExecutionId ? <StudioPageHeader title="Run" headingLevel={2} actions={<div className="wf-page-context"><span>Workflow Instance ID</span><code>{route.workflowExecutionId}</code></div>} /> : null}
     {route.workflowExecutionId ? <WorkflowInstanceDetailsWorkbench
       context={context}
       ai={ai}
@@ -248,9 +246,8 @@ function Fixture() {
     /> : <WorkflowInstances context={context} navigate={navigate} />}
   </main></ThemeProvider>;
 
-  return new URLSearchParams(window.location.search).get("workbench-shell") === "1"
-    ? <div className="content">{page}</div>
-    : page;
+  return <div className={new URLSearchParams(window.location.search).get("workbench-shell") === "1" ? "content" : undefined}
+    style={{ height: "100dvh" }}>{page}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<Fixture />);

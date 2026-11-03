@@ -40,6 +40,10 @@ public sealed record WorkflowExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowExecutionAuthoritySnapshot? Authority { get; init; }
 
+    /// <summary>Actual model invocation that owns this native worker; it does not create a native parent.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelNativeWorkOrigin? ModelWorkOrigin { get; init; }
+
     /// <summary>
     /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
     /// </summary>

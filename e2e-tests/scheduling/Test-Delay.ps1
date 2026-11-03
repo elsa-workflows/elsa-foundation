@@ -4,7 +4,7 @@
 .DESCRIPTION
     Root Sequence is [WriteLine("before") -> Delay(Duration) -> WriteLine("after")]. Executing it runs the
     pre-delay step and suspends at the Delay; the hosted DurableTimerPumpTask fires the bookmark at now+Duration
-    (swept ~every 10s) and the instance resumes and completes on its own - no external stimulus. Asserts both
+    (deadline-driven, with periodic recovery sweeps) and the instance resumes and completes on its own - no external stimulus. Asserts both
     halves: suspended mid-flow, then resumed-to-completion with the post-delay step run.
     Requires the scheduling features composed in the server (see _SchedulingCommon.ps1 / ../README.md).
 #>
@@ -46,7 +46,7 @@ if (-not ($beforeRan -and $suspended -and -not $afterRan)) {
 }
 Write-Host "suspend OK - parked at the Delay (before ran, after did not)." -ForegroundColor Green
 
-# --- wait for the durable-timer pump to auto-resume (Duration + up to ~10s sweep jitter) ---
+# --- wait for the durable-timer pump to auto-resume (budget also covers periodic recovery) ---
 $completed = $false
 for ($i = 0; $i -lt 20 -and -not $completed; $i++) {
     Start-Sleep -Seconds 2

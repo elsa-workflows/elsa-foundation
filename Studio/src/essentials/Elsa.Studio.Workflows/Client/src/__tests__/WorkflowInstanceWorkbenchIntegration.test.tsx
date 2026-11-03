@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
 import type {
   ActivityExecutionInspection,
@@ -164,6 +164,33 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(container.querySelector(".wf-activity-overview")).toBeNull();
     expect(container.textContent).toContain("Execution context could not be resolved");
+  });
+
+  it("finishes a terminal instance load when Refresh supersedes pending metadata", async () => {
+    const pending = deferred<WorkflowExecutableDetails>();
+    api.getExecutable.mockImplementationOnce(() => pending.promise);
+    renderWorkbench();
+    await vi.waitFor(() => expect(api.getExecutable).toHaveBeenCalledTimes(1));
+    click(buttonByText(container, "Refresh"));
+    await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
+    // Let the refreshed observation commit while the first metadata load still owns its slot.
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    flushSync(() => {});
+    pending.resolve(executable());
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    expect(container.textContent).not.toContain("Loading workflow run");
+  });
+
+  it("does not repeatedly retry failed static metadata without a requested retry", async () => {
+    const pending = deferred<{ activities: ActivityCatalogItem[] }>();
+    api.listActivities.mockRejectedValueOnce(new Error("catalog unavailable")).mockImplementation(() => pending.promise);
+    renderWorkbench();
+    await vi.waitFor(() => expect(container.textContent).toContain("catalog unavailable"));
+    expect(api.listActivities).toHaveBeenCalledTimes(1);
+    click(buttonByText(container, "Refresh"));
+    await vi.waitFor(() => expect(api.listActivities).toHaveBeenCalledTimes(2));
+    pending.resolve({ activities: [sequenceActivity, writeLine] });
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
   });
 
   it("makes an interrupted ancestry read retryable after refresh", async () => {
@@ -1097,7 +1124,7 @@ describe("workflow run workbench definition names", () => {
       .toBe("Order fulfillment"));
     expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("small")?.textContent)
       .toBe("definition-1 · version-1");
-    expect(container.querySelector(".wf-error-card")).toBeNull();
+    expect(container.querySelector(".studio-result-state[data-tone=\"danger\"]")).toBeNull();
   });
 
   it("keeps the inspector ready when the optional workflow-name lookup fails", async () => {
@@ -1109,7 +1136,7 @@ describe("workflow run workbench definition names", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
     expect(container.textContent).not.toContain("Loading workflow run...");
     expect(container.textContent).not.toContain("Design is unavailable");
-    expect(container.querySelector(".wf-error-card")).toBeNull();
+    expect(container.querySelector(".studio-result-state[data-tone=\"danger\"]")).toBeNull();
   });
 });
 
@@ -1123,7 +1150,7 @@ function renderWorkbench(
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
-    ai={{ promptActions: { list: () => [] } } as unknown as StudioAiContributionApi}
+    ai={{ promptActions: { list: () => [] } } as unknown as StudioAgentRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
     initialInspectorTab={initialInspectorTab}

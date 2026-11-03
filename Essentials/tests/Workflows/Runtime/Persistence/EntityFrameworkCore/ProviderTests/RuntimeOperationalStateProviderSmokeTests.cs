@@ -117,7 +117,10 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Empty(nonemptyResult.PendingPostCommitWorkIds);
             Assert.Empty(nonemptyReplay.PendingPostCommitWorkIds);
             Assert.Equal("workflow-a", (await executions.FindAsync("workflow-a"))?.WorkflowExecutionId);
-            Assert.Equal(0, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
+            var healthScopeKey = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(scope);
+            var healthWorkflowKey = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("workflow-a");
+            Assert.Equal(0, (await context.WorkflowRunHealthStates.SingleAsync(row =>
+                row.ScopeKey == healthScopeKey && row.WorkflowExecutionId == healthWorkflowKey)).IncidentCount);
             Assert.Equal(3, (await scheduler.FindAsync("workflow-a"))!.Version);
             Assert.Equal(2, (await liveness.FindVersionedAsync("workflow-a", "ownership:workflow-a"))!.Revision);
             var checkpointIncident = new IncidentState("native-checkpoint-incident", "workflow-a", null, null,
@@ -132,7 +135,8 @@ internal static class RuntimeOperationalStateProviderSmoke
             };
             await checkpointStore.CommitAsync(incidentCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
             await checkpointStore.CommitAsync(incidentCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
-            Assert.Equal(1, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
+            Assert.Equal(1, (await context.WorkflowRunHealthStates.SingleAsync(row =>
+                row.ScopeKey == healthScopeKey && row.WorkflowExecutionId == healthWorkflowKey)).IncidentCount);
             Assert.Equal("native-checkpoint-incident", (await incidents.FindAsync("workflow-a", "native-checkpoint-incident"))!.IncidentId);
             var outbox = new EfRuntimePostCommitOutboxStore(context, accessor);
             var futureAt = DateTimeOffset.UtcNow.AddDays(3);

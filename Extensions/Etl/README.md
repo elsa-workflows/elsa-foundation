@@ -10,6 +10,24 @@ extend the finite runtime with HTTP JSON sources and HTTP/JSONL routes. The
 HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable retries. These use the same worker
 capacity and terminal delivery as file ETL, with additive connector provider contracts.
 
+## JSON Lines file input
+
+[Spec 1190](../../specs/1190-etl-jsonl-input/spec.md), part of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908),
+adds a `jsonl` source: a host-approved file holding one JSON object per line, with fields selected by JSON Pointer.
+It reuses the CSV file path end to end (pinned approval, retained snapshot, byte index, file partitions, owed
+batches and fenced acceptance). Malformed, non-object and over-long lines are routed record errors rather than run
+failures. A file run with zero records settles as success when its preparation commits, for CSV and JSON Lines alike.
+
+## CSV file delivery
+
+[Spec 1191](../../specs/1191-etl-csv-delivery/spec.md) adds a `csv` destination for either route. Each published batch is
+one RFC 4180 file (comma, double-quote quoting, CRLF, UTF-8 without a BOM) beginning with its header row: the mapped
+field names on the main route, `recordOrdinal,code,field` on the error route. Values keep the canonical text of their
+typed values. The CSV bytes, header included, are what the batch output limit bounds; a row that does not fit is
+rejected as `etl.output-too-large`. Retention, effect identity, create-only `.csv` publication, verification and fenced
+acceptance are the JSON Lines file path. The connector store's effect columns record the delivery mechanism (HTTP or
+file), so CSV needed no migration. A single-column mapping writes a null as an empty line; Elsa's CSV reader reads it as one null field, but many external readers skip blank lines. An HTTP route's closing bracket is reserved with its first element: a file route filling the output limit can no longer fail the batch, and an HTTP main route's exact-limit first row is rejected instead of failing it.
+
 [Native continuation](../../specs/996-http-etl/evidence/http-native-checkpoint.md),
 [process recovery](../../specs/996-http-etl/evidence/http-process-checkpoint.md),
 [cancellation](../../specs/996-http-etl/evidence/http-cancellation-checkpoint.md),
@@ -37,6 +55,34 @@ exporters, additional instrumentation and redaction configuration. Do not place 
 or assume that arbitrary host telemetry is covered by ETL's diagnostic boundary. The workflow activity fault
 mask is a separate adapter concern, not a global telemetry scrubber.
 
+## Continuous HTTP runs
+
+[Spec 1192](../../specs/1192-etl-continuous-http/spec.md) lets an HTTP pipeline run continuously: set
+`continuous: { pollIntervalSeconds }` (1–86,400) on a source with token or next-link pagination. A pipeline without it
+is finite and keeps its exact artifact bytes. Each host shard is still one independently leased partition.
+
+- **Feed contract.** Re-requesting a cursor returns the records after it, and every page with records carries a
+  continuation. When nothing is new, the feed answers with no records and a continuation that is absent or the same
+  cursor. A page with records and no continuation ends that shard, as in a finite run. A collection that re-lists
+  everything is not a continuous source. Single-page pagination and file sources are refused.
+- **Idling.** A caught-up response retains nothing: the request's fetch journal is cleared, its reservations are
+  released and the shard polls the same cursor again after the interval. A cursor that moves without records waits one
+  interval too, but each such response is a retained page.
+- **Completion.** `POST /etl/runs/{id}/complete` (permission `etl/runs:complete`, Studio "Complete run") records a
+  durable request and makes idle shards due at once. Each shard ends at its first caught-up response from an attempt
+  started after the request, retained as a final empty page; then the run settles `Succeeded`, or `BusinessError` if
+  records were rejected. Cancellation still settles `Cancelled`, and the first terminal outcome wins. A native workflow
+  waits on `RunEtl` until the run settles; it cannot request completion itself yet.
+- **Limits.** Until accepted state is compacted (a follow-up), every non-empty page still accumulates page, request,
+  batch and retained-byte state, so a run's lifetime is bounded by `MaxPagesPerPartition` and the retention budgets.
+  Each idle poll claims its partition and audits the shard's retained history, so its cost grows with that history. A
+  feed outage longer than the fetch deadline (`DeadlineSeconds`) fails the run. Workers without this feature refuse a
+  continuous artifact; upgrade every worker in a scope before admitting one. Claims are ordered by run creation, so a
+  continuous run whose shards are never idle can keep every connector slot in its scope and delay newer runs. Deciding
+  whether a caught-up response ends a draining shard compares host clocks, which must agree, as leases already require.
+  A worker that stalls past its lease while the feed answers its request late can fail the whole run closed with
+  `etl.http.page-provenance-invalid` ([spec 1192](../../specs/1192-etl-continuous-http/spec.md) FR-004).
+
 ## Implemented boundaries
 
 - Core: typed finite topology, exact nullable-tenant/required-persistence scope, immutable versioned artifact envelope, typed JSON representation and SHA-256. Complete v1 envelopes are limited to 256 KiB; a definition may request a lower limit. Unknown saved formats remain observable and are refused at publication/read boundaries.
@@ -48,7 +94,7 @@ mask is a separate adapter concern, not a global telemetry scrubber.
 - `EtlRuntime`: bounded background attempts, retained executable validation, independently leased preparation/partitions and process-local record/input/lookup/output allowances. The Tasks lifecycle starts/stops shell workers; plain hosts use the same instance as a hosted service. Compute uses explicitly configured scopes, retained binding revisions and lookup row/cell ceilings. Terminal delivery discovers pending work in the composition's runtime database independently of the current binding catalog, validates each retained invocation's exact scope and run identity, and creates a scoped native operation. Removing file bindings therefore does not orphan an already-owed result. Invalid candidates remain pending while valid later candidates can progress; this is not a tenant-default fallback or permission to execute files outside configured bindings.
 - `EtlRuntimeEntityFrameworkCore`: separate SQLite runtime context, schema and migration history; short idempotent admission, pinned bindings, immutable preparation metadata, durable batch reservations, fenced manifest/cursor/quota settlement, first-wins terminal result and recoverable delivery outbox. Runtime DI/database composition does not require design services or design tables. The shared persistence package still references the design assembly.
 - [Native workflow adapter](src/Workflows/Runtime/README.md): typed `RunEtl` wait, actual-bookmark admission, private-state/consumed-receipt cancellation, scoped terminal delivery and durable acknowledgement proofs. The [publication contributor](src/Workflows/Design/README.md) binds the full artifact hash through a literal selection and embeds the artifact without workflow dependency edges. [Persisted parent publication](../../specs/255-finite-file-etl/evidence/persisted-parent-publication.md) and [native cancellation evidence](../../specs/255-finite-file-etl/evidence/native-subtree-cancellation.md) cover the ordinary catalog/compiler and native composite boundaries.
-- `EtlDesignApi` and `EtlRuntimeApi`: independently composed, permission-checked operations for authoring/publication and runtime inspection/cancellation. Bounded signed cursors preserve scope and query identity. Responses expose safe binding aliases and retained facts, not host paths. New publication rechecks current binding approval; replay of an existing immutable publication does not. Runtime inspection does not require design services or active workers. Connector runs use the optional inspector and a separately advertised typed partition endpoint; page/item positions, retry state and owed receipts remain distinct from accepted route-body counts. [Inspection evidence and limits](../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).
+- `EtlDesignApi` and `EtlRuntimeApi`: independently composed, permission-checked operations for authoring/publication and runtime inspection, cancellation and continuous-run completion. Bounded signed cursors preserve scope and query identity. Responses expose safe binding aliases and retained facts, not host paths. New publication rechecks current binding approval; replay of an existing immutable publication does not. Runtime inspection does not require design services or active workers. Connector runs use the optional inspector and a separately advertised typed partition endpoint; page/item positions, retry state and owed receipts remain distinct from accepted route-body counts. [Inspection evidence and limits](../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).
 - [EtlStudio](studio/Elsa.Studio.Etl/EXTENSION_POINTS.md): structured finite-stage authoring, saved-revision validation/publication, exact published selection through the public `RunEtl` property editor, and run/partition inspection. [Component evidence](../../specs/255-finite-file-etl/evidence/studio-components.md) records executed checks without substituting them for browser acceptance.
 
 A compiler-produced valid/filtered/rejected fixture runs through two real hosts sharing SQLite/filesystem storage, then a separate host reopens accepted output and the owed terminal delivery. These hosts run inside one test process. Separate [two-process recovery](../../specs/255-finite-file-etl/evidence/two-process-recovery.md) and [concurrent partition proof](../../specs/255-finite-file-etl/evidence/round-1-review.md) exercise distinct worker processes, interruption and survivor takeover. Native parent delivery has separate durable fixture evidence linked above.
@@ -62,7 +108,7 @@ Enable only the responsibilities a host needs:
 | Author and publish ETL | `EtlDesign`, `EtlDesignEntityFrameworkCore`, `EtlDesignApi`; Foundation Identity, API capabilities, host persistence scope and a scoped `IEtlBindingCatalog` |
 | Execute accepted runs | `EtlRuntime`, `EtlRuntimeEntityFrameworkCore`; Tasks lifecycle, shared input/snapshot/output storage and explicit binding revisions |
 | Author or execute v2 connectors | Add `IEtlConnectorBindingCatalog` and `IEtlConnectorBindingResolver`; configure `EtlRuntimeFeature.HttpBindings` and independent `HttpLimits`. Authenticated bindings require public Connections providers and the retained tenant; anonymous bindings do not |
-| Inspect or cancel runs | `EtlRuntimeApi`, `EtlRuntimeEntityFrameworkCore`; Foundation Identity, API capabilities and host persistence scope; no compute worker required |
+| Inspect, cancel or complete runs | `EtlRuntimeApi`, `EtlRuntimeEntityFrameworkCore`; Foundation Identity, API capabilities and host persistence scope; no compute worker required |
 | Invoke from native workflows | `EtlWorkflowsDesign` on the native publication host, `EtlWorkflowsRuntime` on the native execution host, plus the applicable ETL/runtime stores |
 | Author and inspect in Studio | `EtlStudio` with the ordinary Studio authenticated backend configuration; backend authoring/runtime capabilities must be available |
 
