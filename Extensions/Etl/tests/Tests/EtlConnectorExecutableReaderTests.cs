@@ -217,6 +217,27 @@ public sealed class EtlConnectorExecutableReaderTests
     }
 
     [Fact]
+    public void Reader_accepts_a_jsonl_source_and_refuses_a_field_count_over_its_limit()
+    {
+        var pipeline = EtlJsonlInputTests.JsonlPipeline();
+        using var runtime = CreateRuntime();
+
+        Assert.IsType<EtlJsonlSource>(runtime.Reader.Read(Compile(pipeline)).Source);
+        var crowded = pipeline with { Limits = pipeline.Limits with { MaxFields = 1 } };
+        Assert.Equal("etl.executable.limits-exceeded",
+            Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(crowded))).Code);
+    }
+
+    [Fact]
+    public void Reader_accepts_csv_destinations()
+    {
+        using var runtime = CreateRuntime();
+        var pipeline = EtlV2TestPipelines.Create() with { Routes = new(new EtlCsvDestination("output"), new EtlCsvDestination("errors")) };
+
+        Assert.IsType<EtlCsvDestination>(runtime.Reader.Read(Compile(pipeline)).Routes.Errors);
+    }
+
+    [Fact]
     public void Reader_verifies_content_hash_and_artifact_identity()
     {
         var artifact = Compile(EtlV2TestPipelines.Create());

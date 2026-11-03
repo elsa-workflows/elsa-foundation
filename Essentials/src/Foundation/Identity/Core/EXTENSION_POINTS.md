@@ -134,7 +134,10 @@ D4); the async contexts are the only request authorization contexts.
 
 The optional `LoginPageOptions.Renderer` callback is a single presentation replacement owned by
 `Elsa.Foundation.Identity.AspNetCoreIdentity` (Layer 3), not a provider-neutral authentication contract.
-Its default is `LoginPage.Render`, configured through `Identity:Login`. Register once with
+Its default is `LoginPage.Render`, configured through `Identity:Login`. `Artwork` selects one of the
+bundled images; `unfolding-map` is the default and unknown-name fallback. A valid `ImageUrl` overrides
+the selection. See the [artwork choices and configuration examples](../../../../../Studio/docs/branding.md#configure-the-actual-credential-page).
+Register once with
 `PostConfigure<LoginPageOptions>`; it receives a `LoginPageContext` after return URL sanitization and
 antiforgery issuance. Keeping `FormHtml` retains the standard POST fields. The login endpoint consumes
 the callback; credential/CSRF/return-url validation remains endpoint-owned. No event or contributor is

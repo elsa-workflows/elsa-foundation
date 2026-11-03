@@ -87,7 +87,7 @@ export interface EtlPipelineV2 {
   http: EtlHttpPolicy;
 }
 
-export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource;
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource;
 
 export interface EtlCsvSource {
   kind: "csv";
@@ -101,6 +101,13 @@ export interface EtlHttpJsonSource {
   recordsPointer: string;
   fields: EtlJsonField[];
   pagination: EtlHttpPagination;
+}
+
+/** A host-approved JSON Lines file: one JSON object per line, with fields selected by JSON Pointer. */
+export interface EtlJsonlSource {
+  kind: "jsonl";
+  binding: string;
+  fields: EtlJsonField[];
 }
 
 export interface EtlJsonField {
@@ -127,7 +134,7 @@ export interface EtlRoutes {
   errors: EtlDestination;
 }
 
-export type EtlDestination = EtlJsonlDestination | EtlHttpDestination;
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination;
 
 export interface EtlJsonlDestination {
   kind: "jsonl";
@@ -136,6 +143,12 @@ export interface EtlJsonlDestination {
 
 export interface EtlHttpDestination {
   kind: "http";
+  binding: string;
+}
+
+/** A host-approved output folder receiving one RFC 4180 CSV file, with a header row, per published batch. */
+export interface EtlCsvDestination {
+  kind: "csv";
   binding: string;
 }
 

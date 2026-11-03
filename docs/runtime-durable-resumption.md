@@ -242,13 +242,22 @@ steps check that in-memory signal before starting their next step. The active tu
 its folded segment through the ordinary ownership-fenced checkpoint path, reports `Yielded`, and releases its lease
 and mailbox. Cancel then runs through its normal scheduler handler. An activity already running must finish or
 cooperate with its own cancellation policy before handoff; the signal does not interrupt an external effect. A
-cancelled caller removes its waiting signal. If the drain had already yielded and that Cancel then does not run (its
-caller cancels before it acquires the mailbox, or its turn answers `Duplicate`, `Rejected` or `Deferred`), the remaining
-scheduler work stays durably queued and continues when the sweep's backlog discovery re-drives it, not immediately. An
-idle drain adds no database read for this check. Distributed placement uses the configured local mailbox on the owning
-node; forwarding still has to deliver Cancel to that mailbox. The yield signal is internal to the default in-process
-provider: a custom actor provider that wraps the registered `InProcessWorkflowExecutionActorProvider` keeps the handoff,
-and an independent provider does not get it.
+cancelled caller removes its waiting signal. The yielded segment flushes its next steps without delivering them, so the
+Cancel takes effect at that checkpoint. If that Cancel then does not run (its caller cancels before it acquires the
+mailbox, or its turn answers `Duplicate`), the mailbox re-drives the execution at once through its normal serialized
+dispatch path (#3647). That re-drive first delivers the flushed continuations into the queue, then drains them; it
+skips that delivery while another Cancel already waits, so no step is queued ahead of it. The sweep still picks up the
+work when the mailbox is passivated (it answers `Deferred`), when the provider has been disposed, when the re-drive
+fails or answers anything but `Accepted` (both are logged), and when the yielded drain throws after it yielded, for
+example from a drain observer or `CheckpointRuleViolationWorkflowFaulter`, so its turn never reports `Yielded`. An idle drain adds no
+database read for this check. Distributed placement uses the configured local mailbox on the owning node. A Cancel sent
+through another node takes effect once the owner's next placement pump sweep that lists the execution delivers it to
+that mailbox, usually within `SweepInterval` (default 10 seconds). The sweep's own waits for local work, failure
+backoff, or a hand-off or passivation still pending for the execution (#3678) can make it later. The sweep does not
+wait for the running drain (see the
+[distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
+The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
+`InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
 
 **Acknowledging an inline parent decision.** The completion pump's current item remains in the working queue while
 its handler runs. Once that exact fenced, non-retaining decision has physically committed, queue advance acknowledges

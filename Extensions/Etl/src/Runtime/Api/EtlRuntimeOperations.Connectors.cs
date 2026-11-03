@@ -31,7 +31,7 @@ internal sealed partial class EtlRuntimeOperations
             SourceRecordCount = connector.Prepared?.File?.RecordCount,
             BindingAliases = new(bindings.Source.Revision.Alias, bindings.Lookup?.Revision.Alias,
                 bindings.Main.Revision.Alias, bindings.Errors.Revision.Alias),
-            SourceInput = bindings.Source.Kind == EtlConnectorKind.Csv
+            SourceInput = bindings.Source.Kind is EtlConnectorKind.Csv or EtlConnectorKind.Jsonl
                 ? InputIdentity(bindings.Source.Revision, connector.Prepared?.File?.Source) : null,
             LookupInput = InputIdentity(bindings.Lookup?.Revision, connector.Prepared?.Lookup),
             Connector = new(Kind(bindings.Source.Kind), Kind(bindings.Main.Kind), Kind(bindings.Errors.Kind),
@@ -70,10 +70,10 @@ internal sealed partial class EtlRuntimeOperations
     private static EtlRunEffectView? Effect(EtlConnectorEffectInspection? effect)
     {
         if (effect is null) return null;
-        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl) ||
+        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) ||
             effect.State is not ("retained" or "acknowledged" or "published") ||
             effect.State == "acknowledged" && effect.Kind != EtlConnectorKind.Http ||
-            effect.State == "published" && effect.Kind != EtlConnectorKind.Jsonl ||
+            effect.State == "published" && effect.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) ||
             effect.Kind != EtlConnectorKind.Http && effect.Retry is not null ||
             effect.Kind == EtlConnectorKind.Http &&
             ((effect.State == "acknowledged") != (effect.Retry?.Phase == "acknowledged")))

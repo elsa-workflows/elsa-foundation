@@ -35,6 +35,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<WorkflowDrainOrchestrator> _logger;
 
+    internal DrainControlContext? DrainControls { private get; set; }
+
     /// <summary>
     /// Creates the orchestrator for a caller-owned ownership service. C1 (#1227): the six telescoping constructors
     /// collapsed into this single primary constructor: the required collaborators followed by optional collaborators
@@ -242,7 +244,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // The scheduler loop owns each coalesced segment. A resume claim boundary ends one segment, dispatches
         // its durable item, and starts a fresh segment for subsequent replayable work under the same ownership lease.
         using var liveDrainScope = _liveDrainDeliveryAccessor?.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId));
-        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, cancellationToken);
+        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, IsYieldRedrive(envelope), cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
     }
@@ -250,12 +252,30 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(
         RuntimeSchedulerDrainRequest request,
         ResolvedPersistenceMode resolved,
+        bool deliverFlushedContinuations,
         CancellationToken cancellationToken)
     {
         RuntimeSchedulerDrainResult? firstDrainResult = null;
         RuntimeSchedulerDrainResult? lastDrainResult = null;
         var itemResults = new List<RuntimeSchedulerWorkItemResult>();
         var outboxDeliveryResults = new List<RuntimePostCommitOutboxProcessResult>();
+
+        // A yielded segment flushes its continuations without delivering them, so the Cancel it yielded to takes
+        // effect at that checkpoint. If the Cancel never ran, the actor re-drives the execution (#3647). A session
+        // reads this execution's continuations only from its own overlay, so hand over the flushed ones from the
+        // durable outbox before the first segment begins; otherwise only the sweep would find them.
+        // Stop before each batch while a Cancel waits: the drainer yields before its first step, and delivering then would
+        // queue the next step ahead of that Cancel's work. A withdrawn Cancel re-drives again.
+        if (deliverFlushedContinuations)
+        {
+            while (DrainControls?.ShouldYield(request.WorkflowExecutionId) != true)
+            {
+                var delivered = await _postCommitOutboxProcessor.ProcessAsync(ContinuationDelivery(request.WorkflowExecutionId), cancellationToken);
+                outboxDeliveryResults.Add(delivered);
+                if (delivered.DeliveredCount == 0 || delivered.FailedCount > 0)
+                    break;
+            }
+        }
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
         var continuationWait = new ContinuationWaitDeadline(_options.ContinuationClaimWaitLimit);
         var cycles = new DrainCycleBudget(_options, request.WorkflowExecutionId, _logger);
@@ -407,6 +427,11 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             return (scope, registration);
         }
     }
+
+    private static bool IsYieldRedrive(WorkflowExecutionCommandEnvelope envelope) =>
+        envelope.Command.Kind == WorkflowExecutionCommandKind.RunSchedulerWork &&
+        envelope.Command.Metadata.TryGetValue("source", out var source) &&
+        string.Equals(source, InProcessWorkflowExecutionActorProvider.YieldRedriveSource, StringComparison.Ordinal);
 
     private RuntimePostCommitOutboxProcessRequest ContinuationDelivery(string workflowExecutionId) =>
         new(

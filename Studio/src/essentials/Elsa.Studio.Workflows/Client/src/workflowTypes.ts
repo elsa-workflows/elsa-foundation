@@ -565,6 +565,7 @@ export interface PublishedWorkflowResponse {
 }
 
 export interface StartWorkflowDraftTestRunRequest {
+  layout?: DesignMetadataRecord[];
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;
