@@ -70,8 +70,9 @@ internal sealed class EtlConnectorPreparer
     }
 
     /// <summary>Prepares an admitted connector input set and returns the exact durable references used by the store.</summary>
+    /// <param name="watermarkFloor">A SQL source's checkpoint: only rows above it are read (spec 1199); null reads every row.</param>
     public async ValueTask<EtlConnectorPreparationResult> PrepareAsync(EtlConnectorRunAdmission admission,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, long? watermarkFloor = null)
     {
         if (!TryReadAdmission(admission, out var pipeline, out var sourcePin, out var lookupPin, out var diagnostic))
             return new(null, diagnostic);
@@ -91,9 +92,13 @@ internal sealed class EtlConnectorPreparer
                     pipeline.Limits.MaxSnapshotBytes,
                     pipeline.Source is EtlJsonlSource ? _jsonlPublisher : _csvPublisher, cancellationToken);
             }
-            else if (pipeline.Source is EtlSqlSource sql)
+            long? sourceWatermark = null;
+            if (pipeline.Source is EtlSqlSource sql)
             {
-                sourceChunk = await PublishSqlSnapshotAsync(admission, pipeline, sql, cancellationToken);
+                sourceChunk = await PublishSqlSnapshotAsync(admission, pipeline, sql, watermarkFloor, cancellationToken);
+                if (sql.Watermark is { } column)
+                    sourceWatermark = await EtlSqlSnapshotReader.ReadHighWatermarkAsync(Path.Combine(_snapshotRoot, sourceChunk.Key),
+                        column, cancellationToken);
             }
 
             EtlObjectReference? lookup = null;
@@ -120,7 +125,7 @@ internal sealed class EtlConnectorPreparer
                     ReadIndexRecordCount(index));
             }
 
-            return new(new EtlConnectorPreparedRun(file, lookup), null);
+            return new(new EtlConnectorPreparedRun(file, lookup) { SourceWatermark = sourceWatermark }, null);
         }
         catch (EtlConnectorPreparationFailure failure)
         {
@@ -207,7 +212,7 @@ internal sealed class EtlConnectorPreparer
     /// time; otherwise reads the table once (spec 1198). The identity matches a file snapshot's, keyed by the pinned handle.
     /// </summary>
     private async ValueTask<EtlChunk> PublishSqlSnapshotAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,
-        EtlSqlSource sql, CancellationToken cancellationToken)
+        EtlSqlSource sql, long? watermarkFloor, CancellationToken cancellationToken)
     {
         var revision = admission.Bindings.Source.Revision;
         var identity = JsonSerializer.Serialize(new
@@ -227,7 +232,7 @@ internal sealed class EtlConnectorPreparer
         try
         {
             return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
-                (destination, ct) => EtlSqlSnapshotReader.WriteAsync(binding, sql, maxBytes, destination, ct), cancellationToken);
+                (destination, ct) => EtlSqlSnapshotReader.WriteAsync(binding, sql, maxBytes, destination, ct, watermarkFloor), cancellationToken);
         }
         catch (EtlEffectException exception) when (exception.Code == "etl.effect-conflict")
         {

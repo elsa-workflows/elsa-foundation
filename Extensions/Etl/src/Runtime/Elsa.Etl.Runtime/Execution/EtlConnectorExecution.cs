@@ -41,7 +41,12 @@ internal sealed class EtlConnectorExecution(
             if (view is not { Run.Status: EtlRunStatus.Preparing }) return;
             var pipeline = reader.Read(view.Run.Invocation.Artifact);
             permit = await budget.AcquireAsync(Charge(pipeline), token);
-            var prepared = await preparer.PrepareAsync(new(view.Run.Invocation, view.Bindings), token);
+            // A watermarked SQL source reads only rows above the last completed run's high watermark (spec 1199).
+            long? floor = pipeline.Source is EtlSqlSource { Watermark: { } column } sql
+                ? await store.FindConnectorSourceWatermarkAsync(lease.Scope,
+                    new(view.Run.Invocation.Artifact.DefinitionId, sql.Binding, sql.Table, column), token)
+                : null;
+            var prepared = await preparer.PrepareAsync(new(view.Run.Invocation, view.Bindings), token, floor);
             // A transiently unavailable source records nothing; the lapsed lease runs preparation again.
             if (prepared.Transient)
             {
