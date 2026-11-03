@@ -65,9 +65,10 @@ was staged under, in the caller's ordinary persistence scope, and returns `null`
 The result is returned only for a full payload capture, and never when the envelope, the contract result or a projected
 member is sensitive or encryption-required. A diagnostic snapshot stays with the runtime's own inspection.
 
-The application status counts only this invocation's own delivery. It separates a recorded settlement (`Applied`), a
-native completion whose settlement is still pending (`SettlementPending`), a native fault or cancellation
-(`NotApplied`) and a boundary that has not settled (`Pending`).
+The application status counts only this invocation's own delivery. It separates a turn with no accepted result
+(`NotAccepted`), a recorded settlement (`Applied`), a native completion whose settlement is still pending
+(`SettlementPending`), a native fault, cancellation or supersession (`NotApplied`) and a boundary that has not settled
+(`Pending`).
 
 Protected request, result and session material, instructions, fences, leases, connection incarnations and capability
 fingerprints never enter it. The fingerprint and incarnation stay in the immutable artifact and turn record, which

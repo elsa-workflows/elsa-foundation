@@ -99,7 +99,8 @@ public sealed partial class SpecialistPublicationTests
         var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(started.WorkflowExecutionId);
         var root = states.Single(x => x.ParentActivityExecutionId is null);
         Assert.Equal("draft about moss gardens", root.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString());
-        await AssertEvidenceAsync(provider.GetRequiredService<ISpecialistInvocationInspector>(), capture, completed, candidate, root, states);
+        await AssertEvidenceAsync(provider.GetRequiredService<ISpecialistInvocationInspector>(), capture,
+            provider.GetRequiredService<IActivityExecutionStateStore>(), completed, candidate, root, states);
         var replay = await service.StartAsync(request);
         Assert.Equal(completed.TestRunId, replay.TestRunId);
         Assert.Equal("Completed", replay.Status);
@@ -112,8 +113,8 @@ public sealed partial class SpecialistPublicationTests
     }
 
     // The evidence of the exact candidate's accepted turn, read through the same native identity, without protected material.
-    private static async Task AssertEvidenceAsync(ISpecialistInvocationInspector inspector, RecordingCapturePolicy capture, ActivityDraftTestRunView run,
-        WorkflowExecutable candidate, ActivityExecutionState root, IReadOnlyCollection<ActivityExecutionState> states)
+    private static async Task AssertEvidenceAsync(ISpecialistInvocationInspector inspector, RecordingCapturePolicy capture, IActivityExecutionStateStore states,
+        ActivityDraftTestRunView run, WorkflowExecutable candidate, ActivityExecutionState root, IReadOnlyCollection<ActivityExecutionState> executed)
     {
         Assert.Equal(root.InvocationId, run.OuterActivityExecutionId);
         capture.Requests.Clear();
@@ -150,8 +151,20 @@ public sealed partial class SpecialistPublicationTests
         var withheld = (await inspector.InspectAsync(run.WorkflowExecutionId, root.InvocationId))!.Output!;
         Assert.Equal(("None", null), (withheld.CaptureMode, withheld.Value));
 
+        // A sensitive result stays withheld even under a policy that would capture it: the inspector's own rule holds.
+        var completion = root.Completion!;
+        var sensitive = ValueEnvelope.Inline(completion.Result.Type, completion.Result.InlineValue!.Value,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true));
+        await states.SaveAsync(root with { Completion = new(completion.InvocationId, completion.AttemptId, sensitive, completion.OutcomeKey, completion.CompletedAt, completion.ContractFingerprint) });
+        capture.Mode = RuntimePayloadCaptureMode.Payload;
+        capture.IgnoreSensitivity = true;
+        capture.Requests.Clear();
+        var hidden = (await inspector.InspectAsync(run.WorkflowExecutionId, root.InvocationId))!.Output!;
+        Assert.Equal(("Payload", null), (hidden.CaptureMode, hidden.Value));
+        Assert.True(Assert.Single(capture.Requests).IsSensitive);
+
         // Only the exact specialist boundary in its own workflow has evidence: not its model-turn child, nor a guessed identity.
-        var child = states.Single(x => x.ParentActivityExecutionId == root.InvocationId);
+        var child = executed.Single(x => x.ParentActivityExecutionId == root.InvocationId);
         Assert.Null(await inspector.InspectAsync(run.WorkflowExecutionId, child.InvocationId));
         Assert.Null(await inspector.InspectAsync(run.WorkflowExecutionId, "not-an-activity"));
         Assert.Null(await inspector.InspectAsync("not-a-workflow", root.InvocationId));
@@ -160,11 +173,12 @@ public sealed partial class SpecialistPublicationTests
     private sealed class RecordingCapturePolicy : IRuntimePayloadCapturePolicy
     {
         public RuntimePayloadCaptureMode Mode { get; set; } = RuntimePayloadCaptureMode.Payload;
+        public bool IgnoreSensitivity { get; set; }
         public List<RuntimePayloadCaptureRequest> Requests { get; } = [];
         public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request)
         {
             Requests.Add(request);
-            return new(request.IsSensitive ? RuntimePayloadCaptureMode.None : Mode, "test");
+            return new(request.IsSensitive && !IgnoreSensitivity ? RuntimePayloadCaptureMode.None : Mode, "test");
         }
     }
 
