@@ -9,7 +9,8 @@ namespace Elsa.Etl.Core.Runtime;
 public interface IEtlRabbitMqPublisher
 {
     /// <summary>The connection's target without any secret, for the binding's pinned handle.</summary>
-    /// <exception cref="ArgumentException">The AMQP URI is not valid.</exception>
+    /// <exception cref="ArgumentException">The AMQP URI is not valid, for example not an <c>amqp</c> or <c>amqps</c> URI.</exception>
+    /// <exception cref="FormatException">The AMQP URI is malformed (<see cref="UriFormatException"/>).</exception>
     EtlRabbitMqTarget DescribeTarget(string connectionString);
 
     /// <summary>

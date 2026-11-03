@@ -71,6 +71,11 @@ public sealed class EtlRabbitMqDestinationTests
         Assert.NotEqual(resolved.Handle, With("amqp://etl:secret@broker:5672/finance").Handle);
         Assert.NotEqual(resolved.Handle, With("amqp://etl:secret@other:5672/sales").Handle);
         Assert.NotEqual(resolved.Handle, With("amqp://loader:secret@broker:5672/sales").Handle);
+        Assert.NotEqual(resolved.Handle, With("amqp://etl:secret@broker:5673/sales").Handle);
+        var wider = Binding("amqp://etl:secret@broker:5672/sales");
+        wider.AllowedExchanges = ["etl.orders", "etl.refunds"];
+        Assert.NotEqual(resolved.Handle,
+            new HostRabbitMqBindings([wider], [new TestRabbitMqPublisher()]).ResolveCurrent(Scope, "events", "MainOutput", "etl.orders").Handle);
         Assert.DoesNotContain("secret", resolved.ToString(), StringComparison.Ordinal);
         Assert.Equal(resolved.Handle, bindings.ResolveExact(Scope, "events", "MainOutput", "v1", resolved.Handle, "etl.orders").Handle);
         Assert.Equal("etl.rabbitmq-exchange-not-allowed",
@@ -81,7 +86,7 @@ public sealed class EtlRabbitMqDestinationTests
             bindings.ResolveExact(Scope, "events", "MainOutput", "v1", new string('0', 64), "etl.orders")).Code);
         Assert.Equal("etl.binding-unavailable", Assert.Throws<EtlBindingException>(() =>
             new HostRabbitMqBindings([Binding("not a uri")], [new TestRabbitMqPublisher()]).ResolveCurrent(Scope, "events", "MainOutput", "etl.orders")).Code);
-        // Two current revisions of one alias are ambiguous, and an alias approved by two catalogs is refused at admission.
+        // Two current revisions of one alias are ambiguous.
         var second = Binding("amqp://etl:secret@broker/sales");
         second.Revision = "v2";
         Assert.Equal("etl.binding-ambiguous", Assert.Throws<EtlBindingException>(() =>

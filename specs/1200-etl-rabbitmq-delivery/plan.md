@@ -19,7 +19,7 @@ The plan adds a main-route `rabbitmq` destination in the shape of spec 1197's `s
 ## Constitution check
 
 - **Packages and dependencies** (§2.1, §2.7, §2.20): the contract carries no external dependency; the driver stays in its own package, which references only `Elsa.Etl.Core`.
-- **Wrapping** (§2.19, §2.23.5): driver exceptions are classified by the driver package and wrapped at the writer boundary.
+- **Wrapping** (§2.23.5): driver exceptions are classified by the driver package and wrapped at the writer boundary.
 - **Compatibility:** existing artifacts and identities are byte-identical (`RabbitMq` is appended); RabbitMQ shares the recorded-publication `EffectMechanism` value 2; no migration.
 - **Extension points.** The Core `EXTENSION_POINTS.md` gains `IEtlRabbitMqPublisher`, a single-implementation adapter; the driver package gets a README.
 - **Tests.** Behaviour tests cover the compiler, bindings, writer, publication sites and journeys. The driver feature's registration is plain, so the §2.23.1 composition test covers it. The new container project is listed in `test-tiers.json` and `containerSuites`.

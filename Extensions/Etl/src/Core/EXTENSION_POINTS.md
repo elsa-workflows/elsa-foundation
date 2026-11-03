@@ -162,4 +162,5 @@ public interface IEtlRabbitMqPublisher
 - **Registration:** `services.AddSingleton<IEtlRabbitMqPublisher, …>()` from `EtlRabbitMqFeature` in `Elsa.Etl.RabbitMq`. Register at most one: with two, building the runtime's connector bindings throws `InvalidOperationException`, so no ETL attempt runs, as for two SQL engines with one provider name.
 - **When to implement:** to publish through another client or transport with the same confirm semantics. `DescribeTarget` must exclude the password, because its result is hashed into the binding's pinned handle.
 - **What depends on it:** `HostRabbitMqBindings` and `EtlRabbitMqRouteWriter` in `Elsa.Etl.Runtime`.
+- **Known implementations** (intra-domain, ETL): `RabbitMqEtlPublisher` (`Elsa.Etl.RabbitMq`). `DescribeTarget` throws `ArgumentException` or `FormatException` for an invalid URI, which binding resolution reports as `etl.binding-unavailable`.
 

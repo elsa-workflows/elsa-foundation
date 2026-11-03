@@ -63,6 +63,7 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
         }
         catch (Exception exception) when (exception is ArgumentException or FormatException or UriFormatException)
         {
+            // The cause is not attached: a URI parser's message can echo the AMQP URI, password included.
             throw new EtlBindingException("etl.binding-unavailable", "The RabbitMQ binding's AMQP URI is invalid.");
         }
         var handle = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
