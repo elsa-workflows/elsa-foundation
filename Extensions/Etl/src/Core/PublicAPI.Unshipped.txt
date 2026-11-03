@@ -2057,3 +2057,6 @@ Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Deconstruct(out string! Def
 Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.EtlConnectorSourceWatermarkKey(string! DefinitionId, string! SourceAlias, string! SourceHandle, string! Table, string! Column) -> void
 Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.get -> string!
 Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

@@ -306,6 +306,8 @@ public static class RuntimeMetadataKeys
     public const string NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId";
     public const string NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId";
     public const string ParentNotificationCode = "runtime.parentNotificationCode";
+    /// <summary>On an incident a child-control consumer raised: the calling child whose control batches it was evaluating.</summary>
+    public const string ChildControlActivityExecutionId = "runtime.childControlActivityExecutionId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
     public const string PinnedArtifactVersion = "runtime.pinnedArtifactVersion";
     public const string PinnedArtifactHash = "runtime.pinnedArtifactHash";
