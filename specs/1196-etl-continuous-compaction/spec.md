@@ -23,7 +23,7 @@ The cause of both is the same: a continuous shard's identities and history are t
 
 This slice gives continuous runs two things:
 - **A constant-size retained window per shard.**
-  - Every claim of a continuous shard deletes the rows behind its window, in the claim transaction and before any work is charged.
+  - Every claim in a continuous run deletes the rows behind every shard's window, in the claim transaction and before any work is charged. Retention budgets are per run, so peers are compacted too.
   - The worker deletes the files whose use a committed transition ended.
   - The audits start at the window's base.
 - **A poll generation.** Each caught-up poll increments a counter on the shard's partition, and the page-cache key includes it. A stalled worker's late page lands under a key no later poll reads.
@@ -40,12 +40,12 @@ An operator leaves a continuous run going. However many pages the feed delivers 
 
 **Independent Test**: run a continuous pipeline whose `MaxPagesPerPartition` is 3 and whose retention budgets admit only a few pages, over a feed that delivers many more non-empty pages than that on each of two shards.
 - Every record is accepted exactly once, and the run keeps running.
-- After each advance, each shard retains at most its window.
+- Each shard never retains more than its peak window.
 - The lifetime counts (pages, batches, accepted, rejected and filtered records, effects) keep counting.
 
 **Acceptance Scenarios**:
 
-1. **Given** a continuous shard whose current request is *r*, **When** any worker claims it, **Then**, in the claim transaction:
+1. **Given** a continuous shard whose current request is *r*, **When** any worker claims any shard of the run, **Then**, in the claim transaction:
    - the page, request and batch rows of pages before *r* − 1 are deleted;
    - the retained byte counters of the shard and the run drop by exactly those rows' bytes;
    - the shard's compacted summary grows by exactly those rows' counts.
@@ -80,7 +80,7 @@ In both cases, the accepted records equal the fed records exactly.
 
 **Acceptance Scenarios**:
 
-1. **Given** an acceptance that committed, **When** the same worker retries it with the same fence, **Then** the store replays the result. Compaction happens only at a claim, which changes the fence, so a same-fence retry always finds its rows.
+1. **Given** an acceptance that committed, **When** the same worker retries it with the same fence, **Then** the store replays the result. Every compaction, whichever shard's claim runs it, keeps each shard's predecessor page and request with that page's batches, which is every row a same-fence replay reads, so a retry always finds its rows.
 2. **Given** a worker killed after the advance commits but before it deletes the page's cached files, **Then** the files are left behind (a bounded leak per crash), and the run continues.
 3. **Given** a continuous run started before this slice, **When** each shard is first claimed on this slice, **Then** that claim compacts the shard's whole history before any budget is charged, and legacy cache files stay readable. A run already at its retention ceiling therefore resumes.
 
@@ -96,7 +96,7 @@ In both cases, the accepted records equal the fed records exactly.
   - A claim with nothing to delete costs one query.
   - A caught-up poll adds no row, so it leaves nothing to compact.
 - **Peak per shard.** Between claims, an advance can add a request. At peak a shard holds 2 pages, 3 requests and the batches of 2 pages.
-- **Constant work.** Each claim deletes at most one page's rows in steady state. A run that started before this slice compacts each shard's whole history at that shard's first claim, once.
+- **Constant work.** In steady state each claim deletes at most one page's rows per shard; a shard with nothing to delete costs no query. A run that started before this slice compacts every shard's whole history at its first claim, once.
 - **Deletion order.** The page and request rows form a chain of restrict foreign keys: request *k* + 1 references page *k*, and page *k* references request *k*. Compaction runs these steps in order:
   1. clear the predecessor pointers of the base and of every request below it;
   2. delete the batches;
@@ -148,7 +148,7 @@ In both cases, the accepted records equal the fed records exactly.
   - the compacted main and error effect counts.
 
   Every value is non-negative, defaults to 0 and has a database check. All are 0 in a finite run.
-- **FR-005** On every claim of a continuous shard whose current request is *r*, the store compacts the shard in the claim transaction, after the audit:
+- **FR-005** On every claim in a continuous run, the store compacts every shard of the run in the claim transaction, after the claimed shard's audit. For a shard whose current request is *r*:
   - It clears the predecessor pointers of request *r* − 1 and every request below it, making request *r* − 1 the base.
   - It then deletes the batches, pages and requests below page *r* − 1, in that order.
   - It subtracts those rows' bytes from the shard's and the run's retained input, metadata and output counters.

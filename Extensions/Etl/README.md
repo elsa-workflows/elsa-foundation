@@ -73,8 +73,8 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
   started after the request, retained as a final empty page; then the run settles `Succeeded`, or `BusinessError` if
   records were rejected. Cancellation still settles `Cancelled`, and the first terminal outcome wins. A native workflow
   waits on `RunEtl` until the run settles; it cannot request completion itself yet.
-- **Bounded state** ([spec 1196](../../specs/1196-etl-continuous-compaction/spec.md)). Every claim of a continuous
-  shard deletes the rows behind its window, in the claim transaction and before any work is charged: it keeps the
+- **Bounded state** ([spec 1196](../../specs/1196-etl-continuous-compaction/spec.md)). Every claim in a continuous
+  run deletes the rows behind every shard's window, in the claim transaction and before any work is charged: it keeps the
   current request, the predecessor page and request, and that page's batches. The partition keeps the deleted rows'
   counts as a compacted summary, so page, batch, record and effect counts stay lifetime totals. A shard holds at most
   2 pages, 3 requests and 2 pages' batches; size the retention budgets for that peak once per shard, since they are per

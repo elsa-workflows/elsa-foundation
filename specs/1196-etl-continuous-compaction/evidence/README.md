@@ -47,10 +47,11 @@ Each mutation makes its focused tests fail, and the restore makes them pass. The
 - the chain rebuilt from the seed instead of the base.
 
 **Tested without a bite-proof, or not tested:**
-- **Untested requirements.** The final caught-up path leaving the generation unchanged (FR-002). Reading a legacy shared body (FR-003, US3 scenario 3; the fixture has no cached page). The cycle refusal limited to the window (FR-009). The per-partition inspection effect counts (FR-008; only the run-level total is asserted). Each follows from code that the README names.
+- **Untested requirements.** The final caught-up path leaving the generation unchanged (FR-002). Reading a legacy shared body (FR-003, US3 scenario 3; the fixture has no cached page). The cycle refusal limited to the window (FR-009). The per-partition inspection effect counts (FR-008; only the run-level total is asserted).
 - **The audit's reads are bounded (SC-002).** The audits stream only retained rows, and SC-001's test bounds those rows. No test counts the rows the audit reads.
-- **Same-fence acceptance replay after compaction.** Compaction runs only in a claim, which changes the fence, so a same-fence retry cannot span it. No test exercises it.
+- **Same-fence acceptance replay after compaction**, including a peer compacted under its live lease. Every compaction, whichever shard's claim runs it, keeps each shard's predecessor page and request with that page's batches, which is every row a same-fence replay reads, so a retry always finds its rows. No test exercises it.
 - **Compaction precedes budget checks** (a spec 1192 run at its retention ceiling). This follows from compacting in the claim transaction, but no test drives a run to its ceiling.
+- **Guards without a test.** The audit rule for the compacted summary and the generation, and the database checks on those columns (FR-001, FR-004). That legacy shared bodies are never deleted, and that a missing file is not an error (FR-003, FR-010). That the rebuilt request table keeps its indexes under their EF names (FR-006): `HasPendingModelChanges` compares the model with the snapshot, not with the database.
 - **Orphaned files** from a crash between a commit and its file deletion, or from a stalled attempt's late page, are left in place. No test asserts their count.
 
 ## Actual Workbench journey

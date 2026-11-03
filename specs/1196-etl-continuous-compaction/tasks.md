@@ -16,7 +16,7 @@
 - [x] T007 `CompactConnectorHttpHistoryAsync`, called by every claim of a continuous shard after its audit (research R8).
 - [x] T008 Base-relative HTTP history audit and batch history audit. Inspector effect counts.
 - [x] T009 No page-sequence bound in continuous runs: the store's pipeline decoder and the page cache.
-- [x] T010 Tests: window, accounting, lifetime counts, finite runs unchanged, a pre-slice run compacted at its first claim. The audit's bounded reads (SC-002) and a same-fence replay after compaction follow from construction and are not separately tested, as the evidence README states.
+- [x] T010 Tests: window, accounting, lifetime counts, finite runs unchanged, a pre-slice run compacted at its first claim. What is not separately tested is listed in the evidence README.
 
 ## Phase 4 — Files (US1)
 - [x] T011 `EtlHttpPageCache.DeleteAsync` and `DeleteRetainedRouteBodiesAsync`; execution calls both after commits in continuous runs. Test: cache files stay bounded over a long run.

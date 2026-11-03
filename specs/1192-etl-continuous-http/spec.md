@@ -244,7 +244,7 @@ A second run is cancelled and ends `Cancelled`.
 
 ## Assumptions and boundaries
 
-- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page can fail the run closed (FR-004, known limit).
+- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page can fail the run closed (FR-004, known limit). Spec [1196](../1196-etl-continuous-compaction/spec.md) addresses it with a poll-generation page identity.
 - **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime is unbounded and its idle-poll cost bounded, is a separate follow-up slice. Criterion 1 is checked only after it lands. Addressed by spec [1196](../1196-etl-continuous-compaction/spec.md).
 - **Native completion.** No workflow activity requests completion in this slice; the runtime API and Studio do. Native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
 - **Other continuous sources.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.

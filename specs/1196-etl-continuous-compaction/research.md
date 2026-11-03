@@ -101,8 +101,9 @@ As a result, a spec 1192 run already at its ceiling would fail `PermanentBudgetE
 **Decision: compact in the claim transaction, after the claim audit.**
 - Every connector step starts with a claim, because a worker takes one step per lease.
 - Compaction therefore always precedes any work that is charged.
-- A same-fence retry never spans a claim, so it still finds its rows.
+- A same-fence retry still finds its rows. Every compaction, whichever shard's claim runs it, keeps each shard's predecessor page and request with that page's batches, which is every row a same-fence replay reads, so a retry always finds its rows. Compacting a peer under a live lease is therefore safe; transactions are serialized, so the peer's next transition reads the compacted row.
 - The claim is a single compaction site instead of two advance sites.
+- **Every shard, not only the claimed one** (review round 1). Retention budgets are per run, so a shard without history could otherwise fail a resumed run whose history sits on a peer that has not been claimed yet.
 
 **Rows the window must keep:**
 - **The predecessor page's batches.** The batch audit reads them (`ReadAcceptedItemCountAsync`), and a same-fence replay reads them.

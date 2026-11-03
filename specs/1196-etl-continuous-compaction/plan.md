@@ -5,7 +5,7 @@
 ## Summary
 
 The plan covers continuous runs only:
-- **Compaction.** Each claim of a shard deletes the rows below the predecessor of its current request, in the claim transaction and before any work is charged. Their counts move into a compacted summary on the partition, and the retained byte counters fall.
+- **Compaction.** Each claim in a continuous run deletes, for every shard, the rows below the predecessor of its current request, in the claim transaction and before any work is charged. Their counts move into a compacted summary on the partition, and the retained byte counters fall.
 - **Audits.** They start at the base the compaction leaves.
 - **Files.** The worker deletes the files whose use the committed transition ended.
 - **Poll generation.** A partition column, copied onto the lease and incremented by each caught-up record, separates the page-cache keys of successive polls.
@@ -68,6 +68,9 @@ Finite runs are unchanged.
   - the superseded-late-page interleaving;
   - byte identity at generation 0.
 - **`EtlContinuousCompactionMigrationTests.cs`:** the captured spec 1192 fixture, then migrate, check, resume, compact and complete.
+- **`EtlContinuousPeerCompactionTests.cs`:** one claim compacts every shard of the fixture's run.
+- **`EtlContinuousFixtureCaptureTests.cs`:** the gated capture of the fixture.
+- **`EtlConnectorRequestConstraintTests.cs`:** a null predecessor outside the base is refused by the audit.
 - **The journey and processes tests:** long continuous runs with kills, asserting bounded rows and files.
 
 ### Docs
