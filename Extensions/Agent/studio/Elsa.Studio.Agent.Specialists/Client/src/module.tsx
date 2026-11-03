@@ -4,6 +4,7 @@ import { AgentsPage } from "./AgentsPage";
 import { HumanReviewPage } from "./HumanReviewPage";
 import { SpecialistEditor } from "./SpecialistEditor";
 import { SpecialistPlayground } from "./SpecialistPlayground";
+import { SpecialistInvocationPage } from "./SpecialistInvocationPage";
 import { specialistProviderKey } from "./agentsApi";
 import { continuitySchemaVersion, initialSpecialistManifest } from "./specialistManifest";
 import "./styles.css";
@@ -50,6 +51,13 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/agents/drafts/:draftId/playground",
     label: "Playground",
     component: ({ navigate }) => <SpecialistPlayground context={api.backend} navigate={navigate} />
+  });
+  api.routes.add({
+    id: "agent-invocation",
+    requiresBackend: [{ id: "elsa.api.agent-specialist-inspection", contractVersion: "1", relations: ["agent-specialist-invocation-evidence"] }],
+    path: "/agents/invocations/:workflowExecutionId/:activityExecutionId",
+    label: "Agent invocation",
+    component: ({ navigate }) => <SpecialistInvocationPage context={api.backend} navigate={navigate} />
   });
   // One exact wait addressed by URL; the occurrence link from run inspection is T034.
   api.routes.add({

@@ -40,6 +40,15 @@ describe("agent specialists module", () => {
     }));
   });
 
+  it("keeps the invocation page behind the occurrence evidence capability", () => {
+    const { routes } = registered();
+
+    expect(routes).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/agents/invocations/:workflowExecutionId/:activityExecutionId",
+      requiresBackend: [{ id: "elsa.api.agent-specialist-inspection", contractVersion: "1", relations: ["agent-specialist-invocation-evidence"] }]
+    }));
+  });
+
   it("keeps the playground behind the generic draft Test Run and the agent evidence capabilities", () => {
     const { routes } = registered();
 
