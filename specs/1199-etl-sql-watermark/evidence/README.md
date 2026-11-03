@@ -11,21 +11,21 @@ Source: the branch `agent/claude/2908-sql-watermark`, stacked on `agent/claude/2
 | FR-003, FR-005: the filtered read and the high watermark | `A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark` (SQLite: the filter and the high watermark). The container test `A_watermark_floor_reads_only_rows_above_it_in_key_order` proves the filter on PostgreSQL 16 and SQL Server 2022; the high watermark is read back from the retained snapshot, whatever the engine. |
 | FR-002, FR-004, US1, US2: checkpoints through the worker and store | `A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs` (3, then 2, then 0 records; the checkpoint 3, 5, 5).<br>`A_watermarked_run_with_a_rejected_delivery_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again` (a rejected delivery leaves no checkpoint; the next run reads all three rows).<br>`A_cancelled_watermarked_run_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again` (a run cancelled after preparation, through worker processes, leaves no checkpoint; the next run reads all three rows).<br>`A_watermarked_run_that_completes_with_rejected_rows_still_advances_the_checkpoint` (US1 scenario 4).<br>The incremental journey also shows that a checkpoint keyed by another source handle is not found. |
 | US2 scenario 2, SC-003: real worker processes | `A_watermarked_run_whose_worker_was_killed_after_publishing_records_the_snapshot_high_watermark`: a row with a higher watermark arrives after the snapshot, and the checkpoint is the snapshot's high watermark, 3. |
-| §2.23.5: a corrupt retained snapshot | `A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read` (`InvalidDataException`, which the preparer reports as `etl.snapshot-integrity-failed`). |
+| §2.23.5: a corrupt retained snapshot | `A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read` (a truncated line and a line that is JSON but not an object both raise `InvalidDataException`, which the preparer reports as `etl.snapshot-integrity-failed`). |
 | SC-006: the migration | `Connector_run_completion_migration_keeps_prior_finite_rows_and_leaves_their_request_null` seeds a runtime database at `20261021170000` and migrates it to the latest migration, which includes `20261103120000_ConnectorSourceWatermarks`, then checks for pending model changes. The existing migration tests also apply every migration to a new database. |
 | FR-006: Studio | Vitest `connector-pipeline-editor` (the selector offers required `int64` columns, follows a rename and drops a column that no longer qualifies) and Playwright `etl-connector-authoring` (the watermark is saved). |
 
+At `4ebc5a198` (review round 3), the ETL suite passed 1245 of 1245 and the architecture suite 614 of 614. Round 3 changed only the high-watermark read and its test, and documentation.
+
 At `fe4aca2e8` (review round 2):
-- the ETL suite passed, 1244 of 1244;
 - the container suite passed, 50 of 50;
-- the architecture suite passed, 614 of 614;
 - Studio ETL Vitest passed, 120 of 120.
 
 The Playwright spec passed 14 of 14 at `6f57b43f1`. Since then, Studio changed only the watermark help text, which the spec does not assert.
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has 10 entries, and all bite. Three, recorded at `fe4aca2e8`, cover the `WHERE` clause on PostgreSQL and on SQL Server (each made inclusive, which the container test catches) and the integrity mapping of a corrupt snapshot. One, recorded at `6f57b43f1`, covers the source handle in the checkpoint key. The other 6, recorded at `bc5fdb4da`, are:
+[`bite-proofs.json`](bite-proofs.json) has 11 entries, and all bite. One, recorded at `4ebc5a198`, covers the refusal of a snapshot line that is not a JSON object. Three, recorded at `fe4aca2e8`, cover the `WHERE` clause on PostgreSQL and on SQL Server (each made inclusive, which the container test catches) and the integrity mapping of a corrupt snapshot. One, recorded at `6f57b43f1`, covers the source handle in the checkpoint key. The other 6, recorded at `bc5fdb4da`, are:
 - the compiler's and the worker's watermark rules;
 - the reader's floor;
 - the recorded high watermark;
