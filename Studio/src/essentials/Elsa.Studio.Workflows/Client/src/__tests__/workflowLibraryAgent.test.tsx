@@ -8,7 +8,7 @@ import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
 import { useWorkflowPageAgent } from "../workflow-editor/useWorkflowLibraryAgent";
 import {
-  applyCreateDialogPrefill, applyListStateChange, buildLibraryContent, buildTemplateListContent, createDialogAttachment, createDialogKind, libraryAttachment,
+  applyCreateDialogPrefill, applyListStateChange, buildCreateDialogContent, buildLibraryContent, buildTemplateListContent, createDialogAttachment, createDialogKind, libraryAttachment,
   libraryContextLimit, libraryKind,
   pageBindingProblem, type LibraryContextInput
 } from "../workflow-editor/workflowLibraryAgent";
@@ -65,6 +65,49 @@ describe("workflow library context (spec 1193 FR-020)", () => {
     const content = buildTemplateListContent("appr", "template-1", [{ id: "template-1", name: "Approval", revision: "t-r3" }]);
     expect(content).toMatchObject({ filter: { search: "appr" }, selection: "template-1", templates: [{ id: "template-1", name: "Approval", description: null, revision: "t-r3" }] });
     expect(buildTemplateListContent("", "definition-1", []).selection).toBeNull();
+  });
+});
+
+describe("bounded page contexts (spec 1193 FR-020, FR-023, FR-024)", () => {
+  const long = (id: string) => ({ id, name: `Template ${id} `.padEnd(256, "n"), description: "d".repeat(500), revision: `r-${id}` });
+  const serverLimit = 16 * 1024;
+
+  it("clips the disclosed search to the 256 characters the server admits", () => {
+    const content = buildLibraryContent(input({ location: { ...location, search: "s".repeat(400) } }));
+    expect(content.query.search).toHaveLength(256);
+  });
+
+  it("bounds the create dialog's templates to the server's 16 KiB, keeping the draft's chosen template", () => {
+    const templates = Array.from({ length: 50 }, (_, index) => long(`t${index}`));
+    const draft: CreateWorkflowDraft = { name: "N".repeat(256), description: "D".repeat(2000), rootActivityVersionId: null, templateId: "t49" };
+    const content = buildCreateDialogContent(draft, templates);
+    expect(JSON.stringify(content).length).toBeLessThanOrEqual(serverLimit);
+    expect(content.templates.some(template => template.id === "t49")).toBe(true);
+    expect(Object.keys(content).sort()).toEqual(["description", "name", "revision", "rootActivityVersionId", "templateId", "templates"]);
+    // Descriptions go before templates do.
+    expect(content.templates.length).toBeGreaterThan(30);
+    expect(content.templates.every(template => template.description === null || template.description.length <= 120)).toBe(true);
+  });
+
+  it("leaves a dialog with few templates whole", () => {
+    const templates = Array.from({ length: 3 }, (_, index) => long(`t${index}`));
+    const content = buildCreateDialogContent({ name: "N", description: "", rootActivityVersionId: null }, templates);
+    expect(content.templates.map(template => template.description)).toEqual(templates.map(template => template.description));
+  });
+
+  it("bounds the template list to the server's 16 KiB, keeping the selected template and its selection", () => {
+    // Long identities, so that even without descriptions and with clipped names not every template fits.
+    const id = (index: number) => `t${index}-`.padEnd(120, "x");
+    const templates = Array.from({ length: 100 }, (_, index) => long(id(index)));
+    const content = buildTemplateListContent("", id(99), templates);
+    expect(JSON.stringify(content).length).toBeLessThanOrEqual(serverLimit);
+    expect(content.selection).toBe(id(99));
+    expect(content.templates.some(template => template.id === id(99))).toBe(true);
+    // Left out from the end, the selected template last: the kept ones are the first ones, then the selection.
+    expect(content.templates.length).toBeLessThan(100);
+    expect(content.templates.slice(0, -1).map(template => template.id)).toEqual(templates.slice(0, content.templates.length - 1).map(template => template.id));
+    expect(content.templates.every(template => template.description === null)).toBe(true);
+    expect(Object.keys(content).sort()).toEqual(["filter", "revision", "selection", "templates"]);
   });
 });
 
