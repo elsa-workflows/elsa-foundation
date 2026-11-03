@@ -71,6 +71,22 @@ All are sub-issues of epic #3052 and out of scope here.
 - [#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291): inspection shows a commit-ordered journal and compares two instances.
 - [#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292): the runtime traces a write that overwrites another open branch's write.
 
+### Runtime semantics and analysis limits
+
+For plain writes, "last commit wins" means the last successfully committed write determines the value. Activity
+start order, completion timestamps and completion-notification arrival order do not select the winner. Commit-order
+resolution is defined within one run; unordered branches may produce different winning writes and final values
+across runs. Merge and Reduce retain their current overwrite semantics; this spec adds no aggregation guarantee.
+
+A write based on an earlier read of the same variable is a separate read-modify-write case. Its stale-read policy
+is addressed by analysis A-2 and proposed ADR 0092 ([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411));
+this spec does not approve or implement that proposal. The static warning still covers declared unordered writes.
+
+Absence of a warning does not establish that an execution is free of write conflicts: the analysis cannot see every
+script, custom-activity or runtime-dependent write. Runtime write history, commit-order comparison and overwrite
+tracing remain separate commitments in #3290–#3292. They are not prerequisites for this specification; until they
+are delivered, this warning does not provide that runtime inspection evidence.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Unordered writes in a workflow are reported (Priority: P1)
@@ -104,6 +120,9 @@ and a single Set after the join; the warning disappears.
    validated and promoted, **Then** the finding is a warning and promotion succeeds.
 7. **Given** a Sequence where two nodes capture into `total` one after another, **When** the draft is validated,
    **Then** no warning is reported, and at run time the later capture's value remains.
+8. **Given** fork branches A and B and a threshold or first-wins join that releases C after A arrives while B can
+   still write `total`, and B and C both write `total`, **When** the draft is validated, **Then** the warning names
+   B and C; crossing the join does not establish an order between their writes.
 
 ---
 
@@ -132,6 +151,10 @@ a sequential Flowchart path, Flowchart decision outcomes and a loop body; none r
    two nodes that each capture into `result`, **When** it is validated, **Then** no warning is reported. (If the
    activity's contract allows several outcomes per completion, the two paths are unordered and the warning is
    reported, per D-2a.)
+6. **Given** a join that waits for every branch that can still write, or guarantees those branches can no longer
+   commit writes before releasing its continuation, **When** a branch and the continuation both write `result`,
+   **Then** that branch write is ordered before the continuation write and this pair causes no warning. Unordered
+   writes between the incoming branches are still reported.
 
 ---
 
@@ -196,10 +219,13 @@ variable from them report the warning without any change to the validator.
 - **A capture and a write in an outer and an inner graph activity.** A graph activity is a closed scope (spec 265),
   so an inner graph's captures can only target the inner graph's variables. They never collide with the caller's
   variables.
-- **A Flowchart that joins and forks again.** Nodes before a join and nodes after it are ordered. Nodes between a
-  fork and its join are not.
-- **A threshold or first-wins join.** Branches stay in flight until the join fires, so their writes are still
-  unordered.
+- **A Flowchart that joins and forks again.** A join orders incoming branch writes before its continuation only
+  when it waits for every branch that can still write, or guarantees that no such branch can commit further writes
+  before releasing the continuation. A join alone does not establish that guarantee. Unordered writes between
+  incoming branches remain unordered.
+- **A threshold or first-wins join.** If the join releases its continuation while an incoming branch can still
+  write, writes by that branch and the continuation remain unordered. Ordering must follow the structure's waiting
+  and cancellation guarantees, not merely the presence of a join.
 - **Writes the analysis cannot see.** Script `setVariable`, C# activities writing through the execution context,
   and writes inside sub-workflows or graph activities are not declared writes. They produce no warning; #3292 covers
   a runtime trace for them.
@@ -216,14 +242,18 @@ variable from them report the warning without any change to the validator.
   compilation.
 - **FR-002**: There MUST be one finding per variable, keeping the `ValueFlow/ConcurrentWrite` type and today's path.
   It MUST name every node that writes that variable without a defined order, the variable and its scope, state that
-  the last commit wins, and say how to make the result deterministic. Every affected variable MUST be reported in the
-  same validation or compilation pass.
+  the last successfully committed plain write wins, and say how to make the result deterministic, keeping the
+  separate stale read-modify-write policy in view (FR-014). Every affected variable MUST be reported in the same
+  validation or compilation pass.
 - **FR-003**: Writes whose order is defined, or of which only one can run, MUST NOT be reported: consecutive steps, a
   Flowchart path, If arms, Switch cases, loop iterations, Flowchart paths that leave different outcome ports of a
   node without a fork policy, and BPMN exclusive gateway branches. A node or structure that may select several
   outcomes in one completion (D-4) is not exclusive: its selected paths are unordered.
+  Across a join, ordering MUST follow the structure's waiting and cancellation guarantees. A branch that can still
+  commit writes after the continuation is released MUST NOT be classified as ordered before that continuation.
 - **FR-004**: The warning MUST appear in workflow draft validation, in graph activity draft validation and in graph
-  activity compilation diagnostics.
+  activity compilation diagnostics. Author-facing documentation MUST state that workflow executable compilation
+  does not return this warning and that API clients obtain it through workflow draft validation.
 - **FR-005**: For a graph activity, the rule MUST cover captures into the activity's own variables from its body
   nodes.
 - **FR-006**: Each structure MUST be able to declare, for any two of its children, whether one always runs before
@@ -245,7 +275,10 @@ variable from them report the warning without any change to the validator.
   the last commit wins; §4 states that commits are serialized per instance and that the frame revision is a version
   counter; the required-evidence item becomes "shared-ancestor parallel capture warning".
 - **FR-014**: The runtime semantics MUST be documented where authors look for value-flow behaviour: writes whose
-  order the definition does not fix resolve by commit order, and the last commit wins.
+  order the definition does not fix resolve, for plain writes, by successful commit order, and the last successfully
+  committed write wins. Documentation MUST distinguish that rule from reproducibility across runs and from the
+  separate stale read-modify-write policy. It MUST state the limits of static analysis and the temporary inspection
+  gap while #3290–#3292 remain undelivered.
 
 ### Key Entities
 
@@ -270,6 +303,9 @@ variable from them report the warning without any change to the validator.
 - **SC-004**: A structure added only in a test participates in the rule without any change to the validator.
 - **SC-005**: ADR 0048's amended required-evidence item, "shared-ancestor parallel capture warning", has a test that
   fails when the rule is removed.
+- **SC-006**: Join coverage includes both an early-release join whose outstanding branch and continuation writes
+  warn (Story 1, scenario 8), and a join that guarantees incoming writes precede continuation writes (Story 2,
+  scenario 6). An early-release join MUST NOT suppress the warning merely because the writes cross the join.
 
 ## Assumptions
 

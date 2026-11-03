@@ -43,3 +43,9 @@
 - FR-010 (two captures of one node into one variable) is a separate finding, not about ordering; it is kept because
   the same variable-write grouping finds it.
 - Follow-ups #3282 to #3285 and #3290 to #3292 are filed under epic #3052 and are out of scope.
+- Owner review feedback (2026-11-03) retains the warning policy, structure-owned ordering and diagnostic surfaces.
+  The spec and ADR distinguish successful commit order from repeatable results and the separate proposed stale
+  read-modify-write policy. Early-release joins gain an explicit ordering requirement and acceptance scenarios;
+  author documentation covers workflow compilation's warning gap, static-analysis limits and the temporary
+  inspection gap. #3290–#3292 remain separate commitments. This records incorporated feedback, not final initiative
+  approval of the amended text or implementation evidence.

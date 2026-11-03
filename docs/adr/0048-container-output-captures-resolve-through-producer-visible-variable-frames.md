@@ -134,14 +134,18 @@ producing node and the target kind is writable:
 - a mutable loop-local declaration uses the normal container-frame model and receives the frame of
   the concrete visible activation;
 - captures into the same shared frame variable whose order the definition does not fix produce a
-  validation warning, not a refusal. The last commit wins; the warning names every writer and points
-  the author to ordering the branches, separate variables, or one combining write after the join; and
+  validation warning, not a refusal. For plain writes, the last successfully committed write wins;
+  the warning names every writer and points the author to ordering the branches, separate variables,
+  or one combining write after the join; and
 - data leaving a structured scope still uses an explicit typed return, collection, selection,
   merge, or reduction. Capturing into an ancestor variable is an explicit state mutation, not an
   implicit scope-return mechanism.
 
 Runtime repeats the visibility, ownership, declaration, active-frame, and revision checks as
-defense in depth. It does not use completion timing as a conflict-resolution policy.
+defense in depth. Plain writes resolve by successful commit order, not by activity start order,
+completion timestamps or completion-notification arrival order. This defines the winner within one
+run; it does not guarantee the same winning write or final value across runs. A write based on an
+earlier read of the same variable is a separate read-modify-write case; see the amendment below.
 
 ### 6. Expose only semantically eligible targets in authoring
 
@@ -238,11 +242,11 @@ enforcement:
 - Merge and Reduce currently overwrite exactly like Set, so they are not exempt.
 
 Elsa provides guardrails and diagnostics; it does not restrict what the engineer builds. §5 therefore
-warns, and "last commit wins" is defined behaviour for plain writes: captures, and Set, Merge and
-Reduce as they work today. A write based on an earlier read of the same variable (a stale
-read-modify-write) is not covered here; analysis A-2 and ADR 0092
-([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) define it, so the two rules do not
-contradict each other. The same warning covers the intrinsic writes,
+warns, and "last commit wins" means the last successfully committed write wins for plain writes:
+captures, and Set, Merge and Reduce as they work today. A write based on an earlier read of the same variable (a stale
+read-modify-write) is not covered here; analysis A-2 and proposed ADR 0092
+([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) address its separate policy.
+This amendment does not approve or implement that proposal. The same warning covers the intrinsic writes,
 which draft validation previously refused. Each structure declares how its children relate in time,
 so the warning does not depend on structure kinds the validator knows.
 
@@ -251,3 +255,6 @@ Making the actual run order visible is follow-up work: variable write history in
 instance comparison ([#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291)), and a
 runtime trace for overwrites the static analysis cannot see
 ([#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292)).
+These remain separate commitments rather than prerequisites for this specification. Until delivered,
+the warning can identify declared writers but does not supply that runtime inspection evidence.
+Absence of a static warning does not establish that an execution is free of write conflicts.
