@@ -189,7 +189,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         folderToggleButtonRef.current?.focus();
         return;
       }
-      findTreeItemByKey(navigationRef.current, key)?.focus();
+      (findTreeItemByKey(navigationRef.current, key) ?? findTreeItemByKey(navigationRef.current, "all") ?? manageButtonRef.current)?.focus();
     });
   };
 

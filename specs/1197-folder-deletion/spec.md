@@ -1,6 +1,6 @@
 # Feature Specification: Safe Workflow Folder Deletion
 
-**Status**: Draft
+**Status**: Implemented
 **Created**: 2026-11-03
 **Issue**: #3713
 **Program-goal state**: none/free-flow

@@ -14,6 +14,29 @@ function preview(revision = "preview-1", workflowCount = 2) {
 }
 
 describe("workflow folder deletion", () => {
+  it("restores focus to All workflows when a deep-linked surviving parent is not rendered", async () => {
+    const root = { ...folder, id: "root", name: "Root" };
+    const parent = { ...folder, id: "parent", name: "Parent", parentId: root.id };
+    const selected = { ...folder, parentId: parent.id };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/preview")) return response({ ...preview(), folder: selected, parent });
+      if (url.pathname.endsWith("/remove")) return new Response(null, { status: 204 });
+      if (url.pathname.endsWith("/folders/demo")) return response({ folder: selected, ancestors: [root, parent] });
+      if (url.pathname.endsWith("/folders/parent")) return response({ folder: parent, ancestors: [root] });
+      if (url.pathname.endsWith("/folders")) return response({ items: [root] });
+      return response({ items: [] });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions?folderId=demo", fetchMock, capabilities());
+    await waitForCondition(() => expect(button(container, "Delete")).not.toBeNull());
+    await click(button(container, "Delete"));
+    await waitForText(container, "2 active workflows");
+    await click(button(container, "Delete folder"));
+    await waitForText(container, "Deleted folder Demo");
+    expect(container.querySelector('[data-folder-id="parent"]')).toBeNull();
+    await waitForCondition(() => expect(document.activeElement).toBe(container.querySelector('[data-tree-key="all"]')));
+  });
+
   it("preserves loaded promoted and unrelated expanded branches", async () => {
     const child = { ...folder, id: "child", name: "Child", parentId: folder.id };
     const grandchild = { ...folder, id: "grandchild", name: "Grandchild", parentId: child.id };

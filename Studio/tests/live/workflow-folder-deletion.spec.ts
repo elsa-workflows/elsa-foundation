@@ -74,9 +74,13 @@ for (const deleteWorkflows of [false, true]) {
     await expect(dialog).toContainText("Unfiled");
     await page.setViewportSize({ width: 360, height: 800 });
     await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
-    await testInfo.attach("folder-deletion-narrow", { body: await page.screenshot(), contentType: "image/png" });
+    const narrowScreenshot = testInfo.outputPath("folder-deletion-narrow.png");
+    await page.screenshot({ path: narrowScreenshot });
+    await testInfo.attach("folder-deletion-narrow", { path: narrowScreenshot, contentType: "image/png" });
     await page.setViewportSize({ width: 1440, height: 900 });
-    await testInfo.attach("folder-deletion", { body: await page.screenshot(), contentType: "image/png" });
+    const screenshot = testInfo.outputPath("folder-deletion.png");
+    await page.screenshot({ path: screenshot });
+    await testInfo.attach("folder-deletion", { path: screenshot, contentType: "image/png" });
     await dialog.getByRole("button", { name: deleteWorkflows ? "Delete folder and 2 workflows" : "Delete folder", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator(`[data-folder-id="${grandchild.id}"]`)).toBeVisible();

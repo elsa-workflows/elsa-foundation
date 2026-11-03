@@ -36,10 +36,11 @@ export function WorkflowFolderDeletionDialog({ context, folder, onClose, onDelet
     }
   }, [context, folder.id]);
 
+  const invalidateRequests = useCallback(() => { request.current++; }, []);
   useEffect(() => {
     void reload();
-    return () => { request.current++; };
-  }, [reload]);
+    return invalidateRequests;
+  }, [reload, invalidateRequests]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
