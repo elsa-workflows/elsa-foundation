@@ -13,6 +13,9 @@ no implicit ephemeral encryption key or memory-journal fallback.
 | `IRuntimeActivityConsumerCapability` | Declares the installed specialist descriptor/schema consumer. |
 | `IStartupTask` | Registers the actual facade and background worker under their frozen runtime aliases. |
 
+Within the domain, the feature also registers the scoped default `ISpecialistInvocationInspector` (`TryAdd`) over the
+native binding and the selected journal; see [Invocation evidence](../Core/EXTENSION_POINTS.md#invocation-evidence).
+
 Both activity classes opt out of standalone CLR catalog discovery with `Activity(IsDiscoverable=false)`.
 Published user specialists remain discoverable through their normal versioned provider definitions.
 The opt-out changes reconciliation, not runtime alias registration or existing artifact execution.
