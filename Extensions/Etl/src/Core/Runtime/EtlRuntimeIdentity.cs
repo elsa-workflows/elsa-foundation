@@ -100,6 +100,13 @@ public static class EtlRuntimeIdentity
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + extension;
     }
 
+    /// <summary>The opaque key recording a SQL route's applied effect: the effect identity's hash with a <c>.sql</c> suffix.</summary>
+    public static string ConnectorSqlEffectKey(string effectId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".sql";
+    }
+
     private static string? ObjectReference(EtlObjectReference? reference) => reference is null
         ? null : Hash("etl-object-v2", reference.Key, reference.ContentHash, Number(reference.ByteLength));
 
