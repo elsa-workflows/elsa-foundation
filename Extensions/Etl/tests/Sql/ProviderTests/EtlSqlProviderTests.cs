@@ -239,6 +239,25 @@ public sealed partial class EtlSqlServerProviderTests(EtlSqlServerFixture fixtur
     protected override string CreateTableSql(string table, bool keyed) =>
         $"CREATE TABLE {table} (id bigint NOT NULL, name nvarchar(200) NOT NULL, score decimal(18, 4) NULL{(keyed ? $", CONSTRAINT {table}_key UNIQUE (id)" : "")})";
 
+    [SkippableFact]
+    public async Task A_disabled_unique_index_is_not_a_key_and_the_write_fails_closed()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var table = "disabled_" + suffix;
+        await fixture.ExecuteAsync($"CREATE TABLE {table} (id bigint NOT NULL, name nvarchar(200) NOT NULL, score decimal(18, 4) NULL)");
+        await fixture.ExecuteAsync($"CREATE UNIQUE NONCLUSTERED INDEX {table}_key ON {table} (id); ALTER INDEX {table}_key ON {table} DISABLE");
+
+        // SQL Server keeps a disabled index's definition but no longer enforces it, so MERGE could insert duplicate keys.
+        var failure = await Assert.ThrowsAsync<EtlEffectException>(() => new EtlSqlRouteWriter(fixture.Engine, TimeProvider.System)
+            .WriteAsync(new EtlSqlRouteDelivery(fixture.ConnectionString, "ledger_" + suffix, true, table, ["id"],
+                [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("score", EtlColumnType.Decimal, false)],
+                Encoding.UTF8.GetBytes("[{\"id\":1,\"name\":\"Ada\"}]"), "effect-1", "run", "batch-1", new string('a', 64)), default).AsTask());
+
+        Assert.Equal("etl.sql-key-constraint-missing", failure.Code);
+        Assert.Empty(await fixture.QueryAsync($"SELECT id FROM {table}"));
+    }
+
     [Fact]
     public void An_exhausted_connection_pool_is_transient() =>
         Assert.Equal(EtlSqlErrorKind.Transient, new EtlSqlServerFixture().Engine.Classify(new InvalidOperationException(
