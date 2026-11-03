@@ -40,6 +40,27 @@ function redact(value) {
     .replace(/("(?:authorization|proxy-authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|clientSecret|cookie|set-cookie)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     .replace(/\b((?:access[_-]?token|refresh[_-]?token|client[_-]?secret|password|api[_-]?key)=)[^\s&#"']+/gi, "$1[redacted]") : value;
 }
+function safeFailureFrames(error) {
+  const frames = [], seen = new Set();
+  for (const line of typeof error?.stack === "string" ? error.stack.split("\n") : []) {
+    if (!/^\s+at /.test(line)) continue;
+    const match = line.trim().match(/[\\/]browser\.mjs:(\d+):(\d+)\)?$/);
+    if (!match) continue;
+    const row = Number(match[1]), column = Number(match[2]), key = row + ":" + column;
+    if (![row, column].every(value => Number.isSafeInteger(value) && value > 0 && value <= 1000000) || seen.has(key)) continue;
+    seen.add(key);
+    frames.push({ file: "browser.mjs", line: row, column });
+    if (frames.length === 8) break;
+  }
+  return frames;
+}
+function retainFailureDiagnostic(error) {
+  const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
+  try {
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600 });
+  } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
+  return diagnostic;
+}
 function diagnosticUrl(value) {
   try { const url = new URL(value); return url.origin + url.pathname; }
   catch { return "[unavailable URL]"; }
@@ -51,6 +72,7 @@ function retain(name, value) {
 }
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
+process.on("uncaughtExceptionMonitor", retainFailureDiagnostic);
 const browser = await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
@@ -1341,6 +1363,9 @@ async function consumedIntentRemount() {
     catalogRevisionBefore: catalog.revision, catalogRevisionAfter: catalogAfter.revision,
     configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
+  // Connection startup renders a temporary searchable shell. Its query is discarded
+  // when the connected AppContent mounts; the launcher exists only in that ready shell.
+  await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
@@ -1426,6 +1451,7 @@ try {
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
+  result.failureDiagnostic = retainFailureDiagnostic(error);
   result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
