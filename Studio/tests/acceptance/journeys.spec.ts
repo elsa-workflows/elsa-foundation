@@ -1,7 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
-
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
@@ -39,6 +38,7 @@ test.beforeEach(async ({ page }, info) => {
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
   await signIn(page);
+  await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
   await capture(page, info, "reference");
 });
 
@@ -54,6 +54,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await capture(page, info, "no-matches");
   await page.getByRole("button", { name: /clear search/i }).press("Enter");
   await expect(search).toHaveValue("");
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
   await capture(page, info, "connections-list");
   if (info.project.name === "desktop-light") {
     await expect(page.getByRole("table", { name: "Connections", exact: true }).getByRole("button", { name: "Create connection", exact: true })).toBeVisible();
@@ -79,6 +80,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(`qa-${stamp}`);
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await name.scrollIntoViewIfNeeded();
   await capture(page, info, "invalid-name");
   await name.fill(`qa-${stamp}`);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -100,6 +103,7 @@ test("collections and connection creation", async ({ page }, info) => {
 test("agent authoring and navigation", async ({ page }, info) => {
   await page.goto("/agents");
   await expect(page.getByTestId("agents-page").getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /^\d[\d,]* agents?$/ })).toBeVisible();
   await capture(page, info, "agents-list");
   const create = page.getByRole("button", { name: "New agent", exact: true });
   await create.press("Enter");
@@ -142,5 +146,6 @@ test("agent authoring and navigation", async ({ page }, info) => {
       await expect(entry.locator(`svg.lucide-${icon}`)).toBeVisible();
     }
   }
+  await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "completed");
 });
