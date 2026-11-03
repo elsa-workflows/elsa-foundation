@@ -47,7 +47,7 @@ for (const width of [1280, 320]) test(`tag suggestions stay bounded with long co
   await page.setViewportSize({ width, height: 740 });
   await page.goto("/?mode=workflow-library&tags=many&long-folder=1&theme=dark&palette=classic");
   await expect(page.getByRole("link", { name: "Collect overdue payment", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Manage tags", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Manage tags", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("workflow-library.png") });
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
   await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
