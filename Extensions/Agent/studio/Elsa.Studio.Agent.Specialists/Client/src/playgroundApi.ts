@@ -93,7 +93,8 @@ export function startPlaygroundRun(context: StudioEndpointContext, draft: Playgr
   for (const input of businessInputs(draft)) if (input.referenceKey in values) inputs[input.referenceKey] = { state: "Present", value: values[input.referenceKey] };
   if (draft.contract.inputs.some(input => input.referenceKey === optionsInputKey))
     inputs[optionsInputKey] = { state: "Present", value: continuation ? { conversationId: continuation.conversationId, revision: continuation.revision } : {} };
-  return context.http.postJson<{ testRunId: string; status: string; reason?: string | null; failure?: { code: string; message: string } | null }>(
+  return context.http.postJson<{ testRunId: string; status: string; reason?: string | null;
+    failure?: { code: string; message: string; diagnostics?: Array<{ code: string; message: string }> } | null }>(
     startPath(draft.draftId), { expectedRevision: draft.revision, idempotencyKey, inputs });
 }
 

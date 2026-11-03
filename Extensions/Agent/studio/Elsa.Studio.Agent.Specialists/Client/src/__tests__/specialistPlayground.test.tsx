@@ -155,6 +155,9 @@ describe("agent playground", () => {
 
     expect(container.querySelector("[role='alert']")?.textContent).toBe("Enter a value.");
     expect(postJson).not.toHaveBeenCalled();
+    type(container, "Brief", "m");
+    await settle();
+    expect(container.querySelector("[role='alert']")).toBeNull();
   });
 
   it("says the outcome is unknown instead of claiming a result", async () => {
@@ -163,6 +166,7 @@ describe("agent playground", () => {
     await submit(container);
 
     expect(container.textContent).toContain("The model may have received this request, but no result was accepted.");
+    expect(container.textContent).toContain("Start a fresh conversation, or continue from the last accepted revision.");
     expect(container.querySelector("[data-testid='playground-output']")).toBeNull();
     expect(button(container, "Continue this conversation")).toBeNull();
   });
@@ -270,13 +274,15 @@ describe("agent playground", () => {
 
   it("shows why the generic Test Run refused the start", async () => {
     const { context, getJson } = fakeContext({ start: [{ testRunId: "run-1", status: "ValidationRejected", reason: null,
-      failure: { code: "activity.draft.stale-revision", message: "The draft revision is stale." } }] });
+      failure: { code: "activity.draft.stale-revision", message: "The draft revision is stale.",
+        diagnostics: [{ code: "specialist.model.unavailable", message: "The selected model connection is unavailable." }] } }] });
     const container = await render(context);
     type(container, "Brief", "moss gardens");
     await submit(container);
 
     expect(container.querySelector("[data-testid='playground-refusal']")!.textContent).toBe("The draft revision is stale.");
     expect(container.textContent).toContain("activity.draft.stale-revision");
+    expect(container.querySelector("[data-testid='playground-diagnostics']")!.textContent).toContain("specialist.model.unavailable The selected model connection is unavailable.");
     expect(getJson.mock.calls.some(call => String(call[0]).includes("/evidence"))).toBe(false);
     expect(button(container, "Run")!.disabled).toBe(false);
   });

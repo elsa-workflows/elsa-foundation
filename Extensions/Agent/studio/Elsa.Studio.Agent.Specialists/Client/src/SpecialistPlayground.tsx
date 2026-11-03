@@ -9,7 +9,7 @@ import {
 } from "./playgroundApi";
 
 type Load = { kind: "loading" } | { kind: "missing" } | { kind: "denied" } | { kind: "error"; message: string } | { kind: "ready"; draft: PlaygroundDraft };
-type Refusal = { code?: string | null; message: string };
+type Refusal = { code?: string | null; message: string; diagnostics: Array<{ code: string; message: string }> };
 type Run = { testRunId: string; evidence: PlaygroundEvidence | null; refusal: Refusal | null; stopping: boolean; stopNote: string | null; failures: number };
 type Attempt = { key: string; signature: string };
 
@@ -135,7 +135,8 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
       // A refused start is still a 202 receipt: its reason is only on this response, not in the agent evidence.
       const refused = ["validationrejected", "dispatchrejected"].includes(started.status.toLowerCase());
       setRun({ testRunId: started.testRunId, evidence: null, stopping: false, stopNote: null, failures: 0,
-        refusal: refused ? { code: started.failure?.code, message: started.failure?.message ?? started.reason ?? "The run was refused before the agent started." } : null });
+        refusal: refused ? { code: started.failure?.code, message: started.failure?.message ?? started.reason ?? "The run was refused before the agent started.",
+          diagnostics: (started.failure?.diagnostics ?? []).map(item => ({ code: item.code, message: item.message })) } : null });
     } catch (error) {
       if (!alive.current) return;
       const status = error instanceof StudioHttpError ? error.status : (error as { status?: number }).status;
@@ -180,7 +181,11 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
       <form className="agent-playground__form" aria-label="Run" onSubmit={event => { event.preventDefault(); void start(); }}>
         {inputs.map(input => (
           <InputField key={input.referenceKey} input={input} value={values[input.referenceKey] ?? ""} error={errors[input.referenceKey]} disabled={active || starting}
-            onChange={value => setValues(current => ({ ...current, [input.referenceKey]: value }))} />
+            onChange={value => {
+              setValues(current => ({ ...current, [input.referenceKey]: value }));
+              // An edited field's earlier complaint no longer describes it; the next run validates again.
+              setErrors(current => { const { [input.referenceKey]: _, ...rest } = current; return rest; });
+            }} />
         ))}
         {continuity ? (
           <fieldset className="agent-playground__conversation" disabled={active || starting}>
@@ -264,7 +269,16 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
         <h2>Run <StatusChip tone={statusTone(evidence?.status)}>{evidence?.status ?? (run.refusal ? "Refused" : "Starting")}</StatusChip></h2>
         <p data-testid="playground-stage">{run.refusal ? "The run was refused before the agent started." : stageText(evidence)}</p>
       </div>
-      {run.refusal ? <StudioAlert tone="danger"><span data-testid="playground-refusal">{run.refusal.message}</span>{run.refusal.code ? <> <code>{run.refusal.code}</code></> : null}</StudioAlert> : null}
+      {run.refusal ? (
+        <StudioAlert tone="danger">
+          <span data-testid="playground-refusal">{run.refusal.message}</span>{run.refusal.code ? <> <code>{run.refusal.code}</code></> : null}
+          {run.refusal.diagnostics.length > 0 ? (
+            <ul className="agent-playground__diagnostics" data-testid="playground-diagnostics">
+              {run.refusal.diagnostics.map((item, index) => <li key={`${item.code}-${index}`}><code>{item.code}</code> {item.message}</li>)}
+            </ul>
+          ) : null}
+        </StudioAlert>
+      ) : null}
       {run.failures > 0 && run.failures < maximumPollFailures ? <p className="agent-playground__hint">The latest status could not be read; showing the last known state.</p> : null}
       {run.failures >= maximumPollFailures ? (
         <p className="agent-playground__hint" data-testid="playground-poll-stopped">The status could not be read, so it is no longer refreshed.{" "}
@@ -273,8 +287,10 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
       {run.stopNote ? <p role="status">{run.stopNote}</p> : null}
       {turn?.status === "OutcomeUnknown" ? (
         <StudioAlert tone="warning">
-          The model may have received this request, but no result was accepted. It is not retried automatically. Start a fresh
-          conversation, or continue from the last accepted revision.
+          The model may have received this request, but no result was accepted. It is not retried automatically.{" "}
+          {invocation?.specialist.allowContinuity
+            ? "Start a fresh conversation, or continue from the last accepted revision."
+            : "Run again only once a repeated request is acceptable."}
         </StudioAlert>
       ) : null}
       {invocation?.fault ? (
@@ -286,7 +302,7 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
           <dt>Candidate</dt><dd>{invocation.specialist.version} <CopyableIdentifier label="Candidate version" value={invocation.specialist.definitionVersionId} /></dd>
           <dt>Model</dt><dd>{invocation.model.modelId} on {invocation.model.connectionName}</dd>
           {turn ? <><dt>Model requests</dt><dd data-testid="playground-requests">{turn.modelRequests.length} of at most {turn.maximumModelCalls}</dd></> : null}
-          {turn ? <><dt>Usage</dt><dd data-testid="playground-usage">{usageText(turn.usage)}</dd></> : null}
+          {turn ? <><dt>Usage</dt><dd data-testid="playground-usage">{usageText(turn.usage, terminal)}</dd></> : null}
           {turn ? <><dt>Result</dt><dd data-testid="playground-application">{applicationText(turn.application)}</dd></> : null}
           {turn?.conversation ? <><dt>Conversation</dt><dd>
             <CopyableIdentifier label="Conversation" value={turn.conversation.conversationId} />
@@ -337,8 +353,8 @@ function applicationText(application: NonNullable<NonNullable<PlaygroundEvidence
   }
 }
 
-function usageText(usage: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["turn"]>["usage"]) {
-  if (!usage) return "Not reported yet";
+function usageText(usage: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["turn"]>["usage"], terminal: boolean) {
+  if (!usage) return terminal ? "Not reported" : "Not reported yet";
   if (!usage.usageAvailable) return "The provider did not report usage";
   const part = (value: number | null | undefined) => value == null ? "unknown" : String(value);
   return `${part(usage.inputTokens)} input, ${part(usage.outputTokens)} output, ${part(usage.totalTokens)} total tokens`;

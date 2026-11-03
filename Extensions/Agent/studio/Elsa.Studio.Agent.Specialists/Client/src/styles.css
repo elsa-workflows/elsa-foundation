@@ -169,3 +169,7 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.agent-playground__diagnostics {
+  margin: var(--studio-space-2, 8px) 0 0;
+  padding-left: var(--studio-space-4, 16px);
+}
