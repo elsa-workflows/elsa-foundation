@@ -9,7 +9,7 @@
 | FR-003: catalog paging without a provider function | `EfEtlDefinitionCatalog` orders and seeks on `DefinitionKey`; `Definition_pages_use_stable_hash_cursors_and_preserve_opaque_ids` (with `orders` and `Orders`) passes on all four engines. Definition keys are uppercase hexadecimal hashes, which sort alike under any collation, so the collation is proven from the schema instead: `Key_columns_use_the_engines_binary_collation` reads each server's recorded collation for the key columns. |
 | FR-004: publication retry | `Concurrent_publications_of_one_draft_record_one_artifact_and_settle_without_a_provider_failure`: four writers on their own connections publish the same draft revision; one publishes, the others replay or conflict, one artifact is recorded. `Concurrent_updates_of_one_draft_revision_admit_exactly_one`. Both on all four engines. On SQLite, with interceptors: `A_publication_that_runs_out_of_attempts_leaves_nothing_for_a_later_save_to_publish` (a database that stays busy exhausts the retry, which leaves nothing tracked) and `An_update_reports_its_own_revision_when_another_writer_advances_the_draft_before_the_reread`. |
 | FR-005: migrate, validate, model agreement | `A_fresh_database_migrates_validates_and_matches_the_model` on each server engine. |
-| FR-006: contract suite and CI | The design-store tests are contract classes (`Extensions/Etl/tests/Shared/DesignStore`): `Elsa.Etl.Tests` runs them on SQLite with the SQLite-only cases (a storage-failure trigger, the retained pre-v2 database); `Elsa.Etl.Persistence.ProviderTests` (container suite `etl-ef`, shard `ef-3`, `ELSA_ETL_EF_REQUIRE_NATIVE_PROVIDERS`) runs them on PostgreSQL 16, SQL Server 2022 and MySQL 8.4. |
+| FR-006: contract suite and CI | The design-store tests are contract classes (`Extensions/Etl/tests/Shared/DesignStore`): `Elsa.Etl.Tests` runs them on SQLite with the SQLite-only cases (a storage-failure trigger, the retained pre-v2 database, and the interceptor-staged update interleave and retry exhaustion); `Elsa.Etl.Persistence.ProviderTests` (container suite `etl-ef`, shard `ef-3`, `ELSA_ETL_EF_REQUIRE_NATIVE_PROVIDERS`) runs them on PostgreSQL 16, SQL Server 2022 and MySQL 8.4. |
 | FR-007: docs | ETL README persistence section, the new persistence project README, the design feature's manifest text, the package description, the Design API `EXTENSION_POINTS.md`, the unified-execution program goal, ADR 0087's EF admission paragraph. |
 
 ## Suites
@@ -18,25 +18,26 @@ At `6337c6bef` (review round 1): the ETL suite passed 1311 of 1311 and the `etl-
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has seven entries, and all bite. Two, recorded at `6337c6bef` (review round 1), cover a draft update reporting its own revision and a failed publication clearing the change tracker. Five, recorded at `84b61a306`, cover:
+[`bite-proofs.json`](bite-proofs.json) has seven entries, and all bite. Two, recorded at `6337c6bef` (review round 1), cover a draft update reporting its own revision and a failed publication clearing the change tracker. Five, recorded at `84b61a306`, cover (two of them name `Key_and_hash_columns_use_the_engines_binary_collation`, which round 1 renamed to `Key_columns_use_the_engines_binary_collation`):
 - the registration selecting the PostgreSQL context;
 - the binary collation in the SQL Server, PostgreSQL and MySQL models: without it the model disagrees with the committed migrations, so the model-agreement test fails (and on SQL Server and PostgreSQL the migrate step in each test's setup refuses the database). The recorded column collation comes from the migrations, so `Key_columns_use_the_engines_binary_collation` guards the migrations, not the model;
 - the publication retry: with a single attempt, the concurrent-publication contract fails on all three server engines, so the races are real there.
 
 **Not bite-proven:**
-- **The publication's transient-conflict filter on `catch (DbUpdateException)`.** Removing it survived: in the races the conflicts surface from the conditional update or the reads, not from `SaveChanges`, so that branch was not reached.
+- **The publication's transient-conflict filter on `catch (DbUpdateException)`.** Removing it survives: `A_publication_that_runs_out_of_attempts_leaves_nothing_for_a_later_save_to_publish` does reach that catch with a transient `DbUpdateException`, but without the filter the fallback rolls back (which succeeds on SQLite), clears the tracker and rethrows, so the outcome is the same. The case the filter exists for, a transaction the server already aborted (a SQL Server deadlock victim) whose explicit rollback would throw and hide the deadlock, is not staged by any test.
 - **The catalog without `EF.Functions.Collate`.** Hash keys sort alike under every collation, so no paging case can tell; the collation itself is bite-proven above.
 - **Provider selection for SQL Server, MySQL and SQLite**: only the PostgreSQL entry is mutated; the other three are tested by the same registration test per engine (and SQLite by the host tests).
 - **The SQLite context's ordinal comparers and the MySQL `utf8mb4` character-set annotation**: tested through model agreement, not bite-proven.
 - **The per-attempt `ChangeTracker.Clear()` at the start of each publication attempt**: tested by the races, not bite-proven separately.
+- **The update result's format version, schema version and timestamp**: only its revision is bite-proven; its pipeline and hash are checked through the returned pipeline and the codec's hash check, but the interleave test uses one format and schema version for both writers.
 - **Tooling**: the shared generator's exclusion of `Extensions/Etl` and `Extensions/Rules`, and the ETL script's refusal of SQLite and rewrite of the migration to internal, were exercised by running the scripts, not by tests.
-- **Wrapping**: a publication that runs out of attempts rethrows the provider failure unchanged; ETL has no persistence exception type, as before this slice.
+- **Wrapping**: a publication that runs out of attempts rethrows the provider failure unchanged; ETL has no persistence exception type, as before this slice. Follow-up: #3758.
 
 ## Actual Workbench journey
 
 [`design_store_workbench_journey.py`](design_store_workbench_journey.py) starts, for each server engine, its own database container and its own Workbench on ephemeral loopback ports, with the ETL design store on that engine and the runtime on SQLite. It creates two definitions whose ids differ only by case, validates and publishes one, runs the published version from a native Flowchart over a JSON Lines file, stops the host, starts a new one on the same database and reads the draft, the publication and the catalog back.
 
-All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.json`](workbench-journey-summary.json), recorded at `9432455c1` with a clean tree. Container secrets are generated per run.
+All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.json`](workbench-journey-summary.json), recorded at `9432455c1` with a clean tree, before round 1's store fixes (`26e2fbbc3`). Those changed the update result and failed publication attempts; the journey creates, publishes and runs but does not update a draft, and its publications succeed, so they do not reach the changed paths. Container secrets are generated per run.
 
 ## Limits
 
