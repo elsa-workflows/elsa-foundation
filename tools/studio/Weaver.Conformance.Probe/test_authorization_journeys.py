@@ -14,6 +14,7 @@ from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_FRAMES, TURN_R
 from artifacts import sha
 
 CAUSE = "QUALIFICATION_PRIVATE_OWNER_CAUSE_0123456789abcdef"
+CATALOG = {"contentType": "workflow.catalog", "content": {"status": "available", "entries": []}}
 
 
 def body(value):
@@ -64,7 +65,7 @@ class TurnRefusalTests(unittest.TestCase):
     def frames(self, expected, provider="copilot"):
         def frame(kind):
             if kind == "contextAdmitted":
-                return {"kind": kind, "payload": {"attachments": [{"contentType": "workflow.definition"}, {"contentType": "workflow.guidance"}],
+                return {"kind": kind, "payload": {"attachments": [{"contentType": "workflow.definition"}, copy.deepcopy(CATALOG), {"contentType": "workflow.guidance"}],
                                                   "diagnostics": []}}
             if kind in ("toolCallRequested", "toolCallStarted"):
                 return {"kind": kind, "payload": {"toolCallId": "call-1", "toolName": "workflow_read_graph"}}
@@ -123,12 +124,19 @@ class TurnRefusalTests(unittest.TestCase):
         def later_context_refused(frames):
             [frame for frame in frames if frame["kind"] == "contextAdmitted"][-1]["payload"].update(diagnostics=[{"code": UNAVAILABLE_CODE, "required": True}])
         def no_snapshot(frames): first(frames, "contextAdmitted")["payload"].update(attachments=[{"contentType": "workflow.guidance"}])
+        def no_catalog(frames):
+            admitted = first(frames, "contextAdmitted")["payload"]
+            admitted.update(attachments=[item for item in admitted["attachments"] if item["contentType"] != "workflow.catalog"])
+        def unavailable_catalog(frames):
+            for item in first(frames, "contextAdmitted")["payload"]["attachments"]:
+                if item["contentType"] == "workflow.catalog": item["content"] = {"status": "unavailable", "entries": []}
         def other_tool(frames): first(frames, "toolCallStarted")["payload"]["toolName"] = "workflow_set_designer_position"
         def wrong_code(frames): frames[-1]["error"]["code"] = "agent.tool.admission_unavailable"
         def wrong_status(frames): frames[-1]["error"]["statusCode"] = 500
         def owner_text(frames): frames[-1]["error"]["message"] = "Workflow definition authorization could not be completed."
         def leaked(frames): frames[-1]["error"]["message"] += " " + CAUSE
-        for change in (completed, finished, message, no_context, context_refused, later_context_refused, no_snapshot, other_tool,
+        for change in (completed, finished, message, no_context, context_refused, later_context_refused, no_snapshot, no_catalog,
+                       unavailable_catalog, other_tool,
                        wrong_code, wrong_status, owner_text, leaked):
             for provider in ("copilot", "anthropic"):
                 with self.subTest(change=change.__name__, provider=provider):
