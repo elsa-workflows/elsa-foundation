@@ -8,7 +8,7 @@ import unittest
 from artifacts import sha
 from journey_runtime import BASE_GRANTS
 from truth_seam_journeys import (ACTORS, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
-                                 SECTION, TENANT_MANAGER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
+                                 SECTION, TENANT_READER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
                                  require_permissions, require_truth_turn, require_workflow_truth_seams, synthetic_actors,
                                  synthetic_registrations, truth_principals, truth_seam_manifest_gaps)
 
@@ -182,18 +182,19 @@ class PrincipalTests(unittest.TestCase):
     def test_the_three_actors_extend_the_original_five_with_their_own_grants_and_tenants(self):
         original = [{"tenant": "default"}, {"tenant": "default"}, {"tenant": "other"}, {"tenant": "default"}, {"tenant": "default"}]
         made = truth_principals(original, lambda prefix, tenant, grants: {"prefix": prefix, "tenant": tenant, "grants": grants})
-        self.assertEqual([("witness-reader", "default"), ("witness-manager", "default"), ("witness-tenant-manager", "other"),
+        self.assertEqual([("witness-reader", "default"), ("witness-manager", "default"), ("witness-tenant-reader", "other"),
                           ("witness-catalog-denied", "default")], [(item["prefix"], item["tenant"]) for item in made])
-        self.assertEqual((5, 6, 7, 8), (READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED))
+        self.assertEqual((5, 6, 7, 8), (READER, MANAGER, TENANT_READER, CATALOG_DENIED))
         self.assertTrue(set(BASE_GRANTS) <= set(made[0]["grants"]) and "workflows/design:manage" not in made[0]["grants"])
-        self.assertTrue(all({"workflows/design:manage", "activities/design:read"} <= set(item["grants"]) for item in made[1:3]))
+        self.assertTrue({"workflows/design:manage", "activities/design:read"} <= set(made[1]["grants"]))
         # Exactly what each journey reaches beyond BASE_GRANTS, nothing broader: every actor discovers owner links through
-        # GET /capabilities; managers create, preflight and lay out; only the reader's Studio editor reads expressions;
-        # the catalog-denied actor never holds activities/design:read.
+        # GET /capabilities; only the manager preflights and lays out; the second tenant's reader only reads the catalog
+        # over a target-free request; only the reader's Studio editor reads expressions; the catalog-denied actor never
+        # holds activities/design:read.
         extra = [sorted(key for key in item["grants"] if key not in BASE_GRANTS) for item in made]
         self.assertEqual([["activities/design:read", "api-capabilities:read", "expressions:read", "workflows/design:read"],
                           ["activities/design:read", "api-capabilities:read", "workflows/design:manage"],
-                          ["activities/design:read", "api-capabilities:read", "workflows/design:manage"],
+                          ["activities/design:read", "api-capabilities:read", "workflows/design:read"],
                           ["api-capabilities:read", "workflows/design:read"]], extra)
         self.assertTrue(all(len(item["grants"]) == len(set(item["grants"])) and all("*" not in key for key in item["grants"]) for item in made))
         with self.assertRaises(RuntimeError): truth_principals(original[:4], lambda *args: {})
@@ -321,12 +322,27 @@ class GateTests(unittest.TestCase):
         with self.assertRaises(RuntimeError): require_workflow_truth_seams(self.section(browser={}), self.root, source="a" * 40)
         with self.assertRaises(RuntimeError): require_workflow_truth_seams(changed, self.root, source="a" * 40)
         for role, value in (("reader", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}),
-                            ("tenant-manager", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}),
+                            ("tenant-reader", {"permissions": None, "catalog": {"tenantOnly": True, "status": "available"}}),
+                            ("tenant-reader", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": False, "status": "available"}}),
                             ("catalog-denied", {"permissions": {"manage": "denied"}, "catalog": {"tenantOnly": None, "status": "available"}})):
             with self.subTest(actor=role):
                 with self.assertRaises(RuntimeError):
                     require_workflow_truth_seams(self.section({**synthetic_actors(), role: value}), self.root, source="a" * 40)
         self.assertEqual("workflowTruthSeamQualification", SECTION)
+
+
+class FailureExcerptTests(unittest.TestCase):
+    def test_an_unexpected_error_body_names_its_cause_without_secrets(self):
+        from runtime import failure_excerpt
+        body = json.dumps({"errors": {"generalErrors": ["The requested workflow definition is not readable."]},
+                           "accessToken": "private-token-value"}).encode() + b" Bearer private-bearer"
+        excerpt = failure_excerpt(403, body)
+        self.assertIn("not readable", excerpt)
+        self.assertNotIn("private-token-value", excerpt)
+        self.assertNotIn("private-bearer", excerpt)
+        self.assertEqual("", failure_excerpt(200, b"{}"))
+        self.assertEqual("", failure_excerpt(403, b""))
+        self.assertLessEqual(len(failure_excerpt(500, b"x" * 5000)), 620)
 
 
 if __name__ == "__main__":

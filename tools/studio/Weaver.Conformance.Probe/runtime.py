@@ -73,8 +73,19 @@ class Http:
 
     def json(self, path, body=None, *, method="GET", headers=None, expected=200):
         status, data, response_headers = self.request(path, body, method=method, headers=headers)
-        check(status == expected, f"{method} {path} returned {status}, expected {expected}")
+        check(status == expected, f"{method} {path} returned {status}, expected {expected}" + failure_excerpt(status, data))
         return json.loads(data), response_headers
+
+
+_SECRET_TEXT = re.compile(r'("(?:accessToken|refreshToken|password|apiKey|clientSecret|cookie)"\s*:\s*)"(?:\\.|[^"\\])*"|\bBearer\s+\S+', re.I)
+
+
+def failure_excerpt(status, data):
+    """A bounded, redacted excerpt of an unexpected error body, so a refusal names its own cause in the failure."""
+    if not isinstance(status, int) or status < 400 or not data:
+        return ""
+    text = data[:600].decode("utf-8", "replace") if isinstance(data, (bytes, bytearray)) else str(data)[:600]
+    return "; body: " + _SECRET_TEXT.sub(lambda match: (match.group(1) + '"[redacted]"') if match.group(1) else "Bearer [redacted]", text)
 
 
 def normal_sign_in(base, username, password, output, *, tenant_id=None):

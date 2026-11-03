@@ -5,9 +5,11 @@ tenant: the activity catalog (workflow.catalog) equals the designer's own catalo
 (workflow.permissions) equal the owning design API's read and manage decisions. Tool availability follows them: the
 actual adapter is offered the reviewed layout tool only when the actor may manage the workflow.
 
-Four dedicated principals run one read-graph turn each: a manager, a read-only reader and a reader without activity
-design read in the admin's tenant, against the admin's seeded workflow, and a manager in a second tenant against a
-workflow it seeds itself. The host's generation observation also reports its loaded Agent Workflows package types and
+Three dedicated principals in the admin's tenant run one read-graph turn each against the admin's seeded workflow: a
+manager, a read-only reader and a reader without activity design read. A fourth, in a second tenant, compares catalogs
+only: the packaged consumer's workflow persistence has one scope, so a definition that tenant created would be stored
+under "default" and rightly refused to it; its Weaver catalog is the collection admitted with a target-free workflow
+request. The host's generation observation also reports its loaded Agent Workflows package types and
 composed catalog, so the packaged consumer is shown to ship and compose no placeholder. Finally the reader runs the
 actual packaged Studio journey (browser.mjs, workflow-read-only) with a fresh normal-login state: explanation completes
 through the owning catalog and permissions, and a layout request is never offered to the actual adapter, so no proposal,
@@ -31,7 +33,7 @@ import time
 import uuid
 
 from artifacts import TOOL, check, sha
-from authorization_journeys import select_command, snapshot_attachment
+from authorization_journeys import WORKFLOW_MODULE, select_command, snapshot_attachment
 from journey_runtime import BASE_GRANTS, browser_inputs, same
 from owner_resources import capability_links, owner_path, seed_workflow
 from runtime import RUNTIME_ENVIRONMENT, private_json
@@ -51,13 +53,12 @@ CATALOG_KIND = "workflow.catalog"
 PERMISSIONS_KIND = "workflow.permissions"
 
 # The four dedicated principals, appended after the original five so every earlier index keeps its meaning.
-READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED = 5, 6, 7, 8
+READER, MANAGER, TENANT_READER, CATALOG_DENIED = 5, 6, 7, 8
 # Exactly what each actor's journey reaches, beyond the agent and preferences BASE_GRANTS:
 # - api-capabilities:read: GET /capabilities, through which every owner link (activity catalog, workflow definitions,
 #   drafts, validations, expressions) is discovered, by the driver and by Studio alike;
 # - workflows/design:read: the definition GET, its draft validations and the read-graph tool;
-# - workflows/design:manage (managers): definition create in seed_workflow, the promotion preflight and the layout tool,
-#   and it satisfies read;
+# - workflows/design:manage (manager): the promotion preflight and the layout tool; the evaluator lets it satisfy read;
 # - activities/design:read: the designer catalog GET and Weaver's catalog (never the catalog-denied actor);
 # - expressions:read (reader only): the packaged Studio editor's expression descriptors in the browser journey.
 CAPABILITIES_READ = "api-capabilities:read"
@@ -65,19 +66,26 @@ READER_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:read", "acti
 # A reader without activity design read: the owner withholds its catalog, and Weaver must disclose none.
 CATALOG_DENIED_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:read"]
 MANAGER_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:manage", "activities/design:read"]
-# role -> (principal index, seeded workflow, may manage, sees the tenant-restricted activity; None: no catalog read)
+# The second tenant's actor compares catalogs only. The packaged consumer's workflow persistence has one scope, so every
+# definition is stored under that scope's tenant ("default") whatever tenant creates it, and the owner rightly refuses a
+# principal of another tenant (its stored tenant must equal the principal's). This actor therefore seeds no workflow and
+# runs no turn: its Weaver catalog is the collection admitted with its message, over a target-free workflow request,
+# which needs workflow design read.
+TENANT_READER_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/design:read", "activities/design:read"]
+# role -> (principal index, seeded workflow or None: catalog only, may manage, sees the tenant-restricted activity;
+# None: no catalog read)
 ACTORS = (("manager", MANAGER, "home", True, True), ("reader", READER, "home", False, True),
-          ("tenant-manager", TENANT_MANAGER, "other", True, False), ("catalog-denied", CATALOG_DENIED, "home", False, None))
+          ("tenant-reader", TENANT_READER, None, None, False), ("catalog-denied", CATALOG_DENIED, "home", False, None))
 
 
 def truth_principals(principals, new_identity):
     """The dedicated principals: a reader, a manager and a catalog-denied reader in the first principal's tenant, and a
-    manager in the third's."""
+    catalog-only reader in the third's."""
     check(len(principals) == READER and principals[0]["tenant"] != principals[2]["tenant"],
           "The truth-seam principals extend exactly the original five, which span two tenants")
     return [new_identity("witness-reader", principals[0]["tenant"], READER_GRANTS),
             new_identity("witness-manager", principals[0]["tenant"], MANAGER_GRANTS),
-            new_identity("witness-tenant-manager", principals[2]["tenant"], MANAGER_GRANTS),
+            new_identity("witness-tenant-reader", principals[2]["tenant"], TENANT_READER_GRANTS),
             new_identity("witness-catalog-denied", principals[0]["tenant"], CATALOG_DENIED_GRANTS)]
 
 
@@ -333,6 +341,34 @@ def _actor(runtime, name, http, seed, *, manage, tenant_only):
                          message.receipt, stream.receipt, trace["receipt"]]}
 
 
+def _tenant_catalog(runtime, name, http, *, tenant_only):
+    """The second tenant's catalogs: the designer's GET and the Weaver catalog admitted with a message over a target-free
+    workflow request. No stream is opened, so no turn or provider call follows the admission."""
+    links, capability = capability_links(http, "elsa.api.activity-design", runtime.output(name + "-capabilities"))
+    path = owner_path(http, links["activity-catalog"])
+    catalog_record, catalog_data = runtime.native.request(http, name + "-owner-catalog", path + ("&" if "?" in path else "?") + "availability=all")
+    owner = json.loads(catalog_data) if catalog_record["status"] == 200 else {}
+    transport = runtime.transport(name, http=http)
+    session_response = transport.create_session({"conversationId": str(uuid.uuid4()), "mode": "explain",
+        "activeSurface": {"route": "/workflows/definitions"}, "autonomyMode": "auto-read-only"}).require_status(200)
+    session = session_response.json()["data"]["sessionId"]
+    request = {"id": str(uuid.uuid4()), "moduleId": WORKFLOW_MODULE, "schemaVersion": "1", "source": WORKFLOW_MODULE, "sourceId": "qualification-tenant-catalog",
+               "label": "Workflow request", "contentType": "workflow.request", "sensitivity": "internal", "scope": "selection",
+               "origin": "clientSnapshot", "content": {"requestKind": "workflow-definition", "referenceId": "qualification-tenant-catalog",
+                                                       "intent": "Which activities can this tenant use?"}}
+    message = transport.message(session, {"content": "Owned workflow truth-seam tenant catalog request", "mode": "explain",
+        "requestId": str(uuid.uuid4()), "requestedCapabilities": ["workflow.explain"], "contextAttachments": [request]}).require_status(200)
+    admitted = message.json()["data"].get("contextAttachments") or []
+    catalogs = [item for item in admitted if isinstance(item, dict) and item.get("contentType") == CATALOG_KIND]
+    check(len(catalogs) == 1 and catalogs[0].get("origin") == "authoritativeRead" and catalogs[0].get("target") is None,
+          "The second tenant's message admitted no server-read catalog")
+    check(not any(isinstance(item, dict) and item.get("contentType") == PERMISSIONS_KIND for item in admitted),
+          "A target-free workflow request must disclose no workflow permissions")
+    catalog = require_catalog(catalogs[0].get("content"), catalog_record["status"], owner.get("activities"), tenant_only=tenant_only)
+    return {"sessionId": session, "catalog": catalog, "permissions": None,
+            "evidence": [capability, catalog_record["receipt"], session_response.receipt, message.receipt]}
+
+
 def _case(runtime, provider):
     name = provider + "-workflow-truth-seams"
     evidence = list(runtime.select_provider(provider))
@@ -346,15 +382,15 @@ def _case(runtime, provider):
         clients[index], identity = runtime.sign_in(index)
         check(identity["tenantId"] == (runtime.principals[index]["tenant"]), "A truth-seam principal signed in to another tenant")
     home = runtime.principals[MANAGER]["tenant"]
-    check(admin["tenantId"] == home != runtime.principals[TENANT_MANAGER]["tenant"],
-          "The admin's workflow must be in the home tenant and the tenant manager in another")
-    seeds["other"] = seed_workflow(clients[TENANT_MANAGER], runtime.output(name + "-other-workflow") / "workflow-seed")
+    check(admin["tenantId"] == home != runtime.principals[TENANT_READER]["tenant"],
+          "The admin's workflow must be in the home tenant and the tenant reader in another")
     for seed in seeds.values(): evidence.extend(seed["evidence"])
     evidence.extend(runtime.apply_features(name + "-select-seam", {SEAM_FEATURE: (True, {"Tenant": home})}))
     actors = {}
     try:
         for role, index, seed, manage, tenant_only in ACTORS:
-            observed = _actor(runtime, name + "-" + role, clients[index], seeds[seed], manage=manage, tenant_only=tenant_only)
+            observed = (_tenant_catalog(runtime, name + "-" + role, clients[index], tenant_only=tenant_only) if seed is None
+                        else _actor(runtime, name + "-" + role, clients[index], seeds[seed], manage=manage, tenant_only=tenant_only))
             evidence.extend(observed.pop("evidence"))
             actors[role] = observed
         # The reader's actual Studio journey over the same seeded workflow (FR-036 normal-host evidence).
@@ -437,7 +473,8 @@ def require_workflow_truth_seams(section, owned_root=None, *, source=None):
             check(observed.get("id") == row["id"] and observed.get("status") == "passed"
                   and observed.get("adapter") == row["id"].split("-", 1)[0]
                   and sorted(actors) == sorted(role for role, *_ in ACTORS)
-                  and all(actors[role].get("permissions", {}).get("manage") == ("allowed" if manage else "denied")
+                  and all((actors[role].get("permissions") is None if manage is None
+                           else (actors[role].get("permissions") or {}).get("manage") == ("allowed" if manage else "denied"))
                           and actors[role].get("catalog", {}).get("tenantOnly") is tenant_only
                           and actors[role].get("catalog", {}).get("status") == ("denied" if tenant_only is None else "available")
                           for role, _index, _seed, manage, tenant_only in ACTORS)
@@ -449,7 +486,7 @@ def require_workflow_truth_seams(section, owned_root=None, *, source=None):
 
 def synthetic_actors():
     """The minimal record shape the final gate checks per actor; for synthetic self-tests only, never native evidence."""
-    return {role: {"permissions": {"manage": "allowed" if manage else "denied"},
+    return {role: {"permissions": None if manage is None else {"manage": "allowed" if manage else "denied"},
                    "catalog": {"tenantOnly": tenant_only, "status": "denied" if tenant_only is None else "available"}}
             for role, _index, _seed, manage, tenant_only in ACTORS}
 
