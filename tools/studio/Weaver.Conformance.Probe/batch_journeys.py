@@ -403,6 +403,8 @@ def _browser(runtime, name, seed):
     output = root / "observation"
     n, write = seed["nodes"], seed["writeLine"]
     workflow = {key: seed[key] for key in ("definitionId", "draftId", "definitionPath", "draftPath", "validationPath")}
+    # The shared browser-input summary names one primary activity; for this journey it is the seed's first root node.
+    workflow["activityId"] = n["a"]
     workflow.update(nodes=n, batch={"operations": positive_operations(seed), "addedNodeId": ADDED, "writeLineVersionId": write["activityVersionId"],
                                     "literal": LITERAL, "displayName": DISPLAY_NAME, "position": POSITION, "slot": seed["flowchart"]["slot"]},
                     followUp={"operations": [{"kind": "position", "activity": {"id": n["a"]}, "x": 160, "y": 200}]})
