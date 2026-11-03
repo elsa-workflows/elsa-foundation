@@ -67,6 +67,18 @@ public sealed class EtlSqlSourceTests : IDisposable
     }
 
     [Fact]
+    public void More_columns_than_the_field_limit_are_refused()
+    {
+        var pipeline = Pipeline();
+        pipeline = pipeline with { Limits = pipeline.Limits with { MaxFields = Columns.Length - 1 } };
+
+        var result = Compile(pipeline);
+
+        Assert.Null(result.Artifact);
+        Assert.Contains(result.Diagnostics, item => item.Code == "schema.field-count.exceeded" && item.Path == "source.columns");
+    }
+
+    [Fact]
     public void A_continuous_sql_source_is_refused() =>
         Assert.Equal("etl.continuous-source-unsupported",
             EtlContinuousRunPolicy.FindViolation(Pipeline() with { Continuous = new EtlContinuousRunPolicy(5) }));
@@ -303,7 +315,6 @@ public sealed class EtlSqlSourceTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 

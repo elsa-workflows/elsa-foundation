@@ -31,9 +31,12 @@ internal interface IFileChunkPublisher
         CancellationToken cancellationToken = default);
 
     /// <summary>Describes the chunk already published under an identity, or returns null when there is none.</summary>
-    /// <remarks>Publication is atomic, so a found chunk is complete. Its bytes are re-hashed, never trusted from a sidecar.</remarks>
+    /// <remarks>
+    /// Publication is atomic, so a found chunk is complete. Its bytes are re-hashed, never trusted from a sidecar. A decorator
+    /// must forward this: a SQL source's replacement worker relies on it to reuse the published snapshot (spec 1198).
+    /// </remarks>
     ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
-        CancellationToken cancellationToken = default) => ValueTask.FromResult<EtlChunk?>(null);
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Selects a file publisher for one fixed ETL-owned chunk format.</summary>

@@ -16,7 +16,7 @@ public abstract partial class EtlSqlProviderTests
         new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, false), new("score", EtlColumnType.Decimal, false),
         new("active", EtlColumnType.Boolean, false), new("small", EtlColumnType.Int64, false), new("uid", EtlColumnType.String, false),
         new("at", EtlColumnType.String, false), new("whole", EtlColumnType.Int64, false), new("amount", EtlColumnType.Decimal, false),
-        new("day", EtlColumnType.String, false), new("zoned", EtlColumnType.String, false)
+        new("day", EtlColumnType.String, false), new("zoned", EtlColumnType.String, false), new("clock", EtlColumnType.String, false)
     ];
 
     /// <summary>A literal for the zoned column: 10:15:30 at UTC+1.</summary>
@@ -33,9 +33,9 @@ public abstract partial class EtlSqlProviderTests
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
         await fixture.ExecuteAsync(CreateTypedTableSql(_table));
-        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, name, score, active, small, uid, at, whole, amount, day, zoned) VALUES " +
-            $"(2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), " +
-            $"(1, N'Привет', 1.5, {TrueLiteral}, 7, '6f9619ff-8b86-d011-b42d-00c04fc964ff', '2026-11-03 10:15:30', 42, 7, '2026-11-03', {ZonedLiteral})");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, name, score, active, small, uid, at, whole, amount, day, zoned, clock) VALUES " +
+            $"(2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), " +
+            $"(1, N'Привет', 1.5, {TrueLiteral}, 7, '6f9619ff-8b86-d011-b42d-00c04fc964ff', '2026-11-03 10:15:30', 42, 7, '2026-11-03', {ZonedLiteral}, '10:15:30')");
 
         var raw = await ReadRawSnapshotAsync(new EtlSqlSource("db", _table, SnapshotColumns, ["id"]));
         var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line)).ToArray();
@@ -46,8 +46,8 @@ public abstract partial class EtlSqlProviderTests
         var ada = lines[0].RootElement;
         Assert.Equal((1L, "Привет", 1.5m, true, 7L), (ada.GetProperty("id").GetInt64(), ada.GetProperty("name").GetString(),
             ada.GetProperty("score").GetDecimal(), ada.GetProperty("active").GetBoolean(), ada.GetProperty("small").GetInt64()));
-        Assert.Equal((42L, 7m, "2026-11-03"), (ada.GetProperty("whole").GetInt64(), ada.GetProperty("amount").GetDecimal(),
-            ada.GetProperty("day").GetString()));
+        Assert.Equal((42L, 7m, "2026-11-03", "10:15:30.0000000"), (ada.GetProperty("whole").GetInt64(), ada.GetProperty("amount").GetDecimal(),
+            ada.GetProperty("day").GetString(), ada.GetProperty("clock").GetString()));
         Assert.Equal(new DateTimeOffset(2026, 11, 3, 9, 15, 30, TimeSpan.Zero),
             DateTimeOffset.Parse(ada.GetProperty("zoned").GetString()!, CultureInfo.InvariantCulture));
         Assert.Equal("6f9619ff-8b86-d011-b42d-00c04fc964ff", ada.GetProperty("uid").GetString());
@@ -184,10 +184,23 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
 {
     protected override string CreateTypedTableSql(string table) =>
         $"CREATE TABLE {table} (id bigint NOT NULL, name text NULL, score numeric(18, 4) NULL, active boolean NULL, " +
-        "small smallint NULL, uid uuid NULL, at timestamp NULL, whole integer NULL, amount integer NULL, day date NULL, zoned timestamptz NULL)";
+        "small smallint NULL, uid uuid NULL, at timestamp NULL, whole integer NULL, amount integer NULL, day date NULL, zoned timestamptz NULL, clock time NULL)";
 
     protected override string TrueLiteral => "true";
     protected override string ZonedLiteral => "'2026-11-03 10:15:30+01'";
+
+    [SkippableFact]
+    public async Task An_interval_is_a_duration_not_a_time_and_is_refused()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL, span interval NULL)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, span) VALUES (1, '02:03:04')");
+
+        var failure = await Assert.ThrowsAsync<EtlConnectorPreparationFailure>(() => ReadSnapshotOnAsync(fixture.ConnectionString,
+            new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true), new("span", EtlColumnType.String, false)], ["id"])));
+
+        Assert.Equal(("etl.sql-column-type-unsupported", "span"), (failure.Diagnostic.Code, failure.Diagnostic.Field));
+    }
     protected override string UnreachableConnectionString =>
         new Npgsql.NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Host = "127.0.0.1", Port = 1, Timeout = 5 }.ConnectionString;
 }
@@ -196,7 +209,7 @@ public sealed partial class EtlSqlServerProviderTests
 {
     protected override string CreateTypedTableSql(string table) =>
         $"CREATE TABLE {table} (id bigint NOT NULL, name nvarchar(200) NULL, score decimal(18, 4) NULL, active bit NULL, " +
-        "small tinyint NULL, uid uniqueidentifier NULL, at datetime2 NULL, whole int NULL, amount int NULL, day date NULL, zoned datetimeoffset NULL)";
+        "small tinyint NULL, uid uniqueidentifier NULL, at datetime2 NULL, whole int NULL, amount int NULL, day date NULL, zoned datetimeoffset NULL, clock time NULL)";
 
     protected override string TrueLiteral => "1";
     protected override string ZonedLiteral => "'2026-11-03 10:15:30 +01:00'";

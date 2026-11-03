@@ -43,6 +43,9 @@ internal static class EtlSqlSnapshotReader
         {
             await using var connection = engine.CreateConnection(binding.ConnectionString);
             await connection.OpenAsync(cancellationToken);
+            // The same session as the writer's, so a session option such as a search path reads what the writer writes.
+            if (engine.SessionSetup is { } session)
+                await ExecuteAsync(connection, null, session, cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(engine.SnapshotIsolation, cancellationToken);
             if (engine.SnapshotSetup is { } setup)
                 await ExecuteAsync(connection, transaction, setup, cancellationToken);
@@ -54,7 +57,17 @@ internal static class EtlSqlSnapshotReader
                 command.CommandTimeout = 0;
                 // The reader is closed before the commit: PostgreSQL and SQL Server allow one open reader per connection.
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-                await CopyRowsAsync(reader, source, columns, maxBytes, destination, cancellationToken);
+                try
+                {
+                    await CopyRowsAsync(reader, source, columns, maxBytes, destination, cancellationToken);
+                }
+                catch
+                {
+                    // Closing a reader drains every remaining row; cancel first so a doomed read stops at once, and so a
+                    // drain failure cannot replace the original failure.
+                    try { command.Cancel(); } catch (Exception exception) when (exception is DbException or InvalidOperationException) { }
+                    throw;
+                }
             }
             await transaction.CommitAsync(cancellationToken);
         }
@@ -145,7 +158,8 @@ internal static class EtlSqlSnapshotReader
                         writer.WriteStringValue(text);
                         return;
                     case Guid guid: writer.WriteStringValue(guid.ToString("D", CultureInfo.InvariantCulture)); return;
-                    // Both drivers return DateTime for a date column; write the date alone so it compares as one.
+                    // SqlClient returns DateTime for a date column (Npgsql returns DateOnly, written below); write the date
+                    // alone so it compares as one.
                     case DateTime date when string.Equals(reader.GetDataTypeName(index), "date", StringComparison.OrdinalIgnoreCase):
                         writer.WriteStringValue(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                         return;
@@ -153,7 +167,11 @@ internal static class EtlSqlSnapshotReader
                     case DateTimeOffset offset: writer.WriteStringValue(offset.ToString("O", CultureInfo.InvariantCulture)); return;
                     case DateOnly date: writer.WriteStringValue(date.ToString("O", CultureInfo.InvariantCulture)); return;
                     case TimeOnly time: writer.WriteStringValue(time.ToString("O", CultureInfo.InvariantCulture)); return;
-                    case TimeSpan span: writer.WriteStringValue(span.ToString("c", CultureInfo.InvariantCulture)); return;
+                    // A time of day arrives as TimeSpan from SqlClient (and older Npgsql); an interval is a duration, not
+                    // ISO 8601 time text, so it falls through to the refusal below.
+                    case TimeSpan span when IsTimeOfDay(reader.GetDataTypeName(index)) && span >= TimeSpan.Zero && span < TimeSpan.FromDays(1):
+                        writer.WriteStringValue(TimeOnly.FromTimeSpan(span).ToString("O", CultureInfo.InvariantCulture));
+                        return;
                 }
                 break;
             case EtlColumnType.Int64:
@@ -182,7 +200,12 @@ internal static class EtlSqlSnapshotReader
         throw Failure("etl.sql-column-type-unsupported", column.Name);
     }
 
-    private static async ValueTask ExecuteAsync(DbConnection connection, DbTransaction transaction, string sql,
+    // SQL Server names it "time"; PostgreSQL "time without time zone" (a zoned time arrives as DateTimeOffset).
+    private static bool IsTimeOfDay(string dataTypeName) =>
+        string.Equals(dataTypeName, "time", StringComparison.OrdinalIgnoreCase) ||
+        dataTypeName.StartsWith("time without time zone", StringComparison.OrdinalIgnoreCase);
+
+    private static async ValueTask ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();

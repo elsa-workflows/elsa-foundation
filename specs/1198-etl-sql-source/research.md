@@ -25,13 +25,13 @@
 **Rationale**:
 - The chunk store publishes atomically, so a present snapshot is complete.
 - A re-read after the table changed would produce different bytes under the same identity, which the store refuses as `etl.effect-conflict`, so without the lookup a crash would fail the run.
-- The reused snapshot is re-hashed and re-indexed, so a damaged file is refused as `etl.snapshot-integrity-failed`.
+- The reused snapshot is re-hashed and re-indexed, and that hash is what the preparation records (R4). After the commit, a damaged file is refused as `etl.snapshot-integrity-failed`.
 
 ## R4 — Integrity anchor
 
 **Decision**: A file source's snapshot must match the digest pinned at admission. A SQL source has no such digest, so its anchor is the snapshot hash recorded with the preparation; the batch builder verifies the file against that hash.
 
-**Rationale**: the bytes do not exist until preparation reads them. Once recorded, the preparation is immutable, so every partition verifies the same bytes.
+**Rationale**: the bytes do not exist until preparation reads them. Once recorded, the preparation is immutable, so every partition verifies the same bytes. The anchor covers the bytes from the commit onwards: a snapshot published but not yet committed is trusted as it stands in the host-approved snapshot root, like any other retained chunk, and a replacement that reuses it records its hash.
 
 ## R5 — Typed conversion before retention
 

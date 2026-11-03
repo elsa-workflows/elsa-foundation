@@ -99,14 +99,17 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   point in time. A transient read failure (a connection loss or an unreachable database) records nothing and logs a
   warning, and preparation runs again once its lease lapses, so an outage pauses the run. The read has no command
   timeout; the lease bounds it.
-- **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and time or timestamp values (ISO 8601 invariant
-  text); a `date` column is written as `yyyy-MM-dd`; `Int64` accepts 8- to
+- **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and timestamps or times of day (ISO 8601 invariant
+  text); a `date` column is written as `yyyy-MM-dd`, and an interval is refused; `Int64` accepts 8- to
   64-bit integers; `Decimal` accepts exact decimals within .NET `decimal` range and integers; `Boolean` accepts booleans
   (`bit` on SQL Server). Any other value, including a floating-point column, fails preparation with
   `etl.sql-column-type-unsupported`, naming the column. A NULL in a required column is a record error on the error route.
 - **Limits.** The snapshot is bounded by `MaxSnapshotBytes` (`etl.snapshot-too-large`); a row longer than
   `MaxRecordBytes` is a record error, `etl.record-too-large`. A SQL source is finite only. SQL Server's driver replaces
-  an unpaired surrogate in `nvarchar` text with U+FFFD before the run sees it.
+  an unpaired surrogate in `nvarchar` text with U+FFFD before the run sees it. A driver materialises each value before
+  the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
+  run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
+  names it.
   Watermark (incremental) reads, authored queries and log CDC are not supported.
 
 ## Continuous HTTP runs

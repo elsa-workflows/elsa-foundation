@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Implemented; [evidence](evidence/README.md)
+**Status**: Implemented — [PR #3705](https://github.com/elsa-workflows/elsa-foundation/pull/3705); [evidence](evidence/README.md)
 
 **Input**: The snapshot half of the read side of the fourth criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): "Both PostgreSQL and SQL Server support snapshot/watermark reads and transactional keyed writes, with real provider-specific recovery evidence. Log CDC is deferred." Keyed writes are [spec 1197](../1197-etl-sql-destination/spec.md). Watermark (incremental) reads are a later slice. Part of [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
@@ -52,8 +52,8 @@ Writers keep changing the table while the run reads it. The run sees the table a
 
 1. **Given** a published snapshot whose preparation was not recorded, **When** preparation runs again, **Then** it verifies and reuses that snapshot and does not query the database.
 2. **Given** a transient failure while reading, such as a connection failure or a timeout, **Then** the run is not failed. The preparation is left unrecorded and is claimed again once its lease expires. The worker logs a warning naming the failure type. The read itself has no command timeout; the lease bounds it.
-4. **Given** a predecessor whose lease lapsed while it was still reading, **When** it publishes its snapshot after the replacement has started reading, **Then** the replacement adopts the published snapshot rather than failing the run.
-3. **Given** a deterministic refusal while reading, such as a missing table or column, or a permission error, **Then** the run fails with `etl.sql-read-rejected`.
+3. **Given** a predecessor whose lease lapsed while it was still reading, **When** it publishes its snapshot after the replacement has started reading, **Then** the replacement adopts the published snapshot rather than failing the run.
+4. **Given** a deterministic refusal while reading, such as a missing table or column, or a permission error, **Then** the run fails with `etl.sql-read-rejected`.
 
 ### User Story 4 — Author and inspect a SQL source (Priority: P2)
 
@@ -70,7 +70,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
 
   | Declared type | Accepted database values |
   |---------------|--------------------------|
-  | `String` | text; a GUID; a time or timestamp in ISO 8601 invariant form; a `date` column as `yyyy-MM-dd` |
+  | `String` | text; a GUID; a timestamp or time of day in ISO 8601 invariant form; a `date` column as `yyyy-MM-dd`. An interval is refused. |
   | `Int64` | 8-, 16-, 32- and 64-bit integers |
   | `Decimal` | exact decimals within .NET `decimal` range, and integers |
   | `Boolean` | booleans (`bit` on SQL Server) |
@@ -117,10 +117,10 @@ An author picks a SQL source binding in Studio, names the table, declares column
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001** Against real PostgreSQL 16 and SQL Server 2022 containers, preparation reads a table into a snapshot whose records equal the rows in key order, including NULLs, an empty table, and each accepted kind of value (8-, 16-, 32- and 64-bit integers, an exact decimal and a decimal read from an integer column, a boolean, a GUID, text including non-ASCII, a timestamp, a zoned timestamp and a date), and refuses a floating-point column and a decimal beyond .NET range.
+- **SC-001** Against real PostgreSQL 16 and SQL Server 2022 containers, preparation reads a table into a snapshot whose records equal the rows in key order, including NULLs, an empty table, and each accepted kind of value (16-, 32- and 64-bit integers on PostgreSQL, which has no 8-bit type, and 8-, 32- and 64-bit on SQL Server; an exact decimal and a decimal read from an integer column, a boolean, a GUID, text including non-ASCII, a timestamp, a zoned timestamp and a date), and refuses a floating-point column and a decimal beyond .NET range.
 - **SC-002** On each real engine, a change committed after preparation does not reach the run, and a missing table is refused with `etl.sql-read-rejected`. On SQL Server, a database without snapshot isolation is refused.
 - **SC-003** In real worker processes, a worker killed between the snapshot publication and the preparation record is replaced, and the replacement reuses the snapshot after the table changed. The run delivers the original rows across two or more partitions.
-- **SC-004** A transient read failure leaves the run preparing and a later attempt succeeds, on the SQLite test engine. On each real engine, an unreachable database is classified as transient.
+- **SC-004** A transient read failure records nothing and a later preparation attempt succeeds, at the preparer, on the SQLite test engine. On each real engine, an unreachable database is classified as transient.
 - **SC-005** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof, except the guards the evidence README names.
 - **SC-006** An actual Workbench journey reads a PostgreSQL table into a PostgreSQL table from a native Flowchart.
 - **SC-007** Existing pipelines keep their bytes and identities. The ETL suite passes, and the container suite passes in CI's full tier.
