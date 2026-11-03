@@ -26,7 +26,7 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   const row = page.locator(`a[href*="/user-tasks/${taskId}"]`); await expect(row).toBeVisible();
   await row.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: receipt.title, exact: true })).toBeVisible();
-  const account = page.getByLabel(/^Account/); await expect(account).toHaveValue("A-107"); await expect(account).toBeDisabled();
+  const account = page.getByRole("textbox", { name: /^Account/ }); await expect(account).toHaveValue("A-107"); await expect(account).toBeDisabled();
   await page.getByRole("button", { name: "Approve", exact: true }).press("Enter");
   await expect(page.getByText("This field is required.", { exact: true }).first()).toBeVisible();
   await page.getByLabel(/^Amount/).fill("42"); await page.getByLabel(/^Confirmed/).selectOption("false"); await page.getByLabel(/^Note/).fill("Studio case preserved");

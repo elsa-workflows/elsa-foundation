@@ -54,7 +54,9 @@ export function TaskDetail({ api, id, identity, changed }: { api: ElsaStudioModu
       const next = await read(api, id); if (current !== sequence.current) return;
       setTask(next); setMissing(false); setStale(false);
       if (!edited.current || next.decision) setData(next.decision?.response.data ?? next.prefill ?? {});
-      if (next.status === "Completed" || next.status === "Cancelled") attempt.current = null;
+      // A newer unaccepted revision proves the previous conditional write cannot still win.
+      if (next.status === "Completed" || next.status === "Cancelled" ||
+          (!next.decision && attempt.current && next.revision > attempt.current.revision)) attempt.current = null;
     } catch (failure) { if (current !== sequence.current) return; setMissing(statusOf(failure) === 404); setNotice(message(failure)); setStale(true); }
   }, [api, id]);
   useEffect(() => { void refresh(); return () => { sequence.current++; }; }, [refresh]);

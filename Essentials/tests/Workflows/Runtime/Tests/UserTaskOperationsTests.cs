@@ -173,6 +173,27 @@ public sealed class UserTaskOperationsTests
         Assert.Contains("Note", forms.ValidateResponse(form, Json("{}"), JsonSerializer.SerializeToElement(new { Note = new string(' ', 1000) }), false).Keys);
     }
 
+    [Fact]
+    public async Task Accepted_pending_receipt_remains_readable_and_replayable_during_reconciliation_outage()
+    {
+        var store = Store(); await store.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = null }, null);
+        var request = new UserTaskCompletion(1, "pending-outage", "Approve", Json("{}"));
+        var accepted = await Operations(store, Actor("alice")).CompleteAsync("task", request);
+        foreach (var error in new Exception[] { new TimeoutException(), new InvalidOperationException("provider retry", new TimeoutException()),
+            new Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException("unavailable", "try later") })
+        {
+            var operations = new UserTaskOperations(store, new ActorAccess(Actor("alice")), [new BasicUserTaskForms()], TimeProvider.System, new Runtime(error), new(TimeProvider.System), new Accessor());
+            Assert.Equal(UserTaskStatus.CompletionPending, (await operations.GetAsync("task")).Status);
+            Assert.Equal(accepted.Decision!.Response.CompletionId, (await operations.CompleteAsync("task", request)).Decision!.Response.CompletionId);
+            await Assert.ThrowsAsync<UserTaskException>(() => operations.CompleteAsync("task", request with { Action = "Reject" }).AsTask());
+        }
+        var corrupt = new UserTaskOperations(store, new ActorAccess(Actor("alice")), [], TimeProvider.System, new Runtime(new InvalidDataException("corrupt")), new(TimeProvider.System), new Accessor());
+        await Assert.ThrowsAsync<InvalidDataException>(() => corrupt.GetAsync("task").AsTask());
+        var ct = new CancellationTokenSource(); ct.Cancel();
+        var cancelled = new UserTaskOperations(store, new ActorAccess(Actor("alice")), [], TimeProvider.System, new Runtime(new OperationCanceledException(ct.Token)), new(TimeProvider.System), new Accessor());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled.GetAsync("task", ct.Token).AsTask());
+    }
+
     private sealed class ExternalForms : IUserTaskFormProvider
     {
         public string Provider => "acme.forms/1"; public int Validations; public string? VersionValidated;
@@ -198,10 +219,10 @@ public sealed class UserTaskOperationsTests
         public ValueTask AuthorizeAsync(UserTaskRecord task, string operation, CancellationToken cancellationToken = default) => denyRead && operation == "read" ? ValueTask.FromException(new UserTaskException("missing", "Task not found.")) : ValueTask.CompletedTask;
         public ValueTask ValidateAssignmentAsync(string tenantId, string? assigneeId, string? groupId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
-    private sealed class Runtime : IUserTaskRuntime
+    private sealed class Runtime(Exception? failure = null) : IUserTaskRuntime
     {
         public ValueTask<UserTaskRecord> StageAsync(UserTaskCreation request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<UserTaskResponse> ReadAcceptedAsync(string tenantId, string taskId, string completionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default) => failure is null ? ValueTask.CompletedTask : ValueTask.FromException(failure);
     }
 }

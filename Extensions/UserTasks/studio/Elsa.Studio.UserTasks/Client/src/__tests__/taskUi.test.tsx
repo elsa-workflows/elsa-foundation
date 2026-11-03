@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioHttpError, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { ActionsEditor, AssignmentEditor } from "../PropertyEditors";
 import { BasicTaskForm } from "../TaskForm";
 import { FormsPage } from "../FormsPage";
 import { TasksPage, TaskDetail } from "../TasksPage";
@@ -140,4 +141,44 @@ it("uses advertised operation relations and encodes opaque task identities", asy
   const capability = context.backendSession!.capabilities!.capabilities[0];
   capability.links.find(item => item.rel === "task")!.href = "custom/human-work/{id}";
   await read(context, "opaque/id"); expect(get).toHaveBeenCalledWith("/custom/human-work/opaque%2Fid");
+});
+
+
+it("resolves an unaccepted ambiguous response when a newer revision proves its CAS cannot commit", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const get = vi.fn().mockResolvedValueOnce(withForm).mockResolvedValue({ ...withForm, revision: 2 });
+  const post = vi.fn().mockRejectedValueOnce(new StudioHttpError(0, "Connection lost")).mockResolvedValue({ ...withForm, status: "CompletionPending", revision: 3 });
+  await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} changed={vi.fn()} />));
+  await input(container.querySelector("input")!, "Keep my response"); await click("Approve"); await click("Refresh task");
+  expect(container.querySelector("input")!.disabled).toBe(false); expect(container.querySelector("input")!.value).toBe("Keep my response");
+  await click("Approve"); expect(post.mock.calls[1][1].revision).toBe(2); expect(post.mock.calls[1][1].requestId).not.toBe(post.mock.calls[0][1].requestId);
+});
+
+it("edits the literal JSON string supplied by catalog defaults without losing configured actions", async () => {
+  const change = vi.fn(); const validation = vi.fn();
+  await act(async () => root.render(<ActionsEditor value={'["Approve","Reject"]'} onChange={change} onValidationChange={validation} descriptor={{ name: "Test", typeName: "String" }} context={{ activity: {}, expressionDescriptors: [] }} />));
+  expect([...container.querySelectorAll("input")].map(x => x.value)).toEqual(["Approve", "Reject"]); expect(validation).toHaveBeenLastCalledWith(false);
+  await input(container.querySelector("input")!, "Accept"); expect(change).toHaveBeenLastCalledWith(["Accept", "Reject"]);
+});
+
+it("serializes target paging and retries a failed page before advancing", async () => {
+  let release!: (value: unknown) => void; const pending = new Promise(resolve => { release = resolve; });
+  const get = vi.fn().mockResolvedValueOnce({ users: [{ id: "first", name: "First" }], groups: [], moreUsers: true })
+    .mockReturnValueOnce(pending).mockRejectedValueOnce(new Error("Temporary outage")).mockResolvedValue({ users: [{ id: "last", name: "Last" }], groups: [], moreUsers: false });
+  await act(async () => root.render(<AssignmentEditor api={api(get)} group={false} value={null} onChange={vi.fn()} descriptor={{ name: "Test", typeName: "String" }} context={{ activity: {}, expressionDescriptors: [] }} />));
+  await click("More choices"); await click("More choices"); expect(get).toHaveBeenCalledTimes(2);
+  await act(async () => release({ users: [{ id: "middle", name: "Middle" }], groups: [], moreUsers: true }));
+  await click("More choices"); await click("More choices");
+  expect(get.mock.calls.map(([path]) => new URL(path, "http://owned").searchParams.get("skip"))).toEqual(["0", "100", "200", "200"]);
+  expect([...container.querySelectorAll("option")].map(x => x.value)).toEqual(["", "first", "middle", "last"]);
+});
+
+it("renders an explicit external integration and submits its nested case-sensitive response", async () => {
+  const custom = { ...task(), form: { id: "external", version: "immutable-1", name: "External", provider: "acme.forms/1", fields: [] } };
+  const post = vi.fn().mockResolvedValue({ ...custom, status: "CompletionPending", revision: 2 });
+  const context = api(vi.fn().mockResolvedValue(custom), post);
+  Object.assign(context, { userTaskForms: { list: () => [{ id: "acme.renderer", provider: "acme.forms/1", component: ({ value, onChange, readOnly }) => <label>External amount<input disabled={readOnly} value={String((value.Approval as { AmountUSD?: number } | undefined)?.AmountUSD ?? "")} onChange={event => onChange({ Approval: { AmountUSD: Number(event.target.value), CaseSensitiveKey: "kept" } })} /></label> }] } as NonNullable<ElsaStudioModuleApi["userTaskForms"]> });
+  await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} changed={vi.fn()} />));
+  await input(container.querySelector("input")!, "42"); await click("Approve");
+  expect(post.mock.calls[0][1].data).toEqual({ Approval: { AmountUSD: 42, CaseSensitiveKey: "kept" } });
 });

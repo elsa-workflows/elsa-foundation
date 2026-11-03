@@ -139,6 +139,17 @@ public sealed class EfUserTaskStoreTests
         await Assert.ThrowsAsync<UserTaskException>(() => store.TryWriteAsync(Task("run", "late"), null).AsTask());
     }
 
+    [Fact]
+    public async Task Retention_qualification_requires_the_same_physical_context_and_partition()
+    {
+        await using var first = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite("Data Source=:memory:").Options);
+        await using var second = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite("Data Source=:memory:").Options);
+        var boundary = new EfUserTaskPersistenceBoundary(); var journal = new EfUserTaskStore(first, new Accessor("tenant"));
+        Assert.True(boundary.CanRetainCompletionEvidence(journal, Executions(first)));
+        Assert.False(boundary.CanRetainCompletionEvidence(journal, Executions(second)));
+        Assert.False(boundary.CanRetainCompletionEvidence(new EfUserTaskStore(first, new Accessor("other")), Executions(first)));
+    }
+
     private static EfWorkflowExecutionStateStore Executions(RuntimeDbContext context) => new(context, new Accessor("tenant"),
         new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
     private static WorkflowExecutionState Execution(string id) => new(id, new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running,

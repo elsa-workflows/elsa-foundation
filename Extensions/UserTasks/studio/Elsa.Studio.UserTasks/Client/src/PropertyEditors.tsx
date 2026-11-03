@@ -1,10 +1,12 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import { forms, targets, message, type FormVersion } from "./taskApi";
 export function ActionsEditor({ value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps) {
-  const items = Array.isArray(value) ? value.map(String) : [];
+  let literal: unknown = value;
+  if (typeof literal === "string") { try { literal = JSON.parse(literal); } catch { literal = null; } }
+  const items = Array.isArray(literal) ? literal.map(String) : [];
   const invalid = !items.length || items.some(item => !item.trim() || item !== item.trim() || item === "Unmatched") || new Set(items).size !== items.length;
   useEffect(() => { onValidationChange?.(invalid); return () => onValidationChange?.(false); }, [invalid, onValidationChange]);
   return <div>{items.map((item, index) => <div className="user-task-actions" key={index}><label>Action {index + 1}<input disabled={disabled} value={item} onChange={event => onChange(items.map((entry, i) => i === index ? event.target.value : entry))} /></label>
@@ -13,11 +15,26 @@ export function ActionsEditor({ value, disabled, onChange, onValidationChange }:
     {invalid ? <p role="alert">Enter unique, nonempty action names without surrounding spaces.</p> : null}</div>;
 }
 export function AssignmentEditor({ api, group, value, disabled, onChange }: StudioActivityPropertyEditorProps & { api: ElsaStudioModuleApi; group: boolean }) {
-  const [items, setItems] = useState<{ id: string; name: string }[]>([]); const [error, setError] = useState(""); const [skip, setSkip] = useState(0); const [more, setMore] = useState(false);
-  useEffect(() => { let active = true; void targets(api, skip).then(page => { if (active) { setItems(previous => skip ? [...previous, ...(group ? page.groups : page.users)] : group ? page.groups : page.users); setMore(group ? page.moreGroups : page.moreUsers); setError(""); } }, failure => { if (active) setError(message(failure)); }); return () => { active = false; }; }, [api, group, skip]);
+  const [items, setItems] = useState<{ id: string; name: string }[]>([]); const [error, setError] = useState("");
+  const [skip, setSkip] = useState(0); const [more, setMore] = useState(false); const [loading, setLoading] = useState(false);
+  const busy = useRef(false); const generation = useRef(0);
+  const load = useCallback(async (offset: number, append: boolean) => {
+    if (busy.current) return; busy.current = true; setLoading(true); const current = generation.current;
+    try {
+      const page = await targets(api, offset); if (current !== generation.current) return;
+      const next = group ? page.groups : page.users;
+      setItems(previous => append ? [...previous, ...next] : next); setMore(group ? page.moreGroups : page.moreUsers);
+      setSkip(offset + 100); setError("");
+    } catch (failure) { if (current === generation.current) setError(message(failure)); }
+    finally { if (current === generation.current) { busy.current = false; setLoading(false); } }
+  }, [api, group]);
+  useEffect(() => {
+    ++generation.current; busy.current = false; setItems([]); setMore(false); setSkip(0); void load(0, false);
+    return () => { ++generation.current; busy.current = false; };
+  }, [load]);
   return <div><select disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => onChange(event.target.value || null)}>
     <option value="">None</option>{value && !items.some(item => item.id === value) ? <option value={String(value)}>{String(value)}</option> : null}{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-    {more ? <StudioButton disabled={disabled} onClick={() => setSkip(skip + 100)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
+    {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
 }
 export function FormEditor({ api, value, disabled, onChange }: StudioActivityPropertyEditorProps & { api: ElsaStudioModuleApi }) {
   const [items, setItems] = useState<FormVersion[]>([]); const [error, setError] = useState(""); const [nextPage, setNextPage] = useState<string | null>(null);

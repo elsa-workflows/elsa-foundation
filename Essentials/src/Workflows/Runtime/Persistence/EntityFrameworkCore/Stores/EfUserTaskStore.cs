@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access) : IUserTaskStore
 {
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => access.Current;
     public bool IsDurable => true;
     private string Scope => RequireScope(access);
 
@@ -162,6 +165,11 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
 
 internal sealed class EfUserTaskPersistenceBoundary : IUserTaskPersistenceBoundary
 {
-    public bool CanRetainCompletionEvidence(IUserTaskStore journal, IWorkflowExecutionStateStore executions) =>
-        journal.GetType() == typeof(EfUserTaskStore) && executions.GetType() == typeof(EfWorkflowExecutionStateStore);
+    public bool CanRetainCompletionEvidence(IUserTaskStore journal, IWorkflowExecutionStateStore executions)
+    {
+        if (journal is not EfUserTaskStore tasks || executions is not EfWorkflowExecutionStateStore native ||
+            !ReferenceEquals(tasks.Context, native.Context)) return false;
+        try { return tasks.AccessContext.RequireScope() == native.AccessContext.RequireScope(); }
+        catch (InvalidOperationException) { return false; }
+    }
 }

@@ -144,7 +144,13 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
         if (task is null || task.Status == UserTaskStatus.Staged || !UserTaskRules.CanSee(task, actor.UserId, actor.GroupIds, actor.CanManage))
             throw Failure("missing", "Task not found.");
         await access.AuthorizeAsync(task, "read", ct);
-        await runtime.ReconcileAsync(task, ct);
+        try { await runtime.ReconcileAsync(task, ct); }
+        catch (Exception exception) when (task.Status == UserTaskStatus.CompletionPending &&
+            !ct.IsCancellationRequested && (UserTaskAvailability.IsUnavailable(exception, ct) ||
+                exception is Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException))
+        {
+            // Acceptance already owns durable delivery responsibility. Re-read and reauthorize its receipt below.
+        }
         task = await store.FindAsync(actor.TenantId, id, ct);
         if (task is null || !UserTaskRules.CanSee(task, actor.UserId, actor.GroupIds, actor.CanManage)) throw Failure("missing", "Task not found.");
         await access.AuthorizeAsync(task, "read", ct);
