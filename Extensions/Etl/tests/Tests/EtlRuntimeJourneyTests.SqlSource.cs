@@ -187,10 +187,21 @@ public sealed partial class EtlRuntimeJourneyTests
 
         var first = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-first", WatermarkPipeline()));
         Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (first.Status, first.AcceptedRecords, await CheckpointAsync(host, files, "watermark-first")));
-        // The checkpoint belongs to the pinned source: an alias pointed at another database starts again from every row.
+        // The checkpoint belongs to the definition, the alias and its pinned source, the table and the column: changing any of
+        // them, such as an alias pointed at another database, starts again from every row.
         await using (var lookup = host.Services.CreateAsyncScope())
-            Assert.Null(await lookup.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>().FindConnectorSourceWatermarkAsync(
-                files.Scope, new("orders", "people-db", new string('0', 64), "people", "version")));
+        {
+            var store = lookup.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>();
+            var handle = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(files.Scope, "watermark-first")).Bindings.Source.Revision.Handle;
+            EtlConnectorSourceWatermarkKey key = new("orders", "people-db", handle, "people", "version");
+            Assert.Equal(3L, await store.FindConnectorSourceWatermarkAsync(files.Scope, key));
+            foreach (var other in new[]
+                     {
+                         key with { DefinitionId = "invoices" }, key with { SourceAlias = "other-db" },
+                         key with { SourceHandle = new string('0', 64) }, key with { Table = "people_archive" }, key with { Column = "id" }
+                     })
+                Assert.Null(await store.FindConnectorSourceWatermarkAsync(files.Scope, other));
+        }
 
         ExecuteSql(source, "UPDATE people SET name = 'Bram II', version = 4 WHERE id = 2; INSERT INTO people VALUES (4, 'Dee', 5)");
         var second = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-second", WatermarkPipeline()));
