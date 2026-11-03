@@ -8,7 +8,7 @@ using Npgsql;
 namespace Elsa.Etl.Sql.ProviderTests;
 
 /// <summary>Spec 1197: the SQL delivery protocol on each real engine.</summary>
-public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
+public abstract partial class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
 {
     private static readonly EtlColumn[] Columns =
         [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("score", EtlColumnType.Decimal, false)];
@@ -161,7 +161,7 @@ public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
     }
 }
 
-public sealed class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixture)
+public sealed partial class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixture)
     : EtlSqlProviderTests(fixture), IClassFixture<EtlSqlPostgreSqlFixture>
 {
     private static readonly EtlColumn[] RowColumns =
@@ -233,7 +233,7 @@ public sealed class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixtur
     }
 }
 
-public sealed class EtlSqlServerProviderTests(EtlSqlServerFixture fixture)
+public sealed partial class EtlSqlServerProviderTests(EtlSqlServerFixture fixture)
     : EtlSqlProviderTests(fixture), IClassFixture<EtlSqlServerFixture>
 {
     protected override string CreateTableSql(string table, bool keyed) =>

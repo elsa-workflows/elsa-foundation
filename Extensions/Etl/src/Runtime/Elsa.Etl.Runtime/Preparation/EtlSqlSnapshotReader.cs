@@ -43,33 +43,13 @@ internal static class EtlSqlSnapshotReader
             await using var transaction = await connection.BeginTransactionAsync(engine.SnapshotIsolation, cancellationToken);
             if (engine.SnapshotSetup is { } setup)
                 await ExecuteAsync(connection, transaction, setup, cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = engine.SelectSnapshot(source.Table, columns, source.Key);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            if (reader.FieldCount != columns.Length)
-                throw Failure("etl.sql-read-rejected");
-
-            using var line = new MemoryStream();
-            long written = 0;
-            while (await reader.ReadAsync(cancellationToken))
+            await using (var command = connection.CreateCommand())
             {
-                line.SetLength(0);
-                await using (var writer = new Utf8JsonWriter(line, WriterOptions))
-                {
-                    writer.WriteStartObject();
-                    for (var index = 0; index < columns.Length; index++)
-                    {
-                        writer.WritePropertyName(columns[index]);
-                        WriteValue(writer, reader, index, source.Columns[index]);
-                    }
-                    writer.WriteEndObject();
-                }
-                line.Write(LineFeed);
-                if (line.Length > maxBytes - written)
-                    throw Failure("etl.snapshot-too-large");
-                await destination.WriteAsync(line.GetBuffer().AsMemory(0, (int)line.Length), cancellationToken);
-                written += line.Length;
+                command.Transaction = transaction;
+                command.CommandText = engine.SelectSnapshot(source.Table, columns, source.Key);
+                // The reader is closed before the commit: PostgreSQL and SQL Server allow one open reader per connection.
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                await CopyRowsAsync(reader, source, columns, maxBytes, destination, cancellationToken);
             }
             await transaction.CommitAsync(cancellationToken);
         }
@@ -87,6 +67,34 @@ internal static class EtlSqlSnapshotReader
             if (engine.Classify(exception) == EtlSqlErrorKind.Transient)
                 throw new EtlSqlTransientReadException(exception);
             throw new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.sql-read-rejected", exception));
+        }
+    }
+
+    private static async ValueTask CopyRowsAsync(DbDataReader reader, EtlSqlSource source, string[] columns, long maxBytes,
+        Stream destination, CancellationToken cancellationToken)
+    {
+        if (reader.FieldCount != columns.Length)
+            throw Failure("etl.sql-read-rejected");
+        using var line = new MemoryStream();
+        long written = 0;
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            line.SetLength(0);
+            await using (var writer = new Utf8JsonWriter(line, WriterOptions))
+            {
+                writer.WriteStartObject();
+                for (var index = 0; index < columns.Length; index++)
+                {
+                    writer.WritePropertyName(columns[index]);
+                    WriteValue(writer, reader, index, source.Columns[index]);
+                }
+                writer.WriteEndObject();
+            }
+            line.Write(LineFeed);
+            if (line.Length > maxBytes - written)
+                throw Failure("etl.snapshot-too-large");
+            await destination.WriteAsync(line.GetBuffer().AsMemory(0, (int)line.Length), cancellationToken);
+            written += line.Length;
         }
     }
 

@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import type { EtlConnectorBindingSummary, EtlSourceV2 } from "../etlTypes";
+import type { EtlColumn, EtlConnectorBindingSummary, EtlSourceV2, EtlSqlSource } from "../etlTypes";
 import { EtlJsonFieldsEditor } from "./EtlJsonFieldsEditor";
 import { PipelineBindingSelect } from "./PipelineBindingSelect";
 import { SchemaEditor } from "./SchemaEditor";
@@ -24,18 +24,19 @@ export function EtlConnectorSourceEditor({
   const headingId = useId();
   const changeKind = (kind: EtlSourceV2["kind"]) => {
     if (kind === source.kind) return;
+    const declared = sourceColumns(source);
     if (kind === "csv") {
-      onChange({
-        kind,
-        binding: source.binding,
-        schema: source.kind === "csv" ? source.schema : source.fields.map(({ name, type, required }) => ({ name, type, required }))
-      });
+      onChange({ kind, binding: source.binding, schema: declared });
+      return;
+    }
+    if (kind === "sql") {
+      onChange({ kind, binding: source.binding, table: "", columns: declared, key: [] });
       return;
     }
 
-    const fields = source.kind === "csv"
-      ? source.schema.map(({ name, type, required }) => ({ name, pointer: `/${escapePointer(name)}`, type, required }))
-      : source.fields;
+    const fields = source.kind === "jsonl" || source.kind === "httpJson"
+      ? source.fields
+      : declared.map(({ name, type, required }) => ({ name, pointer: `/${escapePointer(name)}`, type, required }));
     if (kind === "jsonl") {
       onChange({ kind, binding: source.binding, fields });
       return;
@@ -54,7 +55,7 @@ export function EtlConnectorSourceEditor({
       <div className="etl-editor-section-heading">
         <div>
           <h3 id={headingId}>Source connector</h3>
-          <p>Choose a host-approved CSV, JSON Lines or HTTP source. File paths, endpoint URLs and credentials are configured by the host.</p>
+          <p>Choose a host-approved CSV, JSON Lines, HTTP or SQL source. File paths, endpoint URLs, connection strings and credentials are configured by the host.</p>
         </div>
       </div>
       <div className="etl-editor-binding-grid">
@@ -64,14 +65,15 @@ export function EtlConnectorSourceEditor({
             <option value="httpJson">HTTP JSON</option>
             <option value="csv">CSV file</option>
             <option value="jsonl">JSON Lines file</option>
+            <option value="sql">SQL table</option>
           </select>
           <small>The source kind determines which approved connector aliases and field declaration are available.</small>
         </div>
         <PipelineBindingSelect
-          label={source.kind === "csv" ? "Source CSV binding" : source.kind === "jsonl" ? "Source file binding" : "Source HTTP binding"}
+          label={source.kind === "csv" ? "Source CSV binding" : source.kind === "jsonl" ? "Source file binding" : source.kind === "sql" ? "Source SQL binding" : "Source HTTP binding"}
           role="Source"
           // Hosts list source file approvals under the csv kind; a JSON Lines source selects from the same files.
-          kind={source.kind === "httpJson" ? "http" : "csv"}
+          kind={source.kind === "httpJson" ? "http" : source.kind === "sql" ? "sql" : "csv"}
           subjectLabel={source.kind === "jsonl" ? "Source file" : undefined}
           value={source.binding}
           bindings={bindings}
@@ -82,7 +84,9 @@ export function EtlConnectorSourceEditor({
         />
       </div>
 
-      {source.kind === "csv" ? (
+      {source.kind === "sql" ? (
+        <SqlSourceFields source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
+      ) : source.kind === "csv" ? (
         <SchemaEditor
           title="Source CSV schema"
           description="Field names must match the source CSV header exactly."
@@ -96,6 +100,60 @@ export function EtlConnectorSourceEditor({
       )}
     </section>
   );
+}
+
+/** The table, its declared columns and the key that orders the snapshot. */
+function SqlSourceFields({ source, maxFields, disabled, onChange }: {
+  source: EtlSqlSource;
+  maxFields: number;
+  disabled: boolean;
+  onChange(source: EtlSourceV2): void;
+}) {
+  const id = useId();
+  const required = source.columns.filter(column => column.required && column.name).map(column => column.name);
+  return (
+    <>
+      <div className="etl-editor-field">
+        <label htmlFor={`${id}-table`}>Source table</label>
+        <input id={`${id}-table`} value={source.table} disabled={disabled} placeholder="schema.table" aria-describedby={`${id}-table-help`}
+          onChange={event => onChange({ ...source, table: event.currentTarget.value })} />
+        <small id={`${id}-table-help`}>The host binding must allow this table. The run reads it once, as of one point in time, when it is prepared.</small>
+      </div>
+      <SchemaEditor
+        title="Source table columns"
+        description="Column names must match the table's columns. Floating-point columns are not supported."
+        fieldLabel="Column"
+        emptyMessage="Add the table columns this pipeline reads."
+        schema={source.columns}
+        maxFields={maxFields}
+        disabled={disabled}
+        onChange={columns => onChange({ ...source, columns, key: source.key.filter(name => columns.some(column => column.name === name && column.required)) })}
+      />
+      <fieldset className="etl-editor-field">
+        <legend>Source key</legend>
+        <small>Records follow this order. Choose required columns; a unique key keeps record numbers reproducible.</small>
+        {required.length === 0 ? <small role="status">Mark at least one column required to choose a key.</small> : null}
+        {required.map(name => (
+          <label key={name}>
+            <input type="checkbox" checked={source.key.includes(name)} disabled={disabled}
+              onChange={event => onChange({
+                ...source,
+                key: event.currentTarget.checked
+                  ? required.filter(column => column === name || source.key.includes(column))
+                  : source.key.filter(column => column !== name)
+              })} />
+            {name}
+          </label>
+        ))}
+      </fieldset>
+    </>
+  );
+}
+
+function sourceColumns(source: EtlSourceV2): EtlColumn[] {
+  if (source.kind === "csv") return source.schema;
+  if (source.kind === "sql") return source.columns;
+  return source.fields.map(({ name, type, required }) => ({ name, type, required }));
 }
 
 function escapePointer(value: string) {

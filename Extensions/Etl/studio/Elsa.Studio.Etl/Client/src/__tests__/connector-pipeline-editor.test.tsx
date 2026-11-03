@@ -180,6 +180,38 @@ describe("connector pipeline editor", () => {
     expect(editor.pipeline.routes.main).toMatchObject({ key: [] });
   });
 
+  it("reads a SQL table snapshot selected from SQL source approvals, with columns and a key of required columns", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.continuous = { pollIntervalSeconds: 60 };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "sql");
+    editor.render();
+    expect(editor.pipeline.source).toEqual({
+      kind: "sql", binding: "source", table: "",
+      columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: []
+    });
+    // A SQL source runs finitely: the continuous policy is dropped and the run mode is not offered.
+    expect(editor.pipeline.continuous).toBeUndefined();
+    expect(editor.host.textContent).not.toContain("Run continuously");
+    expect(editor.host.textContent).toContain("Read one snapshot of the table");
+    const binding = control<HTMLSelectElement>(editor.host, "Source SQL binding");
+    expect(Array.from(binding.options).map(option => option.value)).toEqual(["", "source", "people-db"]);
+    setSelect(binding, "people-db");
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Source table"), "dbo.people");
+    editor.render();
+    clickCheckbox(control<HTMLInputElement>(editor.host, "id"));
+    editor.render();
+
+    expect(editor.pipeline.source).toMatchObject({ kind: "sql", binding: "people-db", table: "dbo.people", key: ["id"] });
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "jsonl");
+    expect(editor.pipeline.source).toEqual({
+      kind: "jsonl", binding: "people-db",
+      fields: [{ name: "id", pointer: "/id", type: "int64", required: true }, { name: "name", pointer: "/name", type: "string", required: true }]
+    });
+  });
+
   it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
     const editor = renderEditor();
     expect(editor.pipeline.continuous).toBeUndefined();
