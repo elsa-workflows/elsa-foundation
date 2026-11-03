@@ -1,3 +1,4 @@
+using Elsa.Agent.Persistence.EntityFrameworkCore;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
 using System.Reflection;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
@@ -28,6 +29,7 @@ internal static class ModuleContextCatalog
     internal static readonly Assembly[] Modules =
     [
         typeof(ActivitiesDesignDbContext).Assembly,
+        typeof(AgentDbContext).Assembly,
         typeof(ClusterMembershipDbContext).Assembly,
         typeof(ConnectionsDbContext).Assembly,
         typeof(SpecialistsDbContext).Assembly,
@@ -76,7 +78,7 @@ internal static class ModuleContextCatalog
     /// </summary>
     public static readonly string[] OrdinalModules =
     [
-        "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "ActivitiesDesign", "Agent", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "Specialists", "WorkflowsDesign"
     ];
 

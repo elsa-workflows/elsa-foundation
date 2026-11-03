@@ -9,9 +9,13 @@
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/src/Persistence/">
+    <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/src/Specialists/">
     <Project Path="Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
@@ -27,6 +31,10 @@
   </Folder>
   <Folder Name="/Extensions/Agent/tests/">
     <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/tests/Persistence/">
+    <Project Path="Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj" />
+    <Project Path="Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/tests/Specialists/">
     <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />
@@ -230,7 +238,10 @@
   </Folder>
   <Folder Name="/Essentials/src/Api/">
     <Project Path="Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <Project Path="Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Api/Capabilities/">
+    <Project Path="Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
+    <Project Path="Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Caching/">
     <Project Path="Essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />

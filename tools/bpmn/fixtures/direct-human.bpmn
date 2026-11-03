@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="direct-human-definitions" targetNamespace="https://elsa-workflows.io/acceptance">
+  <bpmn:process id="order-approval" name="Direct approval journey" isExecutable="true">
+    <bpmn:startEvent id="start" name="Start"/>
+    <bpmn:task id="review" name="Review order"/>
+    <bpmn:endEvent id="end" name="Complete"/>
+    <bpmn:sequenceFlow id="to-review" sourceRef="start" targetRef="review"/>
+    <bpmn:sequenceFlow id="to-end" sourceRef="review" targetRef="end"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram"><bpmndi:BPMNPlane id="plane" bpmnElement="order-approval">
+    <bpmndi:BPMNShape id="start-shape" bpmnElement="start"><dc:Bounds x="60" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="review-shape" bpmnElement="review"><dc:Bounds x="240" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="end-shape" bpmnElement="end"><dc:Bounds x="500" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="to-review-edge" bpmnElement="to-review"><di:waypoint x="96" y="138"/><di:waypoint x="240" y="138"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="to-end-edge" bpmnElement="to-end"><di:waypoint x="360" y="138"/><di:waypoint x="500" y="138"/></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</bpmn:definitions>

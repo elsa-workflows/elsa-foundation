@@ -10,7 +10,7 @@ This is the domain catalog for framework §2.22.1. The [root index](../../../../
 
 `Elsa.Agent.Core` contains contracts, models, named collecting events and thin provider bridges. Active defaults and registration are in `Elsa.Agent`; modules contribute through Core without referencing these defaults. Context collectors, catalogs, registries, invoker, proposal facade/executor, policy, session policy service, authorizer, streaming and provider registry are scoped. The scoped tool registry caches only its own collected tools, never a cross-request tool instance.
 
-`InMemoryAgentSessionService` (which also owns policy revisions and work claims), `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore` (sink, reader and audit ownership), `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee.
+`InMemoryAgentSessionService` (which also owns policy revisions and work claims), `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore` (sink, reader and audit ownership), `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee. Since #3441 the session owner writes through `IAgentSessionRecordStore`; the opt-in [EF store](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) makes that record durable ([below](#durable-recovery-3441-preview)).
 
 ## Overridable contracts
 
@@ -31,13 +31,17 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 | [`IAgentActionProposalExecutor`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentActionProposalExecutor`, scoped | `ExecuteAsync(proposal)` and `CompleteClientAsync(proposal, acknowledgement)` return `Task<AgentResult<AgentProposalExecutionResult>>` | Replace effect routing while preserving installed tool/version, expiry, current authorization and receipt checks. Proposal service consumes it. The default executes the owning tool or returns explicit unavailable; no success-reporting no-op remains. |
 | [`IAgentStreamingService`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentTurnOrchestrator`, scoped | `StreamAsync(sessionId)` returns `IAsyncEnumerable<AgentStreamEvent>` | Replace generic turn coordination. Streaming API consumes it; providers retain their existing host-step or harness bridge. |
 | [`IAgentTurnRegistry`](../Core/Contracts/AgentTurnContracts.cs) | `AgentTurnRegistry`, singleton | `Register`, `Cancel`, `Unregister` take session/turn identity; `IsActive(sessionId)` | Replace active-turn lease/cancellation tracking. API and orchestrator use it to reject a concurrent foreground turn. |
-| [`IAgentTurnStateStore`](../Core/Contracts/AgentTurnContracts.cs) | `InMemoryAgentTurnStateStore`, singleton | `Save(AgentPausedTurn)`, `Find(sessionId)`, `Remove(sessionId)` | Replace paused-turn retention. Orchestrator consumes the stored proposal/tool/history correlation after review. |
+| [`IAgentTurnStateStore`](../Core/Contracts/AgentTurnContracts.cs) *(changed, #3441)* | `InMemoryAgentTurnStateStore`, singleton, bound to the default session owner | `SaveAsync(AgentPausedTurn)`, `FindAsync(sessionId)`, `RemoveAsync(sessionId)` | Replace paused-turn retention. Orchestrator consumes the stored proposal/tool/history correlation after review. The default keeps the pause on the owner's session record, so saving it takes the Pause claim; a replacement keeps autonomy support through the orchestrator's explicit pause claim, but cannot recover paused turns: with the in-memory default that composition reports `unsupported`, and with a durable store selected it fails shell activation (`AgentDurableRecoveryValidator`). |
+| [`IAgentSessionRecordStore`](../Core/Contracts/AgentContracts.cs) *(preview, #3441)* | `InMemoryAgentSessionRecordStore`, singleton, round-trips every record as JSON | `CreateAsync`, `LoadAsync` (hydrate), owner/fence-guarded atomic `WriteAsync` that extends the lease, `AcquireOwnershipAsync`/`ReleaseOwnershipAsync`, all-or-nothing unique keys, per-record proposal `Version` compare-and-set (`VersionConflict`), `FindProposalSessionAsync`, `ListOwnedAsync`, `FindOwnerAsync` (plain owner columns; default reads `LoadAsync`); `SupportsFencing` | Supply durable backing for the default session owner, which writes through it and is not replaced, so autonomy stays supported. Select a store with `services.SelectAgentSessionRecordStore(...)` (`AgentPersistenceSelection`), which replaces only the process-local default and throws on a second selection; a second registration fails `AgentRegistrationValidator` at shell activation and before the default lifecycle services resolve. A store that cannot fence always fails shell activation (`AgentDurableRecoveryValidator`). Known implementation: `EfAgentSessionRecordStore` (`Elsa.Agent.Persistence.EntityFrameworkCore`, feature `FoundationAgentEntityFrameworkCore`) *(intra-domain — opt-in EF Core store)*. |
+| [`IAgentRecoverySupport`](../Core/Contracts/AgentContracts.cs) *(preview, #3441)* | `DefaultAgentRecoverySupport`, scoped, over the composition's durable-recovery evaluation | `Describe()` returns an `AgentRecoveryModes` value: `durable`, `processLifetime` or `unsupported` | Normally not replaced: only the default can see whether the default owner participates with every default lifecycle service over a fencing store. Bootstrap reads it for `recovery` and reports `unsupported` when it throws. At most one registration; a second fails `AgentRegistrationValidator`. |
 | [`IAgentFeedbackService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentFeedbackService`, singleton | `AddAsync(AgentFeedback)` returns `Task<AgentFeedback>` | Supply feedback persistence. API consumes it; default emits audit linkage. |
 | [`IAgentAuditSink`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentAuditStore`, singleton shared with reader | `EmitAsync(AgentAuditEvent)` returns `Task` | Supply audit persistence/forwarding. Sessions, context, tools, proposals, feedback and provider diagnostics emit records. |
 | [`IAgentAuditReader`](../Core/Contracts/AgentContracts.cs) | Same `InMemoryAgentAuditStore` | `ListAsync(sessionId?, take?)` returns `Task<IReadOnlyCollection<AgentAuditEvent>>` (trusted, unscoped, in-process); preview default member `ListOwnedAsync(AgentAuditOwnerQuery)` returns `Task<AgentAuditQueryResult>`, `Unsupported` by default | Supply audit queries consistent with the sink. The API audit route reads only through `ListOwnedAsync`; a reader that does not implement it makes the route answer 409 `agent.audit.query_unsupported`. |
 | [`IAgentAuditOwnership`](../Core/Contracts/AgentContracts.cs) *(preview, #3440)* | Same `InMemoryAgentAuditStore`, singleton | `AssociateAsync(sessionId, actorId, tenantId)` returns `Task<bool>`; first association wins | Replace together with the reader so association and owner query stay coherent. The default session service associates each session before emitting any record for it. |
 | [`IAgentProviderRegistry`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentProviderRegistry`, scoped | `Active: IAgentProvider?` | Replace provider selection only while preserving the single-active-provider contract. Orchestrator/API consume it; multiple installed providers fail with `AgentHarnessConflictException`. |
-| [`IAgentProvider`](../Core/Contracts/AgentContracts.cs) | No provider in base registration | Provider/session identity, `CreateSessionAsync`, `ContinueTurnAsync(AgentTurnContext)`, approval and diagnostics | Install one provider adapter through its feature. The orchestrator consumes it; zero providers is unavailable, never a deterministic production fallback. |
+| [`IAgentProvider`](../Core/Contracts/AgentContracts.cs) | No provider in base registration | Provider/session identity, `CreateSessionAsync`, `ContinueTurnAsync(AgentTurnContext)`, approval and diagnostics | Install one provider adapter through its feature. The orchestrator consumes it; zero providers is unavailable, never a deterministic production fallback. A provider reports an explicit outcome of its own (for example a conversation reset) as an `AgentProviderNotice(Code, Label)` payload on a `Progress` event; the turn records it, and it is never an accepted outcome *(preview, #3441)*. |
+
+The audit sink, reader and ownership are one store's facets and are replaced together, with `services.SelectAgentAuditStore(...)` (`AgentPersistenceSelection`), which replaces the three default facets at once and throws on a second selection; a second registration of any of the three fails `AgentRegistrationValidator`. `EfAgentAuditStore` (`Elsa.Agent.Persistence.EntityFrameworkCore`) persists the records and the owner association, so owner-scoped audit reads keep answering for recovered sessions; `settledBy` (`user` or `recovery`) is a metadata key.
 
 `Elsa.Agent.Api` calls `services.AddFoundationAgentApi()` to replace the fail-closed `IAgentToolAuthorizer` with scoped `HttpAgentToolAuthorizer`. It uses the current normalized authenticated principal/tenant and exactly one `IPermissionAuthorizationService`, checking the descriptor's required permissions against the prepared target. Custom/non-HTTP hosts must install an equivalent current-authority replacement; installing a tool alone grants no execution authority.
 
@@ -112,7 +116,7 @@ The M1 implementation admits at most one distinct mutating tool call per session
 
 Client execution returns HTTP 202 with `awaiting-client`, `executed: false` and the exact prepared request. Only a matching authenticated observation accepted by the same installed tool can mark it Executed. Receipt continuation receives the retained result with no available tools and cannot start another mutation or replay the original prompt. Before dispatch a refusal has no effect; after dispatch cancellation, missing/invalid receipt or lost delivery can mean uncertainty. Retained duplicates cannot rerun effects or replace accepted evidence.
 
-All lifecycle retention and deduplication here are in memory. Restart/shell replacement, cross-process coordination, durable history/approvals and broader recovery remain M2 work. The [owning receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) records completed package-consumer and deterministic provider-protocol evidence for 76ec; [final-head integration and resulting-main gates completed](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143). Registrations alone establish no runtime evidence, and no live-provider success is claimed.
+All lifecycle retention and deduplication here are in memory. Restart/shell replacement, cross-process coordination, durable history/approvals and broader recovery remain M2 work. #3441 adds them behind the record store; see [Durable recovery](#durable-recovery-3441-preview). The [owning receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) records completed package-consumer and deterministic provider-protocol evidence for 76ec; [final-head integration and resulting-main gates completed](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143). Registrations alone establish no runtime evidence, and no live-provider success is claimed.
 
 ## Session policy and owner-scoped audit (#3440, preview)
 
@@ -155,6 +159,63 @@ these envelopes for their own invocations and targets while read authority remai
 optional session, and orders newest first before the limit (1..`AgentAuditOwnerQuery.MaxTake`). It
 never returns a record without an ownership association. A custom session service must call
 `IAgentAuditOwnership.AssociateAsync` before emitting records, or its sessions stay ineligible.
+
+## Durable recovery (#3441, preview)
+
+The [recovery contract](../../../../specs/1189-weaver-recovery/contracts/recovery.md) (a candidate until its
+qualification) records the wire shape, refusal codes and SemVer classification; this section keeps the
+extension rules. Workflow-runtime agent continuation and its recovery stay with Program #2892 (leaf #2912) and
+Program #3519; this store owns only the durability of Weaver foreground sessions, reviews and receipts, and adds no
+detached turn owner.
+
+**Record store and participation.** The default session owner writes every transition through
+`IAgentSessionRecordStore` before applying it in memory, and hydrates a session it has not loaded before
+acting on it. Durable recovery is Supported only when the session, streaming, invoker and proposal services
+are the default participants of one owner (as in #3440), `IAgentTurnStateStore` is the default (it keeps the
+paused turn on the owner's record, so saving the pause records the Pause claim) and the record store
+`SupportsFencing`. A replaced `IAgentTurnStateStore` (now `SaveAsync`, `FindAsync`, `RemoveAsync`) or lifecycle
+service keeps autonomy support where #3440 allows it, but cannot recover: with the in-memory default the composition
+reports `unsupported`, and with a durable store selected it fails shell activation (`AgentDurableRecoveryValidator`).
+A custom store that cannot fence always fails activation. Configuring the
+EF feature gives the owner a durable store and does not replace it. Bootstrap reports the composition's support as
+`recovery` (`durable`, `processLifetime` for the in-memory default, or `unsupported`), and shell activation fails
+with a diagnostic when a durable store is configured into an Unsupported composition, rather than running it partly
+durable.
+
+**Ownership.** Each process has one owner token. Hydration takes ownership when the record has no live
+owner, its lease lapsed or this process owns it; a takeover increments the fence. Every write is guarded on
+owner and fence and extends the lease (EF: database time, 30 seconds by default); while a foreground turn
+runs or a dispatched execution's executor is still running the lease is renewed every 10 seconds (an operation that only
+waits on a client or on its owner keeps the session busy but does not renew its lease). A graceful host stop, or the drain of a
+reloaded shell generation, gives every loaded session's lease back before the shell's container is disposed (the
+`ReleaseAgentSessionLeasesTerminator` shell terminator), so the next process takes those sessions over at once;
+only a crashed process's leases have to lapse. A live lease elsewhere answers the
+retryable 409 `agent.session.owned_elsewhere` with a retry hint; losing ownership mid-call answers
+`agent.session.ownership_lost`, evicts the row and cancels the turn. Authorization reads only the plain owner
+columns (`FindOwnerAsync`, `FindSessionIdAsync`) before anything decodes, hydrates or takes ownership.
+
+**Recovery outcomes.** Hydration settles what the recorded facts already decide, in one write, before
+anything acts on the session: a message that was streaming becomes Cancelled with `StatusReason`
+`interrupted`; a pending prompt keeps its Prompt claim until the owner starts or withdraws it; an approved or
+pending proposal past its deadline is Expired once with zero effect and `settledBy=recovery`; Executing, or a
+client request past its deadline, becomes Uncertain, never Expired (an outcome the store could not record after
+dispatch settles that one operation the same way, without touching the session or other work in flight); an approved proposal executes only on an
+explicit execute after the story 2.3 rechecks (a stale policy revision answers 409
+`agent.proposal.policy_stale`); a paused turn with a receipt continues once. Recorded state that is
+unreadable, corrupt or fails verification answers 409 `agent.session.unavailable_state` with its reason and
+no effect. Recovery with no authenticated user records only lifecycle outcomes.
+
+**What is recoverable (FR-001).** With a durable store: session identity, owner, status and expiry;
+workspace and `ContinuedFrom`; the acknowledged policy and its revision; messages and their history,
+including accepted-policy snapshots, delivery fingerprints and status reasons; each distinct disclosure
+snapshot with its byte-identical canonical text and the digest references that form the provenance ledger;
+retained session context; proposals with their exact authorized requests, approval bindings, statuses,
+results, receipts, acknowledgement digests and owner resolutions; the paused turn with its pause
+fingerprint; the call, invocation, per-turn mutation and call-input keys; and the audit records with their
+owner association. Work claims are rebuilt from these facts at hydration, never stored. **Not recoverable:**
+provider runtime objects and SDK sessions (the Copilot adapter may start a new conversation and says so),
+open stream connections, cancellation sources and in-memory gates, hidden reasoning, credentials, and
+unsaved browser working state. With the in-memory default nothing survives a process restart.
 
 ## Context and result disclosure (#3439, under qualification)
 

@@ -40,6 +40,13 @@
   <ItemGroup>
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/retained-runtime.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/retained-design.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/late-before-crash.json"
           Link="Fixtures/signal-cancellation-input/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Spec 1184 actual pre-claim writer captures, restored by tools/bpmn/restore_evidence.py and pinned by fixtures.json. -->
+    <None Include="../../../../../../specs/1184-direct-bpmn-studio/evidence/fixtures.json"
+          Link="Fixtures/pre-claim/fixtures.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1184-direct-bpmn-studio/evidence/fixtures/preclaim/*"
+          Link="Fixtures/pre-claim/preclaim/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1184-direct-bpmn-studio/evidence/fixtures/human/*"
+          Link="Fixtures/pre-claim/human/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json"
           Link="Fixtures/legacy-baseline-manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/api.json"
