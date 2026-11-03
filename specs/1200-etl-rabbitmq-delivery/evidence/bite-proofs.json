@@ -620,6 +620,48 @@
    "original": "            _ = Task.Run(blocked.Cancel);",
    "mutated_text": "            _ = Task.CompletedTask;",
    "sourceRevision": "3e7a85bf093925da56d3a56145f34b7d42666e0c"
+  },
+  {
+   "mutation": "driver-connection-limit-alternative",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_virtual_host_at_its_connection_limit",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_virtual_host_at_its_connection_limit_yields_and_one_the_user_may_not_open_is_rejected"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "new(@\"limit \\(\\d+\\) is reached|limit of",
+   "mutated_text": "new(@\"limit of",
+   "sourceRevision": "1ac5c8e19b651daee3e5bbf931a96356a2653c4b"
+  },
+  {
+   "mutation": "driver-channel-limit-alternative",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_user_at_its_channel_limit",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_user_at_its_channel_limit_yields"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "|limit of \\(\\d+\\)|limit cannot",
+   "mutated_text": "|limit cannot",
+   "sourceRevision": "1ac5c8e19b651daee3e5bbf931a96356a2653c4b"
+  },
+  {
+   "mutation": "driver-unblock-releases-hold",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~resource_alarm",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_broker_under_a_resource_alarm_yields_and_holds_at_most_one_blocked_connection_until_it_unblocks"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            Volatile.Write(ref unblocked, 1);\n            return Free(connectionString, connection);",
+   "mutated_text": "            Volatile.Write(ref unblocked, 1);\n            return Task.CompletedTask;",
+   "sourceRevision": "1ac5c8e19b651daee3e5bbf931a96356a2653c4b"
   }
  ]
 }
