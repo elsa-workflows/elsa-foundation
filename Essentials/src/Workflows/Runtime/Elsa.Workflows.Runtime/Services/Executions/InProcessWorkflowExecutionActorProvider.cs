@@ -393,10 +393,13 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // waiter removes its request; the running turn may safely have yielded in the meantime.
             // The registration is held through the Cancel's own turn, so a drain that yielded to it is settled before the
             // registration drops: either the Cancel ran, or the turn ends without it and the drain is re-driven.
+            // A Cancel registers while the actor passivates too. If the passivation completes, the Cancel answers Deferred
+            // and its check returns, since the actor is no longer Active. If it gives up, the Cancel's own signal keeps
+            // the drain yielding, so the Cancel runs on the restored actor rather than waiting behind a drain that goes on.
             using var pendingControl = _drainControls is not null &&
                 envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel &&
                 envelope.WorkflowExecutionId == _workflowExecutionId && envelope.Partition == _partition &&
-                Status == WorkflowExecutionActorStatus.Active ? _drainControl.Wait() : null;
+                Status != WorkflowExecutionActorStatus.Passivated ? _drainControl.Wait() : null;
             try
             {
                 await _mailbox.WaitAsync(cancellationToken);
@@ -514,7 +517,11 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         // The yielding turn sets the flag before it checks for waiters, and a leaving waiter unregisters before it
         // checks the flag. Both are full fences, so whichever runs last sees both, and the exchange lets only one re-drive.
         // Only a Cancel that ran clears it otherwise, so a turn that takes the mailbox before a leaving waiter checks
-        // cannot hide the yield from that check, and that turn's own check finds it too.
+        // cannot hide the yield from that check, and that turn's own check finds it too. A passivation that gives up
+        // unregisters before it sets Active, and a leaving waiter unregisters before it reads the status. Both take the
+        // status lock, so if the waiter reads Passivating the passivation's later check sees the waiter gone, and if it
+        // reads Active its own check sees the passivation gone. A completed passivation never sets
+        // Active again, so nothing re-drives on its actor; the resumption sweep does.
         private void RedriveIfYieldStranded()
         {
             if (_drainControl.IsPending || Status != WorkflowExecutionActorStatus.Active)
@@ -542,7 +549,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             catch
             {
                 // A passivation that gives up keeps the actor, so a drain that yielded to it is re-driven like one that
-                // yielded to a withdrawn Cancel.
+                // yielded to a withdrawn Cancel. A Cancel still waiting keeps the drain yielding and runs instead.
                 pendingHandoff?.Dispose();
                 SetStatus(WorkflowExecutionActorStatus.Active);
                 RedriveIfYieldStranded();

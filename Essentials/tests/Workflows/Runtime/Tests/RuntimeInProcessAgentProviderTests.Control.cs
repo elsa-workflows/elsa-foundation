@@ -282,9 +282,9 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         var passivation = drain.Provider.PassivateAsync(NewPassivationRequest("wfexec-1"), timeout.Token).AsTask();
         await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
 
-        // A Cancel on a passivating actor asks for no yield of its own and runs nothing here. Deferred, it stays with its
-        // sender, as any deferred command does. Only a sender that resolved the actor before the passivation began gets
-        // here: resolving it later waits for the passivation and returns a fresh actor.
+        // A Cancel on an actor whose passivation completes runs nothing here. Deferred, it stays with its sender, as any
+        // deferred command does. Only a sender that resolved the actor before the passivation began gets here: resolving
+        // it later waits for the passivation and returns a fresh actor.
         var cancel = agent.EnqueueAsync(NewCancel("cancel"), timeout.Token).AsTask();
         await processor.YieldObserved.Task.WaitAsync(timeout.Token);
         processor.Release.TrySetResult();
@@ -316,10 +316,42 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         Assert.Equal(0, processor.CancelsProcessed);
     }
 
-    private async Task<YieldingDrain> StartYieldingDrainAsync(string? precedingCancelKey = null, ILogger? logger = null)
+    [Fact]
+    public async Task A_cancel_that_arrived_while_a_passivation_gave_up_makes_the_drain_yield_and_runs()
+    {
+        // The drain is inside a step that outlasts the passivation, as when the stop path's one-lease bound cancels it.
+        var step = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var drain = await StartYieldingDrainAsync(step: step);
+        var (processor, agent, timeout) = (drain.Processor, drain.Agent, drain.Timeout);
+        using var passivationToken = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        var passivation = drain.Provider.PassivateAsync(NewPassivationRequest("wfexec-1"), passivationToken.Token).AsTask();
+        await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
+        var cancel = agent.EnqueueAsync(NewCancel("cancel"), timeout.Token).AsTask();
+
+        await passivationToken.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => passivation);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, agent.Descriptor.Status);
+        Assert.False(processor.YieldObserved.Task.IsCompleted);
+
+        // The step ends and the drain would go on; the Cancel's own signal makes it yield, and the Cancel runs.
+        step.TrySetResult();
+        await processor.YieldObserved.Task.WaitAsync(timeout.Token);
+        processor.Release.TrySetResult();
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await drain.Running.WaitAsync(timeout.Token)).Status);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await cancel.WaitAsync(timeout.Token)).Status);
+        Assert.Equal(1, processor.CancelsProcessed);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, agent.Descriptor.Status);
+
+        // The Cancel consumed the yield, so nothing re-drives it.
+        await Task.Delay(TimeSpan.FromMilliseconds(500), timeout.Token);
+        Assert.False(processor.Redriven.Task.IsCompleted);
+    }
+
+    private async Task<YieldingDrain> StartYieldingDrainAsync(string? precedingCancelKey = null, ILogger? logger = null, TaskCompletionSource? step = null)
     {
         var controls = new DrainControlContext();
-        var processor = new YieldingControlProcessor(controls);
+        var processor = new YieldingControlProcessor(controls) { Step = step };
         var provider = new InProcessWorkflowExecutionActorProvider(processor) { DrainControls = controls, Logger = logger };
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -364,9 +396,9 @@ public sealed partial class RuntimeInProcessAgentProviderTests
             Logged.TrySetResult((logLevel, exception, formatter(state, exception)));
     }
 
-    // The first scheduler turn yields once a Cancel waits, holding the mailbox until the test releases it. A turn whose
-    // source is the yield re-drive is reported, and fails or answers as set; any other later scheduler turn drains nothing,
-    // or runs a drain to quiescence when its key is the draining key.
+    // The first scheduler turn, after a step the test may hold, yields once a Cancel waits, holding the mailbox until the
+    // test releases it. A turn whose source is the yield re-drive is reported, and fails or answers as set; any other
+    // later scheduler turn drains nothing, or runs a drain to quiescence when its key is the draining key.
     private sealed class YieldingControlProcessor(DrainControlContext controls) : IWorkflowExecutionCommandExecutor
     {
         private int schedulerTurns;
@@ -377,6 +409,7 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         public TaskCompletionSource<WorkflowExecutionCommandEnvelope> Redriven { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource CancelEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource? CancelGate { get; set; }
+        public TaskCompletionSource? Step { get; init; }
         public string? GatedKey { get; set; }
         public string? DrainingKey { get; set; }
         public TaskCompletionSource GatedEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -415,6 +448,8 @@ public sealed partial class RuntimeInProcessAgentProviderTests
                     : WorkflowExecutionCommandProcessResult.NoDrain;
             }
             Entered.TrySetResult();
+            if (Step is { } step)
+                await step.Task.WaitAsync(cancellationToken);
             while (!controls.ShouldYield(envelope.WorkflowExecutionId))
                 await Task.Delay(5, cancellationToken);
             YieldObserved.TrySetResult();

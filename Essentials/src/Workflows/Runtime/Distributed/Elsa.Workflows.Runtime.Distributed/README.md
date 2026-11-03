@@ -94,8 +94,10 @@ then claims the execution, and fencing refuses the old drain's next commit. A Ca
 transport, because a sweep leases nothing for an execution it is handing off, and takes effect on the next owner. A
 sweep that overlaps a hand-off the stop path started can still lease the Cancel and dispatch it. Resolving the mailbox
 then waits for the passivation, so the Cancel runs on a fresh mailbox on this member once the hand-off has passivated
-the old one. Only a caller that resolved the mailbox before the passivation began reaches the passivating mailbox; its
-Cancel is answered `Deferred` and runs nothing there.
+the old one. Only a caller that resolved the mailbox before the passivation began reaches the passivating mailbox. Its
+Cancel asks the drain to yield too. Once the hand-off has passivated the mailbox, the Cancel is answered `Deferred` and
+runs nothing there. If the stop path's one-lease bound cancels the hand-off first, the drain still yields to the
+Cancel, which then runs on that mailbox.
 
 An execution with a drain this pump left running gets no inline wait:
 - A Cancel for it is dispatched without waiting, reaches the drain's mailbox, and the drain yields to it. A Cancel

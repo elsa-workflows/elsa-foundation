@@ -253,8 +253,9 @@ example from a drain observer or `CheckpointRuleViolationWorkflowFaulter`, so it
 database read for this check. Passivating the mailbox makes the drain yield the same way (#3678), so a hand-off, a
 terminal eviction or a reaper does not wait for a drain that keeps making progress, nor for one that waits for a
 continuation another worker holds (see "Waiting too long" above). A Cancel that reaches the mailbox while it passivates
-answers `Deferred` and runs nothing; a Cancel that resolves the mailbox only then waits for the passivation and runs on
-a fresh mailbox. A drain that yielded to a passivation is not re-driven on that
+asks the drain to yield too. It answers `Deferred` and runs nothing once the passivation completes; if the passivation
+is cancelled first, the drain still yields to the Cancel, which then runs on that mailbox. A Cancel that resolves the
+mailbox only then waits for the passivation and runs on a fresh mailbox. A drain that yielded to a passivation is not re-driven on that
 mailbox: the resumption sweep delivers its flushed continuations and re-drives the execution, on its next owner. A passivation that is cancelled before it takes
 the mailbox re-drives a drain that yielded to it, as a withdrawn Cancel does. Distributed placement uses the configured
 local mailbox on the owning node. A Cancel sent through another node takes effect once the owner's next placement pump
