@@ -68,7 +68,11 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       setLoadedViews(response.items);
       setPermissions(current => ({ ...current, ...response.permissions }));
     }).catch(caught => {
-      if (generation === generationRef.current) setError(message(caught, "Couldn't read saved views."));
+      if (generation !== generationRef.current) return;
+      setError(message(caught, "Couldn't read saved views."));
+      // A first read that fails still settles the view list as empty: the page then discloses no view it cannot identify,
+      // rather than never settling.
+      setLoadedViews(current => current ?? []);
     });
     return () => { generationRef.current += 1; };
   }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);

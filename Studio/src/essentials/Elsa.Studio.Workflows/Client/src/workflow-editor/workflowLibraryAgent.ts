@@ -35,7 +35,8 @@ export interface LibraryContextInput {
 export function libraryQuery(location: WorkflowDefinitionBrowseLocation) {
   const folder = location.folderSelection;
   return {
-    search: location.search.trim() || null,
+    // The server admits a search of at most 256 characters, as the list's own query does.
+    search: clip(location.search.trim(), 256) || null,
     state: location.listState,
     folderId: typeof folder === "object" ? folder.id : null,
     unfiled: folder === "unfiled",
@@ -117,11 +118,38 @@ export function libraryAttachment(input: LibraryContextInput, client: { clientId
 
 export interface CreateDialogTemplate { id: string; name: string; description?: string | null; revision: string }
 
+type DisclosedTemplate = { id: string; name: string | null; description: string | null; revision: string };
+
+const overLimit = (body: Record<string, unknown>) =>
+  JSON.stringify({ revision: "sha256:" + "0".repeat(64), ...body }).length > libraryContextLimit - libraryContextMargin;
+
+/**
+ * Bounds a disclosed template list to the server's 16 KiB content bound (WorkflowLibraryContext.ContentLimit), as the
+ * library list is bounded: descriptions are clipped and then left out, names are clipped, and finally templates are left
+ * out from the end, those named in `keep` (the draft's or the list's selected template) last. The server's shapes have no
+ * omitted count, so a left-out template is simply not disclosed.
+ */
+function boundTemplates(templates: DisclosedTemplate[], keep: string | null, compose: (items: DisclosedTemplate[]) => Record<string, unknown>) {
+  let items = templates;
+  if (overLimit(compose(items))) items = items.map(item => ({ ...item, description: clip(item.description, 120) }));
+  if (overLimit(compose(items))) items = items.map(item => ({ ...item, description: null }));
+  if (overLimit(compose(items))) items = items.map(item => ({ ...item, name: clip(item.name, 64) }));
+  while (overLimit(compose(items)) && items.length) {
+    const last = items.map(item => item.id === keep).lastIndexOf(false);
+    items = items.filter((_, index) => index !== (last >= 0 ? last : items.length - 1));
+  }
+  return items;
+}
+
+const disclosedTemplate = (template: CreateDialogTemplate): DisclosedTemplate =>
+  ({ id: template.id, name: clip(template.name, 256), description: clip(template.description ?? null, 500), revision: template.revision });
+
 export function buildCreateDialogContent(draft: CreateWorkflowDraft, templates: CreateDialogTemplate[]) {
-  const body = {
-    name: clip(draft.name, 256), description: clip(draft.description, 2000), rootActivityVersionId: draft.rootActivityVersionId ?? null, templateId: draft.templateId ?? null,
-    templates: templates.slice(0, 50).map(template => ({ id: template.id, name: clip(template.name, 256), description: clip(template.description ?? null, 500), revision: template.revision }))
+  const fields = {
+    name: clip(draft.name, 256), description: clip(draft.description, 2000), rootActivityVersionId: draft.rootActivityVersionId ?? null, templateId: draft.templateId ?? null
   };
+  const compose = (items: DisclosedTemplate[]) => ({ ...fields, templates: items });
+  const body = compose(boundTemplates(templates.slice(0, 50).map(disclosedTemplate), fields.templateId, compose));
   return { revision: pageRevision(body), ...body };
 }
 
@@ -130,12 +158,12 @@ export function createDialogAttachment(draft: CreateWorkflowDraft, templates: Cr
 }
 
 export function buildTemplateListContent(search: string, selection: string | null, templates: CreateDialogTemplate[]) {
-  const listed = templates.slice(0, 100);
-  const body = {
-    filter: { search: search.trim() ? clip(search.trim(), 256) : null },
-    selection: selection && listed.some(template => template.id === selection) ? selection : null,
-    templates: listed.map(template => ({ id: template.id, name: clip(template.name, 256), description: clip(template.description ?? null, 500), revision: template.revision }))
-  };
+  const listed = templates.slice(0, 100).map(disclosedTemplate);
+  const filter = { search: search.trim() ? clip(search.trim(), 256) : null };
+  const selected = selection && listed.some(template => template.id === selection) ? selection : null;
+  // The selection names a disclosed template only; if even it had to be left out, nothing is selected.
+  const compose = (items: DisclosedTemplate[]) => ({ filter, selection: selected && items.some(item => item.id === selected) ? selected : null, templates: items });
+  const body = compose(boundTemplates(listed, selected, compose));
   return { revision: pageRevision(body), ...body };
 }
 
