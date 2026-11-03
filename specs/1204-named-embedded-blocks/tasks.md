@@ -2,7 +2,7 @@
 
 **Program:** [#3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610).
 **Board:** [Project 67](https://github.com/orgs/elsa-workflows/projects/67).
-**Status:** establishment in progress; no product/prototype acceptance claimed.
+**Status:** establishment merged in PR #3760; prototype in progress. No product/prototype acceptance claimed.
 
 Native sub-issues are durable work units; these checklists are the canonical task/acceptance map. One implementation leaf is active at a time. Evidence belongs to that leaf/PR, not new checkpoint issues. A checked task requires its actual acceptance; source preparation is insufficient.
 
@@ -11,7 +11,7 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 **Goal:** prove the selected native composition and exact delivery contract before production completion.
 **Independent test:** actual composed-host extract/edit/reload/history/run proof with paired data/control baselines.
 
-- [ ] T000 [#3748](https://github.com/elsa-workflows/elsa-foundation/issues/3748) Persist `spec.md`, `plan.md`, research/data boundaries/journeys and this task map; record ADR 0080 activation, registry/program links, native hierarchy and verified Kanban configuration. Documentation-only PR; no product result claimed.
+- [x] T000 [#3748](https://github.com/elsa-workflows/elsa-foundation/issues/3748) Persist `spec.md`, `plan.md`, research/data boundaries/journeys and this task map; record ADR 0080 activation, registry/program links, native hierarchy and verified Kanban configuration. Delivered by PR #3760 / main `12aa9e263`; reviewed files match and resulting-main documentation guards pass. No product result claimed.
 - [ ] S001 [#3749](https://github.com/elsa-workflows/elsa-foundation/issues/3749) Build and exercise a bounded UX/execution prototype through the existing graph-authoring area and owned Studio/Workbench composition. Prove parent variables, crossing result references, repeat/loop occurrences, wait/resume, cancellation and supported recovery. Record any completion-causality defect and revise supporting contracts before production delivery. Depends on T000.
 
 ## Phase 2 — Shared prerequisites and User Story 1
