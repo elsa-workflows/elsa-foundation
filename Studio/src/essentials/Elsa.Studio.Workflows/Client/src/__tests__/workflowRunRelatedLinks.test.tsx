@@ -127,6 +127,19 @@ it("lets a contribution for a family of user-defined activities match any activi
       contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks }] });
     await vi.waitFor(() => expect(view.container.querySelector("a")?.textContent).toBe("Open family member"));
     expect(getLinks).toHaveBeenCalledTimes(1);
+    expect(view.container.querySelector("section[aria-label='Related'] h4")?.textContent).toBe("Related");
+  } finally { view.dispose(); }
+});
+
+it("shows no section for an activity an any-type contribution yields no link for", async () => {
+  vi.mocked(getActivityStateView).mockResolvedValue({ ...projection(), viewKind: "other.kind" });
+  const view = fixture();
+  try {
+    view.render({ activity: { ...view.activity, activityType: "Example.Unrelated" },
+      contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks: vi.fn(() => []) }] });
+    await vi.waitFor(() => expect(getActivityStateView).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(view.container.textContent).not.toContain("Related");
   } finally { view.dispose(); }
 });
 

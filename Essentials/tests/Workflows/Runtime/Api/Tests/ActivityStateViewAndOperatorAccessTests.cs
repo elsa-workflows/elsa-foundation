@@ -188,6 +188,7 @@ public sealed class ActivityStateViewAndOperatorAccessTests
         await using var host = await StateViewHost.StartAsync([WorkflowRuntimePermissions.WorkflowRuntimeRead], descriptorProjector: true);
         using var response = await host.Client.GetAsync(StatePath);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<DescriptorProjector>()).Calls);
     }
 
     [Fact]
@@ -195,6 +196,13 @@ public sealed class ActivityStateViewAndOperatorAccessTests
     {
         var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([new DescriptorProjector(), new DescriptorProjector("Other.Unused")]));
         Assert.Contains("descriptor kind 'test'", error.Message);
+    }
+
+    [Fact]
+    public void A_projector_cannot_claim_the_descriptor_kind_every_clr_activity_shares()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([new DescriptorProjector(kind: "elsa.clr-activity")]));
+        Assert.Contains("elsa.clr-activity", error.Message);
     }
 
     [Fact]
@@ -479,17 +487,24 @@ public sealed class ActivityStateViewAndOperatorAccessTests
     }
 
     /// <summary>Reads every node whose descriptor kind is <c>test</c>, as a family of user-defined activities would be read.</summary>
-    private sealed class DescriptorProjector(string alias = "Test.Descriptor.Unused") : IActivityStateViewProjector
+    private sealed class DescriptorProjector(string alias = "Test.Descriptor.Unused", string kind = "test") : IActivityStateViewProjector
     {
         public const string Kind = "test.descriptor";
+        public int Calls { get; private set; }
         public string StateTypeAlias => alias;
-        public string? DescriptorKind => "test";
+        public string? DescriptorKind => kind;
         public string ViewKind => Kind;
         public int ViewVersion => 1;
-        public ValueTask<JsonElement> ProjectAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(JsonSerializer.SerializeToElement(new { withState = true }));
-        public ValueTask<JsonElement?> ProjectWithoutStateAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<JsonElement?>(JsonSerializer.SerializeToElement(new { withState = false }));
+        public ValueTask<JsonElement> ProjectAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(new { withState = true }));
+        }
+        public ValueTask<JsonElement?> ProjectWithoutStateAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult<JsonElement?>(JsonSerializer.SerializeToElement(new { withState = false }));
+        }
     }
 
     private sealed class DenyManageForRuns : IPermissionResourceHandler

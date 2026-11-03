@@ -43,7 +43,8 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Signature: `StudioWorkflowRunRelatedLinkContribution { id, order?, activityTypes, anyActivityType?, viewKind, viewVersion, requiresBackend?, getLinks(context) }` returning `StudioWorkflowRunRelatedLink { id, label, path }`. `anyActivityType` matches every activity type, for user-defined activity families whose type keys are unknown in advance, so the view kind alone decides.
 - Register: call `api.workflowRunRelatedLinks?.add(contribution)` during registration; hosts without the slot show no links.
 - Consumer: `WorkflowRunRelatedLinks` in native run details and attached Test Run inspection. It reads the authorized activity state view matching `viewKind`/`viewVersion`, and keeps only same-origin Studio paths on the selected backend. The target route reauthorizes its own reads.
-- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)).
+- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)) and `agent-invocation` (`Elsa.Studio.Agent.Specialists`, cross-domain, `anyActivityType` over view `elsa.specialist.invocation/1`).
+- An any-type contribution shows nothing for an activity until a matching view yields a link, and its links appear under "Related" rather than "Related runs".
 
 ### Frontend route workspace options (SDK — Elsa.Studio.Hosting)
 
