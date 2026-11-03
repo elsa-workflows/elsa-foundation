@@ -396,6 +396,76 @@
    "original": "IsRabbitMqRoutingKey(string? routingKey) => routingKey is { Length: <= 255 } &&",
    "mutated_text": "IsRabbitMqRoutingKey(string? routingKey) => routingKey is not null &&",
    "sourceRevision": "069d41663629f2b47dd22b40340cd2b560544bd5"
+  },
+  {
+   "mutation": "writer-body-array",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlRabbitMqRouteWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_retained_body_that_is_not_an_array",
+   "mutated": "Failed!  - Failed: 1, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_retained_body_that_is_not_an_array_of_objects_is_refused_before_publishing(body: \"{\\\"id\\\":1}\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "            if (document.RootElement.ValueKind != JsonValueKind.Array)\n",
+   "mutated_text": "            if (document.RootElement.ValueKind == JsonValueKind.Undefined)\n",
+   "sourceRevision": "154fbb248e371c36ed5c579b2cfddf8f463163ca"
+  },
+  {
+   "mutation": "writer-record-object",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlRabbitMqRouteWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_retained_body_that_is_not_an_array",
+   "mutated": "Failed!  - Failed: 1, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_retained_body_that_is_not_an_array_of_objects_is_refused_before_publishing(body: \"[1]\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "                if (record.ValueKind != JsonValueKind.Object)\n",
+   "mutated_text": "                if (record.ValueKind == JsonValueKind.Undefined)\n",
+   "sourceRevision": "154fbb248e371c36ed5c579b2cfddf8f463163ca"
+  },
+  {
+   "mutation": "writer-run-header",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlRabbitMqRouteWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.The_writer_publishes",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.The_writer_publishes_one_message_per_record_with_stable_ids_and_headers"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                    new(RunIdHeader, delivery.RunId),\n",
+   "mutated_text": "",
+   "sourceRevision": "154fbb248e371c36ed5c579b2cfddf8f463163ca"
+  },
+  {
+   "mutation": "binding-invalid-uri",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        catch (Exception exception) when (exception is ArgumentException or FormatException or UriFormatException)",
+   "mutated_text": "        catch (Exception exception) when (exception is ArgumentException)",
+   "sourceRevision": "154fbb248e371c36ed5c579b2cfddf8f463163ca"
+  },
+  {
+   "mutation": "driver-connection-limit-transient",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_virtual_host_at_its_connection_limit",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_virtual_host_at_its_connection_limit_yields_and_one_the_user_may_not_open_is_rejected"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "reason.ReplyCode == NotAllowed && reason.ReplyText.Contains(\"connection limit\", StringComparison.OrdinalIgnoreCase)",
+   "mutated_text": "reason.ReplyCode == NotAllowed && reason.ReplyText.Contains(\"never\", StringComparison.OrdinalIgnoreCase)",
+   "sourceRevision": "154fbb248e371c36ed5c579b2cfddf8f463163ca"
   }
  ]
 }
