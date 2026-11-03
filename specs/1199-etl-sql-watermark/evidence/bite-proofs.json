@@ -1,0 +1,92 @@
+{
+ "spec": "1199-etl-sql-watermark",
+ "note": "Each entry names the revision it was recorded at. All six bite.",
+ "results": [
+  {
+   "mutation": "compiler-watermark-unchecked",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_watermark_must_be",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_watermark_must_be_a_declared_required_int64_column_and_is_omitted_when_absent"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (sql.Watermark is { } watermark &&\n",
+   "mutated_text": "        if (false && sql.Watermark is { } watermark &&\n",
+   "sourceRevision": "bc5fdb4da040310ebd43737449bfda4a420748f4"
+  },
+  {
+   "mutation": "worker-watermark-unchecked",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~Reader_refuses_a_sql_source_with_columns",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                    sql.Watermark is { } watermark &&",
+   "mutated_text": "                    false && sql.Watermark is { } watermark &&",
+   "sourceRevision": "bc5fdb4da040310ebd43737449bfda4a420748f4"
+  },
+  {
+   "mutation": "floor-ignored",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_watermark_reads_only|FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 2, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs",
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "var filter = source.Watermark is not null && watermarkFloor is not null ? source.Watermark : null;",
+   "mutated_text": "string? filter = null;",
+   "sourceRevision": "bc5fdb4da040310ebd43737449bfda4a420748f4"
+  },
+  {
+   "mutation": "high-watermark-not-recorded",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_watermark_reads_only|FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 2, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs",
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "sourceWatermark = await EtlSqlSnapshotReader.ReadHighWatermarkAsync(",
+   "mutated_text": "_ = await EtlSqlSnapshotReader.ReadHighWatermarkAsync(",
+   "sourceRevision": "bc5fdb4da040310ebd43737449bfda4a420748f4"
+  },
+  {
+   "mutation": "checkpoint-not-raised",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "else if (high > checkpoint.Watermark)",
+   "mutated_text": "else if (false && high > checkpoint.Watermark)",
+   "sourceRevision": "bc5fdb4da040310ebd43737449bfda4a420748f4"
+  },
+  {
+   "mutation": "execution-floor-not-read",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "long? floor = pipeline.Source is EtlSqlSource { Watermark: { } column } sql",
+   "mutated_text": "long? floor = false && pipeline.Source is EtlSqlSource { Watermark: { } column } sql",
+   "sourceRevision": "bc5fdb4da040310ebd43737449bfda4a420748f4"
+  }
+ ]
+}
