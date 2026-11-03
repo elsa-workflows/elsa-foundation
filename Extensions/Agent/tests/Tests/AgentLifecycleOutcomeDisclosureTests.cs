@@ -286,6 +286,67 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
         Assert.Equal(unavailable ? (GatedSource.UnavailableCode, 503) : ("agent.result.disclosure_denied", 403), (error?.Code, error?.StatusCode));
     }
 
+    [Fact]
+    public async Task A_host_policy_refusal_during_an_owner_outage_is_definite_and_releases_the_pause()
+    {
+        var policy = new PolicyGate();
+        var harness = Harness.Create(configure: services => services.Replace(ServiceDescriptor.Scoped<IAgentPolicyEvaluator>(_ => policy)));
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        harness.Source.Unavailable = true;
+        policy.Denied.Add(DeterministicAgentProvider.MutatingToolName);
+
+        var stopped = await Collect(scope, session.Id);
+
+        Assert.Equal(("agent.result.disclosure_denied", 403), Code(Assert.Single(stopped, x => x.Kind == AgentStreamEventKind.Error).Error));
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.Equal(AgentMessageStatus.Failed, Assert.Single(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status);
+    }
+
+    [Fact]
+    public async Task A_replacement_collector_that_rebuilds_the_unavailable_error_still_keeps_the_pause()
+    {
+        var harness = Harness.Create(configure: services => services.Replace(ServiceDescriptor.Scoped<IAgentContextCollector>(provider =>
+            new RebuildingCollector(ActivatorUtilities.CreateInstance<DefaultAgentContextCollector>(provider)))));
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        harness.Source.Unavailable = true;
+
+        var stopped = await Collect(scope, session.Id);
+
+        Assert.Equal((GatedSource.UnavailableCode, 503), Code(Assert.Single(stopped, x => x.Kind == AgentStreamEventKind.Error).Error));
+        Assert.NotNull(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.DoesNotContain(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Status == AgentMessageStatus.Failed);
+    }
+
+    private static (string?, int?) Code(AgentError? error) => (error?.Code, error?.StatusCode);
+
+    /// <summary>Host capability policy that can withdraw a tool's capability.</summary>
+    private sealed class PolicyGate : IAgentPolicyEvaluator
+    {
+        private readonly DefaultAgentPolicyEvaluator inner = new();
+        public HashSet<string> Denied { get; } = new(StringComparer.Ordinal);
+        public ValueTask<AgentPolicyDecision> EvaluateAvailabilityAsync(AgentPolicy policy, CancellationToken cancellationToken = default)
+            => inner.EvaluateAvailabilityAsync(policy, cancellationToken);
+        public ValueTask<AgentPolicyDecision> EvaluateContextAsync(AgentPolicy policy, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
+            => inner.EvaluateContextAsync(policy, attachments, cancellationToken);
+        public ValueTask<AgentPolicyDecision> EvaluateCapabilityAsync(AgentPolicy policy, string capabilityId, CancellationToken cancellationToken = default)
+            => Denied.Contains(capabilityId) ? ValueTask.FromResult(new AgentPolicyDecision(false, [new("test.policy_withdrawn", "Host policy withdrew this capability.")]))
+                : inner.EvaluateCapabilityAsync(policy, capabilityId, cancellationToken);
+    }
+
+    /// <summary>A supported replacement collector (a decorator here) that returns its own error instances.</summary>
+    private sealed class RebuildingCollector(IAgentContextCollector inner) : IAgentContextCollector
+    {
+        public async Task<AgentResult<AgentContextContribution>> CollectAsync(AgentPolicy policy, AgentContextRequest request, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CollectAsync(policy, request, cancellationToken);
+            return result.Error is { } error ? new(result.Value, new AgentError(error.Code, error.Message, error.StatusCode)) : result;
+        }
+    }
+
     private static async Task<List<AgentStreamEvent>> Collect(IServiceScope scope, string sessionId)
     {
         var events = new List<AgentStreamEvent>();
@@ -295,7 +356,7 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
 
     private sealed record Harness(ServiceProvider Root, NativeAuthority Authority, GatedSource Source, GatedTool Tool, CapturingProvider Provider)
     {
-        public static Harness Create(bool receipt = true)
+        public static Harness Create(bool receipt = true, Action<IServiceCollection>? configure = null)
         {
             var authority = new NativeAuthority();
             var source = new GatedSource(authority);
@@ -308,6 +369,7 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
                 services.AddSingleton<IAgentTool>(tool);
                 services.AddSingleton<IAgentTool>(new ForgingReadTool());
                 services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
+                configure?.Invoke(services);
             });
             return new(root, authority, source, tool, provider);
         }

@@ -1167,37 +1167,17 @@ internal sealed class DefaultAgentTurnOrchestrator(
     {
         try
         {
+            // Every retained outcome is evaluated before an owner outage is reported: a definite refusal of any of them
+            // (a provenance 409, a denial or a host policy refusal 403) wins over another outcome's unavailable owner.
+            var outcomes = new List<AgentError?>();
             foreach (var result in results)
             {
-                // Engine-created refusal text has no successful resource payload to disclose.
-                if (!result.Succeeded && result.Payload is null && result.Receipt is null && result.Access is null) continue;
-                var tool = await toolRegistry.FindAsync(result.ToolName, token);
-                if (result.Access is not { } access || tool is null || access.ModuleId != tool.Descriptor.ModuleId
-                    || access.ContractVersion != tool.Descriptor.ContractVersion
-                    || string.IsNullOrEmpty(access.DisclosureSourceId) || access.DisclosureSourceId != tool.Descriptor.DisclosureSourceId
-                    || string.IsNullOrEmpty(access.InvocationId)
-                    || result.Receipt is { } receipt && (!AgentInvocationIntegrity.SameTarget(receipt.Before, access.Target)
-                        || receipt.After.ModuleId != access.ModuleId || string.IsNullOrEmpty(receipt.After.ResourceType)
-                        || receipt.InvocationId != access.InvocationId))
-                    return AgentResult<AgentContextContribution>.Failure("agent.result.provenance_unavailable", "The original installed result owner or contract is unavailable.", 409);
-                // An engine lifecycle outcome (denied/refused/uncertain, no receipt) discloses no owner result
-                // data, so withdrawn mutation authority cannot withhold it from its originating turn. It still
-                // requires the owning module's current read/disclosure decision for exactly this outcome and target.
-                bool allowed;
-                if (DefaultAgentActionProposalExecutor.IsLifecycleResult(result, tool.Descriptor))
-                {
-                    var owner = await contextCollector.CollectAsync(session.Policy, new(session.Id, string.Empty, new Dictionary<string, string>())
-                        { Disclosure = new(session.Id, [], [result], continuation) { IsHistorical = historical } }, token);
-                    // An owner that could not decide is not a denial: keep the collector's own unavailable outcome (503), so
-                    // a paused continuation keeps its pause and a later prompt can retry. Every other refusal stays 403.
-                    if (AgentContextOwnerMarkers.IsUnavailable(owner.Error)) return new(null, owner.Error);
-                    allowed = owner.Succeeded;
-                }
-                else allowed = (await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, access.Target, token)).Allowed;
-                var policy = await policyEvaluator.EvaluateCapabilityAsync(session.Policy, tool.Descriptor.Name, token);
-                if (!allowed || !policy.Allowed)
-                    return AgentResult<AgentContextContribution>.Failure("agent.result.disclosure_denied", "Current authority or host policy withholds the retained outcome details. Its accepted effect remains recorded and will not be repeated.", 403);
+                var outcome = await AdmitRetainedOutcomeAsync(session, result, continuation, historical, token);
+                outcomes.Add(outcome);
+                if (outcome is { StatusCode: < 500 }) break;
             }
+            if (AgentRetainedOutcomeAdmission.Combine(outcomes) is { } refusal)
+                return new(null, refusal);
 
             return await contextCollector.CollectAsync(session.Policy, new(session.Id, string.Empty, new Dictionary<string, string>())
             { Disclosure = new(session.Id, context, results.Where(x => x.Access is not null || x.Succeeded || x.Payload is not null || x.Receipt is not null).ToArray(), continuation) { IsHistorical = historical } }, token);
@@ -1208,6 +1188,42 @@ internal sealed class DefaultAgentTurnOrchestrator(
         {
             throw new AgentContributionException($"Agent disclosure 'admit-evidence' for session '{session.Id}' could not be established.", cause);
         }
+    }
+
+    /// <summary>One retained outcome's current disclosure decision: null when admitted, otherwise its refusal.</summary>
+    private async Task<AgentError?> AdmitRetainedOutcomeAsync(AgentSession session, AgentToolResult result, bool continuation, bool historical,
+        CancellationToken token)
+    {
+        // Engine-created refusal text has no successful resource payload to disclose.
+        if (!result.Succeeded && result.Payload is null && result.Receipt is null && result.Access is null) return null;
+        var tool = await toolRegistry.FindAsync(result.ToolName, token);
+        if (result.Access is not { } access || tool is null || access.ModuleId != tool.Descriptor.ModuleId
+            || access.ContractVersion != tool.Descriptor.ContractVersion
+            || string.IsNullOrEmpty(access.DisclosureSourceId) || access.DisclosureSourceId != tool.Descriptor.DisclosureSourceId
+            || string.IsNullOrEmpty(access.InvocationId)
+            || result.Receipt is { } receipt && (!AgentInvocationIntegrity.SameTarget(receipt.Before, access.Target)
+                || receipt.After.ModuleId != access.ModuleId || string.IsNullOrEmpty(receipt.After.ResourceType)
+                || receipt.InvocationId != access.InvocationId))
+            return new("agent.result.provenance_unavailable", "The original installed result owner or contract is unavailable.", 409);
+        // An engine lifecycle outcome (denied/refused/uncertain, no receipt) discloses no owner result
+        // data, so withdrawn mutation authority cannot withhold it from its originating turn. It still
+        // requires the owning module's current read/disclosure decision for exactly this outcome and target.
+        bool allowed;
+        AgentError? outage = null;
+        if (DefaultAgentActionProposalExecutor.IsLifecycleResult(result, tool.Descriptor))
+        {
+            var owner = await contextCollector.CollectAsync(session.Policy, new(session.Id, string.Empty, new Dictionary<string, string>())
+                { Disclosure = new(session.Id, [], [result], continuation) { IsHistorical = historical } }, token);
+            // A collection that could not be established (5xx, such as an owner that could not decide) is not a denial.
+            // It passes through unchanged, as on every other admission path, unless host policy refuses definitely.
+            if (!owner.Succeeded && owner.Error is { StatusCode: >= 500 } unavailable) outage = unavailable;
+            allowed = owner.Succeeded || outage is not null;
+        }
+        else allowed = (await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, access.Target, token)).Allowed;
+        var policy = await policyEvaluator.EvaluateCapabilityAsync(session.Policy, tool.Descriptor.Name, token);
+        if (!allowed || !policy.Allowed)
+            return new("agent.result.disclosure_denied", "Current authority or host policy withholds the retained outcome details. Its accepted effect remains recorded and will not be repeated.", 403);
+        return outage;
     }
 
     private static PreparedTurn Rejected(AgentMessage source, AgentError error)

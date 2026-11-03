@@ -12,13 +12,10 @@ namespace Elsa.Agent.Services;
 /// returned by an installed <see cref="Core.Contracts.IAgentContextProvider"/> under its own descriptor id. Any other event
 /// handler can add diagnostics to the public <see cref="AgentContextCollecting.Diagnostics"/> collection, but it cannot
 /// produce a recorded instance, so a forged marker is cleared and the refusal stays an ordinary incomplete-context failure.</para>
-/// <para>Likewise only the collector's own <see cref="AgentError"/> instance is the unavailable collection outcome. A caller
-/// that must preserve it compares the instance, never the public code, status or message, which any module may return.</para>
 /// </remarks>
 internal static class AgentContextOwnerMarkers
 {
     private static readonly ConditionalWeakTable<AgentContextCollecting, HashSet<AgentContributionDiagnostic>> Recorded = new();
-    private static readonly ConditionalWeakTable<AgentError, object> UnavailableErrors = new();
 
     internal static void Record(AgentContextCollecting collecting, AgentContributionDiagnostic diagnostic) =>
         Recorded.GetValue(collecting, _ => new HashSet<AgentContributionDiagnostic>(ReferenceEqualityComparer.Instance)).Add(diagnostic);
@@ -27,12 +24,5 @@ internal static class AgentContextOwnerMarkers
     internal static bool IsRecorded(AgentContextCollecting collecting, AgentContributionDiagnostic diagnostic) =>
         Recorded.TryGetValue(collecting, out var recorded) && recorded.Contains(diagnostic) && AgentToolAccess.IsOwnerUnavailable(diagnostic);
 
-    internal static AgentError Unavailable(string code)
-    {
-        var error = new AgentError(code, AgentToolAccess.OwnerUnavailableMessage, 503);
-        UnavailableErrors.Add(error, new object());
-        return error;
-    }
-
-    internal static bool IsUnavailable(AgentError? error) => error is not null && UnavailableErrors.TryGetValue(error, out _);
+    internal static AgentError Unavailable(string code) => new(code, AgentToolAccess.OwnerUnavailableMessage, 503);
 }
