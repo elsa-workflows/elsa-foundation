@@ -20,11 +20,12 @@ public static class LoginPage
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
 
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "");
-        var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" ? options.Layout : "split";
-        var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" ? options.Palette : "linen";
+        var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" or "field-guide" ? options.Layout : "split";
+        var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" or "field-guide" ? options.Palette : "linen";
         var artwork = LoginArtwork.IsKnown(options.Artwork) ? options.Artwork : LoginArtwork.Default;
         var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
-        var logoUrl = SafeUrl(options.LogoUrl) ?? $"{pathBase}/_elsa/identity/login-assets/elsa-logo.png";
+        var logoName = layout == "field-guide" ? "field-guide-logo.png" : "elsa-logo.png";
+        var logoUrl = SafeUrl(options.LogoUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{logoName}";
         var logo = $"<img class=\"logo\" src=\"{Encode(logoUrl)}\" alt=\"\" />";
         var links = string.Join("", new[] { (options.HelpUrl, "Help"), (options.PrivacyUrl, "Privacy") }
             .Where(link => SafeUrl(link.Item1) is not null)
@@ -33,11 +34,11 @@ public static class LoginPage
         var focal = $"{Coordinate(options.FocalX)}% {Coordinate(options.FocalY)}%";
         return $$"""
         <!doctype html>
-        <html lang="en">
+        <html lang="en"{{(palette == "field-guide" ? " data-appearance=\"light\"" : "")}}>
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <meta name="color-scheme" content="light dark" />
+          <meta name="color-scheme" content="{{(palette == "field-guide" ? "light" : "light dark")}}" />
           <title>Sign in · {{Encode(options.ProductName)}}</title>
           <style>
             :root { --ground:#f3f1ec; --paper:#fffefa; --ink:#34372f; --muted:#65685e; --line:#d9dbd0; --accent:#a64834; --on-accent:#fff; --wash:#eee9e1; color-scheme:light; }
@@ -75,12 +76,53 @@ public static class LoginPage
             [data-layout="immersive"] .welcome { position:relative; z-index:2; width:440px; border:1px solid var(--line); border-radius:24px; background:var(--paper); padding:40px; box-shadow:0 24px 80px rgba(10,20,16,.15); }
             [data-layout="editorial"] .entry { padding:5vh 6vw; gap:6vw; }
             [data-layout="editorial"] .visual { border-radius:45% 45% 24px 24px; }
+            /* Field Guide: the brochure's paper, sage ink, serif type and uncropped pencil plate. */
+            body[data-palette="field-guide"] { --ground:#f5f2ea; --paper:#fdfbf5; --ink:#293c34; --muted:#626d63; --line:#d8dcd0; --accent:#293c34; --on-accent:#fdfbf5; --wash:#e6e9dd; color-scheme:light; }
+            [data-layout="field-guide"] .entry { max-width:1500px; margin:auto; grid-template-columns:minmax(300px,.82fr) minmax(0,1.18fr); align-items:center; gap:5vw; padding:48px 6vw; }
+            [data-layout="field-guide"] .welcome { order:0; padding:30px 0; }
+            [data-layout="field-guide"] .form-wrap { max-width:350px; }
+            [data-layout="field-guide"] .brand { gap:12px; font-size:17px; font-weight:500; margin-bottom:58px; }
+            [data-layout="field-guide"] .logo { width:46px; height:46px; mix-blend-mode:multiply; }
+            [data-layout="field-guide"] h1 { font:400 clamp(36px,3.8vw,52px)/1.12 Georgia,"Times New Roman",serif; letter-spacing:-.045em; margin-bottom:16px; }
+            [data-layout="field-guide"] .subtitle { font-size:13px; line-height:1.8; margin-bottom:30px; }
+            [data-layout="field-guide"] label { font-size:12px; font-weight:500; }
+            [data-layout="field-guide"] input { border-radius:4px; padding:13px 14px; font-size:14px; }
+            [data-layout="field-guide"] button { border-radius:28px; font-size:12px; font-weight:500; padding:14px 18px; }
+            [data-layout="field-guide"] .error { border-radius:4px; }
+            [data-layout="field-guide"] footer { border-top:1px solid var(--line); margin-top:34px; padding-top:20px; font-size:10px; }
+            [data-layout="field-guide"] .visual { order:1; min-height:0; display:flex; flex-direction:column; align-items:center; border-radius:0; overflow:visible; background:transparent; color:var(--ink); }
+            [data-layout="field-guide"] .visual>img { position:static; width:100%; height:auto; aspect-ratio:3/2; object-fit:contain; mix-blend-mode:multiply; mask-image:linear-gradient(to right,transparent,#000 3%,#000 97%,transparent),linear-gradient(to bottom,transparent,#000 3%,#000 97%,transparent); mask-composite:intersect; }
+            [data-layout="field-guide"] .visual::after { display:none; }
+            [data-layout="field-guide"] .story { position:static; max-width:480px; padding:26px 14px 0; text-align:center; text-shadow:none; }
+            [data-layout="field-guide"] .story .eyebrow { display:none; }
+            [data-layout="field-guide"] .story h2 { font:italic 400 clamp(23px,2.5vw,32px)/1.35 Georgia,"Times New Roman",serif; letter-spacing:-.025em; margin:0 0 12px; }
+            [data-layout="field-guide"] .story p { color:var(--muted); font-size:12px; line-height:1.8; max-width:none; }
+            @media(max-width:1000px) and (min-width:801px) {
+              [data-layout="field-guide"] .entry { gap:3vw; padding:32px 5vw; }
+              [data-layout="field-guide"] .story { padding:18px 0 0; }
+            }
+            @media(max-width:800px) {
+              [data-layout="field-guide"] .entry { grid-template-columns:minmax(0,1fr); gap:36px; padding:28px 7vw 38px; }
+              [data-layout="field-guide"] .welcome { padding:0; }
+              [data-layout="field-guide"] .form-wrap { max-width:420px; }
+              [data-layout="field-guide"] .brand { margin-bottom:32px; font-size:16px; }
+              [data-layout="field-guide"] .logo { width:40px; height:40px; }
+              [data-layout="field-guide"] h1 { font-size:38px; margin-bottom:12px; }
+              [data-layout="field-guide"] .subtitle { margin-bottom:24px; }
+              [data-layout="field-guide"] .visual { order:1; min-height:0; border-radius:0; width:100%; max-width:580px; margin:auto; }
+              [data-layout="field-guide"] .story { padding-top:18px; }
+              [data-layout="field-guide"] .story h2 { font-size:24px; }
+              [data-layout="field-guide"] .story p { display:block; }
+              [data-layout="field-guide"] footer { margin-top:26px; padding-top:18px; }
+            }
             @media(prefers-color-scheme:dark) {
-              :root,body[data-palette] { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
+              :root:where(:not([data-appearance="light"])),body[data-palette]:where(:not([data-palette="field-guide"])) { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
               body[data-palette="tidal"] { --ground:#1d2729; --paper:#253338; --ink:#edf4f5; --muted:#b5c9cc; --line:#536b72; --accent:#acd3dc; --on-accent:#183239; }
               body[data-palette="daybreak"] { --ground:#2b242b; --paper:#362e35; --ink:#f5edf1; --muted:#d2bdc8; --line:#78636e; --accent:#dab2c4; --on-accent:#382630; }
               body[data-palette="canopy"] { --ground:#20271f; --paper:#2b3329; --ink:#eff4e9; --muted:#b6c5a7; --line:#5d6b53; --accent:#b4cd9e; --on-accent:#20301e; }
-              .error { color:#ffb6ad; background:#422d2b; }
+              :where(body:not([data-palette="field-guide"])) .error { color:#ffb6ad; background:#422d2b; }
+              [data-layout="field-guide"]:not([data-palette="field-guide"]) .visual>img { mix-blend-mode:normal; }
+              [data-layout="field-guide"]:not([data-palette="field-guide"]) .logo { mix-blend-mode:normal; background:#f5f2ea; border-radius:4px; }
             }
             @media(max-width:800px) {
               .entry,[data-layout="editorial"] .entry { grid-template-columns:1fr; padding:12px; gap:0; }
@@ -95,10 +137,11 @@ public static class LoginPage
             }
             @media(forced-colors:active),(prefers-contrast:more) {
               :root,body[data-palette] { --ground:Canvas; --paper:Canvas; --ink:CanvasText; --muted:CanvasText; --line:CanvasText; --accent:Highlight; --on-accent:HighlightText; }
-              .visual { display:none; }
-              .entry,[data-layout="editorial"] .entry { display:flex; justify-content:center; }
+              .visual,[data-layout="field-guide"] .visual { display:none; }
+              .entry,[data-layout="editorial"] .entry,[data-layout="field-guide"] .entry { display:flex; justify-content:center; }
               .welcome { position:relative; width:100%; max-width:520px; box-shadow:none; }
               .error { color:CanvasText; background:Canvas; border-color:CanvasText; }
+              [data-layout="field-guide"] button { background:ButtonFace; color:ButtonText; border-color:ButtonText; }
             }
           </style>
         </head>
