@@ -46,6 +46,20 @@ public sealed class WorkflowVersionReaderTests
     }
 
     [Fact]
+    public async Task Finds_a_versions_definition_without_reading_the_version()
+    {
+        var store = new Store();
+        await using var provider = Compose(store).BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IWorkflowVersionReader>();
+        Assert.Equal("definition-1", await reader.FindDefinitionIdAsync("version-2"));
+        Assert.Null(await reader.FindDefinitionIdAsync("missing"));
+        Assert.Null(await reader.FindDefinitionIdAsync("draft:draft-1"));
+        Assert.Equal(["version-2", "missing"], store.Lookups);
+        Assert.Empty(store.Reads);
+    }
+
+    [Fact]
     public async Task Lists_the_definitions_versions_as_the_store_holds_them()
     {
         await using var provider = Compose(new Store()).BuildServiceProvider();
@@ -89,6 +103,7 @@ public sealed class WorkflowVersionReaderTests
     private sealed class Duplicate : IWorkflowVersionReader
     {
         public ValueTask<WorkflowVersionDetails?> ReadAsync(string versionId, CancellationToken cancellationToken = default) => ValueTask.FromResult<WorkflowVersionDetails?>(null);
+        public ValueTask<string?> FindDefinitionIdAsync(string versionId, CancellationToken cancellationToken = default) => ValueTask.FromResult<string?>(null);
         public ValueTask<IReadOnlyList<WorkflowDefinitionVersionSummary>> ListAsync(string definitionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<WorkflowDefinitionVersionSummary>>([]);
     }
@@ -121,7 +136,13 @@ public sealed class WorkflowVersionReaderTests
             Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(definitionId == "definition-1" ? [Version("version-1", "1.0.0"), Version("version-2", "2.0.0")] : []);
 
         public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default)
+        {
+            Lookups.Add(versionId);
+            return Task.FromResult(versionId == "version-2" ? Version("version-2", "2.0.0") : null);
+        }
+
+        public List<string> Lookups { get; } = [];
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

@@ -36,7 +36,8 @@ public sealed class WorkflowDesignOnlyHostTests : IAsyncDisposable
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddCShells(shells => shells
             .WithAssemblies(typeof(EventsFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly, typeof(WorkflowsDesignApiFeature).Assembly,
-                typeof(FoundationWorkflowsAgentFeature).Assembly, typeof(DesignOnlyFixtureFeature).Assembly)
+                typeof(FoundationWorkflowsAgentFeature).Assembly, typeof(DesignOnlyFixtureFeature).Assembly,
+                typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly)
             .AddShell(ShellName, shell => shell
                 .WithFeature<WorkflowsDesignApiFeature>()
                 .WithFeature<FoundationWorkflowsAgentFeature>()
@@ -80,9 +81,8 @@ public sealed class WorkflowDesignOnlyHostTests : IAsyncDisposable
 }
 
 /// <summary>
-/// The Design-only host's fixtures: the version stores a persistence provider would register, the owner's read decision
-/// and the host's tool permissions in place of the HTTP adapters, and a stand-in for the validations feature the Design API
-/// depends on (its rules are not exercised here).
+/// The Design-only host's fixtures: the version stores a persistence provider would register, and the owner's read decision
+/// and the host's tool permissions in place of the HTTP adapters. The Design API's validations dependency is the real feature.
 /// </summary>
 [ShellFeature(name: "DesignOnlyFixture", DisplayName = "Design-only fixture", Description = "Version stores and authority for composition tests.",
     DependsOn = new object[] { typeof(FoundationWorkflowsAgentFeature), typeof(WorkflowsDesignApiFeature) })]
@@ -117,15 +117,9 @@ public sealed class DesignOnlyFixtureFeature : IShellFeature
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(definitionId == "definition-design-only" ? [Version()] : []);
         public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(versionId == "version-design-only" ? Version() : null);
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
-}
-
-/// <summary>Stands in for the Design validations feature the Design API depends on; this composition test runs none of its rules.</summary>
-[ShellFeature(name: "WorkflowDesignValidations", DisplayName = "Validations stand-in", Description = "Satisfies the Design API's dependency in composition tests.")]
-public sealed class DesignValidationsStandInFeature : IShellFeature
-{
-    public void ConfigureServices(IServiceCollection services) { }
 }

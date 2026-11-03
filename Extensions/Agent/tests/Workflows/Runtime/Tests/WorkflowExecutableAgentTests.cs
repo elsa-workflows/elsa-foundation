@@ -99,7 +99,7 @@ public sealed class WorkflowExecutableAgentTests
             services.RemoveAll<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableInspection>());
         var session = await host.SessionAsync();
         var refusal = Assert.Single((await host.CollectAsync(session, Reference())).Diagnostics);
-        Assert.Equal(("agent.workflow.executable_inspection_unavailable", true, true), (refusal.Code, refusal.Required, refusal.OwnerUnavailable));
+        Assert.Equal(("workflow.executable.inspection_unavailable", true, true), (refusal.Code, refusal.Required, refusal.OwnerUnavailable));
         var decision = await ((IAgentToolAuthorization)host.Tool).AuthorizeAsync(session.ActorId, session.TenantId, null);
         Assert.False(decision.Allowed);
         Assert.True(Assert.Single(decision.Violations).OwnerUnavailable);
@@ -238,6 +238,21 @@ public sealed class WorkflowExecutableAgentTests
         var first = graph.GetProperty("slots")[0].GetProperty("nodes")[0];
         Assert.True(first.GetProperty("inputs").GetArrayLength() < 60);
         Assert.True(first.GetProperty("inputsTruncated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_cut_text_value_is_counted_never_cut_silently()
+    {
+        var executable = Executable() with { RootActivity = Executable().RootActivity with { ActivityType = new string('t', 300) } };
+        using var host = new WorkflowRuntimeAgentTestHost(new(executable));
+        var session = await host.SessionAsync();
+        var data = (await host.PrepareAsync(session, (await host.CollectAsync(session, Reference())).Attachments)).Value!.Preview.Data;
+        Assert.Equal(256, data.GetProperty("graph").GetProperty("activityType").GetString()!.Length);
+        Assert.Equal(1, data.GetProperty("truncatedFields").GetInt32());
+        using var plain = new WorkflowRuntimeAgentTestHost();
+        var plainSession = await plain.SessionAsync();
+        Assert.Equal(0, (await plain.PrepareAsync(plainSession, (await plain.CollectAsync(plainSession, Reference())).Attachments)).Value!.Preview.Data
+            .GetProperty("truncatedFields").GetInt32());
     }
 
     [Fact]

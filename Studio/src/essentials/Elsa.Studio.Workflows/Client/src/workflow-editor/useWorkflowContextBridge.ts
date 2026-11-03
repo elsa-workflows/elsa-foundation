@@ -125,12 +125,13 @@ export function collectWorkflowSnapshotParts(draft: WorkflowDraft, catalogByVers
   const activities = collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion, [], indexActivityPresentation(draft.activityPresentation));
   const byNode = collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion);
   const structure = compactWorkflowStructure(activities, byNode, [...(draft.layout ?? []), ...(draft.activityPresentation ?? [])].map(record => record.nodeId));
+  const placed = new Set(activities.map(activity => activity.id));
   return {
     activities,
     connections: collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion),
     // Only placed activities: a layout record the draft still holds for a removed node (kept by the side table) names no
     // activity, and the server admits positions only for the snapshot's own activities. Its id stays in reservedIds.
-    positions: (draft.layout ?? []).filter(item => activities.some(activity => activity.id === item.nodeId))
+    positions: (draft.layout ?? []).filter(item => placed.has(item.nodeId))
       .map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })),
     // Visible Secret References are those the draft already binds: names, types and scopes only, never a value.
     secretReferences: collectVisibleSecretReferences(draft.state.rootActivity, catalogByVersion),

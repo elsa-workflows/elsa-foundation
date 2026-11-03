@@ -27,8 +27,13 @@ internal static class WorkflowVersionContext
     internal const string NotFoundCode = "agent.workflow.version_not_found";
     internal const string NotFoundMessage = "The workflow version is unavailable.";
     internal const string DeniedMessage = "Current workflow design read permission is required for the workflow version.";
-    internal const string ReaderUnavailableCode = "agent.workflow.version_reader_unavailable";
-    internal const string StructureUnavailableCode = "agent.workflow.version_structure_unavailable";
+    // Composition faults are reported as unavailable (503), so their codes are owner-namespaced: the engine honours the
+    // unavailable marker only outside its reserved agent. namespace. Slice A's agent.workflow.authority_unavailable keeps its
+    // established meaning (an ordinary denial of the draft tools) and is not used here.
+    internal const string ReaderUnavailableCode = "workflow.version.reader_unavailable";
+    internal const string StructureUnavailableCode = "workflow.version.structure_unavailable";
+    internal const string AuthorityUnavailableCode = "workflow.authority.composition_unavailable";
+    internal const string AuthorityUnavailableMessage = "Exactly one owning workflow definition authorizer is required; workflow versions are unavailable.";
 
     internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -40,23 +45,6 @@ internal static class WorkflowVersionContext
     internal sealed record Reference(string DefinitionId, string VersionId, AgentClientBinding? Client);
 
     internal static AgentResourceTarget Target(string versionId) => new(ModuleId, ResourceType, versionId, versionId);
-
-    /// <summary>
-    /// The server's own target for a version it read: the version identity, plus the Studio route of its definition, so
-    /// a later authority decision for this target asks the definition's owner before anything is read. Only targets this
-    /// module produced carry it (an admitted read, a preparation); the engine's target identity ignores the route.
-    /// </summary>
-    internal static AgentResourceTarget Target(string versionId, string definitionId) =>
-        Target(versionId) with { Route = "/workflows/definitions?definition=" + Uri.EscapeDataString(definitionId) };
-
-    /// <summary>The definition a server-produced version target names in its route, or null when it names none.</summary>
-    internal static string? DefinitionOf(AgentResourceTarget? target)
-    {
-        const string prefix = "/workflows/definitions?definition=";
-        if (target?.Route is not { } route || !route.StartsWith(prefix, StringComparison.Ordinal)) return null;
-        var value = Uri.UnescapeDataString(route[prefix.Length..]);
-        return value is { Length: > 0 and <= IdentityLimit } && !value.Contains('&') ? value : null;
-    }
 
     internal static bool IsTarget(AgentResourceTarget? target) =>
         target is { ModuleId: ModuleId, ResourceType: ResourceType, ResourceId: { Length: > 0 } id } && target.Revision == id;
@@ -136,6 +124,21 @@ internal static class WorkflowVersionContext
         return owner.Violations.Any(violation => violation.Code == "agent.workflow.authority_unavailable") ? Outcome.AuthorityUnavailable : Outcome.NotFound;
     }
 
+    /// <summary>
+    /// The owner's read decision for one exact version named only by its identity (a retained result, a tool target): the
+    /// host's design read, then the definition the version belongs to (looked up without reading the version), then that
+    /// definition's owner; the version itself is then read once with <see cref="ReadOwnedAsync"/> when its content is needed.
+    /// </summary>
+    internal static async Task<(Outcome Outcome, string? DefinitionId)> AuthorizeVersionAsync(IAgentToolAuthorizer? authorizer,
+        IEnumerable<IWorkflowDefinitionAuthorizer>? owners, IWorkflowVersionReader? reader, string actorId, string tenantId, string versionId,
+        CancellationToken cancellationToken)
+    {
+        if (authorizer is not null && !(await authorizer.AuthorizeAsync(ReadGate, actorId, tenantId, null, cancellationToken)).Allowed) return (Outcome.Denied, null);
+        if (reader is null) return (Outcome.ReaderUnavailable, null);
+        if (await reader.FindDefinitionIdAsync(versionId, cancellationToken) is not { } definitionId) return (Outcome.NotFound, null);
+        return (await OwnerAsync(owners, actorId, tenantId, definitionId, cancellationToken), definitionId);
+    }
+
     /// <summary>The exact version of a definition whose read the caller already decided, read once.</summary>
     internal static async Task<Read> ReadOwnedAsync(IWorkflowVersionReader reader, string definitionId, string versionId, bool list, CancellationToken cancellationToken)
     {
@@ -160,7 +163,7 @@ internal static class WorkflowVersionContext
             $"Workflow '{Bound(version.DefinitionName, 256)}' version v{Bound(version.Version, 64)} ('{version.VersionId}'), read from the workflow design service: {activityCount} activities. A version is immutable.",
             content, new Dictionary<string, string> { ["workflowDefinitionId"] = version.DefinitionId, ["versionId"] = version.VersionId, ["revision"] = version.VersionId })
         {
-            ModuleId = ModuleId, SchemaVersion = "1", Target = Target(version.VersionId, version.DefinitionId), Origin = AgentContextOrigin.AuthoritativeRead, Client = client,
+            ModuleId = ModuleId, SchemaVersion = "1", Target = Target(version.VersionId), Origin = AgentContextOrigin.AuthoritativeRead, Client = client,
             AgentScopes = ["/workflows"]
         };
     }

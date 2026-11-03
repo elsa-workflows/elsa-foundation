@@ -27,7 +27,7 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   ("Current workflow runtime read permission is required for the workflow Executable."),
   `agent.workflow.executable_not_found` ("The workflow Executable is unavailable."), `agent.workflow.executable_stale`
   ("The workflow Executable's Artifact Hash differs from the bound hash, so the context is stale."), and
-  `agent.workflow.executable_inspection_unavailable` (no or several inspections; owner-unavailable, 503). Without an
+  `workflow.executable.inspection_unavailable` (no or several inspections; owner-unavailable, 503). Without an
   Executable reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own retained read, reads it again at
   the bound hash for the current turn, and withholds a retained context or `workflow_read_executable` result once the
   Executable is gone, changed or no longer readable.
@@ -39,14 +39,15 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   kind, input bindings by name, source and sensitivity, never a value or source detail, child slots and connections) depth
   first and bounded: at most 300 nodes, each with at most 32 inputs and 64 connections, fewer of each when the result would
   exceed 24 KiB (well under the host's 32 KiB budget, #3710); a connection is kept only when both its ends are included
-  (`connectionsOmitted` counts the rest), per-node `inputsTruncated` and `connectionsTruncated` and the overall
+  (`connectionsOmitted` counts the rest), text values (types, versions, names and ports) are cut at 256 characters and
+  counted in `truncatedFields` (identities never are), per-node `inputsTruncated` and `connectionsTruncated` and the overall
   `nodesIncluded` and `graphTruncated` say what was cut, and a read that does not fit even its smallest bound is refused as
   `agent.workflow.executable_too_large` (413), never returned unbounded, the Source References (FR-028: those the Runtime read discloses under
   `workflows/runtime:read`) and the direct dependencies. Its authorization decides a concrete target by the Executable's
   current existence at the bound hash. Refusals: `agent.workflow.executable_context_required` (409),
   `agent.workflow.executable_stale` (409), `agent.workflow.executable_not_found` (404),
   `agent.workflow.executable_arguments_invalid` (400), `agent.workflow.permission_denied` (403) and
-  `agent.workflow.executable_inspection_unavailable` (503).
+  `workflow.executable.inspection_unavailable` (503).
 - `IAgentCapabilityProvider`: `WorkflowRuntimeAgentCapabilityProvider` declares `workflow.executable-explain` (Answer,
   ReadOnly, `workflows/runtime:read`, kind `workflows.executable`, mode `explain`).
 

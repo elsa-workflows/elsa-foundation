@@ -121,10 +121,12 @@ internal sealed class WorkflowReadExecutableTool(
         return JsonSerializer.SerializeToElement(new
         {
             readOnly = true, artifactId = executable.ArtifactId, artifactHash = executable.ArtifactHash, createdAt = executable.CreatedAt,
-            rootActivityType = Text(executable.RootActivityType), rootActivityVersion = Text(executable.RootActivityVersion), nodeCount = executable.NodeCount,
+            rootActivityType = walk.Text(executable.RootActivityType), rootActivityVersion = walk.Text(executable.RootActivityVersion), nodeCount = executable.NodeCount,
             graph, nodesIncluded = walk.Included.Count,
             graphTruncated = Count(executable.RootActivity) > walk.Included.Count || walk.ListsCut || walk.ConnectionsOmitted > 0,
             connectionsOmitted = walk.ConnectionsOmitted,
+            // Text values (types, versions, names, ports) longer than 256 characters are cut; identities never are.
+            truncatedFields = walk.TruncatedFields,
             sourceReferences = WorkflowExecutableContext.References(executable).Take(bound.References).ToArray(),
             sourceReferencesTruncated = executable.SourceReferences.Count > Math.Min(bound.References, WorkflowExecutableContext.ReferenceLimit),
             dependencies = executable.Dependencies.Take(bound.References)
@@ -142,6 +144,15 @@ internal sealed class WorkflowReadExecutableTool(
     {
         public HashSet<string> Included { get; } = new(StringComparer.Ordinal);
         public bool ListsCut { get; private set; }
+        public int TruncatedFields { get; private set; }
+
+        /// <summary>A text value bounded at 256 characters; each cut is counted and reported.</summary>
+        public string Text(string value)
+        {
+            if (value.Length <= TextLimit) return value;
+            TruncatedFields++;
+            return value[..TextLimit];
+        }
         public int ConnectionsOmitted { get; private set; }
 
         public void Include(WorkflowExecutableInspectionNode node)
@@ -182,7 +193,6 @@ internal sealed class WorkflowReadExecutableTool(
         }
     }
 
-    private static string Text(string value) => value.Length <= TextLimit ? value : value[..TextLimit];
 
     private static int Count(WorkflowExecutableInspectionNode node) => 1 + node.Slots.Sum(slot => slot.Nodes.Sum(Count));
 
