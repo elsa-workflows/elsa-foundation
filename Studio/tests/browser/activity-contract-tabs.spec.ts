@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import axe from "axe-core";
 
 for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`contract tabs isolate collections and retain changes at ${width}px ${theme}`, async ({ page }, testInfo) => {
@@ -10,6 +11,18 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
       await tabs.getByRole("tab", { name: new RegExp(`^${kind === "input" ? "Inputs" : "Outputs"} \\(0\\)$`) }).click();
       await expect(page.getByRole("region", { name: "Done", exact: true })).toHaveCount(0);
       await expect(page.getByText(`No ${kind}s yet`, { exact: true })).toBeVisible();
+      const [empty, workbench] = await page.locator(".ad-contract-workbench-empty, .ad-contract-workbench").evaluateAll(elements => {
+        const empty = elements.find(element => element.classList.contains("ad-contract-workbench-empty"))!;
+        const workbench = elements.find(element => element.classList.contains("ad-contract-workbench"))!;
+        return [empty.getBoundingClientRect().width, workbench.getBoundingClientRect().width];
+      });
+      expect(empty).toBeGreaterThanOrEqual(workbench - 2);
+      await page.addScriptTag({ content: axe.source });
+      const violations = await page.evaluate(async () => {
+        const engine = (window as Window & { axe: typeof axe }).axe;
+        return (await engine.run(document.querySelector(".ad-public-interface-view")!)).violations.map(item => item.id);
+      });
+      expect(violations).toEqual([]);
       await page.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
       const name = page.getByRole("textbox", { name: `${kind === "input" ? "Input" : "Output"} name`, exact: true });
       await expect(name).toBeFocused();

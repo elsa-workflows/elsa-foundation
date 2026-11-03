@@ -291,7 +291,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   const description = memberKind === "input" ? "Define the values this activity receives."
     : memberKind === "output" ? "Define the values this activity returns."
       : "Define the completion paths callers can follow.";
-  return <section ref={collectionElementRef} className="ad-contract-editor" aria-labelledby="activity-contract-title">
+  return <section ref={collectionElementRef} className="ad-contract-editor" aria-label={`${title} editor`}>
     <header className="ad-contract-header">
       <div><h2 id="activity-contract-title">{title}</h2><p>{description}</p></div>
     </header>
@@ -313,7 +313,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
           createForm={renderCreateForm(memberKind)}
         />
       </nav>
-      <div className="ad-contract-workbench-detail" aria-label="Selected contract member">
+      <div className="ad-contract-workbench-detail" role="group" aria-label="Selected contract member">
         {selectionGuardMessage ? <div className="ad-contract-selection-guard" role="alert">{selectionGuardMessage}</div> : null}
         <div className="ad-contract-workbench-panes">
           {entries.map(entry => {

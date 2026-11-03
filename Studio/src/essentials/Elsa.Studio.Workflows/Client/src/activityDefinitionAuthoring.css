@@ -266,7 +266,7 @@
 
 .ad-draft-editor > .ad-diagnostics-panel { width: 100%; max-width: 84rem; }
 .ad-public-interface-view .ad-contract-editor { border: 0; padding-inline: 0; background: transparent; }
-.ad-public-interface-view .ad-contract-workbench { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); }
+.ad-public-interface-view .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); }
 @media (max-width: 900px) {
-  .ad-public-interface-view .ad-contract-workbench { grid-template-columns: minmax(0, 1fr); }
+  .ad-public-interface-view .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(0, 1fr); }
 }
