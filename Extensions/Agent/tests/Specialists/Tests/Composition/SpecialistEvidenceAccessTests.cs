@@ -22,6 +22,7 @@ public sealed class SpecialistEvidenceAccessTests
         var workflows = new InMemoryWorkflowExecutionStateStore();
         await workflows.SaveAsync(Run("own", "tenant-1"));
         await workflows.SaveAsync(Run("foreign", "tenant-2"));
+        await workflows.SaveAsync(Run("shared", null));
 
         Assert.Equal(new SpecialistEvidenceGrant(true, true, true),
             await Access(workflows, SpecialistEvidenceAccess.InspectStructure, SpecialistEvidenceAccess.InspectValues).AuthorizeAsync("own", default));
@@ -34,8 +35,15 @@ public sealed class SpecialistEvidenceAccessTests
             await Access(workflows, SpecialistEvidenceAccess.InspectStructure, SpecialistEvidenceAccess.InspectValues).AuthorizeAsync("foreign", default));
         Assert.Equal(new SpecialistEvidenceGrant(false, false, false),
             await Access(workflows, SpecialistEvidenceAccess.InspectStructure).AuthorizeAsync("missing", default));
-        Assert.Equal(new SpecialistEvidenceGrant(true, false, false),
+        Assert.Equal(new SpecialistEvidenceGrant(false, false, false),
             await Access(workflows, [SpecialistEvidenceAccess.InspectStructure], trusted: false).AuthorizeAsync("own", default));
+        // A run without a tenant is open to any trusted caller, as in the runtime; a caller without a tenant sees only those.
+        Assert.Equal(new SpecialistEvidenceGrant(true, true, false),
+            await Access(workflows, SpecialistEvidenceAccess.InspectStructure).AuthorizeAsync("shared", default));
+        Assert.Equal(new SpecialistEvidenceGrant(false, false, false),
+            await Access(workflows, [SpecialistEvidenceAccess.InspectStructure], trusted: true, tenant: null).AuthorizeAsync("own", default));
+        Assert.Equal(new SpecialistEvidenceGrant(true, true, false),
+            await Access(workflows, [SpecialistEvidenceAccess.InspectStructure], trusted: true, tenant: null).AuthorizeAsync("shared", default));
     }
 
     [Fact]
@@ -48,7 +56,7 @@ public sealed class SpecialistEvidenceAccessTests
         Assert.Same(evidence, SpecialistEvidenceAccess.Redact(evidence, values: true));
     }
 
-    private static WorkflowExecutionState Run(string id, string tenant)
+    private static WorkflowExecutionState Run(string id, string? tenant)
     {
         var now = DateTimeOffset.UtcNow;
         return new(id, new WorkflowExecutableIdentity("artifact", "definition", "version", "1.0.0", "sha256:hash"),
@@ -57,9 +65,10 @@ public sealed class SpecialistEvidenceAccessTests
 
     private static SpecialistEvidenceAccess Access(InMemoryWorkflowExecutionStateStore workflows, params string[] granted) => Access(workflows, granted, trusted: true);
 
-    private static SpecialistEvidenceAccess Access(InMemoryWorkflowExecutionStateStore workflows, string[] granted, bool trusted)
+    private static SpecialistEvidenceAccess Access(InMemoryWorkflowExecutionStateStore workflows, string[] granted, bool trusted, string? tenant = "tenant-1")
     {
-        var claims = new List<Claim> { new(IdentityClaimTypes.TenantId, "tenant-1") };
+        var claims = new List<Claim>();
+        if (tenant is not null) claims.Add(new(IdentityClaimTypes.TenantId, tenant));
         if (trusted) claims.Add(new(IdentityClaimTypes.Normalized, "v1"));
         var context = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test")) };
         var options = Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "test" } });

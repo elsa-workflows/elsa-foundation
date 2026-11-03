@@ -61,8 +61,7 @@ internal partial class SpecialistInspectionApiJsonContext : JsonSerializerContex
 
 /// <summary>
 /// Renders the generic Test Run's refusals with their stable codes: an unknown or invisible run is 404 and a foreign tenant
-/// reference 403. An invisible occurrence is 404 and one the caller may not inspect 403. A schema write refusal keeps its
-/// own 409 answer. Anything else, including a journal failure, is an
+/// reference 403. An occurrence the caller may not see or inspect is 404. A schema write refusal keeps its own 409 answer. Anything else, including a journal failure, is an
 /// opaque server failure.
 /// </summary>
 internal sealed class SpecialistInspectionFaultRenderer : IEndpointFaultRenderer
@@ -90,11 +89,6 @@ internal sealed class SpecialistInspectionFaultRenderer : IEndpointFaultRenderer
         if (exception is Elsa.Primitives.Exceptions.EntityNotFoundException)
         {
             await Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "No visible specialist invocation matches.").ExecuteAsync(context);
-            return true;
-        }
-        if (exception is UnauthorizedAccessException)
-        {
-            await Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Inspecting this run needs the activity execution inspection permission.").ExecuteAsync(context);
             return true;
         }
         await Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "The specialist evidence read failed.").ExecuteAsync(context);

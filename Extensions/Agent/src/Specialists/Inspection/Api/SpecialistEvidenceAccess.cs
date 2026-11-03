@@ -26,7 +26,8 @@ internal sealed class SpecialistEvidenceAccess(IHttpContextAccessor http, Normal
     {
         var workflow = await workflows.FindAsync(workflowExecutionId, cancellationToken);
         if (workflow is null) return new(false, false, false);
-        if (http.HttpContext is not { } context || !principals.TryGetNormalizedPrincipal(context.User, out var principal)) return new(true, false, false);
+        // An untrusted caller learns nothing, not even that the run exists.
+        if (http.HttpContext is not { } context || !principals.TryGetNormalizedPrincipal(context.User, out var principal)) return new(false, false, false);
         var tenant = principal.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? principal.FindFirst("tenant_id")?.Value;
         if (workflow.TenantId is not null && !StringComparer.Ordinal.Equals(workflow.TenantId, tenant)) return new(false, false, false);
         var structure = await GrantedAsync(principal, InspectStructure, tenant, workflow, cancellationToken);

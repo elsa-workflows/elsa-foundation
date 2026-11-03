@@ -44,12 +44,12 @@ internal sealed class GetInvocationEvidence(ISpecialistInvocationInspector inspe
         options.StrictTypedParsing = true;
     }
 
-    // A run the caller cannot see, and an occurrence that is not a specialist, read alike as not found.
+    // As the runtime's own activity execution reads do, a run the caller may not see or inspect, and an occurrence that is
+    // not a specialist, all read alike as not found, so the answer never confirms that a run exists.
     public override async Task<SpecialistInvocationEvidenceView> HandleAsync(SpecialistInvocationEvidenceRequest request, CancellationToken cancellationToken)
     {
         var grant = await access.AuthorizeAsync(request.WorkflowExecutionId, cancellationToken);
-        if (!grant.Found) throw new Elsa.Primitives.Exceptions.EntityNotFoundException("No visible specialist invocation matches.");
-        if (!grant.Structure) throw new UnauthorizedAccessException("Inspecting this run needs the activity execution inspection permission.");
+        if (!grant.Found || !grant.Structure) throw new Elsa.Primitives.Exceptions.EntityNotFoundException("No visible specialist invocation matches.");
         var invocation = await inspector.InspectAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken)
             ?? throw new Elsa.Primitives.Exceptions.EntityNotFoundException("No visible specialist invocation matches.");
         return new(SpecialistEvidenceAccess.Redact(invocation, grant.Values)!, grant.Values);

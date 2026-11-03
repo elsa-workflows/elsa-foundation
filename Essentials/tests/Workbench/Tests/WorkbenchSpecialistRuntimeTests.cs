@@ -166,6 +166,7 @@ public sealed class WorkbenchSpecialistRuntimeTests
         var read = (await occurrence.Content.ReadFromJsonAsync<JsonNode>())!;
         Assert.Equal(activityExecutionId, (string?)read["invocation"]!["activityExecutionId"]);
         Assert.Equal((string?)turn["status"], (string?)read["invocation"]!["turn"]!["status"]);
+        Assert.DoesNotContain("placeholder-not-a-key", read.ToJsonString(), StringComparison.Ordinal);
 
         using var other = await client.GetAsync($"/agent/specialists/invocations/{workflowExecutionId}/not-an-activity/evidence");
         await AssertStatusAsync(HttpStatusCode.NotFound, other, "Reading a non-specialist occurrence");

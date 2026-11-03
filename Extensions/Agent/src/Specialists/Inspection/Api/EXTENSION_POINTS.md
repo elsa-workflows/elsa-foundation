@@ -15,9 +15,9 @@ separate project so the authoring API stays composable without the runtime.
 Result values are re-authorized per run, with the runtime's own inspection permissions, on both endpoints. A value is
 returned only when the caller holds `workflows/activity-executions:inspect` and `workflows/activity-executions:inspect-values`
 for that run. Otherwise `valuesPermitted` is false, and the output keeps its capture mode but drops its value. Seeing a
-run, or holding the Test Run permission, does not imply its values. The occurrence read answers 404 for a run outside
-the caller's tenant, for an unknown run and for an occurrence that is not a specialist. A visible run the caller may not
-inspect is 403.
+run, or holding the Test Run permission, does not imply its values. Like the runtime's own activity execution reads, the
+occurrence read answers 404 for a run outside the caller's tenant, an unknown run, a run the caller may not inspect and an
+occurrence that is not a specialist, so it never confirms that a run exists.
 
 The endpoint adds no execution path. A playground run starts with the generic `POST publishing/activity-drafts/{draftId}/test-runs`
 and is polled and cancelled through `publishing/activity-test-runs/{testRunId}` and its `cancel` route. Here, `IActivityDraftTestRunService.GetAsync` authorizes the
