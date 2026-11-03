@@ -8,7 +8,7 @@ Design and implementation are present. M2 is complete; integrated qualification 
 
 The initial checkpoint stopped after three successive failures of the new HTTP fixture, under the organization protocol. The owner instructed “Continue 20 more times maximum” on 3 November. Fresh app claims were established and blocking labels removed. Additional attempt 1 of the formerly blocked check passed all four tests: management authority permits inspection after group revocation, while completion remains forbidden. No further retry of that HTTP check was needed. See the PR history for the initial checkpoint and claim receipts.
 
-The packet was renumbered from1190 to1194 after current main and open PRs reserved1190–1193. Historical links pinned to the initial commit remain valid.
+The packet was renumbered from1190, then1194, to1196 after current main and open PRs occupied1190–1195. Historical links pinned to the initial commit remain valid.
 
 ## Executed evidence
 

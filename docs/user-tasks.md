@@ -40,7 +40,7 @@ Use `AddRuntimeEntityFrameworkCore` to select the complete durable family. A dur
 
 ## Custom applications and forms
 
-Discover `elsa.api.user-tasks` version 1 and its `tasks`, `task`, `claim`, `release`, `complete`, `reassign`, `forms`, `form-version`, `targets` and `identity` relations. The capability is operationally conditional on the selected task persistence boundary. The [API contract](../specs/1194-user-tasks/contracts/api.md) describes status/error and concurrency semantics.
+Discover `elsa.api.user-tasks` version 1 and its `tasks`, `task`, `claim`, `release`, `complete`, `reassign`, `forms`, `form-version`, `targets` and `identity` relations. The capability is operationally conditional on the selected task persistence boundary. The [API contract](../specs/1196-user-tasks/contracts/api.md) describes status/error and concurrency semantics.
 
 Every mutation supplies the expected `revision` and a stable `requestId`. Completion additionally supplies `action` and an object `data`; preserve opaque key casing. A `202` completion is a durable accepted receipt awaiting Runtime proof, not a completed workflow. Store that receipt/request ID in a custom client so a network retry cannot become another decision. Inbox cursors are encrypted, bound to the scope/tenant/user/view/search, expire after 15 minutes and expire on process restart; return to the first page when a cursor is refused.
 
@@ -54,7 +54,7 @@ The journal commits revision, history, accepted response and delivery responsibi
 
 The recovery worker checks up to 50 records per partition per sweep, advances a fair continuation and uses fresh partition/operation scopes. Its normal interval is two seconds and failure backoff is capped at 30 seconds. Temporary journal outages preserve owed responses, including after bookmark claim. Persisted input policies requiring encryption or withholding are refused before writing task content to this journal. Do not use task inputs as a secret store.
 
-Apply the Runtime module's incremental migrations on existing supported relational stores. The User Tasks migration adds its tables; it does not require deleting an existing development database. See [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) for ownership/lifetime seams and the [qualification guide](../specs/1194-user-tasks/quickstart.md) for acceptance evidence.
+Apply the Runtime module's incremental migrations on existing supported relational stores. The User Tasks migration adds its tables; it does not require deleting an existing development database. See [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) for ownership/lifetime seams and the [qualification guide](../specs/1196-user-tasks/quickstart.md) for acceptance evidence.
 
 
 To qualify a custom form integration, run the durable external-form journey and matching mounted renderer test, then use `e2e-tests/user-tasks/qualify_integration.py --help` to compile an external consumer against the public Runtime Core binary and actual Studio package. `Test-UserTasks.ps1` exercises the same authorized HTTP contract through publication and every action path. The live Studio journey covers activity configuration, visual connections, reusable form authoring, save/reload and participant completion on owned hosts.

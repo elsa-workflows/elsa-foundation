@@ -1177,7 +1177,7 @@ a durable retry delay that exists only in memory.
 
 ## User Tasks
 
-The human-work model and public contracts live in `Runtime.Core/UserTasks`. The [User Tasks guide](../../../../../docs/user-tasks.md) owns usage and integration instructions; [spec 1190](../../../../../specs/1194-user-tasks/plan.md) records the delivery design.
+The human-work model and public contracts live in `Runtime.Core/UserTasks`. The [User Tasks guide](../../../../../docs/user-tasks.md) owns usage and integration instructions; [spec 1190](../../../../../specs/1196-user-tasks/plan.md) records the delivery design.
 
 | Contract/contribution | Kind and default | Ownership and lifetime |
 |---|---|---|

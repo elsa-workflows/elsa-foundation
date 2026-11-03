@@ -3,7 +3,7 @@
 - **Status:** Active program; implementation qualification resumed under the owner’s 3 November instruction. Establishment, design and end-to-end delivery authorized 2 November 2026.
 - **Steward:** Sipke Schoorstra; delivery Codex.
 - **Program:** [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688).
-- **Feature and acceptance:** [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), [specification](../../specs/1194-user-tasks/spec.md).
+- **Feature and acceptance:** [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), [specification](../../specs/1196-user-tasks/spec.md).
 
 ## Purpose and scope
 
@@ -23,4 +23,4 @@ Do not mark complete until every #3577 success criterion and Program exit row ha
 
 ## Delivery checkpoint
 
-M2 durable lifecycle is complete. Workflow/Studio integration and final qualification are active in draft PR #3691; see the [executed evidence and remaining exits](../../specs/1194-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.
+M2 durable lifecycle is complete. Workflow/Studio integration and final qualification are active in draft PR #3691; see the [executed evidence and remaining exits](../../specs/1196-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.
