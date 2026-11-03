@@ -122,10 +122,22 @@ internal static class EtlSqlSnapshotReader
         await foreach (var line in File.ReadLinesAsync(snapshotPath, cancellationToken))
         {
             if (line.Length == 0) continue;
-            using var document = JsonDocument.Parse(line);
-            if (document.RootElement.TryGetProperty(column, out var value) && value.ValueKind == JsonValueKind.Number &&
-                value.TryGetInt64(out var watermark) && (high is null || watermark > high))
-                high = watermark;
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(line);
+            }
+            catch (JsonException exception)
+            {
+                // A retained snapshot that no longer parses is an integrity failure, as for any other snapshot read.
+                throw new InvalidDataException("The SQL snapshot is not valid JSON lines.", exception);
+            }
+            using (document)
+            {
+                if (document.RootElement.TryGetProperty(column, out var value) && value.ValueKind == JsonValueKind.Number &&
+                    value.TryGetInt64(out var watermark) && (high is null || watermark > high))
+                    high = watermark;
+            }
         }
         return high;
     }

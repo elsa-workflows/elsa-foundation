@@ -220,7 +220,7 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     [Fact]
-    public async Task A_faulted_watermarked_run_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again()
+    public async Task A_watermarked_run_with_a_rejected_delivery_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again()
     {
         await using var files = new RuntimeFiles("");
         var source = CreateVersionedTable(files);
@@ -238,14 +238,47 @@ public sealed partial class EtlRuntimeJourneyTests
         var toCopy = WatermarkPipeline() with { Routes = new(new EtlSqlDestination("copy", "people_copy", ["id"]), new EtlJsonlDestination("errors")) };
 
         // The destination table does not exist yet, so delivery is rejected after the snapshot was read.
-        var faulted = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-faulted", toCopy));
-        Assert.Equal((EtlRunStatus.BusinessError, "etl.sql-write-rejected"), (faulted.Status, faulted.TerminalResult?.Diagnostic?.Code));
-        Assert.Null(await CheckpointAsync(host, files, "watermark-faulted"));
+        var rejected = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-rejected", toCopy));
+        Assert.Equal((EtlRunStatus.BusinessError, "etl.sql-write-rejected"), (rejected.Status, rejected.TerminalResult?.Diagnostic?.Code));
+        Assert.Null(await CheckpointAsync(host, files, "watermark-rejected"));
 
         ExecuteSql(source, "CREATE TABLE people_copy (id INTEGER NOT NULL, name TEXT NOT NULL, version INTEGER NOT NULL, CONSTRAINT people_copy_key UNIQUE (id))");
         var retried = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-retried", toCopy));
         Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (retried.Status, retried.AcceptedRecords, await CheckpointAsync(host, files, "watermark-retried")));
         Assert.Equal(["1|Ada", "2|Bram", "3|Cleo"], QuerySql(source, "SELECT id, name FROM people_copy ORDER BY id"));
+    }
+
+    [Fact]
+    public async Task A_cancelled_watermarked_run_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again()
+    {
+        await using var files = new RuntimeFiles("");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var source = CreateVersionedTable(files);
+        EtlHostSqlBindingOptions[] sql = [SqlSourceBinding(files.Scope, source)];
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.AddRange(sql));
+        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(deadline.Token);
+        var invocation = ConnectorInvocation(files.Scope, "watermark-cancelled", WatermarkPipeline());
+        await files.AdmitAsync(host, invocation);
+
+        // The run is prepared, with its high watermark recorded, when it is cancelled.
+        var worker = await files.StartWorkerAsync("watermark-cancelled", deadline.Token,
+            connectorGate: EtlConnectorWorkerGate.AfterReservation, sqlBindings: sql);
+        await worker.WaitForConnectorCheckpointAsync(deadline.Token);
+        await using (var operation = host.Services.CreateAsyncScope())
+            Assert.Equal(EtlStoreStatus.Applied,
+                (await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>().CancelAsync(invocation, deadline.Token)).Status);
+        await worker.CrashAsync();
+        Assert.Equal(EtlRunStatus.Cancelled, (await files.WaitForTerminalAsync(host.Services, invocation.RunId)).Status);
+        Assert.Null(await CheckpointAsync(host, files, invocation.RunId));
+
+        _ = await files.StartWorkerAsync("watermark-after-cancel", deadline.Token, sqlBindings: sql);
+        var next = ConnectorInvocation(files.Scope, "watermark-after-cancel", WatermarkPipeline());
+        await files.AdmitAsync(host, next);
+        var run = await files.WaitForTerminalAsync(host.Services, next.RunId);
+        Assert.Equal((EtlRunStatus.Succeeded, 3L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(3L, await CheckpointAsync(host, files, next.RunId));
     }
 
     [Fact]

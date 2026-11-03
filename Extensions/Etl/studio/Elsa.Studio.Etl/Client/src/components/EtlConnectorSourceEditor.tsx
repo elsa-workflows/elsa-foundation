@@ -166,7 +166,7 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
           <option value="">None: read every row</option>
           {watermarks.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
-        <small id={`${id}-watermark-help`}>A required 64-bit integer column that rises on every write. Each run then reads only rows above the last completed run's highest value.</small>
+        <small id={`${id}-watermark-help`}>A required 64-bit integer column whose values become visible in increasing order, such as one stamped by a single writer. Each run then reads only rows above the last completed run's highest value; a sequence, identity or per-row version can skip rows.</small>
       </div>
     </>
   );

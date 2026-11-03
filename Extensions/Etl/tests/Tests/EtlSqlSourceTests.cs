@@ -124,6 +124,16 @@ public sealed class EtlSqlSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read()
+    {
+        Directory.CreateDirectory(SnapshotRoot);
+        var path = Path.Combine(SnapshotRoot, "corrupt.jsonl");
+        await File.WriteAllTextAsync(path, "{\"id\":1,\"version\":4}\n{\"id\":2,\"vers");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => EtlSqlSnapshotReader.ReadHighWatermarkAsync(path, "version", default).AsTask());
+    }
+
+    [Fact]
     public void A_prepared_run_without_a_watermark_keeps_its_persisted_bytes()
     {
         var prepared = new EtlConnectorPreparedRun(null, null);

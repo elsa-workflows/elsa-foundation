@@ -112,7 +112,7 @@ internal sealed class EtlConnectorHttpPageRecord
 internal sealed class EtlConnectorSourceWatermarkRecord
 {
     public string ScopeKey { get; set; } = null!;
-    /// <summary>The hash of the definition, source alias, table and watermark column.</summary>
+    /// <summary>The hash of the definition, source alias, pinned source handle, table and watermark column.</summary>
     public string CheckpointKey { get; set; } = null!;
     public long Watermark { get; set; }
     /// <summary>The run whose completion last raised the checkpoint.</summary>

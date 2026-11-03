@@ -123,8 +123,12 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   Authored queries and log CDC are not supported.
 - **Watermark reads.** [Spec 1199](../../specs/1199-etl-sql-watermark/spec.md) adds an optional `watermark`: a declared,
   required `Int64` column. A run then reads only rows whose watermark is above the high watermark of the last completed
-  run of the same definition, source binding (its alias and the database it points to), table and column; the first run
-  reads every row, and so does the first run after the alias is pointed elsewhere. The run's highest watermark
+  run of the same definition, source alias, source binding revision (the pinned handle, which covers the database, user
+  and allowed tables), table and column. The first run reads every row, and so does the first run after any of these
+  changes, including a new binding revision, so a non-idempotent route then receives the table again. The checkpoint
+  does not include the destination: a new definition version that routes to a new, empty target reads only rows above
+  the checkpoint, and loading that target from the start needs a new source identity, as there is no checkpoint reset
+  yet. The run's highest watermark
   is raised into that checkpoint in the transaction that completes it, so a run settled by a failure (a fault, a
   cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Overlapping runs can
   both read the same rows, and the checkpoint never moves backwards. **A row whose watermark is at or below a checkpoint
