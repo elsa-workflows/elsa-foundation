@@ -24,7 +24,7 @@ public abstract class EtlDesignProviderTests(EtlNativeProviderFixture fixture)
     }
 
     [SkippableFact]
-    public async Task Key_and_hash_columns_use_the_engines_binary_collation()
+    public async Task Key_columns_use_the_engines_binary_collation()
     {
         await using var database = await EtlProviderDesignDatabase.CreateTypedAsync(fixture);
         var expected = EfOrdinalCollation.ForProvider(EfRelationalProviderBinding.ExpectedProviderName(database.Provider));
@@ -52,7 +52,8 @@ public abstract class EtlDesignProviderTests(EtlNativeProviderFixture fixture)
 
         var context = scope.ServiceProvider.GetRequiredService<EtlDesignDbContext>();
 
-        Assert.Equal(database.CreateContext().GetType(), context.GetType());
+        await using (var expected = database.CreateContext())
+            Assert.Equal(expected.GetType(), context.GetType());
         Assert.Equal(EfRelationalProviderBinding.ExpectedProviderName(database.Provider), context.Database.ProviderName);
         Assert.True(await context.Database.CanConnectAsync());
     }

@@ -33,7 +33,7 @@ The domain separates those responsibilities while sharing durable infrastructure
 
 Each package has an actual consumer or deployment boundary. Add a separate connector package only when a real connector dependency or independently selectable implementation requires it. Add no generic foundation package, provider umbrella or placeholder implementation.
 
-The persistence package admits EF Core, `.Abstractions`, `.Analyzers` and `.Relational` only; provider engines stay host and test dependencies. For the design store's four-engine qualification ([spec 1202](../../specs/1202-etl-design-store-providers/spec.md)), the nonpackable migration host under `Extensions/Etl/src/Tooling` admits the four engines plus private `.Design`, and the provider suite under `Extensions/Etl/tests/Persistence/ProviderTests` admits the three server engines, as Rules does (ADR 0088). Both reach the internal contexts through same-domain friendship; the architecture guard ratchets these closures.
+The persistence package admits EF Core, `.Abstractions`, `.Analyzers` and `.Relational` only; provider engines stay host and test dependencies. For the design store's four-engine qualification ([spec 1202](../../specs/1202-etl-design-store-providers/spec.md)), the nonpackable migration host under `Extensions/Etl/src/Tooling` admits the three server engines plus private `.Design` (the SQLite chains are hand-maintained), and the provider suite under `Extensions/Etl/tests/Persistence/ProviderTests` admits the three server engines, as Rules does (ADR 0088). Both reach the internal contexts through same-domain friendship; the architecture guard ratchets these closures.
 
 ## Consequences and limits
 

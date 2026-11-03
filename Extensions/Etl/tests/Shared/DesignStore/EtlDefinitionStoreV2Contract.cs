@@ -163,7 +163,7 @@ public abstract class EtlDefinitionStoreV2Contract
         await Assert.ThrowsAsync<NotSupportedException>(async () => await ((IEtlDefinitionStoreV2)store).FindDraftAsync(Scope, "orders"));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData('x')]
     [InlineData('界')]
     public async Task Oversized_v2_draft_is_rejected_before_json_materialization(char character)

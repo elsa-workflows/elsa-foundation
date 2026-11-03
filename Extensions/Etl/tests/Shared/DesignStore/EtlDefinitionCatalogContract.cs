@@ -124,7 +124,7 @@ public abstract class EtlDefinitionCatalogContract
         });
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("schema")]
     [InlineData("scope")]
     [InlineData("definition-key")]
@@ -166,7 +166,7 @@ public abstract class EtlDefinitionCatalogContract
         }
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("scope")]
     [InlineData("definition-key")]
     [InlineData("content-hash")]

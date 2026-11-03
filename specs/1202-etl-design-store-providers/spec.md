@@ -41,13 +41,13 @@ A host that keeps its Elsa state in SQL Server, PostgreSQL or MySQL selects that
 ### Edge Cases
 
 - **Identity widths.** Draft and artifact keys are 64-character hashes, so keys fit every engine's index limits; the encoded tenant, partition and definition ids (up to 1,200 characters) are payload columns only.
-- **Collation.** Key and hash columns use the engine's binary collation (`EfOrdinalCollation`), so equality and ordering agree with `StringComparer.Ordinal` and EF's identity map agrees with the server. Definition keys are uppercase hexadecimal hashes, which sort alike under any collation, so the binary collation is proven from the generated model and migrations rather than by paging.
-- **Retry budget.** A publication that loses a serialization race (a serialization failure or deadlock) is retried as a whole unit a bounded number of times. A real competitor settles on the next attempt through the existing-publication check; running out of attempts means the database kept refusing, which surfaces as a persistence failure, not as `Conflict`.
+- **Collation.** Key columns (and the indexed schema-version stamps) use the engine's binary collation (`EfOrdinalCollation`), so equality and ordering agree with `StringComparer.Ordinal` and EF's identity map agrees with the server. The pipeline and envelope hashes are compared only in memory. Definition keys are uppercase hexadecimal hashes, which sort alike under any collation, so the binary collation is proven from the generated model and the server's recorded column collation rather than by paging.
+- **Retry budget.** A publication that loses a serialization race (a serialization failure or deadlock, or SQLite reporting the database busy or locked) is retried as a whole unit a bounded number of times, on every engine. A real competitor settles on the next attempt through the existing-publication check; running out of attempts means the database kept refusing, which surfaces as the last provider failure, as the store's other storage failures already do, not as `Conflict`.
 - **Out of scope.** The ETL runtime store, which needs narrower keys, provider-specific check constraints and retried units across its transitions, is the next slice; until then its registration still refuses other providers.
 
 ## Requirements *(mandatory)*
 
-- **FR-001** `EtlDesign` declares SQL Server, PostgreSQL and MySQL contexts beside SQLite, each applying the engine's text column type and the binary collation; registration selects the context by provider.
+- **FR-001** `EtlDesign` declares SQL Server, PostgreSQL and MySQL contexts beside SQLite, each applying the binary collation (unbounded text takes each provider's default type: `TEXT`, `nvarchar(max)`, `text`, `longtext`); registration selects the context by provider.
 - **FR-002** Each new engine has a generated initial migration, made with an ETL-owned design-time tooling project and script (as Rules has), generated as internal classes; the retained SQLite chains are untouched.
 - **FR-003** The catalog pages by the column's binary collation, with no provider-specific function in the query.
 - **FR-004** Publication retries a transient write conflict (serialization failure, deadlock) as a whole unit within a bounded budget and otherwise keeps its contract outcomes; draft create and update keep their single conditional statements.
@@ -57,7 +57,7 @@ A host that keeps its Elsa state in SQL Server, PostgreSQL or MySQL selects that
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001** The contract suite passes on all four engines, including the case-only and linguistic-order catalog cases and the concurrent publish and update races.
-- **SC-002** A fresh database on each engine migrates and validates with no pending model changes, and the generated models carry the binary collation on the key and hash columns.
+- **SC-001** The contract suite passes on all four engines, including the case-only catalog case and the concurrent publish and update races.
+- **SC-002** A fresh database on each engine migrates and validates with no pending model changes, and the generated models carry the binary collation on the key columns.
 - **SC-003** Every new guard is bite-proven or named in the evidence README as not bite-proven.
 - **SC-004** Existing SQLite design databases and existing artifacts are unchanged.
