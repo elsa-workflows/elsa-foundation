@@ -367,3 +367,19 @@ class BrowserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VersionSeedCanaryTests(unittest.TestCase):
+    """Witness dbe305ff2: the canary must be in every seeded version input, never in the batch seed."""
+
+    def test_every_seeded_version_text_carries_the_canary(self):
+        from owner_resources import version_states
+        write = {"activityVersionId": "write-v1"}
+        flowchart = {"activityVersionId": "flow-v1", "activityTypeKey": "Elsa.Flowchart",
+                     "authoringTemplate": {"structure": {"kind": "elsa.flowchart.structure"}},
+                     "containerStructure": {"mode": "flowchart", "slots": [{"property": "activities", "cardinality": "many"}],
+                                            "initialPayload": {"activities": [], "connections": []}}}
+        states = version_states(write, flowchart, "vcanary-0123456789abcdef")
+        texts = [leaf["inputs"][0]["value"]["value"] for state in states for leaf in state["rootActivity"]["structure"]["payload"]["activities"]]
+        self.assertTrue(texts)
+        self.assertTrue(all("vcanary-0123456789abcdef" in text for text in texts))

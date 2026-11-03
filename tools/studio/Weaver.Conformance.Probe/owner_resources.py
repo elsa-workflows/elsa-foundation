@@ -152,7 +152,7 @@ def seed_batch_workflow(http, output, *, explain=False):
     check(container["kind"] == "elsa.flowchart.structure" and container["mode"] == "flowchart", "The actual Flowchart is not a flowchart container")
     def leaf(node_id, text):
         return {"nodeId": node_id, "activityVersionId": write["activityVersionId"], "outputs": [], "structure": None,
-                "inputs": [{"referenceKey": "text", "value": {"value": (text + " " + canary).strip(), "expressionType": "Literal"}}]}
+                "inputs": [{"referenceKey": "text", "value": {"value": text, "expressionType": "Literal"}}]}
     def flow(node_id, children, connections, start):
         payload = json.loads(json.dumps(container["payload"]))
         payload.update(activities=children, connections=connections, startNodeId=start)
@@ -247,7 +247,7 @@ def version_states(write, flowchart, canary=""):
     n = VERSION_NODES
     def leaf(node_id, text):
         return {"nodeId": node_id, "activityVersionId": write["activityVersionId"], "outputs": [], "structure": None,
-                "inputs": [{"referenceKey": "text", "value": {"value": text, "expressionType": "Literal"}}]}
+                "inputs": [{"referenceKey": "text", "value": {"value": (text + " " + canary).strip(), "expressionType": "Literal"}}]}
     def connection(source, target):
         return {"id": source + "-" + target, "source": {"nodeId": source, "port": "Done"}, "target": {"nodeId": target}}
     def state(children, connections):
