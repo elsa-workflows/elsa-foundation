@@ -22,10 +22,10 @@ This repository has two planning systems. They are kept separate on purpose.
 
 | | Initiatives (this page) | [Program goals](../program-goals/README.md) |
 |---|---|---|
-| Led by | People: a coordinator and the initiative's approvers | Agents, on behalf of a steward |
+| Led by | A coordinator and the initiative's approvers | A steward, with human or agent execution |
 | Answers | Which architecture decisions and specs an objective needs | Which mid-term buckets of work are active |
 | Lives in | One issue labelled `initiative`, its ADR PRs and its specs | `docs/program-goals/` and `type:program` issues |
-| A decision is | An ADR PR approved by every approver named in its approval plan | As each program records it |
+| A decision is | An ADR PR agreed under its approval plan | As each program records it |
 
 The two systems keep distinct responsibilities over **shared** specs, issues and PRs: an initiative decides what an
 objective needs, a program goal governs the delivery work it takes on. Moving work from human to agent execution does
@@ -38,18 +38,21 @@ and [triage](../agents/triage-labels.md).
 **Boundary rule.** Work belongs to an initiative when its issue is a sub-issue of an `initiative`-labelled issue (at
 any depth), or when the issue or PR says `Part of #N` and #N is that issue or one of its sub-issues. A PR belongs to it
 through the issues it closes or its `Part of #N`. Such work follows this page. All other work follows the existing
-rules and is never pulled into an initiative. The initiative skill does not change program
-goal files. The program-goal skills do not add initiative work to goal buckets.
+rules and is never pulled into an initiative. The initiative skill does not change program-goal files.
+Initiative planning and coordination stay outside program-goal buckets and drift review; delivery taken on by a
+linked program goal belongs in that goal's tracking and drift review, even when it is also linked to the initiative.
 
-**The bridge.** If someone wants agents to build an initiative's specs, they define a program goal that delivers those
-specs and link it from the spec's row on the initiative board. The initiative itself never depends on a program
-goal. The program goal governs the delivery work; the initiative only tracks the spec's row and links. The
-coordinator's sync sees the resulting PRs and closed issues and reviews them like any other linked work.
+**The bridge.** When a program goal takes on delivery of an initiative's specs, link the existing goal from the spec's
+row on the initiative board. Define a new goal only when the delivery work needs a new mid-term bucket, following
+the existing program-goal rules. The initiative governs architecture and spec agreement; the linked goal governs
+delivery. Both can reference the same specs, issues and PRs. The initiative tracks their status and links without
+duplicating the delivery backlog. Human or agent execution does not by itself require a program goal or a new one.
 
 ## Roles
 
-One person can hold several roles. Anyone can contribute: a session infers what someone is doing (drafting or
-reviewing an ADR is technical-architect work) and refuses nothing. Contribution never makes someone an approver.
+One person can hold several roles. Anyone can contribute, and a session helps with permitted work without requiring
+a formal role. Actions reserved for the coordinator, a recorded delegate or an approver require that role.
+Contribution never makes someone an approver.
 
 | Role | How it is known | What it does |
 |---|---|---|
@@ -71,9 +74,8 @@ The board states which phase the initiative is in.
    Analyses lead to discussion and, in the end, to decisions.
 2. **Specs.** A spec may be drafted at any time, as long as the draft says it is **provisional**. Its formal approval
    needs the ADRs it depends on to be agreed. Each spec row on the board names the ADRs and decisions it needs.
-3. **Implementation.** Production implementation needs the approved spec and the decisions it applies. A spec is
-   approved by the same rule as an ADR: every approver in its approval plan, other than its author, approves the
-   spec's PR.
+3. **Implementation.** Production implementation needs the approved spec and the decisions it applies. ADR and spec
+   PRs both follow the final-commit agreement rule below.
 
 An initiative may agree stricter rules; #3052, for example, agreed that all specs are defined before implementation
 starts. Such a rule holds until the approvers change it. A bounded research experiment is allowed in any phase, but it
@@ -90,12 +92,15 @@ No activation by a program goal is needed for any phase.
   analysis for discussion is not authorization to publish an ADR from it.
 - Analyses inside an initiative are not filed as spike issues, and are not posted on the initiative issue.
 
-**Approval plan.** Every ADR or spec PR names its required approvers, and the capacity each acts in, in its
+**Approval plan.** Every ADR or spec PR names its required human approvers, and the capacity each acts in, in its
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
 this page, needs an authorized role, a scope, a reason and a record on the PR.
 
-**Review.** The PR requests every approver in its plan, so GitHub notifies them at once. Small points are settled in
-PR comments and reviews. A topic that cannot be settled in comments goes to a meeting.
+**Review.** The PR requests every non-author approver in its plan, so GitHub notifies them at once. Small points are
+settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting. If disagreement
+persists or an approver is unavailable, the coordinator brings the question to the role authorized under project
+governance to resolve it or arrange a delegation. Record any authorized change in the approval plan. Silence is
+never approval, and the coordinator cannot remove an approver merely to unblock a PR.
 
 **Reconciliation.** A review or a position comment that raises more than a couple of points gets a reconciliation: a
 table that answers every point.
@@ -110,7 +115,7 @@ table that answers every point.
   - **differs:** the positions, the current text, and the answer or options.
 - **Every point the PR adopts** also gets a short reply on its review thread, naming the commit.
 - **A reconciliation never makes anything agreed.** It says what each PR's text will be. Agreement still follows the
-  rule below: every approver in the PR's approval plan approves the PR.
+  final-commit approval rule below.
 - **Open rows reach the board:** a clarification names who must answer in *Who is needed where*, and a "differs" that
   comments do not settle becomes a meeting topic.
 
@@ -122,31 +127,48 @@ table that answers every point.
 | 3 | Outcome API | #1240 | differs | Setters only until a case shows they cannot express it | @drafter |
 ```
 
-**Agreement.** A decision is agreed when every approver in the PR's approval plan, other than the PR's author, has
-approved it (GitHub does not let authors approve their own PR). The coordinator then:
-- commits `Status: accepted (<date>)` on the PR branch, or asks the author to;
-- marks the decision agreed on the board;
-- marks the PR ready, so it is merged through the normal [merge path](merging.md).
+**Agreement (ADRs and specs).** Both kinds of PR stay drafts until the following steps are complete:
+1. Once review has settled the text, the **author** commits the final record: `Status: accepted (<date>)` for an ADR,
+   or `**Status**: Approved` for an initial spec approval. Later spec changes retain the appropriate
+   [lifecycle status](../reference/spec-lifecycle.md), including `Implemented` when delivery finishes. An approving
+   coordinator asks the author to make this edit instead of committing to the PR. A status line alone is not agreement.
+2. Every human approver in the approval plan who is not an author approves the **current head commit**, including
+   that status edit. Earlier approvals do not count. Only a current, non-dismissed `APPROVED` review on that commit
+   counts; a later changes-requested review must be resolved by a fresh approval.
+3. An author includes anyone who committed to the PR, as the normal merge rules require. A human author named in
+   the approval plan records their agreement in a PR comment naming the final commit, without self-approving.
+   A bot's publishing identity or approval never substitutes for a human approver's agreement.
+4. The coordinator records the agreed commit on the board and marks the PR ready for the normal
+   [merge path](merging.md). Code Review still checks the final commit and its CI; it does not decide the architecture.
 
-An ADR PR stays a draft until then, so it cannot be merged before everyone has approved. Agreeing the architecture and
-merging the PR are separate steps: agreement is decided here, the merge follows the merge path.
+Any new commit, including another status-only edit, requires fresh approvals and author confirmations on that head.
+A changed approval plan also needs fresh agreement under that plan. Keep the PR in draft, or return it to draft,
+until that agreement is complete. If an already agreed PR changes, mark its board row in review again; dependent
+work may use only the version actually agreed. Agreement and merge remain separate steps.
 
-**Scope.** Every ADR, and every ADR amendment, whose topic is on an initiative's board is agreed through that
-initiative, whoever writes it, including an architect working outside the board. Its PR is opened as a draft, says
-`Part of #N`, and requests every other approver. An approval by Code Review or another bot checks the change, not the
-decision, and never counts as agreement.
+**Scope.** Every ADR, ADR amendment and spec whose topic is on an initiative's board is agreed through that initiative,
+whoever writes it, including an architect working outside the board. Its PR is opened as a draft, says `Part of #N`,
+and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
+PR closes. Missing a link does not exempt a board topic: add the link and apply the same gate. Bot review checks
+the change, never architectural agreement. A manual merge follows the same agreement rule.
 
-**An ADR that reached `main` without agreement** is not agreed, whatever its status line says. The coordinator:
+The gate covers proposals and changes to ADR decisions or spec requirements. A delivery PR that only advances a
+spec's lifecycle status links the already agreed spec and follows the normal merge path; it does not reopen the
+architectural agreement. If it also changes decisions or requirements, the agreement gate applies to those changes.
+
+**An ADR or spec that reached `main` without agreement** is not agreed, whatever its status line says. The coordinator:
 - shows it on the board as in review, not agreed;
-- opens a draft review PR that records in the ADR that it is not yet agreed and links the PR, with any amendment
+- opens a draft review PR that records in the ADR or spec that it is not yet agreed and links the PR, with any amendment
   the review proposes;
-- requests every other approver on that PR, which then follows the agreement rule above.
+- requests every non-author approver on that PR, which then follows the agreement rule above.
 
-Nothing may build on such an ADR (a spec, or another ADR's decision) until its review PR is agreed.
+Nothing may build on the unagreed ADR or spec until its review PR is agreed. If the session cannot open that PR,
+record the blocker and who must act; dependent work stays blocked.
 
 **Reporting work.** Whoever does work for an initiative reports it where it happened (the PR, a review request) and then
 posts one short **pointer comment** on the initiative. Everyone does this, including the coordinator when working as
-an architect. The source record stays visible before the next sync. The pointer looks like this:
+an architect. Link the source discussion instead of copying it; the board is not a second delivery backlog.
+The source record stays visible before the next sync. The pointer looks like this:
 
 ```markdown
 **Initiative update** (A-6, ADR 0094)
@@ -158,9 +180,10 @@ an architect. The source record stays visible before the next sync. The pointer 
 **Sync.** The coordinator's sync handles every pointer that is not yet handled:
 - it checks that the work fits the plan, and updates the board;
 - it marks the pointer handled with a 👍 reaction from the coordinator or the recorded delegate;
-- it applies agreement to PRs that every other approver in their plan has approved;
-- it lists the changes to `docs/adr/` merged since the last sync, and flags any in the initiative's scope that were
-  merged without every approver's approval (see *Scope*);
+- it applies the agreement rule to the current head and approval plan of each ADR or spec PR;
+- it lists the ADR and spec changes merged since the last sync, distinguishes lifecycle-only delivery updates from
+  changed decisions or requirements, and opens the required draft review PR for any in scope that needed agreement
+  but merged without it (see *Scope*), keeping dependent work blocked;
 - it sets the "Last synced" line on the board;
 - it reports who is blocking whom, and offers reminders and meeting topics, without sending them;
 - it also reads the linked PRs and issues, so that work reported without a pointer (for example a PR approved in the
@@ -235,6 +258,6 @@ picked up), and a History list of links to meeting notes. -->
 The ADRs table shows which decisions each ADR records, so the Decisions table needs no ADR column.
 
 Status values for decisions:
-- **agreed**: every approver in the ADR PR's plan, other than the author, approved it;
+- **agreed**: the recorded ADR commit meets the agreement rule above;
 - **in review**: an ADR PR is open;
 - **in analysis**: an analysis is open and no ADR PR exists yet.
