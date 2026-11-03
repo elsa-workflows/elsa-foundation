@@ -85,6 +85,12 @@ export interface EtlPipelineV2 {
   filters: EtlFilter[];
   limits: EtlConnectorLimits;
   http: EtlHttpPolicy;
+  /** Omitted for a finite pipeline; present when the HTTP shards poll until completion or cancellation. */
+  continuous?: EtlContinuousRunPolicy;
+}
+
+export interface EtlContinuousRunPolicy {
+  pollIntervalSeconds: number;
 }
 
 export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource;
@@ -351,6 +357,9 @@ export interface EtlRunConnectorView {
   errorKind: string;
   acceptedMainEffects: number;
   acceptedErrorEffects: number;
+  /** Absent on hosts that predate continuous runs, which only run finitely. */
+  mode?: "finite" | "continuous";
+  completionRequestedAt?: string | null;
 }
 
 export interface EtlRunDetailView extends EtlRunSummaryView {
@@ -390,6 +399,8 @@ export interface EtlRunConnectorPartitionView {
   owedBatch: EtlRunConnectorOwedView | null;
   acceptedMainEffects: number;
   acceptedErrorEffects: number;
+  /** A caught-up continuous shard's next poll; null or absent for retry waits and finite runs. */
+  nextPollAt?: string | null;
 }
 
 export interface EtlRunFileProgressView {
@@ -432,6 +443,10 @@ export interface EtlRunEffectView {
 export interface EtlRunCancellationView {
   cancellationAccepted: boolean;
   terminalResult: EtlRunTerminalResultView;
+}
+
+export interface EtlRunCompletionView {
+  result: "accepted" | "alreadyRequested" | "terminal" | "notContinuous";
 }
 
 export type EtlRunPageRequest = EtlPageRequest;

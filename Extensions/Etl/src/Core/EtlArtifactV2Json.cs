@@ -164,6 +164,13 @@ public static class EtlArtifactV2Json
 
     private static void MarkSharedModelPropertiesRequired(JsonTypeInfo typeInfo)
     {
+        if (typeInfo.Type == typeof(EtlPipelineV2))
+        {
+            var continuousName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlPipelineV2.Continuous));
+            var continuous = typeInfo.Properties.Single(property => property.Name == continuousName);
+            continuous.ShouldSerialize = static (_, value) => value is not null;
+        }
+
         if (typeInfo.Type == typeof(EtlConnectorLimits))
         {
             var retainedOutputBudgetName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlConnectorLimits.MaxRetainedOutputBytes));

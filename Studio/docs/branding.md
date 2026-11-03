@@ -98,8 +98,8 @@ Layout, palette and artwork are independent:
 
 | Setting | Choices |
 |---|---|
-| Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image) |
-| Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green) |
+| Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
+| Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
 | Artwork | `unfolding-map` (default); see the choices below |
 
 The ten artwork directions are available independently of the selected layout and palette:
@@ -144,8 +144,50 @@ belong in real text. A failed image leaves readable copy on a solid surface and 
 Names/copy/URLs are encoded. Asset and resource URLs accept root-relative paths or HTTPS; HTTP loopback
 is available for local development. Executable/data/protocol-relative URLs are rejected. Rejected configured Studio resource links are hidden; an omitted setting keeps the default product resource link. Serve SVG only
 from a trusted deployment source. Supply your own privacy/help endpoint if you configure a local link.
-Dark appearance follows the OS and high contrast removes the artwork; the form needs no JavaScript.
+Dark appearance follows the OS except for the light-only Field Guide palette, and high contrast removes the artwork; the form needs no JavaScript.
 External OIDC login pages remain owned and themed by their identity provider.
+
+## Field Guide login theme
+
+The Field Guide presentation matches the Elsa 4 brochure: warm paper, sage/graphite ink,
+serif headings, the drawn Elsa logo, and an uncropped pencil/watercolor capability plate.
+Configure the **identity backend**, where the credential page is rendered:
+
+```json
+{
+  "Identity": {
+    "Login": {
+      "Layout": "field-guide",
+      "Palette": "field-guide",
+      "Artwork": "field-guide",
+      "Tagline": "Workflows, decisions, data, and agents.",
+      "Description": "A modular .NET foundation, built in the open."
+    }
+  }
+}
+```
+
+The equivalent environment variables are `Identity__Login__Layout=field-guide`,
+`Identity__Login__Palette=field-guide`, and `Identity__Login__Artwork=field-guide`.
+For code-based composition, configure the same properties on `LoginPageOptions`.
+Existing default copy remains configurable through `Tagline`, `Description`, and `ProductName`.
+
+The three choices stay independent. The layout places the form on the left and the complete
+illustration on the right; on mobile, the form comes first and the illustration follows it.
+The Field Guide palette stays **light**, including when the OS prefers dark appearance.
+Other palettes retain their existing OS-driven appearance. High contrast hides decorative
+artwork while retaining the form and visible controls. There is no animation or JavaScript
+requirement on the credential page.
+
+The layout's default logo is the locally embedded `field-guide-logo.png`; `LogoUrl` still
+overrides it. The `field-guide` artwork is served as `field-guide.jpg` through the existing
+anonymous login-asset endpoint. Both resources follow the request's shell prefix or proxy
+PathBase. `ImageUrl` can replace the illustration, and the Field Guide layout contains the
+whole image rather than cropping it. The original brochure art is decorative; instructions
+and labels remain real text. A missing image leaves the form usable.
+
+This is an additional login appearance. It does not select a Studio workspace theme, change
+existing login defaults, or theme an external identity provider's own login page.
 
 ## Replace login presentation
 
