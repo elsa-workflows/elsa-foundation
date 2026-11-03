@@ -173,8 +173,9 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
     /// <summary>
     /// Hands off every execution this member still holds, in every persistence scope: passivating each
     /// local actor, which makes an in-flight drain yield at its next step, releasing its placement lease, and making its
-    /// unacknowledged transport items visible. A step that outlasts the lease duration is left as a crash would be; its
-    /// leases are reclaimed once the host id is departed.
+    /// unacknowledged transport items visible. If a single step outlasts the lease duration, the passivation gives up:
+    /// the drain carries on after that step on this member, its placement lapses, and fencing refuses the old drain's
+    /// next commit once another member takes the execution over. Its leases are reclaimed once the host id is departed.
     /// </summary>
     public async ValueTask<int> HandOffAllAsync(string reason, CancellationToken cancellationToken = default)
     {
@@ -238,7 +239,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         }
         // `bounded` links the caller's token with its own lease-duration timer, so a caller cancellation and the timer
         // both surface as OperationCanceledException on `bounded.Token`; only the timer firing is a hand-off failure to
-        // swallow, as HandOffAllAsync says a step that outlasts the lease is left as a crash would be. A caller
+        // swallow: HandOffAllAsync documents that a step outlasting the lease leaves the drain to fencing. A caller
         // cancellation must still propagate.
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
