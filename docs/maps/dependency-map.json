@@ -1447,6 +1447,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Design.Persistence.Core",
           "path": "Essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
         },
@@ -23667,6 +23672,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Design.Core",
+          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Design.Core",
           "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
         },
@@ -24185,6 +24195,11 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Api",
+          "path": "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Events",
