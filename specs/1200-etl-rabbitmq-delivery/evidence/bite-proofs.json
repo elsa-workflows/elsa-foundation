@@ -564,6 +564,62 @@
    "original": "        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq => 2,",
    "mutated_text": "        EtlConnectorKind.RabbitMq => 1,\n        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql => 2,",
    "sourceRevision": "d9fafbd3c6ab4ccb23401bab6b865af87da928fa"
+  },
+  {
+   "mutation": "driver-limit-strips-quoted-names",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_virtual_host_at_its_connection_limit",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_virtual_host_at_its_connection_limit_yields_and_one_the_user_may_not_open_is_rejected"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "LimitReached.IsMatch(QuotedName.Replace(reason.ReplyText, \"''\"))",
+   "mutated_text": "LimitReached.IsMatch(reason.ReplyText)",
+   "sourceRevision": "3e7a85bf093925da56d3a56145f34b7d42666e0c"
+  },
+  {
+   "mutation": "driver-timeout-transient",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~resource_alarm",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_broker_under_a_resource_alarm_yields_and_holds_at_most_one_blocked_connection_until_it_unblocks"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "PublishException or IOException or SocketException or TimeoutException or OperationCanceledException",
+   "mutated_text": "PublishException or IOException or SocketException or OperationCanceledException",
+   "sourceRevision": "3e7a85bf093925da56d3a56145f34b7d42666e0c"
+  },
+  {
+   "mutation": "driver-hold-one-per-target",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~resource_alarm",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_broker_under_a_resource_alarm_yields_and_holds_at_most_one_blocked_connection_until_it_unblocks"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (_blocked.ContainsKey(connectionString))\n",
+   "mutated_text": "        if (_blocked.ContainsKey(connectionString + \"#\"))\n",
+   "sourceRevision": "3e7a85bf093925da56d3a56145f34b7d42666e0c"
+  },
+  {
+   "mutation": "driver-blocked-notice-ends-confirm",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~resource_alarm",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqProviderTests.A_broker_under_a_resource_alarm_yields_and_holds_at_most_one_blocked_connection_until_it_unblocks"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            _ = Task.Run(blocked.Cancel);",
+   "mutated_text": "            _ = Task.CompletedTask;",
+   "sourceRevision": "3e7a85bf093925da56d3a56145f34b7d42666e0c"
   }
  ]
 }
