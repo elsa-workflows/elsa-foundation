@@ -111,6 +111,12 @@ Required checks must still pass on the closeout's independently reviewed exact h
 head check, human hold or protection bypass. Original implementation full-tier/native-provider CI
 remains green; no failed check has been waived.
 
+GitHub's normal merge endpoint rejected the initial closeout attempt with “2 of 3 required status
+checks are expected”, despite per-head APIs reporting Build & test/Generated maps green from the
+draft run and Full tier green from the ready run. The final ready-PR push reruns all three together;
+its checked results and normal protected merge are recorded on the PR. The rejected attempt is
+retained as evidence, and neither an administrator override nor alternate write identity is used.
+
 [Descendant-main push CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41593751946)
 is monitored as additional evidence. Its status and the healthy-main inspection are recorded in
 [closeout PR #3706](https://github.com/elsa-workflows/elsa-foundation/pull/3706)'s gate-evidence comment.
