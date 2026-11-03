@@ -89,8 +89,11 @@ cases on both actual adapters against the packaged EF store. M2 #3431 is verifie
 [Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is complete under
 [spec1193](../../specs/1193-weaver-workflow-journeys/spec.md), which is now Implemented. It was delivered
 as seven slices, #3671, #3704, #3715, #3722, #3727, #3732 and #3736; the last merged as `af947767a` and
-closed #3442. Each slice merged under Sipke's standing self-review authorization while Code Review was
-unavailable. Each carried independent package witness evidence on both actual adapters, recorded on its PR.
+closed #3442. Code Review was unavailable, so each slice merged after a converged self-review loop under the
+owner's [standing delivery and merge authorization of 3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669).
+That authorization covers this Program's PRs only; the 1 November paragraph's Code Review route
+otherwise stands. Each slice carried independent package witness evidence on both actual adapters,
+recorded on its PR. M3 #3432 closes once main's CI qualifies `af947767a`, which is recorded on #3432.
 [Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
 implementation leaf, under [spec1203](../../specs/1203-weaver-module-support/spec.md).
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
@@ -136,11 +139,12 @@ no blanket administration authority and exposes no secret values or unrelated da
 support is valid where a domain does not support mutation, with that limit explicit in the matrix.
 
 [Owner amendment, 3 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6612627295):
-the integrator decides which privileges Weaver has, through configuration. A host policy of the Agent
-module defines three privilege classes: administrative, irrecoverable and activation. Each is off by
-default, and the Workbench enables all three. Where a host enables the activation class, Weaver may
-apply feature selections; package promotion and package activation stay outside scope. M4 also adds a
-generic outcome for an approved action that persists nothing. Spec 1203 records how these apply.
+the owner's answers are that the integrator decides through configuration which privileges Weaver has,
+including irrecoverable deletes and revokes and feature selection apply; that the gate for Admin-risk effects
+is off by default and always on in the Workbench; and that M4 adds a generic outcome for an approved action
+that persists nothing. Spec 1203 applies these as host-configured privilege classes. That class design is
+the spec's Program-authority choice, open to owner review. Package promotion and package activation stay
+outside scope.
 
 Approval, denial, effective server autonomy, cancellation, disconnect/reconnect, retry, duplicate
 delivery, restart and module removal need declared supported outcomes. Persist accepted decisions,
