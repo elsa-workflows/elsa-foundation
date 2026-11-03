@@ -79,6 +79,18 @@ public sealed class RuntimeAdmissionShedResponseTests
     }
 
     [Fact]
+    public async Task Dispatch_stimulus_returns_200_when_a_keyed_replay_skips_a_duplicate_beside_a_refused_start()
+    {
+        // The first call started one workflow and refused the other; its replay must not turn into a client error.
+        var skipped = new StimulusStartView("binding-1", "artifact-1", nameof(StimulusStartStatus.SkippedDuplicate), null);
+        var refused = new StimulusStartView("binding-2", "artifact-2", nameof(StimulusStartStatus.Refused), null, "runtime.input.missing-required");
+        await using var host = await RuntimeApiHost.StartAsync(ShedView(null), new DispatchStimulusResponse(0, 1, 0, [skipped, refused], [], RefusedStartCount: 1));
+        using var response = await host.Client.PostAsJsonAsync("/runtime/workflows/stimuli", new { stimulusType = "t", stimulusHash = "h" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Dispatch_stimulus_returns_200_when_a_start_went_through_beside_a_shed_one()
     {
         var started = new StimulusStartView("binding-1", "artifact-1", nameof(StimulusStartStatus.Started), "wfexec-1");

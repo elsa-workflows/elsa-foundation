@@ -330,7 +330,7 @@ public sealed class HttpEndpointMiddleware(
 
         // Every matched start was refused by its workflow's input contract (#3728) and nothing was resumed: the route is
         // live, so 404 would be wrong, and the same request would be refused again, so it is a client error.
-        if (result.StartedCount == 0 && result.ResumedCount == 0 && result.RefusedStartCount > 0)
+        if (result.RefusedStartCount > 0 && result.RefusedStartCount == result.Starts.Count && result.ResumedCount == 0)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;

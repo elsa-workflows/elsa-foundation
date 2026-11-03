@@ -36,7 +36,7 @@ public sealed class Endpoint(IStimulusDispatchService stimuli) : ApiEndpointWith
 
         // Every matched start was refused by its workflow's input contract (#3728) and nothing was resumed: the same
         // request would be refused again, so it is a client error. The body names each refusal's reason code.
-        if (response.RefusedStartCount > 0 && response.StartedCount == 0 && response.ResumedCount == 0)
+        if (response.RefusedStartCount > 0 && response.RefusedStartCount == response.Starts.Count && response.ResumedCount == 0)
             return EndpointResult.Status(StatusCodes.Status400BadRequest, response);
 
         return EndpointResult.Status(StatusCodes.Status200OK, response);
