@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: [Feature #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442), M3 ([#3432](https://github.com/elsa-workflows/elsa-foundation/issues/3432)) of [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428). The owner authorizes autonomous delivery of the six acceptance criteria, the 30 October reusable-workflow-template and workflow-library refinements, and the two "Workflow authorization read-path follow-through" items recorded on the issue. Prerequisite #3440 is verified Done ([closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6570028483)); #3441 is closed as completed under [spec 1189](../1189-weaver-recovery/spec.md).
 
@@ -454,3 +454,37 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
 | --- | --- |
 | Reduce duplicate GET authorization and store reads while keeping the visibility, organization, actor and tenant guarantees | FR-002; story 5; SC-006 |
 | Explicit fail-closed behavior for a replacement authorizer's `WorkflowDefinitionAuthorizationException`: unavailable versus denied, without causes | FR-001; story 5; SC-006 |
+
+### Acceptance evidence
+
+Evidence categories:
+- **C**: deterministic component tests on the real default services, the EF design store and the Studio client (Vitest and Playwright).
+- **P**: deterministic provider-protocol native evidence. It uses the actual Copilot (delegated) and Anthropic (host-driven) adapters, with packaged consumers on the packaged EF store over SQLite, and drives each journey through the normal host in a real browser (`tools/studio/Weaver.Conformance.Probe`).
+- **Live**: live-provider evidence. None is claimed.
+
+The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The native proofs ran on `f0b244f51`, slice G's integrated head with slices E and F and `main`. Commits after it change only documentation and this record.
+
+| #3442 item | Evidence |
+| --- | --- |
+| Real authorized host catalogs, exact versions and revisions, and domain APIs | C: `ActivityAuthoringCatalogContractTests`, `WorkflowTruthSeamTests`, `WorkflowAgentNativeAuthorityTests`, `WorkflowVersionReaderTests`, `WorkflowExecutableInspectionTests`, `WorkflowRunInspectionTests`, `StudioModuleManifestProviderTests`. P: truth-seam, inspection and run journeys (`test_truth_seam_journeys.py`, `test_inspection_journeys.py`, `test_run_journeys.py`) |
+| Lists, filters and selections; new workflow intent; active drafts; selected activities and expressions; versions; Executables; exact Runs | C: `WorkflowLibraryAgentTests`, `WorkflowVersionAgentTests`, `WorkflowExecutableAgentTests`, `WorkflowRunAgentTests`, `workflowLibraryAgent.test.tsx`, `workflowInspectionAgent.test.tsx`, `workflowExplainContext.test.tsx`, `workflowContextSize.test.tsx`. P: library, inspection and run journeys |
+| Explain, troubleshoot and reviewed edits against current data; clarification or refusal | C: `WorkflowExplainContextTests`, `WorkflowOperationBatchTests`, `workflowAgent.test.tsx`. P: explain and batch journeys (`test_explain_journeys.py`, `test_batch_journeys.py`), including the missing-activity, undeclared-property, ambiguous-target and credential-literal controls |
+| Atomic visible batches, validation, dirty state, whole-batch Undo; explicit save and publish | C: `WorkflowBatchConformanceTests`, `workflowBatchConformance.test.ts`, `workflowGraphOperationBatch.test.ts`, `workflowOperationBatchEditor.test.tsx`, `workflowEditorSaveCommands.test.tsx`, `workflowPublicationOperations.test.tsx`. P: batch journeys (apply, Undo, autosave hold) |
+| Nested, parallel and reusable scope; stale revisions; historical and published resources; denied permissions; unavailable or redacted data | C: `WorkflowOperationBatchTests`, `WorkflowVersionAgentTests`, `WorkflowRunAgentTests` (withheld sensitive values and incident messages). P: stale-revision, published, historical, denied and redaction-canary controls in every journey family |
+| Normal-host end-to-end effects, regressions and the provider evidence boundary | P: the complete package witness below. C: the composed Studio suite below. Live: none |
+| Deployment shapes (SC-009) | C: `WorkflowDesignOnlyHostTests`, `WorkflowRuntimeOnlyHostTests`, `WorkflowRuntimeOnlyCompositionTests`, `WorkflowDeploymentShapeTests`. P: per-shape journeys |
+
+| 30 October refinements | Evidence |
+| --- | --- |
+| Reusable Workflow Templates | C: `WorkflowLibraryCommandsTests`, `TemplateDesignUpgradeTests`, `WorkflowsDesignRetainedMigrationTests`, `workflowDefinitions.test.tsx`. P: template journeys in `test_library_journeys.py` |
+| Workflow library filters, favorites, sort, views, ownership, revisions and native authority | C: `WorkflowLibraryApiContractTests`, `EfWorkflowDesignPersistenceTests.LibraryOperationKeys`, `WorkflowLibraryNativeWitness`, `EfWorkflowDesignNativeProviderSmokeTests`. P: library journeys, including the dropped-response operation-key replay (SC-008) |
+
+| Workflow authorization read-path follow-through | Evidence |
+| --- | --- |
+| Fewer duplicate GET authorization and store reads | C: `DefinitionReadAuthorizationTests` (counted permission checks, store reads and organization checks) |
+| Fail-closed replacement authorizer: unavailable versus denied | C: `WorkflowAuthorizationUnavailableTests`, `AgentOwnerUnavailableTests`, `AgentContextOwnerUnavailableTests`, `AgentRetainedOutcomeAdmissionTests`, `workflow-authorization-unavailable.spec.ts`. P: `test_authorization_journeys.py` on both adapters |
+
+Final-head proofs:
+- **Complete package witness:** 107 of 107 cases, no gaps, `independentPackageWitness: true`, report SHA-256 `2474e1450f573f64488d94099179a299c32bcb630db25520bff45ff3fe6c0e2a`. The attempt on `2cfeced8f` failed because a feature apply's shell reload raced the configuration file watcher; `ShellReloader` now retries that CShells refusal, at most three attempts in all.
+- **Composed Studio suite:** 948 tests: 942 passed, 6 skipped, 0 failed, 0 flaky.
+- **Required CI:** `Build & test`, `Generated maps fresh` and `Full tier` green on the closing PR's merged head, including CI's own independent package witness.
