@@ -271,8 +271,9 @@ internal sealed class EfEtlDefinitionStore(
         // the server already aborted could not.
         catch (DbUpdateException exception) when (!EfRelationalExceptionClassifier.IsWriteConflict(exception, EfWriteConflict.Transient))
         {
-            await transaction.RollbackAsync(cancellationToken);
+            // Clear first: an exception from the rollback below leaves this catch without reaching the one that clears.
             dbContext.ChangeTracker.Clear();
+            await transaction.RollbackAsync(cancellationToken);
             var published = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
             if (published is not null)
                 return ExistingPublicationResult(published, scope, definitionId, validated);

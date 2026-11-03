@@ -87,6 +87,42 @@ public sealed class EtlDefinitionStoreTests : EtlDefinitionStoreContract
             (await store.PublishAsync(scope, "orders", created.Draft!.Revision, Compile("orders", 1, pipeline))).Status);
     }
 
+    [Fact]
+    public async Task A_publication_whose_rollback_throws_leaves_nothing_for_a_later_save_to_publish()
+    {
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var pipeline = EtlTestPipelines.Create();
+        using var cancellation = new CancellationTokenSource();
+        // The caller's token is cancelled while the refused insert fails, so the rollback that follows throws.
+        await using var context = database.CreateContext(new CancelOnCommandFailure(cancellation));
+        var store = Store(context);
+        var created = await store.CreateDraftAsync(scope, "orders", pipeline);
+        await context.Database.ExecuteSqlRawAsync("""
+            CREATE TRIGGER refuse_publication_and_cancel BEFORE INSERT ON elsa_etl_published_artifacts
+            BEGIN SELECT RAISE(ABORT, 'fixture storage refusal'); END;
+            """);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.PublishAsync(scope, "orders", created.Draft!.Revision, Compile("orders", 1, pipeline), cancellation.Token));
+        await context.Database.ExecuteSqlRawAsync("DROP TRIGGER refuse_publication_and_cancel");
+        Assert.Equal(EtlDefinitionWriteStatus.Created, (await store.CreateDraftAsync(scope, "unrelated", pipeline)).Status);
+
+        Assert.Null(await store.FindPublishedAsync(scope, "orders", 1));
+        Assert.Equal(EtlPublicationStatus.Published,
+            (await store.PublishAsync(scope, "orders", created.Draft!.Revision, Compile("orders", 1, pipeline))).Status);
+    }
+
+    /// <summary>Cancels a token when a command fails, as a caller giving up while the store handles the failure.</summary>
+    private sealed class CancelOnCommandFailure(CancellationTokenSource cancellation) : DbCommandInterceptor
+    {
+        public override Task CommandFailedAsync(DbCommand command, CommandErrorEventData eventData, CancellationToken cancellationToken = default)
+        {
+            cancellation.Cancel();
+            return Task.CompletedTask;
+        }
+    }
+
     /// <summary>Runs an action once, right after the first UPDATE this context sends.</summary>
     private sealed class AfterFirstUpdate(Func<Task> action) : DbCommandInterceptor
     {
