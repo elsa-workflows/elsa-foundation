@@ -1114,7 +1114,8 @@ export function WorkflowEditor({
     );
     if (next === draft) throw new Error("The reviewed occurrence no longer matches this version change.");
 
-    const saved = await saveDraft(next, "Activity version changed");
+    // `next` derives from the live draft, so it carries the live history line.
+    const saved = await saveDraft(next, "Activity version changed", { lineage: lineageHold.lineage() });
     const savedOccurrence = findActivityOccurrence(saved.state.rootActivity, request.precondition.occurrenceId);
     if (!savedOccurrence || savedOccurrence.activityVersionId !== request.targetVersionId) {
       throw new Error("The server did not confirm the reviewed exact version change.");
@@ -1122,7 +1123,7 @@ export function WorkflowEditor({
     loadDraft(saved);
     setVersionChange(null);
     setAutosavePaused(false);
-  }, [draft, loadDraft, saveDraft, setAutosavePaused]);
+  }, [draft, lineageHold, loadDraft, saveDraft, setAutosavePaused]);
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
   // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The

@@ -335,6 +335,58 @@ describe("reviewed Operation Batch in the editor", () => {
     card.unmount();
   });
 
+  it("an explicit save of a snapshot that is not the live draft, with no declared line, keeps a saved batch saved (BPMN and publication snapshots)", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    // A snapshot the caller captured, then edited before saving: its line is not known to persistence.
+    const snapshot = { ...structuredClone(doc.state.draft!), layout: [...doc.state.draft!.layout, { nodeId: "a", x: 7, y: 7 }] };
+    const saved = await persistence.saveDraft(snapshot, "BPMN publication snapshot saved");
+    flushSync(() => doc.loadDraft(saved));
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result)).persisted).toBe(true);
+    expect(history.lineageHold.isHeld()).toBe(false);
+    await expectHandEditAutosaves();
+  });
+
+  it("the activity version change saves a snapshot derived from the live draft with its line, so the batch is saved and edits autosave", async () => {
+    const result = await run(request(fiveKinds()));
+    expect(history.lineageHold.isHeld()).toBe(true);
+    // As WorkflowEditor's version change: save `next` (derived from the live draft) with the live line, then load it.
+    const next = { ...structuredClone(doc.state.draft!), layout: [...doc.state.draft!.layout, { nodeId: "b", x: 9, y: 9 }] };
+    const saved = await persistence.saveDraft(next, "Activity version changed", { lineage: history.lineageHold.lineage() });
+    flushSync(() => doc.loadDraft(saved));
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result)).persisted).toBe(true);
+    expect(history.lineageHold.isHeld()).toBe(false);
+    await expectHandEditAutosaves();
+  });
+
+  it("an explicit save marks the line it wrote even when a hand edit lands while it is in flight; that edit then autosaves", async () => {
+    const result = await run(request(fiveKinds()));
+    let release!: () => void;
+    vi.mocked(updateDraft).mockImplementationOnce((_context, snapshot) => new Promise(resolve => { release = () => resolve(snapshot); }));
+    const pendingSave = persistence.saveDraft(doc.state.draft!, "Saved");
+    await vi.advanceTimersByTimeAsync(0);
+    // The later edit E, made while the save of B's line is in flight.
+    flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, layout: [...draft!.layout.filter(row => row.nodeId !== "a"), { nodeId: "a", x: 610, y: 610 }] })));
+    release();
+    await pendingSave;
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result)).persisted).toBe(true);
+    expect(history.lineageHold.isHeld()).toBe(false);
+    // E stays unsaved on its own and autosaves as usual: it carries no new batch.
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes + 1);
+    expect(vi.mocked(updateDraft).mock.calls.at(-1)![1].layout).toContainEqual({ nodeId: "a", x: 610, y: 610 });
+  });
+
   it("disables the review card's Undo with a reason after a later edit; designer history stays the path", async () => {
     const result = await run(request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]));
     expect(controller.batch!.state(token(result)).status).toBe("available");
@@ -439,6 +491,14 @@ async function run(invocation: StudioAgentPreparedInvocation) {
   let completion!: Promise<StudioAgentClientExecutionResult>;
   flushSync(() => { completion = controller.execute!(invocation); });
   return completion;
+}
+
+async function expectHandEditAutosaves() {
+  const writes = vi.mocked(updateDraft).mock.calls.length;
+  flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, layout: [...draft!.layout.filter(row => row.nodeId !== "b"), { nodeId: "b", x: 777, y: 777 }] })));
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes + 1);
+  expect(vi.mocked(updateDraft).mock.calls.at(-1)![1].layout).toContainEqual({ nodeId: "b", x: 777, y: 777 });
 }
 
 async function explicitSave() {

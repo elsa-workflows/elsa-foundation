@@ -70,15 +70,21 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     setPersistedDraft(savedDraft);
   }, []);
 
-  const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
+  /**
+   * Saves a snapshot. A caller saving a snapshot it derived from the live draft (not the live draft itself) may declare
+   * the history line it carries in `options.lineage`; without that, the written line is unknown and the batch saved set
+   * is left as it is.
+   */
+  const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string> }) => {
     // Capture when requested, before waiting in the queue. An old save cannot release a newer
     // reviewed edit, even when that old request only starts after the new hold was acquired.
     const requestedReviewGeneration = reviewHoldGenerationRef.current;
     const requestedSignature = getDraftSignature(draftSnapshot);
-    // The line of the state this save writes: the live line's, captured when the save is requested and only when it asks
-    // to save the live draft. A save of an older snapshot writes a state whose line is not known (null).
+    // The line of the state this save writes, captured when the save is requested: the live line's when it saves the live
+    // draft, the caller's declared line for a snapshot it derived from it, and otherwise not known (null).
     const requestedLive = latestDraftRef.current;
-    const writtenLineage = requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
+    const writtenLineage = requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])]
+      : options?.lineage ? [...options.lineage] : null;
     const queuedSave = async () => {
       if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
@@ -94,7 +100,9 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
         if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
-        lineageHoldRef.current?.recordSave(writtenLineage, savedStatus !== "Autosaved" && coversLiveDraft);
+        // An explicit save marks the batches of the line it wrote, even when the author kept editing while it was in flight:
+        // those later edits stay unsaved on their own, and autosave as usual unless they bring a new batch.
+        lineageHoldRef.current?.recordSave(writtenLineage, savedStatus !== "Autosaved");
         // Reconcile the just-persisted draft: if the live draft still matches what we sent, adopt the
         // server copy wholesale; otherwise the author kept editing, so only fold in the fresh validation.
         editDraft(({ draft: current }) => {

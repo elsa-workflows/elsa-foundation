@@ -50,9 +50,9 @@ export interface WorkflowLineageHold {
   isHeld(): boolean;
   lineage(): ReadonlySet<string>;
   /**
-   * A save wrote the owning draft. `lineage` is the line of the state it wrote (null when that is not known); an
-   * explicit save of the live state marks that line's batches saved. Either way only batches in the written line stay
-   * saved: a batch undone before an autosave is no longer what the owner holds, so its Redo is held again.
+   * A save wrote the owning draft. `lineage` is the line of the state it wrote; an explicit save marks that line's
+   * batches saved. Any known written line also keeps only its own batches saved: a batch undone before an autosave is no
+   * longer what the owner holds, so its Redo is held again. An unknown line (null) leaves the saved set as it is.
    */
   recordSave(lineage: Iterable<string> | null, explicit: boolean): void;
 }
@@ -225,10 +225,11 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     isHeld: isLineageHeld,
     lineage: () => lineageRef.current,
     recordSave(lineage, explicit) {
-      const written = lineage ? new Set(lineage) : null;
+      if (!lineage) return;
+      const written = new Set(lineage);
       const before = [...savedBatchesRef.current].sort().join("\n");
-      const next = new Set(explicit && written ? [...savedBatchesRef.current, ...written] : savedBatchesRef.current);
-      savedBatchesRef.current = new Set([...next].filter(id => written?.has(id) ?? false));
+      const next = explicit ? [...savedBatchesRef.current, ...written] : [...savedBatchesRef.current];
+      savedBatchesRef.current = new Set(next.filter(id => written.has(id)));
       if ([...savedBatchesRef.current].sort().join("\n") !== before) changed();
     }
   }), [changed, isLineageHeld, lineageHeld]);
