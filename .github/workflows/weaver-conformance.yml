@@ -46,7 +46,7 @@ concurrency:
 
 jobs:
   package-witness:
-    name: Weaver independent package witness
+    name: Remount diagnosis (not qualification)
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -90,9 +90,9 @@ jobs:
       - name: Verify driver refusal controls
         run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
 
-      - name: Qualify real distributions and all native journeys
+      - name: Diagnose the bounded remount (not qualification)
         run: >-
-          python3 tools/studio/Weaver.Conformance.Probe/qualify.py
+          python3 tools/studio/Weaver.Conformance.Probe/diagnose_remount.py
           --output "$RUNNER_TEMP/weaver-conformance"
           --version "$WEAVER_VERSION"
 

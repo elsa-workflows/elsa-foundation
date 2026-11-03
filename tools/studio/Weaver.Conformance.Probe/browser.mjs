@@ -40,6 +40,20 @@ function redact(value) {
     .replace(/("(?:authorization|proxy-authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|clientSecret|cookie|set-cookie)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     .replace(/\b((?:access[_-]?token|refresh[_-]?token|client[_-]?secret|password|api[_-]?key)=)[^\s&#"']+/gi, "$1[redacted]") : value;
 }
+function safeFailureFrames(error) {
+  const frames = [], seen = new Set();
+  for (const line of typeof error?.stack === "string" ? error.stack.split("\n") : []) {
+    if (!/^\s+at /.test(line)) continue;
+    const match = line.trim().match(/[\\/]browser\.mjs:(\d+):(\d+)\)?$/);
+    if (!match) continue;
+    const row = Number(match[1]), column = Number(match[2]), key = row + ":" + column;
+    if (![row, column].every(value => Number.isSafeInteger(value) && value > 0 && value <= 1000000) || seen.has(key)) continue;
+    seen.add(key);
+    frames.push({ file: "browser.mjs", line: row, column });
+    if (frames.length === 8) break;
+  }
+  return frames;
+}
 function diagnosticUrl(value) {
   try { const url = new URL(value); return url.origin + url.pathname; }
   catch { return "[unavailable URL]"; }
@@ -1426,6 +1440,7 @@ try {
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
+  result.failureDiagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error.name) ? error.name : "Error", frames: safeFailureFrames(error) };
   result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
