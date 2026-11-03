@@ -147,7 +147,7 @@ These consumers do not yet implement the combined callback.
 ### `ActivityResumeValidating` *(Core — `Elsa.Workflows.Runtime.Core`, #2735)*
 
 - **Kind:** Named validation event, published inline with Sequential delivery before bookmark trigger claim or CLR activation, including retry of an existing claim.
-- **Register:** `AddEventHandler<ActivityResumeValidating, THandler>()`; scoped handlers run in registration order. Zero handlers preserves the ordinary path. Configured handlers require `IInlineEventPublisher`; missing event infrastructure fails closed. A handler skips activity families it does not own and validates without changing execution or delivery state.
+- **Register:** `AddEventHandler<ActivityResumeValidating, THandler>()`; scoped handlers run in registration order. Zero handlers preserves the ordinary path. `ActivitiesRuntimeFeature` composes the canonical Events publisher/pipeline for direct library hosts too; repeated Events composition preserves it and its middleware. Configured handlers require `IInlineEventPublisher`; deliberately removing event infrastructure fails closed. A handler skips activity families it does not own and validates without changing execution or delivery state.
 - **Failure:** Conflicting data refuses. Temporary source unavailability throws `RuntimeSchedulerWorkUnavailableException` before the bookmark is consumed; the claim/fence stays governed by the existing scheduler. This gate is outside the activity callback fault conversion, so an infrastructure read does not become an authored activity fault.
 
 ### `IRuntimeActivityChildControlConsumer` *(Core — `Elsa.Workflows.Runtime.Core`, #2735)*

@@ -70,7 +70,7 @@ public sealed class OpenIddictTokenService(
         var payloadJson = await tokenManager.GetPayloadAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
         var payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
 
-        var issued = await IssueAsync(new TokenIssueRequest(subject, payload.TenantId, payload.Scopes), cancellationToken);
+        var issued = await IssueAsync(new TokenIssueRequest(subject, payload.TenantId, payload.Scopes) { CanonicalUserId = payload.CanonicalUserId }, cancellationToken);
         return new TokenRefreshResult(issued.AccessToken, issued.ExpiresAt, issued.RefreshToken);
     }
 
@@ -166,6 +166,11 @@ public sealed class OpenIddictTokenService(
         identity.AddClaim(new Claim(OpenIddictConstants.Claims.Subject, request.SubjectId));
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, request.SubjectId));
         identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, request.TenantId));
+        if (request.CanonicalUserId is { } userId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+            identity.AddClaim(new Claim(IdentityClaimTypes.UserId, userId));
+        }
         identity.AddClaim(new Claim(IdentityClaimTypes.Provider, options.Value.ProviderId));
 
         foreach (var scope in request.Scopes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -181,7 +186,7 @@ public sealed class OpenIddictTokenService(
     private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var referenceId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.TenantId, request.Scopes.ToArray()));
+        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.TenantId, request.Scopes.ToArray(), request.CanonicalUserId));
 
         await CreateTokenEntryAsync(
             request.SubjectId, OpenIddictConstants.TokenTypeHints.RefreshToken, now, now.Add(options.Value.RefreshTokenLifetime),
@@ -231,5 +236,5 @@ public sealed class OpenIddictTokenService(
 
     private static InvalidOperationException InvalidRefreshToken() => new("Refresh token is invalid or expired.");
 
-    private sealed record RefreshTokenPayload(string TenantId, string[] Scopes);
+    private sealed record RefreshTokenPayload(string TenantId, string[] Scopes, string? CanonicalUserId = null);
 }

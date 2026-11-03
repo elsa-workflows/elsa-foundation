@@ -359,6 +359,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationAgentAbstractionsFeature).Assembly,
             typeof(FoundationAgentApiFeature).Assembly,
             typeof(FoundationWorkflowsAgentFeature).Assembly,
+            // Runtime-side Weaver workflow contributions (spec 1193 slice F): Executable context and the read-only Executable tool.
+            typeof(Elsa.Agent.Workflows.Runtime.FoundationWorkflowsRuntimeAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
             // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists FoundationAgentEntityFrameworkCore.
             typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,

@@ -79,7 +79,10 @@ internal sealed class DefaultAgentToolInvoker(
                     var existing = await proposals.FindAsync(existingId, cancellationToken);
                     if (existing?.PreparedInvocation is not { } original)
                         return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                    if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
+                    var replayAdmission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken);
+                    if (AgentToolAccess.OwnerUnavailable(replayAdmission) is { } replayUnavailable)
+                        return await DeniedAsync(replayUnavailable.Code, replayUnavailable.Message, replayUnavailable.StatusCode);
+                    if (!replayAdmission.Allowed)
                         return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
                     if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
                         return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(retained, original));
@@ -119,6 +122,8 @@ internal sealed class DefaultAgentToolInvoker(
                         return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
                 }
                 var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
+                if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
+                    return await DeniedAsync(unavailable.Code, unavailable.Message, unavailable.StatusCode);
                 if (!admission.Allowed)
                     return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
 

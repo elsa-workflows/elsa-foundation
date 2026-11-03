@@ -61,7 +61,7 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             if (contribution is null)
                 continue;
             foreach (var diagnostic in contribution.Diagnostics)
-                domainEvent.Diagnostics.Add(diagnostic);
+                Add(domainEvent, OwnedMarker(diagnostic, descriptor.Id));
             foreach (var attachment in contribution.Attachments)
             {
                 if (attachment.ModuleId != descriptor.ModuleId)
@@ -104,7 +104,7 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             var contribution = await CollectSourceAsync(source, request with { CallerAttachments = [], Disclosure = owned },
                 domainEvent.Diagnostics, cancellationToken);
             if (contribution is null) continue;
-            foreach (var diagnostic in contribution.Diagnostics) domainEvent.Diagnostics.Add(diagnostic);
+            foreach (var diagnostic in contribution.Diagnostics) Add(domainEvent, OwnedMarker(diagnostic, source.Descriptor.Id));
             foreach (var attachment in contribution.Attachments)
             {
                 if (attachment.ModuleId != source.Descriptor.ModuleId
@@ -166,6 +166,21 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
         try { await pending; }
         catch (Exception) { }
     }
+
+    // Only this handler records markers, and only for a source's own diagnostics: another event handler that adds a
+    // marked diagnostic to the public collection is never recorded, so the collector clears its marker.
+    private static void Add(AgentContextCollecting domainEvent, AgentContributionDiagnostic diagnostic)
+    {
+        domainEvent.Diagnostics.Add(diagnostic);
+        if (diagnostic.OwnerUnavailable) Services.AgentContextOwnerMarkers.Record(domainEvent, diagnostic);
+    }
+
+    // The owner-unavailable marker counts only on a diagnostic a source reports under its own descriptor id, so a source
+    // cannot impersonate the engine's "host" diagnostics or another source to claim it.
+    private static AgentContributionDiagnostic OwnedMarker(AgentContributionDiagnostic diagnostic, string sourceId) =>
+        diagnostic.OwnerUnavailable && !string.Equals(diagnostic.ContributorId, sourceId, StringComparison.Ordinal)
+            ? diagnostic with { OwnerUnavailable = false }
+            : diagnostic;
 
     private static AgentContextAttachment Snapshot(AgentContextAttachment attachment)
     {
