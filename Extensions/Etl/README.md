@@ -121,15 +121,15 @@ provides the consumer. The runtime never declares queues.
   requeues them, and the next attempt reads them again into a snapshot of its own.
 - **At least once.** A worker that dies, or a connection that is lost, after the messages were received and before the
   acknowledgement reaches the broker can leave the run with messages the broker also requeues, so a later run reads them
-  again. Records carry no message id, so
-  destinations should be idempotent (a keyed SQL destination is) or tolerate duplicates.
+  again. Records carry no message id, so destinations should be idempotent (a keyed SQL destination is) or tolerate
+  duplicates.
 - **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
   `MaxSnapshotBytes`; the rest stay queued. A single message larger than that fails preparation with
   `etl.snapshot-too-large` and stays queued. Each message is one record: a body that is not JSON, or not a JSON object, is
   routed to errors as `etl.jsonl.record-invalid` or `etl.jsonl.record-not-object` and still acknowledged.
 - **Failures.** An unreachable broker or a closed connection leaves preparation to run again after its lease lapses; access
-  refused, a missing queue or failed authentication fails the run with `etl.rabbitmq-read-rejected`. Two runs reading one
-  queue at once take different messages.
+  refused, a missing queue, a stream queue (which `basic.get` cannot read) or failed authentication fails the run with
+  `etl.rabbitmq-read-rejected`. Two runs reading one queue at once take different messages.
 - **Requeue limits.** Every preparation that does not record its snapshot returns the messages to the queue. A quorum queue
   counts those returns: by default RabbitMQ 4 drops a message after 20 of them, so a pipeline that keeps failing (a broken
   lookup, a refused record) loses the messages. Give such queues a dead-letter exchange, or a higher `x-delivery-limit`.

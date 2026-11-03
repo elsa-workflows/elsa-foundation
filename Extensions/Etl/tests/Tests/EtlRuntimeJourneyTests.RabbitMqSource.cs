@@ -16,15 +16,18 @@ public sealed partial class EtlRuntimeJourneyTests
     {
         await using var files = new RuntimeFiles("");
         var consumer = new TestRabbitMqConsumer("""{"id":1,"name":"Ada"}""", """{"id":2,"name":"Bram"}""", "not json",
-            """{"id":3,"name":"Cleo"}""");
+            """{"id":3,"name":"Cleo"}""", "[4]");
         var host = await StartRabbitMqSourceHostAsync(files, consumer);
 
         var run = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-source", EtlRabbitMqSourceTests.Pipeline()));
 
-        // The body that is not JSON is one record routed to errors; the others are delivered.
+        // The body that is not JSON and the one that is not an object are each one record routed to errors; the others are delivered.
         Assert.Equal((EtlRunStatus.BusinessError, 3L), (run.Status, run.AcceptedRecords));
         Assert.Equal(["Ada", "Bram", "Cleo"], ReadJsonlNames(files.OutputRoot));
-        Assert.Equal(["receive 4", "record Applied", "ack 4"], consumer.Log);
+        Assert.Equal(["etl.jsonl.record-invalid", "etl.jsonl.record-not-object"], Directory.EnumerateFiles(files.ErrorRoot, "*.jsonl")
+            .SelectMany(File.ReadAllLines).Where(line => line.Length > 0)
+            .Select(line => System.Text.Json.JsonDocument.Parse(line).RootElement.GetProperty("code").GetString()!).Order().ToArray());
+        Assert.Equal(["receive 5", "record Applied", "ack 5"], consumer.Log);
         Assert.Empty(consumer.Ready);
     }
 

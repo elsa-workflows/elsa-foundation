@@ -78,12 +78,12 @@ snapshot whose hash it cannot compare to a pin: that hash is the snapshot's anch
 A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)):
 the runtime records an applied SQL route through `RecordConnectorFilePublicationAsync` under
 `EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`, and it counts as a recorded publication (effect mechanism 2).
-A provider accepts a RabbitMQ source's `EtlConnectorKind.RabbitMq` source pin, which carries no expected digest, and a
-prepared snapshot anchored on its own hash, as for a SQL source ([spec 1201](../../../../specs/1201-etl-rabbitmq-source/spec.md));
-the runtime acknowledges the source's messages only after `CommitConnectorPreparationAsync` returns `Applied` or `Replay`.
 A provider accepts `EtlConnectorKind.RabbitMq` route outputs the same way ([spec 1200](../../../../specs/1200-etl-rabbitmq-delivery/spec.md)):
 the runtime records a route whose messages the broker confirmed under `EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(effectId)`
 (an `.amqp` key), and it counts as a recorded publication (effect mechanism 2).
+A provider accepts a RabbitMQ source's `EtlConnectorKind.RabbitMq` source pin, which carries no expected digest, and a
+prepared snapshot anchored on its own hash, as for a SQL source ([spec 1201](../../../../specs/1201-etl-rabbitmq-source/spec.md));
+the runtime acknowledges the source's messages only after `CommitConnectorPreparationAsync` returns `Applied` or `Replay`.
 
 `EtlPipelineV2.Continuous` is an optional, init-only run policy; a null policy is never serialized, so finite artifacts
 keep their bytes and identities. `EtlContinuousRunPolicy.FindViolation` is the one rule every reader applies (HTTP
@@ -185,9 +185,9 @@ public interface IEtlRabbitMqReceipt : IAsyncDisposable
 }
 ```
 
-- **What it is.** An adapter that receives a finite source's messages without acknowledging them and hands each body to the runtime's `accept` callback as it arrives; the body is valid only during that call. The runtime writes the body to the run's snapshot and refuses it when it would pass the snapshot bound; a refused body, and every later message, must stay queued. The runtime calls `AcknowledgeAsync` only after the store has recorded the snapshot; any other outcome disposes the receipt unacknowledged, which must let the broker requeue the messages.
-- **Registration:** `services.AddSingleton<IEtlRabbitMqConsumer, …>()` from `EtlRabbitMqFeature`, beside the publisher, which binding resolution also uses to describe a source binding's target. More than one registration makes connector binding resolution throw.
-- **When to implement:** to receive through another client with the same unacknowledged-until-told semantics, without holding received bodies after `accept` returns.
+- **What it is.** An adapter that receives a finite source's messages without acknowledging them and hands each body to the runtime's `accept` callback as it arrives; the body is valid only during that call. The runtime writes the body to the run's snapshot and refuses it when it would pass the snapshot bound; a refused body, and every later message, must stay queued. It also stops taking messages once a drain time bound well inside the broker's `consumer_timeout` is spent, having taken at least one, so the broker never closes the channel for deliveries held unacknowledged too long; the rest stay queued. The runtime calls `AcknowledgeAsync` only after the store has recorded the snapshot; any other outcome disposes the receipt unacknowledged, which must let the broker requeue the messages.
+- **Registration:** `services.AddScoped<IEtlRabbitMqConsumer, …>()` from `EtlRabbitMqFeature`, beside the publisher, which binding resolution also uses to describe a source binding's target. More than one registration makes connector binding resolution throw.
+- **When to implement:** to receive through another client with the same unacknowledged-until-told semantics and drain time bound, without holding received bodies after `accept` returns.
 - **What depends on it:** `HostRabbitMqBindings`, `EtlConnectorPreparer` and `EtlConnectorExecution` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `RabbitMqEtlConsumer` (`Elsa.Etl.RabbitMq`).
 

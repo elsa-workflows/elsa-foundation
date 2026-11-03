@@ -115,6 +115,28 @@ public sealed class EtlRabbitMqConsumerProviderTests(EtlRabbitMqBrokerFixture br
     }
 
     [SkippableFact]
+    public async Task A_drain_that_fails_partway_or_a_dropped_connection_returns_the_taken_messages_to_the_queue()
+    {
+        Skip.If(broker.SkipReason is not null, broker.SkipReason);
+        await FillAsync("""{"id":1}""", """{"id":2}""", """{"id":3}""");
+
+        // The runtime's accept fails on the second body, after the first was taken.
+        var taken = 0;
+        await Assert.ThrowsAsync<IOException>(() => _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10,
+            (_, _) => ++taken == 2 ? throw new IOException("snapshot write failed") : ValueTask.FromResult(true), default).AsTask());
+        Assert.Equal(3u, await ReadyAsync());
+
+        // The broker drops the connection while the receipt holds the messages unacknowledged.
+        var (held, heldBodies, _) = await ReceiveAsync(10, 1_000_000);
+        await using (held)
+        {
+            Assert.Equal(3, heldBodies.Count);
+            Skip.IfNot(await broker.ControlAsync("close_all_connections", "dropped by the test"), "The broker was supplied, not started.");
+            Assert.Equal(3u, await ReadyAsync());
+        }
+    }
+
+    [SkippableFact]
     public async Task A_stream_queue_which_basic_get_cannot_read_is_rejected()
     {
         Skip.If(broker.SkipReason is not null, broker.SkipReason);
