@@ -13,7 +13,7 @@
 ## R2 — Snapshot isolation per engine
 
 **Decision**:
-- PostgreSQL uses `REPEATABLE READ` with `SET TRANSACTION READ ONLY`, then `LOCK TABLE … IN ACCESS SHARE MODE` before the `SELECT`. `TRUNCATE` and table-rewriting `ALTER TABLE` are not MVCC-safe, and a `SELECT` takes its snapshot before it waits for its table lock, so without the explicit lock a read behind a truncate-and-reload sees an empty table. `LOCK TABLE` takes no snapshot.
+- PostgreSQL uses `REPEATABLE READ` with `SET TRANSACTION READ ONLY`, then `LOCK TABLE … IN ACCESS SHARE MODE` before the `SELECT`. `TRUNCATE` and table-rewriting `ALTER TABLE` are not MVCC-safe, and a `SELECT` takes its snapshot before it waits for its table lock, so without the explicit lock a read behind a truncate-and-reload sees an empty table. `LOCK TABLE` takes no snapshot. It needs table-level `SELECT` and a lockable relation, so where PostgreSQL refuses it the read runs without it in a new transaction, rather than refusing a read the role may perform.
 - SQL Server uses `SNAPSHOT`.
 
 **Rationale**: PostgreSQL's REPEATABLE READ is snapshot isolation. SQL Server's SNAPSHOT is the only level that reads one point in time without holding shared locks against writers. `SERIALIZABLE` would block writers for the length of the read. SQL Server refuses SNAPSHOT when the database option is off (error 3952); the engine classifies that as a rejection, and the README documents the option.

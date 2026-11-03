@@ -90,7 +90,9 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
 
 - **One point in time.** Preparation reads the declared columns once, ordered by the key, in a single transaction:
   `REPEATABLE READ READ ONLY` on PostgreSQL, which first takes an `ACCESS SHARE` table lock so a read behind a
-  truncate-and-reload sees the reloaded rows rather than an empty table, and `SNAPSHOT` on SQL Server, which needs `ALLOW_SNAPSHOT_ISOLATION ON` for the
+  truncate-and-reload sees the reloaded rows rather than an empty table (where PostgreSQL refuses the lock, as for a role
+  with column-level grants only, a materialized view or a foreign table, the read runs without it), and `SNAPSHOT` on
+  SQL Server, which needs `ALLOW_SNAPSHOT_ISOLATION ON` for the
   database (`etl.sql-read-rejected` otherwise). The rows are retained as a JSON Lines input snapshot, and from there the
   run is a JSON Lines run: its partitions, positions and replay are unchanged, every partition sees the same rows, and no
   connection is held while records are processed. A unique key keeps record numbers reproducible; rows with equal keys

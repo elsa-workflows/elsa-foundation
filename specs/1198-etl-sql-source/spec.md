@@ -80,7 +80,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
   Floating-point columns are refused, so a value is never rounded silently. Text is retained as raw UTF-8. SQL Server's driver replaces an unpaired surrogate in `nvarchar` text with U+FFFD before the reader sees it; PostgreSQL never stores one.
 - **Size.** The snapshot is bounded by the pipeline's `MaxSnapshotBytes`, with `etl.snapshot-too-large`. A row longer than `MaxRecordBytes` is a record error, `etl.record-too-large`, on the error route, as for JSON Lines input. The record count is bounded as for JSON Lines input.
 - **Isolation.**
-  - PostgreSQL reads in a `REPEATABLE READ READ ONLY` transaction, which is snapshot isolation there. It locks the table in `ACCESS SHARE` mode before the snapshot is taken, because `TRUNCATE` and table-rewriting `ALTER TABLE` are not MVCC-safe: a read waiting behind a truncate-and-reload then sees the reloaded rows, not an empty table.
+  - PostgreSQL reads in a `REPEATABLE READ READ ONLY` transaction, which is snapshot isolation there. It locks the table in `ACCESS SHARE` mode before the snapshot is taken, because `TRUNCATE` and table-rewriting `ALTER TABLE` are not MVCC-safe: a read waiting behind a truncate-and-reload then sees the reloaded rows, not an empty table. Where PostgreSQL refuses the lock (column-level grants only, a materialized view or a foreign table), the read runs without it in a new transaction.
   - SQL Server reads under `SNAPSHOT` isolation, which needs the database option `ALLOW_SNAPSHOT_ISOLATION ON`.
 - **Finite only.** A continuous pipeline with a `sql` source is refused with `etl.continuous-source-unsupported`, as for file sources.
 - **Credentials.** As for destinations: the binding's connection string is never pinned or exposed, and the handle hashes the secret-free target, the role and the allowed tables.
@@ -93,7 +93,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
 - **FR-001** `EtlSqlSource(Binding, Table, Columns, Key)` is a new source of kind `sql`; `Columns` are `EtlColumn` declarations. Existing artifacts and identities are byte-identical.
 - **FR-002** The compiler enforces the identifier and key rules in Edge Cases, and the source column count against `MaxFields`.
 - **FR-003** SQL bindings accept the role `Source`. Source and destination bindings share `EtlRuntimeFeature.SqlBindings`, and binding resolution pins a `Sql` source revision with no expected digest.
-- **FR-004** `IEtlSqlEngine` gains the snapshot read: the isolation level, a statement selecting the columns ordered by the key, a statement run before the snapshot is taken (read-only mode, and on PostgreSQL a table lock), and whether the driver maps infinite dates to the extreme values.
+- **FR-004** `IEtlSqlEngine` gains the snapshot read: the isolation level, a statement selecting the columns ordered by the key, a statement run before the snapshot is taken (read-only mode), a table lock taken before the snapshot where the engine allows it (PostgreSQL), and whether the driver maps infinite dates to the extreme values.
 - **FR-005** The connector preparer, for a `sql` source:
   1. looks for a published input snapshot under the run's snapshot identity, and reuses it when present;
   2. otherwise opens a connection, begins a transaction at the engine's snapshot isolation, streams the ordered rows, converts each value by its declared type, and writes one JSON object per row through the JSON Lines snapshot publisher;

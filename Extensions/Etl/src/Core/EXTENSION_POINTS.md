@@ -125,7 +125,8 @@ public interface IEtlSqlEngine
     string Parameter(string column, int row);
     EtlSqlErrorKind Classify(Exception exception);
     IsolationLevel SnapshotIsolation { get; }
-    string? SnapshotSetup(string table);
+    string? SnapshotSetup { get; }
+    string? SnapshotLock(string table);
     bool ExtremeDatesAreInfinite { get; }
     string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 }
@@ -133,6 +134,6 @@ public interface IEtlSqlEngine
 
 - **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction), and its snapshot reader owns the read (one transaction at `SnapshotIsolation`, ordered by the key, retained as JSON Lines); an engine never commits or retries.
 - **Registration:** `services.AddSingleton<IEtlSqlEngine, …>()` from an engine feature.
-- **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, whether the driver maps infinite dates to the extreme `DateTime`/`DateOnly`/`DateTimeOffset` values (so the reader refuses them), and exception classification.
+- **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, an optional table lock taken before the snapshot (the reader falls back to an unlocked read when the engine refuses it), whether the driver maps infinite dates to the extreme `DateTime`/`DateOnly`/`DateTimeOffset` values (so the reader refuses them), and exception classification.
 - **What depends on it:** `HostSqlBindings`, `EtlSqlRouteWriter` and `EtlSqlSnapshotReader` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).

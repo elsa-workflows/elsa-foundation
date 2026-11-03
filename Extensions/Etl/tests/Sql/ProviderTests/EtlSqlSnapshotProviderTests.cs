@@ -255,6 +255,24 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
         Assert.Equal("{\"id\":10}\n{\"id\":11}\n", await read.WaitAsync(TimeSpan.FromSeconds(30)));
     }
 
+    [SkippableFact]
+    public async Task A_role_with_column_grants_only_and_a_materialized_view_still_read_without_the_lock()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var (view, role) = ("matview_" + suffix, "etl_cols_" + suffix);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL PRIMARY KEY, secret text NULL)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, secret) VALUES (1, 'x'), (2, 'y')");
+        await fixture.ExecuteAsync($"CREATE MATERIALIZED VIEW {view} AS SELECT id FROM {_table}");
+        // LOCK TABLE needs table-level SELECT and refuses a materialized view; the read itself is allowed in both cases.
+        await fixture.ExecuteAsync($"CREATE ROLE {role} LOGIN PASSWORD 'etl'; GRANT USAGE ON SCHEMA public TO {role}; GRANT SELECT (id) ON {_table} TO {role}");
+        var limited = new Npgsql.NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Username = role, Password = "etl" }.ConnectionString;
+        var columns = new EtlColumn[] { new("id", EtlColumnType.Int64, true) };
+
+        Assert.Equal("{\"id\":1}\n{\"id\":2}\n", await ReadRawSnapshotOnAsync(limited, new EtlSqlSource("db", _table, columns, ["id"])));
+        Assert.Equal("{\"id\":1}\n{\"id\":2}\n", await ReadRawSnapshotOnAsync(fixture.ConnectionString, new EtlSqlSource("db", view, columns, ["id"])));
+    }
+
     [SkippableTheory]
     [InlineData("timestamp", "'infinity'")]
     [InlineData("timestamptz", "'-infinity'")]

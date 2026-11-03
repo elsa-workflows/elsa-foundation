@@ -47,9 +47,7 @@ internal static class EtlSqlSnapshotReader
             // The same session as the writer's, so a session option such as a search path reads what the writer writes.
             if (engine.SessionSetup is { } session)
                 await ExecuteAsync(connection, null, session, cancellationToken);
-            await using var transaction = await connection.BeginTransactionAsync(engine.SnapshotIsolation, cancellationToken);
-            if (engine.SnapshotSetup(source.Table) is { } setup)
-                await ExecuteAsync(connection, transaction, setup, cancellationToken);
+            await using var transaction = await BeginSnapshotAsync(connection, engine, source.Table, cancellationToken);
             await using (var command = connection.CreateCommand())
             {
                 command.Transaction = transaction;
@@ -101,6 +99,51 @@ internal static class EtlSqlSnapshotReader
             // Any other provider failure is deterministic: retrying the same read would fail the same way. Snapshot-root I/O
             // failures propagate unwrapped, so the preparer reports them as write failures.
             throw new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.sql-read-rejected", exception));
+        }
+    }
+
+    /// <summary>
+    /// Begins the snapshot transaction and takes the engine's table lock before any snapshot. Where the engine refuses the
+    /// lock but might still allow the read (column-level grants, a relation that cannot be locked), the read runs without it.
+    /// </summary>
+    private static async ValueTask<DbTransaction> BeginSnapshotAsync(DbConnection connection, IEtlSqlEngine engine, string table,
+        CancellationToken cancellationToken)
+    {
+        var transaction = await StartSnapshotAsync(connection, engine, cancellationToken);
+        if (engine.SnapshotLock(table) is not { } lockStatement)
+            return transaction;
+        try
+        {
+            await ExecuteAsync(connection, transaction, lockStatement, cancellationToken);
+            return transaction;
+        }
+        catch (DbException exception) when (engine.Classify(exception) != EtlSqlErrorKind.Transient)
+        {
+            // A failed statement aborts the transaction, so the unlocked read starts a new one.
+            await transaction.DisposeAsync();
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+        return await StartSnapshotAsync(connection, engine, cancellationToken);
+    }
+
+    private static async ValueTask<DbTransaction> StartSnapshotAsync(DbConnection connection, IEtlSqlEngine engine,
+        CancellationToken cancellationToken)
+    {
+        var transaction = await connection.BeginTransactionAsync(engine.SnapshotIsolation, cancellationToken);
+        try
+        {
+            if (engine.SnapshotSetup is { } setup)
+                await ExecuteAsync(connection, transaction, setup, cancellationToken);
+            return transaction;
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
         }
     }
 
