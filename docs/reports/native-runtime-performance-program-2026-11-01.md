@@ -1,6 +1,6 @@
 # Runtime Efficiency continuation evidence
 
-Program [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531), draft integration [#3601](https://github.com/elsa-workflows/elsa-foundation/pull/3601).
+Program [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531), integration [#3601](https://github.com/elsa-workflows/elsa-foundation/pull/3601) (a draft when this receipt was written; merged as `ea5c4de47`).
 This is an in-progress receipt. It does not establish completion of M0–M5 or current-main throughput. Independent-host capacity below covers independent starts sharing one PostgreSQL server; failure injection and remote Cancel are reported separately, including what did not qualify.
 The [baseline assessment](native-runtime-performance-2026-10-31.md) and [first implementation receipt](native-runtime-performance-implementation-2026-10-31.md) retain their original cohorts and exclusions.
 
@@ -59,7 +59,8 @@ Recovery assertions now check sweep failures, settled outbox and empty scheduler
 that does no work. Replacing the first sweep with a no-op fails all twelve cases; restoration passes all twelve.
 The corrected whole suites pass: runtime 3,122, Distributed 114, HTTP integration 107, zero failed/skipped. Discovery
 accounts for all cases (runtime's same three delayed theories expand 3,111 discoveries into 3,122 executions).
-All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due.
+All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due
+(point-in-time; see [Independent review corrections](#independent-review-corrections) and the #3601 merge `ea5c4de47`).
 
 ## Unchanged native roots: candidate #2586
 
@@ -670,8 +671,10 @@ series (`failure-r2`) the reclaim and default-interrupt cases hit a stale per-ca
 cases measured a host `RetryAfter` policy: all six runs stalled silently in Running with no incident, because nothing
 re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRetryAt`, but no sweep reads it). That
 pre-existing defect is already tracked as [#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275) and is
-outside this delivery (point-in-time; #3656, merged as `180da1476`, since releases the claim until it is due so the
-resumption sweep re-drives it, and #3275 is closed).
+outside this delivery (point-in-time; #3656, merged as `180da1476`, closed #3275: a `RetryAfter` now releases the claim
+until it is due, for the resumption sweep to re-drive, when the handler threw before any non-retaining checkpoint and a
+re-driver is composed; every other `RetryAfter` is recorded `Poisoned` and raises an incident. It was not re-run on
+this fixture).
 
 ### A lease heartbeat failed fenced checkpoints (found and fixed)
 
@@ -706,9 +709,9 @@ Cancelling a **progressing** drain on another node did **not** qualify, and no C
 - In `c7` and in the one-run comparisons `p-main` and `p-branch`, placement was on node A before and after the Cancel
   (`p-main` and `p-branch` were also sampled 150 times at one-second intervals per build on the database host; the
   archive keeps only those commands' output tails, and `c7` records only the before and after rows), yet the sender
-  never progressed past picking up its request. The cause was not established in this series. #3669 later found that
-  the placement pump awaited each dispatched drain, freezing placement renewal and transport delivery; its own runs on
-  `main` saw placement move to node B, unlike `p-main` here.
+  never progressed past picking up its request. The cause is not established. #3669 later found a placement pump that
+  awaited each dispatched drain and stopped renewing, but that does not match these runs: node A's placement row kept
+  renewing (revision 26 to 163 in each), and #3669's own runs on `main` saw placement move to node B, unlike `p-main`.
 - `c4` is invalid: a leftover sender from `c3` held the port, so the new sender never started.
 - Before the fence fix, `c1`'s loop was poisoned on node A (one incident, rows stalled at 1,618); `c2` never formed
   the cluster, because its control folders already existed.
