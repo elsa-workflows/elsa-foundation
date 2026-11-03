@@ -103,6 +103,8 @@ public sealed class EtlRabbitMqSourceTests : IDisposable
     [InlineData("not\njson", "\u0001")]
     [InlineData("", "\u0001")]
     [InlineData("  ", "\u0001")]
+    [InlineData("\t", "\u0001")]
+    [InlineData("\r", "\u0001")]
     public void Each_message_body_becomes_exactly_one_snapshot_line(string body, string line) =>
         Assert.Equal(line, Encoding.UTF8.GetString(EtlRabbitMqSnapshotWriter.Line(Encoding.UTF8.GetBytes(body)).Span));
 
