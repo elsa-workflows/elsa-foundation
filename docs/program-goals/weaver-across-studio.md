@@ -91,9 +91,10 @@ cases on both actual adapters against the packaged EF store. M2 #3431 is verifie
 [M3 #3432 is verified complete](https://github.com/elsa-workflows/elsa-foundation/issues/3432#issuecomment-6616867867);
 the closeout links its slices and its resulting-main evidence. The slices merged after converged self-review
 loops under the owner's [standing delivery and merge authorization of 3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669),
-an explicit standing owner exception to merging.md's one-action owner exception and its "no author merges
-its own PR" fallback. The delivery lane uses it while Code Review is unavailable; that condition is the
-lane's interpretation, not the owner's words. Otherwise the 1 November paragraph's Code Review route stands.
+whose words are "enter the self review loop with as many iterations as reasonably necessary and then merge".
+The lane reads it as a standing owner exception to merging.md's one-action owner exception and its "no
+author merges its own PR" fallback, used while Code Review is unavailable; that reading and that condition
+are the lane's, not the owner's words. Otherwise the native-baseline paragraph's Code Review route stands.
 [Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
 implementation leaf, under [spec1203](../../specs/1203-weaver-module-support/spec.md).
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
@@ -138,13 +139,18 @@ Distinguish trusted installed-module guidance from untrusted resource content. M
 no blanket administration authority and exposes no secret values or unrelated data. Useful read-only
 support is valid where a domain does not support mutation, with that limit explicit in the matrix.
 
-[Owner amendment, 3 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6612627295):
-the owner's answers are that the integrator decides through configuration which privileges Weaver has,
-including irrecoverable deletes and revokes and feature selection apply; that the gate for Admin-risk effects
-is off by default and always on in the Workbench; and that M4 adds a generic outcome for an approved action
-that persists nothing. Spec 1203 applies these as host-configured privilege classes. That class design is
-the spec's Program-authority choice, open to owner review. Package promotion and package activation stay
-outside scope.
+Owner decisions for M4, [3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6612627295)
+and [4 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6617907022),
+quoted verbatim:
+- Irrecoverable deletes and revokes of Secrets and Service connections: "Let the integrator decide what privileges weaver has via configuration".
+- Feature selection apply: "Let the integrator decide via configuration".
+- A generic outcome for an approved action that persists nothing: "Add it in leaf 0".
+- The default of the host option gating Admin-risk effects: "Off; Workbench always on".
+- The Workbench's base configuration for the irrecoverable and activation classes as well: "Enable all three".
+
+[Spec1203](../../specs/1203-weaver-module-support/spec.md) applies these answers as host-configured privilege
+classes; that design and its other defaults are the delivery lane's application, open to owner review.
+Package promotion and package activation remain outside scope under #3443's boundaries.
 
 Approval, denial, effective server autonomy, cancellation, disconnect/reconnect, retry, duplicate
 delivery, restart and module removal need declared supported outcomes. Persist accepted decisions,
