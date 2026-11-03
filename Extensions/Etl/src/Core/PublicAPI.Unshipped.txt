@@ -1950,3 +1950,6 @@ Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.CompletionRequestedAt.get -> Sys
 Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.CompletionRequestedAt.init -> void
 Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Continuous.get -> bool
 Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Continuous.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

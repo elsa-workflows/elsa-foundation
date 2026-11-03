@@ -429,6 +429,17 @@ internal sealed class EtlConnectorOutputProcessor
         _ => throw new InvalidDataException("The connector output destination is unsupported.")
     };
 
+    /// <summary>
+    /// Removes an accepted batch's retained route bodies (spec 1196). A replayed acceptance reads only rows, and only an
+    /// owed batch reads its bodies, so nothing reads them once the acceptance has committed.
+    /// </summary>
+    public void DeleteRetainedRouteBodies(EtlConnectorBatchOutput output)
+    {
+        foreach (var route in new[] { output.Main, output.Errors })
+            if (route is not null)
+                BodyStore(route.Kind).Delete(_snapshotRoot, RetainedBodyIdentity(route.Kind, route.EffectId));
+    }
+
     private FileChunkStore BodyStore(EtlConnectorKind kind) => kind switch
     {
         EtlConnectorKind.Http => _jsonStore,

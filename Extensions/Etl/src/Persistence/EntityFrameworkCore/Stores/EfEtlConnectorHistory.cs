@@ -50,6 +50,17 @@ internal sealed partial class EfEtlRuntimeStore
             row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes) ||
             row.AcceptedBatchCount < 0 || row.AcceptedRecords < 0 || row.RejectedRecords < 0 || row.FilteredRecords < 0)
             throw new InvalidDataException("The connector partition accounting is invalid.");
+        // Only a continuous shard has a poll generation or compacted history (spec 1196).
+        if (row.PollGeneration < 0 || row.CompactedPageCount < 0 || row.CompactedBatchCount < 0 ||
+            row.CompactedAcceptedRecords < 0 || row.CompactedRejectedRecords < 0 || row.CompactedFilteredRecords < 0 ||
+            row.CompactedMainEffects < 0 || row.CompactedErrorEffects < 0 ||
+            row.CompactedBatchCount > row.AcceptedBatchCount || row.CompactedPageCount > row.PageCount ||
+            row.CompactedAcceptedRecords > row.AcceptedRecords || row.CompactedRejectedRecords > row.RejectedRecords ||
+            row.CompactedFilteredRecords > row.FilteredRecords ||
+            pipeline.Continuous is null && (row.PollGeneration != 0 || row.CompactedPageCount != 0 || row.CompactedBatchCount != 0 ||
+                row.CompactedAcceptedRecords != 0 || row.CompactedRejectedRecords != 0 || row.CompactedFilteredRecords != 0 ||
+                row.CompactedMainEffects != 0 || row.CompactedErrorEffects != 0))
+            throw new InvalidDataException("The connector partition's compacted history is invalid.");
         if (auditHistory && (admission is null || prepared is null))
             throw new InvalidDataException("A full connector history audit requires its admission and prepared input.");
         if (position is not EtlConnectorHttpPosition http)
@@ -144,8 +155,12 @@ internal sealed partial class EfEtlRuntimeStore
     private async ValueTask AuditHttpHistoryAsync(EtlConnectorPartitionRecord row, EtlConnectorHttpPosition http,
         EtlPipelineV2 pipeline, CancellationToken cancellationToken)
     {
-        long requestCount = 0, requestInputReservedBytes = 0,
-            metadataBytes = checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes), pageBytes = 0, sequence = 0;
+        // A compacted continuous shard starts at its base (spec 1196): rows below it were deleted, and the base request,
+        // whose predecessor pointer was cleared, heads the retained continuation chain.
+        var basePage = row.CompactedPageCount;
+        long requestCount = basePage, requestInputReservedBytes = 0,
+            metadataBytes = checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes), pageBytes = 0, sequence = basePage;
+        EtlHttpRequest? baseRequest = null;
         // Full audit at ownership acquisition and successful terminal settlement, including fresh
         // processes. No process-local cache is required for the normal bounded transition path.
         await foreach (var retained in Requests(row).OrderBy(request => request.PageSequence).AsAsyncEnumerable().WithCancellation(cancellationToken))
@@ -157,13 +172,16 @@ internal sealed partial class EfEtlRuntimeStore
             if (retained.PageSequence < http.PageSequence &&
                 (retained.InputReservationBytes != 0 || retained.SourceMetadataReserveBytes != 0))
                 throw new InvalidDataException("A historical HTTP request retains source reservation capacity.");
+            if ((retained.PreviousPageSequence is null) != (retained.PageSequence == 0 || retained.PageSequence == basePage))
+                throw new InvalidDataException("Only the first or base HTTP request may have no predecessor.");
+            baseRequest ??= request;
             requestInputReservedBytes = checked(requestInputReservedBytes + retained.InputReservationBytes);
             EtlConnectorRecordCodec.ValidateHttpPosition(new(retained.PageSequence, 0, request, null, false), pipeline.Http);
             requestCount++;
             metadataBytes = checked(metadataBytes + retained.MetadataBytes);
         }
         if (requestCount != http.PageSequence + 1) throw new InvalidDataException("The HTTP request history is incomplete.");
-        var expectedRequest = new EtlHttpRequest(http.Request.ShardId, null);
+        var expectedRequest = basePage == 0 ? new EtlHttpRequest(http.Request.ShardId, null) : baseRequest!;
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var pagesWithRequests =
             from page in Pages(row)
@@ -287,7 +305,10 @@ internal sealed partial class EfEtlRuntimeStore
         if (row.PageSequence < 0 || row.MetadataBytes != expectedMetadataBytes || row.RequestHash != EtlRuntimeIdentity.HttpRequestHash(request) ||
             (row.PageSequence == 0
                 ? request.Continuation is not null || row.PreviousPageSequence is not null || row.PreviousHasContinuation is not null
-                : string.IsNullOrEmpty(request.Continuation) || row.PreviousPageSequence != row.PageSequence - 1 || row.PreviousHasContinuation != true))
+                // A compacted shard's base request has no predecessor; the full audit allows that only on the base (spec 1196).
+                : string.IsNullOrEmpty(request.Continuation) ||
+                  (row.PreviousPageSequence is not null || row.PreviousHasContinuation is not null) &&
+                  (row.PreviousPageSequence != row.PageSequence - 1 || row.PreviousHasContinuation != true)))
             throw new InvalidDataException("The retained HTTP request metadata is inconsistent.");
         return (request, fetch);
     }
