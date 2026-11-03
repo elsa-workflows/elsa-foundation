@@ -127,6 +127,7 @@ public interface IEtlSqlEngine
     IsolationLevel SnapshotIsolation { get; }
     string? SnapshotSetup { get; }
     string? SnapshotLock(string table);
+    bool IsLockRefusal(Exception exception);
     bool ExtremeDatesAreInfinite { get; }
     string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 }

@@ -26,6 +26,12 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     // empty. LOCK TABLE takes no snapshot, so waiting for it here makes the SELECT's snapshot follow any such rewrite.
     public string? SnapshotLock(string table) => $"LOCK TABLE {Quote(table)} IN ACCESS SHARE MODE";
 
+    // LOCK needs table-level SELECT (42501) and a lockable relation (42809); a materialized view or foreign table is not one.
+    public bool IsLockRefusal(Exception exception) => exception is PostgresException
+    {
+        SqlState: PostgresErrorCodes.InsufficientPrivilege or PostgresErrorCodes.WrongObjectType
+    };
+
     // Npgsql maps infinity and -infinity to the extreme values, so a finite 9999-12-31 cannot be told apart from them.
     public bool ExtremeDatesAreInfinite => true;
 

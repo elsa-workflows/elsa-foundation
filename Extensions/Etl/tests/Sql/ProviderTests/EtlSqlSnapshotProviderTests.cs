@@ -256,6 +256,34 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
     }
 
     [SkippableFact]
+    public async Task A_lock_wait_cut_short_by_a_statement_timeout_fails_the_read_rather_than_reading_unlocked()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL PRIMARY KEY)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id) VALUES (1)");
+        await using var reload = new Npgsql.NpgsqlConnection(fixture.ConnectionString);
+        await reload.OpenAsync();
+        await using var transaction = await reload.BeginTransactionAsync();
+        await using (var command = reload.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = $"TRUNCATE {_table}; INSERT INTO {_table} (id) VALUES (10)";
+            await command.ExecuteNonQueryAsync();
+        }
+        var impatient = new Npgsql.NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Options = "-c statement_timeout=1000" }.ConnectionString;
+
+        // The lock times out at 1 s and the reload commits at 1.5 s. A fallback to an unlocked read would take its snapshot
+        // at about 1 s and then wait out the reload, publishing an empty table; a timed-out lock must not fall back.
+        var read = Record.ExceptionAsync(() => ReadRawSnapshotOnAsync(impatient,
+            new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true)], ["id"])));
+        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        await transaction.CommitAsync();
+        var failure = await read.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(failure is EtlSqlTransientException or EtlConnectorPreparationFailure, failure?.GetType().Name ?? "no failure");
+    }
+
+    [SkippableFact]
     public async Task A_role_with_column_grants_only_and_a_materialized_view_still_read_without_the_lock()
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);

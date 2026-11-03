@@ -67,6 +67,13 @@ public interface IEtlSqlEngine
     string? SnapshotLock(string table);
 
     /// <summary>
+    /// Whether the engine refused <see cref="SnapshotLock"/> itself, for a reason the read may not share (missing table-level
+    /// privilege, a relation that cannot be locked), so the read runs without it. A lock that timed out or was cancelled is
+    /// not a refusal: reading without it would lose the protection the lock exists for.
+    /// </summary>
+    bool IsLockRefusal(Exception exception);
+
+    /// <summary>
     /// Whether the driver returns the extreme <see cref="DateTime"/>, <see cref="DateOnly"/> and <see cref="DateTimeOffset"/>
     /// values for infinite dates and timestamps (Npgsql's default), so a snapshot read refuses them rather than invent a date.
     /// </summary>

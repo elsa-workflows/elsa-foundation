@@ -40,6 +40,7 @@ internal sealed class SqliteEtlSqlEngine : IEtlSqlEngine
     public System.Data.IsolationLevel SnapshotIsolation => System.Data.IsolationLevel.Serializable;
     public string? SnapshotSetup => null;
     public string? SnapshotLock(string table) => null;
+    public bool IsLockRefusal(Exception exception) => false;
     public bool ExtremeDatesAreInfinite => false;
 
     public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>

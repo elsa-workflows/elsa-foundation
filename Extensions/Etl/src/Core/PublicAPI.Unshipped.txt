@@ -2021,6 +2021,7 @@ Elsa.Etl.Core.EtlSqlSource.Table.get -> string!
 Elsa.Etl.Core.EtlSqlSource.Table.init -> void
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.SelectSnapshot(string! table, System.Collections.Generic.IReadOnlyList<string!>! columns, System.Collections.Generic.IReadOnlyList<string!>! keyColumns) -> string!
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotIsolation.get -> System.Data.IsolationLevel
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.IsLockRefusal(System.Exception! exception) -> bool
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotLock(string! table) -> string?
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotSetup.get -> string?
 override Elsa.Etl.Core.EtlSqlSource.<Clone>$() -> Elsa.Etl.Core.EtlSqlSource!

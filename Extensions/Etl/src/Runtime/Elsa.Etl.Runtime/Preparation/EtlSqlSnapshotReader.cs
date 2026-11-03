@@ -114,10 +114,11 @@ internal static class EtlSqlSnapshotReader
             return transaction;
         try
         {
-            await ExecuteAsync(connection, transaction, lockStatement, cancellationToken);
+            // The lock waits for any rewrite in progress as long as the read itself would.
+            await ExecuteAsync(connection, transaction, lockStatement, cancellationToken, timeoutSeconds: 0);
             return transaction;
         }
-        catch (DbException exception) when (engine.Classify(exception) != EtlSqlErrorKind.Transient)
+        catch (DbException exception) when (engine.IsLockRefusal(exception))
         {
             // A failed statement aborts the transaction, so the unlocked read starts a new one.
             await transaction.DisposeAsync();
@@ -280,11 +281,13 @@ internal static class EtlSqlSnapshotReader
         !dataTypeName.StartsWith("timestamp", StringComparison.OrdinalIgnoreCase);
 
     private static async ValueTask ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, int? timeoutSeconds = null)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
+        if (timeoutSeconds is { } timeout)
+            command.CommandTimeout = timeout;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
