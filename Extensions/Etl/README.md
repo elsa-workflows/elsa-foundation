@@ -131,8 +131,12 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   the checkpoint, and loading that target from the start needs a new source identity, as there is no checkpoint reset
   yet. The run's highest watermark
   is raised into that checkpoint in the transaction that completes it, so a run settled by a failure (a fault, a
-  cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Overlapping runs can
-  both read the same rows, and the checkpoint never moves backwards. **A row whose watermark is at or below a checkpoint
+  cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Runs of one
+  watermarked definition must not overlap: the checkpoint never moves backwards, but a run that read a row before a
+  newer run delivered it can finish last and write the older row over the newer one in a keyed destination, and the
+  checkpoint, already past the row's newer value, does not read it again until it changes. Nothing enforces this yet
+  ([#3721](https://github.com/elsa-workflows/elsa-foundation/issues/3721)); start the next run only once the previous
+  one has settled. **A row whose watermark is at or below a checkpoint
   already passed is never read.** Values drawn when a row is inserted, such as a sequence or identity, can commit out of
   order under concurrent writers: a run can read value 101 while the transaction holding 100 is still open, and row 100,
   committed later, is then skipped. A per-row version counter is not a watermark either. Use a column whose values

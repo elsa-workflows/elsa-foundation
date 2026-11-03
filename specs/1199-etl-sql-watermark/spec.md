@@ -45,6 +45,7 @@ An author names an `Int64` watermark column whose values become visible in incre
 - **Ordering.** The snapshot is still ordered by the key. The watermark only filters.
 - **Commit order.** Rows are read once their watermark is above the checkpoint; a row committed with a watermark at or below a checkpoint already passed is never read. Values drawn at insert, such as a sequence or identity, can commit out of order under concurrent writers, and a per-row version counter is not monotonic across rows, so neither is a safe watermark. The README requires a column whose values become visible in increasing order. A commit-ordered watermark derived by the engine is deferred (#3719).
 - **Identity.** The checkpoint is keyed by the scope, the definition identifier, the source binding alias and its pinned secret-free handle (which hashes the database target and the binding revision), the table and the watermark column. Publishing a new definition version keeps it; changing the alias, the database it points to, the binding revision, the table or the column starts again from all rows.
+- **Overlapping runs.** The checkpoint never moves backwards, but runs of one definition must not overlap: a run that finishes last can write an older row over a newer one in a keyed destination, and the checkpoint no longer reads that row. Serialising them is deferred (#3721).
 - **Finite only**, as for snapshot reads.
 - **Persisted state.** The prepared run gains an optional high watermark, written only when the source has a watermark column, so existing prepared runs keep their bytes. The checkpoint is a new runtime table, added by a migration.
 
@@ -70,5 +71,5 @@ An author names an `Int64` watermark column whose values become visible in incre
 
 ## Assumptions and boundaries
 
-- **Deferred:** continuous SQL polling (a continuous `sql` source), watermark types other than `Int64`, a checkpoint reset API, and log CDC.
+- **Deferred:** continuous SQL polling (a continuous `sql` source), watermark types other than `Int64`, a checkpoint reset API, serialising overlapping runs on one checkpoint (#3721), and log CDC.
 - **Not changed:** the snapshot read, its isolation and its recovery (spec 1198).
