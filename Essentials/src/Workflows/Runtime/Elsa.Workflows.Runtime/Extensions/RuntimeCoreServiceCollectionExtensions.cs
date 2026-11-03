@@ -67,6 +67,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.ClaimWorkflowAlterationProvider(typeof(InMemoryWorkflowAlterationStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
+        Elsa.Workflows.Runtime.UserTasks.UserTaskRegistration.AddUserTasks(services);
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
@@ -363,7 +364,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
         // live-drain accessor and the persistence-mode resolver are wired in every configuration (C1, #1227).
         services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>
-            WorkflowDrainOrchestrator.CreateScoped(
+        {
+            var orchestrator = WorkflowDrainOrchestrator.CreateScoped(
                 serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
                 serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
@@ -379,7 +381,10 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
-                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>()));
+                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>());
+            orchestrator.DrainControls = serviceProvider.GetService<DrainControlContext>();
+            return orchestrator;
+        });
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
@@ -437,7 +442,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
                 serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
             { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
-                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>() });
+                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>(),
+                HasResumptionRedriver = serviceProvider.GetServices<IWorkflowDispatchDurabilityEvidence>().Any(evidence =>
+                    string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();

@@ -696,6 +696,20 @@ export interface StudioActivityPropertyEditorContext {
   scope?: StudioActivityPropertyEditorScope;
 }
 
+/** Module-owned renderer for a pinned, server-validated user-task form integration. */
+export interface StudioUserTaskFormProps {
+  form: unknown;
+  value: Record<string, unknown>;
+  readOnly: boolean;
+  errors?: Record<string, string>;
+  onChange(value: Record<string, unknown>): void;
+}
+export interface StudioUserTaskFormContribution extends StudioBackendAwareContribution {
+  id: string;
+  provider: string;
+  component: ComponentType<StudioUserTaskFormProps>;
+}
+
 export interface StudioActivityPropertyEditorProps {
   descriptor: StudioActivityInputDescriptor;
   value: unknown;
@@ -1515,6 +1529,7 @@ export const studioSlotIds = {
   toolbarActions: "studio.toolbar.actions",
   activityEditors: "workflow.activity.editors",
   propertyEditors: "workflow.activity.property-editors",
+  userTaskForms: "user-task.form-renderers",
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
@@ -1605,6 +1620,7 @@ export const studioSlots = {
   panels: defineStudioSlot({ id: studioSlotIds.panels, kind: "panel", title: "Panels", owner: hostSlotOwner() }),
   toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
+  userTaskForms: defineStudioSlot({ id: studioSlotIds.userTaskForms, kind: "user-task-form-renderer", title: "User task form renderers", owner: hostSlotOwner() }),
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
@@ -1903,6 +1919,7 @@ export interface ElsaStudioModuleApi {
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<StudioActivityDefinitionImplementationEditorContribution>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
+  readonly userTaskForms?: StudioContributionRegistry<StudioUserTaskFormContribution>;
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;

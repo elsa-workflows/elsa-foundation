@@ -3,7 +3,7 @@ import axe, { type AxeResults, type RunOptions } from "axe-core";
 import { createDefaultEtlConnectorPipeline } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
 
 // Browser-level product components against a deterministic API fixture. Actual Workbench HTTP acceptance is T019.
-async function arrangeApi(page: Page, options: { jsonlSource?: boolean } = {}) {
+async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean } = {}) {
   let pipeline = createDefaultEtlConnectorPipeline();
   let revision = 1;
   let created = false;
@@ -41,7 +41,11 @@ async function arrangeApi(page: Page, options: { jsonlSource?: boolean } = {}) {
       if (request.method() === "PUT") {
         const body = request.postDataJSON();
         expect(body.expectedRevision).toBe(revision);
-        if (options.jsonlSource) {
+        if (options.continuous) {
+          expect(body.pipeline.continuous).toEqual({ pollIntervalSeconds: 30 });
+        } else if (options.csvErrors) {
+          expect(body.pipeline.routes.errors).toEqual({ kind: "csv", binding: "error-file" });
+        } else if (options.jsonlSource) {
           expect(body.pipeline.source).toEqual({ kind: "jsonl", binding: "csv-only", fields: [
             { name: "id", pointer: "/id", type: "int64", required: true },
             { name: "name", pointer: "/customer/name", type: "string", required: true }
@@ -146,6 +150,72 @@ for (const width of [320, 1024]) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByRole("heading", { name: "Source connector", exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1190-studio-jsonl-source-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+// Spec 1191: a CSV route selects from the host's output folder approvals and saves its destination kind.
+for (const width of [320, 1024]) {
+  test(`CSV destination authoring saves the route and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { csvErrors: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await page.getByLabel("Rejected records destination kind", { exact: true }).selectOption("csv");
+    const binding = page.getByLabel("Rejected records binding", { exact: true });
+    await expect(binding.locator("option", { hasText: "error-file" })).toHaveCount(1);
+    await binding.selectOption("error-file");
+    await expect(page.getByText("Choose a host-approved rejected file output binding.", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Rejected records destination kind", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1191-studio-csv-route-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+// Spec 1192: a cursor-paginated HTTP source can run continuously with a poll interval.
+for (const width of [320, 1024]) {
+  test(`continuous run authoring saves the poll interval and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { continuous: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await page.getByLabel("Run continuously", { exact: true }).check();
+    await expect(page.getByText("Continuous connector pipeline", { exact: true })).toBeVisible();
+    await page.getByLabel("Poll interval (seconds)", { exact: true }).fill("30");
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Poll interval (seconds)", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1192-studio-continuous-${width}.png` });
     await page.addScriptTag({ content: axe.source });
     const violations = await page.evaluate(async () => (await (window as unknown as {
       axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }

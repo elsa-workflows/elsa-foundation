@@ -62,6 +62,8 @@ internal static class EtlConnectorRecordCodec
             pipeline.Http.MaxPageBytes > pipeline.Http.MaxRetainedInputBytes ||
             pipeline.Http.MaxContinuationBytes > pipeline.Http.MaxPageBytes || !EtlHttpRetryPolicy.IsValid(pipeline.Http))
             throw new ArgumentException("The connector storage limits are invalid.");
+        if (EtlContinuousRunPolicy.FindViolation(pipeline) is not null)
+            throw new ArgumentException("The continuous run policy is unsupported.");
         switch (pipeline.Source)
         {
             case EtlCsvSource csv:
@@ -176,6 +178,7 @@ internal static class EtlConnectorRecordCodec
         {
             case EtlJsonlDestination file: Binding(binding, EtlConnectorKind.Jsonl, file.Binding, isInput: false); break;
             case EtlHttpDestination http: Binding(binding, EtlConnectorKind.Http, http.Binding, isInput: false); break;
+            case EtlCsvDestination csv: Binding(binding, EtlConnectorKind.Csv, csv.Binding, isInput: false); break;
             default: throw new ArgumentException("The connector destination is unsupported.");
         }
     }

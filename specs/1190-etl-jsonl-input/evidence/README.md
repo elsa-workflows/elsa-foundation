@@ -91,7 +91,7 @@ Disabling the span check fails only 2 of its 3 targeted cases: the third forged 
 
 Run locally; CI covers the exact head:
 
-- `Elsa.Etl.Tests` at `657b5cd9f` (after review round 2): 1060/1060 passed, 0 skipped; `--list-tests` gives 1060; 187.5 s wall time on a loaded shared machine. Earlier: 1058/1058 at `c51023ed8`, 1056/1056 at `7ecec65ad`.
+- `Elsa.Etl.Tests` on `f1b85fa0c`'s code (rerun during review round 4): 1060/1060 passed, 0 skipped; `--list-tests` gives 1060; 189 s wall time on a loaded shared machine; architecture guard 609/609, maps check and catalog links pass on the same code. Earlier: 1060/1060 at `657b5cd9f`, 1058/1058 at `c51023ed8`, 1056/1056 at `7ecec65ad`.
 - The golden-hash theory `EtlV2ArtifactIdentityTests.Persisted_v2_artifacts_keep_their_canonical_hash_per_source_kind`, copied unchanged onto an untouched `origin/main` checkout (`eb2df8548`), passes there (3/3 in the class), so the pinned CSV and HTTP JSON hashes are main's, not values captured on this branch.
 - Architecture guard at `7ecec65ad`: 609/609.
 - `Elsa.Maps.Generator -- check` and `test-tiers-check`: pass.
@@ -107,7 +107,7 @@ Independent reviews ran before implementation. Each finding was adopted, and non
 - **Spec, against the code at `3adffdfe1`:** one blocker and ten other findings. The blocker was that header-only v2 CSV runs never settle (FR-011).
 - **Plan and tasks:** ten should-fix findings and three nits, among them the preparer gates, the shared reader's size check and ordinals, the settlement placement, replacement ordering, forged-hash index tests and the R4 exception.
 
-PR review round 1 used three independent lenses: correctness, standards and spec conformance. Their findings and outcomes are recorded in the PR's gate-evidence comment.
+PR review rounds 1–3 used three independent lenses (correctness, standards and spec conformance) and stopped at their cap unconverged. Round 4 re-reviewed the round-3 fixes: correctness found nothing; standards and spec found no code issues but four documentation inaccuracies. The fixes to this file and `tasks.md` landed through the stacked PR #3668, because #3657 was already in auto-merge; the gate-comment inaccuracy is corrected in #3657's round-4 comment. Findings and outcomes are recorded in the PR comments. The round-3 effect-count assertion (`(AcceptedMainEffects, AcceptedErrorEffects) == (2, 1)`) is tested but not bite-proofed.
 
 ## Not covered here
 

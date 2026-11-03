@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -177,6 +178,11 @@ public sealed class RuntimeCheckpointCommitter
         // materialized work must refuse rather than disappear; equivalent representations retain the ordinary one-row form.
         if (postCommitOutbox.Count > 0 && commit.StateChanges.PostCommitOutbox.Count > 0)
             commitToPersist = commitToPersist with { StateChanges = commitToPersist.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
+
+        // #3275: from here the commit may become durable, even if the store call then throws or a coalescing segment only
+        // buffers it, so a faulted dispatch can no longer prove it left no effect. Recorded before the call, whatever
+        // follows, for the drainer's RetryAfter release.
+        RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(commitToPersist);
 
         // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the

@@ -19,7 +19,7 @@ native run; hosts without the slot or the runtime capability show no link.
 The structured editor supports the v1 file topology in [spec 255](../../../../specs/255-finite-file-etl/spec.md)
 and the v2 connector topology in [spec 996](../../../../specs/996-http-etl/spec.md) and
 [spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md). Connector drafts select HTTP, CSV or JSON Lines sources,
-optional CSV lookup, and HTTP or JSONL routes through scoped alias/role/kind choices.
+optional CSV lookup, and HTTP, JSONL or CSV routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)) through scoped alias/role/kind choices.
 Its local draft is separate from the saved revision. Validation and explicit publication operate on the saved
 revision/version/hash tuple. Published artifacts are read-only. Binding choices are scoped aliases, never
 host paths. Integer and decimal literals retain their JSON numeric representation through the lossless client.
@@ -29,6 +29,13 @@ advertised connector endpoint, distinguishes HTTP page/item/exhaustion from file
 retry state, owed receipts and accepted route-body counts without inventing an HTTP total or percentage. It does not probe storage or claim
 that a cancelled run has stopped every external operation. API failure/missing capability must remain visible;
 an empty page is not a substitute for unavailable or forbidden access.
+
+Continuous runs ([spec 1192](../../../../specs/1192-etl-continuous-http/spec.md)) are authored with "Run continuously"
+and a poll interval, offered only for an HTTP source with token or next-link pagination; switching to an unsupported
+source drops the policy. Inspection shows the run mode, a completion request, and a caught-up shard's next poll apart
+from a retry wait. "Complete run" appears only while the host reports a preparing or running continuous run whose
+completion has not been requested, so Studio keeps working against hosts that predate the `etl-run-complete` relation,
+which is resolved only when the action is used.
 
 See [the ETL module guide](../../README.md) for host composition and recovery limits, and
 [file component evidence](../../../../specs/255-finite-file-etl/evidence/studio-components.md),

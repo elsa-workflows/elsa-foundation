@@ -7,7 +7,9 @@ internal enum EtlFileChunkFormat
     Csv,
     Index,
     /// <summary>A retained JSON Lines input snapshot; distinct from <see cref="Jsonl"/> output chunks.</summary>
-    JsonlSnapshot
+    JsonlSnapshot,
+    /// <summary>A published CSV output file; distinct from <see cref="Csv"/> input snapshots.</summary>
+    CsvOutput
 }
 
 /// <summary>Publishes one bounded ETL file chunk to a trusted root.</summary>

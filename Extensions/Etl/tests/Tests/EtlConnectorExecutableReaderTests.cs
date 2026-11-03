@@ -148,6 +148,29 @@ public sealed class EtlConnectorExecutableReaderTests
         Assert.Equal("etl.executable.limits-exceeded", exception.Code);
     }
 
+    [Theory]
+    [InlineData("single-page", "etl.continuous-pagination-unsupported")]
+    [InlineData("zero-interval", "etl.continuous-poll-interval-invalid")]
+    [InlineData("long-interval", "etl.continuous-poll-interval-invalid")]
+    public void Reader_refuses_unsupported_continuous_artifacts(string variant, string code)
+    {
+        using var runtime = CreateRuntime();
+
+        var exception = Assert.Throws<EtlExecutableException>(() =>
+            runtime.Reader.Read(CreateArtifact(EtlContinuousRunPolicyTests.Variant(variant))));
+
+        Assert.Equal(code, exception.Code);
+    }
+
+    [Fact]
+    public void Reader_accepts_a_continuous_cursor_artifact()
+    {
+        using var runtime = CreateRuntime();
+        var pipeline = EtlV2TestPipelines.Create() with { Continuous = new EtlContinuousRunPolicy(15) };
+
+        Assert.Equal(15, runtime.Reader.Read(Compile(pipeline)).Continuous!.PollIntervalSeconds);
+    }
+
     [Fact]
     public void Reader_refuses_artifact_batch_limits_above_live_host_capacity()
     {
@@ -226,6 +249,15 @@ public sealed class EtlConnectorExecutableReaderTests
         var crowded = pipeline with { Limits = pipeline.Limits with { MaxFields = 1 } };
         Assert.Equal("etl.executable.limits-exceeded",
             Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(crowded))).Code);
+    }
+
+    [Fact]
+    public void Reader_accepts_csv_destinations()
+    {
+        using var runtime = CreateRuntime();
+        var pipeline = EtlV2TestPipelines.Create() with { Routes = new(new EtlCsvDestination("output"), new EtlCsvDestination("errors")) };
+
+        Assert.IsType<EtlCsvDestination>(runtime.Reader.Read(Compile(pipeline)).Routes.Errors);
     }
 
     [Fact]

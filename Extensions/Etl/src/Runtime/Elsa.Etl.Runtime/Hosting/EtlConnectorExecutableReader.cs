@@ -40,6 +40,8 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                     EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, hash)))
                 throw Refused("etl.executable.provenance-invalid");
             ValidateConnectors(pipeline);
+            if (EtlContinuousRunPolicy.FindViolation(pipeline) is { } continuousViolation)
+                throw Refused(continuousViolation);
             EtlRowTransformer.ValidateV2Semantics(pipeline);
             return pipeline;
         }
@@ -123,7 +125,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
         }
         if (pipeline.Lookup is { } lookup) RequireAlias(lookup.Binding);
         foreach (var destination in new[] { pipeline.Routes.Main, pipeline.Routes.Errors })
-            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, _ => null });
+            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, EtlCsvDestination csv => csv.Binding, _ => null });
     }
 
     private static void RequireAlias(string? value)

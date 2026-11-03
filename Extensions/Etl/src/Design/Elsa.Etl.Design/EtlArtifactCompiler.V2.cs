@@ -45,6 +45,13 @@ internal sealed partial class EtlArtifactCompiler
         }
         var mapped = ValidateMapping(pipeline.Mapping, source, lookup, diagnostics);
         ValidateFilters(pipeline.Filters, mapped, diagnostics);
+        if (pipeline.Source is not null && EtlContinuousRunPolicy.FindViolation(pipeline) is { } continuousViolation)
+            diagnostics.Add(continuousViolation["etl.".Length..], "continuous", continuousViolation switch
+            {
+                "etl.continuous-poll-interval-invalid" => "The poll interval must be between 1 and 86,400 seconds.",
+                "etl.continuous-pagination-unsupported" => "Continuous runs need token or next-link pagination.",
+                _ => "Only HTTP sources can run continuously."
+            });
         if (diagnostics.HasErrors)
             return Failure(diagnostics);
 
@@ -155,6 +162,7 @@ internal sealed partial class EtlArtifactCompiler
         {
             case EtlJsonlDestination file: ValidateAlias(file.Binding, path + ".binding", diagnostics); break;
             case EtlHttpDestination http: ValidateAlias(http.Binding, path + ".binding", diagnostics); break;
+            case EtlCsvDestination csv: ValidateAlias(csv.Binding, path + ".binding", diagnostics); break;
             default:
                 diagnostics.Add(destination is null ? "destination.required" : "destination.unsupported", path, "A supported output destination is required.");
                 break;
@@ -237,6 +245,7 @@ internal sealed partial class EtlArtifactCompiler
     {
         EtlJsonlDestination file => AddText(file.Binding, ref budget),
         EtlHttpDestination http => AddText(http.Binding, ref budget),
+        EtlCsvDestination csv => AddText(csv.Binding, ref budget),
         _ => true
     };
 }

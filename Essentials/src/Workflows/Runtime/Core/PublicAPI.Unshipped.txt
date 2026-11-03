@@ -8897,6 +8897,8 @@ virtual Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBindingPageRequest.Pri
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeAdmissionCompletion.ToString() -> string
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress.ToString() -> string
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkDeferral
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkDeferral.DeferAsync(string! workflowExecutionId, string! workItemId, System.DateTimeOffset now, System.DateTimeOffset visibleAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkVisibilityReader
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkVisibilityReader.ListWithVisibilityAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility!>!>
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility
@@ -9441,3 +9443,406 @@ Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DueTime.get -> System.D
 Elsa.Workflows.Runtime.Core.Contracts.IPostCommitOutboxLookupStore.FindUndeliveredDurableAsync(string! workflowExecutionId, System.Collections.Generic.IReadOnlyCollection<string!>! excludedIntentKinds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.InputContracts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>?
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.InputContracts.init -> void
+Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ExpectedRecipient.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?
+Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ExpectedRecipient.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess.GetActorAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess.ValidateAssignmentAsync(string! tenantId, string? assigneeId, string? groupId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskFormProvider
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskFormProvider.Provider.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskFormProvider.ValidateDefinition(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm! form) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskFormProvider.ValidateResponseAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm! form, System.Text.Json.JsonElement prefill, System.Text.Json.JsonElement response, bool requireFields, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyDictionary<string!, string!>!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.ClaimAsync(string! id, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.CompleteAsync(string! id, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.CreateFormAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm! form, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.GetAsync(string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.ListAsync(string! view, int limit = 25, string? after = null, string? search = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.ReassignAsync(string! id, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.ReleaseAsync(string! id, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskRuntime
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskRuntime.ReadAcceptedAsync(string! tenantId, string! taskId, string! completionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskRuntime.ReconcileAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord! task, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskRuntime.StageAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.FindAsync(string! tenantId, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord?>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.FindFormAsync(string! tenantId, string! id, string! version, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion?>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.IsDurable.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.QueryAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.RecoverAsync(int limit, string? after, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.TryCreateFormAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion! version, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.TryWriteAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord! record, long? expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanAct.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanAct.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanManage.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanManage.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanManageForms.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanManageForms.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanRead.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanRead.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanReadForms.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.CanReadForms.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.Deconstruct(out string! TenantId, out string! UserId, out System.Collections.Generic.IReadOnlySet<string!>! GroupIds, out bool CanRead, out bool CanAct, out bool CanManage, out bool CanManageForms, out bool CanReadForms) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.GroupIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.GroupIds.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.TenantId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.UserId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.UserId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.UserTaskActor(string! TenantId, string! UserId, System.Collections.Generic.IReadOnlySet<string!>! GroupIds, bool CanRead, bool CanAct, bool CanManage, bool CanManageForms, bool CanReadForms = false) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.AssigneeId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.AssigneeId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.Deconstruct(out long Revision, out string! RequestId, out string? AssigneeId, out string? GroupId) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.GroupId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.GroupId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.RequestId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.RequestId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.Revision.get -> long
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.Revision.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.UserTaskAssignment(long Revision, string! RequestId, string? AssigneeId, string? GroupId) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Action.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Action.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Data.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Data.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Deconstruct(out long Revision, out string! RequestId, out string! Action, out System.Text.Json.JsonElement Data) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.RequestId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.RequestId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Revision.get -> long
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Revision.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.UserTaskCompletion(long Revision, string! RequestId, string! Action, System.Text.Json.JsonElement Data) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Actions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Actions.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.AssigneeId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.AssigneeId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Deconstruct(out string! WorkflowExecutionId, out string! InvocationId, out string! ExecutableNodeId, out string! OperationKey, out string! Title, out string? Description, out string? AssigneeId, out string? GroupId, out System.Collections.Generic.IReadOnlyList<string!>! Actions, out System.Collections.Generic.IReadOnlyList<string!>! OptionalFormActions, out Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? Form, out System.Text.Json.JsonElement Prefill, out string? FormId, out string? FormVersion) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Description.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Description.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.ExecutableNodeId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Form.get -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Form.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.FormId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.FormId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.FormVersion.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.FormVersion.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.GroupId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.GroupId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.InvocationId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.InvocationId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.OperationKey.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.OperationKey.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.OptionalFormActions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.OptionalFormActions.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Prefill.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Prefill.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Title.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Title.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.UserTaskCreation(string! WorkflowExecutionId, string! InvocationId, string! ExecutableNodeId, string! OperationKey, string! Title, string? Description, string? AssigneeId, string? GroupId, System.Collections.Generic.IReadOnlyList<string!>! Actions, System.Collections.Generic.IReadOnlyList<string!>! OptionalFormActions, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? Form, System.Text.Json.JsonElement Prefill, string? FormId = null, string? FormVersion = null) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.WorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.AcceptedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.AcceptedAt.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.ActorId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.ActorId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.Deconstruct(out string! RequestId, out string! ActorId, out Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse! Response, out System.DateTimeOffset AcceptedAt) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.RequestId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.RequestId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.Response.get -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.Response.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.UserTaskDecision(string! RequestId, string! ActorId, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse! Response, System.DateTimeOffset AcceptedAt) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException.Code.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException.Errors.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException.UserTaskException(string! code, string! message, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? errors = null, System.Exception? innerException = null) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Choices.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Choices.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Deconstruct(out string! Key, out string! Label, out string! Kind, out bool Required, out bool ReadOnly, out string? Help, out decimal? Minimum, out decimal? Maximum, out int? MaxLength, out System.Collections.Generic.IReadOnlyList<string!>? Choices) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Help.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Help.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Key.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Key.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Kind.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Kind.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Label.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Label.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.MaxLength.get -> int?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.MaxLength.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Maximum.get -> decimal?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Maximum.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Minimum.get -> decimal?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Minimum.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.ReadOnly.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.ReadOnly.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Required.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Required.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.UserTaskField(string! Key, string! Label, string! Kind, bool Required = false, bool ReadOnly = false, string? Help = null, decimal? Minimum = null, decimal? Maximum = null, int? MaxLength = null, System.Collections.Generic.IReadOnlyList<string!>? Choices = null) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Deconstruct(out string! Id, out string! Version, out string! Name, out string! Provider, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField!>! Fields) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Fields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Fields.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Id.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Id.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Name.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Name.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Provider.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Provider.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.UserTaskForm(string! Id, string! Version, string! Name, string! Provider, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField!>! Fields) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Version.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Version.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.CreatedBy.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.CreatedBy.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.Deconstruct(out string! TenantId, out Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm! Form, out System.DateTimeOffset CreatedAt, out string! CreatedBy) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.Form.get -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.Form.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.TenantId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.UserTaskFormVersion(string! TenantId, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm! Form, System.DateTimeOffset CreatedAt, string! CreatedBy) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Action.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Action.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.ActorId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.ActorId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.AssigneeId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.AssigneeId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.At.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.At.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Deconstruct(out string! Operation, out string! ActorId, out System.DateTimeOffset At, out string? Action, out string? AssigneeId, out string? GroupId) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.GroupId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.GroupId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Operation.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Operation.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.UserTaskHistory(string! Operation, string! ActorId, System.DateTimeOffset At, string? Action = null, string? AssigneeId = null, string? GroupId = null) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.Deconstruct(out long Revision, out string! RequestId) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.RequestId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.RequestId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.Revision.get -> long
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.Revision.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.UserTaskMutation(long Revision, string! RequestId) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>! Items, out string? Next) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.UserTaskPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskProtocol
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.After.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.After.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Deconstruct(out string! TenantId, out string? UserId, out System.Collections.Generic.IReadOnlySet<string!>! GroupIds, out string! View, out int Limit, out string? After, out string? Search) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.GroupIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.GroupIds.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Limit.get -> int
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Limit.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Search.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Search.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.TenantId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.UserId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.UserId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.UserTaskQuery(string! TenantId, string? UserId, System.Collections.Generic.IReadOnlySet<string!>! GroupIds, string! View, int Limit = 25, string? After = null, string? Search = null) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.View.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.View.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Actions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Actions.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.AssigneeId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.AssigneeId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.ClaimantId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.ClaimantId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Decision.get -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Decision.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Deconstruct(out string! Id, out string! TenantId, out string! WorkflowExecutionId, out string! InvocationId, out string! ExecutableNodeId, out string! OperationKey, out string! Title, out string? Description, out string? AssigneeId, out string? GroupId, out string? ClaimantId, out System.Collections.Generic.IReadOnlyList<string!>! Actions, out System.Collections.Generic.IReadOnlyList<string!>! OptionalFormActions, out Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? Form, out System.Text.Json.JsonElement Prefill, out Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus Status, out long Revision, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory!>! History, out Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient? Recipient, out Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? Decision) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Description.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Description.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.ExecutableNodeId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Form.get -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Form.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.GroupId.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.GroupId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.History.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.History.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Id.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Id.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.InvocationId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.InvocationId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.OperationKey.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.OperationKey.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.OptionalFormActions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.OptionalFormActions.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Prefill.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Prefill.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Recipient.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Recipient.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Revision.get -> long
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Revision.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Status.get -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Status.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.TenantId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Title.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Title.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.UpdatedAt.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.UserTaskRecord(string! Id, string! TenantId, string! WorkflowExecutionId, string! InvocationId, string! ExecutableNodeId, string! OperationKey, string! Title, string? Description, string? AssigneeId, string? GroupId, string? ClaimantId, System.Collections.Generic.IReadOnlyList<string!>! Actions, System.Collections.Generic.IReadOnlyList<string!>! OptionalFormActions, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? Form, System.Text.Json.JsonElement Prefill, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus Status, long Revision, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory!>! History, Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient? Recipient = null, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? Decision = null) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.WorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Action.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Action.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.CompletionId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.CompletionId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Data.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Data.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Deconstruct(out string! TaskId, out string! CompletionId, out string! Action, out System.Text.Json.JsonElement Data) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.TaskId.get -> string!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.TaskId.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.UserTaskResponse(string! TaskId, string! CompletionId, string! Action, System.Text.Json.JsonElement Data) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Cancelled = 5 -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Claimed = 2 -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Completed = 4 -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.CompletionPending = 3 -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Open = 1 -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Staged = 0 -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus
+const Elsa.Workflows.Runtime.Core.UserTasks.UserTaskProtocol.ActivityType = "Elsa.CreateUserTask" -> string!
+const Elsa.Workflows.Runtime.Core.UserTasks.UserTaskProtocol.BasicForms = "elsa.basic-forms/1" -> string!
+const Elsa.Workflows.Runtime.Core.UserTasks.UserTaskProtocol.ResumeTarget = "resume-target:user-task" -> string!
+const Elsa.Workflows.Runtime.Core.UserTasks.UserTaskProtocol.StimulusType = "Elsa.UserTask" -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskAssignment? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCompletion? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskCreation? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskDecision? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskMutation? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskResponse? right) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess.AuthorizeAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord! task, string! operation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.UserTaskOptions() -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.AllowVolatileTasksForDevelopment.get -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.AllowVolatileTasksForDevelopment.set -> void
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.GetFormAsync(string! id, string! version, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskOperations.ListFormsAsync(int limit = 25, string? after = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage!>
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore.ListFormsAsync(string! tenantId, int limit, string? after = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage!>
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion!>! Items, out string? Next) -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Equals(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? other) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion!>!
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.UserTaskFormPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion!>! Items, string? Next) -> void
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? right) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary
+Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary.CanRetainCompletionEvidence(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore! journal, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.CursorEncryptionKey.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.CursorEncryptionKey.set -> void

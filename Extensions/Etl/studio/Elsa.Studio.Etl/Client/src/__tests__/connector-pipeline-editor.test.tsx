@@ -142,6 +142,50 @@ describe("connector pipeline editor", () => {
     });
   });
 
+  it("routes either outcome to a CSV file that selects from the output folder approvals", () => {
+    const editor = renderEditor();
+    setSelect(control<HTMLSelectElement>(editor.host, "Accepted records destination kind"), "csv");
+    editor.render();
+    expect(editor.pipeline.routes.main).toEqual({ kind: "csv", binding: "output" });
+    const accepted = control<HTMLSelectElement>(editor.host, "Accepted records binding");
+    expect(Array.from(accepted.options).map(option => option.value)).toEqual(["", "output", "output-jsonl"]);
+    expect(accepted.options[1].textContent).toContain("Accepted file output");
+    setSelect(accepted, "output-jsonl");
+    editor.render();
+    setSelect(control<HTMLSelectElement>(editor.host, "Rejected records destination kind"), "csv");
+    editor.render();
+    expect(editor.pipeline.routes).toEqual({ main: { kind: "csv", binding: "output-jsonl" }, errors: { kind: "csv", binding: "errors" } });
+    expect(editor.host.textContent).toContain("Choose HTTP, JSONL or CSV independently");
+  });
+
+  it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
+    const editor = renderEditor();
+    expect(editor.pipeline.continuous).toBeUndefined();
+    expect(editor.host.textContent).toContain("Finite connector pipeline");
+
+    clickCheckbox(control<HTMLInputElement>(editor.host, "Run continuously"));
+    expect(editor.pipeline.continuous).toEqual({ pollIntervalSeconds: 60 });
+    editor.render();
+    expect(editor.host.textContent).toContain("Continuous connector pipeline");
+    setInput(control<HTMLInputElement>(editor.host, "Poll interval (seconds)"), "15");
+    expect(editor.pipeline.continuous).toEqual({ pollIntervalSeconds: 15 });
+    editor.render();
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Pagination strategy"), "singlePage");
+    editor.render();
+    expect(editor.pipeline.continuous).toBeUndefined();
+    expect(() => control(editor.host, "Run continuously")).toThrow();
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Pagination strategy"), "nextLink");
+    editor.render();
+    clickCheckbox(control<HTMLInputElement>(editor.host, "Run continuously"));
+    editor.render();
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "jsonl");
+    editor.render();
+    expect(editor.pipeline.continuous).toBeUndefined();
+    expect(() => control(editor.host, "Run continuously")).toThrow();
+  });
+
   it("edits all lossless byte controls without rounding and locks every control in read-only mode", () => {
     const editor = renderEditor();
     const exact = "9223372036854775807";

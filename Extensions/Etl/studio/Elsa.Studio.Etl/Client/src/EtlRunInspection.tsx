@@ -51,9 +51,11 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
     {run.connector ? <section aria-label="Connector output progress">
       <h3>Connector output progress</h3>
       <dl className="etl-facts">
+        <dt>Run mode</dt><dd>{run.connector.mode === "continuous" ? "Continuous" : "Finite"}</dd>
+        {run.connector.completionRequestedAt ? <><dt>Completion requested</dt><dd><time dateTime={run.connector.completionRequestedAt}>{run.connector.completionRequestedAt}</time></dd></> : null}
         <dt>Source type</dt><dd>{kindLabel(run.connector.sourceKind)}</dd>
-        <dt>Main output type</dt><dd>{kindLabel(run.connector.mainKind)}</dd>
-        <dt>Error output type</dt><dd>{kindLabel(run.connector.errorKind)}</dd>
+        <dt>Main output type</dt><dd>{outputKindLabel(run.connector.mainKind)}</dd>
+        <dt>Error output type</dt><dd>{outputKindLabel(run.connector.errorKind)}</dd>
         <dt>Main route bodies accepted</dt><dd>{run.connector.acceptedMainEffects}</dd>
         <dt>Error route bodies accepted</dt><dd>{run.connector.acceptedErrorEffects}</dd>
       </dl>
@@ -90,6 +92,11 @@ function sourceRecordCountLabel(run: EtlRunDetailView) {
 
 function isHttpKind(kind: string) {
   return kind === "http";
+}
+
+/** An output's kind; a CSV output is a file, while a CSV source keeps the plain "CSV" label. */
+function outputKindLabel(kind: string) {
+  return kind === "csv" ? "CSV file" : kindLabel(kind);
 }
 
 function kindLabel(kind: string) {
@@ -146,7 +153,9 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
               : `HTTP page ${partition.http!.pageSequence}, next item ${partition.http!.nextItem} of ${partition.http!.pageRecordCount ?? "unknown count"}; ${partition.http!.exhausted ? "source exhausted" : "not yet exhausted"}`;
           return <tr key={partition.partitionOrdinal}>
             <th scope="row">{partition.partitionOrdinal}</th>
-            <td>{sourcePosition}{partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
+            <td>{sourcePosition}{partition.nextPollAt
+              ? <><br />Next poll at <time dateTime={partition.nextPollAt}>{partition.nextPollAt}</time></>
+              : partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
             <td>{claim}{partition.claimExpiresAt ? <><br /><time dateTime={partition.claimExpiresAt}>{partition.claimExpiresAt}</time></> : null}</td>
             <td>{partition.http?.fetch ? <RetryProgress retry={partition.http.fetch} /> : "No fetch retry scheduled"}</td>
             <td>{partition.owedBatch ? <OwedOutput owed={partition.owedBatch} /> : "None"}</td>
@@ -170,7 +179,7 @@ function OwedOutput({ owed }: { owed: NonNullable<EtlRunConnectorPartitionView["
 
 function EffectProgress({ label, effect }: { label: string; effect: EtlRunEffectView }) {
   return <div>
-    <strong>{label} ({kindLabel(effect.kind)})</strong>
+    <strong>{label} ({outputKindLabel(effect.kind)})</strong>
     <p>{effect.recordCount} records; {effectStateLabel(effect.state)}.</p>
     {effect.retry ? <RetryProgress retry={effect.retry} /> : null}
   </div>;
