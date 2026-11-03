@@ -119,6 +119,27 @@ it.each(["absent", "denied"])("keeps native inspection useful when state-view re
   } finally { view.dispose(); }
 });
 
+it("lets a contribution for a family of user-defined activities match any activity type, decided by the view kind", async () => {
+  const view = fixture();
+  try {
+    const getLinks = vi.fn(() => [{ id: "family", label: "Open family member", path: "/family/member" }]);
+    view.render({ activity: { ...view.activity, activityType: "acme.user-defined" },
+      contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks }] });
+    await vi.waitFor(() => expect(view.container.querySelector("a")?.textContent).toBe("Open family member"));
+    expect(getLinks).toHaveBeenCalledTimes(1);
+  } finally { view.dispose(); }
+});
+
+it("still matches only the listed activity types without the any-type opt-in", async () => {
+  const view = fixture();
+  try {
+    view.render({ activity: { ...view.activity, activityType: "acme.user-defined" } });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(view.container.querySelector("a")).toBeNull();
+    expect(view.container.textContent).not.toContain("Related runs");
+  } finally { view.dispose(); }
+});
+
 it("rejects foreign destinations and isolates a broken contribution", async () => {
   const view = fixture();
   try {

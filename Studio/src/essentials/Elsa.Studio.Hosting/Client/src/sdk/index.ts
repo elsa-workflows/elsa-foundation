@@ -1927,6 +1927,11 @@ export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendA
   id: string;
   order?: number;
   activityTypes: readonly string[];
+  /**
+   * Applies to every activity type, so the projected view kind alone decides. For a provider-owned family of user-defined
+   * activities whose type keys are not known in advance; the host then reads the state view of every selected activity.
+   */
+  anyActivityType?: boolean;
   viewKind: string;
   viewVersion: number;
   /** Pure synchronous projection of public reference data; the target route reauthorizes its reads. */

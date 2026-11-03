@@ -26,7 +26,7 @@ export function WorkflowRunRelatedLinks({ context, session, activity, contributi
   const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
   const refreshReference = useRef<(() => void) | null>(null);
   const [state, setState] = useState<{ key: string; view?: ActivityStateView; unavailable?: boolean } | null>(null);
-  const candidates = contributions.filter(item => item.activityTypes.includes(activity.activityType)
+  const candidates = contributions.filter(item => (item.anyActivityType === true || item.activityTypes.includes(activity.activityType))
     && evaluateBackendRequirements(session, item.requiresBackend).state === "available");
   const eligible = !!session && !session.disposed && session.context === context
     && session.identity.status === "authenticated" && !!session.identity.subject && candidates.length > 0;

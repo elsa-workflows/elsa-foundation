@@ -36,13 +36,16 @@ public sealed class ActivityExecutionStateViewService(
 
         var canInspectValues = await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken);
         var privateState = activity.PrivateState;
-        var projector = privateState is not null ? projectors.Find(privateState.Value.Type.Alias)
-            : projectors.FindWithoutState(activity.Execution.ActivityType);
+        var executable = await workflowExecutableStore.FindAsync(workflowExecution.PinnedExecutable.ArtifactId, cancellationToken);
+        ExecutableNode? node = executable is not null && executable.NodesById.TryGetValue(activity.Execution.ExecutableNodeId, out var found) ? found : null;
+        // A provider-owned family of user-defined activities is recognized by its node's descriptor kind before the
+        // private-state alias or the exact cleared-state activity type.
+        var projector = projectors.FindByDescriptor(node?.DescriptorType)
+            ?? (privateState is not null ? projectors.Find(privateState.Value.Type.Alias) : projectors.FindWithoutState(activity.Execution.ActivityType));
         if (projector is null)
             return Unavailable(activity, privateState is null ? ActivityStateView.StateCleared : ActivityStateView.NoProjector, canInspectValues);
 
-        var executable = await workflowExecutableStore.FindAsync(workflowExecution.PinnedExecutable.ArtifactId, cancellationToken);
-        if (executable is null || !executable.NodesById.TryGetValue(activity.Execution.ExecutableNodeId, out var node))
+        if (node is null)
             // A visible cleared activity keeps its StateCleared answer when retained references cannot be read.
             return privateState is null ? Unavailable(activity, ActivityStateView.StateCleared, canInspectValues) : null;
 
