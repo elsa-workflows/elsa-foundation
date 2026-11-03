@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "spec": "1201-etl-rabbitmq-source",
-  "sourceRevision": "7852daed48020fce957277901b4667d7725bc63e",
+  "sourceRevision": "9411620cf04c56cdfcd04c668e20071ef6afd435",
   "workingTreeDirty": false,
-  "workbenchAssemblySha256": "437ca4bb700a9d9d415b2bc0280ea0c1047be1188260c82cfeec7b88c28f5a0b",
-  "hostProcessId": 58042,
+  "workbenchAssemblySha256": "2bf4cd54ff68e2cd703905f88460edfee4940e4a3b908eddb86b99838587b81b",
+  "hostProcessId": 76988,
   "cases": {
     "first": {
-      "definition": "rabbitmq-first-f6dd61b5",
-      "selection": "etl1:rabbitmq-first-f6dd61b5:1:b95044c19efe922cb728c75d578ad56fd01fbbddb05d4f8b8299ea050154113b",
+      "definition": "rabbitmq-first-29654ee9",
+      "selection": "etl1:rabbitmq-first-29654ee9:1:b95044c19efe922cb728c75d578ad56fd01fbbddb05d4f8b8299ea050154113b",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -24,7 +24,7 @@
         "outstandingRecords": 0,
         "outstandingBytes": 0
       },
-      "runId": "etl-9cd844cf47059a06c11edd49baa8464ed84dbc1f0b1e3b72e8fcc9ed095b4711",
+      "runId": "etl-dea283f9b7b99e878ac099338c3faba14dfea060d9046f7148df39d6f24db65f",
       "connector": {
         "sourceKind": "rabbitMq",
         "mainKind": "jsonl",
@@ -47,8 +47,8 @@
       "hostPathOrSecretInInspection": false
     },
     "second": {
-      "definition": "rabbitmq-second-b3ac031b",
-      "selection": "etl1:rabbitmq-second-b3ac031b:1:da6d6522d542631862ff7a1c8dfada2f5f58ae9b1bc059283c7667313cf4378e",
+      "definition": "rabbitmq-second-d9a83829",
+      "selection": "etl1:rabbitmq-second-d9a83829:1:da6d6522d542631862ff7a1c8dfada2f5f58ae9b1bc059283c7667313cf4378e",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -64,7 +64,7 @@
         "outstandingRecords": 0,
         "outstandingBytes": 0
       },
-      "runId": "etl-b37c7bd176e08d1d8277d7a10ecddba93036346db672f1a2c5aafd72a4db00af",
+      "runId": "etl-1aaa0e109ad2b6073e24b91ad0d2ac0f3dcd335aad4d1fec88fa0b2c362f1513",
       "connector": {
         "sourceKind": "rabbitMq",
         "mainKind": "jsonl",
@@ -87,7 +87,7 @@
       "hostPathOrSecretInInspection": false
     }
   },
-  "baseUrl": "http://127.0.0.1:60131",
+  "baseUrl": "http://127.0.0.1:52048",
   "catalogRabbitMqBindings": [
     [
       "events-in",
