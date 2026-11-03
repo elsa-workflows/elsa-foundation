@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Agent.Workflows.Runtime.Tests;
 
-/// <summary>A Runtime-only Weaver host: the Agent foundation, the Runtime-side workflow package and one fixture Executable inspection.</summary>
+/// <summary>A Runtime-only Weaver host: the Agent foundation, the Runtime-side workflow package and one fixture Executable and Run inspection each.</summary>
 internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
 {
     internal const string ModuleId = "Elsa.Studio.Workflows";
@@ -18,9 +18,11 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
     private readonly ServiceProvider root;
     private readonly IServiceScope scope;
 
-    public WorkflowRuntimeAgentTestHost(FixtureInspection? inspection = null, IAgentToolAuthorizer? authorizer = null, Action<IServiceCollection>? configure = null)
+    public WorkflowRuntimeAgentTestHost(FixtureInspection? inspection = null, IAgentToolAuthorizer? authorizer = null, Action<IServiceCollection>? configure = null,
+        FixtureRunInspection? runs = null)
     {
         Inspection = inspection ?? new FixtureInspection(Executable());
+        Runs = runs ?? new FixtureRunInspection();
         var services = new ServiceCollection();
         services.AddLogging();
         new EventsFeature().ConfigureServices(services);
@@ -28,15 +30,19 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
         new FoundationWorkflowsRuntimeAgentFeature().ConfigureServices(services);
         services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authorizer ?? new Authorizer()));
         services.AddSingleton<IWorkflowExecutableInspection>(Inspection);
+        services.AddSingleton<IWorkflowRunInspection>(Runs);
         configure?.Invoke(services);
         root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         scope = root.CreateScope();
     }
 
     public FixtureInspection Inspection { get; }
+    public FixtureRunInspection Runs { get; }
     public IServiceProvider Services => scope.ServiceProvider;
     public IAgentContextProvider Source => Services.GetServices<IAgentContextProvider>().Single(item => item.Descriptor.Id == "workflows.executable-context");
     public IAgentTool Tool => Services.GetServices<IAgentTool>().Single(item => item.Descriptor.Name == "workflow_read_executable");
+    public IAgentContextProvider RunSource => Services.GetServices<IAgentContextProvider>().Single(item => item.Descriptor.Id == "workflows.run-context");
+    public IAgentTool RunTool => Services.GetServices<IAgentTool>().Single(item => item.Descriptor.Name == "workflow_read_run");
 
     public async Task<AgentSession> SessionAsync(string mode = "explain") =>
         await Services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", mode, null,
@@ -44,6 +50,14 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
 
     public async Task<AgentContextContribution> CollectAsync(AgentSession session, params AgentContextAttachment[] callers) =>
         await Source.CollectAsync(new(session.Id, "workflow-executable", new Dictionary<string, string>()) { CallerAttachments = callers });
+
+    public async Task<AgentContextContribution> CollectRunAsync(AgentSession session, params AgentContextAttachment[] callers) =>
+        await RunSource.CollectAsync(new(session.Id, "workflow-run", new Dictionary<string, string>()) { CallerAttachments = callers });
+
+    public async Task<AgentResult<AgentToolPreparation>> PrepareRunAsync(AgentSession session, IReadOnlyCollection<AgentContextAttachment> context,
+        IReadOnlyDictionary<string, object?>? arguments = null) =>
+        await RunTool.PrepareAsync(new("call-1", "workflow_read_run", session.Id, session.ActorId, arguments ?? new Dictionary<string, object?>(), context)
+            { TenantId = session.TenantId });
 
     public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentSession session, IReadOnlyCollection<AgentContextAttachment> context,
         IReadOnlyDictionary<string, object?>? arguments = null) =>
@@ -64,6 +78,85 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
         {
             ModuleId = ModuleId, SchemaVersion = "1", Target = new(ModuleId, "workflow-executable", artifactId, hash), Origin = AgentContextOrigin.ClientSnapshot
         };
+
+    /// <summary>The run page's reference to one exact Run and, where one is selected, one activity execution of it.</summary>
+    public static AgentContextAttachment RunReference(string workflowExecutionId = "run-1", string? activityExecutionId = "act-write", object? content = null) =>
+        new($"workflows.run:{workflowExecutionId}", "workflow-run", workflowExecutionId, "Run", "workflows.run", AgentContextSensitivity.Internal, "screen",
+            "Workflow Run", JsonSerializer.SerializeToElement(content ?? new { workflowExecutionId, activityExecutionId }), new Dictionary<string, string>())
+        {
+            ModuleId = ModuleId, SchemaVersion = "1", Target = new(ModuleId, "workflow-run", workflowExecutionId, activityExecutionId ?? workflowExecutionId),
+            Origin = AgentContextOrigin.ClientSnapshot
+        };
+
+    internal const string Canary = "CANARY-RUN-VALUE-0f4b8f9a2c6d4e1b";
+    internal static readonly DateTimeOffset ReadAt = new(2026, 11, 3, 12, 30, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// A Run of artifact-1: a WriteLine whose sensitive input is withheld, then a Fault that faulted it with one blocking incident.
+    /// The selected WriteLine execution holds a withheld input (whose fixture value is a canary no read may disclose), a
+    /// resolved output, an input the caller may not resolve and one the runtime did not capture; its state view is unsupported.
+    /// <c>act-pruned</c> is recorded by the Run (an incident names it) but no longer inspectable.
+    /// </summary>
+    public static WorkflowRunInspectionDetails Run(WorkflowRunInspectionRequest request, bool inProgress = false, bool canInspectValues = true, int activities = 2,
+        int incidents = 1, bool resolved = true)
+    {
+        var at = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        var status = inProgress ? "Running" : "Faulted";
+        var write = new WorkflowRunInspectionActivitySummary("act-write", "write", "write", "Elsa.Activities.Primitives.Activities.WriteLine", "1.0.0", "Completed",
+            null, 1, at, at, at, ["Done"], 0, 0, 4);
+        var summaries = Enumerable.Range(0, activities).Select(index => index switch
+        {
+            0 => write,
+            1 => new WorkflowRunInspectionActivitySummary("act-fault", "fault", "fault", "Elsa.Activities.Primitives.Activities.Fault", "1.0.0", "Faulted", null, 2,
+                at, at, null, [], 0, 1, 1),
+            _ => new WorkflowRunInspectionActivitySummary($"act-{index}", $"node-{index}", $"node-{index}", "Elsa.Activities.Primitives.Activities.WriteLine", "1.0.0",
+                "Completed", null, index + 1, at, at, at, ["Done"], 0, 0, 1)
+        }).ToArray();
+        var recorded = Enumerable.Range(0, incidents).Select(index => new WorkflowRunInspectionIncident(index == 0 ? "incident-1" : $"incident-{index + 1}",
+            index == 0 ? "act-fault" : "act-pruned", "fault", "Error", "Active", "workflow.fault",
+            canInspectValues ? "Qualification fault." + new string('x', index == 0 ? 0 : 400) : "Incident details are redacted.", !canInspectValues, true, at, null)).ToArray();
+        WorkflowRunInspectionSelection? selection = request.ActivityExecutionId switch
+        {
+            null => null,
+            "act-write" => new("act-write", new(write, "root", "root", 1, [],
+                [], [
+                    Value("text", "ActivityInput", WorkflowRunValueDisclosure.Withheld, null, JsonSerializer.SerializeToElement(Canary), sensitive: true),
+                    Value("result", "ActivityOutput", request.ResolveSelectedValues && resolved ? WorkflowRunValueDisclosure.Resolved : WorkflowRunValueDisclosure.Resolvable,
+                        null, request.ResolveSelectedValues && resolved ? JsonSerializer.SerializeToElement(new { ok = true }) : null),
+                    Value("limited", "ActivityInput", WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotPermitted),
+                    Value("skipped", "ActivityInput", WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotCaptured)
+                ], new(false, WorkflowRunUnavailableReason.Unsupported, null, null, null)), null),
+            "act-pruned" => new("act-pruned", null, WorkflowRunUnavailableReason.Pruned),
+            var other => new(other, null, null)
+        };
+        return new(new(request.WorkflowExecutionId, "artifact-1", Hash, "definition-1", "version-1", "1.0.0", status, null, "Production", !inProgress,
+                at, at, at, inProgress ? null : at, null, activities, incidents, incidents, incidents, "published-1", "publication-1"),
+            recorded, new(summaries.Take(request.ActivityPageSize).ToArray(), activities, activities > request.ActivityPageSize ? "next" : null), selection,
+            canInspectValues, "Durable", "activity-level", ReadAt);
+    }
+
+    private static WorkflowRunInspectionValue Value(string key, string subject, WorkflowRunValueDisclosure disclosure, WorkflowRunUnavailableReason? reason,
+        JsonElement? value = null, bool sensitive = false) =>
+        new("evidence-" + key, key, subject, subject == "ActivityInput" ? key : null, sensitive ? "None" : "DiagnosticSnapshot",
+            sensitive ? "notCaptured" : disclosure == WorkflowRunValueDisclosure.Unavailable && reason == WorkflowRunUnavailableReason.NotCaptured ? "notCaptured" : "diagnosticSnapshotCaptured",
+            disclosure == WorkflowRunValueDisclosure.Resolved || disclosure == WorkflowRunValueDisclosure.Resolvable ? "resolutionAvailable"
+                : reason == WorkflowRunUnavailableReason.NotPermitted ? "resolutionPermissionRequired" : "unavailable",
+            sensitive, new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero), sensitive ? "Sensitive runtime payloads are excluded by default." : "Diagnostic snapshot captured by runtime diagnostics policy.",
+            "primitive", "String", null, null, disclosure, reason, value);
+
+    /// <summary>The Runtime's Run read, over <see cref="Run"/>; a Run outside <see cref="Known"/> reads as absent.</summary>
+    internal sealed class FixtureRunInspection : IWorkflowRunInspection
+    {
+        public HashSet<string> Known { get; } = ["run-1"];
+        public Func<WorkflowRunInspectionRequest, WorkflowRunInspectionDetails?>? Read { get; set; }
+        public List<WorkflowRunInspectionRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowRunInspectionDetails?> GetAsync(WorkflowRunInspectionRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return ValueTask.FromResult(!Known.Contains(request.WorkflowExecutionId) ? null : Read is null ? Run(request) : Read(request));
+        }
+    }
 
     /// <summary>A root flowchart with two children connected Done -> In, one sensitive binding, and two Source References.</summary>
     public static WorkflowExecutableInspectionDetails Executable(string hash = Hash, int children = 2) =>

@@ -224,7 +224,8 @@ public sealed class WorkflowExecutableAgentTests
     public async Task The_capability_is_read_only_explain_under_runtime_read()
     {
         using var host = new WorkflowRuntimeAgentTestHost();
-        var capability = Assert.Single(await host.Services.GetServices<IAgentCapabilityProvider>().OfType<WorkflowRuntimeAgentCapabilityProvider>().Single().GetCapabilitiesAsync());
+        var capability = Assert.Single(await host.Services.GetServices<IAgentCapabilityProvider>().OfType<WorkflowRuntimeAgentCapabilityProvider>().Single().GetCapabilitiesAsync(),
+            item => item.Id == "workflow.executable-explain");
         Assert.Equal(("workflow.executable-explain", ModuleId, AgentRisk.ReadOnly), (capability.Id, capability.ModuleId, capability.Risk));
         Assert.Equal(["workflows/runtime:read"], capability.RequiredPermissions);
         Assert.Equal(["workflows.executable"], capability.ContextKinds);

@@ -3504,6 +3504,47 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("discloses the exact Run it shows to Weaver and explains it with the context left to the page (spec 1193 FR-029)", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1"))
+        return response(workflowInstanceDetails({ instance: workflowInstance({ status: "Faulted", sourceReferenceId: "reference-pinned" }) }));
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) return response(executableDetail());
+      if (url.startsWith("https://server.example/design/activities/catalog")) return response({ activities: [] });
+      if (url.startsWith("https://server.example/design/workflows/definitions")) return response({ items: [] });
+      return response(null, 404);
+    }));
+    const dispatchPrompt = vi.fn();
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", configured => {
+      configured.agent.promptActions.add({ id: "weaver.workflows.explain-instance", label: "Explain run", placement: "selection", contextKind: "workflow-instance",
+        createPrompt: context => ({ message: "Explain", mode: "enqueue", attachments: [], context } as never) });
+      configured.agent.dispatchPrompt = dispatchPrompt;
+    });
+    const runContext = async () => {
+      const provider = api.agent.contextProviders.list().find(item => item.id === "workflows.run-inspector")!;
+      const result = await provider.collect({ surface: { route: "/workflows" }, mode: "explain" } as never);
+      return Array.isArray(result) ? result : result.attachments;
+    };
+    await vi.waitFor(async () => expect(await runContext()).toHaveLength(1));
+    const [attachment] = await runContext();
+    // One exact Workflow Instance, never "the latest run"; with nothing selected its revision is the instance identity.
+    expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.agent.clientId },
+      target: { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-run", resourceId: "wfexec-1", revision: "wfexec-1" },
+      content: { workflowExecutionId: "wfexec-1", activityExecutionId: null } });
+    const explain = [...container.querySelectorAll(".wf-toolbar button")].find(item => item.textContent?.includes("Explain"))!;
+    await click(explain);
+    expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      context: { workflowExecutionId: "wfexec-1", activityExecutionId: null, status: "Faulted", attached: true }
+    }));
+    await unmount();
+    expect(await runContext()).toEqual([]);
+  });
+
   it("renders direct workflow instance details from the pinned Runtime executable", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}

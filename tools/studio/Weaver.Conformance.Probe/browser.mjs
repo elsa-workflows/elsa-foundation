@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -129,7 +129,8 @@ if (config.journey === "workflow-read-only") page.on("response", response => {
 // rewrites it): each request's URL and body, whatever its method, and each non-stream response body. Stream bodies are
 // the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
 const agentTraffic = [], agentResponseReads = [];
-if (config.journey === "workflow-explain") {
+// Spec 1193 T045: the run journey searches the same raw agent traffic for its Run canary.
+if (["workflow-explain", "workflow-run"].includes(config.journey)) {
   page.on("request", request => {
     const url = new URL(request.url());
     if (url.origin === backend && url.pathname.startsWith("/_elsa/agent/"))
@@ -152,7 +153,8 @@ if (["workflow-library", "workflow-templates"].includes(config.journey)) page.on
     designWrites.push({ path: url.pathname, method: request.method(), body: request.postDataJSON() });
 });
 // Spec 1193 T041: the read-only inspection journeys may write nothing to the design, publishing or runtime APIs.
-const INSPECTION_JOURNEYS = ["workflow-version-history", "workflow-executable-inspector"];
+// Spec 1193 T045: the run page's journey is read-only in the same way.
+const INSPECTION_JOURNEYS = ["workflow-version-history", "workflow-executable-inspector", "workflow-run"];
 if (INSPECTION_JOURNEYS.includes(config.journey)) page.on("request", request => {
   const url = new URL(request.url());
   if (url.origin === backend && /\/(design\/workflows|publishing|runtime\/workflows)\//.test(url.pathname) && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
@@ -2117,6 +2119,42 @@ async function workflowExecutableInspector() {
   result.commands = commands;
   result.observations = { executableContext: true, hashBound: true, explainCompleted: true, readOnly: true };
 }
+// Spec 1193 T045: the run page discloses the exact Run and the activity execution selected on it; its Explain action reads it
+// with workflow_read_run. The page's own agent traffic (every request, every non-stream response) and every agent stream
+// byte are searched, raw, for the Run canary, which exists only in the seeded workflow's sensitive input.
+async function workflowRun() {
+  const run = (config.workflow ?? {}).run ?? {};
+  need(run.workflowExecutionId && run.path && run.activityExecutionId && typeof run.canary === "string" && run.canary.length >= 24,
+    "The Run journey needs the seeded Run, its selected activity execution and the canary.");
+  const commands = {};
+  await page.goto(studio + "/workflows/instances/" + encodeURIComponent(run.workflowExecutionId) + "?selected=" + encodeURIComponent(run.activityExecutionId));
+  const explain = page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true });
+  await expect(explain).toBeVisible({ timeout: 30000 });
+  // Wait on the page's settled state: the activity execution it discloses with the Run is the selected one.
+  await expect(explain).toHaveAttribute("data-run-selection", run.activityExecutionId, { timeout: 30000 });
+  const before = await owner("owner-before", run.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.instance?.workflowExecutionId === run.workflowExecutionId, "The seeded Run is not the run API's.");
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_run", {}, "workflows.run",
+    { resourceType: "workflow-run", resourceId: run.workflowExecutionId, revision: run.activityExecutionId }, commands);
+  need(admitted.content?.workflowExecutionId === run.workflowExecutionId && admitted.content?.activityExecutionId === run.activityExecutionId,
+    "The admitted Run is not the shown Run and selection.");
+  await Promise.all(agentResponseReads);
+  const streamed = (await streamCapture()).map(item => item.rawBody ?? "");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")) && streamed.length > 0,
+    "The in-page search observed no agent message or stream to search.");
+  need(!JSON.stringify(agentTraffic).includes(run.canary) && !streamed.some(body => body.includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
+    "The Run canary left the run page.");
+  const after = await owner("owner-after", run.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value.instance).toEqual(before.value.instance);
+  need(inspectionEffects().length === 0, "The Run journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-run-explained");
+  result.commands = commands;
+  result.observations = { runContext: true, selectionBound: true, explainCompleted: true, readOnly: true, canaryAbsentInPage: true };
+}
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -2132,6 +2170,7 @@ try {
   else if (config.journey === "workflow-templates") await workflowTemplates();
   else if (config.journey === "workflow-version-history") await workflowVersionHistory();
   else if (config.journey === "workflow-executable-inspector") await workflowExecutableInspector();
+  else if (config.journey === "workflow-run") await workflowRun();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -2170,7 +2209,7 @@ try {
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
   if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
-  if (["workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector"].includes(config.journey))
+  if (["workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"].includes(config.journey))
     result.evidence.push(retain("design-write-attempts", designWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);

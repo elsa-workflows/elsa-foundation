@@ -66,9 +66,9 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 ## Slice G: One exact Run (story 9)
 
-- [ ] T042 Add `IWorkflowRunInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Add the `workflows.run` context and `workflow_read_run`, bound to the instance and the activity execution (FR-029, D4).
-- [ ] T043 Redaction and unavailable-by-reason. Refuse run controls.
-- [ ] T044 Studio run-page context provider.
+- [x] T042 Add `IWorkflowRunInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Add the `workflows.run` context and `workflow_read_run`, bound to the instance and the activity execution (FR-029, D4).
+- [x] T043 Redaction and unavailable-by-reason. Refuse run controls.
+- [x] T044 Studio run-page context provider.
 - [ ] T045 Probe case `workflow-run` with a canary search, and a normal-host journey on the run page (SC-005, FR-036).
 - [ ] T046 Full package conformance witness and the composed Studio suite on the final source. Record the acceptance evidence in spec.md, set its status to Implemented, and close #3442 (SC-010).
 

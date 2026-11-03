@@ -20,7 +20,7 @@ public sealed class WorkflowDeploymentShapeTests
     private const string Module = "Elsa.Studio.Workflows";
 
     [Fact]
-    public async Task A_design_only_host_serves_versions_and_reports_the_Executable_journey_as_explicitly_unavailable()
+    public async Task A_design_only_host_serves_versions_and_reports_the_Executable_and_Run_journeys_as_explicitly_unavailable()
     {
         using var root = Compose(runtime: false);
         using var scope = root.CreateScope();
@@ -37,10 +37,18 @@ public sealed class WorkflowDeploymentShapeTests
         Assert.Equal(("agent.context.kind_unsupported", "No installed module admits the supplied context kind and owner."), (refusal.Code, refusal.Message));
         Assert.DoesNotContain(executable.Value.Attachments, item => item.ContentType == "workflows.executable");
 
+        // Spec 1193 slice G (story 9 scenario 6): a Run reference is explicitly unavailable in the same way.
+        var run = await collector.CollectAsync(AgentPolicy.Default, Request(session, Run()));
+        Assert.False(run.Succeeded);
+        var runRefusal = Assert.Single(run.Value!.Diagnostics, item => item.Required);
+        Assert.Equal(("agent.context.kind_unsupported", "No installed module admits the supplied context kind and owner."), (runRefusal.Code, runRefusal.Message));
+        Assert.DoesNotContain(run.Value.Attachments, item => item.ContentType == "workflows.run");
+
         var tools = await Tools(scope);
         Assert.Contains("workflow_read_version", tools);
         Assert.DoesNotContain("workflow_read_executable", tools);
-        Assert.DoesNotContain(await Capabilities(scope), id => id == "workflow.executable-explain");
+        Assert.DoesNotContain("workflow_read_run", tools);
+        Assert.DoesNotContain(await Capabilities(scope), id => id is "workflow.executable-explain" or "workflow.run-explain");
     }
 
     [Fact]
@@ -100,6 +108,11 @@ public sealed class WorkflowDeploymentShapeTests
             "Workflow Executable", JsonSerializer.SerializeToElement(new { artifactId = "artifact-1", artifactHash = "sha256:artifact", sourceReferenceId = (string?)null }),
             new Dictionary<string, string>())
         { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-executable", "artifact-1", "sha256:artifact"), Origin = AgentContextOrigin.ClientSnapshot };
+
+    private static AgentContextAttachment Run() =>
+        new("workflows.run:run-1", "workflow-run", "run-1", "Run", "workflows.run", AgentContextSensitivity.Internal, "screen", "Workflow Run",
+            JsonSerializer.SerializeToElement(new { workflowExecutionId = "run-1", activityExecutionId = (string?)null }), new Dictionary<string, string>())
+        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-run", "run-1", "run-1"), Origin = AgentContextOrigin.ClientSnapshot };
 
     private sealed class Inspection : IWorkflowExecutableInspection
     {

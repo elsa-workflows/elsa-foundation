@@ -1,5 +1,5 @@
 {
-  "description": "Spec 1193 SC-007: the server registrations of the Workflows agent module (Elsa.Agent.Workflows), as composed by FoundationWorkflowsAgentFeature. Elsa.Agent.Tests asserts this file equals the composed server registrations; the Weaver Workflows Vitest asserts that every Workflows-package prompt, guidance text and renderer references only these tools, capabilities, context kinds and result kinds. The library context source (spec 1193 slice E) is listed under librarySource; each tool names the source that discloses its results. The version context source (spec 1193 slice F) is listed under versionSource. The Runtime-side package Elsa.Agent.Workflows.Runtime (FoundationWorkflowsRuntimeAgentFeature) is listed under runtime, which Elsa.Agent.Workflows.Runtime.Tests asserts equal to its composed registrations.",
+  "description": "Spec 1193 SC-007: the server registrations of the Workflows agent module (Elsa.Agent.Workflows), as composed by FoundationWorkflowsAgentFeature. Elsa.Agent.Tests asserts this file equals the composed server registrations; the Weaver Workflows Vitest asserts that every Workflows-package prompt, guidance text and renderer references only these tools, capabilities, context kinds and result kinds. The library context source (spec 1193 slice E) is listed under librarySource; each tool names the source that discloses its results. The version context source (spec 1193 slice F) is listed under versionSource. The Runtime-side package Elsa.Agent.Workflows.Runtime (FoundationWorkflowsRuntimeAgentFeature) is listed under runtime, which Elsa.Agent.Workflows.Runtime.Tests asserts equal to its composed registrations; its Run context source (spec 1193 slice G) is listed under runtime.runSource.",
   "moduleId": "Elsa.Studio.Workflows",
   "contextSourceId": "workflows.context",
   "contextKinds": ["workflow.definition", "workflow.request", "workflow.guidance", "workflow.catalog", "workflow.permissions", "workflows.template-editor"],
@@ -88,7 +88,7 @@
     "package": "Elsa.Agent.Workflows.Runtime",
     "contextSourceId": "workflows.executable-context",
     "contextKinds": ["workflows.executable", "workflows.executable-guidance"],
-    "capabilities": ["workflow.executable-explain"],
+    "capabilities": ["workflow.executable-explain", "workflow.run-explain"],
     "tools": [
       {
         "name": "workflow_read_executable",
@@ -96,7 +96,18 @@
         "rendererId": null,
         "executionLocation": "server",
         "disclosureSourceId": "workflows.executable-context"
+      },
+      {
+        "name": "workflow_read_run",
+        "resultType": "workflows.run",
+        "rendererId": null,
+        "executionLocation": "server",
+        "disclosureSourceId": "workflows.run-context"
       }
-    ]
+    ],
+    "runSource": {
+      "id": "workflows.run-context",
+      "contextKinds": ["workflows.run", "workflows.run-guidance"]
+    }
   }
 }
