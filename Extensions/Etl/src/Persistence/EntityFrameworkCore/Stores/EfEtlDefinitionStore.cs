@@ -114,6 +114,14 @@ internal sealed class EfEtlDefinitionStore(
             {
                 var updated = await FindDraftRowAsync(identity, cancellationToken)
                     ?? throw new InvalidDataException("The ETL draft disappeared after its update committed.");
+                // Another writer may have advanced the draft since this update committed; the result is this writer's
+                // revision, never the later one, so a caller saving on top of it still meets the later writer's conflict.
+                updated.Revision = expectedRevision + 1;
+                updated.PipelineJson = pipelineJson;
+                updated.PipelineHash = pipelineHash;
+                updated.FormatVersion = formatVersion;
+                updated.SchemaVersion = EtlDesignEfModule.SchemaVersion;
+                updated.UpdatedAtUtcTicks = updatedAtUtcTicks;
                 _ = EtlDefinitionRecordCodec.ReadDraftContent(updated, scope, definitionId);
                 return new(EtlDefinitionWriteStatus.Updated, updated);
             }
@@ -276,6 +284,12 @@ internal sealed class EfEtlDefinitionStore(
                 return new(EtlPublicationStatus.Conflict, null);
             // A persistence failure is not evidence of a competing writer. Keep it visible so
             // the caller retains retry responsibility instead of treating it as stale input.
+            throw;
+        }
+        catch
+        {
+            // A failed attempt must not leave its artifact tracked, or a later save on this context would publish it.
+            dbContext.ChangeTracker.Clear();
             throw;
         }
     }

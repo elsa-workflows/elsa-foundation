@@ -4,7 +4,10 @@ using Elsa.Etl.Design.Stores;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using System.Data.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
@@ -34,5 +37,88 @@ public sealed class EtlDefinitionStoreTests : EtlDefinitionStoreContract
         await context.Database.ExecuteSqlRawAsync("DROP TRIGGER refuse_fixture_publication");
         Assert.Equal(EtlPublicationStatus.Published,
             (await store.PublishAsync(scope, "orders", created.Draft!.Revision, artifact)).Status);
+    }
+
+    [Fact]
+    public async Task An_update_reports_its_own_revision_when_another_writer_advances_the_draft_before_the_reread()
+    {
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        await using (var context = database.CreateContext())
+            await Store(context).CreateDraftAsync(scope, "orders", EtlTestPipelines.Create("first"));
+        // A second writer commits revision 3 between this writer's update and its re-read of the row.
+        var interleave = new AfterFirstUpdate(async () =>
+        {
+            await using var other = database.CreateContext();
+            Assert.Equal(EtlDefinitionWriteStatus.Updated,
+                (await Store(other).UpdateDraftAsync(scope, "orders", 2, EtlTestPipelines.Create("theirs"))).Status);
+        });
+
+        EtlDefinitionWriteResult mine;
+        await using (var context = database.CreateContext(interleave))
+            mine = await Store(context).UpdateDraftAsync(scope, "orders", 1, EtlTestPipelines.Create("mine"));
+
+        Assert.Equal((EtlDefinitionWriteStatus.Updated, 2L, "mine"), (mine.Status, mine.Draft!.Revision, mine.Draft.Pipeline.Mapping[0].Name));
+        await using (var context = database.CreateContext())
+            Assert.Equal(EtlDefinitionWriteStatus.Conflict,
+                (await Store(context).UpdateDraftAsync(scope, "orders", mine.Draft.Revision, EtlTestPipelines.Create("again"))).Status);
+    }
+
+    [Fact]
+    public async Task A_publication_that_runs_out_of_attempts_leaves_nothing_for_a_later_save_to_publish()
+    {
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var pipeline = EtlTestPipelines.Create();
+        var busy = new BusyOnPublicationInsert();
+        await using var context = database.CreateContext(busy);
+        var store = Store(context);
+        var created = await store.CreateDraftAsync(scope, "orders", pipeline);
+
+        await Assert.ThrowsAnyAsync<DbUpdateException>(async () =>
+            await store.PublishAsync(scope, "orders", created.Draft!.Revision, Compile("orders", 1, pipeline)));
+        busy.Enabled = false;
+        Assert.Equal(EtlDefinitionWriteStatus.Created, (await store.CreateDraftAsync(scope, "unrelated", pipeline)).Status);
+
+        Assert.True(busy.Attempts > 1);
+        Assert.Empty(context.ChangeTracker.Entries());
+        Assert.Null(await store.FindPublishedAsync(scope, "orders", 1));
+        Assert.Equal(EtlPublicationStatus.Published,
+            (await store.PublishAsync(scope, "orders", created.Draft!.Revision, Compile("orders", 1, pipeline))).Status);
+    }
+
+    /// <summary>Runs an action once, right after the first UPDATE this context sends.</summary>
+    private sealed class AfterFirstUpdate(Func<Task> action) : DbCommandInterceptor
+    {
+        private bool _fired;
+
+        public override async ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData, int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_fired && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+            {
+                _fired = true;
+                await action();
+            }
+            return result;
+        }
+    }
+
+    /// <summary>Answers every publication insert as SQLite does a locked database, a lost race the store retries.</summary>
+    private sealed class BusyOnPublicationInsert : DbCommandInterceptor
+    {
+        public bool Enabled { get; set; } = true;
+        public int Attempts { get; private set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (Enabled && command.CommandText.Contains("INSERT INTO \"elsa_etl_published_artifacts\"", StringComparison.Ordinal))
+            {
+                Attempts++;
+                throw new SqliteException("database is locked", 5);
+            }
+            return ValueTask.FromResult(result);
+        }
     }
 }

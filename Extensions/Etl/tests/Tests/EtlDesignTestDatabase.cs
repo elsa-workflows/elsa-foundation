@@ -1,6 +1,7 @@
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
@@ -20,12 +21,13 @@ internal sealed class EtlDesignTestDatabase(string directory) : IEtlDesignTestDa
         return database;
     }
 
-    public EtlDesignSqliteDbContext CreateContext()
+    public EtlDesignSqliteDbContext CreateContext(params IInterceptor[] interceptors)
     {
         var options = new DbContextOptionsBuilder<EtlDesignSqliteDbContext>()
             .UseSqlite(_connectionString, sqlite => sqlite
                 .MigrationsAssembly(typeof(EtlDesignSqliteDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EtlDesignEfModule.HistoryTableName))
+            .AddInterceptors(interceptors)
             .Options;
         return new EtlDesignSqliteDbContext(options);
     }
