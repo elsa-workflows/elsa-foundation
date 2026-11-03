@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "spec": "1198-etl-sql-source",
   "engine": "postgresql",
-  "sourceRevision": "21171659f207aafc9a95ea60fd30fb00d2f0d24d",
+  "sourceRevision": "42572d6af804036c576f56d5d660cd1a77b2a3ac",
   "workingTreeDirty": false,
-  "workbenchAssemblySha256": "cfdaf131e809de6bebdded03ac5b8b57bbd935b5f496f509577f58002b298430",
-  "hostProcessId": 33024,
+  "workbenchAssemblySha256": "1704c6a79aa652c4cbb5223126cd60a508fbcb19772162a5149ddf6ce5192158",
+  "hostProcessId": 50432,
   "cases": {
     "first": {
-      "definition": "sql-source-a73a93cb",
-      "selection": "etl1:sql-source-a73a93cb:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
+      "definition": "sql-source-72f64b7d",
+      "selection": "etl1:sql-source-72f64b7d:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -49,8 +49,8 @@
       "hostPathOrSecretInInspection": false
     },
     "second": {
-      "definition": "sql-source-a88436ed",
-      "selection": "etl1:sql-source-a88436ed:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
+      "definition": "sql-source-cb1ce47e",
+      "selection": "etl1:sql-source-cb1ce47e:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -91,7 +91,7 @@
       "hostPathOrSecretInInspection": false
     }
   },
-  "baseUrl": "http://127.0.0.1:60324",
+  "baseUrl": "http://127.0.0.1:50057",
   "catalogSqlBindings": [
     [
       "warehouse",
