@@ -67,7 +67,7 @@ are services. `[ActivityInput]` properties are workflow data. Activity code MUST
 An invocation attempt returns exactly one transition:
 
 ```text
-Complete(result, outcome)
+Complete(result, outcomeSelection)
 Suspend(state, triggerRegistrations)
 Fault(normalizedFault)
 Cancel(reason)
@@ -75,7 +75,10 @@ Cancel(reason)
 
 - `Complete` carries one complete typed result and one authored outcome selection: unspecified (the default `Done`),
   one or more declared outcome names, or explicitly empty (ADR 0045 §6 amendment, D-4). A selection of more than one
-  name is valid only for an activity whose contract declares multi-outcome completion.
+  name is valid only for an activity whose contract declares multi-outcome completion; the runtime MUST reject it
+  otherwise. Unspecified and explicitly empty selections MUST remain distinct through parent and join handling,
+  persistence and recovery. Explicitly empty is successful completion without outgoing paths, not cancellation of
+  other running branches; the step's pending engine-owned changes still commit.
 - `Suspend` carries one immutable private state document and one or more typed trigger registrations.
 - `Fault` carries normalized persistable fault information, never an arbitrary serialized exception.
 - `Cancel` is distinct from both failure and successful authored outcomes.
@@ -257,10 +260,13 @@ allocated, stable member key when applicable, and the pinned contract fingerprin
 | `VF-ACT-003` | Required input absent after binding normalization |
 | `VF-ACT-004` | Input type/nullability violation |
 | `VF-ACT-005` | Input, state, or result is nonpersistable under durable policy |
-| `VF-ACT-006` | Result projection or selected outcome is not declared by the contract or the node's pinned outcome set, and no fallback outcome is configured |
+| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set and no valid, explicitly configured outcome fallback applies |
 | `VF-ACT-007` | Attempt requested after committed completion |
 | `VF-ACT-008` | Trigger type or identity does not match suspended state |
 | `VF-ACT-009` | Persisted invocation document version is incompatible and cannot be upcast |
+
+An outcome fallback MUST itself be declared in the node's pinned outcome set. A fallback MUST NOT suppress an
+undeclared result projection diagnostic.
 
 Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault
 transition/incident path; contract and durability failures occur before user code and are not

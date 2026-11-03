@@ -230,15 +230,24 @@ completion.** A successful completion carries an *outcome selection* instead of 
   - explicitly empty, meaning a successful completion with no outgoing path.
 
   Unspecified and explicitly empty stay distinct through completion, parent and join handling, persistence and
-  recovery.
+  recovery. An explicitly empty selection ends this invocation's outgoing paths; it does not itself cancel other
+  running branches. It is a successful completion, so the step's pending engine-owned changes still commit.
 - **Selecting.** A C# activity returns the selection in its `Complete` transition.
   - A script selects through `setOutcome(name)` and `setOutcomes([names])`. Each call replaces the pending selection,
     so the last call wins.
-  - The selection is independent of the returned data. A script selects outcomes **only** through the setters; its
-    return value is data only. This replaces RunJavaScript's routing by return value (#1114, recorded in
-    `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome: two mechanisms side by
-    side would give one activity two contradictory rules for "nothing selected" (`Done` here, `Unmatched` there), for
-    an unknown name (a fault here, a silent `Unmatched` there) and for several outcomes.
+  - The selection is independent of ordinary returned business data. Returning a string or business object never
+    implicitly selects an outcome. This replaces RunJavaScript's implicit routing by return value (#1114, recorded
+    in `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome.
+  - The final script API remains open for S-3. An explicitly recognized returned completion value is a candidate,
+    consistent with C# transitions, for example:
+
+    ```javascript
+    return activity.complete({ result: data, outcomes: ["Approved"] });
+    ```
+
+    This example does not settle the signature or require both APIs. S-3 compares setters and an explicit returned
+    completion value, and defines precedence if they coexist. It never infers a completion instruction from ordinary
+    business-object properties. Every supported API uses the same default, validation and completion rules.
   - A pending selection takes effect only on successful completion. A fault or cancellation dispatches nothing, and a
     selection never dispatches a branch while the script is still running.
   - The script setters are therefore part of the step's transaction (D-3). They are a sanctioned exception to the
@@ -255,10 +264,12 @@ completion.** A successful completion carries an *outcome selection* instead of 
   - a literal name (`setOutcome('Approved')`) that is not in the node's set is a publish diagnostic, so a typo is
     caught before run time;
   - a computed name (`setOutcome(variables.status)`) is checked at run time against the node's pinned set. An unknown
-    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a fallback
-    outcome. Dynamic outcomes stay possible, within the set the designer declared.
+    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a valid fallback
+    outcome. The fallback must itself be declared in the node's pinned outcome set. It never excuses an undeclared
+    result projection. Dynamic selections stay possible, within the set the designer declared.
 - **Unconnected outcomes.** A declared outcome with no connected edge is valid; selecting it ends that path.
 - **Several outcomes.** An activity contract declares whether its completions may select more than one outcome.
+  - The runtime rejects a selection of several outcomes when the activity contract does not permit it.
   - The connections of every selected outcome are scheduled.
   - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
     warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
@@ -270,16 +281,24 @@ completion.** A successful completion carries an *outcome selection* instead of 
 - Switch in "match any" mode;
 - `Complete` with several outcomes.
 
-Elsa 3 had no checked outcome set, so for a computed `setOutcome(…)` the converter derives the possible outcomes (from
-the node's `PossibleOutcomes` and the literal names in the script). If it cannot, it refuses with guidance
-(faithful-or-refuse).
+Elsa 3 had no checked outcome set. A computed selection such as `setOutcome(variables.status)` remains supported,
+but the converter must establish a suitable set of possible names and preserve the original routing behavior.
+S-3 defines supported derivations and declarations, using the node's `PossibleOutcomes` and supported script analysis.
+Literal names found in a script are evidence, not necessarily an exhaustive set for a computed selection. The
+converter need not know which outcome a particular execution will select. If it cannot establish faithful conversion,
+it refuses with actionable guidance, such as supplying a suitable outcome declaration (faithful-or-refuse).
 
 A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps Elsa 3's
 `Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it becomes
-`Done` to `Done`, which fixes #3295 at its cause.
+`Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution, including the
+connected RunJavaScript cases behind #3295. This documentation amendment alone does not implement or prove that fix.
 
 *Left to the implementing spec (S-3):*
-- removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule;
+- comparing the script APIs, including an explicitly recognized returned completion value, its signature and any
+  precedence rules if it coexists with setters;
+- removing RunJavaScript's implicit routing by ordinary return value and its `Unmatched` outcome, and the converter's
+  R8 rule, with conversion, publication and execution evidence;
+- the supported derivations and declarations for faithful conversion of computed outcome selections;
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
 - the fallback configuration;
