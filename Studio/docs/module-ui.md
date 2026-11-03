@@ -170,3 +170,16 @@ Horizontal overflow belongs inside the table or canvas, never on the page.
 Validate actual interactions and rendered styles; checking class names alone does
 not establish consistency. The Weather sample uses this public recipe without a
 module stylesheet, and the standalone React example uses published package imports.
+
+## Navigation and focused editors
+
+Set `featureAreas.nav.icon` to the module's icon component; the feature-area registry
+forwards it to the shell, including child entries. Use a recognizable domain icon
+rather than relying on the shell's fallback icon.
+
+In form editors, lead with required authoring work and group optional settings in an
+advanced disclosure. Reveal that disclosure when a saved or local field needs
+correction. Represent provider-fixed values as readable facts while retaining exact
+focus targets for diagnostics. Validation surfaces should have one heading and one
+severity summary; keep server rejection distinct from the severity of its messages,
+and place background explanations behind a help disclosure.

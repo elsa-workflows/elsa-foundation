@@ -454,3 +454,7 @@
     flex-direction: column;
   }
 }
+
+.ad-contract-required-note { margin: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); line-height: 1.5; }
+.ad-contract-required-note > span { display: inline-block; margin-right: var(--studio-space-2); color: var(--studio-text); font-weight: 600; }
+.ad-contract-workbench-member[data-contract-kind="outcome"] .ad-contract-description { grid-column: 1 / -1; }

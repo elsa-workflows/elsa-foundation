@@ -278,7 +278,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
 
   return <section className="ad-contract-editor" aria-labelledby="activity-contract-title">
     <header className="ad-contract-header">
-      <div><h2 id="activity-contract-title">Public interface</h2><p>Define what this activity accepts and returns.</p></div>
+      <div><h2 id="activity-contract-title">Inputs & outputs</h2><p>Choose the values this activity receives and returns, and the outcomes callers can follow.</p></div>
     </header>
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract options unavailable</strong><span>Studio could not load the available types and storage options. Existing members remain visible, but their type settings cannot be changed safely.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No supported type with an active storage option is available, so inputs and outputs cannot be added.</div> : null}
@@ -545,12 +545,12 @@ function OutcomeEditor({ member, index, selected, nameInputRef, providerRequired
   onRemove(): void;
 }) {
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-outcome-${index}-title`} data-contract-kind="outcome" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Outcome</span><h3 id={`contract-outcome-${index}-title`}>{member.name || "Unnamed outcome"}</h3></div>{!providerRequired ? <button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove outcome</button> : null}</header>
-    {providerRequired ? <div className="ad-inline-status" role="status"><strong>Required by the implementation provider</strong><span>This outcome is supplied by provider capability metadata and cannot be removed or made non-emitted.</span></div> : null}
+    <header className="ad-contract-workbench-member-header"><div><span>Outcome</span><h3 id={`contract-outcome-${index}-title`} data-contract-field={providerRequired ? "name" : undefined} tabIndex={providerRequired ? -1 : undefined}>{member.name || "Unnamed outcome"}</h3></div>{!providerRequired ? <button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove outcome</button> : null}</header>
+    {providerRequired ? <p className="ad-contract-required-note"><span data-contract-field="isEmitted" tabIndex={-1}>{member.isEmitted ? "Emitted" : "Not emitted"}</span> This outcome is required. Its name and emitted status are fixed.</p> : null}
     <div className="ad-contract-fields">
-      <StagedNameField field="name" value={member.name} readOnly={readOnly || providerRequired} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
+      {!providerRequired ? <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} /> : null}
       <label className="ad-contract-description"><span>Description</span><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></label>
-      <label className="ad-contract-check"><input data-contract-field="isEmitted" type="checkbox" checked={member.isEmitted} onChange={event => onChange({ ...member, isEmitted: event.target.checked })} disabled={readOnly || providerRequired} /><span>Emitted by this activity</span></label>
+      {!providerRequired ? <label className="ad-contract-check"><input data-contract-field="isEmitted" type="checkbox" checked={member.isEmitted} onChange={event => onChange({ ...member, isEmitted: event.target.checked })} disabled={readOnly} /><span>Emitted by this activity</span></label> : null}
     </div>
     <details className="ad-contract-advanced"><summary>Advanced</summary><div className="ad-contract-fields">
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly || providerRequired} onApply={onReferenceKeyChange} />

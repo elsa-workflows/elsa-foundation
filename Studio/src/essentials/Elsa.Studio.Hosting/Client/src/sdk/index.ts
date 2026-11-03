@@ -454,6 +454,8 @@ export interface StudioFeatureAreaNavLeaf extends StudioBackendAwareContribution
   title: string;
   path: string;
   iconColor?: string;
+  /** Module-owned icon, forwarded to the navigation contribution. */
+  icon?: StudioNavigationContribution["icon"];
   placeholder?: boolean;
   placement?: StudioNavigationPlacement;
   order?: number;
@@ -467,6 +469,8 @@ export interface StudioFeatureAreaNavParent extends StudioBackendAwareContributi
   title: string;
   path: string;
   iconColor?: string;
+  /** Module-owned icon, forwarded to the navigation contribution. */
+  icon?: StudioNavigationContribution["icon"];
   items: StudioFeatureAreaNavLeaf[];
   placement?: StudioNavigationPlacement;
   order?: number;

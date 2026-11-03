@@ -391,9 +391,10 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Customer note");
     showContractView(rendered.container);
     const doneOutcome = selectContractMember(rendered.container, "outcome", "done");
-    expect(doneOutcome.textContent).toContain("Required by the implementation provider");
+    expect(doneOutcome.textContent).toContain("Emitted");
+    expect(doneOutcome.querySelector('input[data-contract-field="name"]')).toBeNull();
     expect([...doneOutcome.querySelectorAll("button")].some(button => button.textContent?.includes("Remove outcome"))).toBe(false);
-    expect(controlByLabel<HTMLInputElement>(doneOutcome, "Emitted by this activity").disabled).toBe(true);
+    expect(doneOutcome.querySelector('input[data-contract-field="isEmitted"]')).toBeNull();
     const customerNote = selectContractMember(rendered.container, "input", "customer-note");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Durable storage driver").value).toBe("elsa.json");
     const required = controlByLabel<HTMLInputElement>(rendered.container, "Required");
@@ -1789,10 +1790,11 @@ describe("Activity Definition authoring", () => {
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.contract.emitted']")!);
     await waitFor(() => {
       const focused = document.activeElement as HTMLElement;
-      expect(focused.tagName).toBe("LABEL");
-      expect(focused.querySelector<HTMLInputElement>("[data-contract-field='isEmitted']")?.disabled).toBe(true);
+      expect(focused.dataset.contractField).toBe("isEmitted");
+      expect(focused.textContent).toBe("Emitted");
+      expect(focused.querySelector("input")).toBeNull();
     });
-    expect(rendered.container.textContent).toContain("exact accessible context for a disabled");
+    expect(rendered.container.textContent).toContain("exact provider-neutral contract location");
     await rendered.unmount();
   });
 

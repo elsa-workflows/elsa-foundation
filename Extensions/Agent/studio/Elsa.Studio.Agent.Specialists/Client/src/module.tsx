@@ -1,3 +1,4 @@
+import { Bot } from "lucide-react";
 import React from "react";
 import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution } from "@elsa-workflows/studio-sdk";
 import { AgentsPage } from "./AgentsPage";
@@ -32,7 +33,7 @@ export function register(api: ElsaStudioModuleApi) {
     id: "agents", title: "Agents", navGroup: "Workspace", order: 25,
     description: "Define agents with a model, instructions and typed inputs and results, and use them in workflows.",
     ownedPaths: ["/agents"], required: false, defaultEnabled: true,
-    nav: { title: "Agents", path: "/agents", order: 25, requiresBackend: activityDesign },
+    nav: { icon: Bot, title: "Agents", path: "/agents", order: 25, requiresBackend: activityDesign },
     routes: [
       { id: "agents", path: "/agents", label: "Agents", requiresBackend: activityDesign,
         component: ({ navigate }) => <AgentsPage context={api.backend} navigate={navigate} /> }
