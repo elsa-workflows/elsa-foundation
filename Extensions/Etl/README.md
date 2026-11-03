@@ -108,6 +108,28 @@ exchanges, queues or bindings.
   with `etl.rabbitmq-unavailable`. The error route cannot be RabbitMQ.
 - **Ordering.** Messages of one batch keep their order; batches of different partitions or shards interleave.
 
+## RabbitMQ ingestion
+
+[Spec 1201](../../specs/1201-etl-rabbitmq-source/spec.md) adds a finite `rabbitmq` source: a host-approved queue drained up to
+`maxMessages` (1 to 100,000) when a run prepares, its JSON message bodies read with declared JSON fields as for a JSON Lines
+source. Add an `EtlRuntimeFeature.RabbitMqBindings` entry with role `Source` and `AllowedQueues`; `Elsa.Etl.RabbitMq`
+provides the consumer. The runtime never declares queues.
+
+- **Manual acknowledgements.** Preparation receives the messages without acknowledging them, writes their bodies as a JSON
+  Lines snapshot, and acknowledges them only once the store has recorded that snapshot as the run's prepared input. A
+  preparation that fails, is refused or whose worker dies before the record leaves them unacknowledged; the broker
+  requeues them, and the next attempt reads them again into a snapshot of its own.
+- **At least once.** A worker that dies after the record and before the acknowledgement reaches the broker leaves the run
+  with the messages, which the broker also requeues, so a later run reads them again. Records carry no message id, so
+  destinations should be idempotent (a keyed SQL destination is) or tolerate duplicates.
+- **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
+  `MaxSnapshotBytes`; the rest stay queued. A single message larger than that fails preparation with
+  `etl.snapshot-too-large` and stays queued. Each message is one record: a body that is not JSON, or not a JSON object, is
+  routed to errors as `etl.jsonl.record-invalid` or `etl.jsonl.record-not-object` and still acknowledged.
+- **Failures.** An unreachable broker or a closed connection leaves preparation to run again after its lease lapses; access
+  refused, a missing queue or failed authentication fails the run with `etl.rabbitmq-read-rejected`. Two runs reading one
+  queue at once take different messages.
+
 ## SQL snapshot reads
 
 [Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
