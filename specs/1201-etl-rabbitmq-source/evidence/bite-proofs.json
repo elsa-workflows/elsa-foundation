@@ -1,0 +1,247 @@
+{
+ "spec": "1201-etl-rabbitmq-source",
+ "note": "Each entry names the revision it was recorded at. All entries bite.",
+ "results": [
+  {
+   "mutation": "compiler-queue-name",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_queue_or_maximum",
+   "mutated": "Failed!  - Failed: 2, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_queue_or_maximum_the_broker_or_runtime_cannot_take_is_refused(queue: \"\", maxMessages: 10, code: \"source.rabbitmq-name-invalid\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_queue_or_maximum_the_broker_or_runtime_cannot_take_is_refused(queue: \"bad queue\", maxMessages: 10, code: \"source.rabbitmq-name-invalid\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 4",
+   "original": "                if (!IsRabbitMqQueue(rabbitMq.Queue))",
+   "mutated_text": "                if (false)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "compiler-max-messages",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_queue_or_maximum",
+   "mutated": "Failed!  - Failed: 1, Passed: 3",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_queue_or_maximum_the_broker_or_runtime_cannot_take_is_refused(queue: \"people\", maxMessages: 100001, code: \"source.rabbitmq-max-messages-invalid\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 4",
+   "original": "                if (rabbitMq.MaxMessages is < 1 or > EtlRabbitMqSource.MaxMessagesLimit)",
+   "mutated_text": "                if (rabbitMq.MaxMessages is < 1)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "binding-allowed-queue",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_source_binding",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_source_binding_allows_its_queues_exactly_and_needs_the_consumer"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (source && !binding.AllowedQueues.Contains(exchange, StringComparer.Ordinal))",
+   "mutated_text": "        if (false)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "binding-needs-consumer",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_source_binding",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_source_binding_allows_its_queues_exactly_and_needs_the_consumer"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (_publisher is null || source && _consumer is null)",
+   "mutated_text": "        if (_publisher is null)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "binding-handle-queues",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_source_binding",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_source_binding_allows_its_queues_exactly_and_needs_the_consumer"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            AllowedQueues = binding.AllowedQueues.Order(StringComparer.Ordinal).ToArray()\n",
+   "mutated_text": "            AllowedQueues = 0\n",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "writer-line-breaks",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 2, Passed: 4",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"not\\njson\", line: \"\\x01\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"{\\n  \\\"id\\\": 1,\\n  \\\"name\\\": \\\"Ada\\\"\\n}\", line: \"{\\\"id\\\":1,\\\"name\\\":\\\"Ada\\\"}\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 6",
+   "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0 && !IsBlank(span))",
+   "mutated_text": "        if (!IsBlank(span))",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "writer-blank",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 2, Passed: 4",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"  \", line: \"\\x01\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\", line: \"\\x01\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 6",
+   "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0 && !IsBlank(span))",
+   "mutated_text": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "preparer-attempt-identity",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_retried_preparation",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_retried_preparation_never_reuses_a_predecessor_snapshot"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            PinHandle = revision.Handle,\n            Attempt = Guid.NewGuid().ToString(\"N\")\n",
+   "mutated_text": "            PinHandle = revision.Handle\n",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "preparer-requeues-on-failure",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_failed_or_transient",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_failed_or_transient_receive_prepares_nothing_and_a_too_large_message_is_left_queued"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            if (!handedOver && receipt is not null)\n",
+   "mutated_text": "            if (false)\n",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "execution-acks-only-recorded",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_prepared_run_the_store_refuses",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_prepared_run_the_store_refuses_to_record_never_acknowledges_its_messages"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            if (status is EtlStoreStatus.Applied or EtlStoreStatus.Replay && receipt is not null)",
+   "mutated_text": "            if (receipt is not null)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "execution-acks",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_queue_is_drained",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_queue_is_drained_into_records_and_acknowledged_only_after_the_prepared_run_is_recorded"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                await AcknowledgeAsync(lease, receipt, token);\n",
+   "mutated_text": "                await Task.CompletedTask;\n",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "processing-view",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_queue_is_drained",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_queue_is_drained_into_records_and_acknowledged_only_after_the_prepared_run_is_recorded"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        EtlRabbitMqSource queue => pipeline with { Source = new EtlJsonlSource(queue.Binding, queue.Fields) },\n",
+   "mutated_text": "",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "driver-manual-ack",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlConsumer.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~Received_messages_stay_unacknowledged",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqConsumerProviderTests.Received_messages_stay_unacknowledged_until_acknowledged_and_return_to_the_queue_otherwise"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "BasicGetAsync(queue, autoAck: false, cancellationToken)",
+   "mutated_text": "BasicGetAsync(queue, autoAck: true, cancellationToken)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "driver-multiple-ack",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlConsumer.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~Received_messages_stay_unacknowledged",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqConsumerProviderTests.Received_messages_stay_unacknowledged_until_acknowledged_and_return_to_the_queue_otherwise"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "await channel.BasicAckAsync(lastTag, multiple: true, cancellationToken);",
+   "mutated_text": "await channel.BasicAckAsync(lastTag, multiple: false, cancellationToken);",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "driver-first-too-large",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlConsumer.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~The_maximum_and_byte_bounds",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqConsumerProviderTests.The_maximum_and_byte_bounds_leave_the_rest_queued"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                    firstTooLarge = bodies.Count == 0;",
+   "mutated_text": "                    firstTooLarge = false;",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "reader-source-queue-name",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~Reader_refuses_a_rabbitmq_source",
+   "mutated": "Failed!  - Failed: 1, Passed: 4",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_rabbitmq_source_the_compiler_would_refuse(queue: \"bad queue\", maxMessages: 10, valid: False)"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 5",
+   "original": "                    !queue.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':') ||",
+   "mutated_text": "                    !queue.All(character => true) ||",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  },
+  {
+   "mutation": "reader-source-max-messages",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~Reader_refuses_a_rabbitmq_source",
+   "mutated": "Failed!  - Failed: 1, Passed: 4",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_rabbitmq_source_the_compiler_would_refuse(queue: \"people\", maxMessages: 100001, valid: False)"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 5",
+   "original": "                    rabbitMq.MaxMessages is < 1 or > EtlRabbitMqSource.MaxMessagesLimit)",
+   "mutated_text": "                    rabbitMq.MaxMessages is < 1)",
+   "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8"
+  }
+ ]
+}
