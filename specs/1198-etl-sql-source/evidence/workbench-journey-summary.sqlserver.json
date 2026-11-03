@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "spec": "1198-etl-sql-source",
   "engine": "sqlserver",
-  "sourceRevision": "1cc03a3d460b3822d77428a59deb99f69c536376",
+  "sourceRevision": "9bb6fb9356559be387cb505b5df08077a7145a3a",
   "workingTreeDirty": false,
-  "workbenchAssemblySha256": "2e86c5aebce0b0a4bca73ee58a061b4841e68c005846cfabd399645dfbd3c3f5",
-  "hostProcessId": 73137,
+  "workbenchAssemblySha256": "b6bdf16cd9d19dd0a9909d29a4ada60c154a6fbc38efc2558acc50a4ffc8e9f8",
+  "hostProcessId": 80937,
   "cases": {
     "first": {
-      "definition": "sql-source-30ee6854",
-      "selection": "etl1:sql-source-30ee6854:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
+      "definition": "sql-source-0909fa3b",
+      "selection": "etl1:sql-source-0909fa3b:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -49,8 +49,8 @@
       "hostPathOrSecretInInspection": false
     },
     "second": {
-      "definition": "sql-source-733bbb5c",
-      "selection": "etl1:sql-source-733bbb5c:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
+      "definition": "sql-source-2a9342cf",
+      "selection": "etl1:sql-source-2a9342cf:1:bf6e4c45b5ba2f8b63d51df101b031ca4ed06b5db18d098278c284655e72c852",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -91,7 +91,7 @@
       "hostPathOrSecretInInspection": false
     }
   },
-  "baseUrl": "http://127.0.0.1:56000",
+  "baseUrl": "http://127.0.0.1:60083",
   "catalogSqlBindings": [
     [
       "warehouse",

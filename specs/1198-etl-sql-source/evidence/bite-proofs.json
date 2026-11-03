@@ -1,6 +1,6 @@
 {
  "spec": "1198-etl-sql-source",
- "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive.",
+ "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day.",
  "results": [
   {
    "mutation": "source-table-identifier-unchecked",
@@ -419,6 +419,20 @@
    "original": "try { command.Cancel(); } catch (Exception cancel)",
    "mutated_text": "try { } catch (Exception cancel)",
    "sourceRevision": "ce00cc26dec0fa9cd0e39819d40feddbcbe88d82"
+  },
+  {
+   "mutation": "zoned-time-given-a-date",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_zoned_time_of_day",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_zoned_time_of_day_is_refused_rather_than_given_a_placeholder_date"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "case DateTimeOffset offset when !reader.GetDataTypeName(index).StartsWith(\"time with\", StringComparison.OrdinalIgnoreCase):",
+   "mutated_text": "case DateTimeOffset offset when true:",
+   "sourceRevision": "9bb6fb9356559be387cb505b5df08077a7145a3a"
   }
  ]
 }
