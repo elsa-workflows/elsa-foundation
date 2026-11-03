@@ -11,15 +11,16 @@ Source: the branch `agent/claude/2908-sql-destination`. Each section names the r
 | FR-005, FR-006: the writer protocol (SQLite test engine) | `EtlSqlRouteWriterTests`:<br>• upsert plus a ledger row;<br>• redelivery writes nothing;<br>• update and insert, and a repeated key keeps the later record;<br>• a missing unique key fails closed;<br>• hash conflict;<br>• rollback across commands;<br>• a transient failure yields, then applies;<br>• a missing ledger, and a ledger created between attempts. (Only the container suite drives a concurrent creation.) |
 | FR-004–FR-008: the real worker and store | `A_csv_pipeline_upserts_its_accepted_records_into_a_keyed_table_with_one_ledger_row_per_batch` covers two runs, the table and the ledger per run.<br>`A_sql_destination_without_its_engine_package_is_refused_at_admission` covers the missing engine. |
 | US2, SC-002: real worker processes | `A_worker_killed_after_its_sql_commit_and_before_the_record_is_replayed_without_writing_twice`:<br>• the killed worker's commit leaves one ledger row;<br>• the survivor replays it;<br>• two ledger rows and two table rows result. |
-| SC-001, SC-003: real engines | Container suite `Elsa.Etl.Sql.ProviderTests`, 16 tests, on PostgreSQL 16 and SQL Server 2022:<br>• upsert, update, insert and a repeated key;<br>• replay and conflict;<br>• a missing unique key, including on SQL Server, where `MERGE` would otherwise succeed;<br>• rollback across commands;<br>• concurrent first deliveries;<br>• a missing ledger;<br>• PostgreSQL: a least-privilege role with a pre-created ledger, and a key check that follows `search_path` and counts only key columns, while refusing a deferrable constraint (review round 1);<br>• error classification on PostgreSQL, and SQL Server pool exhaustion. |
+| SC-001, SC-003: real engines | Container suite `Elsa.Etl.Sql.ProviderTests`, 18 tests, on PostgreSQL 16 and SQL Server 2022:<br>• upsert, update, insert and a repeated key;<br>• replay and conflict;<br>• a missing unique key, including on SQL Server, where `MERGE` would otherwise succeed;<br>• rollback across commands;<br>• concurrent first deliveries;<br>• a missing ledger, and a missing table (a rejection, not a missing key);<br>• PostgreSQL: a least-privilege role with a pre-created ledger, and a key check that follows `search_path` and counts only key columns, while refusing a deferrable constraint (review round 1);<br>• error classification on PostgreSQL, and SQL Server pool exhaustion. |
 | FR-009: Studio | Vitest (`connector-pipeline-editor`) and Playwright (`etl-connector-authoring`): a SQL table for accepted records only, binding, table and key; axe at 320 and 1024 px. |
 
 ## Bite-proofs
 
-There are 20, in [`bite-proofs.json`](bite-proofs.json), each with the names of the tests that failed:
+There are 22, in [`bite-proofs.json`](bite-proofs.json), each with the names of the tests that failed:
 - 14 were recorded at `95d02a433`.
 - 1 was recorded at `a8f339cd2`.
 - 5 were recorded at `221f137cf`, for the review round 1 fixes: ledger DDL only when missing, key columns only, deferrable refused, an exact allow-list, and SQL Server pool exhaustion.
+- 2 were recorded at `727316b97`, for the review round 2 fix: each engine reports a missing table as -1, which the writer maps to a rejection rather than a missing key.
 
 The first run's PostgreSQL deadlock mutation did not bite. Npgsql's `IsTransient` already classifies deadlocks, so the explicit SQLSTATE list was redundant. It was removed, and the remaining guard was re-proven.
 

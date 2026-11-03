@@ -1,6 +1,6 @@
 {
   "spec": "1197-etl-sql-destination",
-  "note": "Each entry names the revision it was recorded at. The first run's pg-deadlock-not-transient mutation did not bite: the explicit SQLSTATE list was redundant with Npgsql's IsTransient, so the list was removed and the remaining guard re-proven.",
+  "note": "Each entry names the revision it was recorded at. The first run's pg-deadlock-not-transient mutation did not bite: the explicit SQLSTATE list was redundant with Npgsql's IsTransient, so the list was removed and the remaining guard re-proven. The writer's own missing-table branch is redundant with the rejection mapping of a failed upsert, so the engines' -1 result is the bite-proven guard.",
   "results": [
     {
       "mutation": "ledger-skipped",
@@ -285,6 +285,34 @@
       "original": "        InvalidOperationException pool when pool.Message.Contains(\"connection from the pool\", StringComparison.OrdinalIgnoreCase) => EtlSqlErrorKind.Transient,",
       "mutated_text": "",
       "sourceRevision": "221f137cf5ca3da08231ecf62c161b3a0a92ec39"
+    },
+    {
+      "mutation": "pg-missing-table-counted-as-zero",
+      "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlPostgreSqlProviderTests.A_missing_table_is_a_rejection",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_missing_table_is_a_rejection_not_a_missing_key"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "IS NULL THEN -1 ELSE (",
+      "mutated_text": "IS NULL THEN 0 ELSE (",
+      "sourceRevision": "727316b97b5a62cc49e932a6ac66a57dc422ade0"
+    },
+    {
+      "mutation": "sqlserver-missing-table-counted-as-zero",
+      "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlServerProviderTests.A_missing_table_is_a_rejection",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_missing_table_is_a_rejection_not_a_missing_key"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "IS NULL THEN -1 ELSE (",
+      "mutated_text": "IS NULL THEN 0 ELSE (",
+      "sourceRevision": "727316b97b5a62cc49e932a6ac66a57dc422ade0"
     }
   ]
 }
