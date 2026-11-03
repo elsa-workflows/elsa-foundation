@@ -188,6 +188,18 @@ the protected session remains in that receipt rather than a second history copy.
 release the revision; unknown outcomes retain the active reference and block continuation. Replaying
 an older accepted turn returns its original receipt without changing current conversation state.
 
+**M5 second owner profile (T032): the playground's draft candidate workspace.** Each playground run is its own
+workflow execution, so the workflow-owned profile cannot span runs. The root specialist of an activity draft Test Run
+gets a different owner: one whose runtime-pinned source has kind `ActivityDraftTestRun` under run kind `TestRun`. That
+owner replaces the workflow execution with the workspace `activity-draft:{draftId}`. It still binds the tenant, the
+partition, the exact candidate version (one per saved draft revision) and the template hash.
+
+The profile deliberately grants cross-workflow access within that workspace. It is tenant-shared, not bound to a caller,
+because the generic draft Test Run it rides on records no requesting principal: any `workflows/publishing:manage` holder
+in the tenant can read every run and its `Conversation` output. A caller-bound playground would first need the generic
+Test Run to record and enforce its requester. Every other invocation keeps the workflow-owned profile above, and still
+infers no user principal.
+
 The runtime worker restores only this admitted accepted reference. The following draft increment adds
 explicit manifest2/descriptor2 continuation controls, retaining fresh-only schema1 readers and business
 schemas. The safe Conversation value can flow through native output capture/variable bindings; its

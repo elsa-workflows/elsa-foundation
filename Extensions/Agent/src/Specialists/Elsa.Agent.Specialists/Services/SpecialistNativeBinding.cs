@@ -121,13 +121,14 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
             { ConversationWorkspace = ConversationWorkspace(workflow, state) };
     }
 
-    // The source kind the generic activity draft Test Run pins on its wrapper reference (owned by Workflows Publishing).
+    // The source kind the generic activity draft Test Run pins on its wrapper reference. Workflows Publishing owns it and
+    // does not yet expose it as a contract (#3762); the playground continuity test pins this copy to the real service.
     internal const string ActivityDraftTestRunSourceKind = "ActivityDraftTestRun";
 
     // Only the root of a Test Run whose runtime-pinned source is an activity draft converses in the draft candidate's
     // workspace. The exact candidate version and template hash in the owner bind it to one saved revision, so a nested
     // specialist, a published run or another revision keeps a workflow-owned conversation.
-    private static string? ConversationWorkspace(WorkflowExecutionState workflow, ActivityExecutionState state) =>
+    internal static string? ConversationWorkspace(WorkflowExecutionState workflow, ActivityExecutionState state) =>
         workflow.RunKind == WorkflowRunKind.TestRun && state.ParentActivityExecutionId is null &&
         workflow.PinnedSource is { SourceKind: ActivityDraftTestRunSourceKind, SourceId: { Length: > 0 } draftId } && !string.IsNullOrWhiteSpace(draftId)
             ? "activity-draft:" + draftId

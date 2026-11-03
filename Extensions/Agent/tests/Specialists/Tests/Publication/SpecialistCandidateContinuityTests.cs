@@ -68,6 +68,12 @@ public sealed partial class SpecialistPublicationTests
         var pinned = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(first.Run.WorkflowExecutionId))!;
         Assert.Equal((WorkflowRunKind.TestRun, SpecialistNativeBinding.ActivityDraftTestRunSourceKind, "draft"),
             (pinned.RunKind, pinned.PinnedSource?.SourceKind, pinned.PinnedSource?.SourceId));
+        // Only that exact provenance grants the candidate workspace: another run kind or source, or a nested invocation, stays workflow-owned.
+        var root = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(first.Run.WorkflowExecutionId)).Single(x => x.ParentActivityExecutionId is null);
+        Assert.Equal("activity-draft:draft", SpecialistNativeBinding.ConversationWorkspace(pinned, root));
+        Assert.Null(SpecialistNativeBinding.ConversationWorkspace(pinned with { RunKind = WorkflowRunKind.PublishedRun }, root));
+        Assert.Null(SpecialistNativeBinding.ConversationWorkspace(pinned with { PinnedSource = pinned.PinnedSource! with { SourceKind = "WorkflowDraftSnapshot" } }, root));
+        Assert.Null(SpecialistNativeBinding.ConversationWorkspace(pinned, root with { ParentActivityExecutionId = "parent" }));
 
         var second = await RunAsync(provider, service, "continue", 1, new { conversationId, revision = 1 });
         Assert.Equal("Completed", second.Run.Status);
@@ -80,7 +86,7 @@ public sealed partial class SpecialistPublicationTests
 
         // A stale revision of the same candidate conversation is refused without a model call.
         var stale = await RunAsync(provider, service, "stale", 1, new { conversationId, revision = 1 });
-        Assert.NotEqual("Completed", stale.Run.Status);
+        await AssertConflictAsync(provider, stale.Run);
         Assert.Equal(2, model.RequestSizes.Count);
 
         // Editing the draft makes a new candidate; its playground run cannot continue the previous revision's conversation.
@@ -88,12 +94,22 @@ public sealed partial class SpecialistPublicationTests
             await fixture.StateAsync(fixture.Manifest with { Instructions = "Write the supplied brief, briefly." }), []));
         Assert.Equal(2, changed.Revision);
         var edited = await RunAsync(provider, service, "edited", 2, new { conversationId, revision = 2 });
-        Assert.NotEqual("Completed", edited.Run.Status);
+        await AssertConflictAsync(provider, edited.Run);
         Assert.Equal(2, model.RequestSizes.Count);
         var fresh = await RunAsync(provider, service, "edited-fresh", 2, null);
         Assert.Equal("Completed", fresh.Run.Status);
         Assert.NotEqual(conversationId, fresh.Output.GetProperty("Conversation").GetProperty("conversationId").GetString());
         Assert.Equal(new[] { 1, 3, 1 }, model.RequestSizes);
+    }
+
+    // The refusal is the journal's own conversation conflict, raised at claim before any model request.
+    private static async Task AssertConflictAsync(IServiceProvider provider, ActivityDraftTestRunView run)
+    {
+        Assert.Equal("Faulted", run.Status);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(run.WorkflowExecutionId);
+        Assert.Equal("specialist.conversation.conflict", states.Single(x => x.ParentActivityExecutionId is not null).Fault?.Code);
+        var turn = (await provider.GetRequiredService<ISpecialistInvocationInspector>().InspectAsync(run.WorkflowExecutionId, run.OuterActivityExecutionId!))!.Turn!;
+        Assert.Empty(turn.ModelRequests);
     }
 
     private static async Task<(ActivityDraftTestRunView Run, JsonElement Output)> RunAsync(IServiceProvider provider, IActivityDraftTestRunService service,

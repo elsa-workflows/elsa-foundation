@@ -94,6 +94,14 @@ admitted conversation/revision reference, selected ordinary owner scope and exac
 The journal now admits a workflow-owned revision before dispatch and restores only its previous
 accepted receipt. Explicit continuation checks the workflow-owned conversation and expected base
 revision before opening a client; unavailable admission becomes a native conversation conflict.
+It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
+and uses the existing Secrets key ring with retained configured decryption keys. Histories are bounded to64
+messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.
+Portable history excludes private reasoning, SDK raw state and system-role instruction fields. Validate business
+inputs and outputs against both the exact schema and declared native conversion. Withheld,
+encryption-required and secret-reference business inputs are refused before model dispatch.
+Root-variable captures resolve their current committed destination policy at native entry and worker
+binding checks; encryption-required or withheld destinations are refused before opening a client.
 
 **Playground continuity.** The root specialist of an activity draft Test Run converses in its candidate's workspace,
 not in its workflow. This applies when the run is a Test Run whose runtime-pinned source has kind `ActivityDraftTestRun`.
@@ -104,18 +112,15 @@ version (`activity-test-version-…`, one per saved draft revision) and the temp
 - successive playground runs of one saved revision continue one conversation explicitly through
   `$specialist.options` `{conversationId, revision}`, which a fresh run passes as `{}`;
 - an edited revision, a stale revision, a published run and a nested specialist cannot continue it;
-- history follows the ordinary content retention of each accepted turn's own Test Run workflow.
+- history follows the ordinary content retention of each accepted turn's own Test Run workflow; once the latest accepted
+  turn's content is purged, a continuation fails with `specialist.session.unavailable` and a fresh conversation is needed.
 
 The workspace is shared like the generic Test Run itself: any caller who can manage draft Test Runs in the tenant and
-holds the conversation reference can continue it.
-It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
-and uses the existing Secrets key ring with retained configured decryption keys. Histories are bounded to64
-messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.
-Portable history excludes private reasoning, SDK raw state and system-role instruction fields. Validate business
-inputs and outputs against both the exact schema and declared native conversion. Withheld,
-encryption-required and secret-reference business inputs are refused before model dispatch.
-Root-variable captures resolve their current committed destination policy at native entry and worker
-binding checks; encryption-required or withheld destinations are refused before opening a client.
+holds the conversation reference can continue it. That reference is the `Conversation` output of a run,
+which any such caller can read through the generic Test Run.
+
+A draft Test Run turn journaled before this change keeps its workflow-owned identity. If it is still in flight across
+the upgrade, it faults on resume. Retention still settles it.
 
 `SpecialistsInMemoryJournal` is an explicit development/test profile, retaining at most 10,000 turns
 for one host lifetime through scoped adapters over shared in-memory state. Both backends enforce the
