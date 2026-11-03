@@ -306,3 +306,7 @@ Local working-state receipts do not mean save/publish; the native module holds a
 until the reviewed changes are explicitly saved, published or undone. An older or queued save cannot
 release a newer hold: the successful explicit save must cover the current held snapshot and generation.
 A failed covering save preserves the hold/undo and stops publication before preflight or mutations.
+
+## User Task form renderers
+
+The additive `user-task.form-renderers` slot exposes `api.userTaskForms`. Contribute a unique `id`, the server form `provider` ID and a component accepting `StudioUserTaskFormProps` (`form`, `value`, `readOnly`, `errors`, `onChange`). Treat form values/error keys as opaque case-sensitive data and read only own properties. Respect read-only state and preserve entered values on validation/conflict. Exactly one renderer must match a task's pinned provider; missing/duplicate matches disable completion. Server-side `IUserTaskFormProvider` validation remains authoritative. The optional UserTasksStudio module contributes the basic renderer and owns inbox/forms/editor flows; the SDK defines only the contribution contract.

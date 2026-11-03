@@ -210,7 +210,8 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
         // It moved for PaletteHints as an additive body init property. The existing 17-parameter
         // constructor and deconstructor remain covered separately; palette metadata stays on the JSON wire.
-        Assert.Equal("461e8620857852ffd6241384740f9253956f32eb6b5c5502ebf2e4771e098ba5", PublicShapeHash(ContractTypes));
+        // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
+        Assert.Equal("b0416616df02ddca9d960c6c126700a973e207563e87eba2d9b21064d89f604f", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

@@ -52,6 +52,7 @@ COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.
 COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
 COPY Extensions/FeatureManagement/studio/ ./Extensions/FeatureManagement/studio/
 COPY Extensions/Secrets/studio/ ./Extensions/Secrets/studio/
+COPY Extensions/UserTasks/studio/ ./Extensions/UserTasks/studio/
 COPY Extensions/Weaver/studio/ ./Extensions/Weaver/studio/
 COPY Extensions/Workflows.Dashboard/studio/ ./Extensions/Workflows.Dashboard/studio/
 

@@ -438,7 +438,13 @@ public sealed class EfWorkflowExecutionStateStore(
                 // checkpoint can add its first dispatch without updating the workflow row: either the guard sees
                 // it, or final SaveChanges conflicts this captured revision and rolls back the entire deletion.
                 ownershipTombstoneInserted = await RevokeExecutionOwnershipAsync(workflowExecutionId, scope, cancellationToken);
-                if (await HasControlDependenciesAsync(state, scope, retiredControlLinks, hintedChildren, cancellationToken))
+                var taskScopeHash = Hash(scope);
+                var taskScopeKey = Encode(scope);
+                var taskExecutionKey = Encode(workflowExecutionId);
+                var taskExecutionHash = Hash(workflowExecutionId);
+                if (await context.UserTasks.AnyAsync(x => x.ScopeHash == taskScopeHash && x.ScopeKey == taskScopeKey &&
+                        x.ExecutionHash == taskExecutionHash && x.ExecutionKey == taskExecutionKey && x.Status < (int)Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Completed, cancellationToken) ||
+                    await HasControlDependenciesAsync(state, scope, retiredControlLinks, hintedChildren, cancellationToken))
                 {
                     await transaction.RollbackAsync(cancellationToken);
                     context.ChangeTracker.Clear(); // Never leak the staged tombstone into a later caller SaveChanges.
