@@ -19,15 +19,15 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <see cref="WorkflowRunUnavailableReason"/>. An in-progress Run is reported as it was at
 /// <see cref="WorkflowRunInspectionDetails.ReadAt"/>. An infrastructure failure propagates.
 /// <para>
-/// An incident message is disclosed only when its activity, and the one causal child it propagated from (the fault
-/// recorder's causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the
-/// child whose parent notification the parent was handling), are established non-sensitive. An incident a child-control
-/// consumer raised, or one recorded for poisoned scheduler work, is always withheld: its message may echo another Run's
-/// batches or an arbitrary handler's exception text. A child-control consumer's returned fault or failed disposal recorded
-/// before the runtime named the calling child carries neither marker and is not recognized; such Runs exist only in
-/// development stores from before that change. Only one causal level is checked: this assumes that a propagated fault
-/// message carries at most the text of the one causal child it names. A runtime that copies a deeper descendant's text into
-/// its parent's incident breaks that assumption and must not be inspected through this contract.
+/// An incident message is disclosed only when its activity, and the causal child it propagated from (the fault recorder's
+/// causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the child whose
+/// parent notification the parent was handling), are established non-sensitive, and so on through that child's own
+/// incidents in this Run, because a propagated message can carry a descendant's text (a nested BPMN process copies its
+/// child's fault message); a chain deeper than the bound counts as sensitive. An incident a child-control consumer raised,
+/// or one recorded for poisoned scheduler work, is always withheld: its message may echo another Run's batches or an
+/// arbitrary handler's exception text. A child-control consumer's returned fault or failed disposal recorded before the
+/// runtime named the calling child carries neither marker and is not recognized; such Runs exist only in stores written by
+/// builds before #3736 (pre-4.0 previews).
 /// </para>
 /// </remarks>
 public interface IWorkflowRunInspection

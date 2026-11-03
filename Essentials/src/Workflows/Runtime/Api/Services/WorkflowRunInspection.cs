@@ -67,7 +67,7 @@ internal sealed class WorkflowRunInspection(
         {
             // Only a caller with value inspection reads incident messages at all, so only then is their sensitivity established.
             var sensitiveInputs = canInspectValues && await IncidentSensitiveAsync(id, incident.ActivityExecutionId, incident.ExecutableNodeId,
-                incident.Metadata, sensitive, lookups, cancellationToken);
+                incident.Metadata, view.Incidents, sensitive, lookups, depth: 0, cancellationToken);
             incidents.Add(Incident(incident.IncidentId, incident.ActivityExecutionId, incident.ExecutableNodeId, incident.Severity, incident.Status,
                 incident.FailureType, incident.Message, incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt, canInspectValues, sensitiveInputs));
         }
@@ -117,6 +117,9 @@ internal sealed class WorkflowRunInspection(
     /// </summary>
     internal const int SensitivityLookupLimit = 32;
 
+    /// <summary>How deep a propagated incident's causal chain is followed before its message counts as sensitive.</summary>
+    internal const int CausalDepthLimit = 8;
+
     // The sub-status the runtime's child-control delivery records on a thrown consumer fault.
     private const string ChildControlFaulted = "ChildControlFaulted";
 
@@ -124,14 +127,14 @@ internal sealed class WorkflowRunInspection(
     /// Whether an incident's message may echo a sensitive input. Non-sensitivity must be established from both sources, the
     /// Executable's input bindings and the activity execution's own value evidence, for the activity the incident names and,
     /// when it propagated from a child's fault, for that causal activity execution too (the fault recorder's causal execution,
-    /// a structural parent's completed child, or the child whose parent notification the parent was handling). Only one causal
-    /// level is checked: this assumes, as the runtime's fault recorders do, that a propagated fault message carries at most
-    /// the text of the one causal child it names. An incident without an activity execution, whose causal execution
-    /// is blank or named only partly, raised by a child-control consumer, or recorded for poisoned scheduler work, counts as
-    /// sensitive.
+    /// a structural parent's completed child, or the child whose parent notification the parent was handling), and so on
+    /// through that child's own incidents in this Run, because a propagated message can carry a descendant's text. An
+    /// incident without an activity execution, whose causal execution is blank or named only partly, whose chain is deeper
+    /// than the bound, raised by a child-control consumer, or recorded for poisoned scheduler work, counts as sensitive.
     /// </summary>
     private async Task<bool> IncidentSensitiveAsync(string workflowExecutionId, string? activityExecutionId, string? executableNodeId,
-        IReadOnlyDictionary<string, string> metadata, HashSet<string>? sensitive, Dictionary<string, bool> lookups, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, string> metadata, IReadOnlyCollection<IncidentStateView> runIncidents, HashSet<string>? sensitive,
+        Dictionary<string, bool> lookups, int depth, CancellationToken cancellationToken)
     {
         if (activityExecutionId is null) return true;
         // Withheld outright: a child-control consumer received batches the called workflow's own Run produced, which this
@@ -156,6 +159,15 @@ internal sealed class WorkflowRunInspection(
             var childNode = key == RuntimeMetadataKeys.CausalActivityExecutionId && metadata.TryGetValue(RuntimeMetadataKeys.CausalExecutableNodeId, out var node)
                             && !string.IsNullOrWhiteSpace(node) ? node : null;
             if (await ActivitySensitiveAsync(workflowExecutionId, child, childNode, sensitive, lookups, cancellationToken)) return true;
+            // The child's own propagated incident may carry a deeper descendant's text (a nested BPMN process copies its child's
+            // fault message), so the chain is followed through this Run's incidents, failing closed beyond the depth bound.
+            foreach (var childIncident in runIncidents.Where(item => item.ActivityExecutionId == child && item.ActivityExecutionId != activityExecutionId))
+            {
+                if (depth + 1 >= CausalDepthLimit) return true;
+                if (await IncidentSensitiveAsync(workflowExecutionId, child, childIncident.ExecutableNodeId, childIncident.Metadata, runIncidents,
+                        sensitive, lookups, depth + 1, cancellationToken))
+                    return true;
+            }
         }
         return !metadata.ContainsKey(RuntimeMetadataKeys.CausalActivityExecutionId)
                && (metadata.ContainsKey(RuntimeMetadataKeys.CausalExecutableNodeId) || metadata.ContainsKey(RuntimeMetadataKeys.CausalIncidentId));
@@ -211,7 +223,7 @@ internal sealed class WorkflowRunInspection(
         foreach (var incident in execution.Incidents)
         {
             var sensitiveInputs = canInspectValues && (nodeSensitive || await IncidentSensitiveAsync(workflowExecutionId, activityExecutionId,
-                execution.ExecutableNodeId, incident.Metadata, sensitive, lookups, cancellationToken));
+                execution.ExecutableNodeId, incident.Metadata, run.Incidents, sensitive, lookups, depth: 0, cancellationToken));
             incidents.Add(Incident(incident.IncidentId, execution.ActivityExecutionId, incident.Causation?.ExecutableNodeId ?? execution.ExecutableNodeId,
                 incident.Severity, incident.Status, incident.FailureType, incident.Message, incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt,
                 canInspectValues, sensitiveInputs));

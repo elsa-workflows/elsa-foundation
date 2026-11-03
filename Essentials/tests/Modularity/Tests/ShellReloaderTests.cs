@@ -49,12 +49,17 @@ public sealed class ShellReloaderTests
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
+    [InlineData(0)] // during the pause between the first and second attempt
     public async Task LogsAndPropagatesACancellationAfterTheSave(int cancelledAttempt)
     {
         var registry = new QueuedReloadRegistry(ConfigurationChanged, null);
         var logger = new RecordingLogger();
         using var cancellation = new CancellationTokenSource();
-        registry.BeforeReload = attempt => { if (attempt == cancelledAttempt) cancellation.Cancel(); };
+        registry.BeforeReload = attempt =>
+        {
+            if (attempt == cancelledAttempt) cancellation.Cancel();
+            else if (cancelledAttempt == 0 && attempt == 1) cancellation.CancelAfter(TimeSpan.FromMilliseconds(50));
+        };
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new ShellReloader(registry, new NuplaneHostTestComposition.StubShell("Authoring"), logger).ReloadAsync(cancellation.Token));

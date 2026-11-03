@@ -82,8 +82,8 @@ to offer the source workflow's current draft instead (FR-015); this package offe
   the result fits in (counting every value it may release at its full bound), the second resolves through the run endpoints'
   audited payload read exactly the values those bounds disclose, so the payload read audits only what the result shows. It
   returns `readAt`, `inProgress` and an `attribution` sentence, the instance,
-  `canInspectValues` and `canResolveValues`, `incidents` (messages redacted without value inspection and withheld for an
-  activity with a sensitive input, `messageRedacted`, `sensitiveInputs`; bounded with a truncation marker, `messageTruncated`), one activity page (`totalCount`,
+  `canInspectValues` and `canResolveValues`, `incidents` (messages redacted without value inspection and withheld, as `sensitiveInputs`, when they could echo a
+  sensitive input, an uninspected causal descendant, another Run's batches or a poisoned handler's text, `messageRedacted`; bounded with a truncation marker, `messageTruncated`), one activity page (`totalCount`,
   `nextContinuationToken`), the selected execution's summary, bookmarks, incidents, `values` (each with `disclosure`
   `resolved`, `resolvable`, `withheld` or `unavailable` and `unavailableReason` `notCaptured`, `pruned`, `unsupported` or
   `notPermitted`; a value only when `resolved`) and `stateView`, an `unavailable` list naming each withheld or unavailable item

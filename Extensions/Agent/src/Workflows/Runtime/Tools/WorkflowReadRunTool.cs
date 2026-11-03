@@ -190,7 +190,7 @@ internal sealed class WorkflowReadRunTool(
                 var state = execution.StateView;
                 if (state.Withheld)
                     unavailable.Add(new { data = "selected activity execution state view", reason = "withheld",
-                        explanation = "withheld because the activity has a sensitive input that its state could echo" });
+                        explanation = "withheld because the activity may have a sensitive input that its state could echo" });
                 else if (!state.Available && state.UnavailableReason is { } stateReason)
                     unavailable.Add(new { data = "selected activity execution state view", reason = WorkflowRunContext.Reason(stateReason), explanation = WorkflowRunContext.Explain(stateReason) });
                 var view = state.View is { } projection && Serialized(projection) <= tier.ValueChars ? (JsonElement?)projection : null;

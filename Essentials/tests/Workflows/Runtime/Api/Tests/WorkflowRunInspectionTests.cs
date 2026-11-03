@@ -344,6 +344,38 @@ public sealed class WorkflowRunInspectionTests
         else Assert.Equal(("Child failed: " + Sentinel, "Child failed: " + Sentinel), (top.Message, selected.Message));
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task A_propagated_chain_is_followed_through_the_childs_own_incident(bool grandchildSensitive, bool withheld)
+    {
+        // A nested BPMN process copies its child's fault message into its own, which its parent copies in turn.
+        const string ChildId = "actexec-child", GrandchildId = "actexec-grandchild";
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ChildId, RunId, "node-child", "authored-child", "Test.Child", "1.0.0",
+            ActivityExecutionStatus.Faulted, null, 2, Now, Now, null, "checkpoint-2", "checkpoint-2", Now, ActivitySchedulingProvenance.Empty, [], [], [],
+            [Captured("text", "hello")], new Dictionary<string, string>()));
+        await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(GrandchildId, RunId, "node-grandchild", "authored-grandchild", "Test.Leaf", "1.0.0",
+            ActivityExecutionStatus.Faulted, null, 3, Now, Now, null, "checkpoint-3", "checkpoint-3", Now, ActivitySchedulingProvenance.Empty, [], [], [],
+            grandchildSensitive ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
+        var parentCausal = new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = ChildId };
+        var childCausal = new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = GrandchildId };
+        await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ActivityId, RunId, "node-1", "authored-1", "Test.Activity", "1.0.0",
+            ActivityExecutionStatus.Faulted, null, 1, Now, Now, null, "checkpoint-1", "checkpoint-1", Now, ActivitySchedulingProvenance.Empty, [], [],
+            [new ActivityExecutionIncidentSummary("incident-1", IncidentSeverity.Error, IncidentStatus.Blocking, null, "workflow.fault", "Child failed: " + Sentinel, Now,
+                null, true, parentCausal, ActivityExecutionIncidentCausation.From(parentCausal))],
+            [], new Dictionary<string, string>()));
+        var parent = details.View!.Incidents.Single() with { Message = "Child failed: " + Sentinel, Metadata = parentCausal };
+        var child = parent with { IncidentId = "incident-child", ActivityExecutionId = ChildId, ExecutableNodeId = "node-child", Metadata = childCausal };
+        var view = details.View! with { Incidents = [parent, child] };
+
+        var run = (await Create(new Details(view)).GetAsync(new(RunId, ActivityId)))!;
+
+        Assert.Equal(withheld, run.Incidents.Single(item => item.IncidentId == parent.IncidentId).MessageRedacted);
+        Assert.Equal(withheld, Assert.Single(run.Selection!.Execution!.Incidents).MessageRedacted);
+        if (withheld) Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(run), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Thousands_of_incidents_cost_a_bounded_number_of_activity_reads()
     {
