@@ -69,10 +69,11 @@ internal static class RuntimeModelMigrationProviderSmoke
             {
                 Assert.False(context.Database.HasPendingModelChanges());
                 var migrations = context.Database.GetMigrations().ToArray();
-                Assert.Equal(3, migrations.Length);
+                Assert.Equal(4, migrations.Length);
                 Assert.EndsWith("_Initial", migrations[0]);
                 Assert.EndsWith("_ModelExecutionState", migrations[1]);
                 Assert.EndsWith("_ModelMaterialKind", migrations[2]);
+                Assert.EndsWith("_OutboxClaimDeliveredAt", migrations[3]);
                 string? before = null;
                 if (retained)
                 {

@@ -249,6 +249,24 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     /// <summary>
+    /// The same race, but the other deliverer finishes while schedule-1 still runs, after the overlay was filled. When the
+    /// drain settles nothing is held any more, and the overlay it would read for queued work never shows schedule-2. The
+    /// listing of held continuations also returns one another deliverer finished since the overlay was filled, so the drain
+    /// starts a fresh segment from durable state rather than report quiescence and leave the step to the sweep (#3661).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Ordinary_segment_drains_work_a_competing_delivery_finished_during_the_first_pass(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromMinutes(10), mode, deliverDuringFirstStep: true);
+
+        await race.AssertDrainedBothStepsAsync();
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await race.Commits.FindAsync(race.OtherClaim.OutboxItemId))?.Status);
+    }
+
+    /// <summary>
     /// The #3647 re-drive delivers the execution's flushed continuations before its first segment. It queues schedule-1 that
     /// way, but another deliverer holds the continuation for schedule-2, and queues that step only after the first segment
     /// filled its overlay. The re-drive must run it too before it reports quiescence (#3659).
@@ -1047,9 +1065,12 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public static async Task<HeldContinuationRace> StartAsync(
             TimeSpan claimVisibility,
             PersistenceMode mode,
-            bool resumeAfterFirstStep = false)
+            bool resumeAfterFirstStep = false,
+            bool deliverDuringFirstStep = false)
         {
             var race = await HoldAsync(claimVisibility, mode, resumeAfterFirstStep: resumeAfterFirstStep);
+            if (deliverDuringFirstStep)
+                race.Probe.DuringSchedule = race.DeliverHeldAsync;
             race.Draining = race._scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
                 .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask();
             return race;
@@ -1118,12 +1139,17 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public async Task DeliverHeldAtFirstPollAsync()
         {
             var poll = await Clock.NextTimerAsync(due => due == TimeSpan.FromMilliseconds(10), Timeout);
+            await DeliverHeldAsync();
+            Clock.Advance(poll);
+        }
+
+        public async Task DeliverHeldAsync()
+        {
             await Shared.Queue.EnqueueAsync(Held);
             Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await Commits.CompleteClaimAsync(
                 new RuntimePostCommitOutboxClaimCompletion(
                     OtherClaim,
-                    new RuntimePostCommitOutboxDeliveryResult(OtherClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now))));
-            Clock.Advance(poll);
+                    new RuntimePostCommitOutboxDeliveryResult(OtherClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Clock.GetUtcNow()))));
         }
 
         public async Task AssertDrainedBothStepsAsync()
@@ -1207,6 +1233,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         // WorkflowResumeBookmarkSchedulerWorkHandler does, retaining its item when true, and then faults.
         public bool? ResumeCommitsInOwnScopeThenFaults => resumeCommitsInOwnScopeThenFaults;
         public int OwnScopeResumeRuns { get; set; }
+        // Runs once inside the first schedule's body, as another worker would act while user code runs.
+        public Func<Task>? DuringSchedule { get; set; }
 
         public bool ShouldDeferResume()
         {
@@ -1434,6 +1462,11 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
             if (workItem.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity)
             {
+                if (probe.DuringSchedule is { } during)
+                {
+                    probe.DuringSchedule = null;
+                    await during();
+                }
                 var current = await schedulerStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
                 probe.ScheduleObservedVersions.Add(current?.Version);
                 var nextState = new SchedulerState(workItem.WorkflowExecutionId, (current?.Version ?? 0) + 1);

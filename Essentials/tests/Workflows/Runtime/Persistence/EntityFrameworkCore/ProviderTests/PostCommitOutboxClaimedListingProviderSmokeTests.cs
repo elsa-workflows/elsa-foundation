@@ -21,4 +21,15 @@ public sealed class PostCommitOutboxClaimedListingPostgreSqlSmokeTests(RuntimeBo
         await PostCommitOutboxClaimedListingContract.ListsOneExecutionsHeldItemsOfOneKindAsync(
             PostCommitOutboxClaimedListingContract.EntityFramework(context, $"native-2225-{Guid.NewGuid():N}"));
     }
+
+    [SkippableFact]
+    public async Task PostgreSql_store_also_lists_the_deliveries_a_claim_finished_since_a_time()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
+        await using var context = new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(fixture.ConnectionString).Options);
+        await context.Database.EnsureCreatedAsync();
+        await PostCommitOutboxClaimedListingContract.AlsoListsTheDeliveriesAClaimFinishedSinceAsync(
+            PostCommitOutboxClaimedListingContract.EntityFramework(context, $"native-3661-{Guid.NewGuid():N}"));
+    }
 }

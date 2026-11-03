@@ -944,11 +944,15 @@ public sealed class RuntimePostCommitOutboxQuery
 /// execution's items of one intent kind whose delivery a deliverer took on and has not settled. That is an item claimed
 /// for delivery (<see cref="RuntimePostCommitOutboxStatus.Delivering"/>) or one whose attempt failed and waits for a retry
 /// (<see cref="RuntimePostCommitOutboxStatus.FailedRetryable"/>). Both filters are required, so the read stays within one
-/// execution.
+/// execution. With <see cref="DeliveredByClaimSince"/> it also selects the items a claim delivered at or after that time.
 /// </summary>
 public sealed class RuntimePostCommitOutboxClaimedQuery
 {
-    public RuntimePostCommitOutboxClaimedQuery(string workflowExecutionId, string intentKind, int limit)
+    public RuntimePostCommitOutboxClaimedQuery(
+        string workflowExecutionId,
+        string intentKind,
+        int limit,
+        DateTimeOffset? deliveredByClaimSince = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
@@ -958,20 +962,36 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
         WorkflowExecutionId = workflowExecutionId;
         IntentKind = intentKind;
         Limit = limit;
+        DeliveredByClaimSince = deliveredByClaimSince;
     }
 
     public string WorkflowExecutionId { get; }
     public string IntentKind { get; }
     public int Limit { get; }
 
+    /// <summary>
+    /// When set, the listing also returns the items a claim delivered at or after this time: delivered under a fencing
+    /// token (<see cref="RuntimePostCommitOutboxItem.DeliveryFencingToken"/> above zero), with
+    /// <see cref="RuntimePostCommitOutboxItem.DeliveredAt"/> no earlier than it. A claim-free delivery, which only the
+    /// drain that owns the execution makes, is never returned (#3661).
+    /// </summary>
+    public DateTimeOffset? DeliveredByClaimSince { get; }
+
     /// <summary>Whether <paramref name="item"/> is one this query lists.</summary>
     public bool Matches(RuntimePostCommitOutboxItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable &&
+        return (item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable ||
+                IsDeliveredByClaimSince(item)) &&
                StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) &&
                StringComparer.Ordinal.Equals(item.Intent.Kind, IntentKind);
     }
+
+    private bool IsDeliveredByClaimSince(RuntimePostCommitOutboxItem item) =>
+        DeliveredByClaimSince is { } since &&
+        item.Status == RuntimePostCommitOutboxStatus.Delivered &&
+        item.DeliveryFencingToken > 0 &&
+        item.DeliveredAt >= since;
 }
 
 public sealed class RuntimePostCommitOutboxDeliveryResult
