@@ -174,12 +174,13 @@ describe("workflow publication operations", () => {
     expect(fixture.saveDraft.mock.calls[0][2]).toEqual({ lineage: ["batch-1"] });
   });
 
-  it("Save writes this render's draft with the live line, or with the line its caller captured at the click", async () => {
+  it("Save writes this render's draft with the line its caller captured at the click, or leaves the line to saveDraft", async () => {
     const line = ["batch-1"];
     const fixture = renderOperations({ lineage: () => line });
 
+    // Without a captured line, saveDraft compares this draft with the live one, so a stale render is never credited.
     await fixture.current().save();
-    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["batch-1"] });
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: undefined });
 
     await fixture.current().save({ lineage: ["captured-at-click"] });
     expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["captured-at-click"] });

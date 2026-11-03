@@ -148,8 +148,9 @@ export function useWorkflowOperations({
   /** Saves this render's draft; a caller that captured the history line when the author acted passes it. */
   const save = useCallback(async (options?: { lineage?: Iterable<string> }) => {
     if (!draft || busy) return;
-    // The line of the draft being saved, captured now with it, before any await.
-    const line = options?.lineage ? [...options.lineage] : lineage ? [...lineage()] : undefined;
+    // A caller that captured the history line when the author acted passes it; otherwise saveDraft decides the line
+    // by comparing this draft with the live one, so a stale render's draft is never credited with the live line.
+    const line = options?.lineage ? [...options.lineage] : undefined;
     setOperation("saving");
     setStatus("Saving...");
     try {
@@ -159,7 +160,7 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [draft, busy, lineage, saveDraft, setOperation, setStatus]);
+  }, [draft, busy, saveDraft, setOperation, setStatus]);
 
   const reviewPublication = useCallback(async (
     review: PublicationReviewState,
