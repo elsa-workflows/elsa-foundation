@@ -155,9 +155,15 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const [librarySupport, setLibrarySupport] = useState<Awaited<ReturnType<typeof workflowOrganizationSupport>> | null>(null);
   const [librarySupportError, setLibrarySupportError] = useState<string | null>(null);
   const [libraryPermissions, setLibraryPermissions] = useState<WorkflowOrganizationPermissions>({});
+  // False until the library controls report the actor's permissions: until then the page cannot say what it offers.
+  const [libraryPermissionsKnown, setLibraryPermissionsKnown] = useState(false);
+  const reportLibraryPermissions = useCallback((permissions: WorkflowOrganizationPermissions) => {
+    setLibraryPermissions(permissions); setLibraryPermissionsKnown(true);
+  }, []);
   const [tagCatalog, setTagCatalog] = useState<WorkflowTag[]>([]);
   const [libraryViews, setLibraryViews] = useState<WorkflowLibraryView[] | null>(null);
-  const [dialogTemplates, setDialogTemplates] = useState<WorkflowTemplate[]>([]);
+  // Null until the open create dialog has read the templates it offers; its context is disclosed only then.
+  const [dialogTemplates, setDialogTemplates] = useState<WorkflowTemplate[] | null>(null);
   const [organizationTarget, setOrganizationTarget] = useState<{ id: string; name: string } | null>(null);
   const [bulkTagTargets, setBulkTagTargets] = useState<string[] | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -382,6 +388,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     if (browseScopeBlocked) return;
     setRequestError(null);
     setCreateError("");
+    setDialogTemplates(null);
     setCreateDraft({ name: "", description: "", rootActivityVersionId: null });
     void loadCatalog();
   }, [browseScopeBlocked, loadCatalog]);
@@ -658,12 +665,19 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   // An applied view is disclosed with its identity, owner kind and revision only once the view list is read (or the list
   // is not disclosed at all until then); a list without a view needs no wait.
   const viewKnown = !browseLocation.viewId || libraryViews !== null;
-  const offeredTemplates = useMemo(() => dialogTemplates.map(template => ({ id: template.id, name: template.name, description: template.description,
+  // The permissions are part of the disclosed state, so the list is disclosed only once they are read (when the backend
+  // reports them, with its tag catalog). Disclosed earlier, they would describe actions the page is about to change, and the
+  // read would move the revision under a change reviewed in between, which the page then refuses as stale.
+  const permissionsKnown = librarySupport !== null && (librarySupport.tags !== true || libraryPermissionsKnown);
+  // The list is settled when its rows are current and what the page offers for them is known; until then it is still being
+  // updated (aria-busy) and is not disclosed.
+  const listSettled = isCurrentData && viewKnown && permissionsKnown;
+  const offeredTemplates = useMemo(() => (dialogTemplates ?? []).map(template => ({ id: template.id, name: template.name, description: template.description,
     revision: template.revision, content: template.content })), [dialogTemplates]);
   useWorkflowPageAgent<WorkflowDefinitionBrowseLocation>({
     controller: weaver, clientId: ai.clientId, kind: libraryKind, toolId: "workflow_library_set_list_state", resultType: "workflows.list-state",
     describe: "Changed the visible workflow list on this page; nothing was saved.",
-    build: (location, client) => isCurrentData && viewKnown ? libraryAttachment({
+    build: (location, client) => listSettled ? libraryAttachment({
       location, view: appliedView && location.viewId === appliedView.id ? { id: appliedView.id, name: appliedView.name, shared: appliedView.shared, revision: appliedView.revision, canEdit: appliedView.canEdit !== false } : null,
       rows: definitions.map(definition => ({ id: definition.id, name: definition.name, folderId: definition.folderId ?? null, tags: definition.tags ?? [],
         favorite: definition.favorite === true, publicationState: definition.publicationState ?? null })),
@@ -677,7 +691,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   useWorkflowPageAgent<CreateWorkflowDraft | null>({
     controller: weaver, clientId: ai.clientId, kind: createDialogKind, toolId: "workflow_create_dialog_prefill", resultType: "workflows.create-dialog-prefill",
     describe: "Filled in the open New workflow dialog; create the workflow with its Create action.",
-    build: (draft, client) => draft ? createDialogAttachment(draft, offeredTemplates, client) : null,
+    build: (draft, client) => draft && dialogTemplates !== null ? createDialogAttachment(draft, offeredTemplates, client) : null,
     apply: change => createDraft ? applyCreateDialogPrefill(createDraft, change, offeredTemplates) : null,
     current: () => createDraft,
     restore: draft => setCreateDraft(draft)
@@ -714,7 +728,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
   useEffect(() => {
     let cancelled = false;
-    setLibrarySupport(null); setLibrarySupportError(null); setLibraryPermissions({}); setTagCatalog([]);
+    setLibrarySupport(null); setLibrarySupportError(null); setLibraryPermissions({}); setLibraryPermissionsKnown(false); setTagCatalog([]);
     setOrganizationTarget(null); setBulkTagTargets(null);
     void workflowOrganizationSupport(context).then(support => { if (!cancelled) setLibrarySupport(support); }).catch(caught => {
       if (cancelled) return;
@@ -758,7 +772,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
         {hasLibrarySupport ? <Suspense fallback={<p role="status">Loading library organization…</p>}><WorkflowLibraryControls
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
-          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions} onViews={setLibraryViews}
+          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={reportLibraryPermissions} onViews={setLibraryViews}
         /></Suspense> : null}
         </div>
         {browseScopeBlocked && browseSupport ? <div className="wf-alert" role="alert">
@@ -807,7 +821,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
           <>
-            <div className="studio-table-container wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="studio-collection-table wf-grid wf-definition-grid" data-library-columns={showTagColumn && showLocationColumn ? "both" : showTagColumn ? "tags" : showLocationColumn ? "location" : undefined} role="table" aria-label="Workflow definitions">
+            <div className="studio-table-container wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="studio-collection-table wf-grid wf-definition-grid" data-library-columns={showTagColumn && showLocationColumn ? "both" : showTagColumn ? "tags" : showLocationColumn ? "location" : undefined} role="table" aria-label="Workflow definitions" aria-busy={!listSettled}>
               <div className="wf-grid-head" role="row">
                 <div className="wf-row-select" role="columnheader">
                   {isCurrentData ? (

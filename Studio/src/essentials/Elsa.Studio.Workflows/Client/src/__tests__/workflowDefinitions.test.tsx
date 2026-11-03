@@ -132,6 +132,68 @@ describe("workflow definition list", () => {
     }, { timeout: 5_000, interval: 20 });
   });
 
+  it("discloses the open create dialog only once it has read the templates it offers (spec 1193 FR-023)", async () => {
+    const template = { id: "template-1", name: "Approval", description: "Two steps", revision: "t-r3", createdAt: "2026-01-01T00:00:00Z", lastModifiedAt: "2026-01-01T00:00:00Z",
+      content: { state: { variables: [], inputs: [], outputs: [], rootActivity: { nodeId: "root", activityVersionId: flowchartActivity().activityVersionId, inputs: [], outputs: [] } },
+        layout: [], activityPresentation: [] } };
+    let releaseTemplates!: () => void;
+    const templatesRead = new Promise<void>(resolve => { releaseTemplates = resolve; });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [{ ...definitionCapabilities.capabilities[0], links: [...definitionCapabilities.capabilities[0].links, { rel: "workflow-templates", href: "design/workflows/templates" }] }, activityCapability] };
+      if (url.endsWith("design/workflows/templates")) { await templatesRead; return [template]; }
+      return routeJson(url);
+    });
+    const agent = createAgentRegistry();
+    const weaver = registerWorkflowAgent(agent);
+    const container = render(context(getJson), vi.fn(), weaver);
+    const dialog = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
+    await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
+    click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    await vi.waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).endsWith("design/workflows/templates"))).toBe(true), { timeout: 5_000, interval: 20 });
+    await settle();
+    expect(nameInput(container)).not.toBeNull();
+    // The dialog is open but its offered templates are not read yet: a context now would be one about to change.
+    expect(dialog()).toBeUndefined();
+    const picker = () => container.querySelector('select[aria-label="Starting point"]')!;
+    expect(picker().getAttribute("aria-busy")).toBe("true");
+    releaseTemplates();
+    await vi.waitFor(() => expect((dialog()?.content as { templates?: unknown[] } | undefined)?.templates).toHaveLength(1), { timeout: 5_000, interval: 20 });
+    expect(picker().getAttribute("aria-busy")).toBe("false");
+    const disclosed = dialog()!;
+    await settle();
+    expect(dialog()!.target!.revision).toBe(disclosed.target!.revision);
+  });
+
+  it("discloses the visible list only once its permissions are read, so that read never moves a reviewed revision (spec 1193 FR-020)", async () => {
+    let releaseTags!: () => void;
+    const tagsRead = new Promise<void>(resolve => { releaseTags = resolve; });
+    const permissions = { canAssignTags: true, canManageFolders: true, canManageTags: true, canShareViews: true };
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [{ ...definitionCapabilities.capabilities[0], links: [...definitionCapabilities.capabilities[0].links,
+        { rel: "workflow-tags", href: "design/workflows/tags" }, { rel: "workflow-organization", href: "design/workflows/definitions/{definitionId}/organization", templated: true }] }, activityCapability] };
+      if (url.includes("design/workflows/tags")) { await tagsRead; return { items: [], permissions }; }
+      return routeJson(url);
+    });
+    const agent = createAgentRegistry();
+    const weaver = registerWorkflowAgent(agent);
+    const container = render(context(getJson), vi.fn(), weaver);
+    const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
+    await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
+    await vi.waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("design/workflows/tags"))).toBe(true), { timeout: 5_000, interval: 20 });
+    await settle();
+    // Rows are current, but the permissions are not read yet: the page has no state it can stand behind, so nothing is disclosed.
+    expect(list()).toBeUndefined();
+    const table = () => container.querySelector('[role="table"][aria-label="Workflow definitions"]')!;
+    expect(table().getAttribute("aria-busy")).toBe("true");
+    releaseTags();
+    await vi.waitFor(() => expect(list()).toBeDefined(), { timeout: 5_000, interval: 20 });
+    expect(table().getAttribute("aria-busy")).toBe("false");
+    const disclosed = list()!;
+    expect((disclosed.content as { permissions: unknown }).permissions).toEqual(permissions);
+    await settle();
+    expect(list()!.target!.revision).toBe(disclosed.target!.revision);
+  });
+
   it("keeps an open create dialog and its name when its workspace tab goes to the background and returns", async () => {
     const getJson = vi.fn(async (url: string) => routeJson(url));
     const tab = renderInTab(context(getJson), vi.fn());

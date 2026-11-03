@@ -194,29 +194,6 @@ public sealed partial class WorkflowLibraryApiContractTests
     }
 
     [Fact]
-    public async Task A_replaced_command_service_decides_the_endpoints_that_have_a_core_counterpart_too()
-    {
-        var replacement = new RecordingCommands();
-        await using var host = await StartAsync(new LibraryProbe(), services =>
-        {
-            services.RemoveAll<IWorkflowLibraryCommands>();
-            services.AddSingleton<IWorkflowLibraryCommands>(replacement);
-        });
-        using var created = await SendAsync(host, "POST", "/design/workflows/tags", "library-catalog", "{\"name\":\"Critical\"}");
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        Assert.Contains("replacement-tag", await created.Content.ReadAsStringAsync());
-        // An unkeyed HTTP create reaches the Core contract unkeyed, as the built-in route's ordinary create, for the request's own actor and tenant.
-        Assert.Equal(("user-a", "tenant-design"), (replacement.Actors.Single().ActorId, replacement.Actors.Single().TenantId));
-        Assert.Null(replacement.TagKeys.Single());
-        using var favorite = await SendAsync(host, "PUT", "/design/workflows/definitions/orders/favorite", "library-read", "{}");
-        Assert.Equal(HttpStatusCode.Forbidden, favorite.StatusCode);
-        Assert.Contains("Replacement refused", await favorite.Content.ReadAsStringAsync());
-        using var view = await SendAsync(host, "POST", "/design/workflows/views", "library-read", "{\"name\":\"Mine\",\"query\":{}}");
-        Assert.Equal(HttpStatusCode.Conflict, view.StatusCode);
-        Assert.Null(replacement.ViewKeys.Single());
-    }
-
-    [Fact]
     public async Task A_core_create_takes_an_optional_key_never_a_blank_one_and_an_update_takes_none()
     {
         await using var host = await StartAsync(new KeyedLibraryProbe());
@@ -230,44 +207,6 @@ public sealed partial class WorkflowLibraryApiContractTests
         Assert.Equal(WorkflowLibraryCommandStatus.Applied, (await commands.CreateTagAsync(actor, new("Critical"), null)).Status);
         Assert.Equal(WorkflowLibraryCommandStatus.Applied, (await commands.SaveViewAsync(actor, null, new("Mine", new()), null)).Status);
         Assert.Equal(WorkflowLibraryCommandStatus.Applied, (await commands.MoveDefinitionsAsync(actor, ["orders"], null, null)).Status);
-    }
-
-    // P3 round 2: through any installed implementation, including a pure pass-through decorator, every library route with a
-    // Core counterpart answers exactly as the built-in route does, for every input.
-    [Theory]
-    [InlineData("POST", "/design/workflows/tags", "library-catalog", "{\"name\":\"Retired\",\"mode\":\"controlled\",\"cardinality\":\"multiple\",\"deprecated\":true,\"values\":[{\"id\":\"\",\"name\":\"Old\",\"deprecated\":true},{\"id\":\"\",\"name\":\"New\"}]}")]
-    [InlineData("POST", "/design/workflows/tags", "library-catalog", "{\"name\":\"Unkeyed\"}")]
-    [InlineData("POST", "/design/workflows/tags", "library-catalog", "{\"name\":\"Keyed\",\"operationKey\":\"k1\"}")]
-    [InlineData("POST", "/design/workflows/views", "library-read", "{\"name\":\"Mine\",\"query\":{\"searchTerm\":\"pay\"},\"columns\":[\"name\"]}")]
-    [InlineData("POST", "/design/workflows/views", "library-read", "{\"name\":\"Mine\",\"query\":{},\"operationKey\":\"k2\"}")]
-    [InlineData("PUT", "/design/workflows/views/view-1", "library-read", "{\"name\":\"Renamed\",\"query\":{},\"revision\":\"v1\"}")]
-    [InlineData("GET", "/design/workflows/views", "library-share", null)]
-    [InlineData("POST", "/design/workflows/tags/bulk", "library-all", "{\"targets\":[{\"definitionId\":\"orders\",\"revision\":\"r1\"},{\"definitionId\":\"deniedBeta\",\"revision\":\"r1\"}],\"add\":[{\"tagId\":\"critical\"}],\"remove\":[],\"operationKey\":\"b1\"}")]
-    [InlineData("POST", "/design/workflows/tags/bulk", "library-all", "{\"targets\":[{\"definitionId\":\"orders\",\"revision\":\"r1\"},{\"definitionId\":\"orders\",\"revision\":\"r1\"}],\"add\":[],\"remove\":[],\"operationKey\":\"b2\"}")]
-    [InlineData("PUT", "/design/workflows/definitions/orders/favorite", "library-read", "{}")]
-    [InlineData("PUT", "/design/workflows/definitions/deniedBeta/favorite", "library-read", "{}")]
-    [InlineData("POST", "/design/workflows/definitions/move", "library-all", "{\"definitionIds\":[\"orders\"],\"folderId\":\"invoices\"}")]
-    [InlineData("POST", "/design/workflows/definitions/move", "library-all", "{\"definitionIds\":[\"orders\",\"deniedBeta\"],\"folderId\":\"invoices\"}")]
-    public async Task A_pass_through_command_decorator_answers_every_library_route_exactly_as_the_built_in(string method, string path, string identity, string? body)
-    {
-        async Task<(HttpStatusCode Status, string Body, string? Input)> SendThrough(bool decorated)
-        {
-            var probe = new EchoLibraryProbe();
-            await using var host = await StartAsync(probe, services =>
-            {
-                services.AddSingleton<IPermissionResourceHandler, DeniedDefinitionPolicy>();
-                if (!decorated) return;
-                // Wraps the built-in registration itself, as a host decorator (or the probe's seam) would.
-                var native = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowLibraryCommands));
-                services.RemoveAll<IWorkflowLibraryCommands>();
-                services.AddScoped<IWorkflowLibraryCommands>(provider => new PassThroughCommands((IWorkflowLibraryCommands)native.ImplementationFactory!(provider)));
-            });
-            using var response = await SendAsync(host, method, path, identity, body);
-            return (response.StatusCode, await response.Content.ReadAsStringAsync(), probe.Recorded);
-        }
-        var builtIn = await SendThrough(false);
-        var decorated = await SendThrough(true);
-        Assert.Equal(builtIn, decorated);
     }
 
     /// <summary>A store without operation-key support that echoes what each create receives, with a stored view schema of 3.</summary>
@@ -290,90 +229,39 @@ public sealed partial class WorkflowLibraryApiContractTests
             Task.FromResult<IReadOnlyList<WorkflowLibraryView>>([new("view-1", "Shared one", true, "user-b", new(SearchTerm: "pay"), ["name"], "v1", SchemaVersion: 3)]);
     }
 
-    private sealed class PassThroughCommands(IWorkflowLibraryCommands inner) : IWorkflowLibraryCommands
+    [Fact]
+    public async Task A_replaced_command_service_decides_weavers_writes_while_the_http_routes_keep_the_built_in_decisions()
     {
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>> GetPermissionsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) => inner.GetPermissionsAsync(actor, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryOrganizationSnapshot>> GetOrganizationAsync(WorkflowLibraryActor actor, string definitionId, CancellationToken cancellationToken = default) => inner.GetOrganizationAsync(actor, definitionId, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>> ListTagsAsync(WorkflowLibraryActor actor, string? search, CancellationToken cancellationToken = default) => inner.ListTagsAsync(actor, search, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input, string? operationKey, CancellationToken cancellationToken = default) => inner.CreateTagAsync(actor, input, operationKey, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> FindTagByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default) => inner.FindTagByOperationKeyAsync(actor, operationKey, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> EditTagsAsync(WorkflowLibraryActor actor, WorkflowLibraryTagEdit edit, CancellationToken cancellationToken = default) => inner.EditTagsAsync(actor, edit, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> SetFavoritesAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, bool favorite, CancellationToken cancellationToken = default) => inner.SetFavoritesAsync(actor, definitionIds, favorite, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string? operationKey, CancellationToken cancellationToken = default) => inner.MoveDefinitionsAsync(actor, definitionIds, folderId, operationKey, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryViewSnapshot>>> ListViewsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) => inner.ListViewsAsync(actor, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> SaveViewAsync(WorkflowLibraryActor actor, string? viewId, WorkflowLibraryViewSave input, string? operationKey, CancellationToken cancellationToken = default) => inner.SaveViewAsync(actor, viewId, input, operationKey, cancellationToken);
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> FindViewByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default) => inner.FindViewByOperationKeyAsync(actor, operationKey, cancellationToken);
+        var probe = new EchoLibraryProbe();
+        var replacement = new DuplicateCommands();
+        await using var host = await StartAsync(probe, services => { services.RemoveAll<IWorkflowLibraryCommands>(); services.AddSingleton<IWorkflowLibraryCommands>(replacement); });
+        // The route is the built-in one over its store, whatever IWorkflowLibraryCommands is installed.
+        using var created = await SendAsync(host, "POST", "/design/workflows/tags", "library-catalog", "{\"name\":\"Critical\"}");
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.Contains("echo-tag", await created.Content.ReadAsStringAsync());
+        using var scope = host.Services.CreateScope();
+        Assert.Same(replacement, scope.ServiceProvider.GetRequiredService<IWorkflowLibraryCommands>());
     }
 
     [Fact]
-    public async Task A_replacement_must_report_exactly_one_outcome_per_target_in_request_order()
+    public async Task A_core_tag_create_hands_the_store_every_field_its_own_create_accepts()
     {
-        foreach (var outcomes in new Func<IReadOnlyList<string>, WorkflowLibraryTargetOutcome[]>[]
-                 {
-                     ids => [],
-                     ids => ids.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Applied)).Concat([new("orders", WorkflowLibraryCommandStatus.Applied)]).ToArray(),
-                     ids => [new("other", WorkflowLibraryCommandStatus.Applied), new("other-2", WorkflowLibraryCommandStatus.Applied)]
-                 })
-        {
-            var replacement = new RecordingCommands { EditOutcomes = outcomes };
-            await using var host = await StartAsync(new LibraryProbe(), services => { services.RemoveAll<IWorkflowLibraryCommands>(); services.AddSingleton<IWorkflowLibraryCommands>(replacement); });
-            await Assert.ThrowsAnyAsync<Exception>(async () =>
-            {
-                using var response = await SendAsync(host, "POST", "/design/workflows/tags/bulk", "library-all",
-                    "{\"targets\":[{\"definitionId\":\"orders\",\"revision\":\"r1\"},{\"definitionId\":\"beta\",\"revision\":\"r1\"}],\"add\":[],\"remove\":[],\"operationKey\":\"b\"}");
-                Assert.True(response.IsSuccessStatusCode, "a defective outcome list must not be answered as success");
-            });
-        }
-        // Reordered outcomes are answered in request order.
-        var reordered = new RecordingCommands { EditOutcomes = ids => ids.Reverse().Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Applied, "r2")).ToArray() };
-        await using var ordered = await StartAsync(new LibraryProbe(), services => { services.RemoveAll<IWorkflowLibraryCommands>(); services.AddSingleton<IWorkflowLibraryCommands>(reordered); });
-        using var answer = await SendAsync(ordered, "POST", "/design/workflows/tags/bulk", "library-all",
-            "{\"targets\":[{\"definitionId\":\"orders\",\"revision\":\"r1\"},{\"definitionId\":\"beta\",\"revision\":\"r1\"}],\"add\":[],\"remove\":[],\"operationKey\":\"b\"}");
-        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
-        using var document = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
-        Assert.Equal(new[] { "orders", "beta" }, document.RootElement.EnumerateArray().Select(item => item.GetProperty("definitionId").GetString()));
-        // A move the replacement refuses for one target is the route's refusal, as a favorite is.
-        var moveRefused = new RecordingCommands { MoveOutcome = id => id == "beta" ? WorkflowLibraryCommandStatus.Conflict : WorkflowLibraryCommandStatus.Applied };
-        await using var moves = await StartAsync(new LibraryProbe(), services => { services.RemoveAll<IWorkflowLibraryCommands>(); services.AddSingleton<IWorkflowLibraryCommands>(moveRefused); });
-        using var moved = await SendAsync(moves, "POST", "/design/workflows/definitions/move", "library-all", "{\"definitionIds\":[\"orders\",\"beta\"],\"folderId\":\"invoices\"}");
-        Assert.Equal(HttpStatusCode.Conflict, moved.StatusCode);
-        using var movedAll = await SendAsync(moves, "POST", "/design/workflows/definitions/move", "library-all", "{\"definitionIds\":[\"orders\"],\"folderId\":\"invoices\"}");
-        Assert.Equal(HttpStatusCode.NoContent, movedAll.StatusCode);
-    }
-
-    private sealed class RecordingCommands : IWorkflowLibraryCommands
-    {
-        public List<WorkflowLibraryActor> Actors { get; } = [];
-        public List<string?> TagKeys { get; } = [];
-        public List<string?> ViewKeys { get; } = [];
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>> GetPermissionsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) => ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>(WorkflowLibraryCommandStatus.Applied, null, new(true, true, true, true)));
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryOrganizationSnapshot>> GetOrganizationAsync(WorkflowLibraryActor actor, string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>> ListTagsAsync(WorkflowLibraryActor actor, string? search, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input, string? operationKey, CancellationToken cancellationToken = default)
-        {
-            Actors.Add(actor); TagKeys.Add(operationKey);
-            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Applied, null,
-                new("replacement-tag", input.Name, null, "marker", "single", false, "r1", [])));
-        }
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> FindTagByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Func<IReadOnlyList<string>, WorkflowLibraryTargetOutcome[]>? EditOutcomes { get; init; }
-        public Func<string, string>? MoveOutcome { get; init; }
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> EditTagsAsync(WorkflowLibraryActor actor, WorkflowLibraryTagEdit edit, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>(WorkflowLibraryCommandStatus.Applied, null,
-                (EditOutcomes ?? throw new NotSupportedException())(edit.Targets.Select(target => target.DefinitionId).ToArray())));
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> SetFavoritesAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, bool favorite, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>(WorkflowLibraryCommandStatus.Applied, null,
-                definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Denied, null, "Replacement refused")).ToArray()));
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string? operationKey, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>(WorkflowLibraryCommandStatus.Applied, null,
-                definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, (MoveOutcome ?? throw new NotSupportedException())(id), null, "Replacement move outcome")).ToArray()));
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryViewSnapshot>>> ListViewsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> SaveViewAsync(WorkflowLibraryActor actor, string? viewId, WorkflowLibraryViewSave input, string? operationKey, CancellationToken cancellationToken = default)
-        {
-            ViewKeys.Add(operationKey);
-            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>(WorkflowLibraryCommandStatus.Conflict, "Replacement conflict"));
-        }
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> FindViewByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        var probe = new EchoLibraryProbe();
+        await using var host = await StartAsync(probe);
+        using var scope = Request(host, "library-catalog");
+        var commands = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryCommands>();
+        var result = await commands.CreateTagAsync(new("user-a", "tenant-design"),
+            new("Retired", Mode: "controlled", Cardinality: "multiple", Values: [new("Old", true), new("Given", false, "value-00000000000000000000000000000001")], Deprecated: true), null);
+        Assert.Equal(WorkflowLibraryCommandStatus.Applied, result.Status);
+        // Deprecation and a supplied value identity reach the store, which validates them as on its own create.
+        using var recorded = JsonDocument.Parse(probe.Recorded!);
+        Assert.True(recorded.RootElement.GetProperty("Deprecated").GetBoolean());
+        Assert.Equal(new[] { ("", true), ("value-00000000000000000000000000000001", false) }, recorded.RootElement.GetProperty("Values").EnumerateArray()
+            .Select(value => (value.GetProperty("Id").GetString(), value.GetProperty("Deprecated").GetBoolean())));
+        Assert.True(result.Value!.Deprecated);
+        Assert.Equal(new[] { true, false }, result.Value.Values.Select(value => value.Deprecated));
+        var view = await commands.SaveViewAsync(new("user-a", "tenant-design"), null, new("Mine", new()), null);
+        Assert.Equal(3, view.Value!.SchemaVersion);
     }
 
     // A command runs within the current request: the scope's accessor carries a principal like the route's own.

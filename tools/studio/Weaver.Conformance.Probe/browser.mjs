@@ -1944,6 +1944,9 @@ async function workflowLibrary() {
   result.ownerBefore = before.receipt;
   await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   const writesBefore = designWrites.length;
+  // The list is reviewed only once it is settled: its rows current and its permissions read (aria-busy="false"). A page whose
+  // permissions arrive after the review moves its revision and refuses the reviewed change as stale (the 6231b4434 witness).
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
   // Narrowing: the list page applies exactly the approved change and the user can revert it.
   const narrow = await reviewedTool("workflow_library_set_list_state", { search: library.search }, "narrow", commands);
   const listContext = (narrow.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.library");
@@ -1960,6 +1963,8 @@ async function workflowLibrary() {
   await nativeEnter("open-create-dialog", page.getByRole("button", { name: "Create workflow", exact: true }).first(), "Create workflow");
   const nameField = page.locator('input[aria-label="Display name"]');
   await expect(nameField).toBeVisible();
+  // Likewise the open dialog is reviewed only once it has read the saved templates it offers.
+  await expect(page.getByRole("combobox", { name: "Starting point", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
   const prefill = await reviewedTool("workflow_create_dialog_prefill", { name: library.prefill.name }, "prefill", commands);
   const filled = await approveAndApply(prefill.proposal, "prefill");
   expect(filled.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.create-dialog-prefill", schemaVersion: "1",

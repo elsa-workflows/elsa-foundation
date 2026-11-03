@@ -16,16 +16,17 @@ namespace Elsa.Workflows.Design.Api.Services;
 /// library endpoints (spec 1193 D4). The endpoints call the request-bound methods below, which keep the endpoints' exact
 /// order of checks and their exceptions; <see cref="IWorkflowLibraryCommands"/> runs the same methods for an explicit actor
 /// and tenant, first applying the permission each endpoint's own route gate applies, and reports outcomes instead of
-/// throwing. Only the current request's own actor and tenant are served.
+/// throwing. Only the current request's own actor and tenant are served. A replacement <see cref="IWorkflowLibraryCommands"/>
+/// decides Weaver's library writes; the HTTP endpoints always keep these built-in decisions (<see cref="Http"/>).
 /// </summary>
-internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWorkflowLibraryStore? store = null) : IWorkflowLibraryCommands
+internal sealed class WorkflowLibraryCommands(IHttpContextAccessor? accessor, IWorkflowLibraryStore? store = null) : IWorkflowLibraryCommands
 {
     private const string NotPermitted = "The requested workflow library operation is not permitted.";
     private const int TagPageSize = 100;
     private const string BlankKey = "An operation key must not be blank.";
 
-    /// <summary>The request's built-in command service, which the library endpoints without a Core counterpart call.</summary>
-    internal static WorkflowLibraryCommands For(HttpContext http) => http.RequestServices.GetRequiredService<WorkflowLibraryCommands>();
+    /// <summary>The library endpoints' own logic over their injected store: the HTTP routes always keep these built-in decisions.</summary>
+    internal static WorkflowLibraryCommands Http(IWorkflowLibraryStore? store) => new(null, store);
 
     // ---- The request-bound commands the endpoints call: the endpoints' former bodies, unchanged in order and outcome. ----
 
@@ -175,7 +176,9 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         if (operationKey is not null && string.IsNullOrWhiteSpace(operationKey))
             return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Invalid, BlankKey));
         var tag = new WorkflowTagInput(input.Name, input.Description, input.Mode, input.Cardinality, input.Deprecated,
-            input.Values?.Select(value => new WorkflowTagValue("", value.Name, value.Deprecated)).ToArray());
+            // Each value exactly as given, identity included, so the store refuses a supplied identity (or a null value) as it
+            // does on its own create.
+            input.Values?.Select(value => value is null ? null! : new WorkflowTagValue(value.Id ?? "", value.Name, value.Deprecated)).ToArray());
         return RunAsync(actor, WorkflowDesignPermissions.ManageTags, async http => ToSnapshot(await CreateTagAsync(http, tag, operationKey, cancellationToken)),
             cancellationToken);
     }
@@ -274,7 +277,7 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
     {
         ArgumentNullException.ThrowIfNull(actor);
         cancellationToken.ThrowIfCancellationRequested();
-        var http = accessor.HttpContext;
+        var http = accessor?.HttpContext;
         if (http is null || string.IsNullOrWhiteSpace(actor.ActorId) || string.IsNullOrWhiteSpace(actor.TenantId))
             return new(WorkflowLibraryCommandStatus.Denied, NotPermitted);
         return await CaptureAsync(async () =>

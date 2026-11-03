@@ -320,6 +320,17 @@ def require_dropped(log_lines, *, kind, operation_key, committed_id):
     return selected[0]
 
 
+def frozen_drop(save, output, log_path, *, kind, operation_key, committed_id):
+    """Checks the seam's lost-response log and retains a frozen copy of exactly the lines read now.
+
+    The log is one shared, append-only file: a later drop appends to it, so a reference to the log itself would no longer
+    match its hash (the 072001a53 witness failed on exactly that). The evidence is this observation's own copy.
+    """
+    lines = Path(log_path).read_text().splitlines()
+    entry = require_dropped(lines, kind=kind, operation_key=operation_key, committed_id=committed_id)
+    return entry, save(output, "dropped-responses-" + kind, {"entries": [json.loads(line) for line in lines if line.strip()]})
+
+
 # ---- Native runner. ----
 
 @contextmanager
@@ -450,7 +461,8 @@ def _library_native(runtime, name, clients, links, seeds, seam):
     data, refs = _approve_execute(runtime, turn, proposal, ASSIGN_TOOL)
     tags, tags_ref = _tags_named(runtime, runtime.backend, name + "-tags-after", links, new_tag)
     check(len(tags) == 1, "The lost tag-creation response did not resolve to exactly one tag")
-    dropped = require_dropped(seam["log"].read_text().splitlines(), kind="create-tag", operation_key=creates[0]["operationKey"], committed_id=tags[0]["id"])
+    dropped, dropped_ref = frozen_drop(runtime.save, turn["transport"].output, seam["log"], kind="create-tag",
+                                       operation_key=creates[0]["operationKey"], committed_id=tags[0]["id"])
     check([item.get("status") for item in data.get("creations") or []] == ["applied"] and data["creations"][0].get("tagId") == tags[0]["id"]
           and sorted(item.get("definitionId") for item in data.get("targets") or []) == sorted(ids)
           and all(item.get("status") == "applied" for item in data["targets"]), "The tag change did not report every target applied")
@@ -460,7 +472,7 @@ def _library_native(runtime, name, clients, links, seeds, seam):
         check({created["id"], tags[0]["id"]} <= {item["tagId"] for item in organization["tags"]}, "A target does not hold both tags")
         evidence.append(org_ref["receipt"])
     records["tags-dropped"] = {"control": "tags-dropped", "resolvedByKey": True, "tags": 1, "targets": len(ids)}
-    evidence += [*turn["evidence"], *refs, tags_ref, {"path": str(seam["log"]), "sha256": sha(seam["log"])}]
+    evidence += [*turn["evidence"], *refs, tags_ref, dropped_ref]
 
     # A lost view-save response, resolved by its key to exactly one view.
     view_name = "Qualification view " + suffix
@@ -475,9 +487,9 @@ def _library_native(runtime, name, clients, links, seeds, seam):
     views, views_ref = _views_named(runtime, runtime.backend, name + "-views-after", links, view_name)
     check(len(views) == 1 and views[0]["query"].get("searchTerm") == "qualification" and (data.get("view") or {}).get("id") == views[0]["id"],
           "The lost view-save response did not resolve to exactly one view of the visible query")
-    require_dropped(seam["log"].read_text().splitlines(), kind="save-view", operation_key=key, committed_id=views[0]["id"])
+    _, dropped_ref = frozen_drop(runtime.save, turn["transport"].output, seam["log"], kind="save-view", operation_key=key, committed_id=views[0]["id"])
     records["view-dropped"] = {"control": "view-dropped", "resolvedByKey": True, "views": 1}
-    evidence += [*turn["evidence"], *refs, views_ref, {"path": str(seam["log"]), "sha256": sha(seam["log"])}]
+    evidence += [*turn["evidence"], *refs, views_ref, dropped_ref]
     _mode(seam["mode"], "none")
 
     # An idempotent favorite set, per target.

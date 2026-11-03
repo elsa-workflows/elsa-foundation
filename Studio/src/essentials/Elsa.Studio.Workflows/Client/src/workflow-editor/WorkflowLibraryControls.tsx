@@ -43,6 +43,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const generationRef = useRef(0);
+  const permissionsReported = useRef(false);
   const filtersId = useId();
 
   useEffect(() => {
@@ -54,9 +55,13 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       setTags(current => catalogTerm ? mergeTags(current, page.items) : page.items);
       setCatalogCursor(page.nextContinuationToken ?? null);
       setPermissions(current => ({ ...current, ...page.permissions }));
+      permissionsReported.current = true;
       onPermissions(page.permissions ?? {});
     }).catch(caught => {
-      if (generation === generationRef.current) setError(message(caught, "Couldn't read workflow tags."));
+      if (generation !== generationRef.current) return;
+      setError(message(caught, "Couldn't read workflow tags."));
+      // A first read that fails still settles the permissions: the page then offers none of the gated actions.
+      if (!permissionsReported.current) { permissionsReported.current = true; onPermissions({}); }
     }).finally(() => { if (generation === generationRef.current) setCatalogLoading(false); });
     if (support.views) void listWorkflowViews(context).then(response => {
       if (generation !== generationRef.current) return;
