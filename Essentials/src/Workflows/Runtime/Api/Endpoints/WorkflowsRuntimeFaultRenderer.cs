@@ -25,6 +25,12 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
     {
         switch (exception)
         {
+            case Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException task:
+                var status = task.Code switch { "unauthorized" => 401, "forbidden" => 403, "missing" => 404, "conflict" => 409, "validation" => 400, _ => 503 };
+                context.Response.StatusCode = status;
+                await context.Response.WriteAsJsonAsync(new UserTasks.UserTaskProblem(task.Code, task.Message, task.Errors is null ? null : System.Text.Json.JsonSerializer.SerializeToElement(task.Errors)), WorkflowsRuntimeJsonContext.Default.UserTaskProblem, cancellationToken: context.RequestAborted);
+                return true;
+
             case RuntimeRunDeletionRejectedSignal deletion:
                 await RuntimeProblemWriting.ProblemAsync(context, deletion.Status, deletion.Detail);
                 return true;

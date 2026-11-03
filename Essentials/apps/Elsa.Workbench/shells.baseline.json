@@ -31,6 +31,7 @@
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesBpmn": {},
+          "ActivitiesBpmnDesign": {},
           "ActivitiesBpmnInterchange": {},
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
@@ -74,6 +75,7 @@
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
+          "FoundationWorkflowsRuntimeAgent": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityOidc": {},
           "GitHubCopilotAgent": {

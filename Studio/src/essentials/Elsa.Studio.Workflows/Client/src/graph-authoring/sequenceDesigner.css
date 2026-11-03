@@ -7,9 +7,52 @@
   flex-direction: column;
   overflow: auto;
   color: var(--studio-text);
-  background: var(--studio-bg);
+  background: var(--studio-canvas);
   font-family: var(--studio-font-ui);
 }
+
+html[data-workspace-style] .wf-sequence-mode-pill {
+  border: 0;
+  background: transparent;
+  font-size: var(--studio-label-size);
+}
+
+html[data-workspace-style] .wf-sequence-content { width: min(100%, 30rem); }
+
+html[data-workspace-style] .wf-sequence-item:not(.is-selected):not(.wf-sequence-runtime) {
+  border-color: transparent;
+  background: var(--studio-panel);
+  box-shadow: var(--shadow-md);
+}
+
+html[data-workspace-style] .wf-sequence-item.is-selected:not(.wf-sequence-runtime) {
+  background: color-mix(in srgb, var(--studio-accent) 7%, var(--studio-panel));
+  box-shadow: 0 0 0 1px var(--studio-accent);
+}
+
+html[data-workspace-style] .wf-sequence-step { padding: 16px; }
+
+html[data-workspace-style="open"] .wf-sequence-content { width: min(100%, 42rem); }
+
+html[data-workspace-style="open"] .wf-sequence-item:not(.wf-sequence-runtime) {
+  background: var(--studio-surface-muted);
+  box-shadow: none;
+}
+
+html[data-workspace-style="open"] .wf-sequence-item.is-selected:not(.wf-sequence-runtime) {
+  border-color: transparent;
+  background: var(--studio-accent-soft);
+  box-shadow: inset 3px 0 var(--studio-accent);
+}
+
+html[data-workspace-style][data-theme-appearance="high-contrast"] .wf-sequence-item:not(.wf-sequence-runtime) {
+  border-color: var(--studio-border);
+}
+
+html[data-workspace-style="minimal"] .wf-sequence-item:not(.wf-sequence-runtime) { border-color: var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-sequence-item.is-selected:not(.wf-sequence-runtime) { border-color: var(--studio-selection-mark); background: var(--studio-surface); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime:not(.faulted) { border-color: var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-selected:not(.faulted) { border-color: var(--studio-selection-mark); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
 
 .wf-sequence-heading {
   position: sticky;
@@ -145,22 +188,6 @@
   white-space: nowrap;
 }
 
-.wf-sequence-ordinal {
-  display: inline-flex;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding-inline: .25rem;
-  border-radius: 999px;
-  color: var(--studio-text-muted);
-  background: var(--studio-surface-muted);
-  font-size: .6875rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
 .wf-sequence-availability {
   display: inline-flex;
   flex: 0 0 auto;
@@ -197,6 +224,7 @@
   gap: .375rem;
   padding: .625rem .75rem;
   border-top: 1px solid var(--studio-border);
+  border-radius: 0 0 var(--studio-radius) var(--studio-radius);
   background: color-mix(in srgb, var(--studio-surface-muted) 48%, var(--studio-surface));
 }
 
@@ -276,6 +304,12 @@
   cursor: default;
 }
 
+.wf-sequence-actions button[aria-pressed="true"] {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+  border-color: var(--studio-accent);
+}
+
 .wf-sequence-insert {
   display: inline-flex;
   width: 1.5rem;
@@ -283,8 +317,7 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
-  margin-left: .5rem;
+  align-self: center;
   margin-block: .1875rem;
   border: 1px dashed var(--studio-border);
   border-radius: 999px;
@@ -300,8 +333,6 @@
 }
 
 .wf-sequence-insert-empty {
-  align-self: center;
-  margin-left: 0;
   width: auto;
   min-height: 2.25rem;
   height: auto;
@@ -315,8 +346,6 @@
 }
 
 .wf-sequence-insert-end {
-  align-self: center;
-  margin-left: 0;
   width: auto;
   min-height: 1.875rem;
   height: auto;

@@ -1,0 +1,34 @@
+[
+  {
+    "file": "atelier-appearance.png",
+    "sha256": "40bc2fb4a184e943b246aa23e23c5ff6dd9ddfc5e76285dd43778b3f7ef9180e"
+  },
+  {
+    "file": "atelier-run-detail.png",
+    "sha256": "fec44e77f0ba6c5b7cffdfa8ebc53ca5cb59045e1af7f223f10efa1893b48de0"
+  },
+  {
+    "file": "atelier-runs.png",
+    "sha256": "8c0ecacc55a7ef9e81a73805487f4004c879a71b403a5b7cb21a26b344e08ab6"
+  },
+  {
+    "file": "atelier-workflows.png",
+    "sha256": "54107aec2506b949512385ebb56c57d1a27499fdd843e2a60aafb2b2450199c2"
+  },
+  {
+    "file": "graphite-logs.png",
+    "sha256": "bafcb5a32da6adb87bf9457bcf646640f730f25a82eaf32e17c11e02aa35207c"
+  },
+  {
+    "file": "graphite-workflows.png",
+    "sha256": "9063b62704e092452b741b6e0f298a4efcd0a1c6fad164be2616d36398b57d3f"
+  },
+  {
+    "file": "porcelain-templates.png",
+    "sha256": "4ee1eecc345bc41f12357e9f41f9872e22b3e09aa4cde7a04ac860e078158b95"
+  },
+  {
+    "file": "porcelain-workflows.png",
+    "sha256": "8ad35cca2e3683014117a34d80ce835b95042382e42190342abba11a29535fef"
+  }
+]

@@ -11,26 +11,37 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 public sealed class ActivityStateViewProjectorRegistry
 {
     private readonly IReadOnlyDictionary<string, IActivityStateViewProjector> _projectors;
+    private readonly IReadOnlyDictionary<string, IActivityStateViewProjector> _withoutState;
 
     public ActivityStateViewProjectorRegistry(IEnumerable<IActivityStateViewProjector> projectors)
     {
         ArgumentNullException.ThrowIfNull(projectors);
         var byAlias = new Dictionary<string, IActivityStateViewProjector>(StringComparer.Ordinal);
+        var withoutState = new Dictionary<string, IActivityStateViewProjector>(StringComparer.Ordinal);
         foreach (var projector in projectors)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(projector.StateTypeAlias);
             if (!byAlias.TryAdd(projector.StateTypeAlias, projector))
                 throw new InvalidOperationException(
                     $"Activity state view projectors '{byAlias[projector.StateTypeAlias].GetType().FullName}' and '{projector.GetType().FullName}' both project private state '{projector.StateTypeAlias}'; at most one may.");
+            if (projector.ActivityTypeWithoutState is { } activityType)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(activityType);
+                if (!withoutState.TryAdd(activityType, projector))
+                    throw new InvalidOperationException($"More than one activity state view projector reads retained references for activity type '{activityType}'; at most one may.");
+            }
         }
 
         _projectors = byAlias;
+        _withoutState = withoutState;
     }
 
     /// <summary>Whether any projector is composed, which decides whether the state view link is advertised.</summary>
     public bool HasProjectors => _projectors.Count > 0;
 
     public IActivityStateViewProjector? Find(string stateTypeAlias) => _projectors.GetValueOrDefault(stateTypeAlias);
+
+    internal IActivityStateViewProjector? FindWithoutState(string activityType) => _withoutState.GetValueOrDefault(activityType);
 }
 
 /// <summary>Builds the projector registry during startup so a duplicate alias fails shell activation.</summary>

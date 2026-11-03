@@ -746,7 +746,8 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
             }.ConfigureServices(services));
 
         if (includeBpmnFeature)
-            builder = builder.WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services));
+            builder = builder.WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services))
+                .WithFeature(services => new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services));
 
         var harness = builder.ConfigureServices(services =>
             {

@@ -1,0 +1,16 @@
+{
+  "source": "f12385fcbe829e6f7cc0bb29347ec6c2e1d27dbf",
+  "base": "588da3eb01d0949ba3c9721b61c09fbc2334a335",
+  "bundleRef": "refs/codex/verification/2898-model-read-f123",
+  "name": "elsa-bpmn-hosting-source-f12385fcb.bundle",
+  "bytes": 2780787,
+  "sha256": "9f0f3837c934b35d5caa9e7de00cec71ff00009debcad3c7e6cd6debdb06a14a",
+  "fullQualification": "running; no clean review or merge verdict",
+  "assetId": 696921512,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-source-f12385fcb.bundle",
+  "uploader": "elsa-workflows-codex[bot]",
+  "reDownloadedAndHashVerified": true,
+  "coldRestoreCandidateInitiallyAbsent": true,
+  "coldRestoreMatchesSource": true,
+  "releasePublishedAtUnchanged": true
+}

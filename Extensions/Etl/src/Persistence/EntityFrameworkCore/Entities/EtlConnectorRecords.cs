@@ -6,6 +6,8 @@ internal sealed class EtlConnectorRunRecord
     public string RunKey { get; set; } = null!;
     public string BindingsJson { get; set; } = null!;
     public string? PreparedJson { get; set; }
+    /// <summary>When a continuous run's completion was requested; null for finite runs and before any request.</summary>
+    public long? CompletionRequestedAtUtcTicks { get; set; }
     public long RetainedInputBytes { get; set; }
     public long SourceInputReservedBytes { get; set; }
     public long RetainedMetadataBytes { get; set; }
@@ -38,6 +40,16 @@ internal sealed class EtlConnectorPartitionRecord
     public long RetainedOutputBytes { get; set; }
     public long? CurrentRequestSequence { get; set; }
     public string? CurrentRequestHash { get; set; }
+    /// <summary>Caught-up polls a continuous shard has recorded; part of its page-cache key above 0 (spec 1196).</summary>
+    public long PollGeneration { get; set; }
+    /// <summary>The base page sequence of a compacted continuous shard: pages below it were deleted (spec 1196).</summary>
+    public long CompactedPageCount { get; set; }
+    public long CompactedBatchCount { get; set; }
+    public long CompactedAcceptedRecords { get; set; }
+    public long CompactedRejectedRecords { get; set; }
+    public long CompactedFilteredRecords { get; set; }
+    public long CompactedMainEffects { get; set; }
+    public long CompactedErrorEffects { get; set; }
     public long Revision { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }

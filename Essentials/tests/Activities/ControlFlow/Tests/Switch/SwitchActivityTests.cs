@@ -268,7 +268,7 @@ public sealed class SwitchActivityTests : IDisposable
     private static ExecutableActivityStructure NewSwitchStructure((string Match, string? Activity)[] cases, string? @default) =>
         new(
             SwitchActivity.StructureKind,
-            SwitchActivity.StructureSchemaVersion,
+            SwitchActivity.LegacyStructureSchemaVersion,
             JsonSerializer.SerializeToElement(new
             {
                 cases = cases.Select(@case => new { match = @case.Match, activity = @case.Activity }).ToArray(),

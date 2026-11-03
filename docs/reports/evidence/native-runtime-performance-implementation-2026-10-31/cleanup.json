@@ -1,0 +1,30 @@
+{
+  "container": "elsa-perf-implementation-3542",
+  "id": "990f810b82c9079a90395ef392c7ccbd80341e1e31630928a930834cc491fa40",
+  "containerAbsent": true,
+  "volumesAbsent": {
+    "9fb10767f8a54c78526f0960128b33a4ff579fd27c6dd2268654cb040c78d38b": true
+  },
+  "e2e": {
+    "roots": [
+      {
+        "path": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-durability-1eb61d0aa9624fe79f105d8dfee6a990",
+        "exists": false
+      },
+      {
+        "path": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-json-activity-bindings-e71aa96f944b44ddb0cf6916adb87f1c",
+        "exists": false
+      },
+      {
+        "path": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-set-variable-3316-2398e6e4b4534cb6a7ed10b8c8db7f86",
+        "exists": false
+      }
+    ],
+    "ownedPids": [
+      "87397",
+      "87472",
+      "87701",
+      "87783"
+    ]
+  }
+}

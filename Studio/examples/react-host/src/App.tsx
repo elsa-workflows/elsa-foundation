@@ -3,9 +3,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StudioCodeEditor, javaScriptLanguageAdapter, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import {
   StudioDataGrid,
+  CopyableIdentifier,
   StatusChip,
-  StudioToolbar,
-  StudioToolbarGroup,
+  StudioPage,
+  StudioPageHeader,
+  StudioCollectionToolbar,
+  StudioCollectionFooter,
+  StudioSearchInput,
+  StudioResultState,
   StudioTabs,
   StudioAlert,
   type StudioDataGridColumn,
@@ -86,38 +91,34 @@ const rows: WorkflowRow[] = [
   { id: "wf-4", name: "Welcome email", status: "Idle", tone: "neutral" }
 ];
 
-/** Section 2 — `@elsa-workflows/studio-ui` primitives + tokens.css. */
+/** Section 2 — `@elsa-workflows/studio-ui` page and collection primitives. */
 function PrimitivesSection() {
   const [tab, setTab] = useState("all");
+  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | undefined>("wf-1");
 
   const columns: StudioDataGridColumn<WorkflowRow>[] = useMemo(
     () => [
       { id: "name", header: "Workflow", render: row => row.name },
+      { id: "id", header: "Identifier", render: row => <CopyableIdentifier label="Workflow ID" value={row.id} /> },
       { id: "status", header: "Status", render: row => <StatusChip tone={row.tone}>{row.status}</StatusChip> }
     ],
     []
   );
 
-  const visibleRows = tab === "all" ? rows : rows.filter(row => row.tone === "accent");
+  const visibleRows = rows.filter(row => (tab === "all" || row.tone === "accent") && row.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <section className="example-section">
       <h2>2. UI primitives</h2>
       <p className="example-note">
-        <code>Toolbar</code>, <code>Tabs</code>, <code>StatusChip</code> and <code>DataGrid</code>,
-        styled via the <code>--studio-*</code> tokens from <code>tokens.css</code>.
+        A collection composed from public components and <code>styles.css</code>. Search the loaded
+        sample to try the empty state; no host CSS or provider is required.
       </p>
-      <div className="example-panel">
-        <StudioToolbar>
-          <StudioToolbarGroup>
-            <strong>Workflows</strong>
-            <StatusChip tone="neutral">{visibleRows.length}</StatusChip>
-          </StudioToolbarGroup>
-          <StudioToolbarGroup>
-            <StatusChip tone="success">Live</StatusChip>
-          </StudioToolbarGroup>
-        </StudioToolbar>
+      <StudioPage className="example-panel">
+        <StudioPageHeader headingLevel={2} title="Workflows" description="Browse the loaded sample workflows." />
+        <StudioCollectionToolbar>
+          <StudioSearchInput aria-label="Search loaded workflows" placeholder="Search loaded workflows" value={query} onChange={event => setQuery(event.currentTarget.value)} />
         <StudioTabs
           ariaLabel="Filter workflows"
           activeTab={tab}
@@ -127,16 +128,18 @@ function PrimitivesSection() {
             { id: "running", label: "Running" }
           ]}
         />
+        </StudioCollectionToolbar>
         <StudioDataGrid
           columns={columns}
           items={visibleRows}
           getKey={row => row.id}
-          gridColumns="minmax(160px, 2fr) minmax(120px, 1fr)"
+          gridColumns="minmax(160px, 2fr) minmax(180px, 1fr) minmax(120px, 1fr)"
           selectedKey={selected}
           onSelect={row => setSelected(row.id)}
-          emptyState="No workflows match this filter."
+          emptyState={<StudioResultState headingLevel={3} title="No matching workflows" description="Change the search or status filter." />}
         />
-      </div>
+        <StudioCollectionFooter>{visibleRows.length} of {rows.length} loaded workflows</StudioCollectionFooter>
+      </StudioPage>
     </section>
   );
 }

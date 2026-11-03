@@ -8,16 +8,16 @@
 
 /* Small structural labels are mono: the breadcrumb eyebrow above each page title, the navigation
    section headings and the status chips and pills. */
-html[data-theme="elsa-cloud"] .breadcrumb,
-html[data-theme="elsa-cloud"] .nav-heading,
-html[data-theme="elsa-cloud"] .studio-status-chip,
-html[data-theme="elsa-cloud"] .studio-status-pill {
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .breadcrumb,
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .nav-heading,
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .studio-status-chip,
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .studio-status-pill {
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
 }
 
-html[data-theme="elsa-cloud"] .breadcrumb,
-html[data-theme="elsa-cloud"] .nav-heading {
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .breadcrumb,
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .nav-heading {
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.06em;
@@ -27,10 +27,10 @@ html[data-theme="elsa-cloud"] .nav-heading {
 
 /* The active navigation item is a neutral bordered box rather than a row with an accent bar. The
    border is an inset ring so the row keeps its size. */
-html[data-theme="elsa-cloud"] .nav-section a.active {
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .nav-section a.active {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-html[data-theme="elsa-cloud"] .nav-section a.active::before {
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] .nav-section a.active::before {
   display: none;
 }

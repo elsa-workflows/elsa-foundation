@@ -1,7 +1,9 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
+import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { CopyableIdentifier } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -35,7 +37,7 @@ import { WfErrorCard } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
-import { CopyValueButton, ExecutableReferenceList, ExecutableRunStatusLine } from "./executableShared";
+import { ExecutableReferenceList, ExecutableRunStatusLine } from "./executableShared";
 import type { ExecutableRunState, WorkflowEditorPanelTab } from "./editorTypes";
 import {
   computeExecutableSourceDrift,
@@ -55,6 +57,12 @@ import {
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
+import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
+import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
+import type { WorkflowAgentController } from "../workflowAgent";
+import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -74,9 +82,11 @@ type SourceDefinitionState =
   | { status: "absent" }
   | { status: "failed"; error: string };
 
-export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
+export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
+  /** The Workflows module's agent state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
+  weaver?: WorkflowAgentController;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   artifactId: string;
   sourceReferenceId: string | null;
@@ -141,6 +151,12 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   }, [load]);
 
   const chosenReference = useMemo(() => findChosenReference(data?.detail ?? null), [data]);
+  // The exact Executable Weaver may read while it is shown: identity bound to its Artifact Hash, withdrawn while loading,
+  // after a failed load and on unmount. The server reads the content itself and refuses a hash that no longer matches.
+  const inspected = state === "ready" && data
+    ? { artifactId: data.detail.artifactId, artifactHash: data.detail.artifactHash, sourceReferenceId: data.detail.chosenReference?.sourceReferenceId ?? null }
+    : null;
+  useWorkflowInspectionContext({ controller: weaver, clientId: ai.clientId, kind: "executable", identity: inspected });
   const publishedRunReference = findPublishedRunReference(data?.detail.references);
   const publishedRunTarget = data && publishedRunReference
     ? {
@@ -192,17 +208,13 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
 
   const explain = () => {
     if (!data || !explainAction) return;
-    // The Weaver explain action consumes the executable summary shape; mirror it from the detail
-    // plus the inspected reference so Explain works identically to the table.
+    // The inspector contributes the exact Executable itself (workflows.executable-inspector), so the prompt attaches none;
+    // without the Workflows agent state the prompt attaches the same identity.
     if (dispatchAiAction(ai, explainAction, {
-      ...data.detail,
-      artifactVersion: chosenReference?.artifactVersion ?? "",
-      definitionId: chosenReference?.definitionId ?? "",
-      definitionVersionId: chosenReference?.definitionVersionId ?? "",
-      publishedAt: chosenReference?.publishedAt ?? null,
-      sourceKind: chosenReference?.sourceKind ?? null,
-      sourceId: chosenReference?.sourceId ?? null,
-      sourceVersion: chosenReference?.sourceVersion ?? null
+      artifactId: data.detail.artifactId,
+      artifactHash: data.detail.artifactHash,
+      sourceReferenceId: data.detail.chosenReference?.sourceReferenceId ?? null,
+      attached: Boolean(weaver?.inspection)
     })) {
       setRunError("");
       setLastRun(null);
@@ -211,14 +223,14 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   };
 
   const goBack = () => {
-    window.history.pushState({}, "", "/workflows/executables");
+    window.history.pushState({}, "", qualifyStudioBackendPath("/workflows/executables"));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const openSourceDefinition = () => {
     const definitionId = chosenReference?.definitionId;
     if (!definitionId) return;
-    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
@@ -324,6 +336,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
     () => buildExecutableInspectorCanvas(graph, activityCatalog, detail.chosenReference?.layout ?? [], frames, onNavigateToScope, selectedNodeId),
     [activityCatalog, detail, frames, graph, onNavigateToScope, selectedNodeId]
   );
+  const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(canvas.nodes);
   const scopeKey = frames.length === 0 ? "root" : frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
 
   return (
@@ -344,11 +357,13 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
         {canvas.nodes.length === 0 ? <div className="wf-empty">This executable has no renderable activities.</div> : (
           <ReactFlow
             key={scopeKey}
-            nodes={canvas.nodes}
+            nodes={flowNodes}
             edges={canvas.edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
+            fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+            onNodesChange={onNodesChange}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
@@ -356,8 +371,10 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             onPaneClick={() => onSelectNode(null)}
           >
             <Background />
-            <MiniMap pannable zoomable />
+            <FitReadOnlyFlowView nodeCount={flowNodes.length} />
+            <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
             <Controls />
+            <RetainFlowViewport />
           </ReactFlow>
         )}
       </div>
@@ -439,7 +456,6 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
   onToggleMaximized(): void;
 }) {
   const [activeTab, setActiveTab] = useState<"identity" | "references">("identity");
-  const [copyStatus, setCopyStatus] = useState("");
   const tabs: WorkflowEditorPanelTab[] = [
     { id: "identity", title: "Identity", order: 0, icon: <Fingerprint size={14} />, render: () => null },
     { id: "references", title: `References (${detail.references.length})`, order: 1, icon: <ListTree size={14} />, render: () => null }
@@ -457,6 +473,9 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
   const selectedDisplayName = selectedFact
     ? resolveActivityLabel(selectedPresentation, selectedCatalogItem, selectedFact.activityType)
     : null;
+  const workflowDisplayName = resolveExecutableIdentityTitle(sourceDefinition);
+  const rootActivityLabel = resolveExecutableRootActivityLabel(detail, activityCatalog, graph);
+  const definitionNames = definitionNamesFromSource(sourceDefinition);
   const sourceDraft = sourceDefinition.status === "ready" ? sourceDefinition.draft : null;
   const sourceDefinitionId = sourceDefinition.status === "ready" ? sourceDefinition.definition.id : null;
   const currentDraftVersionId = useMemo(
@@ -503,30 +522,24 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
       </div>
       {expanded ? (
         <>
-          <header>
-            <div>
-              <span>Executable Artifact</span>
-              <h3>{detail.artifactId}</h3>
+          <div className="wf-inspector-context wf-executable-identity">
+            <h3>{workflowDisplayName}</h3>
+            <div className="wf-executable-addresses">
+              <CopyableIdentifier label="Artifact ID" value={detail.artifactId} />
+              <CopyableIdentifier label="Artifact hash" value={detail.artifactHash} />
             </div>
-          </header>
+          </div>
           <div className="wf-instance-tab-content">
             {activeTab === "identity" ? (
               <>
                 <section className="wf-instance-section">
                   <h4>Identity</h4>
                   <dl className="wf-instance-meta">
-                    <dt>Artifact ID</dt>
-                    <dd className="wf-cell-line">
-                      <code title={detail.artifactId}>{detail.artifactId}</code>
-                      <CopyValueButton value={detail.artifactId} ariaLabel={`Copy artifact ID ${detail.artifactId}`} copiedLabel="artifact ID" onCopied={label => setCopyStatus(`Copied ${label}`)} onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)} />
-                    </dd>
-                    <dt>Artifact Hash</dt>
-                    <dd className="wf-cell-line">
-                      <code title={detail.artifactHash}>{detail.artifactHash}</code>
-                      <CopyValueButton value={detail.artifactHash} ariaLabel={`Copy artifact hash ${detail.artifactHash}`} copiedLabel="artifact hash" onCopied={label => setCopyStatus(`Copied ${label}`)} onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)} />
-                    </dd>
                     <dt>Root activity</dt>
-                    <dd>{detail.rootActivityType} <small>{detail.rootActivityVersion}</small></dd>
+                    <dd className="wf-identity-cell">
+                      <span>{rootActivityLabel}</span>
+                      {detail.rootActivityVersion ? <small>Version {detail.rootActivityVersion}</small> : null}
+                    </dd>
                     <dt>Nodes</dt>
                     <dd>{detail.nodeCount}</dd>
                     <dt>Resume targets</dt>
@@ -534,19 +547,22 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
                     <dt>Created</dt>
                     <dd>{formatDate(detail.createdAt)}</dd>
                   </dl>
-                  {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
                 </section>
                 <section className="wf-instance-section">
                   <h4>Source</h4>
                   {chosenReference ? (
-                    <dl className="wf-instance-meta">
-                      <dt>Kind</dt>
-                      <dd>{formatExecutableSourceKind(chosenReference.sourceKind)}</dd>
-                      <dt>Definition</dt>
-                      <dd>{chosenReference.definitionId} <small>{chosenReference.definitionVersionId}</small></dd>
-                      <dt>Scope</dt>
-                      <dd>{formatReferenceScope(chosenReference.scope)}</dd>
-                    </dl>
+                    <>
+                      <dl className="wf-instance-meta">
+                        <dt>Kind</dt>
+                        <dd>{formatExecutableSourceKind(chosenReference.sourceKind)}</dd>
+                        <dt>Scope</dt>
+                        <dd>{formatReferenceScope(chosenReference.scope)}</dd>
+                      </dl>
+                      <div className="wf-executable-source-ids">
+                        <CopyableIdentifier label="Definition ID" value={chosenReference.definitionId} />
+                        <CopyableIdentifier label="Definition version ID" value={chosenReference.definitionVersionId} />
+                      </div>
+                    </>
                   ) : (
                     <p className="wf-muted">This artifact carries no source references.</p>
                   )}
@@ -568,6 +584,8 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
                 <ExecutableReferenceList
                   references={detail.references}
                   activeReferenceId={detail.chosenReference?.sourceReferenceId ?? null}
+                  definitionNames={definitionNames}
+                  variant="collection"
                   onSelect={reference => onSelectReference(reference.sourceReferenceId)}
                 />
               </section>
@@ -706,6 +724,34 @@ function SourceDriftCaption({ reference, sourceDefinition, hasDraftEquivalence }
       This reference was published from version {drift.referenceVersion ?? reference.definitionVersionId}; the definition&apos;s latest is {drift.latestVersion ?? sourceDefinition.definition.latestVersionId}.
     </p>
   );
+}
+
+function resolveExecutableIdentityTitle(sourceDefinition: SourceDefinitionState) {
+  if (sourceDefinition.status === "ready") {
+    const name = sourceDefinition.definition.name?.trim();
+    if (name) return name;
+  }
+  return "Executable";
+}
+
+function resolveExecutableRootActivityLabel(
+  detail: WorkflowExecutableDetails,
+  activityCatalog: ActivityCatalogItem[],
+  graph: ExecutableActivityGraph
+) {
+  const rootFact = graph.factsByNodeId.get(graph.root.nodeId);
+  const activityType = rootFact?.activityType ?? detail.rootActivityType;
+  const activityTypeVersion = rootFact?.activityTypeVersion ?? detail.rootActivityVersion;
+  const catalogItem = activityCatalog.find(item =>
+    item.activityTypeKey === activityType && item.version === activityTypeVersion)
+    ?? activityCatalog.find(item => item.activityTypeKey === activityType);
+  return resolveActivityLabel(rootFact?.presentation, catalogItem, activityType);
+}
+
+function definitionNamesFromSource(sourceDefinition: SourceDefinitionState): ReadonlyMap<string, string> {
+  if (sourceDefinition.status !== "ready") return new Map();
+  const name = sourceDefinition.definition.name?.trim();
+  return name ? new Map([[sourceDefinition.definition.id, name]]) : new Map();
 }
 
 function findChosenReference(detail: WorkflowExecutableDetails | null): WorkflowExecutableReference | null {

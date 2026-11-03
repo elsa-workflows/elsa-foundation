@@ -10,7 +10,9 @@ import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hos
 import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
-const storageKey = "activity-authoring-2994-fixture";
+const scenario = new URLSearchParams(location.search);
+const outcomeOnly = scenario.get("contract") === "outcome-only";
+const storageKey = `activity-authoring-2994-fixture${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}`;
 const timestamp = "2026-10-19T09:00:00Z";
 const contractType = { alias: "Decimal", collectionKind: "Single", supportsDurability: true };
 const input = (name: string, referenceKey: string, description: string) => ({
@@ -21,12 +23,12 @@ function initialDraft(): ActivityDefinitionDraftView {
   const subtotal = input("Subtotal", "subtotal", "The order amount before shipping.");
   return {
     draftId: "quote-draft", definitionId: "quote-activity", tenantId: "browser-fixture", revision: 1,
-    status: "active", sourceVersionId: null, presentationLabel: null, createdAt: timestamp, updatedAt: timestamp, validation: null,
-    contract: { contractSchemaVersion: "1", inputs: [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
-      outputs: [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
-      outcomes: [{ referenceKey: "quoted", name: "Quoted", isEmitted: true, description: "The quote is ready." }] },
+    status: scenario.has("read-only") ? "published" : "active", sourceVersionId: null, presentationLabel: null, createdAt: timestamp, updatedAt: timestamp, validation: null,
+    contract: { contractSchemaVersion: "1", inputs: outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
+      outputs: outcomeOnly ? [] : [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
+      outcomes: [{ referenceKey: outcomeOnly ? "done" : "quoted", name: outcomeOnly ? "Done" : "Quoted", isEmitted: true, description: "The quote is ready." }] },
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
-      payload: { rootActivity: { nodeId: "root", activityVersionId: "sequence-v1", inputs: [], outputs: [], structure: { kind: "Sequence", schemaVersion: "1", payload: { activities: [] } } }, variables: [], outputMappings: [{ outputReferenceKey: "amount", source: { syntax: "Input", value: { referenceKey: "subtotal" } } }], outcomeMappings: [{ sourceOutcomeReferenceKey: "done", boundaryOutcomeReferenceKey: "quoted" }] } }, layout: []
+      payload: { rootActivity: { nodeId: "root", activityVersionId: "sequence-v1", inputs: [], outputs: [], structure: { kind: "Sequence", schemaVersion: "1", payload: { activities: [] } } }, variables: [], outputMappings: outcomeOnly ? [] : [{ outputReferenceKey: "amount", source: { syntax: "Input", value: { referenceKey: "subtotal" } } }], outcomeMappings: [{ sourceOutcomeReferenceKey: "done", boundaryOutcomeReferenceKey: outcomeOnly ? "done" : "quoted" }] } }, layout: []
   };
 }
 
@@ -49,7 +51,7 @@ export function ActivityAuthoringFixture() {
         ] };
         if (url === "/fixture/drafts/quote-draft") return structuredClone(draft.current);
         if (url === "/fixture/definitions/quote-activity") return {
-          definition: { definitionId: "quote-activity", activityTypeKey: "elsa.user.quote", tenantId: "browser-fixture", displayName: "Prepare order quote", category: "Commerce", description: "A reusable quote activity.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, headVersionId: null, recommendedVersionId: null },
+          definition: { definitionId: "quote-activity", activityTypeKey: "elsa.user.quote", tenantId: "browser-fixture", displayName: parameters.get("name") ?? "Prepare order quote", category: "Commerce", description: "A reusable quote activity.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, headVersionId: null, recommendedVersionId: null },
           lifecycle: { draftCount: 1, versionCount: 0, head: null, recommendation: null }, actions: [], updatedAt: timestamp
         };
         if (url === "/fixture/authoring-capabilities" && parameters.get("capabilities") === "unavailable") throw new Error("Authoring capabilities unavailable in this fixture scenario");

@@ -1,0 +1,19 @@
+{
+  "repositorySource": "2af91afdcddbf7daf5467dfc92a7a3ac4dd7d413",
+  "productSource": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "workingDirectory": "/tmp",
+  "arguments": [
+    "python3.14",
+    "<checkout>/e2e-tests/bpmn/qualify_nested_pipeline_cancellation.py",
+    "--workbench-assembly",
+    "<checkout>/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+    "--reader-assembly",
+    "<checkout>/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+    "--output",
+    "<fresh-owned-output>",
+    "--expected-product-source",
+    "6bd8ac3e86d1701603b1c975534514d3fe62933b"
+  ],
+  "exitCode": 0,
+  "scope": "Ordinary original-waiting coupled cancellation/cold recovery. Explicit earlier-source override accepted only after controller verifies a documentation/controller-only delta."
+}

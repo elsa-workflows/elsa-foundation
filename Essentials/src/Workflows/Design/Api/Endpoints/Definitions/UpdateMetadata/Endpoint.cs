@@ -35,6 +35,7 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionDetailsView> HandleAsync(UpdateDefinitionMetadata command, CancellationToken cancellationToken)
     {
+        await reader.AuthorizeReadAsync(command.DefinitionId, cancellationToken);
         var definition = await definitionStore.GetAsync(command.DefinitionId, cancellationToken);
         if (command.Name is not null)
         {

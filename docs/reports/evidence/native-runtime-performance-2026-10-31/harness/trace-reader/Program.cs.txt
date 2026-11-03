@@ -1,0 +1,24 @@
+using Microsoft.Diagnostics.Tracing;
+using Microsoft.Diagnostics.Tracing.Etlx;
+using System.Text.Json;
+
+var options = new TraceLogOptions();
+var etlx = TraceLog.CreateFromEventPipeDataFile(args[0], null, options);
+using var log = new TraceLog(etlx);
+using var events = log.Events.GetSource();
+var types = new Dictionary<string,long>();
+var stacks = new Dictionary<string,long>();
+long count=0, bytes=0;
+events.Clr.GCAllocationTick += e => {
+ var size=(long)e.AllocationAmount64;
+ if(size==0)size=e.AllocationAmount;
+ var type=e.TypeName??"<unknown>";
+ types[type]=types.GetValueOrDefault(type)+size;count++;bytes+=size;
+ var stack=e.CallStack();
+ var frames=new List<string>();
+ while(stack!=null && frames.Count<80) { frames.Add(stack.CodeAddress.FullMethodName);stack=stack.Caller; }
+ var elsa=frames.FirstOrDefault(f=>f.StartsWith("Elsa."))??"<no Elsa frame>";
+ stacks[elsa]=stacks.GetValueOrDefault(elsa)+size;
+};
+events.Process();
+Console.WriteLine(JsonSerializer.Serialize(new { SampleCount=count,SampledBytes=bytes,Types=types.OrderByDescending(x=>x.Value).Take(25),FirstElsaFrame=stacks.OrderByDescending(x=>x.Value).Take(40)},new JsonSerializerOptions{WriteIndented=true}));

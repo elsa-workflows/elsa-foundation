@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Undo2 } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { WorkflowRunRelatedLinks } from "./WorkflowRunRelatedLinks";
 import { getActivityExecutionInspection } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary } from "../workflowTypes";
 import type { ExecutableGraphNodeFacts } from "../executableGraph";
@@ -8,12 +9,13 @@ import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeA
 import { readPortableExpressionDefinition } from "../activityProperties";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
 import { isCompensationHandlerExecution } from "../compensationRuntime";
-import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
+import { buildInputInspectionRows, evaluationPhase, evaluationSequence, inputRuntimeSnapshot, readDeclaredActivityInputs, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
 import { formatActivityVersion, formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
 import { CopyValueButton } from "./executableShared";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
+import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 
@@ -55,11 +57,15 @@ export function WorkflowActivityExecutionDetails({
   activityCatalog,
   executableNodeFacts,
   expressionEditors = [],
+  backendSession,
+  runRelatedLinks = [],
   focusInputKey = null,
   onSelectEvidence,
   refreshKey = 0,
-  compact = false
+  compact = false,
+  prepared
 }: {
+  prepared?: PreparedAttachedExecution;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -69,12 +75,16 @@ export function WorkflowActivityExecutionDetails({
   activityCatalog: ActivityCatalogItem[];
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   focusInputKey?: string | null;
   onSelectEvidence?(evidenceId: string): void;
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
   const selectedContextIdentity = runtimeValueContextId(context);
+  const preparedInspection = prepared?.contextIdentity === selectedContextIdentity && prepared?.inspection?.workflowExecutionId === selectedWorkflowExecutionId
+    && prepared.inspection.activityExecutionId === selectedActivityExecutionId ? prepared.inspection : null;
   const [inspectionState, setInspectionState] = useState<ActivityExecutionInspectionState>({
     activityExecutionId: null,
     workflowExecutionId: null,
@@ -98,7 +108,8 @@ export function WorkflowActivityExecutionDetails({
     const activityExecutionId = selectedActivityExecutionId;
     const workflowExecutionId = selectedWorkflowExecutionId;
     let running = false;
-    let confirmed: number | null = null;
+    let confirmed: number | null = preparedInspection ? requestedRevision.current : null;
+    if (preparedInspection) setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection: preparedInspection, error: "" });
     const load = async () => {
       if (running || controller.signal.aborted || confirmed === requestedRevision.current) return;
       running = true;
@@ -126,7 +137,7 @@ export function WorkflowActivityExecutionDetails({
     };
     const start = () => { void load(); }; refreshInspection.current = start; start();
     return () => { controller.abort(); if (refreshInspection.current === start) refreshInspection.current = null; };
-  }, [context, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
+  }, [context, preparedInspection, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
   // Live revisions coalesce behind the current exact read; identity changes still cancel it immediately.
   useEffect(() => { refreshInspection.current?.(); }, [refreshKey]);
 
@@ -135,14 +146,15 @@ export function WorkflowActivityExecutionDetails({
     inspectionState.workflowExecutionId === selectedWorkflowExecutionId &&
     inspectionState.contextIdentity === selectedContextIdentity
       ? inspectionState
+      : preparedInspection ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection: preparedInspection, error: "" }
       : selectedActivityExecutionId && selectedWorkflowExecutionId
         ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" }
         : { activityExecutionId: null, workflowExecutionId: null, contextIdentity: selectedContextIdentity, status: "idle", inspection: null, error: "" };
   const resolutionScope = useMemo(
     () => selectedActivityExecutionId && selectedWorkflowExecutionId
-      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId }
+      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, preparedValues: preparedInspection ? prepared?.values : undefined }
       : null,
-    [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
+    [context, prepared, preparedInspection, selectedActivityExecutionId, selectedWorkflowExecutionId]);
 
   if (!activity) {
     return (
@@ -251,6 +263,7 @@ export function WorkflowActivityExecutionDetails({
       </section>
       {executionNavigation}
       {childExecutions}
+      <WorkflowRunRelatedLinks context={context} session={backendSession} activity={activity} contributions={runRelatedLinks} refreshKey={refreshKey} />
       {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
         <h4>Incidents</h4>
         {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
@@ -369,14 +382,6 @@ function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionIn
       </div>
     </section>
   );
-}
-
-function readDeclaredActivityInputs(inputs: unknown[] | undefined): StudioActivityInputDescriptor[] {
-  return (inputs ?? []).filter((input): input is StudioActivityInputDescriptor => {
-    if (!input || typeof input !== "object") return false;
-    const record = input as Record<string, unknown>;
-    return typeof record.name === "string" && typeof record.typeName === "string";
-  });
 }
 
 function ActivityMetadataValue({
@@ -515,8 +520,7 @@ function InputInspectionRowCard({
     return () => cancelAnimationFrame(frame);
   }, [focusInput, row.rowKey]);
 
-  const sensitiveInput = masked || row.authoredSource?.isSensitive || row.compiledBinding?.isSensitive;
-  const runtimeSnapshot = latest && sensitiveInput && !latest.isSensitive ? { ...latest, isSensitive: true } : latest;
+  const runtimeSnapshot = inputRuntimeSnapshot(row);
 
   return (
     <div className="wf-runtime-input wf-input-inspection-row" role="listitem">

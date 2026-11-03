@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Scoped relational persistence of service connection metadata, version CAS and secret references.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <ProjectReference Include="../../Core/Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="../../../Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+    <InternalsVisibleTo Include="Elsa.Connections.Persistence.EntityFrameworkCore.Tests" />
+  </ItemGroup>
+  <ItemGroup><None Update="nuplane.json" Pack="true" PackagePath="/" /></ItemGroup>
+</Project>

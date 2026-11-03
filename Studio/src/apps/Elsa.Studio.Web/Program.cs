@@ -1,4 +1,5 @@
 using Elsa.Studio.Api.Authorization;
+using Elsa.Studio.Backends;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Web;
@@ -13,6 +14,7 @@ ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 var studio = builder.AddElsaStudio(options => options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath]);
+builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
 studio.AddElsaStudioNuplane(options => options.DirectoryFeedName ??= "studio-local-packages");
 var configuration = builder.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);

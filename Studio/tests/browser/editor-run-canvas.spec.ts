@@ -73,7 +73,9 @@ for (const theme of ["light", "dark"]) {
     await expect(inspector.locator("fieldset[disabled]")).toHaveCount(1);
     await page.getByRole("tab", { name: "Code", exact: true }).click();
     await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
-    await expect(page.locator('.studio-code-editor[data-readonly="true"]')).toHaveCount(1);
+    // The inspector can also contain a read-only expression editor for this snapshot.
+    await expect(page.locator('.wf-code-view .studio-code-editor[data-readonly="true"]')).toHaveCount(1);
+    await expect(inspector.locator('.studio-code-editor:not([data-readonly="true"])')).toHaveCount(0);
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await page.getByRole("button", { name: "Return to editing", exact: true }).click();
     await expect(node).toHaveAccessibleName(/State: authoring/);
@@ -127,6 +129,35 @@ for (const theme of ["light", "dark"]) {
     await expect(inspector.getByText("Second activity failed in its exact execution.", { exact: true })).toBeVisible();
     await expect(second).toHaveAccessibleName(/Selected/);
     await expect(first).toHaveAccessibleName(/Not selected/);
+  });
+
+  test(`retains confirmed evidence and focus during delayed occurrence navigation (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&evidence-latency=1&theme=${theme}`);
+    const node = page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await node.click();
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await inspector.getByRole("button", { name: "10 recorded executions", exact: false }).click();
+    await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Completed/ }).click();
+    await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
+    const overview = await inspector.locator(".wf-activity-overview").elementHandle();
+    const details = inspector.getByText("Execution details", { exact: true });
+    await details.click();
+    const previous = inspector.locator(".wf-activity-overview + .wf-execution-browser").getByRole("button", { name: "Previous activity execution", exact: true });
+    await previous.click();
+    await expect(inspector.locator(".wf-execution-content")).toHaveAttribute("aria-busy", "true");
+    await expect(inspector.getByText("Loading requested execution… Showing the previous execution.")).toBeVisible();
+    await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Execution 4 of 10", exact: false })).toBeVisible();
+    await expect(previous).toBeFocused();
+    await expect(inspector.getByText("Current: 3", { exact: true })).toBeVisible();
+    await expect(inspector.getByText("Current: 4", { exact: true })).toHaveCount(0);
+    expect(await overview!.evaluate(element => element.isConnected)).toBe(true);
+    await expect(inspector.locator(".wf-activity-execution-details")).toHaveAttribute("open", "");
+    await expect(previous).toBeFocused();
+    await expect(node).toHaveAccessibleName(/Run state: Completed/);
   });
 
   test(`keeps attached-run controls within a narrow editor (${theme})`, async ({ page }) => {

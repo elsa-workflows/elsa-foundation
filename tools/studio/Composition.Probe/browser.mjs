@@ -50,7 +50,9 @@ try {
     const title = await page.getByRole("button", { name: "Select theme", exact: true }).getAttribute("title");
     if (!title?.includes(themeName)) throw new Error("Restarted browser did not apply the persisted default theme");
     await page.getByRole("button", { name: "Select theme", exact: true }).click();
-    await page.getByRole("menuitem", { name: themeName, exact: true }).waitFor({ state: "visible" });
+    const themeOption = page.getByRole("menuitemradio", { name: themeName, exact: true });
+    await themeOption.waitFor({ state: "visible" });
+    if (await themeOption.getAttribute("aria-checked") !== "true") throw new Error("Restarted browser did not select the persisted theme colors");
   }
   await page.screenshot({ path: process.env.STUDIO_COMPOSITION_OUTPUT.replace(/\.json$/, ".png"), fullPage: true });
   const result = { browserVersion: browser.version(), routes, shared, errors, missing, themeName: themeName ?? null };

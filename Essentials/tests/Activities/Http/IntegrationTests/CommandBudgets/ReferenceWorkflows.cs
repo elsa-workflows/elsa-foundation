@@ -91,6 +91,12 @@ internal static class ReferenceWorkflows
             [],
             EventResumeTarget());
 
+    /// <summary>A suspension before a long sibling sequence, followed by an actual bookmark resume.</summary>
+    public static WorkflowExecutable SuspendingSequence100() =>
+        Executable("suspending-sequence-100",
+            Parallel("fork-join", ("wait", EventWait()), ("work", Sequence("sequence", WriteLines(100)))),
+            [], EventResumeTarget());
+
     /// <summary>An Event activity at <see cref="EventNodeId"/> that suspends on a <see cref="EventName"/> bookmark.</summary>
     internal static ExecutableNode EventWait() =>
         Clr(EventNodeId, typeof(Event), [(nameof(Event.EventName), EventName), (nameof(Event.CanStartWorkflow), false)]);

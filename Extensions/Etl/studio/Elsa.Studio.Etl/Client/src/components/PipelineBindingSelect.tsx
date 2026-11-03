@@ -19,7 +19,8 @@ export function PipelineBindingSelect({
   onChange,
   kind,
   bindingsLoading = false,
-  bindingsUnavailable = false
+  bindingsUnavailable = false,
+  subjectLabel
 }: {
   label: string;
   role: EtlBindingRole;
@@ -31,13 +32,15 @@ export function PipelineBindingSelect({
   kind?: EtlConnectorBindingSummary["kind"];
   bindingsLoading?: boolean;
   bindingsUnavailable?: boolean;
+  /** Overrides the role and kind wording, for approvals whose kind is broader than the declared format. */
+  subjectLabel?: string;
 }) {
   const id = useId();
   const roleCandidates = bindings.filter(binding => binding.role === role);
   const candidates = roleCandidates.filter(binding => kind === undefined || ("kind" in binding && binding.kind === kind));
   const currentIsAvailable = candidates.some(binding => binding.alias === value);
   const currentIsLoaded = roleCandidates.some(binding => binding.alias === value);
-  const subject = kind === undefined ? roleLabels[role] : connectorRoleLabels[role][kind];
+  const subject = subjectLabel ?? (kind === undefined ? roleLabels[role] : connectorRoleLabels[role][kind]);
 
   return (
     <div className="etl-editor-field">

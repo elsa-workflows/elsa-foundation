@@ -57,7 +57,9 @@ interface WorkflowOperationsParams {
    * workflow has no published version or the server does not advertise the export relation.
    */
   publishedExecutable?: PublishedExecutableTarget | null;
-  saveDraft(draft: WorkflowDraft, savedStatus: string): Promise<WorkflowDraft>;
+  saveDraft(draft: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string> }): Promise<WorkflowDraft>;
+  /** The live history line, captured together with the publication review snapshot (spec 1193 FR-010). */
+  lineage?(): Iterable<string>;
   flushPendingSave(): Promise<void>;
   reload(options?: { shouldLoadDraft(): boolean }): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
@@ -81,6 +83,7 @@ export function useWorkflowOperations({
   busy,
   publishedExecutable = null,
   saveDraft,
+  lineage,
   flushPendingSave,
   reload,
   startTestRun,
@@ -142,12 +145,16 @@ export function useWorkflowOperations({
     }
   }, [busy, context, publishedExecutable, setError, setOperation, setStatus]);
 
-  const save = useCallback(async () => {
+  /** Saves this render's draft; a caller that captured the history line when the author acted passes it. */
+  const save = useCallback(async (options?: { lineage?: Iterable<string> }) => {
     if (!draft || busy) return;
+    // A caller that captured the history line when the author acted passes it; otherwise saveDraft decides the line
+    // by comparing this draft with the live one, so a stale render's draft is never credited with the live line.
+    const line = options?.lineage ? [...options.lineage] : undefined;
     setOperation("saving");
     setStatus("Saving...");
     try {
-      await saveDraft(draft, "Saved");
+      await saveDraft(draft, "Saved", { lineage: line });
     } catch {
       // saveDraft surfaces the error in the editor alert.
     } finally {
@@ -264,7 +271,7 @@ export function useWorkflowOperations({
         if (!savedDraft) {
           setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "saving", intent } : current);
           setStatus("Saving publication snapshot...");
-          const justSaved = await saveDraft(publicationReview.draftSnapshot, "Publication snapshot saved");
+          const justSaved = await saveDraft(publicationReview.draftSnapshot, "Publication snapshot saved", { lineage: publicationReview.draftLineage });
           savedDraft = justSaved;
           setPublicationReview(current => current ? { ...current, savedDraft: justSaved, draftSnapshot: justSaved, intent } : current);
         }
@@ -409,6 +416,9 @@ export function useWorkflowOperations({
     // Settle any in-flight or pending autosave before capturing the review snapshot. Previously a save
     // racing the review left "Review & publish" appearing to do nothing; now it awaits (with feedback).
     setStatus(mode === "publish" ? "Saving before publication..." : "Saving before review...");
+    // The snapshot is this render's draft; its history line is captured now with it, before any await, since the author
+    // may Undo or Redo while the save settles or the review is open.
+    const draftLineage = lineage ? [...lineage()] : undefined;
     try {
       await flushPendingSave();
       const draftSnapshot = structuredClone(draft);
@@ -443,6 +453,7 @@ export function useWorkflowOperations({
       });
       review.versionPreflightSupported = versionCapabilities.preflight;
       review.exactVersionSupported = versionCapabilities.exact;
+      review.draftLineage = draftLineage;
       // Spec 261 FR-515: list the server's validation warnings (for example a replay-safe compensation step) in the
       // review. They never block; a host without the validations relation, or a failed read, shows none.
       review = withPublicationWarnings(review, await getDraftValidations(context, draftSnapshot.id).catch(() => null));
@@ -485,7 +496,7 @@ export function useWorkflowOperations({
       setQuickPublishing(false);
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;
@@ -529,6 +540,7 @@ export function useWorkflowOperations({
         definitionId: draftSnapshot.definitionId,
         snapshotId,
         state: draftSnapshot.state,
+        layout: draftSnapshot.layout,
         activityPresentation: draftSnapshot.activityPresentation,
         inputs,
         start,

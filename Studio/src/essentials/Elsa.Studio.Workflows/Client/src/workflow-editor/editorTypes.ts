@@ -1,3 +1,4 @@
+import type { WorkflowTemplateContent } from "../workflowTemplates";
 import type React from "react";
 import type { Edge } from "@xyflow/react";
 import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -12,6 +13,8 @@ export interface CreateWorkflowDraft {
   description: string;
   rootActivityVersionId: string | null;
   starter?: "http";
+  templateId?: string;
+  templateContent?: WorkflowTemplateContent;
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
@@ -73,7 +76,7 @@ export interface WorkflowTestRunWaitDraftState {
 
 export interface WorkflowTestDriveSetupState {
   snapshot: { draft: WorkflowDraft; signature: string; snapshotId: string };
-  selectedOptionId: string;
+  selectedOptionId: string | null; // null until options load; an empty string selects Direct start.
   selectedModeId: string;
   inputDrafts: WorkflowRunInputDrafts;
   stimulusDraft: string;

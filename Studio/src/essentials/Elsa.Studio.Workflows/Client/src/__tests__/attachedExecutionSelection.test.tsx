@@ -3,11 +3,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ExecutableActivityGraph } from "../executableGraph";
-import type { ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
 import { loadExecutionScope } from "../workflow-editor/executionScope";
 import { useAttachedExecutionSelection, type AttachedExecutionSelection } from "../workflow-editor/useAttachedExecutionSelection";
 
-const api = vi.hoisted(() => ({ browse: vi.fn(), inspect: vi.fn(), layout: vi.fn(), supported: vi.fn() }));
+const api = vi.hoisted(() => ({ browse: vi.fn(), inspect: vi.fn(), layout: vi.fn(), supported: vi.fn(), payload: vi.fn() }));
+vi.mock("../api/activityExecutionValuePayload", () => ({ getActivityExecutionValuePayload: api.payload }));
 vi.mock("../api/runtime", () => ({ browseActivityExecutions: api.browse, getActivityExecutionInspection: api.inspect,
   getActivityExecutionLayout: api.layout, supportsActivityExecutionBrowsing: api.supported }));
 const context = {} as StudioEndpointContext;
@@ -165,6 +166,129 @@ it("keeps an unavailable scope blocked until an explicit reset", async () => {
   flushSync(() => current.unavailable());
   expect(current.execution).toBeNull(); expect(current.scopes).toEqual([]); expect(current.error).toContain("unavailable");
   flushSync(() => current.clear()); expect(current.error).toBe("");
+});
+
+it("keeps confirmed evidence and scope while the next occurrence loads, then commits together", async () => {
+  mount(); await current.choose(summary(), graph, labelFor); mount();
+  const previousScopes = current.scopes;
+  const next = summary("write-5"); tree.set(next.activityExecutionId, inspection(next));
+  let release!: (value: ActivityExecutionInspection) => void;
+  api.inspect.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const task = current.choose(next, graph, labelFor);
+  await vi.waitFor(() => expect(current.loading).toBe(true));
+  expect(current.execution?.activityExecutionId).toBe("write-4");
+  expect(current.scopes).toBe(previousScopes);
+  release(inspection(next)); await task; mount();
+  expect(current.loading).toBe(false);
+  expect(current.execution?.activityExecutionId).toBe("write-5");
+});
+
+it("retains the confirmed occurrence after a transient navigation failure and allows retry", async () => {
+  mount(); await current.choose(summary(), graph, labelFor); mount();
+  const next = summary("write-5"); tree.set(next.activityExecutionId, inspection(next));
+  api.inspect.mockRejectedValueOnce(new Error("Connection interrupted"));
+  expect(await current.choose(next, graph, labelFor)).toBe(false); mount();
+  expect(current.execution?.activityExecutionId).toBe("write-4");
+  expect(current.error).toContain("Connection interrupted");
+  expect(current.canRetry).toBe(true);
+  expect(await current.retry()).toBe(true); mount();
+  expect(current.execution?.activityExecutionId).toBe("write-5");
+  expect(current.error).toBe("");
+});
+
+it.each([401, 403, 404])("clears retained evidence when navigation returns %s", async status => {
+  mount(); await current.choose(summary(), graph, labelFor); mount();
+  api.inspect.mockRejectedValueOnce({ status });
+  await current.choose(summary("write-5"), graph, labelFor); mount();
+  expect(current.execution).toBeNull(); expect(current.scopes).toEqual([]);
+  expect(current.canRetry).toBe(false);
+});
+
+it("does not let a late occurrence response overwrite a newer navigation", async () => {
+  mount(); await current.choose(summary(), graph, labelFor); mount();
+  const slow = summary("write-5"), newest = summary("write-6");
+  tree.set(newest.activityExecutionId, inspection(newest));
+  let release!: (value: ActivityExecutionInspection) => void;
+  api.inspect.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const oldTask = current.choose(slow, graph, labelFor);
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(await current.choose(newest, graph, labelFor)).toBe(true); mount();
+  release(inspection(slow)); expect(await oldTask).toBe(false); mount();
+  expect(current.execution?.activityExecutionId).toBe("write-6");
+  expect(current.prepared?.inspection?.activityExecutionId).toBe("write-6");
+});
+
+it("waits for the destination's visible captured values and never prefetches sensitive values", async () => {
+  mount(); await current.choose(summary(), graph, labelFor); mount();
+  const next = summary("write-5");
+  const captured = { name: "Value", inputKey: "Value", evidenceId: "value-5", subject: "ActivityInput" as const,
+    captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} };
+  tree.set(next.activityExecutionId, { ...inspection(next), valueSnapshots: [captured, { ...captured, name: "Secret", inputKey: "Secret", evidenceId: "secret-5", isSensitive: true }] });
+  let release!: (value: { payload: string }) => void;
+  api.payload.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  const task = current.choose(next, graph, labelFor);
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  mount(); expect(current.execution?.activityExecutionId).toBe("write-4");
+  expect(current.loading).toBe(true);
+  expect(api.payload).toHaveBeenCalledTimes(1);
+  expect(api.payload).toHaveBeenCalledWith(context, "run", "write-5", "value-5", "Payload", expect.any(AbortSignal));
+  release({ payload: "Current: 5" }); await task; mount();
+  expect(current.execution?.activityExecutionId).toBe("write-5");
+  expect([...current.prepared!.values.values()]).toEqual([{ status: "ready", payload: "Current: 5" }]);
+});
+
+it("stages a nested scope's selected child and overlays before committing its breadcrumb", async () => {
+  const nextBody = { ...summary("body-5", "body", "do-1"), iterationId: "iteration-5" };
+  const nextWrite = summary("write-5", "write", "body-5");
+  tree.set(nextBody.activityExecutionId, inspection(nextBody)); tree.set(nextWrite.activityExecutionId, inspection(nextWrite));
+  api.browse.mockImplementation(async (_context, _run, query) => query.executableNodeId === "write"
+    ? { totalCount: 1, items: [{ execution: query.ancestorActivityExecutionId === "body-5" ? nextWrite : summary(), position: 1 }] }
+    : { totalCount: 10, items: [{ execution: nextBody, iterationPosition: 5, position: 5 }] });
+  mount({ canvasOwnerId: "body", visibleNodeIds: ["write"] });
+  await current.choose(summary(), graph, labelFor); mount();
+  const previous = current.prepared;
+  let release!: (value: ActivityExecutionInspection) => void;
+  api.inspect.mockImplementation(async (_context, _run, id) => id === "write-5"
+    ? new Promise(resolve => { release = resolve; }) : tree.get(id)!);
+  const task = current.choose(nextBody, graph, labelFor, true);
+  await vi.waitFor(() => expect(release).toBeTypeOf("function")); mount();
+  expect(current.scopes.at(-1)?.execution.activityExecutionId).toBe("body-4");
+  expect(current.prepared).toBe(previous);
+  release(inspection(nextWrite)); await task; mount();
+  expect(current.scopes.at(-1)?.execution.activityExecutionId).toBe("body-5");
+  expect(current.prepared?.inspection?.activityExecutionId).toBe("write-5");
+  expect(current.prepared?.canvas?.ancestorId).toBe("body-5");
+  expect(current.prepared?.canvas?.evidence.activities[0]?.activityExecutionId).toBe("write-5");
+});
+
+it.each(["password", "declaration", "authored", "compiled"])("does not prefetch values protected by %s sensitivity", async sensitivity => {
+  const next = summary("write-5");
+  tree.set(next.activityExecutionId, { ...inspection(next), valueSnapshots: [{ name: "Token", inputKey: "token", evidenceId: "secret",
+    subject: "ActivityInput", captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} }] });
+  const protectedGraph = { ...graph, factsByNodeId: new Map(graph.factsByNodeId) };
+  protectedGraph.factsByNodeId.set("write", { ...graph.factsByNodeId.get("write")!,
+    authoredInputs: [{ executableNodeId: "write", inputKey: "token", expressionType: "Literal", value: "PRIVATE", isSensitive: sensitivity === "authored" }],
+    inputBindings: [{ inputKey: "token", inputName: "Token", source: "Literal", isSensitive: sensitivity === "compiled" }] });
+  mount({ activityCatalog: [{ activityTypeKey: "Test.Activity", inputs: [{ referenceKey: "token", name: "Token", typeName: "System.String",
+    uiHint: sensitivity === "password" ? "password" : undefined, isSensitive: sensitivity === "declaration" }] } as ActivityCatalogItem] });
+  expect(await current.choose(next, protectedGraph, labelFor)).toBe(true); mount();
+  expect(api.payload).not.toHaveBeenCalled();
+  expect(current.prepared?.values.size).toBe(0);
+});
+
+it("commits valid execution evidence when an individual captured value is unavailable", async () => {
+  const next = summary("write-5");
+  tree.set(next.activityExecutionId, { ...inspection(next), outcomeNames: ["Done"], valueSnapshots: [{ name: "Value", inputKey: "Value", evidenceId: "unavailable",
+    subject: "ActivityInput", captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} }] });
+  api.payload.mockRejectedValue(Object.assign(new Error("Captured payload is unavailable"), { status: 409 }));
+  mount(); expect(await current.choose(next, graph, labelFor)).toBe(true); mount();
+  expect(current.execution?.activityExecutionId).toBe("write-5");
+  expect(current.prepared?.inspection?.outcomeNames).toEqual(["Done"]);
+  expect([...current.prepared!.values.values()]).toEqual([{ status: "failed", error: "Captured payload is unavailable" }]);
+  expect(current.error).toBe("");
 });
 
 it.each(["incidents", "bookmarks"] as const)("keeps exact attached selection when %s are unavailable in selected and ancestor responses", async collection => {

@@ -215,7 +215,7 @@ def run_select(args: argparse.Namespace, fetch: Callable[[str], object] = gh_fet
 # Workflow and documentation guards (FR-003, FR-007, FR-024, FR-025) -------------------------------------------------
 
 CI = ".github/workflows/ci.yml"
-CI_FULL = ".github/workflows/ci-full.yml"
+CI_FULL = CI  # Both required aggregates now live in the same workflow.
 MERGING = "docs/contributing/merging.md"
 DOCS_ANCHOR = "merging.md#ci-tiers"
 SKILLS = [".claude/skills/elsa-auto-review-merge/SKILL.md", ".claude/skills/elsa-quality-fix/SKILL.md",
@@ -238,12 +238,14 @@ def _job_name(block: str) -> str:
 def check_workflows(ci: str, ci_full: str) -> list[str]:
     """A required context must never be skippable, and no labeled trigger may sit on a required workflow (research R8)."""
     problems = []
-    build = [block for block in _jobs(ci).values() if _job_name(block) == "Build & test"]
+    build = [block for block in _jobs(ci).values() if _job_name(block) == "Build & test" or "'Build & test'" in _job_name(block)]
     if len(build) != 1:
         problems.append(f"{CI}: expected exactly one job named `Build & test`, found {len(build)}")
     else:
         block = build[0]
-        if "if: ${{ !cancelled() }}" not in block:
+        if not any(condition in block for condition in (
+                "if: ${{ !cancelled() }}",
+                "if: ${{ !cancelled() && github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}")):
             problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() }}}}` so it always reports")
         needs = re.search(r"^    needs:\s*\[([^\]]*)\]", block, re.M)
         for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only"):
@@ -254,9 +256,11 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         problems.append(f"{CI_FULL}: expected exactly one job that reports `Full tier`, found {len(full)}")
     else:
         block = full[0]
-        if "if: ${{ !cancelled() }}" not in block:
+        if not any(condition in block for condition in (
+                "if: ${{ !cancelled() }}",
+                "if: ${{ !cancelled() && github.event_name == 'pull_request' }}")):
             problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}`")
-        if "needs.plan.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
+        if "needs.plan-full.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
             problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
     for path, text in ((CI, ci), (CI_FULL, ci_full)):
         # Comments explain why there is no label trigger; only YAML outside them counts.
@@ -393,7 +397,7 @@ def self_test() -> int:
     good_ci = ("on:\n  pull_request:\njobs:\n  build-and-test:\n    name: Build & test\n"
                "    needs: [plan-tiers, pr-shard, architecture-guards, core-only]\n    if: ${{ !cancelled() }}\n")
     good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\njobs:\n  full-tier:\n"
-                 "    name: \"${{ (needs.plan.result != 'success' || x) && 'Full tier' || 'Full tier (not run: draft)' }}\"\n"
+                 "    name: \"${{ (needs.plan-full.result != 'success' || x) && 'Full tier' || 'Full tier (not run: draft)' }}\"\n"
                  "    if: ${{ !cancelled() }}\n    steps:\n      - run: if [[ \"$PLAN\" != success ]]; then exit 1; fi\n")
     check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
     check("workflows: a skippable Build & test fails",
@@ -405,7 +409,7 @@ def self_test() -> int:
     check("workflows: a labeled trigger fails",
           bool(check_workflows(good_ci, good_full.replace("ready_for_review]", "ready_for_review, labeled]"))))
     check("workflows: a Full tier that ignores a failed plan fails",
-          bool(check_workflows(good_ci, good_full.replace("needs.plan.result != 'success' || ", ""))))
+          bool(check_workflows(good_ci, good_full.replace("needs.plan-full.result != 'success' || ", ""))))
 
     docs = {
         MERGING: f"# Merging\n\n## CI tiers\n\nThe PR tier and the full tier, per {MANIFEST}. Open a draft, then "

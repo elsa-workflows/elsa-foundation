@@ -50,8 +50,8 @@ Optionally supply `--font-display` (title face; defaults to `--font-sans`).
 ### Modes and the `<html>` attributes
 
 Studio offers four modes: `light`, `dark`, `dim` and `high-contrast`. Every theme defines Light
-and Dark; Dim and High contrast are optional per theme (the eight signature themes — Classic,
-Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
+and Dark. All built-in themes define all four modes; custom themes may omit Dim and High contrast.
+ThemeProvider sets two attributes:
 
 | Attribute | Values | Meaning |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all fou
 | `data-theme-appearance` | `light` \| `dark` \| `dim` \| `high-contrast` | the exact mode the user picked |
 
 A third attribute carries the theme's **layout** — `data-theme-layout`, one of `classic`
-(default), `floating` (Drift), `workbench` (Schematic) or `editorial` (Atelier). Layout is the one
+(default), `floating` (Drift), `workbench` (Schematic) or `editorial` (Atelier Original, ID `atelier`). Layout is the one
 theme property that changes arrangement rather than paint:
 
 | Layout | Shell | Graph-authoring workbench |
@@ -96,6 +96,42 @@ zeroes shadows, makes `--studio-focus` the solid ring colour and brightens the t
 tokens. If a module genuinely needs a High-contrast-only adjustment (e.g. thickening a hairline it
 draws with a literal width), it may guard on `html[data-theme-appearance="high-contrast"]`.
 
+### Independent workspace style and color scheme
+
+Appearance offers `linen`, `minimal`, `quiet`, `focus` and `open` workspace styles, independently
+of the selected color scheme and mode. A theme can declare optional `workspaceStyle` metadata
+as its default treatment. Without an explicit workspace override, its own font, radii and layout
+remain authoritative. Existing themes without metadata retain their original presentation. See [ADR 0023](adr/0023-separate-workspace-style-and-color-scheme.md).
+
+The host publishes optional `data-workspace-style` and informational `data-color-scheme`
+attributes. Modules may use the former for surface-owned composition treatment, alongside
+`data-theme-layout`. A color-scheme identity never selects component behavior. Explicit styles
+own typography, shape and elevation; the scheme supplies colors and supported mode variants.
+Navigation overrides still win over workspace defaults (left for Quiet/Focus, top for Open).
+
+Minimal is an opt-in treatment shared by Porcelain, Atelier and Graphite. It uses 28px page titles,
+14px body text, 12px labels, 36px controls, 56px minimum collection rows, 44px table headers and
+24px page gaps. Secondary row/section dividers are dotted; high contrast and forced colors use
+solid dividers. Focus indicators remain solid in every mode. Modules consume roles rather than
+checking palette IDs. The standalone public `styles.css` includes the treatment; a custom host
+can set `data-workspace-style="minimal"` on `<html>` with its own complete palette.
+
+### Collection and action roles
+
+| Token | Purpose |
+| --- | --- |
+| `--studio-control-height`, `--studio-row-height`, `--studio-table-header-height` | Shared control and collection density |
+| `--studio-page-gap` | Gap between page sections |
+| `--studio-row-boundary-style`, `--studio-section-boundary-style` | Secondary divider style; never use for a focus outline |
+| `--studio-row-hover`, `--studio-row-selected` | Neutral or palette-owned row surfaces |
+| `--studio-selection-mark` | Narrow selection marker or selected tab boundary |
+| `--studio-action-primary-bg`, `--studio-action-primary-fg` | Primary action pair; distinct from danger actions and status colors |
+| `--studio-field-border-width`, `--studio-field-padding`, `--studio-field-surface` | Optional field wrapper treatment; the input retains its own boundary |
+
+Defaults retain the existing component presentation. Avoid hard-coded `solid` on secondary row
+boundaries in module-owned collections: consume these roles so Minimal and accessibility modes
+can choose the correct treatment. See [branding](branding.md#minimal-studio-presets) for preset IDs.
+
 ## Layer 2 — the `--studio-*` semantic tokens (STABLE)
 
 These are the primary module-facing surface. Stable: renamed or removed only with a major
@@ -112,6 +148,10 @@ version bump and a migration note.
 | `--studio-text` | primary foreground |
 | `--studio-text-muted` | secondary/label foreground |
 | `--studio-border` | hairline border/divider |
+| `--studio-edge-subtle` | decorative separators; default aliases the border |
+| `--studio-edge-control` | interactive field/control boundary; default aliases the border |
+| `--studio-canvas` | authoring canvas surface; default aliases the page background |
+| `--studio-panel` | tool/property panel surface; default aliases the raised surface |
 
 ### Accent & focus
 
@@ -218,7 +258,8 @@ Texture/grid: `--studio-material-texture`, `--studio-material-texture-size`,
    This rule is about `data-theme` (which theme). The mode and layout attributes are not theme
    selectors and stay allowed: `[data-theme-mode="dark"]` for the colour scheme,
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
-   cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
+   cannot express, `[data-theme-layout="…"]` for arrangement and `[data-workspace-style="…"]`
+   for an explicit workspace treatment (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes — every built-in:
    `classic`, `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`
@@ -297,3 +338,41 @@ values:
 
 (That palette is currently exempted centrally via `ignoreSelectors` in the stylelint config;
 prefer an inline disable pair for any new exception you introduce.)
+
+### Linen and navigation surfaces
+
+Linen is a workspace presentation, independently selectable from a palette. Its rounded Manrope
+geometry and restrained gradients apply through shared roles; modules keep ownership of their layout
+and runtime/selection states. Existing arrangements and full presets remain available.
+
+The additive navigation roles are `--studio-nav-bg`, `--studio-nav-text`, `--studio-nav-muted`,
+`--studio-nav-active` and `--studio-nav-active-text`. They form separate background/foreground pairs:
+never use work-area text on contrasting navigation. The user's **Sidebar color** choice (theme menu and
+Settings › Appearance, kept in `localStorage` as `elsa-studio-sidebar-color`) decides where they come
+from. **Dark**, the default, takes the palette's dark navigation roles in every mode; **Light** takes the
+light ones, or the light card surface when a palette's light mode ships a dark sidebar. A pinned tone is
+published as `data-sidebar-color` (`light` | `dark`) on `<html>`, and the shell re-declares the palette
+and `--studio-*` aliases on `.sidebar` from these roles so every sidebar part follows it. In top
+navigation the same setting paints the menubar. **Theme default** follows the workspace: in light Linen
+the host derives the roles from the palette's dark navigation roles; in other modes it uses the selected
+mode, and a light-only custom palette uses its own pair. High contrast always retains the explicit
+high-contrast pair and never carries `data-sidebar-color`. The choice is independent of Studio presets:
+applying a preset leaves it as it is, so a preset shows its own navigation only under Theme default.
+
+`--studio-workspace-page-background` and `--studio-workspace-panel-background` are workspace background recipes,
+which may contain subtle gradients. Use them only as `background`, with a solid role fallback; never
+pass a recipe to `color-mix()`, a border color or text color. Linen removes decorative gradients in High
+contrast and preserves visible focus. See [branding](branding.md) for host and module customization.
+
+## Page and collection spacing
+
+The public page recipes use `--studio-space-1` (4px), `--studio-space-2` (8px),
+`--studio-space-3` (12px), `--studio-space-4` (16px), and `--studio-space-6` (24px).
+`--studio-control-height` is 32px and `--studio-row-height` is a 48px minimum;
+wrapped content can grow rows. Consume these semantic tokens when extending a
+shared pattern rather than repeating local spacing values.
+
+`@elsa-workflows/studio-ui/styles.css` includes the token contract and all public
+primitive/disclosure styles. `tokens.css` remains available for token-only hosts.
+Both published files include the light-theme primitive defaults; load custom theme
+overrides afterward. See the [module UI guide](module-ui.md) for integration.

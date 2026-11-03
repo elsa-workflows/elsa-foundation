@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState} from "@elsa-workflows/studio-ui";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
 import { CopySecretNameButton } from "./CopySecretNameButton";
@@ -225,27 +225,13 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   };
 
   return (
-    <main className="secrets-shell">
-      <header className="secrets-header">
-        <div className="secrets-header-copy">
-          <span className="secrets-kicker">Secret management</span>
-          <h2><KeyRound size={18} aria-hidden /> Secrets</h2>
-          <p>Manage secret metadata; existing values stay masked.</p>
-        </div>
-        <div className="secrets-header-meta">
-          {!loading && !loadError ? (
-            <p className="secrets-count" aria-live="polite">
-              {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
-            </p>
-          ) : null}
-          <div className="secrets-header-actions" role="group" aria-label="Secret page actions">
+    <StudioPage className="secrets-shell">
+      <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked." actions={          <div className="studio-page-actions" role="group" aria-label="Secret page actions">
             <StudioButton variant="primary" size="md" aria-label="Create secret" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={15} aria-hidden /> Create secret</StudioButton>
             <StudioButton variant="default" size="md" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading} aria-label="Refresh secrets"><RefreshCw size={15} aria-hidden /> Refresh</StudioButton>
-          </div>
-        </div>
-      </header>
+          </div>} />
 
-      <section className="secrets-toolbar" aria-label="Secret filters">
+      <StudioCollectionToolbar className="secrets-toolbar" aria-label="Secret filters">
         <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => { event.preventDefault(); void load(search); }}>
           <StudioSearchInput className="secrets-search-control" aria-label="Search secrets" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search secrets" />
           <StudioButton type="submit" className="secrets-search-action" size="md">Search</StudioButton>
@@ -261,7 +247,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           description={`The list loads up to ${MAX_SECRETS_PER_LOAD} secrets, so other scopes may exist.`}
         />
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
-      </section>
+      </StudioCollectionToolbar>
 
       {descriptorError && dialog?.kind !== "create" ? (
         <p className="secrets-field-error" role="alert">
@@ -278,8 +264,8 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       ) : null}
 
       <section className="secrets-layout">
-        <div className="secrets-table-shell">
-          <table className="secrets-table" aria-label="Secrets">
+        <StudioTableContainer>
+          <table className="studio-table secrets-table" aria-label="Secrets">
             <thead>
               <tr>
                 <th>Name</th>
@@ -297,23 +283,12 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
               ) : null}
               {!loading && loadError ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <div className="secrets-empty-state" role="alert">
-                    <span className="secrets-empty-icon" aria-hidden><AlertCircle size={20} /></span>
-                    <strong>Secrets could not be loaded.</strong>
-                    <p>Check your connection and try again.</p>
-                    <button type="button" onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</button>
-                  </div>
+                  <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && !loadError && filteredSecrets.length === 0 ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <div className="secrets-empty-state" role="status">
-                    <span className="secrets-empty-icon" aria-hidden><KeyRound size={20} /></span>
-                    <strong>{emptyTitle}</strong>
-                    <p>{emptyDescription}</p>
-                    {hasActiveFilters ? <button type="button" onClick={clearFilters}>Clear filters</button>
-                      : <button type="button" className="secrets-primary" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</button>}
-                  </div>
+                  <StudioResultState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (
@@ -348,7 +323,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
               ))}
             </tbody>
           </table>
-        </div>
+        </StudioTableContainer>
 
         {dialog?.kind === "edit" && dialogSecret ? <SecretDetail
           key={dialogSecret.name}
@@ -359,6 +334,12 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           onClose={() => setDialog(null)}
         /> : null}
       </section>
+
+      <StudioCollectionFooter>{!loading && !loadError ? (
+            <p className="secrets-count" aria-live="polite">
+              {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
+            </p>
+          ) : null}</StudioCollectionFooter>
 
       {dialog?.kind === "create" && descriptors ? (
         <CreateSecretDialog
@@ -379,7 +360,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           onSave={request => saveRotation(dialogSecret.name, request)}
         />
       ) : null}
-    </main>
+    </StudioPage>
   );
 }
 

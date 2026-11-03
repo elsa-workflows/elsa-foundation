@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Workflows.Design.Api.Tests.Support;
 
@@ -70,6 +71,15 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         return Sample();
     }
 
+    internal WorkflowDefinition? FindMetadata(string id)
+    {
+        if (Scenario == "trusted-not-found") return null;
+        var metadata = Sample();
+        metadata.Id = id;
+        metadata.TenantId = contextAccessor.HttpContext?.User.FindFirst(IdentityClaimTypes.TenantId)?.Value;
+        return metadata;
+    }
+
     internal void Save(DesignOperationKey operationKey, WorkflowDefinition definition)
     {
         LastSaveOperationKey = operationKey.Value;
@@ -95,7 +105,7 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
             Task.FromResult(fakes.Get(id));
 
         public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) =>
-            Task.FromResult<WorkflowDefinition?>(fakes.Get(id));
+            Task.FromResult(fakes.FindMetadata(id));
 
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);

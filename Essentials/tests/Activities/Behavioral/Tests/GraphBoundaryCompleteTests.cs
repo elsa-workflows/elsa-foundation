@@ -148,7 +148,8 @@ public sealed class GraphBoundaryCompleteTests
             "node-body",
             typeof(SwitchActivity),
             SwitchActivity.StructureKind,
-            SwitchActivity.StructureSchemaVersion,
+            // This hand-built fixture uses the retained Value-matching executable contract.
+            SwitchActivity.LegacyStructureSchemaVersion,
             new { cases = new[] { new { match = "a", activity = "node-exit" } }, @default = "node-default" },
             [
                 new ExecutableChildSlot(SwitchActivity.CaseSlotName("a"), [CompleteNode("node-exit", "succeed")]),

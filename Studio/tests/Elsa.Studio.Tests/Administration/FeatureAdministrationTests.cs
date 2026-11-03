@@ -1,3 +1,5 @@
+using CShells.DependencyInjection;
+using CShells.Features;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
@@ -33,6 +35,29 @@ public sealed class FeatureAdministrationTests
         Assert.NotNull(stored["CShells"]!["Shells"]!["Default"]!["Features"]!["StudioApi"]);
         Assert.Same(decoy, registry.GetActive("Default"));
         Assert.Equal(AdministrationHost.Credential, host.App.Configuration["CShells:Shells:Authoring:Features:Configured:Credential"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Catalog_round_trip_preserves_implicitly_enabled_Studio_infrastructure(bool explicitlyDisabled)
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, beforeStudio: builder =>
+        {
+            if (!explicitlyDisabled) return;
+            var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+            var document = JsonNode.Parse(File.ReadAllText(path))!;
+            document["CShells"]!["Shells"]!["Authoring"]!["Features"]!["Events"] = false;
+            File.WriteAllText(path, document.ToJsonString());
+        });
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.GetAsync("/studio-runtime.js")).StatusCode);
+        var before = await File.ReadAllBytesAsync(host.ShellsFile);
+        var catalog = await Catalog(host);
+        Assert.True((bool)catalog["features"]!.AsArray().Single(feature => (string?)feature!["id"] == "Events")!["enabled"]!);
+        Assert.Equal(before, await File.ReadAllBytesAsync(host.ShellsFile));
+        using var response = await host.Client.PostAsJsonAsync("/modularity/features/apply", Request(catalog));
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.GetAsync("/studio-runtime.js")).StatusCode);
     }
 
     [Fact]
@@ -165,6 +190,40 @@ public sealed class FeatureAdministrationTests
         Assert.Contains("configuration-read-only", await response.Content.ReadAsStringAsync());
         Assert.Equal(before, File.Exists(host.ShellsFile) ? await File.ReadAllBytesAsync(host.ShellsFile) : null);
     }
+
+    [Theory]
+    [InlineData("MissingDependency")]
+    [InlineData("CycleA")]
+    public async Task Catalog_keeps_invalid_dependency_roots_readable_and_allows_disabling_them(string featureId)
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true,
+            configureStudio: studio => studio.ConfigureShells(shells => shells.WithAssemblies(typeof(MissingDependencyFeature).Assembly)),
+            beforeStudio: builder =>
+            {
+                var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+                var document = JsonNode.Parse(File.ReadAllText(path))!;
+                document["CShells"]!["Shells"]!["Authoring"]!["Features"]![featureId] = true;
+                File.WriteAllText(path, document.ToJsonString());
+            });
+        var catalog = await Catalog(host);
+        Assert.True((bool)catalog["features"]!.AsArray().Single(feature => (string?)feature!["id"] == featureId)!["enabled"]!);
+        var request = Request(catalog);
+        var before = await File.ReadAllBytesAsync(host.ShellsFile);
+        using var refused = await host.Client.PostAsJsonAsync("/modularity/features/apply", request);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(before, await File.ReadAllBytesAsync(host.ShellsFile));
+        request["features"]!.AsArray().Single(feature => (string?)feature!["id"] == featureId)!["enabled"] = false;
+        using var response = await host.Client.PostAsJsonAsync("/modularity/features/apply", request);
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.GetAsync("/studio-runtime.js")).StatusCode);
+    }
+
+    [ShellFeature("MissingDependency", DependsOn = new object[] { "UnavailableInfrastructure" })]
+    public class MissingDependencyFeature : IShellFeature { public virtual void ConfigureServices(IServiceCollection services) { } }
+    [ShellFeature("CycleA", DependsOn = new object[] { typeof(CycleBFeature) })]
+    public class CycleAFeature : IShellFeature { public virtual void ConfigureServices(IServiceCollection services) { } }
+    [ShellFeature("CycleB", DependsOn = new object[] { typeof(CycleAFeature) })]
+    public class CycleBFeature : IShellFeature { public virtual void ConfigureServices(IServiceCollection services) { } }
 
     private static async Task<JsonObject> Catalog(AdministrationHost host)
     {
