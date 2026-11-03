@@ -44,7 +44,7 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
     {
         var keys = string.Join(", ", keyColumns.Select(column => $"N'{column}'"));
         return $"SELECT CASE WHEN OBJECT_ID(N'{table}', N'U') IS NULL THEN -1 ELSE (" +
-               $"SELECT COUNT(*) FROM sys.indexes i WHERE i.object_id = OBJECT_ID(N'{table}') AND i.is_unique = 1 AND i.has_filter = 0 " +
+               $"SELECT COUNT(*) FROM sys.indexes i WHERE i.object_id = OBJECT_ID(N'{table}') AND i.is_unique = 1 AND i.is_disabled = 0 AND i.has_filter = 0 " +
                "AND (SELECT COUNT(*) FROM sys.index_columns ic WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id " +
                $"AND ic.is_included_column = 0) = {keyColumns.Count} " +
                "AND NOT EXISTS (SELECT 1 FROM sys.index_columns ic JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id " +
