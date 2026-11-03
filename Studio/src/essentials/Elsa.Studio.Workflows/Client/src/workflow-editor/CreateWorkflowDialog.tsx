@@ -36,7 +36,11 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
 }) {
   // The templates as last read, with the catalog they were judged against (their availability depends on it).
   const [templateRead, setTemplateRead] = useState<{ catalog: ActivityCatalogItem[]; items: Array<{ template: WorkflowTemplate; reason?: string }> } | null>(null);
-  const [templateError, setTemplateError] = useState("");
+  // A failed read, with the catalog it was made for: it settles (and is shown for) that catalog only, so a failure while the
+  // catalog was still loading neither settles the dialog nor outlives the read that follows it.
+  const [templateFailure, setTemplateFailure] = useState<{ catalog: ActivityCatalogItem[] } | null>(null);
+  const templateError = templateFailure?.catalog === catalog
+    ? "Saved templates could not be loaded. Close and reopen this dialog to retry; built-in starters remain available." : "";
   const templates = templateRead?.items ?? [];
   useEffect(() => {
     if (!context) return;
@@ -44,11 +48,12 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
     void import("../workflowTemplates").then(async module => {
       const values = await module.listWorkflowTemplates(context);
       if (active) setTemplateRead({ catalog, items: (values ?? []).map(template => ({ template, reason: module.templateAvailabilityReason(template, catalog) })) });
-    }).catch(() => { if (active) setTemplateError("Saved templates could not be loaded. Close and reopen this dialog to retry; built-in starters remain available."); });
+    }).catch(() => { if (active) setTemplateFailure({ catalog }); });
     return () => { active = false; };
   }, [context, catalog]);
   const templatesSettled = catalogState !== "idle" && catalogState !== "loading" && (!context || templateError !== "" || templateRead?.catalog === catalog);
-  const offered = templatesSettled ? templates.filter(item => !item.reason).map(item => item.template) : null;
+  // Only a read judged against the current catalog is offered; a failed read for it offers none.
+  const offered = templatesSettled ? (templateRead?.catalog === catalog ? templates : []).filter(item => !item.reason).map(item => item.template) : null;
   const offeredKey = offered ? JSON.stringify(offered.map(template => [template.id, template.revision])) : null;
   // Reported when the offered set changes (not on every render), so the page's disclosed revision moves only with it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
