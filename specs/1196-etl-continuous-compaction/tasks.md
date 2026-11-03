@@ -24,4 +24,4 @@
 ## Phase 5 — Evidence and docs
 - [x] T012 Long continuous journey test (2 shards, 40 or more pages each, `MaxPagesPerPartition` 3) and real-process kills.
 - [x] T013 READMEs, `EXTENSION_POINTS.md`, and spec 1192's limits pointed here.
-- [ ] T014 Bite-proofs, Workbench journey, evidence README, the whole ETL and architecture suites.
+- [x] T014 Bite-proofs, Workbench journey, evidence README, the whole ETL and architecture suites.

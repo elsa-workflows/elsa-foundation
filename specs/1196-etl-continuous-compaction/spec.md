@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft
+**Status**: Implemented — [PR #3695](https://github.com/elsa-workflows/elsa-foundation/pull/3695); [evidence](evidence/README.md)
 
 **Input**: The remaining part of the first criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): "Finite and continuous runs process two or more independently leased partitions with resumable cursors and model-owned completion/cancellation." Spec [1192](../1192-etl-continuous-http/spec.md) delivered continuous HTTP runs, but declared two gaps that keep the criterion open. This slice closes them. It belongs to [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
