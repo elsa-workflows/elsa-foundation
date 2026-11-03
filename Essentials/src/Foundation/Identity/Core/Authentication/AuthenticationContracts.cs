@@ -98,7 +98,11 @@ public sealed record PrincipalFactoryContext(
     IReadOnlyCollection<ClaimMappingRule> MappingRules,
     IReadOnlyCollection<Permission> CatalogPermissions);
 
-public sealed record TokenIssueRequest(string SubjectId, string TenantId, IReadOnlyCollection<string> Scopes);
+public sealed record TokenIssueRequest(string SubjectId, string TenantId, IReadOnlyCollection<string> Scopes)
+{
+    /// <summary>Canonical Elsa user established by the issuing authority; absent for non-user subjects.</summary>
+    public string? CanonicalUserId { get; init; }
+}
 
 public sealed record TokenIssueResult(string AccessToken, DateTimeOffset ExpiresAt, string? RefreshToken = null);
 

@@ -2,6 +2,7 @@ using CShells.DependencyInjection;
 using Elsa.Studio.Hosting;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.Attention;
+using Elsa.Studio.UserTasks;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Dashboard;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
@@ -37,6 +38,7 @@ internal static class StudioFeatureAssemblies
                 typeof(FeatureManagementStudioFeature).Assembly,
                 typeof(DashboardStudioFeature).Assembly,
                 typeof(AttentionStudioFeature).Assembly,
+                typeof(UserTasksStudioFeature).Assembly,
                 typeof(WorkflowsDashboardStudioFeature).Assembly,
                 typeof(WeaverWorkflowsStudioFeature).Assembly,
                 typeof(WorkflowsStudioFeature).Assembly,
