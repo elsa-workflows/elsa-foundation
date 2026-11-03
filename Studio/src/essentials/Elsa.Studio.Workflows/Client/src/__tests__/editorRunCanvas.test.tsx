@@ -277,7 +277,7 @@ describe("execution attached to the editor canvas", () => {
   });
 
   it("captures the dispatched snapshot before awaiting the server, without saving or publishing", async () => {
-    const draft = structuredClone(snapshot);
+    const draft = structuredClone({ ...snapshot, layout: [{ nodeId: "write", x: 420, y: 180 }] });
     const signature = getDraftSignature(draft);
     const saveDraft = vi.fn();
     const startTestRun = vi.fn();
@@ -293,6 +293,8 @@ describe("execution attached to the editor canvas", () => {
     flushSync(() => root.render(<OperationsProbe />));
     const pending = operations.runTestDrive(draft, {}, { kind: "direct" }, "Direct start", []);
     draft.state.rootActivity!.nodeId = "later-node";
+    draft.layout[0].x = 999;
+    expect(api.start.mock.calls[0][1].layout).toEqual([{ nodeId: "write", x: 420, y: 180 }]);
     expect(api.start.mock.calls[0][1].state.rootActivity.nodeId).toBe("write");
     complete(run.view);
     await pending; await settle();

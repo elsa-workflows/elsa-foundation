@@ -84,7 +84,7 @@ binds `Identity:Login` without a dependency on Studio:
       "Description": "Thoughtful automation for the work that matters.",
       "Layout": "split",
       "Palette": "linen",
-      "Artwork": "ember",
+      "Artwork": "unfolding-map",
       "FocalX": 50,
       "FocalY": 45,
       "HelpUrl": "https://help.example.com",
@@ -100,9 +100,42 @@ Layout, palette and artwork are independent:
 |---|---|
 | Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image) |
 | Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green) |
-| Artwork | `ember`, `tidal`, `daybreak`, `canopy` |
+| Artwork | `unfolding-map` (default); see the choices below |
 
-The four generated photographs ship locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
+The ten artwork directions are available independently of the selected layout and palette:
+
+| Artwork value | Direction |
+|---|---|
+| `river-to-sea` | Aerial waterways opening into a sunlit coastline |
+| `open-architecture` | Terracotta archway and a continuing coastal path |
+| `flowing-ribbons` | Copper, cream and teal ribbons weaving through space |
+| `paper-landscape` | Layered paper hills, river and bridges |
+| `creative-studio` | Sunlit workspace with sketches and an unfinished model |
+| `botanical-growth` | Branching stems and fresh leaves in filtered sunlight |
+| `constellation` | Points of light connected across a midnight sky |
+| `miniature-world` | Handcrafted landscape with waterways, bridges and buildings |
+| `glass-and-light` | Translucent curved glass and warm refracted light |
+| `unfolding-map` | Illustrated landscape with connecting paths and settlements (default) |
+
+The earlier `ember`, `tidal`, `daybreak` and `canopy` artwork values remain supported. Omitted,
+empty or unrecognized artwork values use `unfolding-map`. A valid `ImageUrl` takes precedence over
+`Artwork`; remove an existing `ImageUrl` override to activate bundled artwork.
+
+Configure the **identity backend host** using appsettings JSON as above, an environment variable such
+as `Identity__Login__Artwork=flowing-ribbons`, or a command-line setting
+`--Identity:Login:Artwork=flowing-ribbons`. Developers can override configuration after binding:
+
+```csharp
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
+
+builder.Services.PostConfigure<LoginPageOptions>(options =>
+{
+    options.Artwork = "flowing-ribbons";
+    options.ImageUrl = null;
+});
+```
+
+Artwork ships locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
 CDN dependency. Set ImageUrl to your own asset to replace the image. FocalX/FocalY are percentages
 clamped to 0–100. Use a portrait source for split/editorial and a larger landscape source for immersive;
 check the crop at desktop, tablet and 320px. Artwork is decorative (`alt=""`), so essential instructions

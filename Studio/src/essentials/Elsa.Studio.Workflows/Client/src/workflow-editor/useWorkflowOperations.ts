@@ -529,6 +529,7 @@ export function useWorkflowOperations({
         definitionId: draftSnapshot.definitionId,
         snapshotId,
         state: draftSnapshot.state,
+        layout: draftSnapshot.layout,
         activityPresentation: draftSnapshot.activityPresentation,
         inputs,
         start,

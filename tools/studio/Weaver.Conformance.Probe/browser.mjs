@@ -1292,7 +1292,7 @@ async function consumedIntentRemount() {
     realCapabilityRead: true, originalTimeOrigin, commandId: selected.commandId, providerCalls: callsFor(selected.commandId) }));
   // Native SPA navigation keeps that consumed-intent App state until Studio feature Apply retires the document.
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();
@@ -1326,7 +1326,9 @@ async function consumedIntentRemount() {
   const appliedResponse = await applied;
   need(appliedResponse.status() === 200, "The native Studio feature apply was refused.");
   await expect.poll(() => moduleEvents.length).toBe(1);
-  await page.waitForURL(studioRoute("/"), { waitUntil: "domcontentloaded" });
+  // Workspace restoration can leave Home before a URL waiter observes it.
+  // The document epoch is the retirement boundary; route/backend checks follow below.
+  await page.waitForFunction(previous => performance.timeOrigin !== previous, timeOrigin);
   expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
   // Apply retires its document, so Chromium may release the old response body.
   // Read the owning catalog after navigation; the serving generation is checked below.
@@ -1340,7 +1342,7 @@ async function consumedIntentRemount() {
     configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
