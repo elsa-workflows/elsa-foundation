@@ -115,3 +115,30 @@ Elsa.Etl.Runtime.EtlHostHttpShardOptions.SeedUri.get -> string!
 Elsa.Etl.Runtime.EtlHostHttpShardOptions.SeedUri.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.HttpBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostHttpBindingOptions!>!
 Elsa.Etl.Runtime.EtlRuntimeFeature.HttpBindings.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Alias.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Alias.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.AllowedTables.get -> System.Collections.Generic.IList<string!>!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.AllowedTables.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.ConnectionString.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.ConnectionString.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.CreateLedger.get -> bool
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.CreateLedger.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.EtlHostSqlBindingOptions() -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.IsCurrent.get -> bool
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.IsCurrent.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.LedgerTable.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.LedgerTable.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.PersistencePartition.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.PersistencePartition.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Provider.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Provider.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Revision.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Revision.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Role.get -> string!
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.Role.set -> void
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.TenantId.get -> string?
+Elsa.Etl.Runtime.EtlHostSqlBindingOptions.TenantId.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.SqlBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostSqlBindingOptions!>!
+Elsa.Etl.Runtime.EtlRuntimeFeature.SqlBindings.set -> void
+const Elsa.Etl.Runtime.EtlHostSqlBindingOptions.DefaultLedgerTable = "elsa_etl_effect_ledger" -> string!

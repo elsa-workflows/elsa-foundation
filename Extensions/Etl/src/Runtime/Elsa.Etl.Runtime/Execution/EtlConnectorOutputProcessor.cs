@@ -33,11 +33,15 @@ internal sealed class EtlConnectorOutputProcessor
     private readonly FileChunkStore _jsonStore = new(".json");
     private readonly EtlHttpTransport _transport;
     private readonly string _snapshotRoot;
+    private readonly HostSqlBindings? _sqlBindings;
+    private readonly TimeProvider _clock;
 
     public EtlConnectorOutputProcessor(IEtlConnectorRuntimeStore store, HostFileBindings fileBindings,
         HostHttpBindings httpBindings, IFileChunkPublisherFactory publishers, EtlHttpTransport transport,
-        string snapshotRoot)
+        string snapshotRoot, HostSqlBindings? sqlBindings = null, TimeProvider? clock = null)
     {
+        _sqlBindings = sqlBindings;
+        _clock = clock ?? TimeProvider.System;
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _fileBindings = fileBindings ?? throw new ArgumentNullException(nameof(fileBindings));
         _httpBindings = httpBindings ?? throw new ArgumentNullException(nameof(httpBindings));
@@ -122,6 +126,17 @@ internal sealed class EtlConnectorOutputProcessor
                     continue;
                 }
 
+                if (routeOutput.Kind == EtlConnectorKind.Sql && destination is EtlSqlDestination sqlDestination)
+                {
+                    var written = await DispatchSqlRouteAsync(lease, admission, pipeline, routeId, routeOutput, sqlDestination, cancellationToken);
+                    if (written.FailureCode is not null || written.Status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay))
+                        return written;
+                    allReady &= written.ReadyToAccept;
+                    if (written.Yield)
+                        return written with { ReadyToAccept = false };
+                    continue;
+                }
+
                 if (routeOutput.Kind != EtlConnectorKind.Http || destination is not EtlHttpDestination httpDestination)
                     return DispatchFailed("etl.connector-output-invalid");
 
@@ -152,7 +167,7 @@ internal sealed class EtlConnectorOutputProcessor
     {
         var maxBytes = pipeline.Limits.MaxOutputBatchBytes;
         var mainIsCsv = pipeline.Routes.Main is EtlCsvDestination;
-        var mainIsArray = pipeline.Routes.Main is EtlHttpDestination;
+        var mainIsArray = pipeline.Routes.Main is EtlHttpDestination or EtlSqlDestination;
         using var main = new RouteBodyBuilder(RouteFormatFor(pipeline.Routes.Main), maxBytes,
             mainIsCsv ? EtlCsvRouteWriter.Header(pipeline.Mapping.Select(field => field.Name).ToArray()) : null);
         using var errors = new RouteBodyBuilder(RouteFormatFor(pipeline.Routes.Errors), maxBytes,
@@ -253,6 +268,57 @@ internal sealed class EtlConnectorOutputProcessor
         if (verified is null || !verified.AsSpan().SequenceEqual(bytes) || Hash(verified) != contentHash)
             throw new EtlEffectException("etl.effect-conflict", "The retained ETL route body could not be verified.");
         return new(kind, new EtlObjectReference(chunk.Key, chunk.ContentHash, chunk.ByteLength), records, effectId);
+    }
+
+    /// <summary>
+    /// Writes a SQL route in one database transaction whose ledger row makes the effect apply once, then records it like a
+    /// published file (spec 1197). A transient database failure yields after a short pause and leaves the route unrecorded.
+    /// </summary>
+    private async ValueTask<EtlConnectorRouteDispatchResult> DispatchSqlRouteAsync(EtlConnectorPartitionLease lease,
+        EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline, EtlOutputRoute routeId, EtlConnectorRouteOutput route,
+        EtlSqlDestination destination, CancellationToken cancellationToken)
+    {
+        if (_sqlBindings is null)
+            return DispatchFailed("etl.sql-unavailable");
+        var bytes = await ReadRetainedRouteBodyAsync(route, pipeline.Limits.MaxOutputBatchBytes, cancellationToken);
+        var pin = DestinationRevision(admission, routeId).Revision;
+        var binding = _sqlBindings.ResolveExact(lease.Scope, pin.Alias, RouteRole(routeId), pin.Revision, pin.Handle, destination.Table);
+        var batchId = lease.OwedBatch!.Batch.BatchId;
+        var outcome = await new EtlSqlRouteWriter(binding.Engine, _clock).WriteAsync(new EtlSqlRouteDelivery(
+            binding.ConnectionString, binding.LedgerTable, binding.CreateLedger, destination.Table, destination.Key,
+            SqlColumns(pipeline), bytes, route.EffectId, lease.RunId, batchId, route.Body.ContentHash), cancellationToken);
+        if (outcome == EtlSqlWriteOutcome.Yield)
+        {
+            await Task.Delay(SqlRetryDelay, _clock, cancellationToken);
+            return new(EtlStoreStatus.Applied, ReadyToAccept: false, Yield: true, FailureCode: null);
+        }
+
+        var recorded = await _store.RecordConnectorFilePublicationAsync(lease, batchId, routeId,
+            route.Body with { Key = EtlRuntimeIdentity.ConnectorSqlEffectKey(route.EffectId) }, cancellationToken);
+        return recorded is EtlStoreStatus.Applied or EtlStoreStatus.Replay
+            ? new(recorded, ReadyToAccept: true, Yield: false, FailureCode: null)
+            : new(recorded, ReadyToAccept: false, Yield: recorded is EtlStoreStatus.BudgetExceeded or EtlStoreStatus.Conflict,
+                FailureCode: recorded is EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal or EtlStoreStatus.NotFound or
+                    EtlStoreStatus.BudgetExceeded or EtlStoreStatus.Conflict ? null : "etl.sql-delivery-refused");
+    }
+
+    /// <summary>How long a transient SQL failure waits before its lease is released for a retry.</summary>
+    internal static readonly TimeSpan SqlRetryDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>The mapped output columns with the types of the fields they map, for typed SQL parameters.</summary>
+    private static IReadOnlyList<EtlColumn> SqlColumns(EtlPipelineV2 pipeline)
+    {
+        var source = pipeline.Source switch
+        {
+            EtlCsvSource csv => csv.Schema.ToDictionary(column => column.Name, column => column.Type, StringComparer.Ordinal),
+            EtlHttpJsonSource http => http.Fields.ToDictionary(field => field.Name, field => field.Type, StringComparer.Ordinal),
+            EtlJsonlSource jsonl => jsonl.Fields.ToDictionary(field => field.Name, field => field.Type, StringComparer.Ordinal),
+            _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector source is unsupported.")
+        };
+        var lookup = pipeline.Lookup?.Schema.ToDictionary(column => column.Name, column => column.Type, StringComparer.Ordinal)
+                     ?? new Dictionary<string, EtlColumnType>(StringComparer.Ordinal);
+        return pipeline.Mapping.Select(field => new EtlColumn(field.Name,
+            (field.Origin == EtlFieldOrigin.Source ? source : lookup)[field.Field], false)).ToArray();
     }
 
     private async ValueTask<EtlConnectorRouteDispatchResult> PublishFileRouteAsync(EtlConnectorPartitionLease lease,
@@ -418,12 +484,13 @@ internal sealed class EtlConnectorOutputProcessor
         EtlHttpDestination => EtlConnectorKind.Http,
         EtlJsonlDestination => EtlConnectorKind.Jsonl,
         EtlCsvDestination => EtlConnectorKind.Csv,
+        EtlSqlDestination => EtlConnectorKind.Sql,
         _ => throw new InvalidDataException("The connector output destination is unsupported.")
     };
 
     private static RouteFormat RouteFormatFor(EtlDestination destination) => destination switch
     {
-        EtlHttpDestination => RouteFormat.JsonArray,
+        EtlHttpDestination or EtlSqlDestination => RouteFormat.JsonArray,
         EtlJsonlDestination => RouteFormat.JsonLines,
         EtlCsvDestination => RouteFormat.Csv,
         _ => throw new InvalidDataException("The connector output destination is unsupported.")
@@ -431,7 +498,7 @@ internal sealed class EtlConnectorOutputProcessor
 
     private FileChunkStore BodyStore(EtlConnectorKind kind) => kind switch
     {
-        EtlConnectorKind.Http => _jsonStore,
+        EtlConnectorKind.Http or EtlConnectorKind.Sql => _jsonStore,
         EtlConnectorKind.Jsonl => _jsonlStore,
         EtlConnectorKind.Csv => _csvStore,
         _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector route body kind is unsupported.")
@@ -442,6 +509,7 @@ internal sealed class EtlConnectorOutputProcessor
         EtlConnectorKind.Http => "etl-connector-http-route-body-v1:" + effectId,
         EtlConnectorKind.Jsonl => "etl-connector-jsonl-route-body-v1:" + effectId,
         EtlConnectorKind.Csv => "etl-connector-csv-route-body-v1:" + effectId,
+        EtlConnectorKind.Sql => "etl-connector-sql-route-body-v1:" + effectId,
         _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector route body kind is unsupported.")
     };
 
