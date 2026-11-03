@@ -26,7 +26,7 @@
 | Fence | A number that grows each time ownership of a run or row changes. A write carrying an old fence is refused, so a worker that lost its claim cannot overwrite the new owner. |
 | Lease / heartbeat | The record a drain writes to say "this node is working on this run". A lease left behind by a crash tells the recovery scanner the run was interrupted. |
 | Pause gate | The check that decides whether a run's next step may go ahead (for example, the run is suspended by an operator). |
-| Segment | Under Balanced and Ephemeral modes, a stretch of steps whose checkpoints are folded into one commit. |
+| Segment | Under Durable, Balanced and Ephemeral modes, a stretch of steps whose checkpoints are folded into one commit (one activity under Durable). |
 | Quiesced | The drain's way of saying "the queue is empty; this run is now waiting". |
 
 ## How a workflow makes progress
@@ -200,8 +200,8 @@ Every run folds the checkpoints of a **segment** into one atomic commit. The mod
 
 | Mode | A segment ends… |
 |---|---|
-| Durable | at each activity (one commit per activity) |
-| Balanced | after the host's activity cap (`MaxActivitiesPerCommit`, default 50) |
+| Durable | at each activity (one commit per activity), and when a continuation another worker held settles or is taken back (#3659) |
+| Balanced | after the host's activity cap (`MaxActivitiesPerCommit`, default 50), and when a continuation another worker held settles or is taken back (#3659) |
 | Ephemeral | only at boundaries, when a continuation another worker held settles or is taken back (#3659), and at the end of the pass |
 
 Every shell with the runtime API has this machinery: the runtime API feature calls `AddPersistenceModes` after every feature has registered its stores. The run's mode is decided once, when the run is started: the start dispatcher writes the workflow's choice, or the host default when it chose none, onto the start command. The scheduler queue keeps that start until the run's first commit records the mode on the run. Every drain then resolves the mode from that record, or before the first commit from the start the queue still holds, so a run driven again before anything was committed keeps its mode. The queue holds a start's first delivery, so a start delivered again with another mode does not change it. A host composed without the machinery cannot run any mode, so it refuses the run before anything runs.
