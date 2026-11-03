@@ -23,4 +23,4 @@ Do not mark complete until every #3577 success criterion and Program exit row ha
 
 ## Delivery checkpoint
 
-M0–M4 are complete. Owned-host integration and package qualification have passed. Required CI, review of CI repairs and resulting-main qualification remain active in PR #3691; see the [executed evidence and remaining exits](../../specs/1196-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.
+M0–M5 are complete. PR #3691 merged after clean independent round 8 and green required CI; #3577 closed through that implementation. Rebuilt resulting main passes real client/browser/identity/native-BPMN restart journeys, whole Runtime/EF suites and the packed module consumer. Main push CI and final Program reconciliation remain active; see [resulting-main qualification](../../specs/1196-user-tasks/resulting-main-qualification.md). The owner explicitly authorized up to 20 formal review rounds for this delivery. Program #3688 remains open until the final gate finishes.

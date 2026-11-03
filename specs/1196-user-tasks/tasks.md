@@ -40,10 +40,10 @@ Input: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](d
 
 ## Integrated qualification, guidance and delivery (M5–M6)
 
-- [ ] T022 Run every `quickstart.md` row on owned composed hosts/stores with real identities; preserve user hosts/stores and report failures/unexecuted evidence honestly.
-- [ ] T023 Qualify provider/custom-host/package composition and complete required e2e suites; add user/integrator guides and extension-point/feature/cadence docs.
-- [ ] T024 Check claims/open PRs; review diff, complete whole affected suite/list counts, architecture/maps/tier/reference guards and post evidence on draft PR.
-- [ ] T025 Complete independent draft review axes, fix findings in new commits, mark ready and run required reviewed-head CI/review/permitted merge.
+- [x] T022 Run every `quickstart.md` row on owned composed hosts/stores with real identities; preserve user hosts/stores and report failures/unexecuted evidence honestly.
+- [x] T023 Qualify provider/custom-host/package composition and complete required e2e suites; add user/integrator guides and extension-point/feature/cadence docs.
+- [x] T024 Check claims/open PRs; review diff, complete whole affected suite/list counts, architecture/maps/tier/reference guards and post evidence on draft PR.
+- [x] T025 Complete independent draft review axes, fix findings in new commits, mark ready and run required reviewed-head CI/review/permitted merge.
 - [ ] T026 Rebuild resulting main, repeat decisive integrated rows, reconcile spec status/#3577/Program/linked parity records, and close only when all exits are evidenced.
 
 ## Dependencies and implementation strategy

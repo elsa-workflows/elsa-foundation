@@ -2,7 +2,9 @@
 
 Program [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688), acceptance [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), PR [#3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
 
-Design and implementation are present. M0–M4 are complete. Owned-host and package qualification have passed; required CI and resulting-main acceptance remain active. Five independent review rounds have completed, with round 5 clean on ec404a7f0d5a8bc50d3d0337c44784e9f219edb2. CI subsequently identified the Docker copy omission and schema-readability expectation repaired below; the next reviewed head must include those fixes. Neither the Program nor the feature is accepted, merged or closed. Per the spec lifecycle transition rule, this implementation PR sets the spec's Implemented status before merge; it becomes true when the PR merges. Program closure still requires resulting-main qualification.
+Implementation [PR #3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691) merged as `bfe9083349949b0cc8ebf1d3651df60ea2ca7767` after clean independent review round 8 and green exact-head required CI. M0–M5 are complete. The [resulting-main qualification record](resulting-main-qualification.md) owns final rebuilt-host, client, browser, identity/BPMN restart, recovery and archive evidence. Main push CI remains in progress; M6/Program closure is still open. The spec's Implemented transition was included in the implementation PR itself.
+
+The intermediate runs and failures below are historical evidence, not claims that every later head was qualified by those earlier runs.
 
 ## Resumption and ownership
 
@@ -33,7 +35,7 @@ The complete local independent Weaver package witness passed on 3f22e14063cafbc1
 
 The retained live screenshot also exposed the accepted-response notice remaining after a Completed refresh. A mounted regression failed on the prior component; successful refresh now replaces that notice from the current task status. The live journey additionally refuses pending-delivery text after committed completion.
 
-The separately owned remount probe repair #3693 was integrated from main 19b063e767925bcd178ae7e724292d9e76093a76 in b92687e32c119a0e5c08f4a5c72bae21651d5cd9. The feature patch was byte-identical against its updated base. All 279 probe controls and the complete local 89-case witness passed on that integrated head. The prior passing run 41565508614 was the repair PR's run, not a main run; the corrected attribution is recorded on the Program. An owner clarification is pending about extending the six-round review limit under the earlier 20-attempt continuation.
+The separately owned remount probe repair #3693 was integrated from main 19b063e767925bcd178ae7e724292d9e76093a76 in b92687e32c119a0e5c08f4a5c72bae21651d5cd9. The feature patch was byte-identical against its updated base. All 279 probe controls and the complete local 89-case witness passed on that integrated head. The prior passing run 41565508614 was the repair PR's run, not a main run; the corrected attribution is recorded on the Program. The owner subsequently explicitly approved up to 20 total formal review rounds for this delivery; the round-7 hold was cleared and round 8 reviewed the final repairs cleanly.
 
 Broader CI then found missing shared coverage wiring: the activity had no behavioral drive, the schema-family chain handle was absent, and tooling inventories omitted the new family/two content columns. The new drive measures Done/Approve/Reject through real durable acceptance/delivery and records actual outputs and required-input refusal; the whole activity suite passes 229/229. The canonical UserTasks schema chain now owns both task and form reads; two regressions failed on the previous corruption classification and pass with structured schema-skew refusal. Whole Runtime EF passes 1,880/1,880 and migration/tooling passes 508/508. Independent pinned inventories remain in place. No activity outcome metadata or persisted format changed.
 
@@ -55,10 +57,10 @@ Real authoring subsequently exposed missing dynamic-outcome facets on the catalo
 
 Causal controls observed: disabling the accepted-response resume guard makes the forged-resume test fail; restoring it passes. Disabling collection-derived port consumption makes its three tests fail; restoring it passes. New pending-receipt, physical-boundary and UI regressions fail before their fixes and pass after them. The default-wire regression likewise fails with Literal JSON text and passes with the restored Object defaults. Round2 repaired optional omitted/null outcome collections and exact capability readiness. Round3 adds shared replica-safe cursor keys and replaces the library-host handler loop with canonical Events composition; both have failing-before/passing-after witnesses.
 
-## Remaining exits
+## Final delivery gates
 
-- Complete latest-source whole suites/count comparison, final architecture/maps/tier/reference/locked restore and exact-head required CI, including full provider/hosting qualification.
-- Finish a clean independent exact-head review round; mark ready, request repository review and merge only under the repository's permitted process.
-- Rebuild resulting main and repeat decisive native/client/browser/restart journeys. Reconcile specification, Program, feature and linked parity/BPMN records before closure.
+Reviewed-head CI passed all required and substantive jobs in [run 41581773609](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41581773609), including full native provider/hosting, both Studio browser shards and all 89 independent Weaver cases. The three independent review axes were clean on fabc78cf in round 8; the permitted merge and rebuilt-main journeys are recorded in [resulting-main qualification](resulting-main-qualification.md).
 
-All normal hosts and integration databases are owned and disposable. Earlier development stores are retained; user hosts/stores were not used. Detailed local logs live under `/tmp/elsa-user-tasks-3577`; durable evidence is the source and commands/results on this PR and Program.
+Only the remaining main push checks and final Program/registry reconciliation are open. No failed CI result was waived. The local provider/hosting limitations above are retained as history; final exact-head native CI passed.
+
+All normal hosts and integration databases were owned and disposable. Hosts were stopped after qualification and owned stores retained; user hosts/stores were not used. Detailed local logs live under `/tmp/elsa-user-tasks-3577`; durable evidence is the source, this qualification record and commands/results on the PR and Program.
