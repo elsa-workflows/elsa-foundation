@@ -31,14 +31,21 @@ internal static class WorkflowVersionStructure
         IReadOnlyDictionary<string, string> Inputs, IReadOnlyDictionary<string, string> Outputs, string? Intrinsic, string Placement,
         string? Structure, IReadOnlyDictionary<string, IReadOnlyList<string>> SlotOrder, string? ContainerMetadata);
 
-    /// <summary>One connection by its endpoints; its container's metadata for it is compared, never part of its identity.</summary>
-    internal sealed record Connection(string Container, string Source, string? SourcePort, string Target, string? TargetPort)
+    /// <summary>
+    /// One connection, identified within its container as the flowchart identifies it: its <c>id</c>, or without one
+    /// <c>{source}:{sourcePort}->{target}</c> (FlowchartGraph.GetConnectionId). Its container's metadata for that identity is
+    /// compared with it, never part of its identity; so are its endpoints, which an identified connection can change.
+    /// </summary>
+    internal sealed record Connection(string Container, string Key, string Source, string? SourcePort, string Target, string? TargetPort)
     {
         public string? Metadata { get; init; }
-        public bool Equals(Connection? other) => other is not null && Container == other.Container && Source == other.Source
-            && SourcePort == other.SourcePort && Target == other.Target && TargetPort == other.TargetPort;
-        public override int GetHashCode() => HashCode.Combine(Container, Source, SourcePort, Target, TargetPort);
+        public bool Equals(Connection? other) => other is not null && Container == other.Container && Key == other.Key;
+        public override int GetHashCode() => HashCode.Combine(Container, Key);
+        public bool SameEndpoints(Connection other) => Source == other.Source && SourcePort == other.SourcePort && Target == other.Target && TargetPort == other.TargetPort;
     }
+
+    /// <summary>The flowchart's identity of a connection: its id, or the key it gives an id-less connection.</summary>
+    internal static string ConnectionKey(string? id, string source, string? sourcePort, string target) => id ?? $"{source}:{sourcePort}->{target}";
 
     /// <summary>
     /// One version's reading. <c>Truncated</c>: the walk stopped at its bound. <c>Incomplete</c>: some container's children
@@ -75,11 +82,12 @@ internal static class WorkflowVersionStructure
             }
             var children = projections.SelectMany(item => item.Activities).Select(child => child.NodeId).ToHashSet(StringComparer.Ordinal);
             var wired = Connections(node).ToArray();
+            var claimed = wired.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
             var graph = node.Structure?.Payload is { ValueKind: JsonValueKind.Object } payload
                 && payload.TryGetProperty("connections", out var list) && list.ValueKind == JsonValueKind.Array;
             activities.Add(new(node.NodeId, node.ActivityVersionId, scope, slot, Arguments(node.Inputs), Arguments(node.Outputs),
                 node.Intrinsic is null ? null : JsonSerializer.Serialize(node.Intrinsic, JsonOptions), node.ExecutionPlacement.ToString(),
-                StructureSignature(node.Structure, children),
+                StructureSignature(node.Structure, children, claimed),
                 // Only an ordered container's child order is compared (see the summary).
                 graph ? new Dictionary<string, IReadOnlyList<string>>()
                     : projections.GroupBy(item => item.Name, StringComparer.Ordinal).ToDictionary(group => group.Key,
@@ -145,14 +153,15 @@ internal static class WorkflowVersionStructure
             if (aspects.Count > 0)
                 changed.Add(new { nodeId = item.NodeId, scopePath = item.ScopePath, aspects = aspects.Order(StringComparer.Ordinal).ToArray(), inputs, reorderedSlots = reordered });
         }
-        var mineConnections = version.Connections.ToHashSet();
-        var theirConnections = comparedTo.Connections.ToHashSet();
-        var connectionsAdded = version.Connections.Where(item => !theirConnections.Contains(item)).Distinct().ToArray();
-        var connectionsRemoved = comparedTo.Connections.Where(item => !mineConnections.Contains(item)).Distinct().ToArray();
-        // The same connection in both whose metadata (its label, policy or configuration) changed.
-        var theirByEndpoints = comparedTo.Connections.GroupBy(item => item).ToDictionary(group => group.Key, group => group.First());
-        var connectionsChanged = version.Connections.Distinct()
-            .Where(item => theirByEndpoints.TryGetValue(item, out var before) && before.Metadata != item.Metadata).ToArray();
+        // Connections by the flowchart's own identity (container and id or fallback key): one entry per identity.
+        var mineConnections = version.Connections.GroupBy(item => item).ToDictionary(group => group.Key, group => group.First());
+        var theirConnections = comparedTo.Connections.GroupBy(item => item).ToDictionary(group => group.Key, group => group.First());
+        var connectionsAdded = mineConnections.Keys.Where(item => !theirConnections.ContainsKey(item)).ToArray();
+        var connectionsRemoved = theirConnections.Keys.Where(item => !mineConnections.ContainsKey(item)).ToArray();
+        // The same connection in both whose endpoints (rewired) or metadata (its label, default flag, policy or configuration) changed.
+        var connectionsChanged = mineConnections.Values
+            .Where(item => theirConnections.TryGetValue(item, out var before) && (before.Metadata != item.Metadata || !before.SameEndpoints(item)))
+            .Select(item => (Now: item, Before: theirConnections[item])).ToArray();
         var reasons = version.IncompleteReasons.Concat(comparedTo.IncompleteReasons).Distinct().ToArray();
         return new
         {
@@ -165,7 +174,7 @@ internal static class WorkflowVersionStructure
             activitiesChanged = changed.Take(limit).ToArray(),
             connectionsAdded = connectionsAdded.Take(limit).Select(ConnectionRow).ToArray(),
             connectionsRemoved = connectionsRemoved.Take(limit).Select(ConnectionRow).ToArray(),
-            connectionsChanged = connectionsChanged.Take(limit).Select(ConnectionRow).ToArray(),
+            connectionsChanged = connectionsChanged.Take(limit).Select(item => ChangedConnectionRow(item.Now, item.Before)).ToArray(),
             truncated = version.Truncated || comparedTo.Truncated
                 || new[] { added.Length, removed.Length, changed.Count, connectionsAdded.Length, connectionsRemoved.Length, connectionsChanged.Length }
                 .Any(count => count > limit),
@@ -184,7 +193,13 @@ internal static class WorkflowVersionStructure
 
     private static object ConnectionRow(Connection item) => new
     {
-        container = item.Container, source = item.Source, sourcePort = item.SourcePort, target = item.Target, targetPort = item.TargetPort
+        container = item.Container, connectionId = item.Key, source = item.Source, sourcePort = item.SourcePort, target = item.Target, targetPort = item.TargetPort
+    };
+
+    private static object ChangedConnectionRow(Connection now, Connection before) => new
+    {
+        container = now.Container, connectionId = now.Key, source = now.Source, sourcePort = now.SourcePort, target = now.Target, targetPort = now.TargetPort,
+        aspects = new[] { now.SameEndpoints(before) ? null : "endpoints", now.Metadata == before.Metadata ? null : "metadata" }.OfType<string>().ToArray()
     };
 
     private static string[] Differing(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right) =>
@@ -206,14 +221,26 @@ internal static class WorkflowVersionStructure
     /// connections, which are compared on their own; the kind and schema version are part of it. Object properties are
     /// ordered, so equal structures read equal.
     /// </summary>
-    private static string? StructureSignature(ActivityNodeStructure? structure, IReadOnlySet<string> children)
+    private static string? StructureSignature(ActivityNodeStructure? structure, IReadOnlySet<string> children, IReadOnlySet<string> connections)
     {
         if (structure is null) return null;
         var payload = JsonNode.Parse(structure.Payload.GetRawText());
-        // The connections and the per-element metadata are compared with the connections and the children they describe.
+        // The connections, and each metadata entry claimed by a connection or a projected child, are compared with what they
+        // describe; an entry no connection or child claims stays part of the container's own structure.
         if (payload is JsonObject body)
-            foreach (var key in new[] { "connections", "connectionMetadata", "nodeMetadata" }) body.Remove(key);
+        {
+            body.Remove("connections");
+            Unclaim(body, "connectionMetadata", connections);
+            Unclaim(body, "nodeMetadata", children);
+        }
         return JsonSerializer.Serialize(new { kind = structure.Kind, schemaVersion = structure.SchemaVersion, payload = Normalize(payload, children) }, JsonOptions);
+    }
+
+    private static void Unclaim(JsonObject body, string property, IReadOnlySet<string> claimed)
+    {
+        if (body[property] is not JsonObject map) return;
+        foreach (var key in map.Select(entry => entry.Key).Where(claimed.Contains).ToArray()) map.Remove(key);
+        if (map.Count == 0) body.Remove(property);
     }
 
     private static JsonNode? Normalize(JsonNode? node, IReadOnlySet<string> children) => node switch
@@ -239,8 +266,9 @@ internal static class WorkflowVersionStructure
         {
             if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("source", out var source) || !item.TryGetProperty("target", out var target)) continue;
             if (Endpoint(source) is not { } from || Endpoint(target) is not { } to) continue;
-            var id = item.TryGetProperty("id", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-            yield return new(node.NodeId, from.NodeId, from.Port, to.NodeId, to.Port) { Metadata = id is null ? null : Metadata(node.Structure, "connectionMetadata", id) };
+            var id = item.TryGetProperty("id", out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(value.GetString()) ? value.GetString() : null;
+            var key = ConnectionKey(id, from.NodeId, from.Port, to.NodeId);
+            yield return new(node.NodeId, key, from.NodeId, from.Port, to.NodeId, to.Port) { Metadata = Metadata(node.Structure, "connectionMetadata", key) };
         }
     }
 
