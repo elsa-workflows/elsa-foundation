@@ -60,6 +60,16 @@ public sealed class EtlSqlRouteWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task A_missing_table_is_a_rejection_not_a_missing_key()
+    {
+        var failure = await Assert.ThrowsAsync<EtlEffectException>(() =>
+            Writer().WriteAsync(Delivery("effect-1", """[{"id":1,"name":"Ada"}]""", "absent"), default).AsTask());
+
+        Assert.Equal("etl.sql-write-rejected", failure.Code);
+        Assert.Empty(Rows("elsa_etl_effect_ledger", "effect_id"));
+    }
+
+    [Fact]
     public async Task The_same_effect_with_different_content_is_a_conflict()
     {
         await Writer().WriteAsync(Delivery("effect-1", """[{"id":1,"name":"Ada"}]"""), default);

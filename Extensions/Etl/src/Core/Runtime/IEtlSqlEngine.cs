@@ -7,8 +7,9 @@ namespace Elsa.Etl.Core.Runtime;
 /// delivery protocol; an engine supplies only connections, dialect text and error classification.
 /// </summary>
 /// <remarks>
-/// Contributor contract keyed by <see cref="Provider"/>: several engines may be registered, and each SQL binding resolves the
-/// one its provider names. Every identifier passed in has already been validated as <c>[A-Za-z_][A-Za-z0-9_]{0,62}</c>.
+/// An adapter keyed by <see cref="Provider"/>, not a fan-in contributor: several engines may be registered, and each SQL
+/// binding resolves exactly the one its provider names. Every column passed in has been validated as
+/// <c>[A-Za-z_][A-Za-z0-9_]{0,62}</c>, and every table, ledger included, as <c>name</c> or <c>schema.name</c> of such parts.
 /// </remarks>
 public interface IEtlSqlEngine
 {
@@ -36,7 +37,10 @@ public interface IEtlSqlEngine
     /// <summary>Selects the content hash recorded for <c>@effect</c>.</summary>
     string ReadLedgerHash(string ledgerTable);
 
-    /// <summary>Counts unique constraints or indexes on exactly the key columns of the table.</summary>
+    /// <summary>
+    /// Counts unique constraints or indexes on exactly the key columns of the table, or returns -1 when the table does not
+    /// exist, so a missing table is not mistaken for a missing key.
+    /// </summary>
     string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns);
 
     /// <summary>

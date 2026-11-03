@@ -49,8 +49,11 @@ internal sealed class EtlSqlRouteWriter(IEtlSqlEngine engine, TimeProvider clock
                 return await ReplayAsync(connection, delivery, cancellationToken);
             }
 
-            var keys = await ScalarAsync(connection, transaction, engine.CountUniqueKeys(delivery.Table, delivery.Key), [], cancellationToken);
-            if (Convert.ToInt64(keys, CultureInfo.InvariantCulture) == 0)
+            var keys = Convert.ToInt64(await ScalarAsync(connection, transaction, engine.CountUniqueKeys(delivery.Table, delivery.Key), [],
+                cancellationToken), CultureInfo.InvariantCulture);
+            if (keys < 0)
+                throw new EtlEffectException("etl.sql-write-rejected", "The SQL destination table does not exist.");
+            if (keys == 0)
                 throw new EtlEffectException("etl.sql-key-constraint-missing",
                     "The SQL destination table has no unique constraint on exactly its key columns.");
 

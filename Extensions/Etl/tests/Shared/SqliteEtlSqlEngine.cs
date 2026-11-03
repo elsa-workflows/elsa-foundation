@@ -40,9 +40,10 @@ internal sealed class SqliteEtlSqlEngine : IEtlSqlEngine
     public string ReadLedgerHash(string ledgerTable) => $"SELECT content_hash FROM {Quote(ledgerTable)} WHERE effect_id = @effect";
 
     public string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns) =>
+        $"SELECT CASE WHEN (SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{table}') = 0 THEN -1 ELSE (" +
         $"SELECT COUNT(*) FROM pragma_index_list('{table}') AS l WHERE l.\"unique\" = 1 AND " +
         $"(SELECT group_concat(name, ',') FROM (SELECT name FROM pragma_index_info(l.name) ORDER BY name)) = " +
-        $"'{string.Join(',', keyColumns.Order(StringComparer.Ordinal))}'";
+        $"'{string.Join(',', keyColumns.Order(StringComparer.Ordinal))}') END";
 
     public string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row)
     {

@@ -96,6 +96,17 @@ public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
         Assert.Empty(await fixture.QueryAsync($"SELECT id FROM {_table}"));
     }
 
+    [SkippableFact]
+    public async Task A_missing_table_is_a_rejection_not_a_missing_key()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+
+        var failure = await Assert.ThrowsAsync<EtlEffectException>(() => WriteAsync("effect-1", """[{"id":1,"name":"Ada"}]"""));
+
+        Assert.Equal("etl.sql-write-rejected", failure.Code);
+        Assert.Empty(await fixture.QueryAsync($"SELECT effect_id FROM {_ledger}"));
+    }
+
     private async Task CreateTableAsync(bool keyed)
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);

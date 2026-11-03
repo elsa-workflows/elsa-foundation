@@ -41,10 +41,11 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     public string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns)
     {
         var keys = string.Join(", ", keyColumns.Order(StringComparer.Ordinal).Select(column => $"'{column}'"));
-        return $"SELECT COUNT(*) FROM pg_index i WHERE i.indrelid = to_regclass('{Quote(table)}') AND i.indisunique AND i.indpred IS NULL " +
+        return $"SELECT CASE WHEN to_regclass('{Quote(table)}') IS NULL THEN -1 ELSE (" +
+               $"SELECT COUNT(*) FROM pg_index i WHERE i.indrelid = to_regclass('{Quote(table)}') AND i.indisunique AND i.indpred IS NULL " +
                $"AND i.indnkeyatts = {keyColumns.Count} AND (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a " +
                "WHERE a.attrelid = i.indrelid AND a.attnum = ANY((i.indkey::int2[])[0:i.indnkeyatts - 1])) = " +
-               $"ARRAY[{keys}]::text[] AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.condeferrable)";
+               $"ARRAY[{keys}]::text[] AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.condeferrable)) END";
     }
 
     public string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row)
