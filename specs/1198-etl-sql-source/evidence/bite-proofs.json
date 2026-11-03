@@ -1,6 +1,6 @@
 {
  "spec": "1198-etl-sql-source",
- "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day.",
+ "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows. Review round 3 adds 2 entries that bite, recorded at 1cc03a3d4 (the 8-column key bound and the 63-character identifier bound), and 2 that do not, recorded on ce00cc26d with the round 3 changes not yet committed (they were committed unchanged as 1cc03a3d4): closing a cancelled reader did not throw on either driver at 200,000 rows, so the guard that keeps the original failure, and the cancel itself, are defensive. Review round 4 adds 1 entry, recorded at 9bb6fb935: the refusal of a zoned time of day. Review round 5 adds 3 entries, recorded at 6b1c8b1c6: the transformer's and output processor's SQL source branches, and the refusal of infinite dates.",
  "results": [
   {
    "mutation": "source-table-identifier-unchecked",
@@ -433,6 +433,50 @@
    "original": "case DateTimeOffset offset when !reader.GetDataTypeName(index).StartsWith(\"time with\", StringComparison.OrdinalIgnoreCase):",
    "mutated_text": "case DateTimeOffset offset when true:",
    "sourceRevision": "9bb6fb9356559be387cb505b5df08077a7145a3a"
+  },
+  {
+   "mutation": "transformer-sql-fields-missing",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Transformation/EtlRowTransformer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRuntimeJourneyTests.A_sql_source_reads_its_table_once",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_sql_source_reads_its_table_once_and_runs_it_across_two_partitions"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            EtlSqlSource sql => ToTransformFields(sql.Columns, nameof(pipeline)),\n",
+   "mutated_text": "",
+   "sourceRevision": "6b1c8b1c6e881ff1b17e6e1d9cb3d43388ec3716"
+  },
+  {
+   "mutation": "output-sql-source-types-missing",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRuntimeJourneyTests.A_sql_source_delivers_into_a_keyed_sql_table",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_sql_source_delivers_into_a_keyed_sql_table_with_typed_columns"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            EtlSqlSource sql => sql.Columns.ToDictionary(column => column.Name, column => column.Type, StringComparer.Ordinal),\n",
+   "mutated_text": "",
+   "sourceRevision": "6b1c8b1c6e881ff1b17e6e1d9cb3d43388ec3716"
+  },
+  {
+   "mutation": "infinity-written-as-extreme",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~An_infinite_date_or_timestamp",
+   "mutated": "Failed!  - Failed: 3, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.An_infinite_date_or_timestamp_is_refused_rather_than_written_as_an_extreme_date(type: \"date\", literal: \"'infinity'\")",
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.An_infinite_date_or_timestamp_is_refused_rather_than_written_as_an_extreme_date(type: \"timestamp\", literal: \"'infinity'\")",
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.An_infinite_date_or_timestamp_is_refused_rather_than_written_as_an_extreme_date(type: \"timestamptz\", literal: \"'-infinity'\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "case DateTime extreme when extreme == DateTime.MaxValue || extreme == DateTime.MinValue: break;\n                    case DateOnly extreme when extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue: break;\n                    case DateTimeOffset extreme when extreme == DateTimeOffset.MaxValue || extreme == DateTimeOffset.MinValue: break;",
+   "mutated_text": "",
+   "sourceRevision": "6b1c8b1c6e881ff1b17e6e1d9cb3d43388ec3716"
   }
  ]
 }
