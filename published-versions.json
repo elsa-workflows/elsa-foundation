@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "4b54e3cc1c42f17e7fdd21770dd9990b48ff2794",
+  "last_publish_commit": "fa8b4a2926833e7abde586a8ab9167683f6ab0d2",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -354,13 +354,13 @@
     },
     {
       "package_id": "Elsa.Etl.Core",
-      "version": "4.0.4-preview",
-      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
+      "version": "4.0.5-preview",
+      "commit": "fa8b4a2926833e7abde586a8ab9167683f6ab0d2"
     },
     {
       "package_id": "Elsa.Etl.Design",
-      "version": "4.0.5-preview",
-      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
+      "version": "4.0.6-preview",
+      "commit": "fa8b4a2926833e7abde586a8ab9167683f6ab0d2"
     },
     {
       "package_id": "Elsa.Etl.Design.Api",
@@ -369,18 +369,18 @@
     },
     {
       "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
-      "version": "4.0.5-preview",
-      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
+      "version": "4.0.6-preview",
+      "commit": "fa8b4a2926833e7abde586a8ab9167683f6ab0d2"
     },
     {
       "package_id": "Elsa.Etl.Runtime",
-      "version": "4.0.5-preview",
-      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
+      "version": "4.0.6-preview",
+      "commit": "fa8b4a2926833e7abde586a8ab9167683f6ab0d2"
     },
     {
       "package_id": "Elsa.Etl.Runtime.Api",
-      "version": "4.0.7-preview",
-      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
+      "version": "4.0.8-preview",
+      "commit": "fa8b4a2926833e7abde586a8ab9167683f6ab0d2"
     },
     {
       "package_id": "Elsa.Etl.Workflows.Design",
