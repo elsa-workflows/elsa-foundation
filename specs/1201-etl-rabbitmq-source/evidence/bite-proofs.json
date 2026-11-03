@@ -3,6 +3,34 @@
  "note": "Each entry names the revision it was recorded at. All entries bite.",
  "results": [
   {
+   "mutation": "driver-maximum",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlConsumer.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~The_maximum_and_byte_bounds",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqConsumerProviderTests.The_maximum_and_byte_bounds_leave_the_rest_queued"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "while (count < maxMessages && (count == 0",
+   "mutated_text": "while (count < int.MaxValue && (count == 0",
+   "sourceRevision": "b1d81e2e317f9b1c25c8f96a1da3b770a0d3c2f0"
+  },
+  {
+   "mutation": "driver-not-implemented-rejected",
+   "file": "Extensions/Etl/src/RabbitMq/RabbitMqEtlPublisher.cs",
+   "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_stream_queue_which_basic_get_cannot_read",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.RabbitMq.ProviderTests.EtlRabbitMqConsumerProviderTests.A_stream_queue_which_basic_get_cannot_read_is_rejected"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "[403, 404, 406, 530, 540]",
+   "mutated_text": "[403, 404, 406, 530]",
+   "sourceRevision": "b1d81e2e317f9b1c25c8f96a1da3b770a0d3c2f0"
+  },
+  {
    "mutation": "compiler-queue-name",
    "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
