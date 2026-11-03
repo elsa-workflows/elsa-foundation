@@ -117,9 +117,9 @@ class WorkflowGuardTests(unittest.TestCase):
 
     def test_studio_workflow_gate_supports_bare_and_ref_qualified_ci_paths(self) -> None:
         workflow = (SCRIPT.parents[2] / ".github/workflows/studio-docker.yml").read_text()
-        self.assertIn("workflows: [Studio CI]", workflow)
-        self.assertIn("github.event.workflow_run.path == '.github/workflows/studio-ci.yml'", workflow)
-        self.assertIn("startsWith(github.event.workflow_run.path, '.github/workflows/studio-ci.yml@')", workflow)
+        self.assertIn("workflows: [CI]", workflow)
+        self.assertIn("github.event.workflow_run.path == '.github/workflows/ci.yml'", workflow)
+        self.assertIn("startsWith(github.event.workflow_run.path, '.github/workflows/ci.yml@')", workflow)
         self.assertNotIn("pull_request:", workflow.split("permissions:", 1)[0])
         packages = (SCRIPT.parents[2] / ".github/workflows/studio-packages.yml").read_text()
         self.assertNotIn("\n  push:", packages.split("env:", 1)[0])

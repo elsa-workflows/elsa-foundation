@@ -17,7 +17,7 @@ namespace Elsa.Etl.Runtime.Api;
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Runtime")]
 [ManifestFeatureCategory("API")]
-[ShellFeature(name: "EtlRuntimeApi", DisplayName = "ETL Runtime API", Description = "Inspect finite ETL runs and request cancellation.", DependsOn = new object[] { "ApiCapabilities" })]
+[ShellFeature(name: "EtlRuntimeApi", DisplayName = "ETL Runtime API", Description = "Inspect ETL runs and request cancellation or, for continuous runs, completion.", DependsOn = new object[] { "ApiCapabilities" })]
 public class EtlRuntimeApiFeature : IWebShellFeature
 {
     /// <summary>Stable shared signing key for pagination across host replicas; defaults to a process-local key.</summary>
@@ -35,7 +35,8 @@ public class EtlRuntimeApiFeature : IWebShellFeature
             new("etl-run", "etl/runs/{id}", true),
             new("etl-run-partitions", "etl/runs/{id}/partitions", true),
             new("etl-run-connector-partitions", "etl/runs/{id}/connector-partitions", true),
-            new("etl-run-cancel", "etl/runs/{id}/cancel", true)
+            new("etl-run-cancel", "etl/runs/{id}/cancel", true),
+            new("etl-run-complete", "etl/runs/{id}/complete", true)
         ], "EtlRuntimeApi"));
     }
 

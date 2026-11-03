@@ -7,6 +7,7 @@ import { EtlRunsPage } from "../EtlRunsPage";
 import {
   EtlApiError,
   cancelEtlRun,
+  completeEtlRun,
   getEtlRun,
   invalidateEtlApiCapabilityCache,
   listEtlRunConnectorPartitions,
@@ -25,6 +26,7 @@ import type {
 vi.mock("../etlApi", async importOriginal => ({
   ...(await importOriginal<typeof import("../etlApi")>()),
   cancelEtlRun: vi.fn(),
+  completeEtlRun: vi.fn(),
   getEtlRun: vi.fn(),
   invalidateEtlApiCapabilityCache: vi.fn(),
   listEtlRunPartitions: vi.fn(),
@@ -319,6 +321,45 @@ describe("ETL runs page", () => {
     resolveOld?.(detail("run-old", "running"));
     await waitFor(() => expect(oldSignal?.aborted).toBe(true));
     expect(rendered.host.textContent).not.toContain("Run run-old");
+  });
+
+  it("offers completion only for a running continuous run that has not requested it", async () => {
+    const context = endpointContext();
+    const dialogs = createDialogs(true);
+    const continuous = (completionRequestedAt: string | null): EtlRunDetailView => ({
+      ...detail("run-1", "running"),
+      connector: { sourceKind: "http", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 1, acceptedErrorEffects: 0,
+        mode: "continuous", completionRequestedAt }
+    });
+    vi.mocked(getEtlRun)
+      .mockResolvedValueOnce(continuous(null))
+      .mockResolvedValueOnce(continuous("2026-11-02T18:00:00Z"));
+    vi.mocked(completeEtlRun).mockResolvedValue({ result: "accepted" });
+
+    const rendered = mount(context, dialogs);
+    await waitFor(() => expect(buttonContaining(rendered.host, "run-1")).toBeTruthy());
+    click(buttonContaining(rendered.host, "run-1")!);
+    await waitFor(() => expect(buttonByText(rendered.host, "Complete run")).toBeTruthy());
+    click(buttonByText(rendered.host, "Complete run"));
+
+    await waitFor(() => expect(rendered.host.textContent).toContain("Completion requested. The run settles once every shard has caught up."));
+    expect(completeEtlRun).toHaveBeenCalledWith(context, "run-1", expect.any(AbortSignal));
+    expect(dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: "Complete run" }));
+    await waitFor(() => expect(buttonOrNull(rendered.host, "Complete run")).toBeNull());
+    expect(buttonByText(rendered.host, "Cancel run")).toBeTruthy();
+  });
+
+  it("does not offer completion for a finite run or a host that predates continuous runs", async () => {
+    vi.mocked(getEtlRun).mockResolvedValue({ ...detail("run-1", "running"),
+      connector: { sourceKind: "http", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 0, acceptedErrorEffects: 0 } });
+
+    const rendered = mount(endpointContext(), createDialogs(true));
+    await waitFor(() => expect(buttonContaining(rendered.host, "run-1")).toBeTruthy());
+    click(buttonContaining(rendered.host, "run-1")!);
+    await waitFor(() => expect(buttonByText(rendered.host, "Cancel run")).toBeTruthy());
+
+    expect(buttonOrNull(rendered.host, "Complete run")).toBeNull();
+    expect(completeEtlRun).not.toHaveBeenCalled();
   });
 
   it("confirms cancellation and displays the actual terminal outcome when success wins the race", async () => {

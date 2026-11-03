@@ -451,7 +451,8 @@ describe("workflows module", () => {
     await click(buttonByText(moveDialog, "Move"));
 
     await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Workflow organization updated" }));
-    expect(container.querySelector(".wf-status-line")).toBeNull();
+    // Saving starts a list refresh; its transient status is not an inline success notice.
+    await vi.waitFor(() => expect(container.querySelector(".wf-status-line")).toBeNull());
 
     await unmount();
   });
