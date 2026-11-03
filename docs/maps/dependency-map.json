@@ -765,6 +765,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Etl.Sql.PostgreSql",
+          "path": "Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Sql.SqlServer",
+          "path": "Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Etl.Workflows.Design",
           "path": "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj"
         },
@@ -14041,6 +14051,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Etl.Sql.PostgreSql",
+          "path": "Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Sql.SqlServer",
+          "path": "Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Etl.Workflows.Design",
           "path": "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj"
         },
@@ -26007,6 +26027,154 @@
       ]
     },
     {
+      "path": "Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj",
+      "name": "Elsa.Etl.Sql.PostgreSql",
+      "kind": "source",
+      "domain": "Elsa.Etl",
+      "sub_domain": "Sql.PostgreSql",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Etl.Sql.PostgreSql",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Core",
+          "path": "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Npgsql",
+          "version": "10.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj",
+      "name": "Elsa.Etl.Sql.SqlServer",
+      "kind": "source",
+      "domain": "Elsa.Etl",
+      "sub_domain": "Sql.SqlServer",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Etl.Sql.SqlServer",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Core",
+          "path": "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Data.SqlClient",
+          "version": "7.0.2"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj",
       "name": "Elsa.Etl.Workflows.Design",
       "kind": "source",
@@ -26161,6 +26329,70 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "name": "Elsa.Etl.Sql.ProviderTests",
+      "kind": "test",
+      "domain": "Elsa.Etl",
+      "sub_domain": "Sql.ProviderTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Runtime",
+          "path": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Sql.PostgreSql",
+          "path": "Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Sql.SqlServer",
+          "path": "Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MsSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.PostgreSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Xunit.SkippableFact",
+          "version": "1.5.23"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
         }
       ]
     },
