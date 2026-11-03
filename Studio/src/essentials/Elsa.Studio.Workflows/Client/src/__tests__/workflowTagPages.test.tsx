@@ -100,18 +100,10 @@ describe("workflow tag pages", () => {
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");
     expect(container.textContent).not.toContain("Edit workflow tag");
   });
-  it("retains unsaved tag fields when a workspace tab is hidden and restored", async () => {
-    const { fetcher, reads } = fixture();
-    let holdRestoration = false;
-    let restoring = false;
-    let release!: () => void;
-    const heldPage = new Promise<void>(resolve => { release = resolve; });
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/capabilities")) return response(capabilities());
-      if (holdRestoration && new URL(url).pathname === "/tags") { restoring = true; await heldPage; }
-      return fetcher(input);
-    });
+  it("retains unsaved tag fields when a workspace tab is restored offline", async () => {
+    const options = { fail: false };
+    const { fetcher, reads } = fixture(options);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => String(input).includes("/capabilities") ? Promise.resolve(response(capabilities())) : fetcher(input));
     window.history.replaceState({}, "", "/workflows/tags/region");
     const context = createEndpointContext("https://server.example/");
     const container = document.createElement("div"); document.body.append(container);
@@ -123,15 +115,36 @@ describe("workflow tag pages", () => {
       await fill(container.querySelector('[aria-label="Tag name"]'), "Unsaved region");
       render("hidden");
       await new Promise(done => setTimeout(done, 20));
-      holdRestoration = true;
+      options.fail = true;
       render("visible");
-      await vi.waitFor(() => expect(restoring).toBe(true));
+      await new Promise(done => setTimeout(done, 20));
       expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("Unsaved region");
-      release();
-      await vi.waitFor(() => expect(reads.filter(path => path === "/tags/region")).toHaveLength(2));
-      await waitForText(container, "Edit workflow tag");
-      expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("Unsaved region");
-    } finally { release(); flushSync(() => root.unmount()); container.remove(); }
+      expect(reads.filter(path => path === "/tags/region")).toHaveLength(1);
+    } finally { flushSync(() => root.unmount()); container.remove(); }
   });
 
+  it("finishes a pending catalog search while its workspace tab is hidden", async () => {
+    const { fetcher } = fixture();
+    let resolve!: (value: Response) => void;
+    const searchResult = new Promise<Response>(done => { resolve = done; });
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => String(input).includes("/capabilities") ? Promise.resolve(response(capabilities())) : String(input).includes("search=missing") ? searchResult : fetcher(input));
+    window.history.replaceState({}, "", "/workflows/tags");
+    const context = createEndpointContext("https://server.example/");
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    const render = (mode: "visible" | "hidden") => flushSync(() => root.render(<Activity mode={mode}><WorkflowTagsRoute context={context} view="list" navigate={() => undefined} /></Activity>));
+    try {
+      render("visible");
+      await waitForText(container, "Region");
+      await fill(container.querySelector('[aria-label="Search workflow tags"]'), "missing");
+      await click(button(container, "Search"));
+      render("hidden");
+      await new Promise(done => setTimeout(done, 20));
+      resolve(response({ items: [], permissions: { canManageTags: true } }));
+      await new Promise(done => setTimeout(done, 20));
+      render("visible");
+      await waitForText(container, "No matching tags");
+      expect(button(container, "Search")?.hasAttribute("disabled")).toBe(false);
+    } finally { flushSync(() => root.unmount()); container.remove(); }
+  });
 });

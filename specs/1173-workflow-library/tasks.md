@@ -36,5 +36,5 @@ Delivery and resulting-main evidence: [Program #3499 receipt](https://github.com
 
 - [x] Replace catalog dialog entry with list/create/edit routes and retain permission/capability guards.
 - [x] Preserve tag/value identities, revisions, retirement and reload in the page editor.
-- [ ] Update component/browser/live journeys; prove navigation, states, paging and wire behavior.
-- [ ] Run affected suite, typecheck/build, architecture/maps checks, diff review and record PR evidence.
+- [x] Update component/browser/live journeys; prove navigation, states, paging and wire behavior.
+- [x] Run affected suite, typecheck/build, architecture/maps checks, diff review and record PR evidence.

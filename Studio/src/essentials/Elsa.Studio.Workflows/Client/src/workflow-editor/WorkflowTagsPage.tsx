@@ -9,12 +9,14 @@ import "./workflowTags.css";
 const tagsPath = "/workflows/tags";
 const tagPath = (id: string) => `${tagsPath}/${encodeURIComponent(id)}`;
 type View = "list" | "create" | "edit";
-type Loaded = { context: StudioEndpointContext; page?: WorkflowTagPage; tag?: WorkflowTag; unsupported?: boolean; error?: string };
+type Loaded = { identity: string; context: StudioEndpointContext; page?: WorkflowTagPage; tag?: WorkflowTag; unsupported?: boolean; error?: string };
 const message = (error: unknown) => error instanceof Error ? error.message : "Check your access and try again.";
 
 export function WorkflowTagsRoute({ context, view, navigate }: { context: StudioEndpointContext; view: View; navigate(path: string): void }) {
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [loaded, setLoaded] = useState<Loaded>();
+  const loadedRef = useRef(loaded);
+  loadedRef.current = loaded;
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const sync = () => setPathname(window.location.pathname);
@@ -23,29 +25,31 @@ export function WorkflowTagsRoute({ context, view, navigate }: { context: Studio
   }, []);
   const tagId = view === "edit" ? pathname.split("/").pop() ?? "" : "";
   const identity = `${view}:${tagId}`;
-  const [loadedIdentity, setLoadedIdentity] = useState("");
   useEffect(() => {
+    // Activity reconnects effects when a retained tab returns. Its current resource and draft
+    // are already loaded; explicit refresh/reload remains with the owning list/editor.
+    const current = loadedRef.current;
+    if (current?.context === context && current.identity === identity && current.page) return;
     let active = true;
-    // Retained workspace tabs reconnect effects; keep their editor and unsaved draft mounted.
     void (async () => {
       try {
         const support = await workflowOrganizationSupport(context);
         if (!active) return;
-        if (!support.tags) { setLoaded({ context, unsupported: true }); setLoadedIdentity(identity); return; }
+        if (!support.tags) { setLoaded({ identity, context, unsupported: true }); return; }
         const page = await listWorkflowTags(context);
         if (!active) return;
         // The catalog's server-issued permission also guards direct create/edit navigation.
         const tag = view === "edit" && page.permissions?.canManageTags === true
           ? await getWorkflowTag(context, decodeURIComponent(tagId)) : undefined;
-        if (active) { setLoaded({ context, page, tag }); setLoadedIdentity(identity); }
+        if (active) { setLoaded({ identity, context, page, tag }); }
       } catch (error) {
-        if (active) { setLoaded({ context, error: message(error) }); setLoadedIdentity(identity); }
+        if (active) { setLoaded({ identity, context, error: message(error) }); }
       }
     })();
     return () => { active = false; };
   }, [attempt, context, identity, tagId, view]);
 
-  if (!loaded || loaded.context !== context || loadedIdentity !== identity) return <SkeletonRows label="Loading workflow tags" />;
+  if (!loaded || loaded.context !== context || loaded.identity !== identity) return <SkeletonRows label="Loading workflow tags" />;
   const back = <StudioButton onClick={() => navigate(view === "list" ? "/workflows/definitions" : tagsPath)}>{view === "list" ? "Back to workflows" : "Back to tags"}</StudioButton>;
   if (loaded.error || loaded.unsupported || (view !== "list" && loaded.page?.permissions?.canManageTags !== true)) {
     return <StudioPage><StudioPageHeader title="Workflow tags" actions={back} />
@@ -66,7 +70,8 @@ function WorkflowTagsPage({ context, initialPage, navigate }: { context: StudioE
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const generation = useRef(0);
-  useEffect(() => () => { generation.current += 1; }, []);
+  // A hidden tab retains this collection. Its pending reads may still settle local state;
+  // a newer search invalidates them, and a real route/context change unmounts the collection.
   const load = async (nextTerm: string, more = false) => {
     const current = ++generation.current;
     setBusy(true); setError("");
