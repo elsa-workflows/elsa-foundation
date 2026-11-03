@@ -24,9 +24,28 @@ CAPTURES = {
 JOURNEYS = set(CAPTURES)
 
 
+def stop_group(process):
+    if process.poll() is None:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=10)
+
+
 def command(args, log, *, cwd=ROOT, env=None):
     with log.open('w') as output:
-        subprocess.run(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, check=True)
+        process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            result = process.wait()
+            if result:
+                raise subprocess.CalledProcessError(result, args)
+        finally:
+            stop_group(process)
 
 
 def verdict(report, artifacts):
@@ -91,7 +110,7 @@ def host(directory, dll, url, ready_path, log, env):
                     raise RuntimeError(f'{dll} exited; see {log}')
                 # An HTTP 200 alone can come from a listener that won the released-port race.
                 # ASP.NET logs this only after it has bound every address; the process is ours and still alive.
-                bound = f'Now listening on: {url}' in log.read_text()
+                bound = any(line.strip() == f'Now listening on: {url}' for line in log.read_text().splitlines())
                 if bound:
                     try:
                         with urllib.request.urlopen(url + ready_path, timeout=2) as response:
@@ -105,13 +124,7 @@ def host(directory, dll, url, ready_path, log, env):
             yield process
         finally:
             # The group was created here and cannot be confused with an unrelated port listener.
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait(timeout=10)
+            stop_group(process)
 
 
 def prepare_host(project, destination):

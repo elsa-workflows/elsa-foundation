@@ -65,7 +65,9 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(secret).toBeHidden();
 
   await page.goto("/security/connections");
-  await page.getByRole("button", { name: "Create connection", exact: true }).first().press("Enter");
+  const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
+  await expect(openConnection).toBeEnabled();
+  await openConnection.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
   const name = dialog.getByLabel("Name", { exact: true });
   await expect(name).toBeFocused();
