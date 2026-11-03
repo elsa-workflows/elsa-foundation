@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { useStudioWorkspaceWhenActive, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowTag, getWorkflowTag, updateWorkflowTag, workflowOperationKey, type WorkflowTag, type WorkflowTagInput } from "../api/workflowOrganization";
 import { getNotifications } from "./notifications";
 import "./workflowTags.css";
@@ -10,6 +10,7 @@ const newTag = (): WorkflowTagInput => ({ name: "", description: "", mode: "mark
 export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
   context: StudioEndpointContext; tag?: WorkflowTag; onBack(): void; onCreated(tag: WorkflowTag): void;
 }) {
+  const whenActive = useStudioWorkspaceWhenActive();
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const editingId = tag?.id;
@@ -18,29 +19,35 @@ export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  // Queue one completion while a workspace tab is hidden, including its busy reset.
+  const complete = (action: () => void) => whenActive(() => {
+    if (!active.current) return;
+    action();
+    setBusy(false);
+  });
   const save = async () => {
     if (busy) return;
     setBusy(true); setError(""); setStatus("");
     const input = { ...draft, name: draft.name.trim(), values: draft.mode === "marker" ? [] : (draft.values ?? []).map(value => ({ ...value, id: serverValueIds.current.has(value.id) ? value.id : "" })), cardinality: draft.mode === "marker" ? "single" as const : draft.cardinality };
     try {
       const tag = editingId ? await updateWorkflowTag(context, editingId, input) : await createWorkflowTag(context, input);
-      if (!active.current) return;
-      serverValueIds.current = new Set(tag.values.map(value => value.id));
-      setDraft(tag); getNotifications().notify({ level: "success", title: `Saved tag ${tag.name}` });
-      if (!editingId) onCreated(tag);
-    } catch (caught) { if (active.current) setError(`Couldn't save the tag. ${caught instanceof Error ? caught.message : "Check your access and values, then retry."} Reload the tag after a conflict before changing it again.`); }
-    finally { if (active.current) setBusy(false); }
+      complete(() => {
+        serverValueIds.current = new Set(tag.values.map(value => value.id));
+        setDraft(tag); getNotifications().notify({ level: "success", title: `Saved tag ${tag.name}` });
+        if (!editingId) onCreated(tag);
+      });
+    } catch (caught) { complete(() => setError(`Couldn't save the tag. ${caught instanceof Error ? caught.message : "Check your access and values, then retry."} Reload the tag after a conflict before changing it again.`)); }
   };
   const reload = async () => {
     if (!editingId) return;
     setBusy(true); setError(""); setStatus("");
     try {
       const current = await getWorkflowTag(context, editingId);
-      if (!active.current) return;
-      serverValueIds.current = new Set(current.values.map(value => value.id));
-      setDraft(current); setStatus("Loaded the current tag. Review its values before saving.");
-    } catch (caught) { if (active.current) setError(caught instanceof Error ? caught.message : "Couldn't reload the selected tag."); }
-    finally { if (active.current) setBusy(false); }
+      complete(() => {
+        serverValueIds.current = new Set(current.values.map(value => value.id));
+        setDraft(current); setStatus("Loaded the current tag. Review its values before saving.");
+      });
+    } catch (caught) { complete(() => setError(caught instanceof Error ? caught.message : "Couldn't reload the selected tag.")); }
   };
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-tag-title">
     <StudioPageHeader title={editingId ? "Edit workflow tag" : "Create workflow tag"} titleId="workflow-tag-title"

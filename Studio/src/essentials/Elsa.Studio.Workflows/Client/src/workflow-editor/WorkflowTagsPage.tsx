@@ -26,7 +26,7 @@ export function WorkflowTagsRoute({ context, view, navigate }: { context: Studio
   const [loadedIdentity, setLoadedIdentity] = useState("");
   useEffect(() => {
     let active = true;
-    setLoaded(undefined);
+    // Retained workspace tabs reconnect effects; keep their editor and unsaved draft mounted.
     void (async () => {
       try {
         const support = await workflowOrganizationSupport(context);
@@ -52,7 +52,7 @@ export function WorkflowTagsRoute({ context, view, navigate }: { context: Studio
       <StudioResultState tone={loaded.error ? "danger" : undefined}
         title={loaded.error ? "Could not load workflow tags" : loaded.unsupported ? "Workflow tags unavailable" : "Tag management is not allowed"}
         description={loaded.error ?? (loaded.unsupported ? "This backend does not support workflow tags." : "You do not have permission to manage workflow tags.")}
-        actions={loaded.error ? <StudioButton onClick={() => setAttempt(value => value + 1)}>Retry</StudioButton> : undefined} />
+        actions={loaded.error ? <StudioButton onClick={() => { setLoaded(undefined); setAttempt(value => value + 1); }}>Retry</StudioButton> : undefined} />
     </StudioPage>;
   }
   return view === "list" ? <WorkflowTagsPage key={attempt} context={context} initialPage={loaded.page!} navigate={navigate} />

@@ -1,3 +1,8 @@
+import { Activity } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { createEndpointContext } from "@elsa-workflows/studio-sdk";
+import { WorkflowTagsRoute } from "../workflow-editor/WorkflowTagsPage";
 import { describe, expect, it, vi } from "vitest";
 import { button, click, fill, pagedDefinitionCapabilities, renderWorkflowRoute, response, waitForText } from "./workflowDefinitionTestHelpers";
 import type { WorkflowTag } from "../api/workflowOrganization";
@@ -82,7 +87,7 @@ describe("workflow tag pages", () => {
     expect(reads).toEqual([]);
   });
 
-  it("discards an old tag detail after navigating to another edit URL", async () => {
+  it("discards an old tag detail after navigating to the create page", async () => {
     let resolve!: (value: Response) => void;
     const { fetcher, reads } = fixture({ deferred: new Promise<Response>(done => { resolve = done; }) });
     const { container } = await renderWorkflowRoute("/workflows/tags/region", fetcher, capabilities(), { followNavigation: true });
@@ -95,4 +100,38 @@ describe("workflow tag pages", () => {
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");
     expect(container.textContent).not.toContain("Edit workflow tag");
   });
+  it("retains unsaved tag fields when a workspace tab is hidden and restored", async () => {
+    const { fetcher, reads } = fixture();
+    let holdRestoration = false;
+    let restoring = false;
+    let release!: () => void;
+    const heldPage = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/capabilities")) return response(capabilities());
+      if (holdRestoration && new URL(url).pathname === "/tags") { restoring = true; await heldPage; }
+      return fetcher(input);
+    });
+    window.history.replaceState({}, "", "/workflows/tags/region");
+    const context = createEndpointContext("https://server.example/");
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    const render = (mode: "visible" | "hidden") => flushSync(() => root.render(<Activity mode={mode}><WorkflowTagsRoute context={context} view="edit" navigate={() => undefined} /></Activity>));
+    try {
+      render("visible");
+      await waitForText(container, "Edit workflow tag");
+      await fill(container.querySelector('[aria-label="Tag name"]'), "Unsaved region");
+      render("hidden");
+      await new Promise(done => setTimeout(done, 20));
+      holdRestoration = true;
+      render("visible");
+      await vi.waitFor(() => expect(restoring).toBe(true));
+      expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("Unsaved region");
+      release();
+      await vi.waitFor(() => expect(reads.filter(path => path === "/tags/region")).toHaveLength(2));
+      await waitForText(container, "Edit workflow tag");
+      expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("Unsaved region");
+    } finally { release(); flushSync(() => root.unmount()); container.remove(); }
+  });
+
 });

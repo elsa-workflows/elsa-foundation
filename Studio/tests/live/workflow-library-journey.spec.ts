@@ -68,6 +68,24 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
   await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
+  await page.getByRole("link", { name: tagName, exact: true }).click();
+  await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  const selectedTagUrl = page.url();
+  await catalog.getByLabel("Tag description", { exact: true }).fill("Managed through the dedicated tag page");
+  await catalog.getByRole("checkbox", { name: "Retire this tag", exact: true }).check();
+  const retiredResponse = page.waitForResponse(response => response.request().method() === "PUT" && /\/tags\/[^/]+$/.test(new URL(response.url()).pathname));
+  await catalog.getByRole("button", { name: "Save tag", exact: true }).click();
+  const retiredTagReceipt = await (await retiredResponse).json() as { id: string; deprecated: boolean; revision: string };
+  expect(retiredTagReceipt.deprecated).toBe(true);
+  await page.reload();
+  await expect(catalog.getByLabel("Tag description", { exact: true })).toHaveValue("Managed through the dedicated tag page");
+  await expect(catalog.getByRole("checkbox", { name: "Retire this tag", exact: true })).toBeChecked();
+  await catalog.getByRole("checkbox", { name: "Retire this tag", exact: true }).uncheck();
+  const restoredResponse = page.waitForResponse(response => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith(`/tags/${retiredTagReceipt.id}`));
+  await catalog.getByRole("button", { name: "Save tag", exact: true }).click();
+  const restoredTagReceipt = await (await restoredResponse).json() as { id: string; deprecated: boolean };
+  expect(restoredTagReceipt).toMatchObject({ id: retiredTagReceipt.id, deprecated: false });
+  await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
   await page.getByRole("button", { name: "Create tag", exact: true }).click();
   await catalog.getByLabel("Tag name", { exact: true }).fill(teamName);
   await catalog.getByLabel("Tag kind", { exact: true }).selectOption("controlled");
@@ -151,7 +169,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await expect(page).toHaveURL(savedUrl);
   await expect(workflowRow(page)).toBeVisible();
 
-  await testInfo.attach("real-library-identities", { body: JSON.stringify({ creation, details, editorUrl, savedUrl, bulkReceipt, controlledTagReceipt }, null, 2), contentType: "application/json" });
+  await testInfo.attach("real-library-identities", { body: JSON.stringify({ creation, details, editorUrl, savedUrl, bulkReceipt, controlledTagReceipt, selectedTagUrl, retiredTagReceipt, restoredTagReceipt }, null, 2), contentType: "application/json" });
   await testInfo.attach("real-library-desktop", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 });
 
