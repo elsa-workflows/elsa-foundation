@@ -3,6 +3,49 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there. An entry with supersededBy mutated code a later round rewrote; the entries it names cover that guard at the current code.",
  "results": [
   {
+   "mutation": "writer-single-line-as-received",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 2, Passed: 8",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"not\\njson\", line: \"\\x01\")",
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"{\\n  \\\"id\\\": 1,\\r\\n  \\\"name\\\": \\\"Ada\\\"\\n}\", line: \"{   \\\"id\\\": 1,    \\\"name\\\": \\\"Ada\\\" }\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 10",
+   "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0)\n            return body;\n",
+   "mutated_text": "        if (span.Length >= 0)\n            return body;\n",
+   "sourceRevision": "2327e565f11a8ccc3166afc644b0de3875bd8e0a"
+  },
+  {
+   "mutation": "binding-destination-handle-shape",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_destination_binding_keeps",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_destination_binding_keeps_its_spec_1200_handle_whatever_queues_it_lists"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        object identity = source\n",
+   "mutated_text": "        object identity = true\n",
+   "sourceRevision": "2327e565f11a8ccc3166afc644b0de3875bd8e0a"
+  },
+  {
+   "mutation": "binding-source-handle-queues",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_source_binding",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_source_binding_allows_its_queues_exactly_and_needs_the_consumer"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        object identity = source\n",
+   "mutated_text": "        object identity = false\n",
+   "sourceRevision": "2327e565f11a8ccc3166afc644b0de3875bd8e0a"
+  },
+  {
    "mutation": "binding-allowed-queue-entity",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
