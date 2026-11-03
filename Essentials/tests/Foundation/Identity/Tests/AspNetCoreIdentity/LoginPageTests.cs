@@ -8,6 +8,40 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 /// </summary>
 public sealed class LoginPageTests
 {
+    [Fact]
+    public void Field_guide_keeps_custom_branding_encoded_and_preserves_the_standard_form()
+    {
+        var html = LoginPage.Render("/studio?x=1&y=2", true, "a&b", new LoginPageOptions
+        {
+            Layout = "field-guide", Palette = "field-guide", Artwork = "field-guide",
+            ProductName = "Northstar <Studio>", Tagline = "A <workflow>",
+            ImageUrl = "/branding/art.jpg?x=1&y=2", LogoUrl = "/branding/logo.png"
+        });
+        Assert.Contains("data-layout=\"field-guide\"", html);
+        Assert.Contains("src=\"/branding/art.jpg?x=1&amp;y=2\"", html);
+        Assert.Contains("src=\"/branding/logo.png\"", html);
+        Assert.Contains("Northstar &lt;Studio&gt;", html);
+        Assert.Contains("A &lt;workflow&gt;", html);
+        Assert.Contains("value=\"a&amp;b\"", html);
+        Assert.Contains("value=\"/studio?x=1&amp;y=2\"", html);
+        Assert.Contains("autocomplete=\"current-password\"", html);
+        Assert.DoesNotContain("<script", html);
+    }
+
+    [Theory]
+    [InlineData("field-guide", "tidal", "ember", "light dark", "field-guide-logo.png")]
+    [InlineData("reverse", "field-guide", "canopy", "light", "elsa-logo.png")]
+    [InlineData("split", "linen", "field-guide", "light dark", "elsa-logo.png")]
+    public void Field_guide_choices_remain_independent(string layout, string palette, string artwork, string colorScheme, string logo)
+    {
+        var html = LoginPage.Render("/", false, null, new LoginPageOptions { Layout = layout, Palette = palette, Artwork = artwork });
+        Assert.Contains($"data-layout=\"{layout}\"", html);
+        Assert.Contains($"data-palette=\"{palette}\"", html);
+        Assert.Contains($"login-assets/{artwork}.jpg", html);
+        Assert.Contains($"login-assets/{logo}", html);
+        Assert.Contains($"name=\"color-scheme\" content=\"{colorScheme}\"", html);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
