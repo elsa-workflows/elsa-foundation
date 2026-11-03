@@ -183,3 +183,10 @@ correction. Represent provider-fixed values as readable facts while retaining ex
 focus targets for diagnostics. Validation surfaces should have one heading and one
 severity summary; keep server rejection distinct from the severity of its messages,
 and place background explanations behind a help disclosure.
+
+Reusable activity editors put Designer, Inputs, Outputs and Outcomes in the main tab
+row, with collection counts. Show only the active collection and its provider
+mappings; retain mounted default editors so tab changes never discard unapplied
+text. Diagnostic links select the matching collection before focusing the exact
+member or field. Provider boundary editors can use the optional `contractSection`
+prop to show the corresponding output or outcome mappings.

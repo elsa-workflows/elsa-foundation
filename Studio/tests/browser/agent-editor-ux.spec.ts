@@ -28,7 +28,7 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await advanced.locator("summary").click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("agent-designer.png"), fullPage: true });
-    await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+    await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
     const outcome = page.getByRole("region", { name: "Done", exact: true });
     await expect(outcome.getByText("Emitted", { exact: true })).toBeVisible();
     await expect(outcome.getByRole("checkbox")).toHaveCount(0);

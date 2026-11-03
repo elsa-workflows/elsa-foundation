@@ -749,7 +749,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await page.getByRole("button", { name: "Add input", exact: true }).click();
   await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Customer note");
   await page.getByRole("button", { name: "Add input", exact: true }).last().click();
@@ -775,7 +775,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await page.reload();
   await expectSavedRevision(page, 6);
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
@@ -807,7 +807,7 @@ test("Activity Definition provider contract proposals require review and apply a
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
   await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
   await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
@@ -849,7 +849,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
   await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
-  await expect(page.getByRole("tab", { name: "Inputs & outputs" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();
 

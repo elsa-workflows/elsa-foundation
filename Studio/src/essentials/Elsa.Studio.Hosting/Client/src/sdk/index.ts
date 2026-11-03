@@ -1888,6 +1888,8 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   providerSchemaVersion: string;
   manifestFingerprint: string;
   contract?: StudioActivityDefinitionContract;
+  /** Active public-contract tab; boundary editors show only its corresponding mappings. */
+  contractSection?: "inputs" | "outputs" | "outcomes";
   propertyEditors?: StudioActivityPropertyEditorContribution[];
   expressionEditors?: StudioExpressionEditorContribution[];
   graphAuthoringPanels?: StudioWorkflowDesignerPanelContribution[];

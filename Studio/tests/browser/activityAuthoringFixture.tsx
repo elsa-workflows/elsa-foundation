@@ -19,7 +19,7 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 const scenario = new URLSearchParams(location.search);
 const agent = scenario.get("provider") === "agent";
 const outcomeOnly = agent || scenario.get("contract") === "outcome-only";
-const storageKey = `activity-authoring-2994-fixture${agent ? ":agent" : ""}${scenario.has("invalid") ? ":invalid" : ""}${scenario.has("invalid-limits") ? ":invalid-limits" : ""}${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}`;
+const storageKey = `activity-authoring-2994-fixture${scenario.has("contract-diagnostics") ? ":contract-diagnostics" : ""}${agent ? ":agent" : ""}${scenario.has("invalid") ? ":invalid" : ""}${scenario.has("invalid-limits") ? ":invalid-limits" : ""}${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}`;
 const timestamp = "2026-10-19T09:00:00Z";
 const contractType = { alias: "Decimal", collectionKind: "Single", supportsDurability: true };
 const input = (name: string, referenceKey: string, description: string) => ({
@@ -30,7 +30,14 @@ function initialDraft(): ActivityDefinitionDraftView {
   const subtotal = input("Subtotal", "subtotal", "The order amount before shipping.");
   return {
     draftId: "quote-draft", definitionId: "quote-activity", tenantId: "browser-fixture", revision: 1,
-    status: scenario.has("read-only") ? "published" : "active", sourceVersionId: null, presentationLabel: null, createdAt: timestamp, updatedAt: timestamp, validation: agent && scenario.has("invalid") ? { draftId: "quote-draft", revision: 1, isValid: false, validatedAt: timestamp, diagnostics: [{ code: "specialist.manifest.invalid", severity: "Info", message: "Choose a model connection and add instructions.", subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 }, location: { providerKey: "elsa.specialist", jsonPointer: "/instructions" }, metadata: {} }] } : null,
+    status: scenario.has("read-only") ? "published" : "active", sourceVersionId: null, presentationLabel: null, createdAt: timestamp, updatedAt: timestamp, validation: scenario.has("contract-diagnostics") ? {
+      draftId: "quote-draft", revision: 1, isValid: false, validatedAt: timestamp,
+      diagnostics: (["inputs", "outputs", "outcomes"] as const).map(section => ({
+        code: `contract.${section}`, severity: "Error" as const, message: `Review ${section}.`,
+        subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 },
+        location: { jsonPointer: `/contract/${section}/0/name`, referenceKey: section === "inputs" ? "subtotal" : section === "outputs" ? "amount" : "quoted" }, metadata: {}
+      }))
+    } : agent && scenario.has("invalid") ? { draftId: "quote-draft", revision: 1, isValid: false, validatedAt: timestamp, diagnostics: [{ code: "specialist.manifest.invalid", severity: "Info", message: "Choose a model connection and add instructions.", subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 }, location: { providerKey: "elsa.specialist", jsonPointer: "/instructions" }, metadata: {} }] } : null,
     contract: { contractSchemaVersion: "1", inputs: outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
       outputs: outcomeOnly ? [] : [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
       outcomes: [{ referenceKey: outcomeOnly ? "done" : "quoted", name: outcomeOnly ? "Done" : "Quoted", isEmitted: true, description: "The quote is ready." }] },

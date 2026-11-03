@@ -128,7 +128,7 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     expect(rendered.container.querySelector(".ad-publication-toolbar-trigger")).not.toBeNull();
     expect(rendered.container.querySelector(".ad-designer-view")?.textContent).toContain("Graph implementation editor");
-    click(buttonByText(rendered.container, "Inputs & outputs"));
+    click(rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=inputs]")!);
     expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(false);
     expect(advanced.open).toBe(false);
     await rendered.unmount();
@@ -499,7 +499,7 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   }, 15_000);
 
-  it("groups contract members and opens a kind-specific creation form that selects the new member", async () => {
+  it("splits contract collections into counted tabs and opens kind-specific creation forms", async () => {
     const initial = fullDraft({ revision: 3 });
     initial.contract.inputs = [{
       referenceKey: "customer-id",
@@ -537,7 +537,8 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Saved revision 3");
     showContractView(rendered.container);
     const list = rendered.container.querySelector<HTMLElement>(".ad-contract-workbench-list")!;
-    expect([...list.querySelectorAll("h3")].map(item => item.textContent)).toEqual(["Inputs", "Outputs", "Outcomes"]);
+    expect([...list.querySelectorAll("h3")].map(item => item.textContent)).toEqual(["Inputs"]);
+    expect([...rendered.container.querySelectorAll(".ad-authoring-view-tabs button")].map(item => item.textContent)).toEqual(["Designer", "Inputs (2)", "Outputs (0)", "Outcomes (1)", "Variables"]);
     const inputAdd = categoryAddButton(rendered.container, "input");
     inputAdd.focus();
     click(inputAdd);
@@ -574,12 +575,12 @@ describe("Activity Definition authoring", () => {
     const outputAdd = categoryAddButton(rendered.container, "output");
     outputAdd.focus();
     click(outputAdd);
-    const outputGroup = outputAdd.closest<HTMLElement>(".ad-contract-workbench-group")!;
+    const outputGroup = rendered.container.querySelector<HTMLElement>(".ad-contract-workbench-group")!;
     const outputForm = outputGroup.querySelector<HTMLFormElement>("form.ad-contract-create-form")!;
     const outputName = controlByLabel<HTMLInputElement>(outputForm, "Output name");
     await waitFor(() => expect(document.activeElement).toBe(outputName));
     flushSync(() => outputName.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    await waitFor(() => expect(document.activeElement).toBe(outputAdd));
+    await waitFor(() => expect(document.activeElement).toBe(categoryAddButton(rendered.container, "output")));
 
     addContractMember(rendered.container, "output", "Result");
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
@@ -741,6 +742,14 @@ describe("Activity Definition authoring", () => {
     expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
     expect(window.location.pathname).toBe("/workflows/activity-definitions");
     expect(putJson).not.toHaveBeenCalled();
+    // Empty collection tabs must not unmount the invalid input buffer or release save guards.
+    click(rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=outputs]")!);
+    expect(quantityPane.hidden).toBe(true);
+    expect(rendered.container.querySelector(".ad-contract-workbench-empty")?.textContent).toContain("No outputs yet");
+    expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
+    showContractView(rendered.container);
+    expect(quantityPane.hidden).toBe(false);
+    expect(controlByLabel<HTMLInputElement>(quantityPane, "Value").value).toBe("-");
 
     change(controlByLabel<HTMLInputElement>(quantityPane, "Value"), "12");
     await waitFor(() => expect(contractListButton(rendered.container, "input", "quantity").textContent).toContain("Apply default"));
@@ -1382,7 +1391,7 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitFor(() => expect(rendered.container.querySelector(".ad-authoring-view-tabs [data-tab-id='public-interface']")).not.toBeNull());
+    await waitFor(() => expect(rendered.container.querySelector(".ad-authoring-view-tabs [data-tab-id='inputs']")).not.toBeNull());
     showContractView(rendered.container);
     openDetails(rendered.container.querySelector<HTMLDetailsElement>(".ad-interface-suggestions")!);
     await waitForText(rendered.container, "Add input Currency");
@@ -1599,7 +1608,7 @@ describe("Activity Definition authoring", () => {
       click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);
     }
     await waitFor(() => expect(document.activeElement?.classList.contains("ad-graph-outcome-mappings")).toBe(true));
-    expect(rendered.container.querySelector<HTMLElement>("[aria-label='Inputs & outputs']")?.hidden).toBe(false);
+    expect(rendered.container.querySelector<HTMLElement>("[aria-label='Outcomes']")?.hidden).toBe(false);
     await rendered.unmount();
   });
 
@@ -2839,18 +2848,20 @@ function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTex
 }
 
 function categoryAddButton(container: HTMLElement, kind: "input" | "output" | "outcome") {
+  click(container.querySelector<HTMLButtonElement>(`[data-tab-id="${kind}s"]`)!);
   const button = container.querySelector<HTMLButtonElement>(`.ad-contract-workbench-list button[aria-label="Add ${kind}"]`);
   if (!button) throw new Error(`Add ${kind} button not found.`);
   return button;
 }
 
 function showContractView(container: HTMLElement) {
-  const tab = container.querySelector<HTMLButtonElement>(".ad-authoring-view-tabs [data-tab-id='public-interface']");
-  if (!tab) throw new Error("Inputs & outputs tab not found.");
+  const tab = container.querySelector<HTMLButtonElement>(".ad-authoring-view-tabs [data-tab-id='inputs']");
+  if (!tab) throw new Error("Inputs tab not found.");
   click(tab);
 }
 
 function contractListButton(container: HTMLElement, kind: "input" | "output" | "outcome", referenceKey: string) {
+  click(container.querySelector<HTMLButtonElement>(`[data-tab-id="${kind}s"]`)!);
   const button = container.querySelector<HTMLButtonElement>(`.ad-contract-workbench-list button[data-member-kind="${kind}"][data-member-reference-key="${referenceKey}"]`);
   if (!button) throw new Error(`Contract list entry '${kind}:${referenceKey}' not found.`);
   return button;
