@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using Elsa.Etl.Core.Runtime;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -24,6 +25,12 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     // channel limit (per virtual host, user or node) with not allowed; a later attempt can pass it, so such a reply is transient.
     private static readonly HashSet<ushort> RejectedReplyCodes = [403, 404, 406, 530];
     private const ushort NotAllowed = 530;
+    // The broker's own limit wording: "connection limit (N) is reached" per virtual host, user or node, "… limit of (N)" for
+    // channels, and a limit it could not query. Names are quoted in the reply and removed first, so a virtual host or user
+    // whose name says "limit" is not mistaken for one.
+    private static readonly Regex LimitReached = new(@"limit \(\d+\) is reached|limit of \(\d+\)|limit cannot be queried",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex QuotedName = new("'[^']*'", RegexOptions.CultureInvariant);
     private static readonly TimeSpan DefaultConfirmTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan _confirmTimeout;
 
@@ -45,8 +52,44 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
         IReadOnlyList<EtlRabbitMqMessage> messages, CancellationToken cancellationToken)
     {
         var factory = Factory(connectionString, _confirmTimeout);
-        await using var connection = await factory.CreateConnectionAsync(cancellationToken);
-        await using var channel = await connection.CreateChannelAsync(
+        var connection = await factory.CreateConnectionAsync(cancellationToken);
+        var answered = false;
+        try
+        {
+            var outcome = await PublishAsync(connection, exchange, routingKey, messages, cancellationToken);
+            answered = true;
+            return outcome;
+        }
+        finally
+        {
+            // The broker answered every publish, so the connection closes normally. Otherwise it may be blocked or gone: the
+            // client's abort and close then wait out fixed and round-trip timeouts, past the caller's cancellation, so the
+            // connection is released in the background and the attempt yields at once.
+            if (answered)
+                await connection.DisposeAsync();
+            else
+                _ = ReleaseAsync(connection);
+        }
+    }
+
+    private static async Task ReleaseAsync(IConnection connection)
+    {
+        try
+        {
+            await connection.AbortAsync();
+            await connection.DisposeAsync();
+        }
+        catch (Exception exception) when (exception is OperationInterruptedException or IOException or SocketException or
+                                          TimeoutException or OperationCanceledException or ObjectDisposedException)
+        {
+            // The connection is already unusable; releasing it is best effort.
+        }
+    }
+
+    private async ValueTask<EtlRabbitMqPublishOutcome> PublishAsync(IConnection connection, string exchange, string routingKey,
+        IReadOnlyList<EtlRabbitMqMessage> messages, CancellationToken cancellationToken)
+    {
+        var channel = await connection.CreateChannelAsync(
             new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), cancellationToken);
         foreach (var message in messages)
         {
@@ -66,6 +109,7 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
             }
             catch (PublishException exception)
             {
+                await channel.DisposeAsync();
                 return exception.IsReturn ? EtlRabbitMqPublishOutcome.Unroutable : EtlRabbitMqPublishOutcome.Nacked;
             }
             catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
@@ -73,6 +117,7 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
                 throw new TimeoutException("The RabbitMQ broker did not confirm a message in time.", exception);
             }
         }
+        await channel.DisposeAsync();
         return EtlRabbitMqPublishOutcome.Confirmed;
     }
 
@@ -88,7 +133,7 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     };
 
     private static EtlRabbitMqErrorKind Classify(ShutdownEventArgs reason) =>
-        reason.ReplyCode == NotAllowed && reason.ReplyText.Contains("limit", StringComparison.OrdinalIgnoreCase)
+        reason.ReplyCode == NotAllowed && LimitReached.IsMatch(QuotedName.Replace(reason.ReplyText, "''"))
             ? EtlRabbitMqErrorKind.Transient
             : RejectedReplyCodes.Contains(reason.ReplyCode) ? EtlRabbitMqErrorKind.Rejected : EtlRabbitMqErrorKind.Transient;
 

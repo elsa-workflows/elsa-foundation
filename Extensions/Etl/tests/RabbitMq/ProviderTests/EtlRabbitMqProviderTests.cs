@@ -102,9 +102,14 @@ public sealed class EtlRabbitMqProviderTests(EtlRabbitMqBrokerFixture broker)
         var limited = await Writer().WriteAsync(Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost(_name) }, default);
         var forbidden = await Assert.ThrowsAsync<EtlEffectException>(() => Writer().WriteAsync(
             Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost("missing-" + _name) }, default).AsTask());
+        // A virtual host the user may not open stays a refusal even when its name says "limit".
+        await broker.ControlAsync("add_vhost", "limits-" + _name);
+        var named = await Assert.ThrowsAsync<EtlEffectException>(() => Writer().WriteAsync(
+            Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost("limits-" + _name) }, default).AsTask());
 
         Assert.Equal(EtlRabbitMqWriteOutcome.Yield, limited);
         Assert.Equal("etl.rabbitmq-publish-rejected", forbidden.Code);
+        Assert.Equal("etl.rabbitmq-publish-rejected", named.Code);
     }
 
     [SkippableFact]
@@ -134,9 +139,18 @@ public sealed class EtlRabbitMqProviderTests(EtlRabbitMqBrokerFixture broker)
             var started = DateTime.UtcNow;
             var outcome = await new EtlRabbitMqRouteWriter(new RabbitMqEtlPublisher(TimeSpan.FromSeconds(3)))
                 .WriteAsync(Delivery(_name, "loaded", """[{"id":1}]"""), default);
+            var timedOut = DateTime.UtcNow - started;
+            // The caller's cancellation ends a blocked publication promptly too, whatever the confirm bound.
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            started = DateTime.UtcNow;
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                Writer().WriteAsync(Delivery(_name, "loaded", """[{"id":2}]"""), stop.Token).AsTask());
+            var cancelled = DateTime.UtcNow - started;
 
             Assert.Equal(EtlRabbitMqWriteOutcome.Yield, outcome);
-            Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(30));
+            // The bound plus a short abort, not a polite close that waits out every round trip.
+            Assert.True(timedOut < TimeSpan.FromSeconds(8), $"The timed-out publication took {timedOut}.");
+            Assert.True(cancelled < TimeSpan.FromSeconds(6), $"The cancelled publication took {cancelled}.");
         }
         finally
         {

@@ -231,6 +231,8 @@ public sealed partial class EtlRuntimeStoreTests
 
             Assert.Equal((EtlStoreStatus.Applied, true), (first.Status, first.ReadyToAccept));
             Assert.True(recorded.MainFilePublished);
+            // A RabbitMQ route is persisted as a recorded publication, effect mechanism 2, like a file or SQL route (FR-007).
+            Assert.Equal(2, recorded.MainEffectKind);
             Assert.Equal((true, false, (string?)null), (again.ReadyToAccept, again.Yield, again.FailureCode));
             Assert.Equal(1, publisher.Attempts);
             Assert.Single(publisher.Deliveries);
