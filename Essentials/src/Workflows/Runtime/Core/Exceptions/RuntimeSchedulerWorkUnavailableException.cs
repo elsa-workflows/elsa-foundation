@@ -6,7 +6,8 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// Delayed retry supports bookmark resumes, invocation and structural notification/control/completion delivery and workflow checkpoints with a live, unconsumed durable queue claim.
 /// Whatever the provider, a claimed dispatch of those kinds that already sent a non-retaining checkpoint to the checkpoint
 /// store, without that commit consuming its claim, is handled as a handler fault (acknowledged and recorded,
-/// <c>Poisoned</c> by default) instead: running it again would repeat that checkpoint (#3683).
+/// <c>Poisoned</c> by default) instead: running it again would repeat that checkpoint (#3683). A checkpoint store throws
+/// this exception to refuse a commit without applying it, and such a refused commit does not count as sent.
 /// Otherwise, unsupported command/provider combinations propagate this signal without acknowledging or poisoning the work.
 /// See <c>docs/runtime-fault-behavior.md</c>, "Temporarily unavailable work".
 /// </summary>

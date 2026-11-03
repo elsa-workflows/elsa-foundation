@@ -228,8 +228,8 @@ case below, anything else propagates the exception and leaves the step queued, o
 its own commit.
 
 One case is settled differently ([#3683](https://github.com/elsa-workflows/elsa-foundation/issues/3683)).
-If the dispatch sent a non-retaining checkpoint to the checkpoint store before it threw, and that
-commit did not consume the claim, the step is not deferred. That checkpoint is durable, or will be at
+If the dispatch sent a non-retaining checkpoint to the checkpoint store before it threw, the store did
+not refuse it outright (see below), and that commit did not consume the claim, the step is not deferred. That checkpoint is durable, or will be at
 the coalescing segment's flush, so running the step again would repeat its effect or hit the
 replay-conflict check. Inside an active segment the commit consumes nothing: it is buffered, folded at
 the cap, or committed by a boundary the segment continues past, and a handler that commits through a
@@ -241,27 +241,41 @@ of propagating. A step of another kind, or on a queue without claims, opens no f
 
 Such a step skips the unavailable arm and is treated as a handler fault. For an execution with a
 selected model protocol, the model-protocol arm catches it first and rethrows it: no acknowledgement,
-no record, and the segment's flush is skipped. No model path reaches that today: a model execution
-accepts only `ExecuteModel` work, and `ExpectedModelExecution` is set only on the `Start` kind's commit,
-and neither kind opens a frame. Every other such step goes to the general arm below. It is acknowledged
-(through the segment's overlay, so the flush commits the effect and removes the durable copy
-together), recorded, and its result is `Faulted`, so with the default policy it surfaces as a blocking
-incident. It is recorded rather than dropped quietly because the attempt only says the checkpoint may
-be durable: a store that refused the commit throws this same exception, and a step acknowledged with no
-record would then be lost without a trace. A `RetryAfter` decision is not released for it, for the same
-reason as any dispatch that attempted a non-retaining checkpoint; `RetryNow` re-enqueues it, as for any
-fault. A step whose own commit consumed its claim is unchanged: the exception propagates and nothing is
-recorded.
+no record, and the segment's flush is skipped. No model path reaches that today, because a model
+execution accepts only `ExecuteModel` work, which opens no frame. Every other such step goes to the
+general arm below. It is acknowledged (through the segment's overlay, so the flush commits the effect
+and removes the durable copy together), recorded, and its result is `Faulted`, so with the default
+policy it surfaces as a blocking incident. It is recorded rather than dropped quietly because the
+attempt only says the checkpoint may be durable: a commit that failed some other way, a timeout say,
+may not have landed, and a step acknowledged with no record would then be lost without a trace. A
+`RetryAfter` decision is not released for it, for the same reason as any dispatch that attempted a
+non-retaining checkpoint; `RetryNow` re-enqueues it, as for any fault. A step whose own commit consumed
+its claim is unchanged: the exception propagates and nothing is recorded.
 
-Every current throw site still gets the delayed release. The stores throw it only to refuse a bookmark
+A checkpoint store's own refusal is not an attempt. A store throws `RuntimeSchedulerWorkUnavailableException`
+to refuse a commit without applying it, its transaction rolled back, and the committer then withdraws
+that commit's attempt, so a step whose only non-retaining commit was refused this way keeps the delayed
+release above. The withdrawal takes back only that commit: a step that sent another non-retaining
+checkpoint earlier in the same dispatch stays marked and is handled as a fault, even when that earlier
+checkpoint was only buffered and the refused commit was the fold that would have persisted it, because
+the segment's flush can still persist it. Any other exception from the store, a `TimeoutException` from
+a commit that may have landed included, keeps the attempt.
+
+That is how every current throw site keeps the delayed release. The stores throw it to refuse a bookmark
 trigger claim (EF and in-memory, keyed on `ExpectedBookmarkResume`, which only the retaining
-`InitialTriggerClaim` carries) or a model or parent-wait commit (model executions only, which open no
-frame). Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`,
-run before the committer records the attempt. Handlers throw it before any commit or after only a
-retaining claim: `ResumeBookmark` before its commit or after only its retaining trigger claim;
-`InvokeActivity`, parent completion and structural callback evaluation after only the retaining attempt
-claim, which covers an activity that throws it inside `ExecuteAsync`, such as Rules' `RunRules`; BPMN and
-child control before their commits.
+`InitialTriggerClaim` carries), a model decision or parent-wait commit (model executions, which open no
+frame), or a native worker's admission. That admission rides on the worker's `WorkflowStarted`
+checkpoint, which `WorkflowStartSchedulerWorkHandler` queues as a `Checkpoint` step and
+`BpmnNativeWorkCheckpointEnricher` stamps with `ExpectedModelExecution`, so it does open a frame. When the authorizing model decision changed, EF
+refuses it with `runtime.model.native-admission-unavailable` ("cross-model admission remains owed"), and
+because a refusal is not an attempt the step is released and retried, as it was before #3683. EF raises
+the same code for a timeout or provider failure of that admission; a retry then replays the commit if it
+had landed. Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`
+and the BPMN enricher's own checks, run before the committer records the attempt. Handlers throw it
+before any commit or after only a retaining claim: `ResumeBookmark` before its commit or after only its
+retaining trigger claim; `InvokeActivity`, parent completion and structural callback evaluation after
+only the retaining attempt claim, which covers an activity that throws it inside `ExecuteAsync`, such as
+Rules' `RunRules`; BPMN and child control before their commits.
 
 ### What it does
 
@@ -519,6 +533,7 @@ Changing the catalog default only affects workflows published afterwards.
 | ack-before-poison, and the release of an honored `RetryAfter` in its place | `WorkflowSchedulerDrainer.DispatchAsync` (fault arm), `CanReleaseWithDelay` |
 | a non-retaining checkpoint attempt is recorded before the store call, on the dispatch's async flow | `RuntimeSchedulerDispatchFrame`, `RuntimeCheckpointCommitter.CommitAsync` |
 | temporarily unavailable work is released with its delay, or handled as a fault after a non-retaining checkpoint attempt | `WorkflowSchedulerDrainer.DispatchAsync` (`RuntimeSchedulerWorkUnavailableException` arm and its filter) |
+| a store's unavailable refusal withdraws that commit's attempt and no other | `RuntimeCheckpointCommitter.CommitAsync`, `RuntimeSchedulerDispatchFrame.CheckpointAttempt.Withdraw` |
 | the retry-mode ladder that turns the decision into a record | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
@@ -550,7 +565,13 @@ Behavioral guards worth reading alongside the code:
   `Unavailable_*` tests run a real active segment and show that a step which buffered, folded or
   committed a non-retaining checkpoint before reporting unavailability is recorded and not run again
   after the flush, while one that committed nothing, or only a retaining checkpoint, is still released
-  (#3683).
+  (#3683). `Unavailable_refusal_of_the_commit_itself_in_an_active_segment_still_releases_the_work` shows a
+  commit the store refused as unavailable is no attempt.
+- `Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerWorkDeferralTests.cs`:
+  `Store_refusing_a_commit_as_unavailable_is_not_a_checkpoint_attempt` releases a `Checkpoint` step whose
+  only commit the store refused, and records one whose earlier non-retaining commit landed. The EF
+  counterpart, `EfRuntimeModelCheckpointTests.A_refused_native_admission_checkpoint_step_is_released_for_retry_not_poisoned`,
+  runs a real native admission refusal through the drainer.
 - `Essentials/tests/Workflows/Runtime/Tests/BlockingIncidentWorkflowFaultObserverTests.cs`: every skip
   condition and the ancestor-faulting rule.
 - `Essentials/tests/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs`: batch atomicity and

@@ -857,6 +857,34 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Single(probe.InvokeSessionActive);
     }
 
+    [Fact]
+    public async Task Unavailable_refusal_of_the_commit_itself_in_an_active_segment_still_releases_the_work()
+    {
+        // #3683: the inner store refuses the boundary's commit as unavailable without applying it, as EF refuses a native
+        // worker's admission whose model decision changed. That commit is no attempt, so with nothing else committed in
+        // the dispatch the item is released with its delay through the overlay, as before #3683, and is not recorded.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            invokeCheckpointName: RuntimeCheckpointNames.ActivitySuspended, unavailableFault: true);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true,
+            decorateInnerCommitStore: inner => new ThrowAfterCommitStore(inner, RuntimeCheckpointNames.ActivitySuspended, refuseAsUnavailable: true));
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using var scope = provider.CreateAsyncScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Deferred, result.StopReason);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, Assert.Single(result.Items).Status);
+        Assert.True(Assert.Single(probe.InvokeSessionActive));
+        Assert.True(Assert.IsType<ThrowAfterCommitStore>(scope.ServiceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value).Threw);
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+        Assert.DoesNotContain(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+            item => item.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivitySuspended);
+        var retained = Assert.Single((await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
+        Assert.Equal(("invoke-1", Now + RetryDelay), (retained.Item.WorkItemId, retained.VisibleAfter));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1214,7 +1242,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
     // Lands the named checkpoint in the inner store once and then throws, as an acknowledgement that times out after the
     // transaction committed does.
-    private sealed class ThrowAfterCommitStore(IRuntimeCheckpointCommitStore inner, string checkpointName) : IRuntimeCheckpointCommitStore
+    // Throws once for the named checkpoint: by default after the inner commit landed, an ambiguous acknowledgement, or,
+    // with refuseAsUnavailable, before it, the way a store refuses a commit it rolled back.
+    private sealed class ThrowAfterCommitStore(IRuntimeCheckpointCommitStore inner, string checkpointName, bool refuseAsUnavailable = false)
+        : IRuntimeCheckpointCommitStore
     {
         public IRuntimeCheckpointCommitStore Inner => inner;
         public bool Threw { get; private set; }
@@ -1233,8 +1264,14 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             RuntimeCheckpointPersistenceDecision decision,
             CancellationToken cancellationToken = default)
         {
+            if (refuseAsUnavailable && !Threw && commit.Checkpoint.Name == checkpointName)
+            {
+                Threw = true;
+                throw new RuntimeSchedulerWorkUnavailableException("probe.commit-refused", "The store rolled the commit back.");
+            }
+
             var result = await inner.CommitAsync(commit, decision, cancellationToken);
-            if (Threw || commit.Checkpoint.Name != checkpointName)
+            if (refuseAsUnavailable || Threw || commit.Checkpoint.Name != checkpointName)
                 return result;
             Threw = true;
             throw new TimeoutException("The commit acknowledgement timed out after the transaction committed.");
