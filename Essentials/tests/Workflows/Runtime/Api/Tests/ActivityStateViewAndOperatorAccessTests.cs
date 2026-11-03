@@ -198,11 +198,26 @@ public sealed class ActivityStateViewAndOperatorAccessTests
         Assert.Contains("descriptor kind 'test'", error.Message);
     }
 
-    [Fact]
-    public void A_projector_cannot_claim_the_descriptor_kind_every_clr_activity_shares()
+    [Theory]
+    [InlineData("elsa.clr-activity")]
+    [InlineData("elsa.graph-activity")]
+    [InlineData("intrinsic")]
+    public void A_projector_cannot_claim_a_descriptor_kind_a_whole_activity_family_shares(string kind)
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([new DescriptorProjector(kind: "elsa.clr-activity")]));
-        Assert.Contains("elsa.clr-activity", error.Message);
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([new DescriptorProjector(kind: kind)]));
+        Assert.Contains(kind, error.Message);
+    }
+
+    [Theory]
+    [InlineData(true, "test.view")]
+    [InlineData(false, null)]
+    public async Task A_composed_descriptor_projector_that_does_not_match_leaves_the_existing_answers(bool privateState, string? kind)
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, privateState: privateState, descriptorProjector: true, descriptorKind: "other");
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync(StatePath));
+        Assert.Equal(kind, document.RootElement.GetProperty("viewKind").GetString());
+        if (!privateState) Assert.Equal("StateCleared", document.RootElement.GetProperty("unavailableReason").GetString());
+        Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<DescriptorProjector>()).Calls);
     }
 
     [Fact]
@@ -357,7 +372,8 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             bool clearedProjector = false,
             bool clearedUnavailable = false,
             bool seedExecutable = true,
-            bool descriptorProjector = false)
+            bool descriptorProjector = false,
+            string descriptorKind = "test")
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -376,7 +392,7 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             if (duplicateProjector)
                 builder.Services.AddSingleton<IActivityStateViewProjector, TestProjector>();
             if (descriptorProjector)
-                builder.Services.AddSingleton<IActivityStateViewProjector, DescriptorProjector>();
+                builder.Services.AddSingleton<IActivityStateViewProjector>(new DescriptorProjector(kind: descriptorKind));
             if (denyManageResource)
                 builder.Services.AddSingleton<IPermissionResourceHandler, DenyManageForRuns>();
             var app = builder.Build();

@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
@@ -35,9 +36,10 @@ public sealed class ActivityStateViewProjectorRegistry
             if (projector.DescriptorKind is { } descriptorKind)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(descriptorKind);
-                // Every CLR activity shares this kind, so claiming it would silently shadow their alias and cleared-type projectors.
-                if (StringComparer.Ordinal.Equals(descriptorKind, ClrActivityDescriptorKind))
-                    throw new InvalidOperationException($"Activity state view projector '{projector.GetType().FullName}' claims descriptor kind '{descriptorKind}', which every CLR activity shares; project CLR activities by private-state alias or activity type instead.");
+                // Every CLR, graph or intrinsic node shares one of these kinds, so claiming one would silently shadow the alias
+                // and cleared-type projectors of all of them.
+                if (SharedDescriptorKinds.Contains(descriptorKind))
+                    throw new InvalidOperationException($"Activity state view projector '{projector.GetType().FullName}' claims descriptor kind '{descriptorKind}', which a whole activity family shares; project those activities by private-state alias or activity type instead.");
                 if (!byDescriptor.TryAdd(descriptorKind, projector))
                     throw new InvalidOperationException($"More than one activity state view projector reads executable nodes of descriptor kind '{descriptorKind}'; at most one may.");
             }
@@ -54,8 +56,10 @@ public sealed class ActivityStateViewProjectorRegistry
     /// <summary>Whether a projector reads by descriptor kind, which requires the pinned node before a projector is chosen.</summary>
     internal bool HasDescriptorProjectors => _byDescriptor.Count > 0;
 
-    // Owned by the activity runtime (RuntimeActivityDescriptor.ClrActivity).
-    private const string ClrActivityDescriptorKind = "elsa.clr-activity";
+    private static readonly HashSet<string> SharedDescriptorKinds = new(StringComparer.Ordinal)
+    {
+        WellKnownRuntimeActivityConsumers.ClrActivity, WellKnownRuntimeActivityConsumers.GraphActivity, WellKnownRuntimeActivityConsumers.Intrinsic
+    };
 
     public IActivityStateViewProjector? Find(string stateTypeAlias) => _projectors.GetValueOrDefault(stateTypeAlias);
 

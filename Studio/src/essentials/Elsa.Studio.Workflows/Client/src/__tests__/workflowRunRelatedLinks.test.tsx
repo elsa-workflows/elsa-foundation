@@ -131,13 +131,15 @@ it("lets a contribution for a family of user-defined activities match any activi
   } finally { view.dispose(); }
 });
 
-it("shows no section for an activity an any-type contribution yields no link for", async () => {
-  vi.mocked(getActivityStateView).mockResolvedValue({ ...projection(), viewKind: "other.kind" });
+it.each(["other view kind", "no links"])("shows no section for an activity an any-type contribution yields no link for: %s", async reason => {
+  if (reason === "other view kind") vi.mocked(getActivityStateView).mockResolvedValue({ ...projection(), viewKind: "other.kind" });
+  const getLinks = vi.fn(() => []);
   const view = fixture();
   try {
     view.render({ activity: { ...view.activity, activityType: "Example.Unrelated" },
-      contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks: vi.fn(() => []) }] });
+      contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks }] });
     await vi.waitFor(() => expect(getActivityStateView).toHaveBeenCalled());
+    if (reason === "no links") await vi.waitFor(() => expect(getLinks).toHaveBeenCalled());
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(view.container.textContent).not.toContain("Related");
   } finally { view.dispose(); }
