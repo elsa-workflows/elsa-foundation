@@ -1,10 +1,10 @@
-# Delivery checkpoint — blocked before qualification
+# Delivery qualification record
 
 Program: [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688). Acceptance: [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577).
 
-Research, design and tasks are complete. Implementation is substantial but **not qualified, merged or delivered**. Keep spec status Draft and T005–T026 open until their complete exit evidence exists. This file is a handoff receipt, not an acceptance certificate.
+Research, design and tasks are complete. Implementation is under active qualification and **not yet merged or delivered**. Keep spec status Draft and T005–T026 open until their complete exit evidence exists. This file is a handoff receipt, not an acceptance certificate.
 
-## Stop and exact current failure
+## Prior stop and authorized resumption
 
 The organization [AGENTS.md stop conditions](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#stop-conditions) require stopping after failing the same check three times in a row. The new HTTP fixture check was:
 
@@ -18,7 +18,7 @@ Its three attempts failed in sequence:
 2. Startup: fixture replaced the current-subject authorizer without updating its replacement registration marker; corrected using `EnsureReplacementContract` for the replaced identity contracts.
 3. Execution: 3 tests passed, 1 failed. `Trusted_canonical_identity_and_current_membership_control_claims_not_body_or_token_roles`, line 41, expected `NotFound` but received `Forbidden` after role revocation. The fixture grants management permission, so the task remains inspectable while completion is refused. Inspect that fixture/expectation before another run; no change was made after the third failure.
 
-Owner direction is required to resume past this stop condition. Claims are released and both issues remain open/blocked. The draft PR must not merge in this state.
+On 3 November the owner instructed “Continue 20 more times maximum”, authorizing continuation past this stop with at most 20 additional attempts of the blocked HTTP check. Fresh claims were established and blocking labels removed. Additional attempt 1 passed all four HTTP tests after correcting the expected status to Forbidden: management permits inspection but never substitutes for current assignment eligibility. No retries beyond attempt 1 have been needed for this check. The PR remains draft until all remaining gates pass.
 
 ## Implementation present
 
@@ -60,7 +60,7 @@ Archived EF test inputs were restored through the canonical `python3 tools/bpmn/
 
 ## Work remaining before completion
 
-1. Resume only on owner direction; inspect/correct the HTTP fixture expectation and rerun it.
+1. Resumption authorized; the HTTP fixture now passes (additional attempt 1/20). Complete the remaining latest-head and whole-suite evidence.
 2. Add decisive overlapping EF claim/completion races and cancellation/deletion races, forged/generation-replaced wait tests, post-bookmark-claim outage/retry, committed completion before acknowledgement, missing-state uncertainty and encrypted/volatile input/provider refusal tests. Current memory claim test uses synchronous collaborators and is not a real overlap witness.
 3. Qualify populated form outputs and configured action branches through normal authoring/publication; qualify BPMN native-worker reuse, external form provider/renderer and custom-client/package-only host composition.
 4. Add mounted inbox/paging/claim/release/reassignment/forms-only/boolean/navigation/form-authoring/selector tests and browser/keyboard/narrow-layout qualification with real normalized identities.
@@ -69,3 +69,13 @@ Archived EF test inputs were restored through the canonical `python3 tools/bpmn/
 7. Open/retain a draft PR, complete independent exact-head correctness/standards/acceptance review rounds, then ready/required CI/permitted merge, resulting-main rebuild/journeys and Program/feature/parity reconciliation. Do not close either issue prematurely.
 
 Local detailed logs are in `/tmp/elsa-user-tasks-3577` on the originating machine. Durable evidence is the commands/results and source in this checkpoint and PR; those temporary logs are supplementary.
+
+## Resumed qualification
+
+- HTTP UserTaskApiTests: 4 passed on additional attempt 1/20.
+- Runtime whole project: 3,202 passed before the subsequent external-form/cursor tests.
+- EF whole project: 1,874 passed, including the added true-overlap, cancellation, forged resume, missing/replaced wait, post-claim outage and retention tests.
+- Provider User Task contract: PostgreSQL, SQL Server and MySQL passed with required-provider mode (3 passed, no skips).
+- Mounted UI: 11 passed including forms-only navigation, explicit false boolean, route selection, group claim/release, inbox paging and reusable form authoring.
+- Architecture: 613/614 passed; remaining manifest diff is the intentional 11 new User Task endpoints, captured from a composed host. The updated manifest preserves every prior entry.
+- Workbench and normal Studio .NET hosts build successfully. Final whole suites, browser/e2e and review remain pending.

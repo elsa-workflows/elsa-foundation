@@ -38,7 +38,8 @@ public sealed class UserTaskApiTests
         Assert.Equal(HttpStatusCode.OK, claimed.StatusCode);
         Assert.Equal("alice", (await claimed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("claimantId").GetString());
         host.Identity.User = host.Identity.User with { RoleIds = new HashSet<string>() };
-        Assert.Equal(HttpStatusCode.NotFound, (await host.Client.PostAsJsonAsync("/runtime/user-tasks/task/complete", new { revision = 2, requestId = "complete", action = "Approve", data = new { } })).StatusCode);
+        // Management still permits inspection; it never substitutes for current group eligibility to complete.
+        Assert.Equal(HttpStatusCode.Forbidden, (await host.Client.PostAsJsonAsync("/runtime/user-tasks/task/complete", new { revision = 2, requestId = "complete", action = "Approve", data = new { } })).StatusCode);
         Assert.Equal(UserTaskStatus.Claimed, (await host.Read())!.Status);
     }
 

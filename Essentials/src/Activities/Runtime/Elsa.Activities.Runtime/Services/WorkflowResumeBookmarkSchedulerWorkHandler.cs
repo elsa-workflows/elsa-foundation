@@ -159,8 +159,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if ((bookmark is not null || hasClaimedResume) &&
             state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered) &&
             serviceProvider.GetServices<IEventHandler<ActivityResumeValidating>>().Any())
-            await serviceProvider.GetRequiredService<IInlineEventPublisher>().Publish(
-                new ActivityResumeValidating(state, executableNode, resumePayload), cancellationToken);
+        {
+            var validation = new ActivityResumeValidating(state, executableNode, resumePayload);
+            if (serviceProvider.GetService<IInlineEventPublisher>() is { } publisher)
+                await publisher.Publish(validation, cancellationToken);
+            else
+                // A library host can compose Runtime without the Events feature. Validation remains sequential
+                // and awaited there too; optional subscribers must not make every unrelated wait require Events.
+                foreach (var handler in serviceProvider.GetServices<IEventHandler<ActivityResumeValidating>>())
+                    await handler.Handle(validation, cancellationToken);
+        }
 
         if (hasClaimedResume)
         {

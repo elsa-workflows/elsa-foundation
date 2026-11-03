@@ -13,6 +13,7 @@ internal static class UserTaskRegistration
     {
         services.AddOptions<UserTaskOptions>();
         services.TryAddSingleton<UserTaskMemoryState>();
+        services.TryAddSingleton(new UserTaskCompositionDescriptors(() => services.ToArray()));
         services.TryAddSingleton<UserTaskCursorCodec>();
         services.TryAddScoped<IUserTaskStore, MemoryUserTaskStore>();
         services.TryAddScoped<IUserTaskAccess, UnavailableUserTaskAccess>();

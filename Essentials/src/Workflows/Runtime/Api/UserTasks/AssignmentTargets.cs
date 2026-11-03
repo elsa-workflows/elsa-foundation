@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using NativeEndpoints;
+using Elsa.Workflows.Runtime.Api.Endpoints;
 
 namespace Elsa.Workflows.Runtime.Api.UserTasks;
 
@@ -12,6 +13,7 @@ internal sealed record AssignmentTargets(IReadOnlyList<AssignmentTarget> Users, 
 
 [Get("runtime/user-task-targets")]
 [RequireAnyPermission(UserTaskPermissions.Manage, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ReadAssignmentTargets(IUserTaskAccess access, IPagedUserStore users, IPagedRoleStore groups) : ApiEndpoint<TargetRequest, AssignmentTargets>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "UserTaskAssignmentTargets";

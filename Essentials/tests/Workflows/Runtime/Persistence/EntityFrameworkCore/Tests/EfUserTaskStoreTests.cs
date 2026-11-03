@@ -76,6 +76,69 @@ public sealed class EfUserTaskStoreTests
         Assert.Equal(EntityState.Added, context.Entry(pending).State);
     }
 
+    [Theory]
+    [InlineData("claim")]
+    [InlineData("complete")]
+    [InlineData("cancel-versus-complete")]
+    public async Task Independently_scoped_writers_overlap_and_commit_one_aggregate_history_and_response(string scenario)
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-task-cas-");
+        var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite($"Data Source={Path.Combine(directory.FullName, "runtime.db")};Pooling=False").Options;
+        try
+        {
+            await using (var setup = new RuntimeSqliteDbContext(options))
+            {
+                await setup.Database.EnsureCreatedAsync(); await Executions(setup).SaveAsync(Execution("run"));
+                Assert.True(await new EfUserTaskStore(setup, new Accessor("tenant")).TryWriteAsync(Task("run", "task"), null));
+            }
+            var bothRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var reads = 0;
+            async Task<bool> Race(string actor)
+            {
+                await using var context = new RuntimeSqliteDbContext(options);
+                var store = new EfUserTaskStore(context, new Accessor("tenant")); var before = (await store.FindAsync("tenant", "task"))!;
+                Assert.Equal(1, before.Revision);
+                if (Interlocked.Increment(ref reads) == 2) bothRead.SetResult();
+                await bothRead.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                var cancel = scenario == "cancel-versus-complete" && actor == "bob";
+                var next = before with { Revision = 2,
+                    Status = scenario == "claim" ? UserTaskStatus.Claimed : cancel ? UserTaskStatus.Cancelled : UserTaskStatus.CompletionPending,
+                    ClaimantId = scenario == "claim" ? actor : null,
+                    Decision = scenario == "claim" || cancel ? null : new("request-" + actor, actor, new(before.Id, "completion-" + actor, actor == "alice" ? "Approve" : "Reject", JsonSerializer.SerializeToElement(new { })), Now),
+                    History = before.History.Append(new UserTaskHistory(scenario, actor, Now)).ToArray() };
+                return await store.TryWriteAsync(next, before.Revision);
+            }
+            var outcomes = await System.Threading.Tasks.Task.WhenAll(Race("alice"), Race("bob"));
+            Assert.Single(outcomes, success => success);
+            await using var verification = new RuntimeSqliteDbContext(options);
+            var winner = (await new EfUserTaskStore(verification, new Accessor("tenant")).FindAsync("tenant", "task"))!;
+            Assert.Equal(2, winner.Revision); Assert.Equal(2, winner.History.Count);
+            var winnerActor = winner.History[1].ActorId;
+            if (scenario == "claim") Assert.Equal(winnerActor, winner.ClaimantId);
+            else if (winner.Status == UserTaskStatus.CompletionPending) Assert.Equal(winnerActor, winner.Decision!.ActorId);
+            else Assert.Null(winner.Decision);
+        }
+        finally { directory.Delete(true); }
+    }
+
+    [Fact]
+    public async Task Nonterminal_task_retains_execution_evidence_and_terminal_acknowledgement_releases_it()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync(); var executions = Executions(context);
+        await executions.SaveAsync(Execution("run") with { Status = WorkflowExecutionStatus.Completed });
+        var store = new EfUserTaskStore(context, new Accessor("tenant"));
+        Assert.True(await store.TryWriteAsync(Task("run", "task"), null));
+        Assert.False(await executions.DeleteAsync("run"));
+        Assert.NotNull(await executions.FindAsync("run")); Assert.False(await executions.IsDeletionTombstonedAsync("run"));
+        var task = (await store.FindAsync("tenant", "task"))!;
+        Assert.True(await store.TryWriteAsync(task with { Status = UserTaskStatus.Completed, Revision = 2 }, 1));
+        Assert.True(await executions.DeleteAsync("run"));
+        Assert.True(await executions.IsDeletionTombstonedAsync("run"));
+        Assert.Equal(UserTaskStatus.Completed, (await store.FindAsync("tenant", "task"))!.Status);
+        await Assert.ThrowsAsync<UserTaskException>(() => store.TryWriteAsync(Task("run", "late"), null).AsTask());
+    }
+
     private static EfWorkflowExecutionStateStore Executions(RuntimeDbContext context) => new(context, new Accessor("tenant"),
         new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
     private static WorkflowExecutionState Execution(string id) => new(id, new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running,

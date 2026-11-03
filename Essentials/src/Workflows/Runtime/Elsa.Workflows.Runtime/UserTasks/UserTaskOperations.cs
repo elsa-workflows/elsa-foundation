@@ -103,6 +103,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
     {
         var actor = await access.GetActorAsync(cancellationToken);
         if (!actor.CanReadForms && !actor.CanManageForms) throw Failure("forbidden", "Form read permission is required.");
+        if (limit is < 1 or > 100) throw Failure("validation", "Choose a form page size between 1 and 100.");
         return await store.ListFormsAsync(actor.TenantId, limit, after, cancellationToken);
     }
 

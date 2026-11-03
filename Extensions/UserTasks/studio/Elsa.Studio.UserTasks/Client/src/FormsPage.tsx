@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useState } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
-import { actor, basicProvider, forms, message, type FormVersion, type TaskActor, type TaskField, type TaskForm } from "./taskApi";
+import { actor, basicProvider, createForm, forms, message, type FormVersion, type TaskActor, type TaskField, type TaskForm } from "./taskApi";
 const initial = (): TaskForm => ({ id: "", version: "1", name: "", provider: basicProvider, fields: [] });
 export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   const [versions, setVersions] = useState<FormVersion[]>([]); const [nextPage, setNextPage] = useState<string | null>(null); const [identity, setIdentity] = useState<TaskActor>();
@@ -12,7 +12,7 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   const field = (index: number, update: Partial<TaskField>) => setForm(value => ({ ...value, fields: value.fields.map((entry, i) => i === index ? { ...entry, ...update } : entry) }));
   const save = async () => {
     if (busy) return; setBusy(true); setNotice("");
-    try { await api.backend.http.postJson("/runtime/user-task-forms", form); setNotice("The immutable form version is available to new tasks."); await refresh(); }
+    try { await createForm(api, form); setNotice("The immutable form version is available to new tasks."); await refresh(); }
     catch (failure) { setError(message(failure)); } finally { setBusy(false); }
   };
   const valid = form.id.trim() && form.version.trim() && form.name.trim() && form.fields.every(item => item.key.trim() && item.label.trim()) && new Set(form.fields.map(item => item.key)).size === form.fields.length;

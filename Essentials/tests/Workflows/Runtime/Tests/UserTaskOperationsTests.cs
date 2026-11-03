@@ -131,6 +131,60 @@ public sealed class UserTaskOperationsTests
         Assert.False(await store.TryCreateFormAsync(version));
     }
 
+    [Fact]
+    public async Task Resource_denied_scan_positions_are_encrypted_and_bound_to_the_actor_and_query()
+    {
+        var store = Store();
+        for (var index = 0; index < 6; index++) await store.TryWriteAsync(Task() with { Id = "hidden-task-identity-" + index }, null);
+        var codec = new UserTaskCursorCodec(TimeProvider.System);
+        UserTaskOperations For(UserTaskActor actor, bool deny) => new(store, new ActorAccess(actor, deny), [new BasicUserTaskForms()], TimeProvider.System, new Runtime(), codec, new Accessor());
+        var page = await For(Actor("alice"), true).ListAsync("queue", 1);
+        Assert.Empty(page.Items); Assert.NotNull(page.Next);
+        Assert.DoesNotContain("hidden-task-identity", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(page.Next)));
+        Assert.Equal("validation", (await Assert.ThrowsAsync<UserTaskException>(() => For(Actor("bob"), false).ListAsync("queue", 1, page.Next).AsTask())).Code);
+        Assert.Equal("validation", (await Assert.ThrowsAsync<UserTaskException>(() => For(Actor("alice"), false).ListAsync("mine", 1, page.Next).AsTask())).Code);
+    }
+
+    [Fact]
+    public async Task External_form_provider_validates_async_nested_response_and_preserves_its_immutable_receipt()
+    {
+        var store = Store(); var integration = new ExternalForms();
+        var form = new UserTaskForm("external-purchase", "immutable-2026-11-03", "External purchase", integration.Provider, []);
+        await store.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = null, Form = form }, null);
+        var operations = new UserTaskOperations(store, new ActorAccess(Actor("alice")), [new BasicUserTaskForms(), integration], TimeProvider.System, new Runtime(), new(TimeProvider.System), new Accessor());
+        await Assert.ThrowsAsync<UserTaskException>(() => operations.CompleteAsync("task", new(1, "invalid-external", "Approve", Json("{\"Approval\":{\"AmountUSD\":0}}"))).AsTask());
+        Assert.Equal(1, (await store.FindAsync("tenant", "task"))!.Revision);
+        var request = new UserTaskCompletion(1, "external-client", "Approve", Json("{\"Approval\":{\"AmountUSD\":42,\"CaseSensitiveKey\":\"kept\"}}"));
+        var accepted = await operations.CompleteAsync("task", request);
+        Assert.Equal(2, integration.Validations); Assert.Equal(form.Version, integration.VersionValidated);
+        Assert.Equal("kept", accepted.Decision!.Response.Data.GetProperty("Approval").GetProperty("CaseSensitiveKey").GetString());
+        Assert.Equal(accepted.Decision.Response.CompletionId, (await operations.CompleteAsync("task", request)).Decision!.Response.CompletionId);
+        foreach (var providers in new IUserTaskFormProvider[][] { [], [integration, new ExternalForms()] })
+        {
+            var missing = new UserTaskOperations(store, new ActorAccess(Actor("alice") with { CanManageForms = true }), providers, TimeProvider.System, new Runtime(), new(TimeProvider.System), new Accessor());
+            Assert.Equal("unavailable", (await Assert.ThrowsAsync<UserTaskException>(() => missing.CreateFormAsync(form).AsTask())).Code);
+        }
+    }
+
+    [Fact]
+    public void Blank_text_still_respects_maximum_length_when_required_fields_are_waived()
+    {
+        var forms = new BasicUserTaskForms(); var form = new UserTaskForm("f", "1", "F", forms.Provider, [new("Note", "Note", "text", true, MaxLength: 5)]);
+        Assert.Contains("Note", forms.ValidateResponse(form, Json("{}"), JsonSerializer.SerializeToElement(new { Note = new string(' ', 1000) }), false).Keys);
+    }
+
+    private sealed class ExternalForms : IUserTaskFormProvider
+    {
+        public string Provider => "acme.forms/1"; public int Validations; public string? VersionValidated;
+        public void ValidateDefinition(UserTaskForm form) { if (form.Id != "external-purchase" || string.IsNullOrWhiteSpace(form.Version)) throw new UserTaskException("validation", "An immutable external form reference is required."); }
+        public async ValueTask<IReadOnlyDictionary<string, string>> ValidateResponseAsync(UserTaskForm form, JsonElement prefill, JsonElement response, bool requireFields, CancellationToken cancellationToken = default)
+        {
+            await System.Threading.Tasks.Task.Yield(); cancellationToken.ThrowIfCancellationRequested(); Validations++; VersionValidated = form.Version;
+            return response.TryGetProperty("Approval", out var approval) && approval.TryGetProperty("AmountUSD", out var amount) && amount.TryGetDecimal(out var value) && value > 0
+                ? new Dictionary<string, string>() : new Dictionary<string, string> { ["Approval.AmountUSD"] = "External form validation refused this value." };
+        }
+    }
+
     private static MemoryUserTaskStore Store() => new(new(), new Accessor());
     private static UserTaskActor Actor(string user) => new("tenant", user, new HashSet<string> { "finance" }, true, true, false, false);
     private static UserTaskOperations Operations(IUserTaskStore store, UserTaskActor actor) => new(store, new ActorAccess(actor), [new BasicUserTaskForms()], TimeProvider.System, new Runtime(), new UserTaskCursorCodec(TimeProvider.System), new Accessor());
@@ -138,10 +192,10 @@ public sealed class UserTaskOperationsTests
     private static UserTaskRecord Task() => new("task", "tenant", "execution", "invocation", "node", "operation", "Purchase", null, null, "finance", null,
         ["Approve", "Reject"], [], null, Json("{}"), UserTaskStatus.Open, 1, Now, Now, [new("created", "workflow", Now)]);
     private sealed class Accessor : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("tenant")); }
-    private sealed class ActorAccess(UserTaskActor actor) : IUserTaskAccess
+    private sealed class ActorAccess(UserTaskActor actor, bool denyRead = false) : IUserTaskAccess
     {
         public ValueTask<UserTaskActor> GetActorAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(actor);
-        public ValueTask AuthorizeAsync(UserTaskRecord task, string operation, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask AuthorizeAsync(UserTaskRecord task, string operation, CancellationToken cancellationToken = default) => denyRead && operation == "read" ? ValueTask.FromException(new UserTaskException("missing", "Task not found.")) : ValueTask.CompletedTask;
         public ValueTask ValidateAssignmentAsync(string tenantId, string? assigneeId, string? groupId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
     private sealed class Runtime : IUserTaskRuntime

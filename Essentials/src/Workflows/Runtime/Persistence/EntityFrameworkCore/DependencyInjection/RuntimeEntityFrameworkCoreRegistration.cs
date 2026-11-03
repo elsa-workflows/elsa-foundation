@@ -70,11 +70,20 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             services.AddRuntimeOperationalStateEntityFrameworkCore(operational);
-            var taskRegistration = services.LastOrDefault(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore));
-            if (taskRegistration is not null && taskRegistration.ImplementationType?.Name != "MemoryUserTaskStore" && taskRegistration.ImplementationType != typeof(EfUserTaskStore))
+            var taskRegistrations = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore)).ToArray();
+            if (taskRegistrations.Length > 1) throw new InvalidOperationException("Multiple user-task journal owners are selected.");
+            var taskRegistration = taskRegistrations.SingleOrDefault();
+            if (taskRegistration is not null && taskRegistration.ImplementationType != typeof(Elsa.Workflows.Runtime.UserTasks.MemoryUserTaskStore) && taskRegistration.ImplementationType != typeof(EfUserTaskStore))
                 throw new InvalidOperationException("The Runtime EF family cannot replace an independently selected user-task journal.");
-            services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore, EfUserTaskStore>());
-            services.Replace(ServiceDescriptor.Singleton<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary, EfUserTaskPersistenceBoundary>());
+            if (taskRegistration?.ImplementationType != typeof(EfUserTaskStore))
+                services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore, EfUserTaskStore>());
+            var taskBoundaries = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary)).ToArray();
+            if (taskBoundaries.Length > 1) throw new InvalidOperationException("Multiple user-task retention owners are selected.");
+            var taskBoundary = taskBoundaries.SingleOrDefault();
+            if (taskBoundary is not null && taskBoundary.ImplementationType != typeof(EfUserTaskPersistenceBoundary))
+                throw new InvalidOperationException("The Runtime EF family cannot replace an independently selected task retention boundary.");
+            if (taskBoundary is null)
+                services.AddSingleton<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary, EfUserTaskPersistenceBoundary>();
 
             services.AddRuntimeArtifactsEntityFrameworkCore(new()
             {

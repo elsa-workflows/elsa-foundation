@@ -15,11 +15,13 @@ internal static class UserTaskPermissions
     internal const string FormsManage = "user-task-forms:manage";
 }
 
-internal sealed class TaskRequestAccess(IHttpContextAccessor http, NormalizedPrincipalValidator validator,
-    IUserStore users, IRoleStore roles, ITenantMembershipStore memberships, ICurrentSubjectPermissionAuthorizer permissions) : IUserTaskAccess
+internal sealed class TaskRequestAccess(IHttpContextAccessor http, NormalizedPrincipalValidator? validator = null,
+    IUserStore? users = null, IRoleStore? roles = null, ITenantMembershipStore? memberships = null, ICurrentSubjectPermissionAuthorizer? permissions = null) : IUserTaskAccess
 {
     public async ValueTask<UserTaskActor> GetActorAsync(CancellationToken cancellationToken = default)
     {
+        if (validator is null || users is null || roles is null || memberships is null || permissions is null)
+            throw new UserTaskException("unavailable", "This host has no complete trusted task identity directory.");
         if (http.HttpContext is not { } context || !validator.TryGetNormalizedPrincipal(context.User, out var principal))
             throw new UserTaskException("unauthorized", "Sign in to view your tasks.");
         var subjects = principal.FindAll(IdentityClaimTypes.UserId).Select(x => x.Value).ToArray();
@@ -49,13 +51,14 @@ internal sealed class TaskRequestAccess(IHttpContextAccessor http, NormalizedPri
         var actor = await GetActorAsync(cancellationToken);
         if (actor.TenantId != task.TenantId) throw new UserTaskException("missing", "Task not found.");
         var permission = operation switch { "read" => UserTaskPermissions.Read, "act" => UserTaskPermissions.Act, "manage" => UserTaskPermissions.Manage, _ => throw new ArgumentException("Unknown task operation.") };
-        var decision = await permissions.AuthorizeAsync(new(actor.TenantId, actor.UserId, permission, task), cancellationToken);
+        var decision = await permissions!.AuthorizeAsync(new(actor.TenantId, actor.UserId, permission, task), cancellationToken);
         if (decision.Status != CurrentSubjectPermissionStatus.Granted)
             throw new UserTaskException(operation == "read" ? "missing" : "forbidden", operation == "read" ? "Task not found." : "This task operation is not permitted.");
     }
 
     public async ValueTask ValidateAssignmentAsync(string tenantId, string? assigneeId, string? groupId, CancellationToken cancellationToken = default)
     {
+        if (users is null || roles is null) throw new UserTaskException("unavailable", "This host has no trusted task assignment directory.");
         if (string.IsNullOrWhiteSpace(assigneeId) == string.IsNullOrWhiteSpace(groupId))
             throw new UserTaskException("validation", "Choose exactly one active user or group.");
         if (assigneeId is not null)
@@ -70,17 +73,4 @@ internal sealed class TaskRequestAccess(IHttpContextAccessor http, NormalizedPri
             if (role is null || role.TenantId != tenantId || role.Id != groupId) throw new UserTaskException("validation", "The selected group is unavailable.");
         }
     }
-}
-
-internal sealed class UserTaskPermissionContributor : IPermissionContributor
-{
-    public string OwnerId => "Elsa.Workflows.Runtime.UserTasks";
-    public IEnumerable<Permission> Contribute() =>
-    [
-        new(UserTaskPermissions.Read, "Read my tasks", "User Tasks", "Read assigned tasks and eligible group work."),
-        new(UserTaskPermissions.Act, "Act on my tasks", "User Tasks", "Claim, release and complete assigned or eligible tasks."),
-        new(UserTaskPermissions.Manage, "Manage user tasks", "User Tasks", "Inspect and reassign tenant work; completion still requires assignment."),
-        new(UserTaskPermissions.FormsRead, "Read task forms", "User Tasks", "Use published reusable task form versions."),
-        new(UserTaskPermissions.FormsManage, "Manage task forms", "User Tasks", "Create immutable reusable task form versions.")
-    ];
 }

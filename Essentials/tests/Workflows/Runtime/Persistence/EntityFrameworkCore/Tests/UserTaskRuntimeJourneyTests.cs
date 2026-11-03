@@ -1,4 +1,8 @@
 using System.Text.Json;
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Time.Testing;
 using CShells.Lifecycle;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
@@ -58,6 +62,8 @@ public sealed class UserTaskRuntimeJourneyTests
                 var runtime = third.Services.GetRequiredService<IUserTaskRuntime>();
                 await runtime.ReconcileAsync(pending);
                 await third.SweepUntilQuietAsync();
+                Assert.Equal(UserTaskStatus.CompletionPending, (await store.FindAsync("default", taskId))!.Status);
+                Assert.False(await third.Services.GetRequiredService<IWorkflowExecutionStateStore>().DeleteAsync("user-task-run"));
                 await runtime.ReconcileAsync(pending); // acknowledgement reads canonical committed completion, then replay is inert.
                 var completed = await store.FindAsync("default", taskId);
                 Assert.Equal(UserTaskStatus.Completed, completed!.Status);
@@ -70,10 +76,125 @@ public sealed class UserTaskRuntimeJourneyTests
                 Assert.Empty((await third.Services.GetRequiredService<IBookmarkStateStore>().ListPageAsync(new("user-task-run"))).Items);
             }
         }
-        finally { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(directory, true); }
+        finally { Directory.Delete(directory, true); }
     }
 
-    private static WorkflowExecutionHarness Build(string database, PersistenceMode mode, string generation)
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_bookmark_is_uncertainty_but_physical_replacement_retires_the_old_task(bool replace)
+    {
+        await WithOpenTask(async (host, task) =>
+        {
+            var bookmarks = host.Services.GetRequiredService<IBookmarkStateStore>();
+            var observed = (await bookmarks.ObserveAsync(task.WorkflowExecutionId, task.Recipient!.BookmarkId))!;
+            if (replace) await bookmarks.SaveAsync(observed.State);
+            else Assert.True(await bookmarks.DeleteAsync(task.WorkflowExecutionId, observed.State.BookmarkId));
+            await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(task);
+            var current = (await host.Services.GetRequiredService<IUserTaskStore>().FindAsync(task.TenantId, task.Id))!;
+            Assert.Equal(replace ? UserTaskStatus.Cancelled : UserTaskStatus.Open, current.Status);
+            Assert.Null(current.Decision);
+            if (replace) { Assert.Equal("wait-replaced", current.History.Last().Operation); Assert.NotNull(await bookmarks.FindAsync(task.WorkflowExecutionId, observed.State.BookmarkId)); }
+        });
+    }
+
+    [Fact]
+    public async Task A_forged_resume_preserves_the_wait_and_a_later_accepted_response_completes_once()
+    {
+        await WithOpenTask(async (host, task) =>
+        {
+            var fake = new UserTaskResponse(task.Id, "forged-completion", "Approve", JsonSerializer.SerializeToElement(new { }));
+            await host.Services.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(new(task.WorkflowExecutionId,
+                UserTaskProtocol.StimulusType, task.Id, JsonSerializer.SerializeToElement(fake), "forged-request", "test", null, null, null, task.Recipient!.BookmarkId, null) { ExpectedRecipient = task.Recipient });
+            await host.SweepUntilQuietAsync();
+            Assert.NotNull(await host.Services.GetRequiredService<IBookmarkStateStore>().FindAsync(task.WorkflowExecutionId, task.Recipient.BookmarkId));
+            var pending = await host.Services.GetRequiredService<IUserTaskOperations>().CompleteAsync(task.Id, new(task.Revision, "valid-response", "Reject", JsonSerializer.SerializeToElement(new { })));
+            await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(pending); await host.SweepUntilQuietAsync();
+            await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(pending);
+            var result = (await host.Services.GetRequiredService<IUserTaskStore>().FindAsync(task.TenantId, task.Id))!;
+            Assert.Equal(UserTaskStatus.Completed, result.Status); Assert.Equal("Reject", result.Decision!.Response.Action);
+            Assert.Single(result.History, x => x.Operation == "completed");
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Workflow_cancellation_retires_open_or_already_accepted_tasks(bool accepted)
+    {
+        await WithOpenTask(async (host, task) =>
+        {
+            if (accepted) task = await host.Services.GetRequiredService<IUserTaskOperations>().CompleteAsync(task.Id, new(task.Revision, "accepted-before-cancel", "Approve", JsonSerializer.SerializeToElement(new { })));
+            await host.CancelAsync(task.WorkflowExecutionId, new("default"));
+            await host.SweepUntilQuietAsync(); await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(task);
+            var retired = (await host.Services.GetRequiredService<IUserTaskStore>().FindAsync(task.TenantId, task.Id))!;
+            Assert.Equal(UserTaskStatus.Cancelled, retired.Status);
+            Assert.DoesNotContain(retired.History, x => x.Operation == "completed");
+            await Assert.ThrowsAsync<UserTaskException>(() => host.Services.GetRequiredService<IUserTaskOperations>().CompleteAsync(task.Id, new(retired.Revision, "late", "Approve", JsonSerializer.SerializeToElement(new { }))).AsTask());
+        });
+    }
+
+    [Theory]
+    [InlineData(2)] // Guard read, before consuming the physical wait.
+    [InlineData(3)] // Accepted-result reread, after the durable bookmark claim.
+    public async Task Wrapped_transient_journal_reads_preserve_owed_work_and_retry_to_one_completion(int failAt)
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-task-outage-"); var database = Path.Combine(directory.FullName, "runtime.db");
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow); var failure = new FailJournalRead();
+        try
+        {
+            await using var host = Build(database, PersistenceMode.Durable, "outage", services =>
+            {
+                services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
+                services.AddScoped<RuntimeDbContext>(_ => new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+                    .UseSqlite($"Data Source={database};Pooling=False").AddInterceptors(failure).Options));
+            });
+            var task = await OpenTask(host);
+            var pending = await host.Services.GetRequiredService<IUserTaskOperations>().CompleteAsync(task.Id, new(task.Revision, "response-before-outage", "Approve", JsonSerializer.SerializeToElement(new { })));
+            failure.Arm(failAt);
+            await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(pending);
+            Assert.Equal(1, failure.Failures);
+            var activity = (await host.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(task.WorkflowExecutionId, task.InvocationId))!;
+            Assert.Null(activity.Fault); Assert.NotEqual(ActivityExecutionStatus.Faulted, activity.Status);
+            Assert.Equal(UserTaskStatus.CompletionPending, (await host.Services.GetRequiredService<IUserTaskStore>().FindAsync(task.TenantId, task.Id))!.Status);
+            clock.Advance(TimeSpan.FromMinutes(2)); await host.SweepUntilQuietAsync();
+            await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(pending); await host.SweepUntilQuietAsync();
+            await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(pending);
+            var result = (await host.Services.GetRequiredService<IUserTaskStore>().FindAsync(task.TenantId, task.Id))!;
+            Assert.Equal(UserTaskStatus.Completed, result.Status); Assert.Single(result.History, x => x.Operation == "completed");
+        }
+        finally { directory.Delete(true); }
+    }
+
+    private sealed class FailJournalRead : DbCommandInterceptor
+    {
+        private int remaining; public int Failures;
+        public void Arm(int reads) => remaining = reads;
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (remaining > 0 && command.CommandText.Contains("FROM \"UserTasks\"", StringComparison.Ordinal) && --remaining == 0)
+            { Failures++; throw new InvalidOperationException("Provider read context", new TimeoutException("Injected temporary journal outage")); }
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private static async Task WithOpenTask(Func<WorkflowExecutionHarness, UserTaskRecord, Task> test)
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-user-task-journey-");
+        try { await using var host = Build(Path.Combine(directory.FullName, "runtime.db"), PersistenceMode.Durable, "journey"); await test(host, await OpenTask(host)); }
+        finally { directory.Delete(true); }
+    }
+    private static async Task<UserTaskRecord> OpenTask(WorkflowExecutionHarness host)
+    {
+        var source = await host.PublishAsync(Executable(), "task-published");
+        await host.StartPublishedAsync(source, "user-task-run", tenantId: "default", partition: new("default")); await host.SweepUntilQuietAsync();
+        var staged = Assert.Single((await host.Services.GetRequiredService<IUserTaskStore>().RecoverAsync(10, null)).Items);
+        await host.Services.GetRequiredService<IUserTaskRuntime>().ReconcileAsync(staged);
+        return await host.Services.GetRequiredService<IUserTaskOperations>().GetAsync(staged.Id);
+    }
+
+    private static WorkflowExecutionHarness Build(string database, PersistenceMode mode, string generation, Action<IServiceCollection>? configure = null)
     {
         var host = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Events.EventsFeature().ConfigureServices(services))
@@ -87,6 +208,7 @@ public sealed class UserTaskRuntimeJourneyTests
                     RecoveryContinuationSigningKey = "user-task-recovery-key-at-least-32-bytes", HierarchyCursorSigningKey = "user-task-hierarchy-key-at-least-32-bytes" });
                 services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
                 services.Replace(ServiceDescriptor.Scoped<IUserTaskAccess, ActorAccess>());
+                configure?.Invoke(services);
             }).WithPersistenceMode(mode).Build(WorkflowExecutionHarness.Identity, "user-task-run", Enumerable.Range(1, 30).Select(x => $"task-{generation}-{x}"));
         foreach (var initializer in host.Services.GetServices<IShellInitializer>()) initializer.InitializeAsync().GetAwaiter().GetResult();
         host.InitializeActivityTypes();

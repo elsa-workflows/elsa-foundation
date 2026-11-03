@@ -1,9 +1,9 @@
 # User Tasks
 
-- **Status:** Active program; delivery blocked at the organization three-failed-check stop condition. Establishment, design and end-to-end delivery authorized 2 November 2026.
+- **Status:** Active program; implementation qualification resumed under the owner’s 3 November instruction. Establishment, design and end-to-end delivery authorized 2 November 2026.
 - **Steward:** Sipke Schoorstra; delivery Codex.
 - **Program:** [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688).
-- **Feature and acceptance:** [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), [specification](../../specs/1190-user-tasks/spec.md).
+- **Feature and acceptance:** [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), [specification](../../specs/1194-user-tasks/spec.md).
 
 ## Purpose and scope
 
@@ -23,4 +23,4 @@ Do not mark complete until every #3577 success criterion and Program exit row ha
 
 ## Delivery checkpoint
 
-Research/design and an initial implementation are preserved in the draft delivery PR. Qualification is incomplete; see the [exact failure, intermediate evidence and remaining work](../../specs/1190-user-tasks/delivery-status.md). Owner direction is required to resume after the protocol stop; neither this Program nor #3577 is complete.
+Research/design and an initial implementation are preserved in the draft delivery PR. Qualification is incomplete; see the [exact failure, intermediate evidence and remaining work](../../specs/1194-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.

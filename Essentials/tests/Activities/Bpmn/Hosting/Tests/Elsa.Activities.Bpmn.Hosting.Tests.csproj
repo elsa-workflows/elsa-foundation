@@ -32,7 +32,9 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <PackageReference Include="Bpmn.Model" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <ProjectReference Include="../../../../../src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
+    <ProjectReference Include="../../../../../src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../../../tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj" ReferenceOutputAssembly="false" />

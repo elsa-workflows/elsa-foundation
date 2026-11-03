@@ -3,6 +3,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using NativeEndpoints;
+using Elsa.Workflows.Runtime.Api.Endpoints;
 
 namespace Elsa.Workflows.Runtime.Api.UserTasks;
 
@@ -27,6 +28,7 @@ internal sealed record UserTaskProblem(string Code, string Message, JsonElement?
 
 [Get("runtime/user-tasks")]
 [RequireAnyPermission(UserTaskPermissions.Read, UserTaskPermissions.Manage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ListTasks(IUserTaskOperations tasks) : ApiEndpoint<TaskListRequest, UserTaskPageView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListUserTasks";
@@ -39,6 +41,7 @@ internal sealed class ListTasks(IUserTaskOperations tasks) : ApiEndpoint<TaskLis
 
 [Get("runtime/user-tasks/{id}")]
 [RequireAnyPermission(UserTaskPermissions.Read, UserTaskPermissions.Manage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ReadTask(IUserTaskOperations tasks) : ApiEndpoint<TaskIdRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "GetUserTask";
@@ -48,6 +51,7 @@ internal sealed class ReadTask(IUserTaskOperations tasks) : ApiEndpoint<TaskIdRe
 
 [Post("runtime/user-tasks/{id}/claim")]
 [RequirePermission(UserTaskPermissions.Act)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ClaimTask(IUserTaskOperations tasks) : ApiEndpoint<TaskMutationRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "ClaimUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
@@ -57,6 +61,7 @@ internal sealed class ClaimTask(IUserTaskOperations tasks) : ApiEndpoint<TaskMut
 
 [Post("runtime/user-tasks/{id}/release")]
 [RequirePermission(UserTaskPermissions.Act)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ReleaseTask(IUserTaskOperations tasks) : ApiEndpoint<TaskMutationRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "ReleaseUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
@@ -66,6 +71,7 @@ internal sealed class ReleaseTask(IUserTaskOperations tasks) : ApiEndpoint<TaskM
 
 [Post("runtime/user-tasks/{id}/complete")]
 [RequirePermission(UserTaskPermissions.Act)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class CompleteTask(IUserTaskOperations tasks) : ApiEndpointWithResult<TaskCompletionRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "CompleteUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
@@ -78,6 +84,7 @@ internal sealed class CompleteTask(IUserTaskOperations tasks) : ApiEndpointWithR
 
 [Post("runtime/user-tasks/{id}/reassign")]
 [RequirePermission(UserTaskPermissions.Manage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ReassignTask(IUserTaskOperations tasks) : ApiEndpoint<TaskAssignmentRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "ReassignUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
@@ -87,6 +94,7 @@ internal sealed class ReassignTask(IUserTaskOperations tasks) : ApiEndpoint<Task
 
 [Get("runtime/user-task-forms")]
 [RequireAnyPermission(UserTaskPermissions.FormsRead, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ListTaskForms(IUserTaskOperations tasks) : ApiEndpoint<FormPageRequest, UserTaskFormPage>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListUserTaskForms";
@@ -95,6 +103,7 @@ internal sealed class ListTaskForms(IUserTaskOperations tasks) : ApiEndpoint<For
 
 [Post("runtime/user-task-forms")]
 [RequirePermission(UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class CreateTaskForm(IUserTaskOperations tasks) : ApiEndpoint<UserTaskForm, UserTaskFormVersion>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "CreateUserTaskForm"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
@@ -103,6 +112,7 @@ internal sealed class CreateTaskForm(IUserTaskOperations tasks) : ApiEndpoint<Us
 
 [Get("runtime/user-task-identity")]
 [RequireAnyPermission(UserTaskPermissions.Read, UserTaskPermissions.Manage, UserTaskPermissions.FormsRead, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class TaskIdentity(IUserTaskAccess access) : ApiEndpointWithoutRequest<UserTaskActor>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "UserTaskIdentity";
@@ -111,6 +121,7 @@ internal sealed class TaskIdentity(IUserTaskAccess access) : ApiEndpointWithoutR
 
 [Get("runtime/user-task-forms/{id}/versions/{version}")]
 [RequireAnyPermission(UserTaskPermissions.FormsRead, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
 internal sealed class ReadTaskForm(IUserTaskOperations tasks) : ApiEndpoint<FormVersionRequest, UserTaskFormVersion>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "GetUserTaskFormVersion";
