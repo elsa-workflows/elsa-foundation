@@ -1,0 +1,49 @@
+using System.Text.Json;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
+using Elsa.Activities.Bpmn.Core;
+using Elsa.Activities.Bpmn.Design;
+using Elsa.Activities.Bpmn.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+
+var checks = new List<string>();
+void Check(bool condition, string name)
+{
+    if (!condition) throw new InvalidOperationException(name);
+    checks.Add(name);
+}
+var services = new ServiceCollection();
+services.AddLogging();
+services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+services.AddCShells(builder => builder.WithAssemblies(typeof(ActivitiesBpmnDesignFeature).Assembly)
+    .AddShell("bpmn-author", shell => shell.WithFeature<ActivitiesBpmnDesignFeature>()));
+await using var host = services.BuildServiceProvider();
+var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("bpmn-author");
+await using var scope = activated.BeginScope();
+var handler = scope.ServiceProvider.GetServices<IActivityStructureHandler>().Single();
+using var placement = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(args[0], "placement.json")));
+var placedId = placement.RootElement.GetProperty("Root").GetProperty("ExecutableNodeId").GetString()!;
+var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+var authored = new BpmnAuthoredStructure(
+    activities: [new ActivityNode("copywriter", "copywriter-v1", [], [])],
+    elements: [new("start", BpmnElementTypes.StartEvent), new("write", BpmnElementTypes.ServiceTask, childNodeId: "copywriter"), new("end", BpmnElementTypes.EndEvent)],
+    sequenceFlows: [new("first", "start", "write"), new("last", "write", "end")]);
+var node = new ActivityNode("editorial", "bpmn-process-v1", [], [],
+    new(BpmnActivityIdentities.StructureKind, BpmnActivityIdentities.StructureSchemaVersion, JsonSerializer.SerializeToElement(authored, options)));
+var children = handler.ProjectChildren(node);
+Check(children.Single().Name == BpmnActivityIdentities.ActivitiesSlotName && children.Single().Activities.Single().ActivityVersionId == "copywriter-v1",
+    "normal authoring feature projects the exact published specialist child");
+var roundtrip = handler.ReplaceChildren(node, children);
+var compiled = handler.RemapExecutableStructure(handler.CompileExecutableStructure(roundtrip), new Dictionary<string, string> { ["copywriter"] = placedId });
+Check(compiled.Kind == "elsa.bpmn.structure" && compiled.SchemaVersion == "1.0.0", "lowering preserves frozen structure identity");
+Check(compiled.Payload.Deserialize<BpmnStructure>(options)!.Elements.Single(element => element.ElementId == "write").ChildNodeId == placedId,
+    "actual handler remaps the child to the separately published placement");
+Check(!AppDomain.CurrentDomain.GetAssemblies().Any(assembly => assembly.GetName().Name is "Elsa.Activities.Bpmn" or "Bpmn.Model" or "Bpmn.Semantics"),
+    "authoring process loads no concrete BPMN runtime or interpreter");
+await File.WriteAllTextAsync(Path.Combine(args[0], "bpmn-structure.json"), compiled.Payload.GetRawText());
+Console.WriteLine(JsonSerializer.Serialize(new { checks, passed = checks.Count, authoringOnly = true, compiled.Kind, compiled.SchemaVersion }));

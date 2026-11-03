@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Agent.Core.Models;
 
 namespace Elsa.Agent.Api.Models;
@@ -22,7 +23,15 @@ public sealed record AgentBootstrapResponse(
     IReadOnlyCollection<string> Modes,
     IReadOnlyCollection<AgentCapabilityResponse> Capabilities,
     AgentProviderDiagnosticsResponse? Provider,
-    AgentPolicySummaryResponse Policy);
+    AgentPolicySummaryResponse Policy)
+{
+    /// <summary>
+    /// Preview (#3441): what a host restart does to this server's Weaver sessions: <c>durable</c> (they are recovered),
+    /// <c>processLifetime</c> (they survive reloads while the process lives; a restart ends them) or <c>unsupported</c>
+    /// (this composition cannot recover them).
+    /// </summary>
+    public string Recovery { get; init; } = "unsupported";
+}
 
 public sealed record AgentPolicySummaryResponse(
     bool ContextVisibility,
@@ -67,6 +76,12 @@ public sealed class AgentCreateSessionRequest
 
     public AgentSurfaceRequest ActiveSurface { get; init; } = new();
     public AgentClientContextRequest ClientContext { get; init; } = new();
+
+    /// <summary>Preview: the Studio backend the session belongs to. It only narrows the owner's session list.</summary>
+    public string? Workspace { get; init; }
+
+    /// <summary>Preview: the session this one continues past a limit. Only the link is recorded; nothing is carried over.</summary>
+    public string? ContinuedFrom { get; init; }
 }
 
 public sealed class AgentSurfaceRequest
@@ -88,14 +103,54 @@ public sealed record AgentCreateSessionResponse(
     string SessionId,
     string Status,
     string? Title,
-    IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments);
+    IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments)
+{
+    /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? Policy { get; init; }
+}
 
 public sealed record AgentSessionDetailsResponse(
     string SessionId,
     string Status,
     string? Title,
     IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments,
-    IReadOnlyCollection<AgentMessageViewModelResponse> Messages);
+    IReadOnlyCollection<AgentMessageViewModelResponse> Messages)
+{
+    /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? Policy { get; init; }
+
+    /// <summary>
+    /// Preview (#3441): the documented session limit the session reached (<c>snapshots</c> or <c>bytes</c>); omitted when it
+    /// reached none. A client offers continuation in a new, linked session.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LimitReached { get; init; }
+}
+
+/// <summary>
+/// Preview: a session's effective autonomy, its ceiling, the modes a client may request
+/// and the owner's policy revision.
+/// </summary>
+public sealed record AgentSessionPolicyResponse(
+    string AutonomyMode,
+    string MaxAutonomyMode,
+    IReadOnlyCollection<string> AllowedAutonomyModes,
+    long Revision);
+
+/// <summary>
+/// Preview: an autonomy-only conditional change. Both members are required; the caller
+/// cannot name an owner, actor or tenant.
+/// </summary>
+public sealed class AgentSessionAutonomyRequest
+{
+    /// <summary><c>manual</c>, <c>auto-read-only</c> or <c>full-auto</c>; clamped to the session's current ceiling.</summary>
+    public string? AutonomyMode { get; init; }
+
+    /// <summary>The policy revision the caller last acknowledged.</summary>
+    public long? ExpectedRevision { get; init; }
+}
 
 public sealed record AgentContextAttachmentResponse(
     string Id,
@@ -105,17 +160,112 @@ public sealed record AgentContextAttachmentResponse(
     string ContentType,
     string Sensitivity,
     string Scope,
-    object? Content);
+    object? Content)
+{
+    public string ModuleId { get; init; } = string.Empty;
+    public string SchemaVersion { get; init; } = "1";
+    public AgentResourceTarget? Target { get; init; }
+    public AgentContextOrigin Origin { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public IReadOnlyCollection<string> AgentScopes { get; init; } = [];
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
+}
 
 public sealed record AgentMessageViewModelResponse(
     string Id,
     string Role,
     string Content,
-    string Status);
+    string Status)
+{
+    /// <summary>Preview: the policy revision the owner accepted this message under, when it owns revisions.</summary>
+    public long? AcceptedPolicyRevision { get; init; }
+
+    /// <summary>
+    /// Preview (#3441): the public session policy (mode, ceiling, allowed modes and revision) the owner accepted this
+    /// message under; omitted when the owner did not attribute it. Revisions are per session, so a reopened session names
+    /// each message's mode from this record rather than from a revision number seen elsewhere.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+
+    /// <summary>Preview: why a cancelled message stopped (<c>interrupted</c>, <c>withdrawn</c> or <c>user-stop</c>); absent otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StatusReason { get; init; }
+}
+
+/// <summary>Preview: the query of the owner-scoped session list (<c>GET /_elsa/agent/sessions</c>).</summary>
+public sealed class AgentSessionListQueryRequest
+{
+    /// <summary>Narrows the owner's sessions to one workspace.</summary>
+    public string? Workspace { get; init; }
+
+    /// <summary>At most this many sessions, 1 to 100; 20 when absent.</summary>
+    public int? Take { get; init; }
+
+    /// <summary>The <c>next</c> cursor of a previous page; only older sessions are returned.</summary>
+    public string? Before { get; init; }
+}
+
+/// <summary>Preview: one page of the caller's own sessions, newest first.</summary>
+/// <param name="Next">The cursor for the next older page, or null when this page is the last.</param>
+public sealed record AgentSessionListResponse(IReadOnlyCollection<AgentSessionSummaryResponse> Items, string? Next);
+
+/// <summary>Preview: one of the caller's sessions, as the owning store summarizes it.</summary>
+public sealed record AgentSessionSummaryResponse(
+    string Id,
+    string? Title,
+    string Status,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt,
+    int PendingReviewCount,
+    string? RecoveryState);
+
+/// <summary>Preview: the owner's statement about an uncertain client operation. It is never a receipt.</summary>
+public sealed class AgentClientInvocationResolutionRequest
+{
+    /// <summary><c>applied</c>, <c>notApplied</c> or <c>unknown</c>.</summary>
+    public string? Claim { get; init; }
+}
 
 public sealed record AgentMessageAcceptedResponse(
-    AgentMessage Message,
+    AgentAcceptedMessageResponse Message,
     IReadOnlyCollection<AgentViolation> Warnings);
+
+/// <summary>
+/// The accepted message as the client sees it: the members the domain <see cref="AgentMessage"/> has always
+/// serialized, with the frozen accepted policy projected to its public session-policy shape. The client never
+/// receives denied capabilities, admitted context kinds, sensitivity ceilings or retention labels.
+/// </summary>
+public sealed record AgentAcceptedMessageResponse(
+    string Id,
+    string SessionId,
+    AgentRole Role,
+    string Content,
+    AgentMessageStatus Status,
+    string? CapabilityId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt,
+    AgentError? Error,
+    IReadOnlyCollection<string> ContextAttachmentIds,
+    IReadOnlyCollection<string> ProposalIds,
+    IReadOnlyCollection<AgentContextAttachment> Context)
+{
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public string? PromptMode { get; init; }
+    public string? DeliveryFingerprint { get; init; }
+    public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
+    public bool HasDisclosureProvenance { get; init; }
+    public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
+
+    /// <summary>Preview: the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
+    public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+
+    /// <summary>Preview: why a cancelled message stopped (<c>interrupted</c>, <c>withdrawn</c> or <c>user-stop</c>).</summary>
+    public string? StatusReason { get; init; }
+}
 
 public sealed class AgentSessionRouteRequest
 {
@@ -141,6 +291,11 @@ public sealed class AgentMessageRequest
     public IReadOnlyCollection<AgentContextAttachmentRequest> ContextAttachments { get; init; } = [];
     public string? CapabilityId { get; init; }
     public IReadOnlyCollection<string> RequestedCapabilities { get; init; } = [];
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public string? PromptMode { get; init; }
+    /// <summary>Current surface for this prompt. It is an untrusted admission hint, never an invocation target or authority.</summary>
+    public AgentSurfaceRequest? ActiveSurface { get; init; }
 }
 
 public sealed class AgentContextAttachmentRequest
@@ -152,13 +307,21 @@ public sealed class AgentContextAttachmentRequest
     public string Summary { get; init; } = string.Empty;
 
     /// <summary>
-    /// Optional structured body the client supplies inline (e.g. the live workflow graph that Studio
-    /// serializes for a <c>workflow.definition</c> attachment). When omitted the <see cref="Summary"/>
-    /// is used as the attachment content for backwards compatibility.
+    /// Module-owned structured caller input. Installed sources admit its schema, bound its content
+    /// and establish provenance before provider use; client metadata never grants authority.
     /// </summary>
     public object? Content { get; init; }
 
     public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
+    public string Source { get; init; } = string.Empty;
+    public string? SourceId { get; init; }
+    public string Label { get; init; } = string.Empty;
+    public string ContentType { get; init; } = string.Empty;
+    public string Scope { get; init; } = "selection";
+    public string ModuleId { get; init; } = string.Empty;
+    public string SchemaVersion { get; init; } = "1";
+    public AgentResourceTarget? Target { get; init; }
+    public AgentClientBinding? Client { get; init; }
 }
 
 public sealed class AgentProposalDecisionRequest
@@ -239,23 +402,94 @@ public static class AgentApiMapping
             attachment.ContentType,
             attachment.Sensitivity.ToContractString(),
             attachment.Scope,
-            attachment.Content);
+            attachment.Content)
+        {
+            ModuleId = attachment.ModuleId,
+            SchemaVersion = attachment.SchemaVersion,
+            Target = attachment.Target,
+            Origin = attachment.Origin,
+            Client = attachment.Client,
+            AgentScopes = attachment.AgentScopes,
+            Summary = attachment.Summary,
+            References = attachment.References
+        };
 
     public static AgentContextAttachment ToDomain(this AgentContextAttachmentRequest attachment)
         => new(
             attachment.Id,
-            string.IsNullOrWhiteSpace(attachment.Kind) ? "context" : attachment.Kind,
-            attachment.References.TryGetValue("sourceId", out var sourceId) ? sourceId : null,
-            attachment.DisplayName,
-            string.IsNullOrWhiteSpace(attachment.Kind) ? "summary" : attachment.Kind,
+            string.IsNullOrWhiteSpace(attachment.Source) ? attachment.Kind : attachment.Source,
+            attachment.SourceId,
+            string.IsNullOrWhiteSpace(attachment.Label) ? attachment.DisplayName : attachment.Label,
+            string.IsNullOrWhiteSpace(attachment.ContentType) ? attachment.Kind : attachment.ContentType,
             ParseSensitivity(attachment.Sensitivity),
-            attachment.References.TryGetValue("scope", out var scope) ? scope : "selection",
+            attachment.Scope,
             attachment.Summary,
             attachment.Content ?? attachment.Summary,
-            attachment.References);
+            attachment.References)
+        {
+            ModuleId = attachment.ModuleId,
+            SchemaVersion = attachment.SchemaVersion,
+            Target = attachment.Target,
+            Client = attachment.Client,
+            Origin = AgentContextOrigin.ClientSnapshot,
+            AgentScopes = []
+        };
 
     public static AgentMessageViewModelResponse ToViewModel(this AgentMessage message)
-        => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString());
+        => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString())
+        {
+            AcceptedPolicyRevision = message.AcceptedPolicy?.Revision,
+            AcceptedPolicy = message.AcceptedPolicy?.ToResponse(),
+            StatusReason = message.StatusReason
+        };
+
+    public static AgentSessionSummaryResponse ToResponse(this AgentSessionSummary summary)
+        => new(summary.Id, summary.Title, summary.Status.ToContractString(), summary.UpdatedAt, summary.ExpiresAt, summary.PendingReviewCount, summary.RecoveryState);
+
+    /// <summary>Parses a wire owner statement (<c>applied</c>, <c>notApplied</c> or <c>unknown</c>); null when unset or unrecognized.</summary>
+    public static AgentOwnerResolutionClaim? ParseResolutionClaim(string? claim) => claim?.Trim() switch
+    {
+        "applied" => AgentOwnerResolutionClaim.Applied,
+        "notApplied" => AgentOwnerResolutionClaim.NotApplied,
+        "unknown" => AgentOwnerResolutionClaim.Unknown,
+        _ => null
+    };
+
+    /// <summary>Projects an accepted domain message for the client; the frozen policy stays with the owner for attribution.</summary>
+    public static AgentMessageAcceptedResponse ToAcceptedResponse(this AgentMessage message, IReadOnlyCollection<AgentViolation> warnings)
+        => new(new(
+                message.Id,
+                message.SessionId,
+                message.Role,
+                message.Content,
+                message.Status,
+                message.CapabilityId,
+                message.CreatedAt,
+                message.CompletedAt,
+                message.Error,
+                message.ContextAttachmentIds,
+                message.ProposalIds,
+                message.Context)
+            {
+                RequestId = message.RequestId,
+                Source = message.Source,
+                Client = message.Client,
+                PromptMode = message.PromptMode,
+                DeliveryFingerprint = message.DeliveryFingerprint,
+                ToolResults = message.ToolResults,
+                HasDisclosureProvenance = message.HasDisclosureProvenance,
+                DisclosureHistory = message.DisclosureHistory,
+                AcceptedPolicy = message.AcceptedPolicy?.ToResponse(),
+                StatusReason = message.StatusReason
+            },
+            warnings);
+
+    public static AgentSessionPolicyResponse ToResponse(this AgentSessionPolicyState state)
+        => new(
+            state.Policy.AutonomyMode.ToContractString(),
+            state.Policy.MaxAutonomyMode.ToContractString(),
+            state.Policy.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
+            state.Revision);
 
     public static AgentProposalDecisionResponse ToDecisionResponse(this AgentActionProposal proposal, AgentProposalExecutionResult? result = null)
         => new(
@@ -384,14 +618,14 @@ public static class AgentApiMapping
         _ => status.ToString().ToLowerInvariant()
     };
 
-    private static AgentContextSensitivity ParseSensitivity(string sensitivity) => sensitivity.Trim().ToLowerInvariant() switch
+    private static AgentContextSensitivity ParseSensitivity(string sensitivity) => sensitivity?.Trim().ToLowerInvariant() switch
     {
         "public" => AgentContextSensitivity.Public,
         "internal" => AgentContextSensitivity.Internal,
         "confidential" => AgentContextSensitivity.Sensitive,
         "sensitive" => AgentContextSensitivity.Sensitive,
-        "secret-redacted" => AgentContextSensitivity.SecretRedacted,
+        "secret-redacted" or "secretredacted" => AgentContextSensitivity.Secret,
         "secret" => AgentContextSensitivity.Secret,
-        _ => AgentContextSensitivity.Internal
+        _ => AgentContextSensitivity.Secret
     };
 }

@@ -6,7 +6,7 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Models;
 using LibInterchange = global::Bpmn.Interchange;
 using LibModel = global::Bpmn.Model;
-using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
@@ -24,7 +24,10 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// </summary>
 public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Export(ActivityNode processNode, BpmnExportOptions? options = null)
     {
@@ -80,6 +83,13 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                     ]);
             }
 
+            if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var directBinding))
+                extensions = extensions with
+                {
+                    ForeignAttributes = extensions.ForeignAttributes
+                        .Append(BpmnDirectBindingMetadata.ToAttribute(directBinding, element.ElementId)).ToArray()
+                };
+
             elements.Add(new LibModel.BpmnElement(
                 element.ElementId,
                 element.ElementType,
@@ -88,7 +98,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 element.LaneId,
                 element.DefaultFlowId,
                 element.EventDefinitions.Select(definition => new LibModel.BpmnEventDefinition(definition.Type, definition.Properties)).ToArray(),
-                element.Properties.Where(property => !property.Key.StartsWith(BpmnRetainedAuthoring.ConditionExpressionPrefix, StringComparison.Ordinal))
+                element.Properties.Where(property => property.Key != BpmnDirectBindingMetadata.PropertyKey &&
+                        !property.Key.StartsWith(BpmnRetainedAuthoring.ConditionExpressionPrefix, StringComparison.Ordinal))
                     .ToDictionary(property => property.Key, property => property.Value, StringComparer.Ordinal),
                 element.AttachedToRef,
                 element.CancelActivity,

@@ -163,7 +163,7 @@ public sealed class WorkflowControlTransportTests
         Exception cause = failureKind switch { "io" => new IOException("Source read failed."),
             "json" => new JsonException("Source read is malformed."), _ => new OperationCanceledException() };
         var lookup = new SourceLookup { Failure = cause };
-        var template = Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<ActivityResumeValidating>>());
+        var template = Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<ActivityResumeValidating>>(), handler => handler.GetType().Name == "DispatchWorkflowResumeGuard");
         var guard = (IEventHandler<ActivityResumeValidating>)ActivatorUtilities.CreateInstance(scope.ServiceProvider, template.GetType(), lookup);
         var state = (await fixture.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(message.ParentWorkflowExecutionId, message.ParentActivityExecutionId))!;
         var pin = (await fixture.FindWorkflowAsync(message.ParentWorkflowExecutionId))!.PinnedExecutable;

@@ -10,7 +10,7 @@
     <ProjectReference Include="../../Core/Elsa.Etl.Core.csproj" />
     <ProjectReference Include="../Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />

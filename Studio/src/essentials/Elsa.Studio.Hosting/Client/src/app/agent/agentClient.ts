@@ -1,7 +1,12 @@
-import type { StudioEndpointContext } from "../../sdk";
+// The transport uses the public SDK bundle; its error class must have the same runtime identity.
+import { StudioHttpError } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
 import type {
+  AgentClientAcknowledgement,
+  AgentAcceptedPolicy,
   AgentActionProposal,
   AgentAutonomyMode,
+  AgentAutonomyUpdateRequest,
   AgentBootstrapResponse,
   AgentProviderStatus,
   AgentProviderDiagnostics,
@@ -11,21 +16,182 @@ import type {
   AgentMessageRequest,
   AgentMessageResponse,
   AgentProposalDecisionRequest,
-  AgentProposalDecisionResponse
+  AgentProposalDecisionResponse,
+  AgentMessageStatusReason,
+  AgentOwnerResolution,
+  AgentOwnerResolutionClaim,
+  AgentRecordedMessage,
+  AgentRecordedProposal,
+  AgentSessionDetailResponse,
+  AgentSessionLimit,
+  AgentSessionListQuery,
+  AgentSessionListResponse,
+  AgentSessionPolicy,
+  AgentSessionSummary
 } from "./agentTypes";
 
 export interface AgentClient {
   bootstrap(): Promise<AgentBootstrapResponse>;
   createSession(request: AgentCreateSessionRequest): Promise<AgentCreateSessionResponse>;
+  /** Reads the authoritative session detail, including its acknowledged policy when the backend owns one. */
+  getSession(sessionId: string): Promise<AgentSessionDetailResponse>;
+  /**
+   * Preview (#3440): one conditional autonomy-only change. Resolves with the acknowledged policy;
+   * refusals reject with an {@link AgentApiError} carrying the server's code, and carry no policy data.
+   */
+  updateAutonomy(sessionId: string, request: AgentAutonomyUpdateRequest): Promise<AgentSessionPolicy>;
   sendMessage(sessionId: string, request: AgentMessageRequest): Promise<AgentMessageResponse>;
   approveProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   denyProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   executeProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
+  acknowledgeClient(sessionId: string, invocationId: string, request: AgentClientAcknowledgement): Promise<AgentProposalDecisionResponse>;
   submitFeedback(sessionId: string, messageId: string, request: AgentFeedbackRequest): Promise<void>;
   cancelTurn(sessionId: string, turnId: string): Promise<void>;
+  /** Preview (#3441): the caller's own sessions, newest first; the server scopes them to the authenticated owner. */
+  listSessions(query?: AgentSessionListQuery): Promise<AgentSessionListResponse>;
+  /** Preview (#3441): the session's recorded proposals with their statuses, previews and deadlines. */
+  listProposals(sessionId: string): Promise<AgentRecordedProposal[]>;
+  /** Preview (#3441): withdraws a prompt that never started; the server refuses it once it started. */
+  withdrawMessage(sessionId: string, messageId: string): Promise<AgentRecordedMessage>;
+  /** Preview (#3441): records the owner's statement about an uncertain client operation. It is not a receipt. */
+  resolveClientInvocation(sessionId: string, invocationId: string, claim: AgentOwnerResolutionClaim): Promise<AgentRecordedProposal>;
+}
+
+/** An HTTP refusal with the authenticated server's authoritative terminal operation outcome. */
+export class AgentExecutionError extends StudioHttpError {
+  constructor(status: number, message: string, public readonly code: string, public readonly terminalOutcome: AgentProposalDecisionResponse, payload: unknown) {
+    super(status, message, null, payload);
+    this.name = "AgentExecutionError";
+  }
+}
+
+/** An HTTP refusal that carries the Agent API's error code (for example `agent.session.policy_stale`). */
+export class AgentApiError extends StudioHttpError {
+  constructor(status: number, message: string, public readonly code: string, payload: unknown, retryAfterSeconds: number | null = null) {
+    super(status, message, null, payload, retryAfterSeconds);
+    this.name = "AgentApiError";
+  }
+}
+
+/**
+ * Preview (#3441): how a recovery read or action ended when it did not succeed. Nothing was applied in any refused case.
+ * - `owned-elsewhere`: another Studio host process holds the session's live lease; retry after the hint.
+ * - `ownership-lost`: this host lost the session during the call; read it again.
+ * - `unavailable`: the recorded state is unreadable or failed verification.
+ * - `query-unsupported`: the backend cannot list sessions; reopen by identity instead.
+ * - `not-pending`: the prompt already started, or a turn is running.
+ * - `not-uncertain`: the operation is not uncertain, so it cannot be resolved.
+ * - `resolution-conflict`: a different owner statement is already recorded.
+ * - `proposal-conflict`: the operation changed after it was read; read it again and decide again.
+ * - `policy-stale`: the session policy changed since the operation was approved.
+ * - `not-found`: the shared not-found or forbidden outcome; nothing about the session is disclosed.
+ * - `lost`: no authoritative answer arrived; the action may or may not have been recorded.
+ */
+export type AgentRecoveryFailure = "owned-elsewhere" | "ownership-lost" | "unavailable" | "query-unsupported" | "not-pending" | "not-uncertain"
+  | "resolution-conflict" | "proposal-conflict" | "policy-stale" | "not-found" | "invalid" | "lost" | "refused";
+
+const RECOVERY_FAILURES: Record<string, AgentRecoveryFailure> = {
+  "agent.session.owned_elsewhere": "owned-elsewhere",
+  "agent.session.ownership_lost": "ownership-lost",
+  "agent.session.unavailable_state": "unavailable",
+  "agent.session.query_unsupported": "query-unsupported",
+  "agent.message.not_pending": "not-pending",
+  "agent.invocation.not_uncertain": "not-uncertain",
+  "agent.invocation.resolution_conflict": "resolution-conflict",
+  "agent.invocation.resolution_invalid": "invalid",
+  "agent.proposal.conflict": "proposal-conflict",
+  "agent.proposal.policy_stale": "policy-stale",
+  "agent.session.not_found": "not-found",
+  "agent.session.forbidden": "not-found",
+  "agent.message.not_found": "not-found",
+  "agent.invocation.not_found": "not-found"
+};
+
+/** Classifies a failed recovery request; the shared 404 and 403 are one outcome, so a foreign session discloses nothing. */
+export function classifyRecoveryFailure(error: unknown): AgentRecoveryFailure {
+  if (!(error instanceof StudioHttpError)) return "lost";
+  const code = getAgentErrorCode(error);
+  if (code && RECOVERY_FAILURES[code]) return RECOVERY_FAILURES[code];
+  if (error.status === 404 || error.status === 403) return "not-found";
+  if (error.status === 400) return "invalid";
+  if (error.status === 0 || error.status === 408 || error.status >= 500) return "lost";
+  return "refused";
+}
+
+/** The retry hint of a retryable refusal, in whole seconds, when the server sent one. */
+export function getAgentRetryAfterSeconds(error: unknown): number | undefined {
+  return error instanceof StudioHttpError && typeof error.retryAfterSeconds === "number" ? error.retryAfterSeconds : undefined;
+}
+
+/** How an autonomy update request ended when it did not return an acknowledged policy. */
+export type AgentAutonomyFailure = "lost" | "stale" | "busy" | "closed" | "unsupported" | "invalid" | "not-found" | "refused";
+
+const AUTONOMY_FAILURES: Record<string, AgentAutonomyFailure> = {
+  "agent.session.policy_stale": "stale",
+  "agent.session.busy": "busy",
+  "agent.session.closed": "closed",
+  "agent.session.autonomy_unsupported": "unsupported",
+  "agent.session.autonomy_invalid": "invalid"
+};
+
+/**
+ * Classifies a failed autonomy update. Only a transport failure, or a response that carries no
+ * authoritative refusal (5xx, timeout, unreadable body), is "lost": the change may have committed.
+ */
+export function classifyAutonomyFailure(error: unknown): AgentAutonomyFailure {
+  if (!(error instanceof StudioHttpError)) return "lost";
+  const code = error instanceof AgentApiError ? error.code : readString(readRecord(error.payload, "error"), "code");
+  if (code && AUTONOMY_FAILURES[code]) return AUTONOMY_FAILURES[code];
+  if (error.status === 404) return "not-found";
+  if (error.status === 400) return "invalid";
+  if (error.status === 0 || error.status === 408 || error.status >= 500 || (error.status >= 200 && error.status < 300)) return "lost";
+  return "refused";
+}
+
+/** Prompt admission lost to a committed policy change; the prompt was not accepted and is never resent automatically. */
+export const POLICY_CHANGED = "agent.message.policy_changed";
+
+/** The error code a refused Agent request carried, when it carried one. */
+export function getAgentErrorCode(error: unknown): string | undefined {
+  if (error instanceof AgentApiError || error instanceof AgentExecutionError) return error.code;
+  if (error instanceof StudioHttpError) return readString(readRecord(error.payload, "error"), "code");
+  return undefined;
+}
+
+function toAgentApiError(error: unknown): unknown {
+  if (!(error instanceof StudioHttpError) || error instanceof AgentApiError) return error;
+  const failure = readRecord(error.payload, "error");
+  const code = readString(failure, "code");
+  return code ? new AgentApiError(error.status, readString(failure, "message") ?? error.message, code, error.payload, error.retryAfterSeconds) : error;
+}
+
+/** Unwraps an envelope, turning a wrapped (status 200) refusal into the same coded error as an HTTP refusal. */
+function unwrapCoded<T>(envelope: AgentApiResponse<T>): T {
+  const failure = readRecord(envelope, "error");
+  const code = readString(failure, "code");
+  if (failure && code) {
+    const status = readField(failure, "statusCode");
+    throw new AgentApiError(typeof status === "number" ? status : 409, readString(failure, "message") ?? code, code, envelope);
+  }
+  return unwrap(envelope);
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
+  const deliveryIds = new WeakMap<AgentMessageRequest, string>();
+
+  async function postReviewedProposal<T>(proposalId: string, decision: "approve" | "deny" | "execute", request: Record<string, unknown>): Promise<T> {
+    let envelope: AgentApiResponse<T>;
+    try {
+      envelope = await context.http.postJson<AgentApiResponse<T>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/${decision}`, request);
+    } catch (error) {
+      if (error instanceof StudioHttpError) throw terminalExecutionError(error.payload, proposalId, error.status) ?? error;
+      throw error;
+    }
+    const terminal = terminalExecutionError(envelope, proposalId);
+    if (terminal) throw terminal;
+    return unwrap(envelope);
+  }
+
   return {
     async bootstrap() {
       // A single agent harness is active server-side; the client never chooses among providers.
@@ -38,6 +204,8 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         autonomyMode: request.autonomyMode,
         activeSurface: request.activeSurface,
         clientContext: request.clientContext,
+        ...(request.workspace ? { workspace: request.workspace } : {}),
+        ...(request.continuedFrom ? { continuedFrom: request.continuedFrom } : {}),
         metadata: {
           mode: request.mode,
           route: request.activeSurface.route,
@@ -49,53 +217,98 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         }
       })));
     },
+    async getSession(sessionId) {
+      let envelope: AgentApiResponse<BackendAgentSession>;
+      try {
+        envelope = await context.http.getJson<AgentApiResponse<BackendAgentSession>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}`);
+      } catch (error) { throw toAgentApiError(error); }
+      const detail = unwrapCoded(envelope);
+      const title = readString(detail, "title");
+      const limit = readSessionLimit(readString(detail, "limitReached"));
+      return {
+        sessionId: readString(detail, "sessionId") ?? readString(detail, "id") ?? sessionId,
+        status: mapSessionStatus(readField(detail, "status")),
+        ...(title ? { title } : {}),
+        policy: mapSessionPolicy(readRecord(detail, "policy")),
+        messages: readRecordArray(detail, "messages").map(mapRecordedMessage),
+        ...(limit ? { limit } : {})
+      };
+    },
+    async updateAutonomy(sessionId, request) {
+      let envelope: AgentApiResponse<unknown>;
+      try {
+        // Only the requested mode and the last acknowledged revision are sent; every other policy field is the owner's.
+        envelope = await context.http.putJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/autonomy`, {
+          autonomyMode: request.autonomyMode,
+          expectedRevision: request.expectedRevision
+        });
+      } catch (error) { throw toAgentApiError(error); }
+      const data = unwrapCoded(envelope);
+      const policy = mapSessionPolicy(isRecord(data) ? data : undefined);
+      if (!policy) throw new StudioHttpError(200, "The server acknowledged the autonomy change without a readable policy.");
+      return policy;
+    },
     async sendMessage(sessionId, request) {
-      const accepted = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
-        role: "user",
-        content: request.message,
-        message: request.message,
-        mode: request.mode,
-        capabilityId: request.capabilityId,
-        requestedCapabilities: request.capabilityId ? [request.capabilityId] : [],
-        contextAttachments: request.contextAttachments.map(mapContextAttachment)
-      }));
+      let requestId = request.requestId ?? deliveryIds.get(request);
+      if (!requestId) { requestId = globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`; deliveryIds.set(request, requestId); }
+      let envelope: AgentApiResponse<BackendAgentMessageAcceptedResponse>;
+      try {
+        envelope = await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
+          role: "user",
+          content: request.message,
+          message: request.message,
+          mode: request.mode,
+          capabilityId: request.capabilityId,
+          requestId,
+          source: request.source,
+          promptMode: request.promptMode,
+          activeSurface: request.activeSurface,
+          requestedCapabilities: request.capabilityId ? [request.capabilityId] : [],
+          contextAttachments: request.contextAttachments.map(mapContextAttachment)
+        });
+      } catch (error) {
+        // Only a policy conflict changes the thrown shape: callers read the session back and the user resends.
+        const coded = toAgentApiError(error);
+        throw coded instanceof AgentApiError && coded.code === POLICY_CHANGED ? coded : error;
+      }
+      const failure = readRecord(envelope, "error");
+      // Keep the historical wrapped-error message, but carry a policy conflict's code so callers can read back.
+      if (readString(failure, "code") === POLICY_CHANGED) unwrapCoded(envelope);
+      const accepted = unwrap(envelope);
 
       return {
         messageId: getAcceptedMessageId(accepted),
-        status: "pending",
-        streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`
+        status: mapMessageStatus(readField(readRecord(accepted, "message"), "status")),
+        contextAttachments: readRecordArray(readRecord(accepted, "message"), "context").map(mapAdmittedContextAttachment),
+        warnings: readRecordArray(accepted, "warnings").map(item => ({ code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", target: readString(item, "target") })),
+        streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`,
+        acceptedPolicy: mapAcceptedPolicy(readRecord(readRecord(accepted, "message"), "acceptedPolicy"))
       };
     },
     async approveProposal(proposalId, request) {
-      return mapProposalDecision(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentActionProposal>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/approve`, {
+      return mapProposalDecision(await postReviewedProposal<BackendAgentActionProposal>(proposalId, "approve", {
         actorId: "studio",
         revision: request.revision,
         comment: request.comment
-      })));
+      }));
     },
     async denyProposal(proposalId, request) {
-      return mapProposalDecision(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentActionProposal>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/deny`, {
+      return mapProposalDecision(await postReviewedProposal<BackendAgentActionProposal>(proposalId, "deny", {
         actorId: "studio",
         revision: request.revision,
         comment: request.comment,
         reason: request.comment
-      })));
+      }));
     },
     async executeProposal(proposalId, request) {
-      const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/execute`, {
-        actorId: "studio",
-        revision: request.revision,
-        comment: request.comment
-      }));
-      return {
-        proposalId: readString(result, "proposalId") ?? proposalId,
-        approvalStatus: getExecutionStatus(result),
-        result: {
-          resourceType: "agent-proposal",
-          resourceId: readString(result, "proposalId") ?? proposalId,
-          summary: readString(result, "message") ?? readString(result, "summary") ?? "Proposal execution completed."
-        }
-      };
+      return mapExecution(await postReviewedProposal<BackendAgentProposalExecutionResult>(proposalId, "execute", {
+        actorId: "studio", revision: request.revision, comment: request.comment
+      }), proposalId);
+    },
+    async acknowledgeClient(sessionId, invocationId, request) {
+      const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(
+        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/acknowledgements`, request));
+      return mapExecution(result, invocationId);
     },
     async submitFeedback(sessionId, messageId, request) {
       unwrap(await context.http.postJson<AgentApiResponse<BackendAgentFeedback>>("/_elsa/agent/feedback", {
@@ -108,8 +321,112 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
     },
     async cancelTurn(sessionId, turnId) {
       unwrap(await context.http.postJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/cancel`, {}));
+    },
+    async listSessions(query = {}) {
+      const parameters = new URLSearchParams();
+      if (query.workspace) parameters.set("workspace", query.workspace);
+      if (query.take !== undefined) parameters.set("take", String(query.take));
+      if (query.before) parameters.set("before", query.before);
+      const search = parameters.toString();
+      const page = await readCoded<unknown>(() => context.http.getJson(`/_elsa/agent/sessions${search ? `?${search}` : ""}`));
+      const next = readString(page, "next");
+      return { items: readRecordArray(page, "items").map(mapSessionSummary), ...(next ? { next } : {}) };
+    },
+    async listProposals(sessionId) {
+      const proposals = await readCoded<unknown>(() => context.http.getJson(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/proposals`));
+      return (Array.isArray(proposals) ? proposals.filter(isRecord) : []).map(mapRecordedProposal);
+    },
+    async withdrawMessage(sessionId, messageId) {
+      return mapRecordedMessage(await readCoded<Record<string, unknown>>(() => context.http.postJson(
+        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/withdraw`, {})));
+    },
+    async resolveClientInvocation(sessionId, invocationId, claim) {
+      return mapRecordedProposal(await readCoded<Record<string, unknown>>(() => context.http.postJson(
+        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/resolution`,
+        { claim: claim === "not-applied" ? "notApplied" : claim })));
     }
   };
+}
+
+/** Sends a recovery request; an HTTP or wrapped refusal becomes an {@link AgentApiError} with the server's code. */
+async function readCoded<T>(send: () => Promise<AgentApiResponse<T>>): Promise<T> {
+  let envelope: AgentApiResponse<T>;
+  try { envelope = await send(); } catch (error) { throw toAgentApiError(error); }
+  return unwrapCoded(envelope);
+}
+
+const MESSAGE_STATUS_REASONS: AgentMessageStatusReason[] = ["interrupted", "withdrawn", "user-stop"];
+
+function mapRecordedMessage(message: Record<string, unknown>): AgentRecordedMessage {
+  const revision = readField(message, "acceptedPolicyRevision");
+  const reason = normalizeEnum(readField(message, "statusReason"));
+  const content = readString(message, "content");
+  const accepted = mapAcceptedPolicy(readRecord(message, "acceptedPolicy"));
+  return {
+    id: readString(message, "id") ?? "",
+    role: normalizeEnum(readField(message, "role")),
+    status: normalizeEnum(readField(message, "status")),
+    ...(content !== undefined ? { content } : {}),
+    ...(MESSAGE_STATUS_REASONS.includes(reason as AgentMessageStatusReason) ? { statusReason: reason as AgentMessageStatusReason } : {}),
+    acceptedPolicyRevision: typeof revision === "number" ? revision : accepted?.revision,
+    ...(accepted ? { acceptedPolicy: accepted } : {})
+  };
+}
+
+function mapSessionSummary(summary: Record<string, unknown>): AgentSessionSummary {
+  const title = readString(summary, "title");
+  const expiresAt = readString(summary, "expiresAt");
+  const recoveryState = readString(summary, "recoveryState");
+  const pending = readField(summary, "pendingReviewCount");
+  return {
+    id: readString(summary, "id") ?? readString(summary, "sessionId") ?? "",
+    status: mapSessionStatus(readField(summary, "status")),
+    updatedAt: readString(summary, "updatedAt") ?? "",
+    pendingReviewCount: typeof pending === "number" ? pending : 0,
+    ...(title ? { title } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(recoveryState ? { recoveryState } : {})
+  };
+}
+
+function mapOwnerResolution(resolution: Record<string, unknown> | undefined): AgentOwnerResolution | undefined {
+  const claim = normalizeEnum(readField(resolution, "claim"));
+  if (claim !== "applied" && claim !== "not-applied" && claim !== "unknown") return undefined;
+  const actorId = readString(resolution, "actorId");
+  const resolvedAt = readString(resolution, "resolvedAt");
+  return { claim, ...(actorId ? { actorId } : {}), ...(resolvedAt ? { resolvedAt } : {}) };
+}
+
+/** A recorded proposal as the stream's proposal payload shape, so the surface normalizes both the same way. */
+function mapRecordedProposal(proposal: Record<string, unknown>): AgentRecordedProposal {
+  const prepared = readRecord(proposal, "preparedInvocation") as StudioAgentPreparedInvocation | undefined;
+  const ownerResolution = mapOwnerResolution(readRecord(proposal, "ownerResolution"));
+  const result = readField(proposal, "result");
+  const target = readRecord(proposal, "resourceTarget");
+  return {
+    ...(proposal as Partial<AgentRecordedProposal>),
+    id: readString(proposal, "id") ?? readString(proposal, "proposalId") ?? "",
+    status: mapProposalStatus(readField(proposal, "status")),
+    title: readString(proposal, "title"),
+    summary: readString(proposal, "summary"),
+    baseRevision: readString(proposal, "baseRevision"),
+    preparedInvocation: prepared,
+    resourceTarget: target as AgentRecordedProposal["resourceTarget"],
+    result: result === null ? undefined : result,
+    expiresAt: prepared?.expiresAt,
+    ownerResolution
+  };
+}
+
+function terminalExecutionError(envelope: unknown, proposalId: string, status?: number): AgentExecutionError | null {
+  const error = readRecord(envelope, "error"); const data = readRecord(envelope, "data");
+  if (!error || !data || readString(data, "proposalId") !== proposalId || readBoolean(data, "executed") !== false) return null;
+  const outcome = normalizeEnum(readField(data, "status"));
+  if (!["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
+  const errorStatus = readField(error, "statusCode");
+  return new AgentExecutionError(status ?? (typeof errorStatus === "number" ? errorStatus : 409),
+    readString(error, "message") ?? "The server refused the reviewed execution.", readString(error, "code") ?? "agent.execution.refused",
+    mapExecution(data as BackendAgentProposalExecutionResult, proposalId), envelope);
 }
 
 interface AgentApiResponse<T> {
@@ -151,6 +468,7 @@ interface BackendAgentProviderDiagnostics {
 
 interface BackendAgentSession {
   id?: string;
+  title?: string;
   sessionId?: string;
   status?: string | number;
   contextAttachments?: unknown[];
@@ -174,6 +492,10 @@ interface BackendAgentActionProposal {
 }
 
 interface BackendAgentProposalExecutionResult {
+  clientInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
+  resourceType?: string;
+  resourceId?: string;
   proposalId?: string;
   executed?: boolean;
   message?: string;
@@ -205,13 +527,16 @@ function mapBootstrap(response: BackendAgentBootstrapResponse): AgentBootstrapRe
   const provider = providerRecord ? mapProviderDiagnostics(providerRecord) : undefined;
   const capabilities = readRecordArray(response, "capabilities");
   const providerStatus = mapProviderStatus(readField(response, "providerStatus"), provider);
+  const recoveryValue = readString(response, "recovery");
+  const recovery = recoveryValue === "durable" || recoveryValue === "processLifetime" || recoveryValue === "unsupported" ? recoveryValue : undefined;
   return {
     enabled: readBoolean(response, "enabled") ?? providerStatus === "available",
     providerStatus,
     modes: readStringArray(response, "modes") as AgentBootstrapResponse["modes"] ?? ["explain", "troubleshoot", "build"],
     capabilities: capabilities.map(mapCapability),
     provider,
-    policy: mapPolicy(readRecord(response, "policy"))
+    policy: mapPolicy(readRecord(response, "policy")),
+    ...(recovery ? { recovery } : {})
   };
 }
 
@@ -273,48 +598,99 @@ function mapProviderStatus(status: unknown, provider: AgentProviderDiagnostics |
 }
 
 function mapSession(session: BackendAgentSession): AgentCreateSessionResponse {
+  const policy = mapSessionPolicy(readRecord(session, "policy"));
   return {
     sessionId: readString(session, "sessionId") ?? readString(session, "id") ?? "",
     status: mapSessionStatus(readField(session, "status")),
-    contextAttachments: []
+    contextAttachments: [],
+    ...(policy ? { policy } : {})
   };
+}
+
+/** Maps the additive session policy; an absent or unreadable one stays absent rather than defaulting. */
+function mapSessionPolicy(policy: Record<string, unknown> | undefined): AgentSessionPolicy | undefined {
+  const autonomyMode = mapAutonomyMode(readField(policy, "autonomyMode"));
+  const revision = readField(policy, "revision");
+  if (!autonomyMode || typeof revision !== "number" || !Number.isFinite(revision)) return undefined;
+  const maxAutonomyMode = mapAutonomyMode(readField(policy, "maxAutonomyMode")) ?? autonomyMode;
+  const allowed = readStringArray(policy, "allowedAutonomyModes")
+    ?.map(mapAutonomyMode)
+    .filter((mode): mode is AgentAutonomyMode => mode !== undefined);
+  return { autonomyMode, maxAutonomyMode, allowedAutonomyModes: allowed?.length ? allowed : allowedModesUpTo(maxAutonomyMode), revision };
+}
+
+/**
+ * The accepted message's public `acceptedPolicy` (the session-policy shape: mode, ceiling, allowed modes and
+ * revision) as the mode and revision that admitted it. Private policy data never reaches the client.
+ */
+function mapAcceptedPolicy(accepted: Record<string, unknown> | undefined): AgentAcceptedPolicy | undefined {
+  const revision = readField(accepted, "revision");
+  if (typeof revision !== "number") return undefined;
+  const autonomyMode = mapAutonomyMode(readField(accepted, "autonomyMode"));
+  return autonomyMode ? { autonomyMode, revision } : { revision };
 }
 
 function mapContextAttachment(attachment: AgentMessageRequest["contextAttachments"][number]) {
-  const secretRedacted = attachment.sensitivity === "secret-redacted";
-  const content = isRecord(attachment.content) ? attachment.content : undefined;
-  const references = buildContextReferences(attachment, content);
+  const redacted = attachment.sensitivity === "secret-redacted";
   return {
-    id: attachment.id,
-    kind: attachment.contentType,
-    displayName: attachment.label,
+    ...attachment,
     sensitivity: mapSensitivity(attachment.sensitivity),
-    summary: secretRedacted ? "[secret redacted]" : typeof attachment.content === "string" ? attachment.content : attachment.label,
-    // Forward the structured body (e.g. the live workflow graph) so the agent can reason over real
-    // activity ids and connections. Never forward content for secret-redacted attachments.
-    content: secretRedacted ? undefined : content,
-    references
+    summary: redacted ? "[secret redacted]" : attachment.summary ?? (typeof attachment.content === "string" ? attachment.content : attachment.label),
+    content: redacted ? undefined : attachment.content,
+    references: attachment.references ?? {}
   };
 }
 
-function buildContextReferences(attachment: AgentMessageRequest["contextAttachments"][number], content: Record<string, unknown> | undefined) {
-  const references: Record<string, string> = {
-    source: attachment.source,
-    sourceId: attachment.sourceId ?? "",
-    scope: attachment.scope
+/** Shared normalization for accepted-message and current-disclosure stream envelopes. */
+export function mapAdmittedContextAttachment(attachment: Record<string, unknown>): AgentMessageRequest["contextAttachments"][number] {
+  const sensitivities = ["public", "internal", "sensitive", "secret-redacted", "secret-redacted"] as const;
+  const sensitivityNames: Record<string, AgentMessageRequest["contextAttachments"][number]["sensitivity"]> = { public: "public", internal: "internal", sensitive: "sensitive", confidential: "sensitive", "secret-redacted": "secret-redacted", secret: "secret-redacted" };
+  const rawSensitivity = readField(attachment, "sensitivity");
+  const sensitivity = typeof rawSensitivity === "number" ? sensitivities[rawSensitivity] ?? "secret-redacted"
+    : sensitivityNames[normalizeEnum(rawSensitivity)] ?? "secret-redacted";
+  const origins = ["clientSnapshot", "resourceData", "authoritativeRead", "installedGuidance"] as const;
+  const rawOrigin = readField(attachment, "origin");
+  const origin = typeof rawOrigin === "number" ? origins[rawOrigin]
+    : origins.find(item => normalizeEnum(item) === normalizeEnum(rawOrigin));
+  const redacted = sensitivity === "secret-redacted";
+  const target = readRecord(attachment, "target");
+  const client = readRecord(attachment, "client");
+  return {
+    id: readString(attachment, "id") ?? "",
+    source: readString(attachment, "source") ?? "",
+    sourceId: redacted ? undefined : readString(attachment, "sourceId"),
+    label: readString(attachment, "label") ?? "Admitted context",
+    contentType: readString(attachment, "contentType") ?? "",
+    sensitivity,
+    scope: readString(attachment, "scope") ?? "",
+    summary: readString(attachment, "summary"),
+    content: redacted ? undefined : readField(attachment, "content"),
+    references: redacted ? {} : readRecord(attachment, "references") as Record<string, string> | undefined,
+    moduleId: readString(attachment, "moduleId"),
+    schemaVersion: readString(attachment, "schemaVersion"),
+    target: redacted || !target ? null : { moduleId: readString(target, "moduleId") ?? "", resourceType: readString(target, "resourceType") ?? "", resourceId: readString(target, "resourceId") ?? null, revision: readString(target, "revision") ?? null, displayName: readString(target, "displayName"), route: readString(target, "route") },
+    origin,
+    client: redacted || !client ? null : { clientId: readString(client, "clientId") ?? "", generationId: readString(client, "generationId") ?? "" },
+    agentScopes: redacted ? [] : readStringArray(attachment, "agentScopes")
   };
+}
 
-  for (const key of ["workflowDefinitionId", "workflowVersionId", "draftId", "revision", "selectedNodeId", "selectedActivityType"]) {
-    const value = content?.[key];
-    if (typeof value === "string" && value.trim()) {
-      references[key] = value;
+function mapExecution(result: BackendAgentProposalExecutionResult, fallbackId: string): AgentProposalDecisionResponse {
+  return {
+    proposalId: readString(result, "proposalId") ?? fallbackId,
+    approvalStatus: getExecutionStatus(result),
+    executed: readBoolean(result, "executed"),
+    clientInvocation: readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined,
+    toolResult: readField(result, "toolResult") as StudioAgentToolResult | undefined,
+    result: {
+      resourceType: readString(result, "resourceType") ?? "agent-proposal",
+      resourceId: readString(result, "resourceId") ?? readString(result, "proposalId") ?? fallbackId,
+      summary: readString(result, "summary") ?? readString(result, "message") ?? "Execution outcome unavailable."
     }
-  }
-
-  return references;
+  };
 }
 
-function mapProviderDiagnostics(provider: BackendAgentProviderDiagnostics): AgentProviderDiagnostics {
+function mapProviderDiagnostics(provider: unknown): AgentProviderDiagnostics {
   return {
     providerId: readString(provider, "providerId") ?? "",
     isAvailable: readBoolean(provider, "isAvailable") ?? false,
@@ -326,7 +702,7 @@ function mapProviderDiagnostics(provider: BackendAgentProviderDiagnostics): Agen
   };
 }
 
-function mapCapabilityKind(kind: string | number | undefined, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["kind"] {
+function mapCapabilityKind(kind: unknown, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["kind"] {
   const value = normalizeEnum(kind);
   if (value === "context" || kind === 1) return "context";
   if (value === "prompt-starter" || kind === 2) return "prompt-starter";
@@ -335,7 +711,7 @@ function mapCapabilityKind(kind: string | number | undefined, requiresApproval?:
   return requiresApproval ? "proposal" : "answer";
 }
 
-function mapCapabilityRisk(risk: string | number | undefined, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["risk"] {
+function mapCapabilityRisk(risk: unknown, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["risk"] {
   const value = normalizeEnum(risk);
   if (value === "review-required" || risk === 1) return "review-required";
   if (value === "destructive" || risk === 2) return "destructive";
@@ -343,7 +719,7 @@ function mapCapabilityRisk(risk: string | number | undefined, requiresApproval?:
   return requiresApproval ? "review-required" : "read-only";
 }
 
-function mapProviderKind(kind: string | number | undefined) {
+function mapProviderKind(kind: unknown) {
   const value = normalizeEnum(kind);
   if (value === "provider-sdk-binding" || kind === 0) return "provider-sdk-binding";
   if (value === "agent-harness-provider" || kind === 1) return "agent-harness-provider";
@@ -356,7 +732,7 @@ function mapProviderOperation(operation: string | number) {
   return numeric ?? value;
 }
 
-function mapProviderRiskProfile(riskProfile: string | number | undefined) {
+function mapProviderRiskProfile(riskProfile: unknown) {
   const value = normalizeEnum(riskProfile);
   if (value === "read-only" || riskProfile === 0) return "read-only";
   if (value === "review-required" || riskProfile === 1) return "review-required";
@@ -374,9 +750,17 @@ function mapProposalDecision(proposal: BackendAgentActionProposal): AgentProposa
 }
 
 function getExecutionStatus(result: BackendAgentProposalExecutionResult): AgentActionProposal["status"] {
+  const status = normalizeEnum(readField(result, "status") ?? readField(result, "approvalStatus"));
+  if (status === "awaiting-client" || status === "uncertain" || status === "cancelled" || status === "expired" || status === "failed" || status === "denied") return status;
   const executed = readBoolean(result, "executed");
   if (executed !== undefined) return executed ? "executed" : "failed";
-  return mapProposalStatus(readField(result, "approvalStatus") ?? readField(result, "status"));
+  return mapProposalStatus(status);
+}
+
+function mapMessageStatus(status: unknown): AgentMessageResponse["status"] {
+  if (typeof status === "number") return (["pending", "streaming", "completed", "failed", "cancelled"] as const)[status] ?? "failed";
+  const value = normalizeEnum(status);
+  return ["pending", "streaming", "completed", "failed", "cancelled"].includes(value) ? value as AgentMessageResponse["status"] : "pending";
 }
 
 function getAcceptedMessageId(accepted: BackendAgentMessageAcceptedResponse) {
@@ -389,8 +773,14 @@ function getAcceptedMessageId(accepted: BackendAgentMessageAcceptedResponse) {
   return messageId;
 }
 
+/** Preview (#3441): only the documented limits are kept; anything else is dropped. */
+function readSessionLimit(value: string | undefined): AgentSessionLimit | undefined {
+  return value === "snapshots" || value === "bytes" ? value : undefined;
+}
+
 function mapSessionStatus(status: unknown): AgentCreateSessionResponse["status"] {
   const value = normalizeEnum(status);
+  if (value === "completed" || value === "cancelled" || value === "expired") return value;
   if (value === "failed" || status === 2) return "failed";
   if (value === "archived" || status === 1) return "completed";
   return "active";
@@ -398,6 +788,7 @@ function mapSessionStatus(status: unknown): AgentCreateSessionResponse["status"]
 
 function mapProposalStatus(status: unknown): AgentActionProposal["status"] {
   const value = normalizeEnum(status);
+  if (["draft", "edited", "expired", "cancelled", "executing", "awaiting-client", "uncertain"].includes(value)) return value as AgentActionProposal["status"];
   if (value === "approved" || status === 1) return "approved";
   if (value === "denied" || status === 2) return "denied";
   if (value === "executed" || status === 3) return "executed";

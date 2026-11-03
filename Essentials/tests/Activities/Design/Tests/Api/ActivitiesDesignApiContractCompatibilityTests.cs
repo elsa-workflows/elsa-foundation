@@ -208,7 +208,45 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
-        Assert.Equal("33b3cd367c3c09caa8fabcb895fb66179e03ad24b229055e1edcd9f692405755", PublicShapeHash(ContractTypes));
+        // It moved for PaletteHints as an additive body init property. The existing 17-parameter
+        // constructor and deconstructor remain covered separately; palette metadata stays on the JSON wire.
+        // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
+        Assert.Equal("b0416616df02ddca9d960c6c126700a973e207563e87eba2d9b21064d89f604f", PublicShapeHash(ContractTypes));
+    }
+
+    [Fact]
+    public void Descriptor_palette_hints_preserve_existing_constructor_deconstructor_and_json()
+    {
+        Type[] parameters =
+        [
+            typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+            typeof(bool), typeof(string), typeof(IReadOnlyCollection<ActivityInputDescriptorView>),
+            typeof(IReadOnlyCollection<ActivityOutputDescriptorView>), typeof(IReadOnlyCollection<ActivityPortDescriptorView>),
+            typeof(System.Text.Json.JsonElement?), typeof(ActivityAuthoringTemplateView), typeof(ActivityAuthoringIntrinsicView),
+            typeof(ActivityAuthoringProvenanceView), typeof(string)
+        ];
+        var type = typeof(ActivityAuthoringDescriptorView);
+        var constructor = type.GetConstructor(parameters);
+        Assert.NotNull(constructor);
+        Assert.All(constructor.GetParameters().Skip(14), parameter => Assert.True(parameter.IsOptional));
+        Assert.NotNull(type.GetMethod("Deconstruct", parameters.Select(parameter => parameter.MakeByRefType()).ToArray()));
+        var original = (ActivityAuthoringDescriptorView)constructor.Invoke(
+        [
+            "version", "activity", "1.0.0", "Activity", null, null, "Clr", true, null,
+            Array.Empty<ActivityInputDescriptorView>(), Array.Empty<ActivityOutputDescriptorView>(), Array.Empty<ActivityPortDescriptorView>(),
+            null, new ActivityAuthoringTemplateView("activity", "version", new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(),
+                new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(), null), null, null, "workflow"
+        ]);
+        Assert.Null(original.PaletteHints);
+        var hints = System.Text.Json.JsonSerializer.SerializeToElement(new { schemaVersion = "1", resourceKinds = new[] { "Workflow" } });
+        var updated = original with { PaletteHints = hints };
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var json = System.Text.Json.JsonSerializer.Serialize(updated, options);
+        var restored = System.Text.Json.JsonSerializer.Deserialize<ActivityAuthoringDescriptorView>(json, options)!;
+        Assert.Equal(original.ActivityVersionId, restored.ActivityVersionId);
+        Assert.Equal(original.IconName, restored.IconName);
+        Assert.True(System.Text.Json.JsonElement.DeepEquals(hints, restored.PaletteHints!.Value));
+        Assert.Null(original.PaletteHints);
     }
 
     [Fact]

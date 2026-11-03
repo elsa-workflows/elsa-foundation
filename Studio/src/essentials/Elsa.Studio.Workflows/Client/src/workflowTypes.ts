@@ -1,3 +1,4 @@
+import type { ActivityPaletteHints } from "./graph-authoring/activityPaletteContext";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
@@ -48,6 +49,9 @@ export interface WorkflowDefinitionSummary {
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
   folderBreadcrumb?: WorkflowFolderBreadcrumbItem[];
+  tags?: { tagId: string; valueId?: string | null }[];
+  favorite?: boolean;
+  permissions?: { canAssignTags?: boolean; canManageFolders?: boolean; canManageTags?: boolean; canShareViews?: boolean };
 }
 
 export interface WorkflowFolderBreadcrumbItem {
@@ -62,6 +66,7 @@ export interface WorkflowFolder {
   normalizedName: string;
   createdAt: string;
   lastModifiedAt: string;
+  revision?: string;
 }
 
 export interface WorkflowFolderDetail {
@@ -216,6 +221,7 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;
   ports?: unknown[];
@@ -517,6 +523,7 @@ export interface VariableTypeDescriptorsResponse {
 }
 
 export interface CreateDefinitionRequest {
+  activityPresentation?: ActivityPresentationRecord[];
   name: string;
   description?: string | null;
   initialState?: WorkflowDefinitionState | null;
@@ -558,6 +565,7 @@ export interface PublishedWorkflowResponse {
 }
 
 export interface StartWorkflowDraftTestRunRequest {
+  layout?: DesignMetadataRecord[];
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;

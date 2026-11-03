@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimeInProcessAgentProviderTests
+public sealed partial class RuntimeInProcessAgentProviderTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 

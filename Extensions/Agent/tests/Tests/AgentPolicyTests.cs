@@ -3,6 +3,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.Api.Endpoints;
 using Elsa.Agent.Api.Models;
+using Elsa.Agent.Services;
 
 namespace Elsa.Agent.Tests;
 

@@ -20,7 +20,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
-public sealed class WorkflowsRuntimeDistributedFeatureTests
+public sealed partial class WorkflowsRuntimeDistributedFeatureTests
 {
     // Kept beside the composition test: replacement, the distributed actor provider replaces the in-process one.
     [Fact]
@@ -254,6 +254,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             LeaseDurationSeconds = 45,
             SweepIntervalSeconds = 3,
             MaxBackoffIntervalMinutes = 2,
+            InlineDispatchWaitSeconds = 0.5,
             MaxExecutionsPerSweep = 14,
             TransportLeaseBatchSize = 7
         }.ConfigureServices(services);
@@ -266,6 +267,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.Equal(TimeSpan.FromSeconds(45), placement.LeaseDuration);
         Assert.Equal(TimeSpan.FromSeconds(3), pump.SweepInterval);
         Assert.Equal(TimeSpan.FromMinutes(2), pump.MaxBackoffInterval);
+        Assert.Equal(TimeSpan.FromMilliseconds(500), pump.InlineDispatchWait);
         Assert.Equal(14, pump.MaxExecutionsPerSweep);
         Assert.Equal(7, pump.TransportLeaseBatchSize);
     }

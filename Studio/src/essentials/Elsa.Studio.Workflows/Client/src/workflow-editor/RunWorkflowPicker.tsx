@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { CopyableIdentifier } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getDefinition, listDefinitions } from "../api/workflowDesign";
 import type { WorkflowDefinitionSummary } from "../workflowTypes";
@@ -225,7 +225,7 @@ export function RunWorkflowPicker({ context, definitionId, onChange }: {
           }}
           onKeyDown={handleKeyDown}
         />
-        {definitionId ? <button type="button" aria-label="Clear workflow selection" onClick={clearSelection}>Clear</button> : null}
+        {definitionId ? <StudioButton type="button" aria-label="Clear workflow selection" onClick={clearSelection}>Clear</StudioButton> : null}
       </div>
       {definitionId ? (
         <CopyableIdentifier label="Workflow definition ID" value={definitionId} className="wf-workflow-picker-identity" />
@@ -242,7 +242,7 @@ export function RunWorkflowPicker({ context, definitionId, onChange }: {
           {searchState === "failed" ? (
             <div className="wf-workflow-picker-error" role="alert">
               Workflow search failed: {searchError}
-              <button type="button" aria-label="Retry workflow search" onClick={() => setRetryVersion(value => value + 1)}>Retry</button>
+              <StudioButton type="button" aria-label="Retry workflow search" onClick={() => setRetryVersion(value => value + 1)}>Retry</StudioButton>
             </div>
           ) : null}
           {searchState === "ready" && results.length === 0 ? <div role="status">No workflows found.</div> : null}
@@ -264,12 +264,12 @@ export function RunWorkflowPicker({ context, definitionId, onChange }: {
             ))}
           </div>
           {canLoadMore ? (
-            <button
+            <StudioButton
               type="button"
               aria-label="Next workflow definitions"
               disabled={searchState === "loading"}
               onClick={() => void loadNextPage()}
-            >Load more workflows</button>
+            >Load more workflows</StudioButton>
           ) : null}
         </div>
       ) : null}

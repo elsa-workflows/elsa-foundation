@@ -55,6 +55,40 @@ describe("ETL run inspection", () => {
     expect(container.textContent).not.toContain("Complete");
   });
 
+  it("labels a continuous run and tells an idle shard's next poll apart from a retry wait", () => {
+    const run = {
+      ...fixture(),
+      status: "running" as const,
+      connector: { sourceKind: "http", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 2, acceptedErrorEffects: 0,
+        mode: "continuous" as const, completionRequestedAt: "2026-11-02T18:00:00Z" }
+    };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Run modeContinuous");
+    expect(container.textContent).toContain("Completion requested2026-11-02T18:00:00Z");
+
+    const http = { pageSequence: 1, nextItem: 0, pageRecordCount: null, exhausted: false, fetch: null };
+    flushSync(() => root.render(<EtlConnectorPartitionTable partitions={[
+      { partitionOrdinal: 0, file: null, http, isClaimed: false, claimFence: null, claimExpiresAt: null,
+        notBefore: "2026-11-02T18:01:00Z", nextPollAt: "2026-11-02T18:01:00Z", owedBatch: null, acceptedMainEffects: 1, acceptedErrorEffects: 0 },
+      { partitionOrdinal: 1, file: null,
+        http: { ...http, fetch: { phase: "waiting", attemptCount: 1, deadline: "2026-11-02T18:15:00Z", notBefore: "2026-11-02T18:00:30Z", lastStatusCode: 429 } },
+        isClaimed: false, claimFence: null, claimExpiresAt: null, notBefore: "2026-11-02T18:00:30Z", nextPollAt: null,
+        owedBatch: null, acceptedMainEffects: 1, acceptedErrorEffects: 0 }
+    ]} />));
+    const rows = Array.from(container.querySelectorAll("tbody tr")).map(row => row.textContent ?? "");
+    expect(rows[0]).toContain("Next poll at 2026-11-02T18:01:00Z");
+    expect(rows[0]).not.toContain("Eligible after");
+    expect(rows[1]).toContain("Eligible after 2026-11-02T18:00:30Z");
+    expect(rows[1]).not.toContain("Next poll at");
+  });
+
+  it("labels a connector run without a reported mode as finite", () => {
+    flushSync(() => root.render(<EtlRunInspection run={{ ...fixture(),
+      connector: { sourceKind: "csv", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 0, acceptedErrorEffects: 0 } }} />));
+    expect(container.textContent).toContain("Run modeFinite");
+    expect(container.textContent).not.toContain("Completion requested");
+  });
+
   it("describes captured HTTP source input without calling it output", () => {
     flushSync(() => root.render(<EtlConnectorPartitionTable partitions={[{
       partitionOrdinal: 0, file: null,
@@ -86,6 +120,30 @@ describe("ETL run inspection", () => {
     expect(container.textContent).toContain("Main route bodies accepted0");
     expect(container.textContent).toContain("Error route bodies accepted1");
     expect(container.textContent).toContain("not records, attempts, or physical executions");
+  });
+
+  it("labels CSV outputs as files while a CSV source stays CSV, and shows a published CSV effect", () => {
+    const run = {
+      ...fixture(),
+      status: "running" as const,
+      connector: { sourceKind: "csv", mainKind: "csv", errorKind: "csv", acceptedMainEffects: 1, acceptedErrorEffects: 0 }
+    };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Source typeCSV");
+    expect(container.textContent).not.toContain("Source typeCSV file");
+    expect(container.textContent).toContain("Main output typeCSV file");
+    expect(container.textContent).toContain("Error output typeCSV file");
+
+    const partitions: EtlRunConnectorPartitionView[] = [{
+      partitionOrdinal: 0, file: { startOrdinal: 1, endOrdinalExclusive: 3, nextOrdinal: 1 }, http: null,
+      isClaimed: true, claimFence: 2, claimExpiresAt: "2026-10-20T13:00:00Z", notBefore: null,
+      owedBatch: { recordCount: 2, inputBytes: 40, outputRetained: true,
+        main: { kind: "csv", recordCount: 2, state: "published", retry: null }, errors: null },
+      acceptedMainEffects: 0, acceptedErrorEffects: 0
+    }];
+    flushSync(() => root.render(<EtlConnectorPartitionTable partitions={partitions} now={Date.parse("2026-10-20T12:00:00Z")} />));
+    expect(container.textContent).toContain("CSV file");
+    expect(container.textContent).toContain("published");
   });
 
   it("renders file and HTTP connector positions and keeps acknowledged output visibly pending", () => {

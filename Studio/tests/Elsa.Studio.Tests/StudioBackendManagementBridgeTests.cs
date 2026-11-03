@@ -18,7 +18,7 @@ namespace Elsa.Studio.Tests;
 /// backend host so status mapping and the "zero outbound calls when unconfigured" fail-closed guarantee are asserted
 /// against the wire, not mocked internals.
 /// </summary>
-public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
+public sealed class StudioBackendManagementBridgeTests : IAsyncLifetime
 {
     private const string StatusRoute = "/_elsa/studio/backend-management/status";
     private const string RegistryRoute = "/_elsa/studio/backend-management/registry";
@@ -287,7 +287,9 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         return app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

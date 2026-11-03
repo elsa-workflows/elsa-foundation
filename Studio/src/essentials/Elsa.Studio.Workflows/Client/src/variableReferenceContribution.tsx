@@ -50,7 +50,7 @@ function VariableReferenceEditor({ descriptor, value, disabled, onChange }: Stud
   const options = authoring.visibleVariables.map(variable => {
     const declaration = declarations.get(variableOptionKey(variable.referenceKey, variable.scopeId));
     const type = declaration ? readArgumentType(declaration) : null;
-    return { variable, type, compatible: type ? isArgumentTypeCompatible(type, descriptor.typeName) : false };
+    return { variable, type, compatible: type ? isArgumentTypeCompatible(type, descriptor.typeName, descriptor.collectionKind) : false };
   });
   const compatible = options.filter(option => option.compatible);
   const incompatible = options.filter(option => !option.compatible);

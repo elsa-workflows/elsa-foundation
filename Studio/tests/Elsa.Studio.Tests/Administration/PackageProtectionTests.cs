@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
+using Nuplane.Loading;
+using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Operational;
 using Nuplane.Reconciliation;
 using Nuplane.Store.State;
@@ -22,12 +24,19 @@ public sealed class PackageProtectionTests
 {
     private static string AssetUrl => $"/_content/{PackageAssetTests.PackageId}/probe.txt";
 
-    [Fact]
-    public async Task Native_admission_excludes_reconcile_and_confirmed_prune_between_preflight_and_read()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Native_admission_excludes_reconcile_and_confirmed_prune_between_preflight_and_read(bool assemblyAlias)
     {
         using var logs = new ContentLog { PausePreflight = true };
-        await using var host = await AdministrationHost.StartAsync(nativeStore: true, afterStudio: builder => Observe(builder, logs));
-        PackageAssetTests.Pack(host, "1.0.0", "package payload");
+        await using var host = await AdministrationHost.StartAsync(nativeStore: true, loadPackages: assemblyAlias,
+            configureNuplane: nuplane =>
+            {
+                if (assemblyAlias) nuplane.AutoloadPackages(loading => loading.WithDefaultLoadMode(PackageLoadMode.Collectible));
+            },
+            afterStudio: builder => Observe(builder, logs));
+        PackageAssetTests.Pack(host, "1.0.0", "package payload", assembly: assemblyAlias ? "First" : null);
         await PackageAssetTests.Reconcile(host);
         var maintenance = host.App.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>();
         var retention = new PackageStoreRetentionPolicy(0);
@@ -35,7 +44,7 @@ public sealed class PackageProtectionTests
         Assert.True(preview.InventoryComplete);
         var state = host.App.Services.GetRequiredService<IOptions<StoreRegistryOptions>>().Value.StateFilePath!;
         var before = await File.ReadAllBytesAsync(state);
-        using var request = new HttpRequestMessage(HttpMethod.Get, AssetUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Get, assemblyAlias ? "/_content/First/probe.txt" : AssetUrl);
         request.Headers.Range = new RangeHeaderValue(0, 2);
         var pending = host.Client.SendAsync(request);
         try

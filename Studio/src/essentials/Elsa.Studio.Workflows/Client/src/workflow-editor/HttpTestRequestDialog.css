@@ -149,26 +149,19 @@
   font-size: var(--studio-label-size);
 }
 
-.wf-http-test-send {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  gap: 7px;
-  padding: 8px 14px;
-  border: 1px solid var(--studio-accent);
-  border-radius: var(--studio-radius-sm);
-  background: var(--studio-accent);
-  color: var(--studio-accent-text);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
+.wf-http-test-dialog .studio-result-state {
+  justify-items: start;
+  padding: var(--studio-space-3) 0;
+  text-align: start;
 }
 
-.wf-http-test-send:disabled {
-  opacity: .6;
-  cursor: not-allowed;
+.wf-http-test-dialog .studio-result-state > .studio-page-actions {
+  justify-content: start;
+}
+
+.wf-http-test-send {
+  flex: 0 0 auto;
+  align-self: end;
 }
 
 .wf-http-test-state,

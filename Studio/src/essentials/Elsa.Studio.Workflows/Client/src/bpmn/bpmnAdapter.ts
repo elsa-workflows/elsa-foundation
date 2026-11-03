@@ -1,12 +1,16 @@
+import { directHumanMode } from "./bpmnDirectBinding";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
 import type { WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
 import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
 import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ActivityIconTone, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
+import { getCollectionSlots, type CollectionSlot } from "../collectionSlots";
 import {
   bpmnElementTypes,
   bpmnStructureKind,
+  isBpmnDecisionType,
+  isDecisionGatewayType,
   type BpmnElement,
   type BpmnSequenceFlow,
   type BpmnShapeDescriptor
@@ -18,6 +22,8 @@ import {
 export interface BpmnNodeData extends Record<string, unknown> {
   element: BpmnElement;
   label: string;
+  /** Explicit authoring or direct inspection work description, without a synthetic child activity. */
+  bindingLabel?: string;
   boundActivity?: {
     nodeId: string;
     activityVersionId: string;
@@ -30,6 +36,7 @@ export interface BpmnNodeData extends Record<string, unknown> {
   // (empty for events, gateways, unbound tasks, and tasks bound to a leaf). Slot entry addresses
   // `boundActivity.nodeId`, never the element id — see NodeSlotBadges.
   childSlots: ChildSlot[];
+  collectionSlots?: CollectionSlot[];
   runtimeNodeId?: string;
   runtime?: WorkflowRuntimeNodeOverlay;
   executionPulse?: string;
@@ -123,8 +130,10 @@ function createBpmnNode(
       element,
       label: element.name?.trim() || boundActivity?.label || "",
       boundActivity,
+      bindingLabel: directHumanMode(element) === "human" ? "Human wait" : directHumanMode(element) === "service" ? "Native service" : undefined,
       runtimeNodeId: boundActivity?.nodeId ?? element.elementId,
-      childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : []
+      childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : [],
+      collectionSlots: boundActivityNode ? getCollectionSlots(boundActivityNode, catalogItem) : []
     }
   };
 }
@@ -211,6 +220,8 @@ export function createBpmnShapeNode(shape: BpmnShapeDescriptor, position: XYPosi
   const element: BpmnElement = {
     elementId: createBpmnElementId(shape.elementType),
     elementType: shape.elementType,
+    ...(shape.name ? { name: shape.name } : {}),
+    ...(shape.properties ? { properties: { ...shape.properties } } : {}),
     ...(shape.eventDefinitions ? { eventDefinitions: shape.eventDefinitions } : {})
   };
 
@@ -225,13 +236,15 @@ export function createBpmnShapeNode(shape: BpmnShapeDescriptor, position: XYPosi
 
 // Canvas node + ActivityNode pair for a catalog activity dropped into a BPMN scope: the activity
 // becomes a slot child and the element binds it. Container activities land as subProcess elements,
-// everything else as a task.
+// decisions as exclusive gateways, and other leaves as tasks.
 export function createBpmnBoundNode(
   catalogItem: ActivityCatalogItem,
   activityNode: ActivityNode,
   position: XYPosition
 ): Node<BpmnNodeData> {
-  const elementType = isContainerCatalogItem(catalogItem) ? bpmnElementTypes.subProcess : bpmnElementTypes.task;
+  const elementType = isBpmnDecisionType(catalogItem.activityTypeKey)
+    ? bpmnElementTypes.exclusiveGateway
+    : isContainerCatalogItem(catalogItem) ? bpmnElementTypes.subProcess : bpmnElementTypes.task;
   const element: BpmnElement = {
     elementId: createBpmnElementId(elementType),
     elementType,
@@ -254,7 +267,23 @@ export function createBpmnBoundNode(
         icon: resolveActivityIcon(catalogItem),
         iconTone: resolveActivityIconTone(catalogItem)
       },
-      childSlots: getChildSlots(activityNode, catalogItem)
+      childSlots: getChildSlots(activityNode, catalogItem),
+      collectionSlots: getCollectionSlots(activityNode, catalogItem)
+    }
+  };
+}
+
+// Attach once, retaining the gateway's identity, routing, layout and opaque authored fields.
+export function bindBpmnDecision(owner: ActivityNode, elementId: string, decision: ActivityNode): ActivityNode {
+  const element = findBpmnElement(owner, elementId);
+  if (!element || element.childNodeId || !isDecisionGatewayType(element.elementType)) return owner;
+  const activities = owner.structure!.payload.activities;
+  const updated = updateBpmnElement(owner, elementId, { childNodeId: decision.nodeId });
+  return {
+    ...updated,
+    structure: {
+      ...updated.structure!,
+      payload: { ...updated.structure!.payload, activities: [...(Array.isArray(activities) ? activities : []), decision] }
     }
   };
 }
@@ -297,9 +326,23 @@ export function updateBpmnDefaultFlow(owner: ActivityNode, sourceElementId: stri
   };
 }
 
+// Gateway conversion must preserve task-owned behavior until the author explicitly removes it.
+export function bpmnGatewayConversionBlocker(owner: ActivityNode | null | undefined, element: BpmnElement): string | undefined {
+  if (!owner || isDecisionGatewayType(element.elementType)) return undefined;
+  if (readBpmnElements(owner).some(candidate => candidate.attachedToRef === element.elementId))
+    return "Remove this task's boundary events before converting it to a gateway.";
+  if (element.loopCharacteristics != null)
+    return "Remove this task's loop or multi-instance settings before converting it to a gateway.";
+  if (element.isForCompensation === true || element.compensationHandlerElementId)
+    return "Remove this task's compensation settings before converting it to a gateway.";
+  return undefined;
+}
+
 // Immutably applies `patch` to one element of a BPMN owner's payload (inspector edits).
 export function updateBpmnElement(owner: ActivityNode, elementId: string, patch: Partial<BpmnElement>): ActivityNode {
   if (owner.structure?.kind !== bpmnStructureKind) return owner;
+  const current = findBpmnElement(owner, elementId);
+  if (current && patch.elementType && isDecisionGatewayType(patch.elementType) && bpmnGatewayConversionBlocker(owner, current)) return owner;
   const elements = readBpmnElements(owner).map(element =>
     element.elementId === elementId ? { ...element, ...patch, elementId: element.elementId } : element);
 

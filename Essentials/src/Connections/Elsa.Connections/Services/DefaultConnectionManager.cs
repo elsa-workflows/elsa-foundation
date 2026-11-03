@@ -116,6 +116,7 @@ internal sealed class DefaultConnectionManager(
         {
             Definition = new ConnectionDefinition
             {
+                IncarnationId = Guid.NewGuid().ToString("N"),
                 TenantId = tenantId,
                 Name = name,
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? name : request.DisplayName.Trim(),

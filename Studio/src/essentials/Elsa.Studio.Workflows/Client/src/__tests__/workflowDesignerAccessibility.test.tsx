@@ -213,6 +213,31 @@ describe("activity palette version chip", () => {
 });
 
 describe("selected workflow node actions", () => {
+  it("toggles workflow starts and includes the toggle in keyboard navigation", () => {
+    const actions = { selectedNodeCount: 1, canAddAfter: false, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn(), setWorkflowStart: vi.fn() };
+    const data = { label: "Http Endpoint", activityVersionId: "http-v1", childSlots: [], acceptsInbound: true, sourcePorts: [], workflowStartEnabled: true };
+    const render = (enabled: boolean) => flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="endpoint" data={{ ...data, workflowStartEnabled: enabled }} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+    render(true);
+    const toggle = container.querySelector<HTMLButtonElement>("button[aria-label='Start new workflows from Http Endpoint']")!;
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle.title).toBe("Disable workflow start");
+    toggle.focus();
+    press("ArrowRight");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Duplicate Http Endpoint");
+    press("Home");
+    expect(document.activeElement).toBe(toggle);
+    flushSync(() => toggle.click());
+    expect(actions.setWorkflowStart).toHaveBeenCalledWith("endpoint", false);
+    render(false);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    flushSync(() => toggle.click());
+    expect(actions.setWorkflowStart).toHaveBeenLastCalledWith("endpoint", true);
+  });
   it("uses one tab stop and moves across toolbar actions with horizontal keys", () => {
     const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
     const data = {

@@ -1,5 +1,4 @@
 using CShells.Features;
-using Elsa.Agent.Core.Extensions;
 using Elsa.Agent.GitHubCopilot.Extensions;
 using Elsa.Agent.GitHubCopilot.Options;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
@@ -13,9 +12,10 @@ namespace Elsa.Agent.GitHubCopilot;
 [ShellFeature(
     name: "GitHubCopilotAgent",
     DisplayName = "GitHub Copilot Agent Provider",
-    Description = "Registers the GitHub Copilot agent provider facade seam without leaking SDK-specific details to Studio or workflow modules."
+    Description = "Registers the GitHub Copilot agent provider facade seam without leaking SDK-specific details to Studio or workflow modules.",
+    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) }
 )]
-public sealed class GitHubCopilotAgentFeature : IShellFeature
+public class GitHubCopilotAgentFeature : FoundationAgentAbstractionsFeature
 {
     public bool Enabled { get; set; }
 
@@ -41,9 +41,9 @@ public sealed class GitHubCopilotAgentFeature : IShellFeature
 
     public string? SystemMessage { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public override void ConfigureServices(IServiceCollection services)
     {
-        services.AddFoundationAgentAbstractions();
+        base.ConfigureServices(services);
         services.AddGitHubCopilotAgentProvider();
         services.Configure<GitHubCopilotAgentOptions>(options =>
         {

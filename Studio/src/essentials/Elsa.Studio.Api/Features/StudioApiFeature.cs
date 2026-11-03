@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Events;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
@@ -16,7 +17,8 @@ namespace Elsa.Studio.Api.Features;
 [ShellFeature(
     name: "StudioApi",
     DisplayName = "Elsa Studio API",
-    Description = "Aggregates Studio module manifests and exposes the module discovery endpoint."
+    Description = "Aggregates Studio module manifests and exposes the module discovery endpoint.",
+    DependsOn = new object[] { typeof(EventsFeature) }
 )]
 public sealed class StudioApiFeature : IWebShellFeature
 {

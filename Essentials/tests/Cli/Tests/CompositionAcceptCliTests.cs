@@ -136,7 +136,7 @@ public sealed class CompositionAcceptCliTests
             return;
         using var fixture = new CompositionBridgeFixture();
         var initialized = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
-            "--group", "diagnostics-ef@1", "--output", fixture.OutputPath);
+            "--group", "diagnostics-ef@2", "--output", fixture.OutputPath);
         Assert.Equal(ToolExitCode.Success, initialized.ExitCode);
         var input = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
         input["add"] = new JsonArray("CustomCapability");

@@ -82,19 +82,30 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md) |
+| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md) |
 | API endpoint layer (failure pipeline, endpoint composition contracts, unload-safety enforcement) | [`Essentials/src/Api/EXTENSION_POINTS.md`](Essentials/src/Api/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
 
 | Domain | Catalog |
 |---|---|
-| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Core/EXTENSION_POINTS.md) |
+| Agent foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Agent EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
+| Connection-backed specialist model contributors | [`Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md) |
+| Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Anthropic specialist connections | [`Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md) |
+| Azure OpenAI specialist connections | [`Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md) |
+| Specialist authoring and immutable compilation | [`Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md) |
+| Specialist native execution | [`Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md) |
+| Specialist human review of agent output | [`Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md) |
+| Specialist human review API | [`Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md) |
+| Specialist authoring API | [`Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
+| Workflow Agent (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
 
 ### Integrations
 
@@ -116,6 +127,7 @@ not automatic constitution violations.
 |---|---|
 | Connections core (provider-neutral contracts — repository, manager, resolver, credential sources, auth schemes, `SensitiveValue`) | [`Essentials/src/Connections/Core/EXTENSION_POINTS.md`](Essentials/src/Connections/Core/EXTENSION_POINTS.md) |
 | Connections (default services, http type, built-in schemes, named credentials) | [`Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md`](Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md) |
+| Connections EF persistence (scoped metadata, version checks, secret references and consumer-owned contexts) | [`Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Connections API (CRUD, picker, OAuth callback) | [`Essentials/src/Connections/Api/EXTENSION_POINTS.md`](Essentials/src/Connections/Api/EXTENSION_POINTS.md) |
 | Connections Design (publish gate) | [`Essentials/src/Connections/Design/EXTENSION_POINTS.md`](Essentials/src/Connections/Design/EXTENSION_POINTS.md) |
 | Connections Workflows (http applicator + secret mask) | [`Essentials/src/Connections/Workflows/EXTENSION_POINTS.md`](Essentials/src/Connections/Workflows/EXTENSION_POINTS.md) |
@@ -152,7 +164,10 @@ not automatic constitution violations.
 | Activities design API — catalog and availability services | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
-| Activities BPMN (scoped execution seam, element behavior contributors) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md) |
+| Activities BPMN design (authored structure lowering and publication pinning) | [`Essentials/src/Activities/Bpmn/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Design/EXTENSION_POINTS.md) |
+| Activities BPMN hosting API (authenticated direct-model commands, cancellation, incident retry and inspection) | [`Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md) |
 | Activities BPMN interchange (document importer and exporter replacement) | [`Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) |
 
 ### Workflows
@@ -166,6 +181,7 @@ not automatic constitution violations.
 | Workflows publishing engine — compiler, slot authority/policy/preflight, publication activation, compilation fan-in, and activity-template registries | [`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md) |
 | Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
+| User Tasks (durable human work, journal/retention/eligibility/form integration and recovery cadence) | [`Runtime domain User Tasks`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
 | Workflows runtime distributed EF Core placement persistence | [`Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
@@ -213,3 +229,9 @@ not automatic constitution violations.
 - §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section); layer badge convention; Known implementations with intra/cross-domain tags; mandatory maintenance obligation.
 - §2.22.2 — this repo-wide extension-points index (pure links, no inline entries).
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).
+
+
+## Studio
+
+- [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Boxes, FolderGit2, FolderPlus, Package, RefreshCcw } from "lucide-react";
-import { StatusChip } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import type {
   ExtensionBuilderCapabilities,
   ExtensionRepositorySummary,
@@ -86,22 +86,16 @@ export function HomeView({
 
   return (
     <section className="extension-builder-home">
-      <header className="extension-builder-hero">
-        <div className="extension-builder-hero-text">
-          <h2>Extension Builder</h2>
-          <p>Create custom NuGet packages online, compile them in the cloud, and load them straight into Elsa &mdash; like Visual Studio, simplified.</p>
-        </div>
-        <div className="extension-builder-hero-actions">
+      <StudioPageHeader headingLevel={2} title={<>Extension Builder</>} description={<>Create custom NuGet packages online, compile them in the cloud, and load them straight into Elsa &mdash; like Visual Studio, simplified.</>} actions={<><div className="studio-page-actions">
           <label className="extension-builder-advanced-toggle">
             <input type="checkbox" aria-label="Advanced mode" checked={advanced} disabled={busy} onChange={event => onToggleAdvanced(event.target.checked)} />
             <span>Advanced</span>
           </label>
-          <button type="button" className="studio-button" disabled={busy} onClick={onRefresh}>
+          <StudioButton type="button" className="studio-button" disabled={busy} onClick={onRefresh}>
             <RefreshCcw size={15} />
             Refresh
-          </button>
-        </div>
-      </header>
+          </StudioButton>
+        </div></>} />
 
       <div className="extension-builder-stats">
         {stats.map(stat => (

@@ -19,3 +19,29 @@ The default run includes meaningful causal controls. Missing customJS is a faile
 Consumer restore/publish/runtime deny and audit node/npm/pnpm/npx; producer and browser automation stay outside that denied environment. Reports retain actual source/tool/template/driver hashes, archives, lock/restore graphs, HTTP/browser/auth/state/lifecycle observations, precise controls and owned process cleanup. Only owned server/client processes are stopped. Native cutover is an explicit selection for the owned fixture; no automatic enrollment of an operator's store or local prune substitute is introduced. Actual supported-native refusal is a failed qualification, not a skip.
 
 The controlled loopback backend follows the existing session/registry contracts; this proves Studio transport/authorization, not a deployed Elsa Server. No arbitrary filesystem mutation, linked-source cycle recovery, performance measurement, release/deployment or publisher activation is implied. See the existing [Hosting browser](../HostingAssets.Probe/README.md), [Api closure](../ApiPackageClosure.Probe/README.md) and [accepted hosting contract](../../../docs/reports/studio-hosting-contract.md) for their distinct scopes.
+
+## Weaver candidate source fixture
+
+Program #3428 uses the `WeaverJourney.Backend.*.in` and `WeaverJourney.Studio.*.in` templates for the bounded #3437 journeys described in the [candidate contract](../../../specs/1018-weaver-module-contributions/contracts/contributions.md). The Studio fixture consumes public module/SDK surfaces and owns its note context, review rendering and resource refresh. Its assembly/module identity is `Weaver.Journey`; the RCL package identity is `Weaver.Journey.Studio`.
+
+Instantiate the frontend fixture into a new owned directory with:
+
+```sh
+python3 tools/studio/Composition.Probe/prepare_weaver_studio.py --output /absolute/new-owned/studio-fixture
+```
+
+This command writes source and hash evidence only. It does not build or start a host. The M1 fixture has source project references and explicitly records `independentPackageWitness: false`; #3438 must separately establish real package consumption before contract freeze.
+
+After the owning delivery run starts fresh Studio/backend processes with the public composition APIs and supplies a seeded workflow, run the browser observations against their explicit URLs:
+
+```sh
+ELSA_WEAVER_OWNED_URL=http://127.0.0.1:owned-studio-port \
+ELSA_WEAVER_OWNED_BACKEND_URL=http://127.0.0.1:owned-backend-port \
+ELSA_WEAVER_OWNED_AUTH_STATE=/absolute/private/fresh-normal-login-storage-state.json \
+ELSA_WEAVER_OWNED_ARTIFACTS=/absolute/private/owned-browser-results \
+ELSA_WEAVER_WORKFLOW_ID=owned-definition-id \
+ELSA_WEAVER_ACTIVITY_ID=owned-node-id \
+pnpm --dir Studio exec playwright test --config tests/browser/playwright.weaver-composed.config.ts
+```
+
+The dedicated suite starts no host, uses no mocked network routes, and rejects the known developer ports. It observes native working state/undo without implicit persistence, and the unrelated note's actual file-backed revision/value/write count, including duplicate execution. Its results are deterministic composed-host evidence; they are separate from provider-protocol tests and any opt-in live-provider qualification.

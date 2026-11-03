@@ -8,9 +8,9 @@ import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
@@ -66,9 +66,15 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { AdvancedSection } from "@elsa-workflows/studio-ui";
+import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
+import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
+import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
-import { WorkflowListIdentity } from "./WorkflowListIdentity";
+import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
+import "./cleanListTables.css";
+import "./minimalRunInspection.css";
+import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -379,29 +385,29 @@ export function WorkflowInstances({ context, navigate }: {
 
   return (
     <>
+      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and execution evidence." actions={<StudioButton ref={refreshButton} onClick={() => void load()}>Refresh</StudioButton>} />
       <form className="wf-run-filters" aria-label="Workflow run filters" onSubmit={event => {
         event.preventDefault();
         applyFilters();
       }}>
-        <div className="wf-toolbar">
-          <button ref={refreshButton} type="button" onClick={() => void load()}>Refresh</button>
+        <div className="studio-collection-toolbar">
+          <RunWorkflowPicker context={context} definitionId={location.filters.definitionId} onChange={definitionId => updateAppliedFilter("definitionId", definitionId)} />
           <div className="wf-run-primary-controls" aria-label="Primary workflow run filters">
-            <button
+            <StudioButton
               type="button"
               aria-pressed={location.filters.incidentHealth === "active"}
               aria-describedby={healthFilterSupported === false ? healthFilterHelpId : undefined}
               disabled={healthFilterSupported === false && location.filters.incidentHealth !== "active"}
               onClick={() => updateAppliedFilter("incidentHealth", location.filters.incidentHealth === "active" ? "" : "active")}
-            >Needs attention</button>
-            <button
+            >Needs attention</StudioButton>
+            <StudioButton
               type="button"
               aria-pressed={location.filters.status === "Running"}
               onClick={() => updateAppliedFilter("status", location.filters.status === "Running" ? "" : "Running")}
-            >Running</button>
+            >Running</StudioButton>
             {healthFilterSupported === false ? <small id={healthFilterHelpId}>Current incident health filtering is not available from this host.</small> : null}
           </div>
-          <RunWorkflowPicker context={context} definitionId={location.filters.definitionId} onChange={definitionId => updateAppliedFilter("definitionId", definitionId)} />
-          <button type="button" onClick={clearFilters} disabled={activeFilterCount === 0 && !hasDraftFilters}>Clear filters</button>
+          <StudioButton type="button" onClick={clearFilters} disabled={activeFilterCount === 0 && !hasDraftFilters}>Clear filters</StudioButton>
         </div>
         {appliedFilterChips.length > 0 ? (
           <div className="wf-run-applied-filters" aria-label="Applied workflow run filters">
@@ -459,7 +465,7 @@ export function WorkflowInstances({ context, navigate }: {
           </div>
         </AdvancedSection>
       </form>
-      {state === "failed" ? <WfErrorCard message={error} action={<button type="button" onClick={() => void load()}>Retry</button>} /> : null}
+      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} action={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
       {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
       {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
       {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
@@ -485,7 +491,7 @@ export function WorkflowInstances({ context, navigate }: {
       ) : null}
       {state === "ready" && instances.length === 0 ? (
         <div role="status" aria-live="polite">
-          <WfEmptyState
+          <WfEmptyState headingLevel={3}
             icon={<Boxes size={22} />}
             title={activeFilterCount ? "No workflow runs match these filters" : "No workflow runs yet"}
             description={activeFilterCount
@@ -495,7 +501,7 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       ) : null}
       {state === "ready" && instances.length > 0 ? (
-        <div className={`wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
+        <div className={`studio-table-container studio-collection-table wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
             <span role="columnheader" className="wf-run-column-header">
               {canDeleteRuns ? <label className="wf-run-select-all"><input
@@ -508,6 +514,8 @@ export function WorkflowInstances({ context, navigate }: {
               /></label> : null}
               <strong>Run</strong>
             </span>
+            <span role="columnheader">Execution ID</span>
+            <span role="columnheader">Identifiers</span>
             <span role="columnheader">Kind</span>
             <span role="columnheader">Status</span>
             <span role="columnheader">Health</span>
@@ -560,34 +568,27 @@ export function WorkflowInstances({ context, navigate }: {
                   >
                     <strong>{workflowName}</strong>
                   </button>
-                  <WorkflowListIdentity
-                    primaryLabel="Execution ID"
-                    primaryValue={instance.workflowExecutionId}
-                    secondaryIdentifiers={secondaryIdentifiers}
-                    primaryClassName="wf-run-primary-identifier"
-                    secondaryClassName="wf-run-secondary-identifiers"
-                    detailsClassName="wf-run-identifiers"
-                    detailsAriaLabel={`Workflow run identifiers for ${instance.workflowExecutionId}`}
-                  />
                 </div>
               </div>
+              <span role="cell" className="wf-list-primary-id wf-run-primary-identifier"><CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} /></span>
+              <span role="cell" className="wf-run-secondary-identifiers"><WorkflowListIdentifiers kind="Workflow run" name={instance.workflowExecutionId} identifiers={secondaryIdentifiers}>
+                <p>{formatCurrentIncidentHealth(instance)}</p>
+                <p>{instance.activityCount} activities · {instance.incidentCount} incidents</p>
+              </WorkflowListIdentifiers></span>
               <span role="cell">{formatRunKind(instance.runKind)}</span>
               <span role="cell"><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span role="cell"><CurrentIncidentHealthLabel instance={instance} /></span>
-              <span role="cell">
-                <strong>{instance.activityCount} activities</strong>
-                <small>{instance.incidentCount} incidents</small>
+              <span role="cell" className="wf-run-activity-indicator">
+                <span aria-hidden="true" title={`${instance.activityCount} activities · ${instance.incidentCount} incidents`}>{instance.activityCount}</span>
+                <span className="wf-visually-hidden">{instance.activityCount} activities · {instance.incidentCount} incidents</span>
               </span>
               <span role="cell">{formatDate(instance.startedAt ?? instance.createdAt)}</span>
               <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
               {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={deletingRuns}
-                  aria-label={`Delete workflow run ${instance.workflowExecutionId}`}
-                  onClick={() => void deleteRuns([instance.workflowExecutionId])}
-                >Delete</button>
+                <OverflowMenu ariaLabel={`Actions for workflow run ${instance.workflowExecutionId}`} items={[{
+                  id: "delete", label: "Delete", destructive: true, disabled: deletingRuns,
+                  onSelect: () => { void deleteRuns([instance.workflowExecutionId]); }
+                }]} />
               </span> : null}
             </div>
             );
@@ -595,7 +596,7 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       ) : null}
       {state === "ready" ? (
-        <div className="wf-pagination" aria-label="Workflow run pagination">
+        <div className="studio-collection-footer" aria-label="Workflow run pagination">
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {page.count} of {page.totalCount} matching runs
           </span>
@@ -810,7 +811,11 @@ function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSu
       : instance.activeIncidentCount! > 0
         ? "active"
         : "none";
-  return <span className="wf-run-health-indicator" data-health={health}>{formatCurrentIncidentHealth(instance)}</span>;
+  const label = health === "blocking" ? "Needs intervention" : health === "active" ? `${instance.activeIncidentCount} active` : health === "none" ? "Healthy" : "Unknown";
+  return <span className="wf-run-health-indicator" data-health={health} title={formatCurrentIncidentHealth(instance)}>
+    <span aria-hidden="true">{label}</span>
+    <span className="wf-visually-hidden">{formatCurrentIncidentHealth(instance)}</span>
+  </span>;
 }
 
 function toUtcIso(value: string) {
@@ -832,10 +837,12 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
 const maxIncidentActivityLookups = 50;
 const incidentActivityLookupBatchSize = 8;
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   workflowExecutionId: string;
   initialActivityExecutionId?: string | null;
   initialInspectorTab?: InstanceInspectorTab;
@@ -1507,6 +1514,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     labelFor={labelForExecution} onSelect={selectBrowserExecution} onEnter={enterChildExecution}
     onIncident={openExecutionIssues}
     renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
+      backendSession={backendSession} runRelatedLinks={runRelatedLinks}
       refreshKey={evidenceRevision}
       activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
       expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
@@ -1655,6 +1663,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             executableGraph={data.executableGraph}
             definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
+            backendSession={backendSession} runRelatedLinks={runRelatedLinks}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={inspectorCollapsed}
@@ -2039,12 +2048,13 @@ function WorkflowInstanceCanvas({
           />
         ) : canvas.nodes.length > 0 ? (
           <ReadOnlyWorkflowFlow
-            key={scopeKey}
+            key={`${details.instance.workflowExecutionId}:${scopeKey}`}
             nodes={animatedCanvas.nodes}
             edges={animatedCanvas.edges}
             onInit={setFlowInstance}
             onSelectActivity={onSelectActivity}
             onSelectEvidence={onSelectEvidence}
+            focusRequestId={focusRequestId}
           />
         ) : null}
       </div>
@@ -2057,33 +2067,17 @@ function ReadOnlyWorkflowFlow({
   edges,
   onInit,
   onSelectActivity,
-  onSelectEvidence
+  onSelectEvidence,
+  focusRequestId
 }: {
   nodes: Node<WorkflowNodeData>[];
   edges: Edge<WorkflowEdgeData>[];
   onInit(instance: WorkflowRunFlowInstance): void;
   onSelectActivity(nodeId: string): void;
   onSelectEvidence(evidenceId: string | null): void;
+  focusRequestId: number;
 }) {
-  const [measuredNodes, setMeasuredNodes] = useState<Node<WorkflowNodeData>[]>([]);
-  const flowNodes = useMemo(() => mergeMeasuredNodeDimensions(nodes, measuredNodes), [measuredNodes, nodes]);
-
-  useEffect(() => {
-    setMeasuredNodes(current => {
-      const activeTypes = new Map(nodes.map(node => [node.id, node.type]));
-      const next = current.filter(node => activeTypes.get(node.id) === node.type);
-      return next.length === current.length ? current : next;
-    });
-  }, [nodes]);
-
-  const onNodesChange = useCallback((changes: NodeChange<Node<WorkflowNodeData>>[]) => {
-    const dimensionChanges = changes.filter(change => change.type === "dimensions");
-    if (dimensionChanges.length === 0) return;
-
-    setMeasuredNodes(current => {
-      return applyNodeChanges(dimensionChanges, mergeMeasuredNodeDimensions(nodes, current));
-    });
-  }, [nodes]);
+  const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
 
   return (
     <ReactFlow
@@ -2092,6 +2086,7 @@ function ReadOnlyWorkflowFlow({
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
+      fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
       onInit={onInit}
       onNodesChange={onNodesChange}
       nodesDraggable={false}
@@ -2101,23 +2096,12 @@ function ReadOnlyWorkflowFlow({
       onPaneClick={() => onSelectEvidence(null)}
     >
       <Background />
-      <MiniMap pannable zoomable />
+      <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} />
+      <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
       <Controls />
+      <RetainFlowViewport />
     </ReactFlow>
   );
-}
-
-function mergeMeasuredNodeDimensions(
-  nodes: Node<WorkflowNodeData>[],
-  measuredNodes: Node<WorkflowNodeData>[]
-) {
-  const measuredById = new Map(measuredNodes.map(node => [node.id, node]));
-  return nodes.map(node => {
-    const measuredNode = measuredById.get(node.id);
-    return measuredNode && measuredNode.type === node.type && measuredNode.measured
-      ? { ...node, measured: measuredNode.measured }
-      : node;
-  });
 }
 
 // Builds the read-only run-inspection canvas for the scope addressed by `frames`. Slot badges navigate
@@ -2301,6 +2285,8 @@ function WorkflowInstanceInspector({
   executableGraph,
   definitionName,
   expressionEditors = [],
+  backendSession,
+  runRelatedLinks = [],
   collapsed = false,
   expanded = true,
   maximized = false,
@@ -2341,6 +2327,8 @@ function WorkflowInstanceInspector({
   executableGraph?: ExecutableActivityGraph | null;
   definitionName?: string | null;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   collapsed?: boolean;
   expanded?: boolean;
   maximized?: boolean;
@@ -2456,6 +2444,7 @@ function WorkflowInstanceInspector({
                   activityCatalog={activityCatalog}
                   executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
                   expressionEditors={expressionEditors}
+                  backendSession={backendSession} runRelatedLinks={runRelatedLinks}
                   focusInputKey={focusInputKey}
                   onSelectEvidence={openActivityEvidence}
                 />

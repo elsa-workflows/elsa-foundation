@@ -1,0 +1,389 @@
+/* Workspace treatment is independent of palette identity and inherited legacy presets. */
+html[data-workspace-style] {
+  /* Legacy controls retain the palette boundary; structural dividers use edge-subtle. */
+  --studio-border: var(--border);
+  --studio-panel: var(--card);
+  --studio-canvas: var(--background);
+  --studio-edge-subtle: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --studio-edge-control: color-mix(in srgb, var(--foreground) 18%, var(--card));
+  --studio-focus: var(--ring);
+  --studio-title-weight: 600;
+  --studio-page-title-size: 20px;
+  --studio-section-title-size: 16px;
+  --studio-body-size: 13px;
+  --studio-label-size: 12px;
+  --studio-surface-raised: var(--card);
+  --studio-shadow-sm: 0 2px 5px color-mix(in srgb, var(--foreground) 5%, transparent);
+  --shadow-sm: var(--studio-shadow-sm);
+  --shadow-md: 0 4px 16px color-mix(in srgb, var(--foreground) 6%, transparent);
+  --shadow-lg: 0 10px 32px color-mix(in srgb, var(--foreground) 10%, transparent);
+  --shadow-xl: 0 18px 48px color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+html[data-workspace-style][data-theme-mode="dark"] {
+  --studio-edge-subtle: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --studio-edge-control: color-mix(in srgb, var(--foreground) 24%, var(--card));
+  --studio-shadow-sm: 0 2px 8px color-mix(in srgb, var(--background) 55%, transparent);
+  --shadow-md: 0 6px 20px color-mix(in srgb, var(--background) 65%, transparent);
+  --shadow-lg: 0 12px 36px color-mix(in srgb, var(--background) 75%, transparent);
+  --shadow-xl: 0 20px 52px color-mix(in srgb, var(--background) 85%, transparent);
+}
+
+html[data-workspace-style] .studio-shell {
+  gap: 0;
+  padding: 0;
+  background: var(--studio-bg);
+}
+
+html[data-workspace-style] :is(.sidebar, .main-frame, .bottom-panel) {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html[data-workspace-style] .sidebar {
+  padding: 16px 12px;
+  background: color-mix(in srgb, var(--sidebar) 65%, var(--background));
+}
+
+html[data-workspace-style] :is(.brand strong, .topbar h1) {
+  font-family: var(--studio-font-ui);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+html[data-workspace-style] .brand-mark {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-workspace-style] :is(.nav-heading, .breadcrumb, .studio-status-chip, .studio-status-pill) {
+  font-family: var(--studio-font-ui);
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-workspace-style] :is(.nav-section a, .nav-disclosure) {
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--studio-radius);
+  box-shadow: none;
+  font-weight: 500;
+}
+
+html[data-workspace-style] .nav-section a.active {
+  background: var(--studio-accent-soft);
+  color: var(--studio-text);
+  box-shadow: none;
+}
+
+html[data-workspace-style] .nav-section a.active::before {
+  display: none;
+}
+
+html[data-workspace-style] .nav-icon-tile {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+
+html[data-workspace-style] :is(.sidebar-search, .sidebar-environment) {
+  border: 0;
+  background: var(--studio-surface-muted);
+  box-shadow: none;
+}
+
+html[data-workspace-style] .sidebar-footer {
+  border: 0;
+}
+
+html[data-workspace-style] .topbar {
+  min-height: 48px;
+  gap: 12px;
+  padding: 8px 24px;
+  border: 0;
+  background: var(--studio-bg);
+  backdrop-filter: none;
+}
+
+html[data-workspace-style] .topbar h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+html[data-workspace-style] .topbar .breadcrumb {
+  font-size: var(--studio-label-size);
+  font-weight: 500;
+  opacity: 1;
+}
+
+html[data-workspace-style] .topbar-actions {
+  gap: 4px;
+}
+
+html[data-workspace-style] :is(.topbar-actions > a, .theme-selector-button, .theme-mode-toggle) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-workspace-style] .theme-mode-toggle-option[aria-checked="true"] {
+  border-color: transparent;
+  background: var(--studio-accent-soft);
+}
+
+html[data-workspace-style] .theme-selector-swatch {
+  border: 0;
+  background: var(--studio-bg);
+  box-shadow: none;
+}
+
+html[data-workspace-style] .content {
+  padding: 20px 28px;
+  background: var(--studio-bg);
+}
+
+html[data-workspace-style] .content:has(> :is(.wf-editor, .wf-page--run-workbench), > .studio-workspace-panel:not([hidden]) > :is(.wf-editor, .wf-page--run-workbench)) {
+  padding: 0;
+}
+
+html[data-workspace-style] :is(.studio-tabs, .bottom-panel-tabs) {
+  border-color: var(--studio-edge-subtle);
+  background: var(--studio-bg);
+}
+
+html[data-workspace-style] :is(.studio-tabs button, .bottom-panel-tab-list button) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--studio-font-ui);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-workspace-style] :is(.studio-tabs button, .bottom-panel-tab-list button)[aria-selected="true"] {
+  color: var(--studio-accent);
+  box-shadow: inset 0 -2px var(--studio-accent);
+}
+
+html[data-workspace-style] .studio-button:where(:not([data-variant="primary"]):not(.studio-button-primary):not(.studio-dialog-confirm):not(.danger)) {
+  border-color: transparent;
+  background: var(--studio-surface-muted);
+  box-shadow: none;
+  font-weight: 500;
+}
+
+html[data-workspace-style] .studio-button[data-variant="ghost"] {
+  background: transparent;
+}
+
+html[data-workspace-style] :is(.settings-card, .settings-section-list) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-workspace-style] .settings-card {
+  padding-block: 24px;
+}
+
+html[data-workspace-style] .settings-radio-card {
+  border-color: transparent;
+  background: var(--studio-surface-muted);
+  box-shadow: none;
+}
+
+html[data-workspace-style] .settings-radio-card[aria-checked="true"] {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent-soft);
+}
+
+.settings-radio-description {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.settings-theme-presets > summary {
+  width: fit-content;
+  padding-block: 12px;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+}
+
+.workspace-style-preview {
+  display: flex;
+  width: 100%;
+  height: 72px;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+}
+
+.workspace-style-preview i {
+  width: 20%;
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+}
+
+.workspace-style-preview i:nth-child(2) {
+  flex: 1;
+  background: var(--studio-accent-soft);
+}
+
+.workspace-style-preview[data-style="focus"] i {
+  align-self: center;
+  height: 75%;
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.workspace-style-preview[data-style="open"] {
+  border-top: 8px solid var(--studio-surface-muted);
+}
+
+@media (min-width: 1025px) {
+  html[data-workspace-style] .studio-shell { grid-template-columns: 220px minmax(0, 1fr); }
+  html[data-workspace-style] .studio-shell.sidebar-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
+  html[data-workspace-style][data-nav-mode="top"] .studio-shell { grid-template-columns: minmax(0, 1fr); }
+  html[data-workspace-style][data-nav-mode="top"] .sidebar { padding: 8px 20px; }
+  html[data-workspace-style="open"] .content { padding: 24px 36px; }
+  html[data-workspace-style="open"] .content:has(> :is(.wf-editor, .wf-page--run-workbench), > .studio-workspace-panel:not([hidden]) > :is(.wf-editor, .wf-page--run-workbench)) { padding: 0; }
+}
+
+@media (max-width: 600px) {
+  html[data-workspace-style] :is(.topbar, .sidebar) { padding: 8px 12px; }
+  html[data-workspace-style] .content { padding: 12px; }
+  html[data-workspace-style] .topbar .breadcrumb { display: none; }
+}
+
+html[data-workspace-style][data-theme-appearance="high-contrast"] {
+  --studio-border: var(--border);
+  --studio-edge-subtle: var(--studio-border);
+  --studio-edge-control: var(--studio-border);
+  --studio-shadow-sm: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+}
+
+html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.studio-button, .settings-radio-card, .sidebar-environment) {
+  border: 1px solid var(--studio-edge-control);
+}
+
+/* Linen: the same modular workbench with soft edges and a quiet contrast in the chrome. */
+html[data-workspace-style="linen"] {
+  --studio-canvas: color-mix(in srgb, var(--studio-panel) 60%, var(--studio-bg));
+  --studio-workspace-page-background: linear-gradient(130deg, color-mix(in srgb, var(--studio-accent) 3%, var(--studio-bg)), var(--studio-bg) 48%);
+  --studio-workspace-panel-background: linear-gradient(155deg, color-mix(in srgb, var(--studio-accent) 2%, var(--studio-panel)), var(--studio-panel) 60%);
+}
+
+html[data-workspace-style="linen"] .studio-shell { background: var(--studio-workspace-page-background); }
+html[data-workspace-style="linen"] .sidebar {
+  --sidebar: var(--studio-nav-bg);
+  --sidebar-foreground: var(--studio-nav-text);
+  --sidebar-active: var(--studio-nav-active);
+  --sidebar-active-foreground: var(--studio-nav-active-text);
+  --studio-text: var(--studio-nav-text);
+  --studio-text-muted: var(--studio-nav-muted);
+  --foreground: var(--studio-nav-text);
+  --muted-foreground: var(--studio-nav-muted);
+  --studio-surface-muted: color-mix(in srgb, var(--studio-nav-text) 7%, var(--studio-nav-bg));
+  --studio-surface: var(--studio-nav-bg);
+  --studio-accent-soft: var(--studio-nav-active);
+  --studio-focus: var(--studio-nav-text);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--studio-nav-text) 3%, var(--studio-nav-bg)), var(--studio-nav-bg) 65%);
+  color: var(--studio-nav-text);
+  padding: 22px 12px 14px;
+}
+html[data-workspace-style="linen"] .brand { padding: 4px; gap: 10px; }
+html[data-workspace-style="linen"] .brand strong { font-size: 14px; overflow-wrap: anywhere; }
+html[data-workspace-style="linen"] :is(.brand small, .nav-heading) { opacity: 1; }
+html[data-workspace-style="linen"] .nav-heading { font-size: 10px; margin-top: 22px; }
+html[data-workspace-style="linen"] :is(.nav-section a.active, .nav-section a.nav-child.active, .nav-section a:hover) { color: var(--studio-nav-active-text); background: var(--studio-nav-active); }
+html[data-workspace-style="linen"] .nav-section a { min-height: 38px; }
+html[data-workspace-style="linen"] .sidebar .sidebar-collapse-toggle { color: var(--studio-nav-text); }
+html[data-workspace-style="linen"] .sidebar-account .user-menu-button { color: var(--studio-nav-text); }
+html[data-workspace-style="linen"] :is(.sidebar-environment, .sidebar-search) { border: 1px solid color-mix(in srgb, var(--studio-nav-text) 13%, transparent); }
+html[data-workspace-style="linen"] .main-frame { min-width: 0; background: transparent; }
+html[data-workspace-style="linen"] :is(.topbar, .content) { background: transparent; }
+html[data-workspace-style="linen"] .topbar { min-height: 58px; }
+html[data-workspace-style="linen"] :is(.settings-card, .settings-section-list) { background: var(--studio-workspace-panel-background); border: 1px solid var(--studio-edge-subtle); border-radius: var(--studio-radius-lg); padding: 24px; }
+html[data-workspace-style="linen"] :is(.settings-radio-card, .studio-input, .studio-select) { border-radius: var(--studio-radius); }
+html[data-workspace-style="linen"] .workspace-style-preview[data-style="linen"] i:first-child { background: var(--studio-nav-bg); }
+html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] { --studio-workspace-page-background: var(--studio-bg); --studio-workspace-panel-background: var(--studio-panel); }
+html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] .sidebar { background: var(--studio-nav-bg); }
+@media (min-width: 1025px) {
+  html[data-workspace-style="linen"] .studio-shell { grid-template-columns: 208px minmax(0, 1fr); }
+  html[data-workspace-style="linen"][data-nav-mode="top"] .studio-shell { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-workspace-style="linen"] :is(.sidebar, .nav-section a, .studio-button) { transition: none; }
+}
+html[data-workspace-style="linen"] .nav-section a:hover:not(.active) {
+  background: color-mix(in srgb, var(--studio-nav-text) 8%, var(--studio-nav-bg));
+  color: var(--studio-nav-text);
+}
+
+/* Minimal chrome: palette-owned navigation, restrained dividers and no ambient color wash. */
+html[data-workspace-style="minimal"] .studio-shell { background: var(--studio-bg); }
+html[data-workspace-style="minimal"] .sidebar {
+  --sidebar: var(--studio-nav-bg);
+  --sidebar-foreground: var(--studio-nav-text);
+  --sidebar-active: var(--studio-nav-active);
+  --sidebar-active-foreground: var(--studio-nav-active-text);
+  --studio-text: var(--studio-nav-text);
+  --studio-text-muted: var(--studio-nav-muted);
+  --foreground: var(--studio-nav-text);
+  --muted-foreground: var(--studio-nav-muted);
+  --studio-surface: var(--studio-nav-bg);
+  --studio-surface-muted: color-mix(in srgb, var(--studio-nav-text) 6%, var(--studio-nav-bg));
+  --studio-accent-soft: var(--studio-nav-active);
+  --studio-focus: var(--studio-nav-text);
+  background: var(--studio-nav-bg);
+  color: var(--studio-nav-text);
+  border-right: 1px solid color-mix(in srgb, var(--studio-nav-text) 8%, var(--studio-nav-bg));
+  padding: 22px 12px 14px;
+}
+html[data-workspace-style="minimal"] .brand { gap: 10px; padding: 0 6px 14px; }
+html[data-workspace-style="minimal"] .brand strong { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+html[data-workspace-style="minimal"] .brand small { font-size: 11px; }
+html[data-workspace-style="minimal"] :is(.brand small, .nav-heading) { opacity: 1; }
+html[data-workspace-style="minimal"] .nav-icon-tile { width: 20px; height: 20px; color: currentColor; background: transparent; border: 0; box-shadow: none; }
+html[data-workspace-style="minimal"] .nav-section a { position: relative; min-height: 42px; font-size: 14px; color: var(--studio-nav-text); }
+html[data-workspace-style="minimal"] .nav-section a.active { background: var(--studio-nav-active); color: var(--studio-nav-active-text); }
+html[data-workspace-style="minimal"] .nav-section a.active::before { content: ""; display: block; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; background: var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .nav-section a:hover:not(.active) { background: color-mix(in srgb, var(--studio-nav-text) 5%, var(--studio-nav-bg)); }
+html[data-workspace-style="minimal"] .sidebar :is(.sidebar-collapse-toggle, .user-menu-button, .nav-overflow-toggle) { color: var(--studio-nav-text); }
+html[data-workspace-style="minimal"] .sidebar-search { border-color: color-mix(in srgb, var(--studio-nav-text) 16%, var(--studio-nav-bg)); background: transparent; }
+html[data-workspace-style="minimal"] .sidebar-environment { border: 0; border-top: 1px var(--studio-section-boundary-style) color-mix(in srgb, var(--studio-nav-text) 20%, transparent); border-radius: 0; background: transparent; padding-top: 16px; }
+html[data-workspace-style="minimal"] .sidebar-account { border-top: 1px var(--studio-section-boundary-style) color-mix(in srgb, var(--studio-nav-text) 20%, transparent); padding-top: 12px; }
+html[data-workspace-style="minimal"] .main-frame { background: var(--studio-bg); min-width: 0; }
+html[data-workspace-style="minimal"] .topbar { min-height: 52px; background: var(--studio-bg); border-bottom: 1px solid var(--studio-edge-subtle); }
+html[data-workspace-style="minimal"] .content { padding: 24px 28px; background: var(--studio-bg); }
+html[data-workspace-style="minimal"] .content:has(> :is(.wf-editor, .wf-page--run-workbench), > .studio-workspace-panel:not([hidden]) > :is(.wf-editor, .wf-page--run-workbench)) { padding: 0; }
+html[data-workspace-style="minimal"] .studio-dialog-confirm[data-tone="default"] { background: var(--studio-action-primary-bg); border-color: var(--studio-action-primary-bg); color: var(--studio-action-primary-fg); }
+@media (min-width: 1025px) {
+  html[data-workspace-style="minimal"] .studio-shell { grid-template-columns: 216px minmax(0, 1fr); }
+  html[data-workspace-style="minimal"] .studio-shell.sidebar-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
+  html[data-workspace-style="minimal"][data-nav-mode="top"] .studio-shell { grid-template-columns: minmax(0, 1fr); }
+  html[data-workspace-style="minimal"][data-nav-mode="top"] .sidebar { padding: 8px 20px; }
+}
+@media (max-width: 600px) {
+  html[data-workspace-style="minimal"] .content { padding: 16px; }
+  html[data-workspace-style="minimal"] .sidebar { padding: 8px 12px; }
+}

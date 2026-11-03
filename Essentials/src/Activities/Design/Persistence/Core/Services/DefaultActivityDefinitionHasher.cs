@@ -78,7 +78,8 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
     };
 
     private static IEnumerable<ActivityDesignFacet> ExcludePresentationFacets(IEnumerable<ActivityDesignFacet> facets) =>
-        facets.Where(facet => !string.Equals(facet.Kind, ActivityIconName.FacetKind, StringComparison.Ordinal));
+        facets.Where(facet => !string.Equals(facet.Kind, ActivityIconName.FacetKind, StringComparison.Ordinal)
+            && !string.Equals(facet.Kind, "elsa.activity-palette", StringComparison.Ordinal));
 
     private static string Canonicalise(string json)
     {

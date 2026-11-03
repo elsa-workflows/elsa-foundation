@@ -31,6 +31,32 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it("keeps ordinary autosave quiet while retaining the navigation guard", async () => {
+    let resolveSave!: (value: ActivityDefinitionDraftView) => void;
+    const putJson = vi.fn(() => new Promise<ActivityDefinitionDraftView>(resolve => { resolveSave = resolve; }));
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      putJson,
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    expect(rendered.container.querySelector(".ad-revision-gate")).toBeNull();
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    click(buttonByText(rendered.container, "Save now"));
+    await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
+    expect(rendered.container.querySelector(".ad-revision-gate")).toBeNull();
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    resolveSave(fullDraft({ revision: 4, payload: { edit: 1 } }));
+    await waitForText(rendered.container, "Saved revision 4");
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await rendered.unmount();
+  });
   it("creates with the sole authorable provider and enters the exact initial draft", async () => {
     const postJson = vi.fn(async (_url: string, _body: unknown) => ({
       definition: definitionIdentity(),

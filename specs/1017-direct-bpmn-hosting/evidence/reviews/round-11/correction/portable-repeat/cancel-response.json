@@ -1,0 +1,12 @@
+{
+  "executionId": "bpmn:1e8d5e7048efac41363050bc9d38cc13788dd36bf1bd742004a928163f5db4c7",
+  "inputId": "cancel-original-waiting-nested",
+  "replay": false,
+  "pending": false,
+  "result": {
+    "status": "Accepted",
+    "code": null,
+    "revision": 2,
+    "lifecycle": "TerminalPendingSettlement"
+  }
+}

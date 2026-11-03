@@ -101,10 +101,7 @@ public sealed class CoalescingActivityExecutionStateStore(
             (limit, continuation) => _inner.ListPageAsync(
                 new ActivityExecutionStatePageQuery(query.WorkflowExecutionId, limit, continuation), cancellationToken),
             state => state.Execution.ActivityExecutionId,
-            after => session.GetActivityUpserts()
-                .Where(state => after is null || StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after) > 0)
-                .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
-                .FirstOrDefault(),
+            session.NextActivityUpsert,
             id => session.TryGetActivity(id, out _, out _),
             cancellationToken);
     }
@@ -127,11 +124,7 @@ public sealed class CoalescingActivityExecutionStateStore(
                     limit,
                     continuation), cancellationToken),
             state => state.Execution.ActivityExecutionId,
-            after => session.GetActivityUpserts()
-                .Where(state => StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, query.ParentActivityExecutionId))
-                .Where(state => after is null || StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after) > 0)
-                .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
-                .FirstOrDefault(),
+            after => session.NextActivityUpsertByParent(query.ParentActivityExecutionId, after),
             id => session.TryGetActivity(id, out _, out _),
             cancellationToken);
     }
@@ -246,10 +239,7 @@ public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
                     ValidateCurrentOwnerAndContext);
             },
             state => state.DurableValueId,
-            after => session.GetDurableValueUpserts()
-                .Where(state => after is null || StringComparer.Ordinal.Compare(state.DurableValueId, after) > 0)
-                .OrderBy(state => state.DurableValueId, StringComparer.Ordinal)
-                .FirstOrDefault(),
+            session.NextDurableValueUpsert,
             id => session.TryGetDurableValue(id, out _, out _),
             cancellationToken);
     }

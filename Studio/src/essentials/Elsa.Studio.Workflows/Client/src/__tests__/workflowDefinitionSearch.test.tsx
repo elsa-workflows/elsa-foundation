@@ -243,7 +243,7 @@ describe("workflow definition search refresh", () => {
     const { container } = await renderWorkflowRoute("/workflows/definitions?search=invoice", fetchMock, pagedDefinitionCapabilities());
 
     await waitForCondition(() => expect(requests.some(url => new URL(url).searchParams.has("searchTerm"))).toBe(true));
-    expect(container.querySelector(".wf-grid[aria-busy='true']")).not.toBeNull();
+    expect(container.querySelector("[role='status'][aria-busy='true']")).not.toBeNull();
     expect(container.textContent).not.toContain("No workflows match");
     expect(container.querySelector("[role='alert']")?.textContent ?? "").not.toContain("failed");
 

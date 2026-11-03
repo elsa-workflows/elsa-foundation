@@ -3,11 +3,20 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells;
+using CShells.AspNetCore.Configuration;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
+using Elsa.Modularity.Api.Extensions;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Api.Services;
+using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -20,6 +29,7 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
     private const string SharedRevisionKey = "revision-key-shared-by-every-instance";
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"elsa-modularity-{Guid.NewGuid():N}");
     private readonly string _shellsPath;
+    private readonly List<IConfigurationRoot> _configurations = [];
 
     public JsonShellFeatureConfigurationStoreTests()
     {
@@ -81,6 +91,78 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         var updated = await store.LoadAsync();
         Assert.False(updated.Features.ContainsKey("Existing"));
         Assert.Equal("abc", updated.Features["NewFeature"].GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task SaveRefreshesTheHostConfigurationBeforeTheActualShellReload()
+    {
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { ContentRootPath = _directory });
+        builder.Configuration.Sources.Clear();
+        // Hold the watcher completely: an immediate successful apply must not depend on its timing.
+        builder.Configuration.AddJsonFile(_shellsPath, optional: false, reloadOnChange: false);
+        builder.Services.AddSingleton<IWebHostEnvironment>(new FakeEnvironment(_directory));
+        builder.Services.AddModularityApi();
+        builder.Services.AddCShells(shells => shells
+            .WithAssemblies(typeof(SavedConfigurationProbeFeature).Assembly)
+            .WithConfigurationProvider(builder.Configuration));
+        using var host = builder.Build();
+        var registry = host.Services.GetRequiredService<IShellRegistry>();
+        var first = await registry.GetOrActivateAsync("default");
+        Assert.Null(first.ServiceProvider.GetService<SavedConfigurationProbe>());
+        await using (var scope = first.BeginScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<HostBuilderContext>();
+            Assert.Same(host.Services.GetRequiredService<HostBuilderContext>(), context);
+            Assert.Same(builder.Configuration, context.Configuration);
+            Assert.IsType<ShellConfiguration>(scope.ServiceProvider.GetRequiredService<IConfiguration>());
+            var store = scope.ServiceProvider.GetRequiredService<IShellFeatureConfigurationStore>();
+            var before = await store.LoadAsync();
+
+            await store.SaveAsync(before.Revision,
+                [new FeatureConfigurationChange("SavedConfigurationProbe", true, Json("""{"Value":"fresh"}"""))]);
+
+            Assert.Equal("fresh", builder.Configuration["CShells:Shells:default:Features:SavedConfigurationProbe:Value"]);
+            Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<IShellReloader>().ReloadAsync());
+        }
+        var next = await registry.GetOrActivateAsync("default");
+        Assert.NotSame(first, next);
+        Assert.Equal("fresh", next.ServiceProvider.GetRequiredService<SavedConfigurationProbe>().Value);
+    }
+
+    [Fact]
+    public async Task SaveRefusesANonReloadableHostConfigurationBeforeWriting()
+    {
+        var root = Configuration();
+        var context = new HostBuilderContext(new Dictionary<object, object>())
+        {
+            Configuration = new ShellConfiguration(new ShellSettings(new ShellId("default")), root)
+        };
+        var store = CreateStore(hostContext: context);
+        var before = await store.LoadAsync();
+        var contents = await File.ReadAllTextAsync(_shellsPath);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(before.Revision, []));
+
+        Assert.Contains("must support reload", error.Message);
+        Assert.Equal(contents, await File.ReadAllTextAsync(_shellsPath));
+        Assert.Equal(before.Revision, (await store.LoadAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task SaveReportsThatTheFileWasSavedWhenHostReloadFails()
+    {
+        var provider = new FailingReloadProvider();
+        var root = new ConfigurationRoot([provider]);
+        _configurations.Add(root);
+        var store = CreateStore(hostContext: new HostBuilderContext(new Dictionary<object, object>()) { Configuration = root });
+        var before = await store.LoadAsync();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(before.Revision,
+            [new FeatureConfigurationChange("NewFeature", true, Json("{}"))]));
+
+        Assert.Contains("was saved, but host configuration reload failed", error.Message);
+        Assert.IsType<InvalidDataException>(error.InnerException);
+        Assert.True((await store.LoadAsync()).Features.ContainsKey("NewFeature"));
     }
 
     [Fact]
@@ -229,13 +311,15 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
+        foreach (var configuration in _configurations)
+            (configuration as IDisposable)?.Dispose();
         if (Directory.Exists(_directory))
             Directory.Delete(_directory, recursive: true);
 
         return ValueTask.CompletedTask;
     }
 
-    private JsonShellFeatureConfigurationStore CreateStore(string shellId = "default", string? revisionKey = null) =>
+    private JsonShellFeatureConfigurationStore CreateStore(string shellId = "default", string? revisionKey = null, HostBuilderContext? hostContext = null) =>
         new(
             new FakeEnvironment(_directory),
             new ShellSettings(new ShellId(shellId)),
@@ -243,7 +327,15 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
             {
                 ShellsJsonPath = _shellsPath,
                 RevisionKey = revisionKey
-            }));
+            }),
+            hostContext ?? new HostBuilderContext(new Dictionary<object, object>()) { Configuration = Configuration() });
+
+    private IConfigurationRoot Configuration()
+    {
+        var root = new ConfigurationBuilder().AddJsonFile(_shellsPath, optional: true, reloadOnChange: false).Build();
+        _configurations.Add(root);
+        return root;
+    }
 
     private static string WithSeedAdminPassword(string password) =>
         $$$"""{"FoundationIdentityAspNetCoreIdentityEntityFrameworkCore":{"SeedAdminPassword":"{{{password}}}"},"ModularityApi":{}}""";
@@ -270,5 +362,24 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         public string EnvironmentName { get; set; } = Environments.Development;
         public string ContentRootPath { get; set; } = contentRootPath;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    [ShellFeature("SavedConfigurationProbe")]
+    public sealed class SavedConfigurationProbeFeature : IShellFeature
+    {
+        public string Value { get; set; } = "";
+        public void ConfigureServices(IServiceCollection services) => services.AddSingleton(new SavedConfigurationProbe(Value));
+    }
+
+    public sealed record SavedConfigurationProbe(string Value);
+
+    private sealed class FailingReloadProvider : ConfigurationProvider
+    {
+        private bool _loaded;
+        public override void Load()
+        {
+            if (_loaded) throw new InvalidDataException("Fixture host reload failure.");
+            _loaded = true;
+        }
     }
 }

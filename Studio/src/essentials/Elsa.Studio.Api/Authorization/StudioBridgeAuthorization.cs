@@ -35,6 +35,9 @@ public static class StudioBridgeAuthorization
     /// </summary>
     public const string PermissionClaimType = "elsa.identity.permission";
 
+    /// <summary>The verified tenant projected by Studio's stable host identity bridge.</summary>
+    public const string TenantClaimType = "elsa.studio.tenant";
+
     /// <summary>
     /// Builds a host-control permission policy: the bridge's bearer-introspection scheme, an authenticated user, and a
     /// <see cref="StudioBridgePermissionRequirement"/> over <paramref name="satisfyingPermissions"/>. Passing more than

@@ -1,4 +1,5 @@
 import type {
+  WorkflowExecutableAuthoredInput,
   WorkflowExecutableCompiledInput,
   WorkflowExecutableDetails,
   WorkflowExecutableInputSources,
@@ -12,6 +13,8 @@ export const httpEndpointActivityType = "Elsa.Activities.Http.Activities.HttpEnd
 const defaultMethods = ["GET"];
 export const publishedHttpEndpointInputsUnavailableMessage =
   "Studio could not read the published endpoint settings. Check your permission to inspect published workflow inputs, then try again.";
+export const publishedHttpEndpointLiteralsMissingMessage =
+  "Studio needs literal Path and SupportedMethods values in the published endpoint to build a test request.";
 export const workflowHttpBasePathCapabilityRelation = "workflow-http-base";
 export const workflowHttpBasePathUnavailableMessage =
   "Studio could not determine the server's configured workflow HTTP base path. Check the server capability and try again.";
@@ -57,17 +60,13 @@ export function findPublishedHttpEndpoint(
     throw new Error("This endpoint is not in the latest published workflow. Publish your changes, then try again.");
   }
 
-  const routeTemplate = readLiteralInput(node, "Path", inputSources.compiledInputs);
-  if (typeof routeTemplate !== "string" || !routeTemplate.trim()) return null;
+  const routeTemplate = readPublishedPath(node, inputSources);
+  if (!routeTemplate) return null;
 
-  const methodsBinding = findCompiledInputBinding(node, "SupportedMethods", inputSources.compiledInputs);
-  const authoredMethods = methodsBinding ? readMethods(readLiteralBinding(methodsBinding)) : defaultMethods;
-  const supportedMethods = methodsBinding && Array.isArray(methodsBinding.binding.literalValue) && methodsBinding.binding.literalValue.length === 0
-    ? defaultMethods
-    : authoredMethods;
+  const supportedMethods = readPublishedMethods(node, inputSources);
   if (supportedMethods.length === 0) return null;
 
-  const responseMode = readResponseMode(readLiteralInput(node, "ResponseMode", inputSources.compiledInputs));
+  const responseMode = readResponseMode(readPublishedLiteral(node, "ResponseMode", inputSources));
   return {
     authoredActivityId,
     routeTemplate: routeTemplate.trim(),
@@ -200,43 +199,147 @@ function findNode(node: WorkflowExecutableNode, authoredActivityId: string): Wor
   return null;
 }
 
+function readPublishedPath(node: WorkflowExecutableNode, inputSources: WorkflowExecutableInputSources): string | undefined {
+  const path = coercePath(readPublishedLiteral(node, "Path", inputSources));
+  return path?.trim() ? path.trim() : undefined;
+}
+
+function readPublishedMethods(node: WorkflowExecutableNode, inputSources: WorkflowExecutableInputSources): string[] {
+  const compiled = findCompiledInputBinding(node, "SupportedMethods", inputSources.compiledInputs);
+  if (!compiled && !findAuthoredInput(node, "SupportedMethods", inputSources.authoredInputs ?? [])) {
+    return defaultMethods;
+  }
+
+  const value = readPublishedLiteral(node, "SupportedMethods", inputSources);
+  if (isEmptyMethodList(value)) return defaultMethods;
+  return readMethods(value);
+}
+
+function readPublishedLiteral(
+  node: WorkflowExecutableNode,
+  inputKey: string,
+  inputSources: WorkflowExecutableInputSources
+): unknown {
+  const compiled = findCompiledInputBinding(node, inputKey, inputSources.compiledInputs);
+  if (compiled) {
+    const raw = readLiteralBinding(compiled);
+    const usable = coerceLiteralValue(raw, compiled.binding.summary);
+    if (usable !== undefined) return usable;
+  }
+
+  return readAuthoredLiteral(node, inputKey, inputSources.authoredInputs ?? []);
+}
+
 function findCompiledInputBinding(
   node: WorkflowExecutableNode,
   inputKey: string,
   compiledInputs: WorkflowExecutableCompiledInput[]
 ): WorkflowExecutableCompiledInput | undefined {
   const target = inputKey.toLowerCase();
-  return compiledInputs.find(input => input.executableNodeId === node.executableNodeId
-    && ((input.binding.inputKey?.trim().toLowerCase() ?? "") === target
-      || input.binding.inputName.trim().toLowerCase() === target));
+  return compiledInputs.find(input => matchesPublishedNode(input.executableNodeId, node) && bindingNames(input).includes(target));
 }
 
-function readLiteralInput(
-  node: WorkflowExecutableNode,
-  inputKey: string,
-  compiledInputs: WorkflowExecutableCompiledInput[]
-): unknown {
-  const compiled = findCompiledInputBinding(node, inputKey, compiledInputs);
-  return compiled ? readLiteralBinding(compiled) : undefined;
+function matchesPublishedNode(inputNodeId: string | null | undefined, node: WorkflowExecutableNode): boolean {
+  return inputNodeId === node.executableNodeId || inputNodeId === node.authoredActivityId;
+}
+
+function bindingNames(input: WorkflowExecutableCompiledInput): string[] {
+  const binding = input.binding;
+  const metadataKey = isRecord(binding.metadata) && typeof binding.metadata.referenceKey === "string"
+    ? binding.metadata.referenceKey
+    : "";
+  return [binding.inputKey, binding.inputName, metadataKey]
+    .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    .map(name => name.trim().toLowerCase());
 }
 
 function readLiteralBinding(compiled: WorkflowExecutableCompiledInput): unknown {
   if (!isAllowedAccessState(compiled.accessState ?? compiled.access) || compiled.binding.isSensitive === true) {
     throw new Error(publishedHttpEndpointInputsUnavailableMessage);
   }
-  if (compiled.binding.source.toLowerCase() !== "literal") return undefined;
+  const source = compiled.binding.source;
+  if (typeof source !== "string" || source.toLowerCase() !== "literal") return undefined;
   return compiled.binding.literalValue;
 }
 
+function readAuthoredLiteral(
+  node: WorkflowExecutableNode,
+  inputKey: string,
+  authoredInputs: WorkflowExecutableAuthoredInput[]
+): unknown {
+  const authored = findAuthoredInput(node, inputKey, authoredInputs);
+  if (!authored) return undefined;
+  if (!isAllowedAccessState(authored.accessState ?? authored.access) || authored.isSensitive === true) {
+    throw new Error(publishedHttpEndpointInputsUnavailableMessage);
+  }
+  const expressionType = authored.expressionType?.trim().toLowerCase() ?? "literal";
+  if (expressionType !== "literal" && expressionType !== "object") return undefined;
+  return coerceLiteralValue(authored.value);
+}
+
+function findAuthoredInput(
+  node: WorkflowExecutableNode,
+  inputKey: string,
+  authoredInputs: WorkflowExecutableAuthoredInput[]
+): WorkflowExecutableAuthoredInput | undefined {
+  const target = inputKey.toLowerCase();
+  return authoredInputs.find(input =>
+    matchesPublishedNode(input.executableNodeId, node) && input.inputKey.trim().toLowerCase() === target);
+}
+
+function coerceLiteralValue(value: unknown, summary?: string | null): unknown {
+  const unwrapped = unwrapLiteralValue(value);
+  if (unwrapped !== undefined) return unwrapped;
+  if (typeof summary !== "string" || !summary.trim()) return undefined;
+  try {
+    return JSON.parse(summary);
+  } catch {
+    return undefined;
+  }
+}
+
+function unwrapLiteralValue(value: unknown): unknown {
+  if (value == null) return undefined;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) return value;
+  if (!isRecord(value) || !("value" in value)) return undefined;
+  const nested = value.value;
+  if (typeof nested === "string" || typeof nested === "number" || typeof nested === "boolean" || Array.isArray(nested)) {
+    return nested;
+  }
+  return undefined;
+}
+
+function coercePath(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function isEmptyMethodList(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 0;
+}
+
 function readMethods(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+  const entries = typeof value === "string" ? parseMethodList(value) : value;
+  if (!Array.isArray(entries)) return [];
   const methods = new Set<string>();
-  for (const entry of value) {
+  for (const entry of entries) {
     if (typeof entry !== "string") continue;
     const method = entry.trim().toUpperCase();
     if (/^[!#$%&'*+.^_`|~0-9A-Z-]+$/.test(method)) methods.add(method);
   }
   return [...methods];
+}
+
+function parseMethodList(value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    /* comma-separated checklist leftovers */
+  }
+  return trimmed.split(/[,\s]+/).filter(Boolean);
 }
 
 function readResponseMode(value: unknown): "async" | "sync" | null {

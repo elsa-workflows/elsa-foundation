@@ -613,9 +613,13 @@ public sealed partial class ArchitectureGuardTests
         // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
         // differs, and the src|tests split sits inside the extension rather than at the top of the tree.
         // Moving a module is therefore one row in ExtensionBuckets, not another branch here.
-        if (ExtensionBuckets.FirstOrDefault(bucket => project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
+        if (ExtensionBuckets.FirstOrDefault(bucket => project.Name == bucket.Prefix.TrimEnd('.')
+                || project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
         {
-            var subPath = string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
+            // A module's root implementation uses its full assembly name as the folder,
+            // just as the root implementation does when a domain folder has child projects.
+            var subPath = project.Name == owner.Prefix.TrimEnd('.')
+                ? project.Name : string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
             var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
             return NameDerivedPath(project, $"Extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
         }

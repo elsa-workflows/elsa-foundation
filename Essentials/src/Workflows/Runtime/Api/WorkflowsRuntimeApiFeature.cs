@@ -63,6 +63,12 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        var taskAccess = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess)).ToArray();
+        if (taskAccess.Length != 1) throw new InvalidOperationException("Exactly one user-task eligibility adapter must be selected.");
+        if (taskAccess[0].ImplementationType == typeof(Elsa.Workflows.Runtime.UserTasks.UnavailableUserTaskAccess))
+            services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess, UserTasks.TaskRequestAccess>());
+        services.AddApiCapabilitySource<UserTasks.UserTaskCapabilitySource>();
+
         services.AddDynamicEndpointApiExplorerRefresh();
         // The owner's failure services are keyed so hosts composing several modules keep each
         // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.

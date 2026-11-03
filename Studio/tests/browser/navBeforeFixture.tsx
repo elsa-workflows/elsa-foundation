@@ -38,6 +38,7 @@ const navigation: StudioNavigationContribution[] = [
   { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 50, section: "settings" }
 ];
 
+/** Historical pre-navigation comparison: original resource links are intentionally retained. */
 export function NavBeforeFixture() {
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
