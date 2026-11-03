@@ -177,17 +177,23 @@ class JourneyBoundariesTests(unittest.TestCase):
         config["workflow"]["draftPath"] += "?accessToken=PRIVATE_CREDENTIAL"
         with self.assertRaises(RuntimeError): browser_inputs(config)
 
-    def test_browser_export_summary_takes_an_activity_only_when_the_journey_has_one(self):
-        workflow = {"definitionId": "definition", "draftId": "draft", "definitionPath": "/design/workflows/definitions/definition",
-                    "draftPath": "/design/workflows/drafts/draft", "validationPath": "/design/workflows/drafts/draft/validations"}
-        config = {"journey": "workflow-version-history", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001",
-                  "backendOrigin": "http://127.0.0.1:51002", "workflow": dict(workflow)}
-        self.assertEqual(set(workflow), set(browser_inputs(config)["workflow"]))
-        # Present, it is still an actual identity; every other field stays required.
-        for value in ("", None, 7):
-            with self.assertRaises(RuntimeError): browser_inputs({**config, "workflow": {**workflow, "activityId": value}})
-        for key in workflow:
-            with self.assertRaises((KeyError, RuntimeError)): browser_inputs({**config, "workflow": {k: v for k, v in workflow.items() if k != key}})
+    def test_browser_export_summary_exports_only_the_fields_a_journey_addresses(self):
+        base = {"journey": "workflow-version-history", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001",
+                "backendOrigin": "http://127.0.0.1:51002"}
+        # Witness f052ff221: the version-history journey addresses a definition and its draft path, no draft id or activity.
+        version = {"definitionId": "definition", "definitionPath": "/design/workflows/definitions/definition",
+                   "draftPath": "/design/workflows/drafts/draft", "version": {"id": "v2", "path": "/design/workflows/versions/v2"}}
+        self.assertEqual({"definitionId", "definitionPath", "draftPath"}, set(browser_inputs({**base, "workflow": version})["workflow"]))
+        executable = {"executable": {"artifactId": "artifact", "artifactHash": "sha256:abc", "path": "/runtime/workflows/executables/artifact"}}
+        self.assertEqual({"executable"}, set(browser_inputs({**base, "workflow": executable})["workflow"]))
+        # Every present field is still validated, and some identity is required.
+        for key, value in (("activityId", ""), ("activityId", None), ("draftId", 7), ("definitionPath", "relative/path"),
+                           ("draftPath", "/x?accessToken=PRIVATE")):
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                browser_inputs({**base, "workflow": {**version, key: value}})
+        with self.assertRaises(RuntimeError): browser_inputs({**base, "workflow": {"definitionPath": "/design/workflows/definitions/d"}})
+        with self.assertRaises(RuntimeError):
+            browser_inputs({**base, "workflow": {"executable": {"artifactId": "a", "artifactHash": "h", "path": "/x?token=1"}}})
 
     def test_semantic_refusal_requires_native_failure_and_correlated_completion(self):
         result = {"toolCallId": "native-call", "toolName": "declared_tool", "succeeded": False,
