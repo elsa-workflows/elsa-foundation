@@ -26,9 +26,8 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     public EtlRabbitMqTarget DescribeTarget(string connectionString)
     {
         var factory = Factory(connectionString);
-        var uri = factory.Uri;
-        var port = uri.IsDefaultPort || uri.Port < 0 ? (factory.Ssl.Enabled ? 5671 : 5672) : uri.Port;
-        return new(factory.HostName, port, factory.VirtualHost, factory.UserName);
+        // The factory's URI carries the resolved port: the default for amqp (5672) or amqps (5671) when the URI names none.
+        return new(factory.HostName, factory.Uri.Port, factory.VirtualHost, factory.UserName);
     }
 
     public async ValueTask<EtlRabbitMqPublishOutcome> PublishAsync(string connectionString, string exchange, string routingKey,
