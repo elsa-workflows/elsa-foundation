@@ -32,7 +32,7 @@ function fixture() {
   const render = (options: { busy?: boolean; readOnly?: boolean; session?: StudioBackendSession; draft?: WorkflowDraft } = {}) => {
     currentSession = options.session ?? currentSession; currentDraft = options.draft ?? currentDraft;
     flushSync(() => root.render(<DirectBpmnPublishAction key={currentSession.key} session={currentSession} definitionId="definition" draft={currentDraft}
-      busy={options.busy ?? false} readOnly={options.readOnly ?? false} saveDraft={saveDraft} flushMetadata={flushMetadata}
+      busy={options.busy ?? false} readOnly={options.readOnly ?? false} saveDraft={saveDraft} lineage={() => new Set(["batch-1"])} flushMetadata={flushMetadata}
       onOpenProcesses={openProcesses} setPaused={setPaused} setBusy={setBusy} setError={setError} setStatus={setStatus} reload={reload} />));
   };
   const click = () => flushSync(() => container.querySelector<HTMLButtonElement>("button")!.click());
@@ -46,7 +46,8 @@ describe("Studio direct BPMN publication", () => {
     const view = fixture();
     try {
       view.click(); await vi.waitFor(() => expect(view.setStatus).toHaveBeenCalledWith("BPMN process published."));
-      expect(view.saveDraft).toHaveBeenCalledWith(view.draft, "BPMN publication snapshot saved");
+      // The history line is captured with the snapshot and passed to the save (spec 1193 FR-010).
+      expect(view.saveDraft).toHaveBeenCalledWith(view.draft, "BPMN publication snapshot saved", { lineage: ["batch-1"] });
       expect(promoteDraft).toHaveBeenCalledWith(view.session.context, "draft", undefined, expect.any(String), expect.any(AbortSignal));
       expect(view.postJson).toHaveBeenCalledTimes(1);
       expect(view.postJson).toHaveBeenCalledWith("/interchange/bpmn/versions/version/publish-direct", { requestId: expect.any(String) }, { retryOnUnauthorized: false, signal: expect.any(AbortSignal) });

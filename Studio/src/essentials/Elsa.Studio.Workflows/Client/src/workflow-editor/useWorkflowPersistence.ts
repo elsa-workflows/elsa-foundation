@@ -71,20 +71,23 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   }, []);
 
   /**
-   * Saves a snapshot. A caller saving a snapshot it derived from the live draft (not the live draft itself) may declare
-   * the history line it carries in `options.lineage`; without that, the written line is unknown and the batch saved set
-   * is left as it is.
+   * Saves a snapshot. A caller that captured a snapshot of (or derived one from) the live draft declares the history line
+   * it captured together with it in `options.lineage`; without one a save of anything but the live draft writes an
+   * unknown line, which clears the batch saved set.
    */
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string> }) => {
     // Capture when requested, before waiting in the queue. An old save cannot release a newer
     // reviewed edit, even when that old request only starts after the new hold was acquired.
     const requestedReviewGeneration = reviewHoldGenerationRef.current;
     const requestedSignature = getDraftSignature(draftSnapshot);
-    // The line of the state this save writes, captured when the save is requested: the live line's when it saves the live
-    // draft, the caller's declared line for a snapshot it derived from it, and otherwise not known (null).
+    // The line of the state this save writes, captured when the save is requested: the caller's declared line for a
+    // snapshot it captured together with that line, else the live line's when it saves the live draft, else not known
+    // (null). The live match is by signature: edits that return to the line's content and are then saved explicitly
+    // mark its batches saved without writing anything new, which is harmless, as the owner then holds content equal
+    // to what the line represents.
     const requestedLive = latestDraftRef.current;
-    const writtenLineage = requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])]
-      : options?.lineage ? [...options.lineage] : null;
+    const writtenLineage = options?.lineage ? [...options.lineage]
+      : requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
     const queuedSave = async () => {
       if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;

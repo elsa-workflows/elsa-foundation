@@ -127,9 +127,9 @@ import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } fro
 import { isHttpEndpointType } from "./httpTestRequest";
 import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
 import {
-  applyActivityVersionChange,
+  activityVersionChangePinnedReason,
   findActivityOccurrence,
-  validateActivityVersionChangePrecondition
+  planActivityVersionChange
 } from "./activityVersionChangeModel";
 import { createLazyExpressionToolingClient } from "../expression-tooling/lazyExpressionToolingClient";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
@@ -693,6 +693,7 @@ export function WorkflowEditor({
   } = useWorkflowOperations({
     context,
     draft: editableDraft,
+    lineage: lineageHold.lineage,
     details,
     catalog,
     busy,
@@ -1091,10 +1092,11 @@ export function WorkflowEditor({
   }, [backendSession, canUseBpmnInterchange, context, directBpmnRoot, draft, editDraftAndSelect, editorDoc.pinned, setError, setStatus]);
 
   const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
+    if (!editorDoc.canEdit()) { setError(activityVersionChangePinnedReason); return; }
     setError("");
     setAutosavePaused(true);
     setVersionChange({ occurrence, current, recommendation: inspectedRecommendation });
-  }, [inspectedRecommendation, setAutosavePaused, setError]);
+  }, [editorDoc, inspectedRecommendation, setAutosavePaused, setError]);
 
   const cancelVersionChange = useCallback(() => {
     setVersionChange(null);
@@ -1102,20 +1104,10 @@ export function WorkflowEditor({
   }, [setAutosavePaused]);
 
   const applyVersionChange = useCallback(async (request: ActivityVersionChangeApplyRequest) => {
-    if (!draft) throw new Error("No workflow draft is loaded.");
-    const staleReason = validateActivityVersionChangePrecondition(draft, request.precondition);
-    if (staleReason) throw new Error(staleReason);
-    const next = applyActivityVersionChange(
-      draft,
-      request.precondition.occurrenceId,
-      request.precondition.fromVersionId,
-      request.targetVersionId,
-      request.scope
-    );
-    if (next === draft) throw new Error("The reviewed occurrence no longer matches this version change.");
-
-    // `next` derives from the live draft, so it carries the live history line.
-    const saved = await saveDraft(next, "Activity version changed", { lineage: lineageHold.lineage() });
+    const next = planActivityVersionChange(draft, request, editorDoc.canEdit());
+    // `next` derives from the live editable draft, so it carries the live history line, captured with it.
+    const lineage = [...lineageHold.lineage()];
+    const saved = await saveDraft(next, "Activity version changed", { lineage });
     const savedOccurrence = findActivityOccurrence(saved.state.rootActivity, request.precondition.occurrenceId);
     if (!savedOccurrence || savedOccurrence.activityVersionId !== request.targetVersionId) {
       throw new Error("The server did not confirm the reviewed exact version change.");
@@ -1123,7 +1115,7 @@ export function WorkflowEditor({
     loadDraft(saved);
     setVersionChange(null);
     setAutosavePaused(false);
-  }, [draft, lineageHold, loadDraft, saveDraft, setAutosavePaused]);
+  }, [draft, editorDoc, lineageHold, loadDraft, saveDraft, setAutosavePaused]);
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
   // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The
@@ -1449,7 +1441,7 @@ export function WorkflowEditor({
         onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
         directBpmnPublication={directBpmnRoot && backendSession ? <DirectBpmnPublishAction
           key={`${backendSession.key}:${definitionId}`} onOpenProcesses={onOpenBpmnProcesses} session={backendSession} definitionId={definitionId} draft={draft}
-          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} flushMetadata={flushDefinitionMeta}
+          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} lineage={lineageHold.lineage} flushMetadata={flushDefinitionMeta}
           setPaused={setAutosavePaused} setBusy={value => setOperation(value ? "publishing" : "idle")}
           setStatus={setStatus} setError={setError} reload={reload} /> : undefined}
         publicationUnavailableReason={publicationUnavailableReason}

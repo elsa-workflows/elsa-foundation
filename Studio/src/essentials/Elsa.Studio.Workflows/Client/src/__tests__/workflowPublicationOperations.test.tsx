@@ -160,6 +160,19 @@ describe("workflow publication operations", () => {
     expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication cancelled; no changes were saved, promoted, or published.");
   });
 
+  it("saves the review snapshot with the history line captured together with it, not the line at publish time", async () => {
+    let line = ["batch-1"];
+    const fixture = renderOperations({ lineage: () => line });
+    await prepare(fixture);
+    // The author undoes the batch while the review is open; the snapshot under review still carries it.
+    line = [];
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.saveDraft.mock.calls[0][2]).toEqual({ lineage: ["batch-1"] });
+  });
+
   it("publishes the immutable authoritative review through save, promote, and token-bound publish", async () => {
     const source = draft();
     const fixture = renderOperations({ draft: source });
@@ -883,6 +896,8 @@ async function flushUpdates() {
 
 function renderOperations(options: {
   draft?: WorkflowDraft;
+  /** The live history line the editor reports (spec 1193 FR-010). */
+  lineage?: () => Iterable<string>;
   failPublish?: boolean;
   failPublishAttempts?: number;
   publishResponse?: Promise<Publication>;
@@ -1020,7 +1035,7 @@ function renderOperations(options: {
     baseUrl: `test://publication-${Math.random()}`,
     http: { getJson, postJson }
   } as unknown as StudioEndpointContext;
-  const saveDraft = vi.fn(async (snapshot: WorkflowDraft) => {
+  const saveDraft = vi.fn(async (snapshot: WorkflowDraft, _status?: string, _options?: { lineage?: Iterable<string> }) => {
     mutationOrder.push("save");
     if (options.saveDelayMs) await new Promise(resolve => setTimeout(resolve, options.saveDelayMs));
     const saved = structuredClone(snapshot);
@@ -1055,6 +1070,7 @@ function renderOperations(options: {
       catalog: [],
       busy: false,
       saveDraft,
+      lineage: options.lineage,
       flushPendingSave,
       ...callbacks
     }} />));

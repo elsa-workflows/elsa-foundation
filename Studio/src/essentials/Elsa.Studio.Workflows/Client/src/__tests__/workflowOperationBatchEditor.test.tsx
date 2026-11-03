@@ -335,12 +335,52 @@ describe("reviewed Operation Batch in the editor", () => {
     card.unmount();
   });
 
-  it("an explicit save of a snapshot that is not the live draft, with no declared line, keeps a saved batch saved (BPMN and publication snapshots)", async () => {
+  it("an explicit save of a non-live snapshot with no declared line clears the saved set, the safe direction", async () => {
     const result = await run(request(fiveKinds()));
     await explicitSave();
-    // A snapshot the caller captured, then edited before saving: its line is not known to persistence.
     const snapshot = { ...structuredClone(doc.state.draft!), layout: [...doc.state.draft!.layout, { nodeId: "a", x: 7, y: 7 }] };
-    const saved = await persistence.saveDraft(snapshot, "BPMN publication snapshot saved");
+    const saved = await persistence.saveDraft(snapshot, "Publication snapshot saved");
+    flushSync(() => doc.loadDraft(saved));
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    // Unknown is never trusted: B is held again until an explicit save of a known line.
+    expect(controller.batch!.state(token(result)).persisted).toBe(false);
+    expect(history.lineageHold.isHeld()).toBe(true);
+  });
+
+  it("BPMN publish captures the line with its snapshot: a Redo during the save is held, never autosaved", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    // DirectBpmnPublishAction captures the snapshot (S0) and its line together, then awaits the metadata flush.
+    const snapshot = structuredClone(doc.state.draft!);
+    const lineage = [...history.lineageHold.lineage()];
+    expect(JSON.stringify(snapshot)).not.toContain("greet");
+    // Meanwhile the author redoes to the saved batch state S1.
+    flushSync(() => history.redo());
+    const saved = await persistence.saveDraft(snapshot, "BPMN publication snapshot saved", { lineage });
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+    expect(JSON.stringify(saved)).not.toContain("greet");
+
+    // The owner now holds S0, so B is not saved: the live S1 is held and the card says not saved.
+    const card = mountCard(token(result));
+    expect(controller.batch!.state(token(result))).toEqual({ status: "available", persisted: false });
+    expect(outcome(card)).toBe("applied-locally");
+    expect(history.lineageHold.isHeld()).toBe(true);
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes);
+    card.unmount();
+  });
+
+  it("BPMN publish of the live batch state marks the batch saved", async () => {
+    const result = await run(request(fiveKinds()));
+    expect(history.lineageHold.isHeld()).toBe(true);
+    const snapshot = structuredClone(doc.state.draft!);
+    const lineage = [...history.lineageHold.lineage()];
+    const saved = await persistence.saveDraft(snapshot, "BPMN publication snapshot saved", { lineage });
     flushSync(() => doc.loadDraft(saved));
     await vi.advanceTimersByTimeAsync(0);
     flushSync(noop);
