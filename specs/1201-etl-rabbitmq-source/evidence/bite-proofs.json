@@ -260,7 +260,7 @@
    "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0 && !IsBlank(span))",
    "mutated_text": "        if (!IsBlank(span))",
    "sourceRevision": "9b4c621db3abdeef8f366b3f790f5100768103d8",
-   "supersededBy": "writer-line-break-as-space@7852daed4, writer-invalid-multiline-is-invalid@9411620cf"
+   "supersededBy": "writer-single-line-as-received@2327e565f, writer-line-break-as-space@7852daed4, writer-invalid-multiline-is-invalid@9411620cf"
   },
   {
    "mutation": "writer-blank",
