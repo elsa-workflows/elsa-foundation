@@ -16,4 +16,10 @@ Backend chooser lists local and enabled effective external choices; preferred do
 
 ## Links and sessions
 
+Implemented HTTP protocol routes and browser/correlation/form contracts are documented in the
+[owning API module](../../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md).
+The ordinary token exchange exposes access token, expiry and its refresh token. Preview has separate routes,
+cookie purposes and result handles, with an explicit existing administrator cookie requirement. This does not
+complete the durable selected-session/link administration boundary below.
+
 Permission-scoped bounded list/detail and explicit link/unlink/revoke commands. Reject cross-tenant lookup and conflicting links. Revocation invalidates the selected normal session and its token family; user disable/delete invalidates all canonical-user credentials. Safe event sink receives outcomes/correlation/record IDs, never secrets or full protocol responses. Precise wire routes/SDK types are finalized with the API implementation and contract tests; no placeholder endpoint counts as delivery.

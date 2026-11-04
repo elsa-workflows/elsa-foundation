@@ -57,7 +57,7 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
             var state = new FlowState(1, selected.Record.Key, selected.Record.Id, selected.MaterialRevision, selected.Record.Protocol,
                 callback, request.ReturnUrl, nonce, verifier, challenge.Issuer, challenge.CredentialBinding, now, Milliseconds(now + options.Value.FlowLifetime));
             var artifact = Protect(handle, request.Purpose, request.ConnectionKey, request.BrowserBinding, admin, now, state.ExpiresAt, state);
-            if (await store!.TryCreateAsync(artifact, cancellationToken)) return new(challenge.AuthorizationUrl);
+            if (await store!.TryCreateAsync(artifact, cancellationToken)) return new(challenge.AuthorizationUrl) { State = handle };
         }
         return new(null, ExternalFlowFailure.Conflict);
     }

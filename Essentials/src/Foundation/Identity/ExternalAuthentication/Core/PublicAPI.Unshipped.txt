@@ -631,3 +631,5 @@ Elsa.Foundation.Identity.ExternalAuthentication.Core.IAuthenticationArtifactStor
 Elsa.Foundation.Identity.ExternalAuthentication.Core.IAuthenticationArtifactStore.IsDurable.get -> bool
 Elsa.Foundation.Identity.ExternalAuthentication.Core.IAuthenticationArtifactStore.TryCreateAsync(Elsa.Foundation.Identity.ExternalAuthentication.Core.AuthenticationArtifact! artifact, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Foundation.Identity.ExternalAuthentication.Core.AuthenticationArtifact.AuthenticationArtifact(string! Id, string! TenantId, Elsa.Foundation.Identity.ExternalAuthentication.Core.AuthenticationArtifactPurpose Purpose, string! BrowserBinding, string? AdministratorBinding, System.DateTimeOffset CreatedAt, System.DateTimeOffset ExpiresAt, string! ProtectedPayload) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalFlowStarted.State.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalFlowStarted.State.init -> void

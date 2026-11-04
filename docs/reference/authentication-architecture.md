@@ -483,5 +483,11 @@ normalization keeps its separate explicit bridge and does not acquire managed-co
 
 Composition, policy configuration and the integrator example belong to the
 [managed feature README](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
-Actual provider/session/API/Studio and deployment qualification remain required by
-[spec 1205](../../specs/1205-external-authentication/spec.md); the policy and persistence component tests alone do not prove them.
+The optional [managed HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md)
+connects admission to the ordinary canonical-user cookie authority and first-party token pipeline. Live provider
+sources supplement static modules in bootstrap; their capabilities reflect Elsa's configured IAM authority and
+ownership policy, rather than the upstream IdP's role vocabulary. Preview has a separate administrator/browser-
+bound callback and never issues a normal session. Owned real HTTP tests cover cookies, token exchange/refresh/
+logout and preview isolation with two protocol fixtures and native SQLite stores. Browser/Studio, durable
+selected-session enforcement, external-product and deployment qualification remain required by
+[spec 1205](../../specs/1205-external-authentication/spec.md).

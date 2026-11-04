@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="NativeEndpoints" />
+    <ProjectReference Include="../Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
+    <ProjectReference Include="../Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+    <ProjectReference Include="../../../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+  </ItemGroup>
+</Project>

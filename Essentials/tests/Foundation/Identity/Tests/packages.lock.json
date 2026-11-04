@@ -704,6 +704,17 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.foundation.identity.externalauthentication.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication.Core": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
       "elsa.foundation.identity.externalauthentication.core": {
         "type": "Project",
         "dependencies": {

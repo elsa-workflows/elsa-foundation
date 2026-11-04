@@ -6,7 +6,8 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 | Contract | Default impl | Override when |
 |---|---|---|
-| `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
+| `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity`) | The host needs tenant-aware provider discovery beyond registered modules and live `IAuthenticationProviderSource` contributions. Sources are bounded and duplicate provider/tenant identities fail closed. |
+| `ICanonicalUserSignInService` | No abstraction default; ASP.NET Core Identity registers `AspNetCoreIdentityCanonicalSignInService` with its concrete cookie substrate | An already admitted canonical user needs the ordinary interactive session. This server-only call rechecks current user/membership/framework sign-in eligibility, uses the selected principal factory and cookie scheme, and never imports upstream grants. Custom session authorities replace it explicitly. |
 | `ITokenSubjectResolver` | `DefaultTokenSubjectResolver` (`Elsa.Foundation.Identity`) | A provider projects a different canonical subject shape. One replacement is allowed; it must preserve tenant/user or tenant/provider/validated-issuer/subject isolation and reject ambiguous claims. The identity API supplies only its trusted normalized identity. |
 | `IOwnershipModeProvider` | `OptionsOwnershipModeProvider` (`Elsa.Foundation.Identity`) | Ownership mode is resolved from tenant configuration or another dynamic source. |
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
@@ -38,6 +39,16 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Register:** `services.AddScoped<IAuthenticationProviderModule, MyProviderModule>()`.
 - **Consumed by:** `DefaultAuthenticationProviderResolver`, which composes enabled provider descriptors for sign-in and capability discovery.
 - **Known implementations:** `OidcAuthenticationProviderModule` (`Elsa.Foundation.Identity.Oidc`) and `OpenIddictAuthenticationProviderModule` (`Elsa.Foundation.Identity.OpenIddict`) *(cross-domain provider modules)*.
+
+### `IAuthenticationProviderSource`
+
+- **Kind:** Live contributor; one scoped source per managed provider authority, registered with `TryAddEnumerable`.
+- **Consumed by:** `DefaultAuthenticationProviderResolver` on each discovery request. Each source returns at most
+  256 descriptors; the composite is bounded to 512 and rejects duplicate provider/tenant identities.
+- **Known implementation:** `ManagedConnectionProviderSource` in optional `ExternalAuthentication/Api`. It exposes
+  enabled effective connections with an installed/configured protocol, artifact authority and registered session
+  scheme. Its capabilities come from Elsa's configured IAM authority and ownership policy. They do not imply that
+  external authentication moves role definitions or user management into the IdP.
 
 ### `IPermissionContributor`
 

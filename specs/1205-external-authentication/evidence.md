@@ -4,7 +4,7 @@ Date: 2026-11-04. Starting Foundation main: `73040cd7b1368818820d2a60902443a9f8a
 
 ## State
 
-Incomplete delivery. Design and independent identity-isolation implementation are in progress. Provider catalog/lifecycle components and qualified-link persistence are implemented locally for draft PR #3806; flow coordination and optional durable artifact storage are now implemented at component scope; HTTP broker/session integration, API, Studio and actual provider/deployment qualification remain incomplete. No merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
+Incomplete delivery. Draft PR #3806 implements identity isolation, exact links/atomic admission, managed catalog/protocol/flow components and backend HTTP cookie/token/preview integration. Management API/Studio, actual runtime recovery adapters, durable selected-session/status enforcement, browser/external-product/server-database/separate-process deployment qualification, review/merge and resulting-main proof remain open. The recurring mapped-role choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign saved existing Elsa roles; upstream roles/permissions have no automatic authority.
 
 Claims: #3579 comment 6627512912; prerequisite #2848 comment 6627557183. No competing claim/assignment/open PR found before this checkpoint. Owner authorization is recorded on #3579 comment 6627537005 and linked on #2771; #2771's Phase 2 description now names this scoped advancement without activating other phases. Baseline main CI 41790684918 passed; no open main-red CI issue was found at startup.
 
@@ -289,3 +289,90 @@ T019's actual interactive preview/cookie witness and T013/T020/T023's ordinary s
 still incomplete, as are management/Studio, native server-database/separate-process deployment, independent
 review/required CI/merge and resulting-main qualification. The considered recurring-role-mapping decision is
 still pending; withdrawn selection and elapsed time are not authorization. No end-to-end completion is claimed.
+
+
+## Backend HTTP sign-in, live discovery and preview checkpoint
+
+Implemented optional `FoundationIdentityExternalAuthenticationApi` and the Core canonical-user sign-in/live
+provider-source seams. The ASP.NET Core Identity substrate supplies the ordinary cookie issuer without gaining
+managed-authentication/Secrets dependencies. The selected framework principal factory/security stamp and
+current user/membership/sign-in/lockout policy are used; the new external adapter refuses an account whose
+required local second factor cannot be completed by this protocol. No raw upstream grants reach the cookie.
+The normal token exchange now exposes the refresh token it already creates; exchange/refresh responses explicitly prohibit credential caching and the actual HTTP clients assert that boundary.
+
+Protocol/form/correlation and endpoint security contracts are documented in the [owning API module](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md).
+The backend theme/custom renderer includes local and live external choices, escapes names, emphasizes a
+preferred choice without redirecting automatically, and retains local recovery when the optional catalog fails.
+Disabling the password method hides/refuses passwords while the same cookie substrate can issue external
+sessions. Live descriptor capabilities reflect Elsa's configured IAM authority and effective ownership mode;
+external authentication never silently substitutes the IdP's user/role authority. Undecided recurring mappings
+are not advertised. Missing protocol/artifact/session support is not advertised as a usable sign-in method.
+
+Owned HTTP evidence is now `ManagedOidc/ExternalAuthenticationHttpTests.cs`: a real Kestrel backend under a path
+base, two independently hosted actual HTTP OIDC protocol fixtures, native SQLite IAM/provider/artifact stores,
+a separate native SQLite OpenIddict vendor token store, and an owned Data Protection key directory. Browser-like
+HTTP clients persist real cookies; this is not a Playwright browser or an external OIDC product deployment.
+The test suite proves:
+
+- Both providers produce ordinary canonical-user cookies, access tokens and refresh tokens with saved Elsa
+  roles/permissions; equal opaque upstream subjects at different issuer/provider scopes become different users.
+  A reader cannot access the administrator resource. Logout revokes its access/refresh credentials and copied
+  cookie stamp while the other user's cookie/access/refresh remain usable. This also works after the connection
+  disappears from discovery and through the technical first-party bearer provider, matching a cookie only by
+  complete canonical subject.
+- Preview of a disabled non-effective draft and an enabled already-linked user preserves the administrator's
+  exact cookie, existing first-party token and IAM user/link/token counts. The result exposes prospective Elsa
+  roles/permissions and consumes once. Bearer-only administration cannot substitute for that administrator's
+  interactive cookie. Earlier flow tests retain cross-administrator/browser/purpose/expiry coverage.
+- Antiforgery, protected browser/purpose correlation, duplicate parameters and replay refuse before unauthorized
+  sign-in. Simultaneous tabs have separate correlations and resolve one stable admitted owner. Unapproved return
+  URLs, source disable/secret rotation/default rejection, oversized bodies and wrong content types never issue
+  a normal session. Responses are no-store/no-referrer and contain only closed errors.
+- Live chooser/bootstrap honors enablement/preference and HTML escaping. A real optional-catalog table outage
+  leaves the local form/login/logout usable. FoundationOwned/ExternalOwned/Hybrid use their current management
+  capabilities; existing linked users can sign in while prohibited unknown-user provisioning is refused.
+- Cookies reject disabled/deleted users and suspended memberships. The new external cookie issuer refuses an
+  existing account's local second-factor requirement rather than bypassing it. This does not establish durable
+  selected-session administration or live access/refresh status enforcement for disable/delete (T023).
+- The seven protocol endpoints carry their owning module and explicit security dispositions: five justified
+  public protocol operations and two provider-management permission operations.
+
+Results and correction history:
+
+- Initial compile diagnostics for new Core API tracking/imports and test token-store type qualification were
+  corrected. First HTTP fixture startup failed because its middleware needed `AddAuthorization`; corrected.
+  Then the test client used an unsupported default deserializer for Core `IReadOnlySet` session fields; it now
+  reads the actual wire arrays. The cache assertion now checks no-store semantics rather than exact header text
+  (the cookie middleware also appends no-cache). Expanded body-size coverage uses form content so it reaches
+  the size boundary rather than the framework's earlier 415 content-type rejection. These failed runs are not
+  counted as passing evidence.
+- Restored initial actual HTTP cases **10/10**, expanded cases **18/18**, then final complete Identity project
+  **718/718**, zero failures/skips; the final repeat after credential-cache assertions reports 15 seconds test duration. The final suite includes **22** actual HTTP
+  cases plus all earlier protocol/flow/admission/isolation regressions.
+- Antiforgery mutation: temporarily remove just the new start's antiforgery validation. The real HTTP regression
+  fails because an unprotected POST returns **302** instead of **400**. Exact API source restored in `finally`
+  before the final 718-test passing run.
+- Full architecture initial run: 615 passed, one failed because the new API lock file had not yet been added to
+  the index. After indexing all new production files and lock file, restored full suite **616/616**, zero skipped,
+  39 seconds reported test duration. This includes the source/solution/lock/EF/endpoint architecture guards.
+- Preceding remote head `d412adf03` CI failed: linked `ModuleContextCatalog.cs` required the new module reference
+  in the separate migration provider-test project, and the solution-folder guard required the persistence leaf
+  under `ExternalAuthentication/Persistence`. Added the explicit provider-test reference/lock closure and moved
+  the solution entry, without waiving either guard. The affected provider-test project now **builds with zero
+  errors**, and the complete architecture suite passes. That is compile/architecture proof, not native container
+  qualification. No old failed CI run was retried; the next pushed head will receive its normal checks.
+- Generated solution-filter check passed. The broad restore graph's existing audit/style warnings remain recorded;
+  no unrelated package upgrade was performed.
+
+```sh
+dotnet test Essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --verbosity quiet
+bash tools/architecture/restore-ci-project-graph.sh --verbosity quiet
+dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --verbosity quiet
+dotnet build Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj --no-restore --verbosity quiet
+dotnet run --project tools/maps/Elsa.Maps.Generator --no-restore -- check
+```
+
+T013/T014/T019/T020 implementation checkpoints are complete at this scope. The actual runtime readiness/recovery
+adapters (T016), considered role-mapping semantics, management/Studio, durable session record/status enforcement,
+real-browser/external-product and supported deployment-mode proof, independent review/current required CI/merge
+and resulting-main qualification remain required. The full goal remains active and unachieved.

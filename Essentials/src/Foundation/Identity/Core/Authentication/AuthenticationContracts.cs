@@ -24,6 +24,23 @@ public interface IAuthenticationProviderResolver
     ValueTask<AuthenticationProviderDescriptor?> FindAsync(string providerId, string? tenantId = null, bool allowGlobalFallback = false, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Live, bounded provider descriptors contributed by a managed connection authority.</summary>
+public interface IAuthenticationProviderSource
+{
+    ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Issues the ordinary interactive session for an already admitted canonical user. Server-only input:
+/// callers must first validate authentication evidence and admit the identity; never bind this from a request.
+/// </summary>
+[ReplacementContract]
+public interface ICanonicalUserSignInService
+{
+    string AuthenticationScheme { get; }
+    ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default);
+}
+
 public interface IPrincipalFactory
 {
     ValueTask<ClaimsPrincipal> CreateAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default);
@@ -56,6 +73,9 @@ public interface IAuthSessionService
 public interface IAuthenticationSessionInvalidator
 {
     string ProviderId { get; }
+
+    /// <summary>Optional shared interactive scheme; managed logical providers can use the same cookie authority.</summary>
+    string? AuthenticationScheme => null;
 
     ValueTask InvalidateAsync(
         AuthenticationSessionInvalidationContext context,

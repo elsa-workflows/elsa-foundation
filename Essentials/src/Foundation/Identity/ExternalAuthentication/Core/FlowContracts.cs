@@ -29,7 +29,11 @@ public enum ExternalFlowFailure
 public sealed record ExternalFlowStart(string ConnectionKey, AuthenticationArtifactPurpose Purpose, string BrowserBinding,
     string ReturnUrl = "/", string? ConnectionRecordId = null);
 public sealed record ExternalFlowStarted(string? AuthorizationUrl, ExternalFlowFailure Failure = ExternalFlowFailure.None,
-    ExternalProtocolFailure ProtocolFailure = ExternalProtocolFailure.None);
+    ExternalProtocolFailure ProtocolFailure = ExternalProtocolFailure.None)
+{
+    /// <summary>Server-only correlation handle, also carried by the authorization URL.</summary>
+    public string? State { get; init; }
+}
 
 public sealed record ExternalFlowCallback(string ConnectionKey, AuthenticationArtifactPurpose Purpose, string State,
     string BrowserBinding, string? Code, string? ResponseIssuer = null, bool ProviderError = false);

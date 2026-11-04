@@ -17,6 +17,7 @@ public sealed class EfCoreIdentitySessionInvalidator(
     IOptions<AspNetCoreIdentityOptions> options) : IAuthenticationSessionInvalidator
 {
     public string ProviderId => options.Value.ProviderId;
+    public string? AuthenticationScheme => AspNetCoreIdentityDefaults.CookieScheme;
 
     public async ValueTask InvalidateAsync(AuthenticationSessionInvalidationContext context, CancellationToken cancellationToken = default)
     {

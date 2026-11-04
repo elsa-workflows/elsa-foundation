@@ -1,5 +1,7 @@
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Core.Authorization;
+using System.Security.Claims;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -37,6 +39,7 @@ public sealed class AspNetCoreIdentitySignInService(
 
     public async ValueTask<SignInOutcome> PasswordSignInAsync(string username, string password, string? tenantId, CancellationToken cancellationToken = default)
     {
+        if (!options.Value.Enabled) return SignInOutcome.Failure;
         var effectiveTenant = string.IsNullOrWhiteSpace(tenantId) ? options.Value.DefaultTenantId : tenantId;
         BindEffectiveTenant(effectiveTenant);
 
@@ -62,6 +65,11 @@ public sealed class AspNetCoreIdentitySignInService(
         // Build the principal through the Elsa claims-principal factory so tenant/role/permission claims are
         // projected into the cookie (and the returned session).
         var principal = await principalFactory.CreateAsync(user);
+        if (principal.Identity is ClaimsIdentity identity)
+        {
+            foreach (var provider in identity.FindAll(IdentityClaimTypes.Provider).ToArray()) identity.RemoveClaim(provider);
+            identity.AddClaim(new(IdentityClaimTypes.Provider, options.Value.ProviderId));
+        }
 
         // Issue the cookie when running inside the HTTP pipeline, on our own cookie scheme. Sign in through
         // HttpContext (not SignInManager.SignInAsync, whose string overload parameter is the authentication

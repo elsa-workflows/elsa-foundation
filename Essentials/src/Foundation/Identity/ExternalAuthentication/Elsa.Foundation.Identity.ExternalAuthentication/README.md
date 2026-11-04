@@ -6,7 +6,7 @@ managed OIDC belongs to the optional ExternalAuthentication/Oidc adapter; existi
 and persistence scope contracts without adding them to every base Identity.Core consumer.
 
 Current implementation: live deployment/catalog selection, explicit complete overrides, catalog persistence/CAS,
-role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation. HTTP login/preview/session/API/Studio
+role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. Durable session administration, management API/Studio and deployment
 integration is still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
 This module alone is not a qualified external sign-in deployment.
 
@@ -99,7 +99,7 @@ Both role IDs must already exist in Elsa and be declared for that connection. Ra
 claims never flow into the canonical principal. Policies return a closed failure category; no arbitrary provider
 message is exposed. Preview calls only `IExternalAdmissionService.AssessAsync`; normal admission calls `AdmitAsync`,
 which reloads current source/lifecycle/material state and reassesses before the atomic write. A disabled draft can
-be assessed but cannot establish a normal login. Interactive preview endpoints and normal session issuance remain pending.
+be assessed but cannot establish a normal login. The optional API supplies interactive preview and the selected canonical sign-in authority supplies the normal cookie.
 
 ## Protected one-time flows
 
@@ -123,9 +123,10 @@ before code exchange; failures do not reopen it. Wrong browser/purpose/route/adm
 flow. Current source, lifecycle, material, callback, return policy and secret generation are checked again.
 Provider errors return closed categories rather than raw upstream messages.
 
-Normal completion returns a server-only admitted user ID and provenance; the session adapter must then issue
-the ordinary Elsa session. Preview runs pure admission assessment and creates a separately protected, bounded,
+Normal completion returns a server-only admitted user ID and provenance; the optional API delegates to the
+selected `ICanonicalUserSignInService` for the ordinary Elsa session. Preview runs pure admission assessment and creates a separately protected, bounded,
 short-lived result artifact. Result reads consume it once and flag observations whose source material changed.
 No raw upstream access/refresh tokens are persisted. Component tests use a real HTTP OIDC fixture, native SQLite
-and owned shared key directories across independent service providers/restarts. Actual cookie/session/browser,
+and owned shared key directories across independent service providers/restarts. Actual composed HTTP cookie/token
+and preview isolation evidence now lives in the optional API's tests. Browser, durable session administration,
 separate-process and PostgreSQL/SQL Server deployment qualification remain open in spec 1205.

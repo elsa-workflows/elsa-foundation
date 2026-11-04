@@ -1148,3 +1148,9 @@ Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.UserId.get 
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.UserId.init -> void
 Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.SupportsQualifiedKeys.get -> bool
 Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.SupportsAtomicAdmission.get -> bool
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationProviderSource
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationProviderSource.ListAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Foundation.Identity.Core.Authentication.AuthenticationProviderDescriptor!>!>
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.AuthenticationScheme.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.SignInAsync(Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.AuthSession?>
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionInvalidator.AuthenticationScheme.get -> string?
