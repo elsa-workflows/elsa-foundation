@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD29 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD30 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -52,6 +52,7 @@ An author places substates inside a containing state and defines shared behavior
 5. **Given** an authored transition exits a containing state, **when** that transition is selected, **then** waits and pending activity work in the exited scope are cancelled according to the agreed lifecycle contract.
 6. **Given** a non-final state with no local outgoing edge, **when** it relies on ancestor behavior or remains waiting, **then** it is not inferred to be complete. Explicit final-state intent and accidental-dead-end diagnostics remain distinct; complete scoped completion propagation is Q1.
 7. **Given** a transition exits or enters multiple nested states, **when** their authored work runs, **then** exited children finish Exit before their exited parents, and entered parents finish Entry before their entered children. All applicable exits finish before transition Action and Action finishes before entries, including across durable waits.
+8. **Given** a compound state reaches its final child, **when** an authored completion-triggered transition is eligible, **then** that transition can define what follows the nested lifecycle. Nested completion does not by itself complete the whole machine; reaching its own top-level final state completes the StateMachine activity. Final-entry timing and completion arbitration remain Q1.
 
 ### User Story 3 — Model independent parallel regions (Priority: P1)
 
@@ -72,6 +73,7 @@ An author models several concurrent lifecycle regions without enumerating every 
 7. **Given** a parallel state whose regions each have an explicit initial state, **when** that parallel state is entered, **then** every region starts at its own initial state rather than one region being selected instead of the others.
 8. **Given** one input selects compatible transitions in independent regions, **when** one region's phase work waits durably, **then** independent work in the same phase can progress in other regions without a guaranteed branch completion order. Hierarchy dependencies remain enforced; all selected exits finish before actions, and all actions finish before entries. Later business events wait until the selected work finishes.
 9. **Given** a regional Action fails and normal Elsa fault handling leaves the machine awaiting recovery, **when** supported recovery retries that failed work, **then** completed sibling work is preserved and successful regions are not restarted. StateMachine adds no automatic sibling cancellation; still-running work follows normal incident policy. The phase and later chart-event evaluation remain blocked until required work succeeds, unless normal workflow cancellation ends the work.
+10. **Given** every region of a parallel state is final, **when** an authored completion-triggered transition is eligible, **then** that transition can define what follows the completed parallel lifecycle without implicit whole-machine completion.
 
 ### User Story 4 — Wait durably during selected transition work (Priority: P1)
 
@@ -196,6 +198,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-038**: For states a transition actually exits, child Exit work MUST finish before its exited parent runs Exit. For states it actually enters, parent Entry work MUST finish before its entered children run Entry. All applicable exits MUST complete before transition Action, and Action MUST complete before entries, including across durable waits. This requirement does not select an unagreed boundary calculation or independent-region ordering/concurrency policy.
 - **FR-039**: Compatible selected work in independent parallel regions MUST be allowed to progress concurrently within each phase, so a durable wait in one region MUST NOT by itself block independent same-phase work in another. Hierarchy dependencies MUST be preserved. All selected exits MUST finish before selected actions begin, and all selected actions MUST finish before entries begin. Independent branch completion order is not guaranteed; later business events MUST wait for the selected work to finish. FR-040 governs sibling preservation during regional Action recovery; other partial-failure paths remain Q2 and existing shared-value policies remain authoritative.
 - **FR-040**: When a regional Action fails and normal Elsa fault handling leaves the machine awaiting recovery, StateMachine MUST preserve completed sibling work and MUST NOT add automatic sibling cancellation or restart successful regions. Still-running work MUST follow normal Elsa incident policy. The phase MUST NOT advance and later chart events MUST NOT be evaluated until required work succeeds. Normal workflow cancellation, supported recovery eligibility and external-effect guarantees remain authoritative; other fault paths and exact integration remain Q2.
+- **FR-041**: Authors MUST be able to define completion-triggered transitions for a compound state reaching its final child and for a parallel state with every region final. Nested completion MUST remain local and MUST NOT by itself complete the whole machine. Reaching the machine's own top-level final state MUST complete the StateMachine activity. Final-entry timing, completion/automatic arbitration and the exact completion lifetime/representation remain Q1; no external delivery authority is chosen by this requirement.
 
 ### Platform constraints and design obligations
 
@@ -254,7 +257,7 @@ OD17 settles same-state selection order for one input (FR-028). Complete conflic
 
 OD18 adds automatic transitions after entry work completes (FR-029). OD19 gives eligible automatic progress precedence over queued business events (FR-030). Complete automatic-candidate arbitration, reevaluation and cycle/protection/recovery rules still need agreement.
 
-OD20 requires explicit final-state intent (FR-031). OD26 requires explicit, validated initial child states at each applicable level and starts all regions when entering a parallel state (FR-037). Final entry work and complete scoped completion propagation remain open.
+OD20 requires explicit final-state intent (FR-031). OD26 requires explicit, validated initial child states at each applicable level and starts all regions when entering a parallel state (FR-037). OD30 supports authored completion-triggered transitions for completed compound/parallel states, keeps nested completion local and completes the StateMachine at its own top-level final state (FR-041). Final-entry timing, completion/automatic arbitration and exact completion lifetime/representation remain open.
 
 OD22 settles source Exit → transition Action → target Entry for applicable authored phases (FR-033), with durable completion before the next phase starts. OD27 adds child-first Exit and parent-first Entry for states actually exited/entered (FR-038). OD28 allows independent regional work to progress concurrently within a phase, preserving hierarchy dependencies and selected-set phase barriers without a guaranteed branch completion order (FR-039). Complete exit/entry boundary calculation and fault/recovery details remain open.
 
