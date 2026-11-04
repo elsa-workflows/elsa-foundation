@@ -86,6 +86,7 @@
       "Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj",
       "Essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj",
       "Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj",
+      "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
       "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
       "Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",

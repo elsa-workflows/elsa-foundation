@@ -1,6 +1,6 @@
 # Agent source ownership and activity publication
 
-**Status**: Draft under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); design-only, pending final human agreement and separate delivery authorization. [#3781](https://github.com/elsa-workflows/elsa-foundation/issues/3781), part of #3519. The revised owner instruction permits pre-GA database recreation and supersedes additive legacy adoption.
+**Status**: Accepted direction under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), merged #3783; source slice #3790 separately authorized. Publication and Studio follow T066/T068. Pre-GA store recreation supersedes additive legacy adoption; no live reset occurs in this leaf.
 
 The [shared revision contract](revision-management.md) owns source/working-copy/snapshot mechanics, the Workflow/Agent mapping, publication recovery and extraction decision. This contract adds Agent authority and execution rules. Logical names are views/responsibilities, not separate Agent-specific repositories or frozen APIs.
 
@@ -38,7 +38,7 @@ Inspection links source revision/release to publication/native identities and le
 
 ## Pre-GA breaking delivery
 
-Use the [reset boundary](revision-management.md#pre-ga-reset-boundary). No legacy ID association, import/backfill, mixed-schema writer transfer, old codec/API aliases or cross-break rollback support is required. Implementation may cleanly rename Specialist identifiers to Agent while updating providers/consumers together. Keep the pinned `Elsa.Agent` root. Existing demo stores are untouched by this draft.
+Use the [reset boundary](revision-management.md#pre-ga-reset-boundary). No legacy ID association, import/backfill, mixed-schema writer transfer, old codec/API aliases or cross-break rollback support is required. Implementation may cleanly rename Specialist identifiers to Agent while updating providers/consumers together. Keep the pinned `Elsa.Agent` root. Existing demo stores are untouched by this delivery.
 
 A future delivery records reset scope, host stop/drain, incompatible-binary exclusion, coordinated schema/package initialization and explicit source recreation/republish. No automatic reset on publication or startup failure is allowed. Normal immutable-binding, scope and crash/replay guarantees continue for all material admitted by the new deployment.
 
@@ -55,4 +55,4 @@ A future delivery records reset scope, host stop/drain, incompatible-binary excl
 | W7 — Reset and retention | Clean-store recreation/republish and readiness qualify; incompatible profiles fail; pinned snapshot deletion is refused; reset is never a retry | T067,T069,T070 |
 | W8 — Product/configuration | Agent create/test/publish/use/inspect and configuration share the pipeline, correct permissions and canonical naming | T068,T070 |
 
-W1–W8 remain unexecuted. Historical M0–M5 receipts do not qualify the amendment. T064–T071 may become delivery leaves only after agreement and separate authorization.
+W1–W8 remain open. #3790 qualifies only the source-storage portions of W1/W2/W5/W7; historical M0–M5 receipts do not qualify the amendment. T066–T071 remain pending under their recorded dependencies.
