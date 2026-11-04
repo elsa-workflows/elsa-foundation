@@ -275,10 +275,10 @@ public sealed class ActivityVersionReconciler(
             return true;
         }
 
-        // A bridge may refuse without saying why; the refusal still names itself, so it is logged and recorded.
-        IReadOnlyList<ActivityDiagnostic> diagnostics = result.Diagnostics.Count > 0
+        // A bridge may refuse without an error saying why; the refusal still names itself, so it is logged and recorded.
+        IReadOnlyList<ActivityDiagnostic> diagnostics = result.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error)
             ? result.Diagnostics
-            : [new(
+            : [.. result.Diagnostics, new(
                 "activity.source.publication-refused",
                 ActivityDiagnosticSeverity.Error,
                 "The publishing bridge refused the source-owned version without a stated reason.",

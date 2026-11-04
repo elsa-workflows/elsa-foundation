@@ -83,19 +83,28 @@ public sealed class SourceVersionRefusalTests
         Assert.Equal([stillRefused], diagnostics.List().Keys);
     }
 
-    [Fact]
-    public async Task A_refusal_without_diagnostics_is_still_recorded_and_logged()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)] // Only a warning: still no error saying why.
+    public async Task A_refusal_without_an_error_is_still_recorded_and_logged_as_one(bool withWarning)
     {
         var versionId = ActivityCatalogStableIds.VersionId(TypeKey, "1.0.0")!;
         var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
         var logger = new RecordingLogger();
         var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.0"));
 
-        await InMemoryReconcilerHarness.BuildReconciler(new(), source, sourceVersionPublisher: new SilentRefusingPublisher(), diagnosticStore: diagnostics, logger: logger)
+        await InMemoryReconcilerHarness.BuildReconciler(new(), source, sourceVersionPublisher: new SilentRefusingPublisher(withWarning), diagnosticStore: diagnostics, logger: logger)
             .Reconcile(CancellationToken.None);
 
-        Assert.Equal("activity.source.publication-refused", Assert.Single(diagnostics.Find(versionId)).Code);
-        Assert.Contains("activity.source.publication-refused", Assert.Single(logger.Entries).Message, StringComparison.Ordinal);
+        var recorded = diagnostics.Find(versionId);
+        Assert.Equal(withWarning ? 2 : 1, recorded.Count);
+        var refusal = recorded[^1];
+        Assert.Equal("activity.source.publication-refused", refusal.Code);
+        Assert.Equal(ActivityDiagnosticSeverity.Error, refusal.Severity);
+        Assert.Equal(new ActivityDiagnosticSubject("ActivitySourceVersion", versionId, ActivityCatalogStableIds.DefinitionId(TypeKey), Revision: 0), refusal.Subject);
+        Assert.Equal(recorded.Count, logger.Entries.Count);
+        Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
+        Assert.Contains("activity.source.publication-refused", logger.Entries[^1].Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -146,10 +155,12 @@ public sealed class SourceVersionRefusalTests
         }
     }
 
-    private sealed class SilentRefusingPublisher : IActivitySourceVersionPublisher
+    private sealed class SilentRefusingPublisher(bool withWarning) : IActivitySourceVersionPublisher
     {
         public Task<ActivitySourceVersionPublicationResult> PublishAsync(IActivityDefinition definition, IActivityDefinitionVersion version, CancellationToken cancellationToken = default) =>
-            Task.FromResult(ActivitySourceVersionPublicationResult.Refused([]));
+            Task.FromResult(ActivitySourceVersionPublicationResult.Refused(withWarning
+                ? [new("acme.note", ActivityDiagnosticSeverity.Warning, "Note.", new("ActivitySourceVersion", version.Id))]
+                : []));
     }
 
     private sealed class ReplacementStore : IActivityReconciliationDiagnosticStore

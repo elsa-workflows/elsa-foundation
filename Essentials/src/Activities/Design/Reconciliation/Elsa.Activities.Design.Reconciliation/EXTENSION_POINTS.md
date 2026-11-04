@@ -45,7 +45,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 ### `IActivitySourceVersionPublisher` *(Core contract — `Elsa.Activities.Design.Core`)*
 - **Kind:** optional bridge, at most one. Without it the reconciler persists catalog rows only.
 - **Implementation:** `SourceOwnedActivityVersionPublisher` *(cross-domain contribution)* in `Elsa.Workflows.Publishing.Api` — see [its catalog](../../../../Workflows/Publishing/Api/EXTENSION_POINTS.md).
-- **Outcome:** `PublishAsync` returns `ActivitySourceVersionPublicationResult`: published (or already published), or refused with that version's `ActivityDiagnostic`s. On a refusal the reconciler logs one warning per diagnostic (a refusal with none gets `activity.source.publication-refused`), records them in `IActivityReconciliationDiagnosticStore`, leaves the version out of what the pass has seen, and goes on with the remaining candidates. A failure to commit content that passed still throws and fails the pass.
+- **Outcome:** `PublishAsync` returns `ActivitySourceVersionPublicationResult`: published (or already published), or refused with that version's `ActivityDiagnostic`s. On a refusal the reconciler logs one warning per diagnostic (a refusal without an error diagnostic also gets `activity.source.publication-refused`), records them in `IActivityReconciliationDiagnosticStore`, leaves the version out of what the pass has seen, and goes on with the remaining candidates. A failure to commit content that passed still throws and fails the pass.
 
 ---
 
