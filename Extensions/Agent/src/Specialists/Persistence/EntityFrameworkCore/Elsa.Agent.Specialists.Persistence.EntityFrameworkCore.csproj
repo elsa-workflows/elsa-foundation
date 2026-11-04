@@ -11,6 +11,7 @@
     <ProjectReference Include="../../Core/Elsa.Agent.Specialists.Core.csproj" />
     <ProjectReference Include="../../../../../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="../../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Agent.Specialists.Tests" />
   </ItemGroup>
   <ItemGroup><None Update="nuplane.json" Pack="true" PackagePath="/" /></ItemGroup>

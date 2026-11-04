@@ -23,8 +23,10 @@ Configure **exactly one** of:
 - `FilePath` — the one-file shorthand for the common case; or
 - `Files` — an ordered set, each tagged with an `Order`. The source reads them in ascending `Order` and
   concatenates the results, so an author can stage dependencies first: e.g. put the plain activities
-  authors depend on in `Order: 1` and provider-defined composites that reference those versions in
-  `Order: 2`, and the earlier file is reconciled into the catalog before the later one.
+  authors depend on in `Order: 1` and entries that reference those versions in `Order: 2`, and the earlier
+  file is reconciled into the catalog before the later one. Provider-compiled content that depends on other
+  activity versions (such as an `elsa.activity-graph` composite) cannot yet be published from a source; see
+  below.
 
 The feature validates this at registration: it throws if **both** are set, if **neither** is set, or if
 `SourceId` is empty. `SourceId` is required (a multi-file source has no single natural path to derive
@@ -58,6 +60,13 @@ CLR descriptor type. Reconciliation preserves the identity fields and payload ve
 runtime consumer registered for the key/schema materializes it. For example, a JSON entry targeting
 `elsa.clr-activity` schema `1` is catalogued with the same provider-neutral runtime identity as CLR
 scanning, without persisting a CLR `FullName` as universal dispatch identity.
+
+When the Publishing API bridge is installed, an entry whose `providerKey` a registered activity template
+provider compiler owns (for example `elsa.activity-graph`) is validated and compiled by that provider, as Studio
+content is, and a version it refuses is skipped with its diagnostics recorded; it is not published as a
+single-node root. Entries for keys no compiler owns, such as `elsa.clr-activity`, keep the single-node root.
+Source-owned publication records no activity dependency edges, so provider content that depends on other activity
+versions is refused (`activity.source.dependencies-unsupported`) on every pass. Author such composites in Studio.
 
 ## Registration
 
