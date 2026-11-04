@@ -38,6 +38,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Weaver across Studio](weaver-across-studio.md) | Active; owner authorization, 29 October | Module-owned assistant context, tools, review and effects across Studio | Sipke | Program #3428; M0 baseline, then M1 contribution contract and independent module witness; Project #65 |
 | [Elsa Agents](elsa-agents.md) | Active; end-to-end owner authorization, 31 October | Reusable specialists, native/BPMN integration and bounded teams | Sipke | Program #3519; M0 research, then reviewed product/architecture design before production contract freeze |
 | [Named Embedded Blocks](named-embedded-blocks.md) | Active; end-to-end owner authorization, 3 November | Studio block authoring, bounded native/BPMN extraction and reviewed reusable promotion | Sipke | Program #3610; establishment #3748, then prototype #3749 before production completion; Project #67 |
+| [Elsa 4 StateMachine](state-machine.md) | Active; owner authorization, 4 November; design first | Generic root/nested hierarchical and parallel state machines, Studio and durable execution | Sipke | Program #3815; establishment #3826, then M0 contract #3820 before production implementation |
 
 The Active table above is the complete list of active programs. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the
