@@ -6,11 +6,28 @@ import {
 } from "../activityDefinitionDraftJson";
 
 describe("Activity Definition authoring draft JSON", () => {
+  it("preserves omitted node presentation, clears explicit empty, validates identities and prunes removed graph nodes", () => {
+    const current = { ...draft(), activityPresentation: [{ nodeId: "child", displayName: "Review" }] };
+    const source = JSON.parse(serializeActivityDefinitionDraftJson(current));
+    delete source.activityPresentation;
+    expect(applyActivityDefinitionDraftJson(current, JSON.stringify(source))).toMatchObject({ draft: { activityPresentation: [{ nodeId: "child", displayName: "Review" }] } });
+    source.activityPresentation = [];
+    expect(applyActivityDefinitionDraftJson(current, JSON.stringify(source))).toMatchObject({ draft: { activityPresentation: [] } });
+    source.activityPresentation = [{ nodeId: "child", displayName: "A" }, { nodeId: "child", displayName: "B" }];
+    expect(applyActivityDefinitionDraftJson(current, JSON.stringify(source))).toHaveProperty("error");
+    source.activityPresentation = [{ nodeId: "child", description: "x".repeat(2_001) }];
+    expect(applyActivityDefinitionDraftJson(current, JSON.stringify(source))).toHaveProperty("error");
+    source.activityPresentation = [{ nodeId: "missing", displayName: "Removed" }, { nodeId: "root", displayName: "Root name" }];
+    expect(applyActivityDefinitionDraftJson(current, JSON.stringify(source))).toMatchObject({ draft: { activityPresentation: [{ nodeId: "root", displayName: "Root name" }] } });
+    expect(current.activityPresentation).toEqual([{ nodeId: "child", displayName: "Review" }]);
+  });
+
   it("serializes only editable authoring fields", () => {
     const serialized = JSON.parse(serializeActivityDefinitionDraftJson(draft()));
 
     expect(serialized).toEqual({
       presentationLabel: "Working copy",
+      activityPresentation: [],
       contract: expect.objectContaining({ contractSchemaVersion: "1" }),
       implementation: {
         providerKey: "elsa.activity-graph",

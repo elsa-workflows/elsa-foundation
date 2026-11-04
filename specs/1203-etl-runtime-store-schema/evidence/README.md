@@ -69,3 +69,9 @@ Continuation docs now name runtime successor1206 (1204 was independently reserve
 ## Full review round4
 
 [Corrections and controls](review-round4.json): the three independent full reviewers found an allocated runtime test-database leak on initialization failure and stale successor/diagnostic documentation. The fixture now releases the allocation and preserves the original exception even if cleanup fails, matching the design fixture. Three new controlled cases fail before the correction; afterward **9/9 focused cases** pass (six design/runtime controlled initialization cases and three native registration-refusal cases). READMEs now name successor1206, and the plan describes the plain guard message. No schema, authoring/state, migration, publicAPI or successful registration behavior changes. Prior whole-provider804 retains its actual source; the new whole807-case run, full review5 and delivery gates remain pending.
+
+## Main reconciliation and complete provider follow-up
+
+The fresh required-native whole provider project passes **807/807**, zero failed/skipped, at clean source `5c26c218c2dc1579559a1131a9711132a871a2e4`: 801 native cases and six controlled initialization cases. [Receipt](qualification-current-stack.json) retains raw counters/log/TRX hashes. Full round5 is clean on `f846aefcf`; subsequent main9da reconciliation comes through parent7190843f0 without a further ETL implementation change. Final full review6 and combined-head CI remain. No old result is relabelled as a new-main execution.
+
+Main9da's activity-authoring module follows its pre-GA recreation policy; its legacy Runtime recovery harness explicitly selects a separate fresh ActivitiesDesign store. That source does not establish ordinary upgraded-host authoring or Studio compatibility. The existing frozen artifacts and legacy producer products remain separate retained evidence; this schema PR neither deletes a writer nor makes an upgrade/Studio claim.
