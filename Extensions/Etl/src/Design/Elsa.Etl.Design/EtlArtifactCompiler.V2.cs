@@ -46,6 +46,7 @@ internal sealed partial class EtlArtifactCompiler
         var mapped = ValidateMapping(pipeline.Mapping, source, lookup, diagnostics);
         ValidateFilters(pipeline.Filters, mapped, diagnostics);
         ValidateSqlDestination(pipeline, mapped, diagnostics);
+        ValidateRabbitMqDestination(pipeline, diagnostics);
         if (pipeline.Source is not null && EtlContinuousRunPolicy.FindViolation(pipeline) is { } continuousViolation)
             diagnostics.Add(continuousViolation["etl.".Length..], "continuous", continuousViolation switch
             {
@@ -170,6 +171,7 @@ internal sealed partial class EtlArtifactCompiler
             case EtlHttpDestination http: ValidateAlias(http.Binding, path + ".binding", diagnostics); break;
             case EtlCsvDestination csv: ValidateAlias(csv.Binding, path + ".binding", diagnostics); break;
             case EtlSqlDestination sql: ValidateAlias(sql.Binding, path + ".binding", diagnostics); break;
+            case EtlRabbitMqDestination rabbitMq: ValidateAlias(rabbitMq.Binding, path + ".binding", diagnostics); break;
             default:
                 diagnostics.Add(destination is null ? "destination.required" : "destination.unsupported", path, "A supported output destination is required.");
                 break;
@@ -200,6 +202,30 @@ internal sealed partial class EtlArtifactCompiler
             diagnostics.Add("destination.sql-key-invalid", "routes.main.key",
                 "The key must be one to eight distinct output fields, each mapped from a required source field.");
     }
+
+    /// <summary>
+    /// A RabbitMQ destination's exchange is empty (the default exchange) or a broker-safe name, and its routing key is printable
+    /// ASCII; both fit the protocol's short strings. Only the main route may publish (spec 1200).
+    /// </summary>
+    private static void ValidateRabbitMqDestination(EtlPipelineV2 pipeline, DiagnosticCollector diagnostics)
+    {
+        if (pipeline.Routes?.Errors is EtlRabbitMqDestination)
+            diagnostics.Add("destination.rabbitmq-route-unsupported", "routes.errors", "Only the main route can publish to RabbitMQ.");
+        if (pipeline.Routes?.Main is not EtlRabbitMqDestination rabbitMq)
+            return;
+        if (!IsRabbitMqExchange(rabbitMq.Exchange))
+            diagnostics.Add("destination.rabbitmq-name-invalid", "routes.main.exchange",
+                "The exchange must be empty or up to 255 letters, digits, underscores, hyphens, periods or colons.");
+        if (!IsRabbitMqRoutingKey(rabbitMq.RoutingKey))
+            diagnostics.Add("destination.rabbitmq-name-invalid", "routes.main.routingKey",
+                "The routing key must be up to 255 printable ASCII characters without spaces.");
+    }
+
+    private static bool IsRabbitMqExchange(string? exchange) => exchange is { Length: <= 255 } &&
+        exchange.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':');
+
+    private static bool IsRabbitMqRoutingKey(string? routingKey) => routingKey is { Length: <= 255 } &&
+        routingKey.All(character => character is >= '!' and <= '~');
 
     /// <summary>The table and columns are identifiers the dialect quotes, and the key orders the snapshot (spec 1198).</summary>
     private static void ValidateSqlSource(EtlSqlSource sql, IReadOnlyDictionary<string, EtlColumn> columns,
@@ -309,6 +335,8 @@ internal sealed partial class EtlArtifactCompiler
         EtlHttpDestination http => AddText(http.Binding, ref budget),
         EtlCsvDestination csv => AddText(csv.Binding, ref budget),
         EtlSqlDestination sql => AddText(sql.Binding, ref budget) && AddText(sql.Table, ref budget) && AddKeyText(sql.Key, ref budget),
+        EtlRabbitMqDestination rabbitMq => AddText(rabbitMq.Binding, ref budget) && AddText(rabbitMq.Exchange, ref budget) &&
+            AddText(rabbitMq.RoutingKey, ref budget),
         _ => true
     };
 

@@ -78,6 +78,9 @@ snapshot whose hash it cannot compare to a pin: that hash is the snapshot's anch
 A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)):
 the runtime records an applied SQL route through `RecordConnectorFilePublicationAsync` under
 `EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`, and it counts as a recorded publication (effect mechanism 2).
+A provider accepts `EtlConnectorKind.RabbitMq` route outputs the same way ([spec 1200](../../../../specs/1200-etl-rabbitmq-delivery/spec.md)):
+the runtime records a route whose messages the broker confirmed under `EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(effectId)`
+(an `.amqp` key), and it counts as a recorded publication (effect mechanism 2).
 
 `EtlPipelineV2.Continuous` is an optional, init-only run policy; a null policy is never serialized, so finite artifacts
 keep their bytes and identities. `EtlContinuousRunPolicy.FindViolation` is the one rule every reader applies (HTTP
@@ -148,3 +151,25 @@ public interface IEtlSqlEngine
 - **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, an optional table lock taken before the snapshot (the reader falls back to an unlocked read when the engine refuses it), whether the driver maps infinite dates to the extreme `DateTime`/`DateOnly`/`DateTimeOffset` values (so the reader refuses them), a snapshot select that, given a watermark column, keeps only rows whose watermark is greater than the `@watermark` parameter or is NULL (spec 1199: a NULL watermark must still be read, so the run rejects it rather than skipping it), and exception classification.
 - **What depends on it:** `HostSqlBindings`, `EtlSqlRouteWriter` and `EtlSqlSnapshotReader` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).
+
+## RabbitMQ publisher
+
+**`IEtlRabbitMqPublisher`** — single-implementation adapter (§2.7), layer: Core contract, no default implementation
+([spec 1200](../../../../specs/1200-etl-rabbitmq-delivery/spec.md)).
+
+```csharp
+public interface IEtlRabbitMqPublisher
+{
+    EtlRabbitMqTarget DescribeTarget(string connectionString);
+    ValueTask<EtlRabbitMqPublishOutcome> PublishAsync(string connectionString, string exchange, string routingKey,
+        IReadOnlyList<EtlRabbitMqMessage> messages, CancellationToken cancellationToken);
+    EtlRabbitMqErrorKind Classify(Exception exception);
+}
+```
+
+- **What it is.** An adapter that isolates the RabbitMQ driver. The runtime's writer owns the protocol: one message per record with a stable id and effect headers, and what each outcome means. The publisher connects, publishes the messages in order on one confirming channel (persistent, mandatory, `application/json`), returns `Confirmed` only when the broker confirmed every message, `Unroutable` on a return and `Nacked` on a negative acknowledgement, and classifies other failures as transient or rejected.
+- **Registration:** `services.AddSingleton<IEtlRabbitMqPublisher, …>()` from `EtlRabbitMqFeature` in `Elsa.Etl.RabbitMq`. Register at most one: with two, building the runtime's connector bindings throws `InvalidOperationException`, so no ETL attempt runs, as for two SQL engines with one provider name.
+- **When to implement:** to publish through another client or transport with the same confirm semantics. Bound every confirm and round trip: a broker under a resource alarm blocks publishers without closing their connections, so an unbounded wait would hold the attempt and its host capacity until the alarm clears; a bounded one surfaces as a transient failure. `DescribeTarget` must exclude the password, because its result is hashed into the binding's pinned handle.
+- **What depends on it:** `HostRabbitMqBindings` and `EtlRabbitMqRouteWriter` in `Elsa.Etl.Runtime`.
+- **Known implementations** (intra-domain, ETL): `RabbitMqEtlPublisher` (`Elsa.Etl.RabbitMq`). `DescribeTarget` throws `ArgumentException` or `FormatException` for an invalid URI, which binding resolution reports as `etl.binding-unavailable`.
+

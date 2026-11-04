@@ -149,6 +149,7 @@ public sealed record EtlRoutes(
 [JsonDerivedType(typeof(EtlHttpDestination), "http")]
 [JsonDerivedType(typeof(EtlCsvDestination), "csv")]
 [JsonDerivedType(typeof(EtlSqlDestination), "sql")]
+[JsonDerivedType(typeof(EtlRabbitMqDestination), "rabbitmq")]
 public abstract record EtlDestination;
 
 /// <summary>A host-bound JSON Lines file destination.</summary>
@@ -191,6 +192,20 @@ public sealed record EtlSqlDestination(
         return hash.ToHashCode();
     }
 }
+
+/// <summary>
+/// A host-bound RabbitMQ exchange to which each record of a batch is published as one persistent JSON message, recorded only
+/// once the broker has confirmed every message of the batch (spec 1200). Delivery is at least once: a replayed batch is
+/// published again with the same message ids. Main route only.
+/// </summary>
+/// <remarks>The binding is a host-approved alias; the AMQP URI and credentials are never authored here.</remarks>
+/// <param name="Binding">The host-approved destination alias.</param>
+/// <param name="Exchange">The exchange, or empty for the default exchange.</param>
+/// <param name="RoutingKey">The routing key of every message.</param>
+public sealed record EtlRabbitMqDestination(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] string Exchange,
+    [property: JsonRequired] string RoutingKey) : EtlDestination;
 
 /// <summary>A closed set of supported HTTP JSON pagination selectors.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]

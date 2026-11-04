@@ -10335,3 +10335,4 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator !=
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?

@@ -32,6 +32,9 @@ public class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "SQL bindings", Description = "Trusted scoped PostgreSQL or SQL Server targets for keyed SQL delivery; each provider needs its engine package. Holds connection strings.", Category = "Bindings", Secret = true)]
     public List<EtlHostSqlBindingOptions> SqlBindings { get; set; } = [];
 
+    [ManifestSetting(DisplayName = "RabbitMQ bindings", Description = "Trusted scoped RabbitMQ brokers and exchanges for message delivery; needs the Elsa.Etl.RabbitMq package. Holds AMQP URIs.", Category = "Bindings", Secret = true)]
+    public List<EtlHostRabbitMqBindingOptions> RabbitMqBindings { get; set; } = [];
+
     [ManifestSetting(DisplayName = "Maximum concurrent attempts", Description = "Maximum actual ETL attempt tasks that may hold process-local capacity.", Category = "Capacity")]
     public int MaxConcurrentAttempts { get; set; } = 2;
 
@@ -83,9 +86,11 @@ public class EtlRuntimeFeature : IShellFeature
             provider.GetServices<IHttpRequestAuthenticator>()));
         var sqlBindings = SqlBindings.ToArray();
         services.AddScoped(provider => new HostSqlBindings(sqlBindings, provider.GetServices<IEtlSqlEngine>()));
+        var rabbitMqBindings = RabbitMqBindings.ToArray();
+        services.AddScoped(provider => new HostRabbitMqBindings(rabbitMqBindings, provider.GetServices<IEtlRabbitMqPublisher>()));
         services.AddScoped(provider => new HostConnectorBindings(
             provider.GetRequiredService<HostFileBindings>(), provider.GetRequiredService<HostHttpBindings>(),
-            options.MaxPartitions, provider.GetRequiredService<HostSqlBindings>()));
+            options.MaxPartitions, provider.GetRequiredService<HostSqlBindings>(), provider.GetRequiredService<HostRabbitMqBindings>()));
         services.TryAddScoped<IEtlConnectorBindingCatalog>(provider => provider.GetRequiredService<HostConnectorBindings>());
         services.TryAddScoped<IEtlConnectorBindingResolver>(provider => provider.GetRequiredService<HostConnectorBindings>());
         services.AddScoped<EtlExecutableReader>();

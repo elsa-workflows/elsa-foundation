@@ -98,7 +98,7 @@ public interface IEtlConnectorRuntimeStore
 }
 
 /// <remarks>Append only: identities hash the integer value (spec 1197).</remarks>
-public enum EtlConnectorKind { Csv, Http, Jsonl, Sql }
+public enum EtlConnectorKind { Csv, Http, Jsonl, Sql, RabbitMq }
 
 /// <summary>A host-resolved connector revision; paths, endpoint URLs and credentials are excluded.</summary>
 public sealed record EtlConnectorBindingRevision(EtlConnectorKind Kind, EtlBindingRevision Revision);

@@ -138,9 +138,15 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
         }
         if (pipeline.Lookup is { } lookup) RequireAlias(lookup.Binding);
         foreach (var destination in new[] { pipeline.Routes.Main, pipeline.Routes.Errors })
-            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, EtlCsvDestination csv => csv.Binding, EtlSqlDestination sql => sql.Binding, _ => null });
-        // Only the main route can deliver to SQL (spec 1197).
-        if (pipeline.Routes.Errors is EtlSqlDestination) throw Refused("etl.executable.invalid-pipeline");
+            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, EtlCsvDestination csv => csv.Binding, EtlSqlDestination sql => sql.Binding, EtlRabbitMqDestination rabbitMq => rabbitMq.Binding, _ => null });
+        // Only the main route can deliver to SQL (spec 1197) or publish to RabbitMQ (spec 1200).
+        if (pipeline.Routes.Errors is EtlSqlDestination or EtlRabbitMqDestination) throw Refused("etl.executable.invalid-pipeline");
+        // The exchange and routing key go to the broker as protocol short strings, so a worker re-checks the compiler's rules.
+        if (pipeline.Routes.Main is EtlRabbitMqDestination main &&
+            (main.Exchange is not { Length: <= 255 } exchange ||
+             !exchange.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':') ||
+             main.RoutingKey is not { Length: <= 255 } routingKey || !routingKey.All(character => character is >= '!' and <= '~')))
+            throw Refused("etl.executable.invalid-pipeline");
     }
 
     private static bool SqlIdentifier(string? value) =>
