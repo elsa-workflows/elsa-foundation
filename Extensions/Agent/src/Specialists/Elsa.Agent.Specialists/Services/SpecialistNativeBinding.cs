@@ -103,7 +103,8 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
             state.InputSnapshot.ContractFingerprint != node.ActivityContract.SchemaFingerprint || state.InputSnapshot.InvocationId != state.InvocationId)
             throw Failure();
         return new(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, state.InvocationId, state.OperationKey,
-            workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+            workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!)
+            { ConversationWorkspace = ConversationWorkspace(workflow, state) };
     }
 
     internal static SpecialistInvocationIdentity CancellationIdentity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
@@ -116,8 +117,22 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
         // Cancellation also covers a scheduled invocation whose input snapshot/staged handle does
         // not exist yet. It grants no permission to infer, and never weakens normal entry/worker checks.
         return new(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, state.InvocationId, state.OperationKey,
-            workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+            workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!)
+            { ConversationWorkspace = ConversationWorkspace(workflow, state) };
     }
+
+    // The source kind the generic activity draft Test Run pins on its wrapper reference. Workflows Publishing owns it and
+    // does not yet expose it as a contract (#3762); the playground continuity test pins this copy to the real service.
+    internal const string ActivityDraftTestRunSourceKind = "ActivityDraftTestRun";
+
+    // Only the root of a Test Run whose runtime-pinned source is an activity draft converses in the draft candidate's
+    // workspace. The exact candidate version and template hash in the owner bind it to one saved revision, so a nested
+    // specialist, a published run or another revision keeps a workflow-owned conversation.
+    internal static string? ConversationWorkspace(WorkflowExecutionState workflow, ActivityExecutionState state) =>
+        workflow.RunKind == WorkflowRunKind.TestRun && state.ParentActivityExecutionId is null &&
+        workflow.PinnedSource is { SourceKind: ActivityDraftTestRunSourceKind, SourceId: { Length: > 0 } draftId } && !string.IsNullOrWhiteSpace(draftId)
+            ? "activity-draft:" + draftId
+            : null;
 
     private static bool Stamped(ExecutableNode node, string key, string? value) =>
         !string.IsNullOrWhiteSpace(value) && node.Metadata.TryGetValue("activity." + key, out var actual) && actual == value;
