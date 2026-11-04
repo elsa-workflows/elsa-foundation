@@ -37,7 +37,7 @@ function Probe() {
   doc = useWorkflowDocument();
   const current = doc;
   history = useDraftHistory({ draft: doc.state.draft, restoreDraft: snapshot => current.editDraft(() => snapshot) });
-  persistence = useWorkflowPersistence({ context, draft: doc.state.draft, editDraft: doc.editDraft, setStatus: noop, setError: noop, lineageHold: history.lineageHold });
+  persistence = useWorkflowPersistence({ context, draft: doc.state.draft, editDraft: doc.editDraft, onSaveReconciled: history.acceptSavedDraft, setStatus: noop, setError: noop, lineageHold: history.lineageHold });
   const document = deferDispatch ? { ...doc, compareAndReplaceDraftByBatch: (...args: Parameters<WorkflowDocumentApi["compareAndReplaceDraftByBatch"]>) => {
     deferred = () => current.compareAndReplaceDraftByBatch(...args);
   } } : doc;
