@@ -95,6 +95,54 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
                 string.Equals(x.ProviderSubject, key.Subject, StringComparison.Ordinal)));
     }
 
+    public ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Key);
+        ArgumentNullException.ThrowIfNull(request.User);
+        if (!Same(request.Key.TenantId, request.User.TenantId))
+            throw new ArgumentException("Admission user and identity must belong to the same tenant.", nameof(request));
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = request.User with
+        {
+            RoleIds = request.User.RoleIds.ToHashSet(StringComparer.Ordinal),
+            DirectPermissions = request.User.DirectPermissions.ToHashSet(StringComparer.Ordinal)
+        };
+        var link = new ExternalIdentityRecord(request.Key.TenantId, request.Key.Provider, request.Key.Subject,
+            user.Id, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, request.LinkPolicy) { Issuer = request.Key.Issuer };
+        lock (_syncRoot)
+        {
+            var existing = _externalIdentities.FirstOrDefault(x => SameLogin(x, link));
+            if (existing is not null)
+            {
+                var owner = _users.FirstOrDefault(x => Same(x.TenantId, existing.TenantId) && Same(x.Id, existing.UserId));
+                return ValueTask.FromResult(owner?.Status == UserStatus.Active
+                    ? new ExternalUserAdmissionResult(true, owner.Id)
+                    : new(false, Failure: "user-unavailable"));
+            }
+            if (user.Status != UserStatus.Active) return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "user-unavailable"));
+            if (request.CreateUser)
+            {
+                if (_users.Any(x => Same(x.TenantId, user.TenantId) && (Same(x.Id, user.Id) || Same(x.UserName, user.UserName))))
+                    return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "admission-conflict"));
+                if (user.RoleIds.Any(role => !_roles.Any(x => Same(x.TenantId, user.TenantId) && Same(x.Id, role))))
+                    return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "role-unavailable"));
+                _users.Add(user);
+            }
+            else
+            {
+                var current = _users.FirstOrDefault(x => Same(x.TenantId, user.TenantId) && Same(x.Id, user.Id));
+                if (current is null || current.Status != UserStatus.Active)
+                    return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "user-unavailable"));
+                if (current != user with { RoleIds = current.RoleIds, DirectPermissions = current.DirectPermissions } ||
+                    !current.RoleIds.SetEquals(user.RoleIds) || !current.DirectPermissions.SetEquals(user.DirectPermissions))
+                    return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "admission-conflict"));
+            }
+            _externalIdentities.Add(link);
+            return ValueTask.FromResult(new ExternalUserAdmissionResult(true, user.Id));
+        }
+    }
+
     public ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         lock (_syncRoot)

@@ -112,6 +112,10 @@ public interface IRevisionAwareCredentialStore
 [ReplacementContract]
 public interface IExternalIdentityStore
 {
+    /// <summary>Commits a policy-assessed new user and login atomically, or links an unchanged active existing user.</summary>
+    ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This external identity authority does not support atomic admission.");
+
     /// <summary>Finds an exact issuer/subject link. Legacy issuer-less links are never used as a fallback.</summary>
     ValueTask<ExternalIdentityRecord?> FindByKeyAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This external identity authority does not support issuer-qualified links.");

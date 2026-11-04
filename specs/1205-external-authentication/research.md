@@ -32,7 +32,7 @@ Decision: a typed token subject distinguishes canonical Elsa users `(tenant, use
 
 ## R6 — Role authority (owner decision pending)
 
-The initial card was withdrawn by Sipke after a misclick. The repeated card asks whether mapped roles are external-session grants (recommended) or synchronize saved assignments. Do not use the withdrawn selection. Independent work, including R5, may proceed. Confirm and encode the response before mapped-role persistence/projection implementation.
+The initial card was withdrawn by Sipke after a misclick. After explaining the distinction between role definitions and membership, the re-presented card offers session grants, saved provider-managed memberships, or provisioning policy only with group mappings omitted for now. No considered response has arrived. Do not use the withdrawn selection. Independent work, including R5, may proceed. Confirm and encode the response before mapped-role persistence/projection implementation.
 
 In either design: raw provider permission/role claims confer no Elsa grants; mapping resolves existing Elsa roles; deployment role allow-lists and the editor's own grant boundary constrain policy changes; preview calculates prospective grants without provisioning.
 

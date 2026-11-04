@@ -11,13 +11,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfExternalIdentityStore(
     IdentityIamDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    EfIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null)
+    EfIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null,
+    EfIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null,
+    IIdentityEmailUniquenessPolicy? emailUniquenessPolicy = null)
     : IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
 {
     private readonly EfIdentityAuthorityRelationshipCoordinator relationship = relationshipCoordinator ?? new(
         context,
         new EfIdentityAtomicWrite(context, accessContextAccessor: accessContextAccessor),
         accessContextAccessor);
+
+    public ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
+        new EfExternalUserAdmission(context, accessContextAccessor,
+            aggregateCoordinator ?? new(context, accessContextAccessor), relationship,
+            emailUniquenessPolicy ?? IdentityEmailUniquenessPolicy.NonUnique).ApplyAsync(request, cancellationToken);
 
     public async ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {

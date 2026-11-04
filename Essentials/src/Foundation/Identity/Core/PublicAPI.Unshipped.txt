@@ -1115,3 +1115,38 @@ static Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.operator !=(Elsa.Fo
 static Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? left, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? right) -> bool
 Elsa.Foundation.Identity.Core.Iam.LinkExternalIdentityRequest.Issuer.get -> string?
 Elsa.Foundation.Identity.Core.Iam.LinkExternalIdentityRequest.Issuer.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.<Clone>$() -> Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.CreateUser.get -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.CreateUser.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Deconstruct(out Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! Key, out Elsa.Foundation.Identity.Core.Iam.UserRecord! User, out bool CreateUser, out Elsa.Foundation.Identity.Core.Iam.ExternalIdentityLinkPolicy LinkPolicy) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Equals(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? other) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ExternalUserAdmission(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! Key, Elsa.Foundation.Identity.Core.Iam.UserRecord! User, bool CreateUser, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityLinkPolicy LinkPolicy) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Key.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Key.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.LinkPolicy.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityLinkPolicy
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.LinkPolicy.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.User.get -> Elsa.Foundation.Identity.Core.Iam.UserRecord!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.User.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.<Clone>$() -> Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Admitted.get -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Admitted.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Deconstruct(out bool Admitted, out string? UserId, out string? Failure) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Equals(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? other) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.ExternalUserAdmissionResult(bool Admitted, string? UserId = null, string? Failure = null) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Failure.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Failure.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.UserId.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.UserId.init -> void
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.AdmitAsync(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult!>
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ToString() -> string!
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.ToString() -> string!
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? right) -> bool

@@ -147,3 +147,8 @@ the callback; credential/CSRF/return-url validation remains endpoint-owned. No e
 registered. See the [branding guide](../../../../../Studio/docs/branding.md#replace-login-presentation).
 
 Managed external links use `ExternalIdentityKey` and `FindByKeyAsync` (or its revision-aware counterpart). The validated issuer and subject are ordinal, opaque values; neither is case-folded or URI-normalized. An authority that has not implemented qualified lookup refuses it rather than falling back to an issuer-less link. `ExternalIdentityRecord.Issuer == null` identifies the legacy ASP.NET login namespace.
+
+`IExternalIdentityStore.AdmitAsync` is the optional atomic admission capability after a trusted policy assessment.
+It creates a user and qualified link together or links an unchanged active user snapshot. A concurrent first
+sign-in returns the active canonical owner; it cannot overwrite another user or leave an orphan candidate.
+Authorities that cannot offer the transaction refuse this capability. Preview must not call it.

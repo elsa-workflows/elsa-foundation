@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Foundation.Identity.Tests;
 
@@ -174,9 +175,10 @@ public sealed class ExternalIdentityLinkTests
     {
         private readonly string file = Path.Combine(Path.GetTempPath(), $"elsa-3579-links-{Guid.NewGuid():n}.db");
         internal readonly IPersistenceAccessContextAccessor Access = new FixedAccess();
-        internal async Task<IdentityIamSqliteDbContext> Open()
+        internal async Task<IdentityIamSqliteDbContext> Open(params IInterceptor[] interceptors)
         {
-            var db = new IdentityIamSqliteDbContext(new DbContextOptionsBuilder<IdentityIamSqliteDbContext>().UseSqlite($"Data Source={file};Pooling=False").Options);
+            var db = new IdentityIamSqliteDbContext(new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
+                .UseSqlite($"Data Source={file};Pooling=False").AddInterceptors(interceptors).Options);
             await db.Database.MigrateAsync();
             return db;
         }

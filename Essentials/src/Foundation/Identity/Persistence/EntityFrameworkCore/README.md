@@ -49,3 +49,8 @@ configuration. IAM schema family 1.1.0 reads 1.0.0 through a content-preserving 
 issuer/subject values separately from legacy keys, while retaining the same authoritative user registry, CAS and
 aggregate-delete boundary. The framework `UserLoginInfo` adapter lists only issuer-less links because it cannot
 represent an issuer; managed link inspection uses the provider-neutral external-identity store.
+
+Atomic external admission nests the existing user/relationship mutations under one outer IAM transaction and
+acknowledgement. New users receive a security stamp and no local password. Missing default roles, stale matched
+user snapshots, disabled users and conflicting identifiers refuse admission; linking an existing user preserves
+saved roles. Its regression suite injects a link-write failure and races independent SQLite contexts.

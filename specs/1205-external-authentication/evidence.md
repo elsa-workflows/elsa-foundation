@@ -111,3 +111,30 @@ errors were corrected and are not counted as passed runs.
 Publication remains separate from local verification: normal app-authenticated pushes of the catalog commit
 have returned GitHub server errors; authoritative remote reads still showed the earlier draft head at the
 last check. No alternate credentials or branch-rule bypass was used.
+
+
+## Atomic admission checkpoint
+
+Added optional `IExternalIdentityStore.AdmitAsync` with a typed policy-assessed request. The EF implementation
+uses the existing user/relationship authority mutations inside one outer transaction and receipt; it does not
+introduce another IAM store. Child user-create receipt identity is scoped to that outer invocation. New external
+users have a fresh security stamp and no local password. Existing-user linking checks the active user snapshot
+and preserves saved roles. The in-memory authority commits the equivalent operation under its shared lock.
+
+Five new tests passed. Two tasks start together against independent SQLite contexts sharing one owned database;
+both return one canonical owner and only one user, link and name reservation persist. Missing default roles,
+pre-existing user IDs, stale matched-user snapshots and disabled users refuse. Injected failure at the link insert
+rolls back the already-flushed new user, reservation and child receipts. Removing the outer transaction makes
+that regression fail with an orphan user; restoring it yields **611/611** passing Identity tests, zero skips.
+
+The initial concurrency fixture tried to synchronize reads inside SQLite's writer transaction and timed out;
+it was corrected to synchronize request starts before transaction entry. This is component concurrency evidence,
+not two-server actual-provider qualification. Provisioning policy assessment, configured matching and the broker
+still have to call this mutation through the authorized admission path; no new runtime sign-in claim is made.
+Logs: `/tmp/elsa-3579-admission-focused-fixed.log`, `/tmp/elsa-3579-admission-atomic-mutant.log`,
+`/tmp/elsa-3579-admission-final.log`. The IAM regression rerun passed **206/206**, no failures/skips
+(`/tmp/elsa-3579-admission-iam.log`).
+
+The earlier GitHub server push failures cleared on a later normal app-authenticated push: draft PR #3806
+was verified at `436ee191b`. This supersedes the earlier publication limitation; no credentials or branch
+rules were changed. Atomic admission is a later local checkpoint until its own push is verified.
