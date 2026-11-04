@@ -172,6 +172,13 @@ public static class EtlArtifactV2Json
             continuous.ShouldSerialize = static (_, value) => value is not null;
         }
 
+        if (typeInfo.Type == typeof(EtlSqlSource))
+        {
+            var watermarkName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlSqlSource.Watermark));
+            var watermark = typeInfo.Properties.Single(property => property.Name == watermarkName);
+            watermark.ShouldSerialize = static (_, value) => value is not null;
+        }
+
         if (typeInfo.Type == typeof(EtlConnectorLimits))
         {
             var retainedOutputBudgetName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlConnectorLimits.MaxRetainedOutputBytes));

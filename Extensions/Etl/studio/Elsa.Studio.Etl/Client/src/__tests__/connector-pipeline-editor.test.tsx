@@ -231,6 +231,32 @@ describe("connector pipeline editor", () => {
     expect(editor.pipeline.source).toMatchObject({ key: ["full_name", "id"] });
   });
 
+  it("offers required int64 columns as the watermark, follows a rename and drops it when the column no longer qualifies", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.source = {
+      kind: "sql", binding: "people-db", table: "people",
+      columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true },
+        { name: "version", type: "int64", required: true }], key: ["id"]
+    };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+    const watermark = () => control<HTMLSelectElement>(editor.host, "Watermark column");
+
+    expect(Array.from(watermark().options).map(option => option.value)).toEqual(["", "id", "version"]);
+    setSelect(watermark(), "version");
+    editor.render();
+    expect(editor.pipeline.source).toMatchObject({ watermark: "version" });
+
+    for (const value of ["", "revision"]) {
+      setInput(control<HTMLInputElement>(editor.host, "Source table columns field 3 name"), value);
+      editor.render();
+    }
+    expect(editor.pipeline.source).toMatchObject({ watermark: "revision" });
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Source table columns field 3 type"), "string");
+    editor.render();
+    expect(editor.pipeline.source).not.toHaveProperty("watermark");
+  });
+
   it("follows the edited row when a rename briefly shares another column's name", () => {
     const initial = createDefaultEtlConnectorPipeline();
     initial.source = {

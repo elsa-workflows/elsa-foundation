@@ -111,6 +111,7 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
 }) {
   const id = useId();
   const required = source.columns.filter(column => column.required && column.name).map(column => column.name);
+  const watermarks = source.columns.filter(column => column.required && column.type === "int64" && column.name).map(column => column.name);
   return (
     <>
       <div className="etl-editor-field">
@@ -127,7 +128,15 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
         schema={source.columns}
         maxFields={maxFields}
         disabled={disabled}
-        onChange={columns => onChange({ ...source, columns, key: keyAfterColumnEdit(source, columns) })}
+        onChange={columns => {
+          const key = keyAfterColumnEdit(source, columns);
+          // The watermark follows a rename like the key, and is dropped when its column is no longer a required int64.
+          const [watermark] = source.watermark !== undefined ? keyAfterColumnEdit({ ...source, key: [source.watermark] }, columns) : [];
+          const { watermark: _, ...rest } = source;
+          // Mid-rename the name may be empty; the watermark follows its row until it is typed again.
+          const valid = watermark !== undefined && columns.some(column => column.name === watermark && column.type === "int64");
+          onChange(valid ? { ...rest, columns, key, watermark } : { ...rest, columns, key });
+        }}
       />
       <fieldset className="etl-editor-field">
         <legend>Source key</legend>
@@ -147,6 +156,18 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
           </label>
         ))}
       </fieldset>
+      <div className="etl-editor-field">
+        <label htmlFor={`${id}-watermark`}>Watermark column</label>
+        <select id={`${id}-watermark`} value={source.watermark ?? ""} disabled={disabled} aria-describedby={`${id}-watermark-help`}
+          onChange={event => {
+            const { watermark: _, ...rest } = source;
+            onChange(event.currentTarget.value ? { ...rest, watermark: event.currentTarget.value } : rest);
+          }}>
+          <option value="">None: read every row</option>
+          {watermarks.map(name => <option key={name} value={name}>{name}</option>)}
+        </select>
+        <small id={`${id}-watermark-help`}>A required 64-bit integer column whose values become visible in increasing order, such as one stamped by a single writer. Each run then reads only rows above the last completed run's highest value; a sequence, identity or per-row version can skip rows.</small>
+      </div>
     </>
   );
 }

@@ -36,7 +36,7 @@ internal static class EtlSqlSnapshotReader
     /// preparation failure; a transient one is an <see cref="EtlSqlTransientException"/>.
     /// </summary>
     internal static async ValueTask WriteAsync(HostSqlResolvedBinding binding, EtlSqlSource source, long maxBytes,
-        Stream destination, CancellationToken cancellationToken)
+        Stream destination, CancellationToken cancellationToken, long? watermarkFloor = null)
     {
         var engine = binding.Engine;
         var columns = source.Columns.Select(column => column.Name).ToArray();
@@ -51,7 +51,17 @@ internal static class EtlSqlSnapshotReader
             await using (var command = connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = engine.SelectSnapshot(source.Table, columns, source.Key);
+                // Without a checkpoint every row is read; with one, only rows above it (spec 1199).
+                var filter = source.Watermark is not null && watermarkFloor is not null ? source.Watermark : null;
+                command.CommandText = engine.SelectSnapshot(source.Table, columns, source.Key, filter);
+                if (filter is not null)
+                {
+                    var parameter = command.CreateParameter();
+                    parameter.ParameterName = "@watermark";
+                    parameter.DbType = System.Data.DbType.Int64;
+                    parameter.Value = watermarkFloor!.Value;
+                    command.Parameters.Add(parameter);
+                }
                 // A large ordered read may run longer than the driver's default timeout, so none applies; the heartbeat keeps
                 // the lease while the worker lives, so only a lost lease or a stopping worker cancels the read.
                 command.CommandTimeout = 0;
@@ -100,6 +110,38 @@ internal static class EtlSqlSnapshotReader
             // failures propagate unwrapped, so the preparer reports them as write failures.
             throw new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.sql-read-rejected", exception));
         }
+    }
+
+    /// <summary>
+    /// The highest non-null value of the watermark column in a published snapshot, or null when it has none (spec 1199). Read
+    /// back from the snapshot itself, so a reused snapshot reports the same value as the read that published it.
+    /// </summary>
+    internal static async ValueTask<long?> ReadHighWatermarkAsync(string snapshotPath, string column, CancellationToken cancellationToken)
+    {
+        long? high = null;
+        await foreach (var line in File.ReadLinesAsync(snapshotPath, cancellationToken))
+        {
+            if (line.Length == 0) continue;
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(line);
+            }
+            catch (JsonException exception)
+            {
+                // A retained snapshot that no longer parses is an integrity failure, as for any other snapshot read.
+                throw new InvalidDataException("The SQL snapshot is not valid JSON lines.", exception);
+            }
+            using (document)
+            {
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new InvalidDataException("The SQL snapshot holds a line that is not a JSON object.");
+                if (document.RootElement.TryGetProperty(column, out var value) && value.ValueKind == JsonValueKind.Number &&
+                    value.TryGetInt64(out var watermark) && (high is null || watermark > high))
+                    high = watermark;
+            }
+        }
+        return high;
     }
 
     /// <summary>

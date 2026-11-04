@@ -72,6 +72,7 @@ success in the same transaction, because no partition exists to complete it; an 
 outputs as file routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)): `RecordConnectorFilePublicationAsync`
 matches a CSV publication against `EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, kind)` (a `.csv` key, refusing the
 `.jsonl` one), and a CSV route counts as a file publication for delivery, acceptance and inspection state.
+A provider keeps SQL source watermark checkpoints ([spec 1199](../../../../specs/1199-etl-sql-watermark/spec.md)): `FindConnectorSourceWatermarkAsync` returns the checkpoint for a key, and the transaction that completes a run whose prepared run carries a `SourceWatermark` raises that checkpoint to it, never lowering it; a run settled by a failure leaves it unchanged. The interface's default returns null, so a store without checkpoints reads every row.
 A provider must accept a SQL source's `EtlConnectorKind.Sql` source pin, which carries no expected digest, and a prepared
 snapshot whose hash it cannot compare to a pin: that hash is the snapshot's anchor ([spec 1198](../../../../specs/1198-etl-sql-source/spec.md)).
 A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)):
@@ -116,7 +117,7 @@ partition's releasable reservation for permanent exhaustion.
 ## SQL engines
 
 **`IEtlSqlEngine`** — adapter keyed by provider name (§2.7), layer: Core contract, no default implementation
-([specs 1197](../../../../specs/1197-etl-sql-destination/spec.md) and [1198](../../../../specs/1198-etl-sql-source/spec.md)).
+([specs 1197](../../../../specs/1197-etl-sql-destination/spec.md), [1198](../../../../specs/1198-etl-sql-source/spec.md) and [1199](../../../../specs/1199-etl-sql-watermark/spec.md)).
 
 ```csharp
 public interface IEtlSqlEngine
@@ -138,12 +139,12 @@ public interface IEtlSqlEngine
     string? SnapshotLock(string table);
     bool IsLockRefusal(Exception exception);
     bool ExtremeDatesAreInfinite { get; }
-    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
+    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, string? watermarkColumn);
 }
 ```
 
 - **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction), and its snapshot reader owns the read (one transaction at `SnapshotIsolation`, ordered by the key, retained as JSON Lines); an engine never commits or retries.
 - **Registration:** `services.AddSingleton<IEtlSqlEngine, …>()` from an engine feature.
-- **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, an optional table lock taken before the snapshot (the reader falls back to an unlocked read when the engine refuses it), whether the driver maps infinite dates to the extreme `DateTime`/`DateOnly`/`DateTimeOffset` values (so the reader refuses them), and exception classification.
+- **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, an optional table lock taken before the snapshot (the reader falls back to an unlocked read when the engine refuses it), whether the driver maps infinite dates to the extreme `DateTime`/`DateOnly`/`DateTimeOffset` values (so the reader refuses them), a snapshot select that, given a watermark column, keeps only rows whose watermark is greater than the `@watermark` parameter or is NULL (spec 1199: a NULL watermark must still be read, so the run rejects it rather than skipping it), and exception classification.
 - **What depends on it:** `HostSqlBindings`, `EtlSqlRouteWriter` and `EtlSqlSnapshotReader` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).

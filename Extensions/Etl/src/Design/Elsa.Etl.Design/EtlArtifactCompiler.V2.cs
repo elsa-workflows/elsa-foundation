@@ -215,6 +215,10 @@ internal sealed partial class EtlArtifactCompiler
         if (sql.Key is not { Count: >= 1 and <= 8 } key || key.Distinct(StringComparer.Ordinal).Count() != key.Count ||
             !key.All(name => name is not null && columns.TryGetValue(name, out var column) && column.Required))
             diagnostics.Add("source.sql-key-invalid", "source.key", "The key must be one to eight distinct required columns.");
+        // The checkpoint compares 64-bit integers; a NULL watermark can never be compared, so the column is required (spec 1199).
+        if (sql.Watermark is { } watermark &&
+            !(columns.TryGetValue(watermark, out var column) && column.Type == EtlColumnType.Int64 && column.Required))
+            diagnostics.Add("source.sql-watermark-invalid", "source.watermark", "The watermark must be a declared, required Int64 column.");
     }
 
     private static bool IsSqlTable(string? table) => table?.Split('.') is { Length: 1 or 2 } parts && parts.All(IsSqlIdentifier);
@@ -285,7 +289,7 @@ internal sealed partial class EtlArtifactCompiler
                 break;
             case EtlSqlSource sql:
                 if (!AddText(sql.Binding, ref budget) || !AddText(sql.Table, ref budget) || !AddSchemaText(sql.Columns, ref budget) ||
-                    !AddKeyText(sql.Key, ref budget)) return false;
+                    !AddKeyText(sql.Key, ref budget) || sql.Watermark is { } watermark && !AddText(watermark, ref budget)) return false;
                 break;
         }
         if (pipeline.Lookup is { } lookup && (!AddText(lookup.Binding, ref budget) || !AddSchemaText(lookup.Schema, ref budget) ||

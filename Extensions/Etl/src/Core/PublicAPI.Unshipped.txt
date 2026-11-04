@@ -2019,7 +2019,6 @@ Elsa.Etl.Core.EtlSqlSource.Key.get -> System.Collections.Generic.IReadOnlyList<s
 Elsa.Etl.Core.EtlSqlSource.Key.init -> void
 Elsa.Etl.Core.EtlSqlSource.Table.get -> string!
 Elsa.Etl.Core.EtlSqlSource.Table.init -> void
-Elsa.Etl.Core.Runtime.IEtlSqlEngine.SelectSnapshot(string! table, System.Collections.Generic.IReadOnlyList<string!>! columns, System.Collections.Generic.IReadOnlyList<string!>! keyColumns) -> string!
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotIsolation.get -> System.Data.IsolationLevel
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.IsLockRefusal(System.Exception! exception) -> bool
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotLock(string! table) -> string?
@@ -2032,6 +2031,32 @@ override sealed Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSource? other
 static Elsa.Etl.Core.EtlSqlSource.operator !=(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
 static Elsa.Etl.Core.EtlSqlSource.operator ==(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.ExtremeDatesAreInfinite.get -> bool
+Elsa.Etl.Core.EtlSqlSource.Watermark.get -> string?
+Elsa.Etl.Core.EtlSqlSource.Watermark.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.SourceWatermark.get -> long?
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.SourceWatermark.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Column.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Column.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.DefinitionId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.DefinitionId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Equals(Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceAlias.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceAlias.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Table.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Table.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.FindConnectorSourceWatermarkAsync(Elsa.Etl.Core.EtlScope! scope, Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long?>
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SelectSnapshot(string! table, System.Collections.Generic.IReadOnlyList<string!>! columns, System.Collections.Generic.IReadOnlyList<string!>! keyColumns, string? watermarkColumn) -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? left, Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? left, Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Deconstruct(out string! DefinitionId, out string! SourceAlias, out string! SourceHandle, out string! Table, out string! Column) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.EtlConnectorSourceWatermarkKey(string! DefinitionId, string! SourceAlias, string! SourceHandle, string! Table, string! Column) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.init -> void
 Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
 Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

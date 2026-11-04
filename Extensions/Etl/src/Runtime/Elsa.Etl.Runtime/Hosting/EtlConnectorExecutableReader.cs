@@ -129,7 +129,9 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                     !sql.Columns.All(column => SqlIdentifier(column.Name)) ||
                     sql.Columns.Select(column => column.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != sql.Columns.Count ||
                     sql.Key is not { Count: >= 1 and <= 8 } || sql.Key.Distinct(StringComparer.Ordinal).Count() != sql.Key.Count ||
-                    !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)))
+                    !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)) ||
+                    sql.Watermark is { } watermark &&
+                    !sql.Columns.Any(column => column.Name == watermark && column.Type == EtlColumnType.Int64 && column.Required))
                     throw Refused("etl.executable.invalid-pipeline");
                 break;
             default: throw Refused("etl.executable.invalid-pipeline");

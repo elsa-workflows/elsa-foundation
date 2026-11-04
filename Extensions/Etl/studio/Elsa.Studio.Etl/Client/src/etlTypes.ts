@@ -128,6 +128,8 @@ export interface EtlSqlSource {
   columns: EtlColumn[];
   /** One to eight required columns ordering the snapshot. */
   key: string[];
+  /** A required int64 column; each run then reads only rows above the last completed run's high watermark. */
+  watermark?: string;
 }
 
 export interface EtlJsonField {

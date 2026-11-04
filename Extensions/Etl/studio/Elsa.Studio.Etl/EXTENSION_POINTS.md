@@ -19,7 +19,7 @@ native run; hosts without the slot or the runtime capability show no link.
 The structured editor supports the v1 file topology in [spec 255](../../../../specs/255-finite-file-etl/spec.md)
 and the v2 connector topology in [spec 996](../../../../specs/996-http-etl/spec.md) and
 [spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md). Connector drafts select HTTP, CSV, JSON Lines or SQL table sources ([spec 1198](../../../../specs/1198-etl-sql-source/spec.md): table, columns and
-key), optional CSV lookup, and HTTP, JSONL or CSV routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)), or a keyed SQL table for accepted
+key; [spec 1199](../../../../specs/1199-etl-sql-watermark/spec.md): an optional watermark column), optional CSV lookup, and HTTP, JSONL or CSV routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)), or a keyed SQL table for accepted
 records ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)), through scoped alias/role/kind choices.
 Its local draft is separate from the saved revision. Validation and explicit publication operate on the saved
 revision/version/hash tuple. Published artifacts are read-only. Binding choices are scoped aliases, never
