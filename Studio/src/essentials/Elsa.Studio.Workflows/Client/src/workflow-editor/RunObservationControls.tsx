@@ -26,7 +26,7 @@ export function RunObservationControls({ following, onFollowingChange, onRefresh
 }
 
 export function RunObservationNotice({ status, error }: { status?: ExecutionObservationStatus; error?: string }) {
-  const label = status === "paused" ? "Live updates paused · showing last confirmed evidence. The workflow keeps running."
+  const label = status === "paused" ? "Live updates paused · showing last confirmed evidence. Pausing updates does not stop the workflow."
     : status === "disconnected" ? "Live updates disconnected · showing last confirmed evidence."
     : status === "unavailable" ? "Live updates unavailable."
     : status === "expired" ? "Test Run expired."

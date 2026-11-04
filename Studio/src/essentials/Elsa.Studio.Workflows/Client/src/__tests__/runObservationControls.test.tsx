@@ -46,3 +46,10 @@ it.each([
   expect(container.querySelector('[role="status"]')?.textContent).toContain(label);
   expect(container.textContent).toContain("Evidence could not be read");
 });
+
+it("describes pausing observation without asserting the workflow is still running", () => {
+  flushSync(() => root.render(<><RunObservationControls following={false} complete onFollowingChange={() => {}} onRefresh={() => {}} /><RunObservationNotice status="paused" /></>));
+  expect(container.querySelector<HTMLButtonElement>('[aria-label="Resume live updates"]')!.disabled).toBe(false);
+  expect(container.textContent).not.toContain("The workflow keeps running");
+  expect(container.textContent).toContain("does not stop the workflow");
+});

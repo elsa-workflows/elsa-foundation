@@ -19,6 +19,8 @@ interface WorkbenchPanel {
   tabLabel: string;
   tabs: WorkflowEditorPanelTab[];
   activeTabId: string;
+  /** Retain inspection disclosures while switching to related controls. Hidden panels are inert. */
+  keepMountedTabIds?: readonly string[];
   onSelect(tabId: string): void;
 }
 
@@ -97,7 +99,12 @@ export function GraphAuthoringWorkbench({
             onToggleCollapsed={() => layout.toggleSidePanelCollapsed("inspector")}
             onToggleMaximized={() => layout.toggleSidePanelMaximized("inspector")}
           />
-          {layout.inspectorExpanded ? activeInspector.render() : null}
+          {inspector.keepMountedTabIds?.length ? inspector.tabs.filter(tab => tab.id === activeInspector.id || inspector.keepMountedTabIds?.includes(tab.id)).map(tab => (
+            <div key={tab.id} className="wf-workbench-panel-content" hidden={!layout.inspectorExpanded || tab.id !== activeInspector.id}
+              inert={!layout.inspectorExpanded || tab.id !== activeInspector.id}>
+              {tab.render()}
+            </div>
+          )) : layout.inspectorExpanded ? activeInspector.render() : null}
         </aside>
       )}
     />

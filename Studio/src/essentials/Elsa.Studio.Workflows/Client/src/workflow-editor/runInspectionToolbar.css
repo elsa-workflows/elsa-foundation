@@ -40,7 +40,7 @@
 :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-tool:hover:not(:disabled) { background: var(--studio-surface-muted); }
 :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-tool:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-icon-tool { width: 32px; padding: 5px; }
-:is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-live-tool { min-width: 140px; justify-content: flex-start; color: var(--studio-text-muted); }
+:is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-live-tool { width: 13em; flex: 0 0 auto; justify-content: flex-start; color: var(--studio-text-muted); }
 :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-live-tool[aria-pressed="true"] { background: var(--studio-accent-soft); color: var(--studio-accent); }
 :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-live-tool:disabled { opacity: 1; }
 .wf-run-actions > .wf-run-observation-controls { padding-left: 8px; border-left: 1px solid var(--studio-border); }
@@ -56,7 +56,10 @@
 
 @media (pointer: coarse) {
   :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-tool,
-  .wf-run-toolbar .wf-run-incident-action { min-width: 44px; min-height: 44px; }
+  .wf-run-toolbar .wf-run-incident-action,
+  .wf-run-toolbar button[aria-haspopup="menu"] { min-width: 44px; min-height: 44px; }
 }
 
 .wf-run-toolbar .wf-run-incident-action[data-health="none"] { border-color: transparent; background: transparent; color: var(--studio-text-muted); font-weight: 400; }
+
+.wf-runtime-heading > .wf-status-badge { min-width: 6rem; justify-content: center; }

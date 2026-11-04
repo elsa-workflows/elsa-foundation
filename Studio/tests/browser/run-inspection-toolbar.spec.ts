@@ -54,13 +54,41 @@ test("opens secondary run actions with the keyboard and restores focus on Escape
   await expect(page.getByRole("menu", { name: "More run actions", exact: true })).toBeHidden();
 });
 
+for (const theme of ["light", "dark"]) test(`retains expanded evidence through Runtime pause, refresh and completion (${theme})`, async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&execution-motion=causal&theme=${theme}`);
+  await page.getByRole("button", { name: "Test Run", exact: true }).click();
+  await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+  await page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
+  await page.locator(".wf-execution-choice").click();
+  await page.getByRole("list", { name: "Recorded activity executions", exact: true }).getByRole("button", { name: /^Execution 4 (Running|Completed)/ }).click();
+  await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
+  const details = page.locator(".wf-activity-execution-details");
+  await details.locator("summary").click();
+  const original = await details.elementHandle();
+  await page.getByRole("tab", { name: "Runtime", exact: true }).click();
+  expect(await original!.evaluate(element => element.isConnected)).toBe(true);
+  await page.getByRole("button", { name: "Pause live updates", exact: true }).click();
+  await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh execution", exact: true }).click();
+  const runtime = page.getByRole("region", { name: "Test run summary", exact: true });
+  await expect(runtime.locator(".wf-status-badge")).toHaveText("Completed");
+  await expect(runtime.getByText(/^Live updates paused/)).not.toContainText("The workflow keeps running");
+  await expect(runtime.getByRole("button", { name: "Resume live updates", exact: true })).toBeEnabled();
+  await page.getByRole("tab", { name: "Inspector", exact: true }).click();
+  expect(await original!.evaluate(element => element.isConnected)).toBe(true);
+  await expect(details).toHaveAttribute("open", "");
+  await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
+  await expect(page.getByText("Completion receipt: 4", { exact: true })).toBeVisible();
+});
+
 test.describe("touch targets", () => {
   test.use({ hasTouch: true });
   test("keeps compact run tools easy to tap", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/?mode=activity-duplicate-editor&host=instance&run-canvas=unique&toolbar-explain");
     const actions = page.getByRole("group", { name: "Run workspace actions", exact: true });
-    for (const label of ["Runs", "Open definition", "Refresh execution", "Pause live updates"]) {
+    for (const label of ["Runs", "Open definition", "Refresh execution", "Pause live updates", "More run actions"]) {
       const button = actions.getByRole("button", { name: label, exact: true });
       await expect(button).toBeEnabled();
       const box = (await button.boundingBox())!;
