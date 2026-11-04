@@ -53,6 +53,10 @@ The witness has not been implemented or executed. Its technical plan and any arc
 
 ## Additional integration constraints
 
+### Parent-to-descendant transition boundaries still need agreement
+
+The [SCXML transition reference](https://www.w3.org/TR/scxml/#transition) distinguishes whether a transition targeting a descendant exits its source state. This is reference evidence for the remaining parent-visit preservation/re-entry decision, not adoption of an Elsa schema, default or implementation. OD15 already distinguishes action-without-exit from deliberate self-re-entry; it does not by itself settle parent-to-descendant transition modes.
+
 ### Concurrent durable activity work is an explicit adaptation
 
 The [SCXML parallel-state reference](https://www.w3.org/TR/scxml/#parallel) describes simultaneously active regions with defined serial processing of executable content. OD28 deliberately allows independent ordinary Elsa activity work to progress concurrently within each phase, retaining hierarchy dependencies and selected-set phase barriers. This is an adaptation for the accepted durable-activity composition model, not SCXML execution conformance. Qualification must cover concurrent work, existing shared-value policies and the absence of a guaranteed independent-branch completion order rather than borrowing the reference's serial-processing assumptions.
