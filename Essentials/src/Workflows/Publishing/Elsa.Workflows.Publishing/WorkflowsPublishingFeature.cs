@@ -146,7 +146,13 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityPublicationCandidateEvaluator, ActivityPublicationCandidateEvaluator>();
         services.TryAddScoped<IActivityCatalogProjection, ActivityCatalogProjection>();
         services.TryAddScoped<IActivityPublicationVersionPolicy, ActivityPublicationVersions>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityPublishingReplacementContractsStartupTask>());
+        // A copied shell may carry a parent validator or IServiceCollection registration. Bind
+        // this contribution to this collection without importing unrelated Design composition.
+        foreach (var previous in services.Where(x => x.ServiceType == typeof(IStartupTask) &&
+                     (x.ImplementationType == typeof(ValidateActivityPublishingReplacementContractsStartupTask) ||
+                      x.ImplementationInstance is ValidateActivityPublishingReplacementContractsStartupTask)).ToArray())
+            services.Remove(previous);
+        services.AddSingleton<IStartupTask>(new ValidateActivityPublishingReplacementContractsStartupTask(services));
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
         // The export producer is destination-agnostic. It reads the executable closure and provenance, while

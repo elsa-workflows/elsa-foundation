@@ -22,10 +22,44 @@ public sealed class ActivityPublishingReplacementAdmissionTests
         IServiceCollection services = new ServiceCollection();
         new WorkflowsPublishingFeature().ConfigureServices(services);
         services.Add(ServiceDescriptor.Scoped(contract, _ => throw new InvalidOperationException("Admission must not instantiate a disputed service.")));
-        Assert.Contains(services, x => x.ServiceType == typeof(IStartupTask) && x.ImplementationType == typeof(ValidateActivityPublishingReplacementContractsStartupTask));
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new ValidateActivityPublishingReplacementContractsStartupTask(services).ExecuteAsync(default));
+        Assert.Single(services, x => x.ServiceType == typeof(IStartupTask) && (x.ImplementationType == typeof(ValidateActivityPublishingReplacementContractsStartupTask) || x.ImplementationInstance is ValidateActivityPublishingReplacementContractsStartupTask));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ResolveGuard(services).ExecuteAsync(default));
         Assert.Contains(contract.Name + " (2 registrations)", error.Message);
         Assert.Contains("services.Replace", error.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Copied_child_admission_uses_its_own_collection_even_with_parent_metadata(bool childDuplicate)
+    {
+        IServiceCollection parent = new ServiceCollection();
+        parent.AddSingleton<IServiceCollection>(parent);
+        new WorkflowsPublishingFeature().ConfigureServices(parent);
+        var extra = ServiceDescriptor.Scoped(typeof(IActivityPublicationCandidateEvaluator), _ => throw new InvalidOperationException());
+        if (!childDuplicate) parent.Add(extra);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        if (childDuplicate) child.Add(extra); else child.Remove(extra);
+        new WorkflowsPublishingFeature().ConfigureServices(child);
+        if (childDuplicate)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => ResolveGuard(child).ExecuteAsync(default));
+            await ResolveGuard(parent).ExecuteAsync(default);
+        }
+        else
+        {
+            await ResolveGuard(child).ExecuteAsync(default);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => ResolveGuard(parent).ExecuteAsync(default));
+        }
+    }
+
+    private static IStartupTask ResolveGuard(IServiceCollection services)
+    {
+        // The feature registers its admission task last. Resolve that actual contribution through
+        // DI without importing a Design API or durable persistence feature into the engine host.
+        using var provider = services.BuildServiceProvider();
+        return Assert.IsType<ValidateActivityPublishingReplacementContractsStartupTask>(provider.GetRequiredService<IStartupTask>());
     }
 
     [Theory]
@@ -36,8 +70,8 @@ public sealed class ActivityPublishingReplacementAdmissionTests
         services.Add(ServiceDescriptor.Scoped(contract, _ => throw new InvalidOperationException("Admission must count registrations without activating them.")));
         new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingFeature().ConfigureServices(services);
-        await new ValidateActivityPublishingReplacementContractsStartupTask(services).ExecuteAsync(default);
+        await ResolveGuard(services).ExecuteAsync(default);
         services.Replace(ServiceDescriptor.Scoped(contract, _ => throw new InvalidOperationException()));
-        await new ValidateActivityPublishingReplacementContractsStartupTask(services).ExecuteAsync(default);
+        await ResolveGuard(services).ExecuteAsync(default);
     }
 }
