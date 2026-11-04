@@ -227,6 +227,7 @@ In both, compare each receipt with the owning module's readback.
 
 Negative cases:
 - a binding added or removed after review, before execution;
+- a binding created after the last consumer comparison but before the secret mutation, coordinated by a barrier (the non-atomic window below);
 - a truncated answer whose page or count changes;
 - no consumer source answering;
 - a repository that is not revision-aware;
@@ -243,8 +244,9 @@ Negative cases:
 3. **Given** a secret that the source reports as connection-owned, hand-made ones included, **When** a revoke or delete is proposed or executed, **Then** Weaver refuses it. This is stricter than the native page, and the user can act there instead.
 4. **Given** no consumer source answered, **When** a revoke or delete is proposed, **Then** it is refused before review. The refusal states that connection bindings could not be checked. This covers five cases: Connections is not composed, Connections is an older version without the source, Connections runs in another shell, the event pipeline is not composed, or the query is unsupported. This limitation is recorded: a host without Connections cannot revoke or delete secrets through Weaver.
 5. **Given** a repository that is not revision-aware, **When** a revoke or delete is proposed, **Then** it is unsupported.
-6. **Given** an approved revoke or delete, **When** it is executed, **Then** the consumer answer is recomputed and compared, by full identity, with the answer the review showed. A truncated answer is compared by its page and count. Any change makes the proposal stale. The reviewed revision is checked before any side effect. Approval itself checks only what Agent core holds (FR-014).
-7. **Given** a delete, **When** it runs, **Then** its receipt reads back the secret's absence. If the value is removed but the metadata save then fails or meets a revision conflict, the owning module throws, and the delete is *uncertain*.
+6. **Given** an approved revoke or delete, **When** it is executed, **Then** the consumer answer is recomputed and compared, by full identity, with the answer the review showed. A truncated answer is compared by its page and count. A change observed by that comparison makes the proposal stale. The reviewed revision is checked before any side effect. Approval itself checks only what Agent core holds (FR-014).
+7. **Given** a binding created after the final consumer comparison but before the secret mutation, **When** that interval is exercised, **Then** the test proves the plan's declared ordering. An owner-supported atomic fence may refuse the stale operation with zero effect. Without such a fence, the remaining cross-module window is explicitly recorded under PD3: the review warns that concurrent bindings may be missed, the consumer answer is attributed to its observation rather than claimed current at deletion, and neither receipt nor UI claims the secret was unused at deletion. The consumer list is advisory; the secret's own revision guard still applies.
+8. **Given** a delete, **When** it runs, **Then** its receipt reads back the secret's absence. If the value is removed but the metadata save then fails or meets a revision conflict, the owning module throws, and the delete is *uncertain*.
 
 ### Edge Cases
 
@@ -671,7 +673,7 @@ Negative cases:
 - **Plan decisions**:
   - **PD1**: each package's shell feature.
   - **PD2**: the contract signatures, internal names and types, the principal seam and the revision mechanisms; where permission constants live; where the durable Agent fields are stored; and the store mechanics behind FR-018, such as the counter's version check, the schema-fleet and activation-refusal types, and the enumeration's limits.
-  - **PD3**: every non-atomic compare-then-write window, and how it is bounded.
+  - **PD3**: every non-atomic compare-then-write window, and how it is bounded. In particular, the Connections consumer comparison and Secrets revoke/delete span owners: specify an owner-supported atomic check/fence if available, or explicitly record the remaining interval, the review warning and observation-attributed receipt semantics of story 4. A secret-revision CAS alone does not serialize a concurrent connection binding. A barrier test creates a binding inside that interval; the implementation must not claim atomic consumer protection when it has none.
 - **Overlap**, reconciled without reparenting:
   - ETL: #2894, #2906 and the ETL defects (#3709, #3719, #3721, #3724, #3562).
   - Home dashboards: #3604.
