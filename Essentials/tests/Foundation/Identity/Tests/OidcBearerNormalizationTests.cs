@@ -331,6 +331,9 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.Normalized.ToUpperInvariant(), "forged"),
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
+            new Claim(IdentityClaimTypes.SubjectProvider, "forged-origin"),
+            new Claim(IdentityClaimTypes.SubjectIssuer.ToUpperInvariant(), "https://forged-issuer/"),
+            new Claim(IdentityClaimTypes.ExternalSubject, "forged-subject"),
             new Claim(IdentityClaimTypes.Role, "admin"),
             new Claim(IdentityClaimTypes.Permission, "worker:admin"),
             new Claim(IdentityClaimTypes.UserId, "user-forged"));
@@ -610,6 +613,9 @@ public sealed class OidcBearerNormalizationTests
         Assert.Contains(received!.Claims, claim => claim.Type == "outside" && claim.Value == "kept");
         Assert.DoesNotContain(received.Claims, IsInternalClaim);
         Assert.Equal(OidcBearerNormalizationEvents.NormalizedAuthenticationType, context.Principal!.Identity!.AuthenticationType);
+        Assert.Equal(Provider, Assert.Single(context.Principal.FindAll(IdentityClaimTypes.SubjectProvider)).Value);
+        Assert.Equal(Issuer, Assert.Single(context.Principal.FindAll(IdentityClaimTypes.SubjectIssuer)).Value);
+        Assert.Empty(context.Principal.FindAll(IdentityClaimTypes.ExternalSubject));
     }
 
     [Fact]

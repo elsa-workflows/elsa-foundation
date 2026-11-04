@@ -39,8 +39,8 @@ public interface ITokenService
 
     ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Revokes every access and refresh token issued to <paramref name="subjectId"/>, as sign-out requires.</summary>
-    ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default);
+    /// <summary>Revokes every access and refresh token in the explicit identity scope, as sign-out requires.</summary>
+    ValueTask RevokeSubjectAsync(TokenSubject subject, CancellationToken cancellationToken = default);
 }
 
 public interface IAuthSessionService
@@ -98,11 +98,7 @@ public sealed record PrincipalFactoryContext(
     IReadOnlyCollection<ClaimMappingRule> MappingRules,
     IReadOnlyCollection<Permission> CatalogPermissions);
 
-public sealed record TokenIssueRequest(string SubjectId, string TenantId, IReadOnlyCollection<string> Scopes)
-{
-    /// <summary>Canonical Elsa user established by the issuing authority; absent for non-user subjects.</summary>
-    public string? CanonicalUserId { get; init; }
-}
+public sealed record TokenIssueRequest(TokenSubject Subject, IReadOnlyCollection<string> Scopes);
 
 public sealed record TokenIssueResult(string AccessToken, DateTimeOffset ExpiresAt, string? RefreshToken = null);
 

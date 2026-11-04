@@ -27,9 +27,9 @@ internal static class IdentityClaimsProjector
         foreach (var userId in identity.FindAll(IdentityClaimTypes.UserId).ToArray())
             identity.RemoveClaim(userId);
         identity.AddClaim(new Claim(IdentityClaimTypes.UserId, user.Id));
-        AddIfMissing(identity, ClaimTypes.NameIdentifier, user.Id);
-        AddIfMissing(identity, "sub", user.Id);
-        AddIfMissing(identity, IdentityClaimTypes.TenantId, user.TenantId);
+        Replace(identity, ClaimTypes.NameIdentifier, user.Id);
+        Replace(identity, "sub", user.Id);
+        Replace(identity, IdentityClaimTypes.TenantId, user.TenantId);
 
         if (!string.IsNullOrWhiteSpace(user.DisplayName))
             AddIfMissing(identity, ClaimTypes.Name, user.DisplayName);
@@ -80,5 +80,12 @@ internal static class IdentityClaimsProjector
     {
         if (!identity.HasClaim(type, value))
             identity.AddClaim(new Claim(type, value));
+    }
+
+    private static void Replace(ClaimsIdentity identity, string type, string value)
+    {
+        foreach (var claim in identity.Claims.Where(claim => string.Equals(claim.Type, type, StringComparison.OrdinalIgnoreCase)).ToArray())
+            identity.RemoveClaim(claim);
+        identity.AddClaim(new Claim(type, value));
     }
 }

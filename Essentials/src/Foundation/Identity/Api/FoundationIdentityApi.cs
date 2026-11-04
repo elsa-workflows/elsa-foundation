@@ -154,25 +154,17 @@ public static class FoundationIdentityApi
             return;
         }
 
-        var subject = Subject(normalizedPrincipal);
-        if (string.IsNullOrWhiteSpace(subject))
+        if (!context.RequestServices.GetRequiredService<ITokenSubjectResolver>().TryResolve(normalizedPrincipal, out var subject))
         {
             await Results.Unauthorized().ExecuteAsync(context);
             return;
         }
 
-        var tenantId = normalizedPrincipal.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
         var permissions = normalizedPrincipal.FindAll(IdentityClaimTypes.Permission)
             .Select(x => x.Value)
             .ToArray();
-        var canonicalUsers = normalizedPrincipal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
-        if (canonicalUsers.Length > 1 || canonicalUsers.Length == 1 && string.IsNullOrWhiteSpace(canonicalUsers[0]))
-        {
-            await Results.Unauthorized().ExecuteAsync(context);
-            return;
-        }
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest(subject, tenantId, permissions) { CanonicalUserId = canonicalUsers.SingleOrDefault() }, context.RequestAborted);
+            .IssueAsync(new TokenIssueRequest(subject, permissions), context.RequestAborted);
 
         await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
     }
@@ -266,9 +258,8 @@ public static class FoundationIdentityApi
             !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal))
             return true;
 
-        var subject = Subject(principal);
-        if (string.IsNullOrWhiteSpace(subject))
-            return true;
+        if (!context.RequestServices.GetRequiredService<ITokenSubjectResolver>().TryResolve(principal, out var subject))
+            return false;
 
         try
         {
@@ -362,9 +353,6 @@ public static class FoundationIdentityApi
 
         return null;
     }
-
-    private static string? Subject(ClaimsPrincipal principal) =>
-        principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
 
     private static string RouteValue(HttpContext context, string name) =>
         context.Request.RouteValues.TryGetValue(name, out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;

@@ -62,6 +62,16 @@ copy, and only the ASP.NET Core Identity claims projector re-emits it, carrying 
 durable actor (for example human review decisions) prefer it and fall back to `NameIdentifier`/`sub`, which the
 OpenIddict tokens already set to the Elsa user ID, so other token factories need not emit it.
 
+Token issuance and subject revocation use an explicit `TokenSubject`: a canonical Elsa user is scoped by tenant
+and user ID; a non-user external identity is scoped by tenant, provider, validated issuer and opaque subject.
+OpenIddict stores a bounded versioned hash of that complete scope, while canonical users retain their Elsa user ID as JWT subject. Non-user JWT subjects are scoped too;
+`IdentityClaimTypes.ExternalSubject` preserves the opaque upstream value separately from that public subject. Refresh preserves the complete scope. Normalized external-bearer adapters stamp
+`IdentityClaimTypes.SubjectProvider` and `SubjectIssuer` from validated protocol state after removing incoming
+copies. Missing or conflicting identity fields cannot be exchanged for first-party tokens. A raw upstream subject
+never selects a local user for cookie invalidation. Pre-GA unscoped refresh payloads must sign in again after this
+security change; they are not guessed into a scope. First-party bearer validation also requires the signed
+full-scope key, so pre-change unscoped access tokens are refused after upgrade rather than surviving scoped logout.
+
 The built-in trusted runtime types are `Elsa.Foundation.Identity` for the normalized external
 principal factory, the ASP.NET Core Identity cookie scheme for reconstructed cookie requests, and
 the OpenIddict validation scheme for validated bearer requests. OpenIddict's token-construction

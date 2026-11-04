@@ -109,6 +109,7 @@ public sealed class IdentityProviderModuleTests
         var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new Claim(ClaimTypes.NameIdentifier, "provider-subject-ada"),
+            new Claim("sub", "another-upstream-subject"),
             new Claim(IdentityClaimTypes.UserId, "forged-user"),
             new Claim(ClaimTypes.Name, "Ada Lovelace")
         ], "external"));
@@ -120,6 +121,9 @@ public sealed class IdentityProviderModuleTests
         Assert.NotNull(linked);
         Assert.Equal(linked.UserId, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
         Assert.NotEqual("provider-subject-ada", linked.UserId);
+        Assert.Equal(linked.UserId, Assert.Single(principal.FindAll(ClaimTypes.NameIdentifier)).Value);
+        Assert.Equal(linked.UserId, Assert.Single(principal.FindAll("sub")).Value);
+        Assert.Equal("tenant-a", Assert.Single(principal.FindAll(IdentityClaimTypes.TenantId)).Value);
     }
 
     [Fact]
@@ -193,7 +197,7 @@ public sealed class IdentityProviderModuleTests
         var tokenService = provider.GetRequiredService<ITokenService>();
         var sessionService = provider.GetRequiredService<IAuthSessionService>();
 
-        var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]));
+        var issued = await tokenService.IssueAsync(new TokenIssueRequest(new TokenSubject("tenant-a", "user-1"), [DefaultIdentityPermissionKeys.IdentityUsersRead]));
         var validated = await tokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
         Assert.True(validated.Succeeded, validated.Failure);
         var session = await sessionService.GetAsync(Assert.IsType<ClaimsPrincipal>(validated.Principal));

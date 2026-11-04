@@ -7,6 +7,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | Contract | Default impl | Override when |
 |---|---|---|
 | `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
+| `ITokenSubjectResolver` | `DefaultTokenSubjectResolver` (`Elsa.Foundation.Identity`) | A provider projects a different canonical subject shape. One replacement is allowed; it must preserve tenant/user or tenant/provider/validated-issuer/subject isolation and reject ambiguous claims. The identity API supplies only its trusted normalized identity. |
 | `IOwnershipModeProvider` | `OptionsOwnershipModeProvider` (`Elsa.Foundation.Identity`) | Ownership mode is resolved from tenant configuration or another dynamic source. |
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
 | `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity`) | The application replaces the whole catalog surface with `ReplacePermissionCatalog<T>()`. To *add* permissions, contribute an `IPermissionContributor` (below); the composite aggregates the active provider's contributions into one immutable snapshot. |
@@ -68,6 +69,8 @@ authenticated callers are challenged; a trusted normalized caller with no grant 
 Foundation wraps one pre-existing `IAuthorizationMiddlewareResultHandler` (or the ASP.NET Core
 default) and delegates every unrelated outcome. Register a host result handler before Foundation;
 multiple prior handlers fail immediately and a handler added afterward fails startup validation.
+The token-subject resolver is a single replacement contract, registered through `EnsureReplacementContract` with duplicate-registration diagnostics. Token issuers take a typed `TokenSubject`; revocation takes the same value. External adapters must strip incoming `SubjectProvider`/`SubjectIssuer` and stamp validated origin. A non-user subject is never inferred to be an Elsa user because its text matches a user ID.
+
 The evaluator, authorization service, current-subject authorizer, formatter, and catalog are single replacement contracts: use their `Replace*`
 methods before or after Foundation registration. Direct competing registrations are rejected rather
 than selected by registration order. `IPermissionContributor` and `IPermissionResourceHandler`
