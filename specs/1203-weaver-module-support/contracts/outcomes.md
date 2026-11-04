@@ -31,7 +31,9 @@ Both the default executor and proposal service's custom-executor boundary use th
 | Client acknowledged | Existing exact client binding/ACK protocol, Status executed and ClientWorkingState scope | Executed6, applied locally only |
 | Wrong scope/status/declaration/correlation/target/evidence after possible dispatch | Success is not accepted | Existing Uncertain11/no replay |
 | Refused before effect | Existing refusal/error lifecycle; no invented successful receipt | Existing refusal/Failed |
-| Partial effect, throw, lost response or unconfirmed receipt persistence | No fabricated zero-effect assertion | Existing uncertainty/no replay |
+| Partial effect, throw after possible dispatch, lost response after possible effect, or unconfirmed receipt persistence | No fabricated zero-effect assertion | Existing uncertainty/no replay |
+
+A provably undispatched throw follows the existing before-effect error/refusal path, not an invented uncertain effect. Once execution is handed off, an exception remains potentially effectful unless an engine-owned pre-dispatch signal establishes otherwise; arbitrary module/custom-executor claims are not that signal.
 
 Performed means the approved action ran without an owning-resource persisted change, not that it succeeded at its business test or made no external call. A test that ran and found failure can still be performed; its verdict is module data. A missing/inactive target or a test that could not run is refused. A connection test that records time/version is persisted.
 
