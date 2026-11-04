@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "40a2cd58500c689433fd6cc003bd1aa2fc33aa9a",
+  "last_publish_commit": "3ecc6a8d9d27c9d34490af914fac62d69bd5e7d2",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -164,8 +164,8 @@
     },
     {
       "package_id": "Elsa.Agent.Specialists",
-      "version": "4.0.4-preview",
-      "commit": "378b641689cd12cf972536d3ddd5372e055655e3"
+      "version": "4.0.5-preview",
+      "commit": "3ecc6a8d9d27c9d34490af914fac62d69bd5e7d2"
     },
     {
       "package_id": "Elsa.Agent.Specialists.Anthropic",
@@ -849,13 +849,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.38-preview",
-      "commit": "af947767a9600944cd9529c17860691f53d3640e"
+      "version": "4.0.39-preview",
+      "commit": "3ecc6a8d9d27c9d34490af914fac62d69bd5e7d2"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.68-preview",
-      "commit": "af947767a9600944cd9529c17860691f53d3640e"
+      "version": "4.0.69-preview",
+      "commit": "3ecc6a8d9d27c9d34490af914fac62d69bd5e7d2"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
