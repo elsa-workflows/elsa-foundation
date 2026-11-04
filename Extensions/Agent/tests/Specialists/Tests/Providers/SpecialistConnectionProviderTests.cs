@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Agent.Specialists.Anthropic;
 using Elsa.Agent.Specialists.AzureOpenAI;
+using Elsa.Agent.Specialists.OpenAI;
 using Elsa.Agent.Specialists.Connections;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
@@ -17,6 +18,7 @@ public sealed class SpecialistConnectionProviderTests
     [Theory]
     [InlineData("anthropic")]
     [InlineData("azure-openai")]
+    [InlineData("openai")]
     public async Task Metadata_never_opens_credentials_and_runtime_uses_the_resolved_snapshot_revision(string vendor)
     {
         var connection = new Resolved(vendor);
@@ -37,7 +39,7 @@ public sealed class SpecialistConnectionProviderTests
     }
 
     public static IEnumerable<object[]> Refusals() =>
-        from vendor in new[] { "anthropic", "azure-openai" }
+        from vendor in new[] { "anthropic", "azure-openai", "openai" }
         from mode in new[] { "unknown-version", "unknown-incarnation", "revoked", "unknown-status", "foreign-owner", "wrong-type", "foreign-tenant", "wrong-auth", "http", "userinfo", "query", "path", "denied-host", "any-host", "unknown-model", "unsupported-json", "tokens", "wrong-partition", "wrong-tenant", "global", "privileged", "schema", "settings", "changed-profile" }
         select new object[] { vendor, mode };
 
@@ -83,6 +85,7 @@ public sealed class SpecialistConnectionProviderTests
     [Theory]
     [InlineData("anthropic")]
     [InlineData("azure-openai")]
+    [InlineData("openai")]
     public async Task Capability_changes_are_fingerprinted_while_operational_revision_changes_remain_compatible(string vendor)
     {
         var connection = new Resolved(vendor);
@@ -105,8 +108,13 @@ public sealed class SpecialistConnectionProviderTests
     public void The_explicit_provider_schema_subset_refuses_unqualified_request_shapes(string raw, bool supported) =>
         Assert.Equal(supported, SpecialistProviderSchema.Supports(Json(raw)));
 
-    internal static SpecialistConnectionModelProvider Provider(string vendor, IConnectionResolver resolver, Access? access = null) => vendor == "anthropic"
-        ? new AnthropicSpecialistModelProvider(resolver, access ?? new()) : new AzureOpenAISpecialistModelProvider(resolver, access ?? new());
+    internal static SpecialistConnectionModelProvider Provider(string vendor, IConnectionResolver resolver, Access? access = null) => vendor switch
+        {
+            "anthropic" => new AnthropicSpecialistModelProvider(resolver, access ?? new()),
+            "azure-openai" => new AzureOpenAISpecialistModelProvider(resolver, access ?? new()),
+            "openai" => new OpenAISpecialistModelProvider(resolver, access ?? new()),
+            _ => throw new ArgumentOutOfRangeException(nameof(vendor))
+        };
     internal static SpecialistModelReference Model(string vendor) => new(vendor, "model-connection", "fixture-model");
     internal static SpecialistInvocationIdentity Identity() => new("tenant", "tenant", "workflow", "activity", "operation", "artifact", "artifact-hash", "version", "template-hash");
     internal static SpecialistModelOpenRequest Request(SpecialistModelReference model, SpecialistModelCapabilities metadata) => new(

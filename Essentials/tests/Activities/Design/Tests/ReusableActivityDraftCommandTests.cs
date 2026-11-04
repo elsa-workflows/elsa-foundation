@@ -21,6 +21,32 @@ namespace Elsa.Activities.Design.Tests;
 public sealed class ReusableActivityDraftCommandTests
 {
     [Fact]
+    public async Task Node_presentation_survives_omitted_replacement_and_conflict_copy_but_explicit_empty_clears_it()
+    {
+        var harness = new Harness();
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand() with
+        {
+            ActivityPresentation = new([new("root", "  Review order  ", "  Human review.  ")])
+        }, default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
+        Assert.Equal("Review order", Assert.Single(draft.ActivityPresentation).DisplayName);
+
+        var replace = new ReplaceReusableActivityDraft(draft.DraftId, draft.Revision, draft.Contract,
+            new(draft.Provider.ProviderKey, draft.Provider.SchemaVersion, draft.Provider.Payload!.Value), draft.Layout);
+        var preserved = await harness.Service.ReplaceDraftAsync(replace, default);
+        Assert.Equal(draft.ActivityPresentation, preserved.ActivityPresentation);
+        await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.ReplaceDraftAsync(replace with { ActivityPresentation = new([]) }, default));
+        Assert.Equal(draft.ActivityPresentation, (await harness.Service.GetDraftViewAsync(draft.DraftId, default)).ActivityPresentation);
+
+        var copy = await harness.Service.CreateConflictCopyAsync(new(draft.DraftId, preserved.Revision, preserved.Contract,
+            replace.Provider, preserved.Layout), default);
+        Assert.Equal(preserved.ActivityPresentation, copy.ActivityPresentation);
+        var cleared = await harness.Service.ReplaceDraftAsync(replace with { ExpectedRevision = preserved.Revision, ActivityPresentation = new([]) }, default);
+        Assert.Empty(cleared.ActivityPresentation);
+        Assert.Single((await harness.Service.GetDraftViewAsync(copy.DraftId, default)).ActivityPresentation);
+    }
+
+    [Fact]
     public async Task Create_definition_persists_design_authority_and_initial_draft_atomically()
     {
         var harness = new Harness();
@@ -943,7 +969,7 @@ public sealed class ReusableActivityDraftCommandTests
     {
         var harness = new Harness();
         var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
-        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"), [new("source-node", "Published step", "Published context")]);
         var clone = await harness.Service.CreateDraftAsync(new(source.DefinitionId, "source-version"), default);
 
         var migrated = await harness.Service.MigrateDraftAsync(new(
@@ -952,6 +978,9 @@ public sealed class ReusableActivityDraftCommandTests
             "target.provider",
             "1"), default);
 
+        Assert.Equal(clone.ActivityPresentation, migrated.ActivityPresentation);
+        Assert.Equal("Published step", Assert.Single(migrated.ActivityPresentation).DisplayName);
+        Assert.Equal("Published context", Assert.Single((await harness.Service.GetVersionAsync("source-version", default)).ActivityPresentation).Description);
         Assert.NotEqual(clone.DraftId, migrated.DraftId);
         Assert.Equal("source-version", migrated.SourceVersionId);
         Assert.Equal("target.provider", migrated.Provider.ProviderKey);
@@ -1267,7 +1296,7 @@ public sealed class ReusableActivityDraftCommandTests
             return authoring;
         }
 
-        public void SeedVersion(string definitionId, string versionId, ActivityProviderManifest manifest, ActivityContract contract)
+        public void SeedVersion(string definitionId, string versionId, ActivityProviderManifest manifest, ActivityContract contract, IReadOnlyList<ActivityNodePresentationRecord>? presentation = null)
         {
             var now = _time.GetUtcNow();
             Stores.SeedPublication(new()
@@ -1295,6 +1324,7 @@ public sealed class ReusableActivityDraftCommandTests
                 TenantId = _context.TenantId,
                 DefinitionVersionId = versionId,
                 Records = [new("source-node", Json("{\"x\":7}"))],
+                ActivityPresentation = presentation?.ToList() ?? [],
                 CreatedAt = now,
                 LastModifiedAt = now
             });

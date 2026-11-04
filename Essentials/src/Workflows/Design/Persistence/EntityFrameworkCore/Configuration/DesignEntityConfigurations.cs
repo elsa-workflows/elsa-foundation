@@ -119,7 +119,10 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.WorkflowDefinitionIdLookupHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.SourceVersionId).HasMaxLength(128);
         b.Property(x => x.SourceVersionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
-        b.Property(x => x.StateSource);
+        b.Ignore(x => x.StateSource);
+        b.Property(x => x.SourceKey).HasMaxLength(64);
+        b.HasOne(x => x.Source).WithMany().HasForeignKey(x => x.SourceKey).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Source).AutoInclude();
         b.HasIndex(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowDefinitionDraft.WorkflowDefinitionIdLookupHash), nameof(WorkflowDefinitionDraft.LastModifiedAt), nameof(WorkflowDefinitionDraft.IdLookupHash));
         b.HasOne(x => x.WorkflowDefinition).WithMany()
             .HasForeignKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowDefinitionDraft.WorkflowDefinitionIdLookupHash))

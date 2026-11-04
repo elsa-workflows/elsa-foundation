@@ -402,9 +402,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                     continue;
                 }
 
-                stopReason = settlement == ContinuationSettlement.Quiesced
-                    ? RuntimeSchedulerDrainStopReason.Quiesced
-                    : RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed;
+                stopReason = settlement switch
+                {
+                    ContinuationSettlement.Quiesced => RuntimeSchedulerDrainStopReason.Quiesced,
+                    ContinuationSettlement.Yielded => RuntimeSchedulerDrainStopReason.Yielded,
+                    _ => RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed
+                };
                 break;
             }
 
@@ -485,6 +488,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             // that failed before this drain's first read.
             if (held.Any(item => item.Status == RuntimePostCommitOutboxStatus.FailedRetryable))
                 return ContinuationSettlement.Undelivered;
+
+            // A waiting Cancel or a passivation ends the wait as it ends a drain before its next step (#3678), so a hand-off
+            // does not outwait the placement lease here. Nothing is taken back or delivered, which would queue a step ahead
+            // of the Cancel: the held continuation stays with its holder, which delivers it and re-drives the execution.
+            if (DrainControls?.ShouldYield(workflowExecutionId) == true)
+                return ContinuationSettlement.Yielded;
 
             taken.UnionWith(held.Select(item => item.OutboxItemId));
             var now = _timeProvider.GetUtcNow();
@@ -639,7 +648,14 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         /// drain stops with <see cref="RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed"/>, the status it reports for a
         /// failed delivery of its own; the durable item stays with the sweep.
         /// </summary>
-        Undelivered
+        Undelivered,
+
+        /// <summary>
+        /// A waiting Cancel or a passivation asked the drain to yield while it waited for another deliverer. The drain stops
+        /// with <see cref="RuntimeSchedulerDrainStopReason.Yielded"/>, as it does before a step; the held item stays with
+        /// its claimant.
+        /// </summary>
+        Yielded
     }
 
     /// <summary>

@@ -104,6 +104,8 @@ public sealed class ActivityDefinitionPublisher(
         receiptStore ?? new InMemoryActivityPublicationReceiptStore();
     private readonly ActivityPublicationReviewPolicy _reviewPolicy =
         new(activityActivationStrategies, storageDrivers);
+    private ActivityPublicationCandidateEvaluator Evaluator => _evaluator ??= new(compiler, _reviewPolicy);
+    private ActivityPublicationCandidateEvaluator? _evaluator;
 
     public async Task<ActivityPublicationPreflightView> PreflightAsync(
         PreflightActivityDefinitionPublicationRequest request,
@@ -334,6 +336,7 @@ public sealed class ActivityDefinitionPublisher(
             request.Version,
             template,
             layout.Records.ToArray(),
+            layout.ActivityPresentation.ToArray(),
             now);
         var catalogVersion = CreateCatalogVersion(definition, draft, versionId, request.Version, template, now);
         var publication = CreatePublication(
@@ -352,6 +355,7 @@ public sealed class ActivityDefinitionPublisher(
             DefinitionVersionId = versionId,
             TenantId = definition.TenantId,
             Records = layout.Records.ToArray(),
+            ActivityPresentation = layout.ActivityPresentation.ToArray(),
             CreatedAt = now,
             LastModifiedAt = now
         };
@@ -518,14 +522,16 @@ public sealed class ActivityDefinitionPublisher(
         CancellationToken cancellationToken)
     {
         var (definition, draft, layout, head) = (context.Definition, context.Draft, context.Layout, context.Head);
-        var compilation = await compiler.CompileAsync(
+        var evaluated = await Evaluator.EvaluateAsync(
             new(
                 definition,
                 draft,
                 versionId,
                 version,
-                ComputeLayoutBytes(layout.Records)),
+                ComputeLayoutBytes(layout.Records) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation).LongLength),
+            context.Validation,
             cancellationToken);
+        var compilation = evaluated.Compilation;
         var diff = compilation.Template is null
             ? null
             : await ComputeDiffAsync(head, versionId, version, draft, layout, compilation, cancellationToken);
@@ -535,9 +541,7 @@ public sealed class ActivityDefinitionPublisher(
             requiredBump,
             context.ExistingVersions);
         var minimumVersion = ActivityPublicationReviewPolicy.MinimumVersion(head?.Version, requiredBump);
-        var diagnostics = ActivityDiagnosticOrderer.Order(context.Validation.Diagnostics
-            .Concat(compilation.Diagnostics)
-            .Concat(_reviewPolicy.ReadinessDiagnostics(draft, compilation.Template)));
+        var diagnostics = evaluated.Diagnostics;
         var provider = new ActivityPublicationCapabilityReadinessView(
             "Provider",
             draft.State.Provider.ProviderKey,
@@ -555,12 +559,7 @@ public sealed class ActivityDefinitionPublisher(
                 x.TemplateHash,
                 x.OccurrenceId))
             .ToArray();
-        // The validator's own verdict counts even without an error-severity diagnostic, so preflight can never call
-        // publishable a draft that validation refused.
-        var isPublishable =
-            compilation.IsSuccessful &&
-            context.Validation.IsValid &&
-            diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error);
+        var isPublishable = evaluated.IsPublishable;
         var reviewToken = ActivityPublicationReviewPolicy.ReviewToken(
             draft,
             context.Authoring.HeadVersionId,
@@ -695,7 +694,11 @@ public sealed class ActivityDefinitionPublisher(
                 candidateLayout.Records.Count,
                 compilation.Template.RuntimeRequirements
                     .Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion))
-                    .ToArray())),
+                    .ToArray())
+            {
+                PresentationHash = ActivityNodePresentationHasher.Compute(candidateLayout.ActivityPresentation),
+                PresentationCount = candidateLayout.ActivityPresentation.Count
+            }),
             cancellationToken);
     }
 
@@ -707,7 +710,11 @@ public sealed class ActivityDefinitionPublisher(
         publication.ResumeTargetCount,
         layout is null ? null : ActivityLayoutHasher.Compute(layout.Records),
         layout?.Records.Count,
-        publication.RuntimeRequirements.ToArray());
+        publication.RuntimeRequirements.ToArray())
+    {
+        PresentationHash = ActivityNodePresentationHasher.Compute(layout?.ActivityPresentation),
+        PresentationCount = layout?.ActivityPresentation.Count ?? 0
+    };
 
     private static ActivityDependencyItem ToDependencyItem(
         ActivityDefinitionVersionPublication owner,
@@ -871,6 +878,7 @@ public sealed class ActivityDefinitionPublisher(
         string version,
         ExecutableActivityTemplate template,
         IReadOnlyCollection<ActivityLayoutRecord> layout,
+        IReadOnlyCollection<ActivityNodePresentationRecord> presentation,
         DateTimeOffset now)
     {
         var records = layout.Select(ToExecutableLayoutRecord).ToArray();
@@ -894,7 +902,8 @@ public sealed class ActivityDefinitionPublisher(
             now,
             WorkflowExecutableReferenceScope.Published,
             Layout: flatLayout,
-            LayoutSidecar: sidecar);
+            LayoutSidecar: sidecar,
+            ActivityPresentation: ActivityTemplatePresentation.CopyFrom(presentation, template));
     }
 
     private static ExecutableActivityLayoutRecord ToExecutableLayoutRecord(ActivityLayoutRecord record)

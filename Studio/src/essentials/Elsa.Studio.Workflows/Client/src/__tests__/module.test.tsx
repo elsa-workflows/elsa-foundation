@@ -21,6 +21,30 @@ import { capabilityDocument, definition, renderRegisteredRoute, response, runJav
 // Per-test teardown lives in the shared afterEach in routeRenderingHelpers.tsx.
 
 describe("workflows module", () => {
+  it("retains spaces while typing a workflow activity display name", async () => {
+    const draft = draftWithFlowchartRoot();
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities/availability/diagnostics")) return response({ items: [], sets: [] });
+      if (url.includes("/activities")) return response({ activities: [flowchartActivity()] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft, versions: [] });
+      return response({ items: [] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.runtime.workflows = { autosaveEnabledByDefault: false };
+    });
+    await waitForEditor(container);
+    await waitForButtonByText(container, "Details");
+    await click(buttonByText(container, "Details"));
+    const input = [...container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    await fill(input, "Approve ");
+    expect(input.value).toBe("Approve ");
+    await fill(input, input.value + "order");
+    expect(input.value).toBe("Approve order");
+    await unmount();
+  });
+
   for (const authoring of [false, true]) it(`adapts the executable empty-state authoring action when workflow design is ${authoring ? "available" : "absent"}`, async () => {
     const capabilities = capabilityDocument();
     if (!authoring) capabilities.capabilities = capabilities.capabilities.filter(item => item.id !== "elsa.api.workflow-design");

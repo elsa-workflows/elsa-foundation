@@ -1194,8 +1194,9 @@ export function WorkflowEditor({
         }
       : frame;
   });
+  // Keep raw editor text: normalizing here removes a space before the next word is typed.
   const inspectedPresentation = inspectedNode
-    ? presentationByNodeId.get(inspectedNode.nodeId)
+    ? draft.activityPresentation?.find(record => record.nodeId === inspectedNode.nodeId)
     : undefined;
   const inspectedLabel = inspectedNode
     ? (nodes.find(node => node.id === inspectedNode.nodeId)?.data.label
