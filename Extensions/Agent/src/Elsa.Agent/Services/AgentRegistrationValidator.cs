@@ -13,7 +13,9 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
     // The audit sink, reader and ownership are one store's facets; a durable replacement replaces all three together.
     private static readonly Type[] AuditTrio = [typeof(IAgentAuditSink), typeof(IAgentAuditReader), typeof(IAgentAuditOwnership)];
 
-    public void Validate()
+    public void Validate() => _ = GetEffectsSelection();
+
+    internal AgentEffectsSelection? GetEffectsSelection()
     {
         var principals = registrations.Where(descriptor => descriptor.ServiceType == typeof(IAgentPrincipalSource)
             && !descriptor.IsKeyedService).ToArray();
@@ -36,6 +38,7 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
             if (count > 1)
                 throw new InvalidOperationException($"Agent replacement contract '{contract.FullName}' allows at most one registration, but found {count}. Select the audit sink, reader and ownership together with services.SelectAgentAuditStore(...), which replaces the three defaults at once.");
         }
+        return AgentEffectsAdmission.ValidateSelection(registrations);
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken)

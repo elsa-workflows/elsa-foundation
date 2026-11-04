@@ -134,12 +134,14 @@ internal sealed class DefaultAgentToolInvoker(
                         throw new AgentContributionException("Prepared tool arguments must be a JSON object.");
                     var requiresApproval = isMutation && (module.RequiresApproval || approvalBasis.RequiresApprovalForMutations
                         || policy.RequiresApprovalForMutations || descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState);
+                    var effectiveRisk = module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk;
+                    var requiredClasses = AgentInvocationIntegrity.PreparePrivilegeClasses(module.RequiredPrivilegeClasses, effectiveRisk);
                     prepared = new(AgentProviderPrimitives.NewId(), session.Id, invocation.TurnId, invocation.ToolCallId,
                         descriptor.Name, descriptor.ContractVersion, descriptor.ModuleId, session.ActorId, session.TenantId,
                         module.Target, AgentInvocationIntegrity.Freeze(module.Arguments), string.Empty,
-                        module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk, AgentInvocationIntegrity.Freeze(module.Preview),
+                        effectiveRisk, AgentInvocationIntegrity.Freeze(module.Preview),
                         descriptor.ExecutionLocation, requiresApproval, module.Client, clock.GetUtcNow().AddMinutes(5))
-                    { DisclosureSourceId = descriptor.DisclosureSourceId };
+                    { DisclosureSourceId = descriptor.DisclosureSourceId, RequiredPrivilegeClasses = requiredClasses };
                     prepared = prepared with { ApprovalDigest = AgentInvocationIntegrity.PreparedDigest(prepared) };
                 }
                 catch (Exception ex) when (ex is AgentContributionException or System.Text.Json.JsonException or NotSupportedException)

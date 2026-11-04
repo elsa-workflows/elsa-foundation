@@ -6,6 +6,7 @@ using CShells.Lifecycle;
 using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Agent.Extensions;
 
@@ -25,6 +26,11 @@ public static class AgentServiceCollectionExtensions
                 services.Remove(previous);
         }
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer>(registrationValidator));
+        services.TryAddScoped<AgentEffectsAdmission>();
+        services.AddOptions<AgentPrivilegePolicyOptions>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<AgentPrivilegePolicyOptions>, AgentPrivilegePolicyConfiguration>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IOptionsChangeTokenSource<AgentPrivilegePolicyOptions>, AgentPrivilegePolicyConfiguration>());
+        services.TryAddScoped<AgentPrivilegePolicy>();
         services.TryAddEventHandler<AgentContextCollecting, CollectAgentContext>();
         services.TryAddEventHandler<AgentCapabilitiesCollecting, CollectAgentCapabilities>();
         services.TryAddEventHandler<AgentToolsCollecting, CollectAgentTools>();

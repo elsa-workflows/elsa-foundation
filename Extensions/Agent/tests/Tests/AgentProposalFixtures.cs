@@ -174,6 +174,8 @@ internal sealed class ProposalMutationTool : IAgentTool
     public int DispatchCalls { get; private set; }
     public int ExecuteCalls { get; private set; }
     public AgentRisk CurrentRisk { get; set; } = AgentRisk.ReviewRequired;
+    public AgentRisk PreparationRisk { get; set; } = AgentRisk.ReviewRequired;
+    public IReadOnlyList<AgentPrivilegeClass>? PrivilegeClasses { get; set; }
     public bool NoopWithoutReceipt { get; init; }
     public bool FailAfterEffect { get; init; }
     public bool CancelAfterEffect { get; init; }
@@ -190,8 +192,9 @@ internal sealed class ProposalMutationTool : IAgentTool
         PrepareCalls++;
         if (Malformed) return Task.FromResult(AgentResult<AgentToolPreparation>.Failure("test.malformed", "The module refused malformed arguments."));
         return Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(new("test.module", "test.resource", "resource-1", Revision),
-            JsonSerializer.SerializeToElement(invocation.Arguments), AgentRisk.ReviewRequired,
-            new("test.preview", "1", JsonSerializer.SerializeToElement(new { before = Value, after = "new" })), false)));
+            JsonSerializer.SerializeToElement(invocation.Arguments), PreparationRisk,
+            new("test.preview", "1", JsonSerializer.SerializeToElement(new { before = Value, after = "new" })), false)
+            { RequiredPrivilegeClasses = PrivilegeClasses }));
     }
     public async Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {

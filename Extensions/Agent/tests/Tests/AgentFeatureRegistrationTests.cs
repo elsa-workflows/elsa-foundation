@@ -1,5 +1,9 @@
 using System.Security.Claims;
+using CShells;
+using CShells.DependencyInjection;
+using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Agent.Api;
 using Elsa.Agent.Api.Extensions;
 using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
@@ -11,6 +15,7 @@ using Elsa.Agent.GitHubCopilot.Services;
 using Elsa.Agent.Workflows;
 using Elsa.Events;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -18,6 +23,30 @@ namespace Elsa.Agent.Tests;
 
 public sealed class AgentFeatureRegistrationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Duplicate_principal_sources_abort_real_shell_activation_including_copied_root_defaults(bool inheritedDefaults)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        if (inheritedDefaults) services.AddFoundationAgentAbstractions();
+        services.AddCShells(builder => builder
+            .WithAssemblies(typeof(AmbiguousPrincipalFeature).Assembly, typeof(EventsFeature).Assembly)
+            .AddShell("agent-principal-conflict", shell => shell.WithFeature<AmbiguousPrincipalFeature>()));
+        await using var root = services.BuildServiceProvider();
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() =>
+            root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("agent-principal-conflict"));
+        var causes = new List<string>();
+        for (Exception? cause = failure; cause is not null; cause = cause.InnerException) causes.Add(cause.Message);
+        var diagnostic = string.Join(" ", causes);
+        Assert.Contains(nameof(IAgentPrincipalSource), diagnostic);
+        Assert.Contains("at most one", diagnostic);
+        Assert.Contains("Replace", diagnostic);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -202,6 +231,16 @@ public sealed class AgentFeatureRegistrationTests
     private sealed class CustomPrincipalSource : IAgentPrincipalSource
     {
         public ClaimsPrincipal? GetCurrent(string actorId, string tenantId) => null;
+    }
+
+    [ShellFeature("AgentAmbiguousPrincipalProbe", DependsOn = new object[] { typeof(FoundationAgentApiFeature) })]
+    public sealed class AmbiguousPrincipalFeature : FoundationAgentApiFeature
+    {
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            base.ConfigureServices(services);
+            services.AddScoped<IAgentPrincipalSource, CustomPrincipalSource>();
+        }
     }
 
     [Fact]

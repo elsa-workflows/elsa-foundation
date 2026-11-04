@@ -8,18 +8,75 @@ using Elsa.Agent.Persistence.EntityFrameworkCore;
 using Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Agent.Services;
+using Elsa.Cluster.Core.Models;
 using Elsa.Events;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Agent.Persistence.Tests;
 
 /// <summary>#3441 T028: the feature's provider selection, its replacement of the store and audit trio, and its explicit selection.</summary>
 public sealed class FoundationAgentEntityFrameworkCoreFeatureTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Every_ef_store_path_declares_the_ef_effects_variation_and_refuses_unobserved_schema(bool consumerContext)
+    {
+        var services = Composition();
+        if (consumerContext) services.AddAgentStores<DbContext>();
+        else services.AddAgentEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        new FoundationAgentEfEffectsFeature().ConfigureServices(services);
+        using var root = services.BuildServiceProvider();
+        using var scope = root.CreateScope();
+        var selection = scope.ServiceProvider.GetRequiredService<AgentRegistrationValidator>().GetEffectsSelection()!;
+        Assert.Equal(typeof(FoundationAgentEfEffectsFeature), selection.FeatureType);
+        Assert.Equal([new SchemaVersionRequirement("Agent", "1.1.0")], selection.Requirements);
+        Assert.Equal("schema-version-not-finalized", (await scope.ServiceProvider.GetRequiredService<AgentEffectsAdmission>().CheckAsync())?.Code);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_common_effects_selection_cannot_stand_in_for_an_ef_store_or_coexist_with_its_variation(bool both)
+    {
+        var services = Composition();
+        services.AddAgentStores<DbContext>();
+        new FoundationAgentEffectsFeature().ConfigureServices(services);
+        if (both) new FoundationAgentEfEffectsFeature().ConfigureServices(services);
+        using var root = services.BuildServiceProvider();
+        var error = Assert.Throws<InvalidOperationException>(() => root.GetRequiredService<AgentRegistrationValidator>().Validate());
+        Assert.Contains(both ? "one selected feature variation" : nameof(FoundationAgentEfEffectsFeature), error.Message);
+    }
+
+    [Fact]
+    public void Ef_effects_specializations_must_repeat_their_direct_minimum_and_keep_the_actual_type()
+    {
+        var missing = Composition();
+        missing.AddAgentStores<DbContext>();
+        new MissingEfEffectsDeclaration().ConfigureServices(missing);
+        using (var root = missing.BuildServiceProvider())
+            Assert.Contains("must directly repeat", Assert.Throws<InvalidOperationException>(() =>
+                root.GetRequiredService<AgentRegistrationValidator>().Validate()).Message);
+
+        var declared = Composition();
+        declared.AddAgentStores<DbContext>();
+        new DeclaredEfEffectsFeature().ConfigureServices(declared);
+        using var valid = declared.BuildServiceProvider();
+        var selection = valid.GetRequiredService<AgentRegistrationValidator>().GetEffectsSelection()!;
+        Assert.Equal(typeof(DeclaredEfEffectsFeature), selection.FeatureType);
+        Assert.Equal(SchemaVersionRequirement.DeclaredBy(typeof(DeclaredEfEffectsFeature)), selection.Requirements);
+    }
+
+    public class MissingEfEffectsDeclaration : FoundationAgentEfEffectsFeature;
+
+    [RequiresSchemaVersion("Agent", "1.1.0")]
+    public class DeclaredEfEffectsFeature : FoundationAgentEfEffectsFeature;
+
     [Fact]
     public void The_feature_is_an_opt_in_shell_feature_over_the_agent_and_secrets_features()
     {

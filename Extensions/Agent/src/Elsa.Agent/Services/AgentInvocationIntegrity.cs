@@ -40,12 +40,31 @@ internal static class AgentInvocationIntegrity
         return stream.ToArray();
     }
 
-    public static string PreparedDigest(AgentPreparedToolInvocation value) => Digest(new
+    /// <summary>Normalizes only a newly returned module preparation, never a retained legacy invocation.</summary>
+    public static IReadOnlyList<AgentPrivilegeClass>? PreparePrivilegeClasses(IReadOnlyList<AgentPrivilegeClass>? classes, AgentRisk effectiveRisk)
     {
-        value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
-        value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
-        value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
-    });
+        if (!Enum.IsDefined(effectiveRisk) || classes?.Any(value => !Enum.IsDefined(value)) == true)
+            throw new AgentContributionException("The preparation contains an unsupported privilege classification.");
+        var required = classes?.ToHashSet() ?? [];
+        if (effectiveRisk == AgentRisk.Admin) required.Add(AgentPrivilegeClass.Administrative);
+        return required.Count == 0 ? null : Array.AsReadOnly(required.Order().ToArray());
+    }
+
+    public static string PreparedDigest(AgentPreparedToolInvocation value) => value.RequiredPrivilegeClasses is not { Count: > 0 }
+        // Exact historical shape: even a null new member would change an already reviewed legacy digest.
+        ? Digest(new
+        {
+            value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
+            value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
+            value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
+        })
+        : Digest(new
+        {
+            value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
+            value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
+            value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId,
+            value.RequiredPrivilegeClasses
+        });
 
     public static bool SameTarget(AgentResourceTarget? left, AgentResourceTarget? right) => left is null
         ? right is null
