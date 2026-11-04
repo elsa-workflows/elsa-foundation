@@ -150,7 +150,12 @@ def require_truth_turn(frames, rows, *, provider, command_id, target):
 def _inputs(entry):
     inputs = entry.get("inputs") if isinstance(entry, dict) else None
     check(isinstance(inputs, list), "A catalog entry has no declared inputs list")
-    return [tuple(item.get(key) for key in ("referenceKey", "name", "type", "isRequired", "isSensitive", "isCredential")) for item in inputs]
+    return [tuple(item.get(key) for key in ("referenceKey", "name", "type", "isRequired", "isSensitive", "isCredential", "uiHint")) for item in inputs]
+
+
+def _masked(item):
+    """What the designer masks: a sensitive or credential input, or one hinted as a password (Activities Design IsMasked)."""
+    return item.get("isSensitive") is True or item.get("isCredential") is True or str(item.get("uiHint") or "").lower() == "password"
 
 
 def _row(entry):
@@ -173,6 +178,9 @@ def require_catalog(content, owner_status, owner_entries, *, tenant_only):
     entries = content.get("entries")
     check(isinstance(entries, list) and entries, "The disclosed catalog has no entries")
     disclosed = [_row(item) for item in entries]
+    # Spec 1193 slice D: each disclosed input says whether the designer masks it, as the owner's own fields decide.
+    check(all(isinstance(item, dict) and item.get("isMasked") is _masked(item) for entry in entries for item in entry.get("inputs") or []),
+          "A disclosed input's isMasked differs from what the designer masks")
     # A bounded projection is the owner's prefix and says so; it never reorders, narrows or invents.
     check(content.get("totalCount") == len(owner) and content.get("includedCount") == len(disclosed)
           and content.get("truncated") is (len(disclosed) < len(owner)) and disclosed == owner[:len(disclosed)],

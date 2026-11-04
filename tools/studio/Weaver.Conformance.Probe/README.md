@@ -195,7 +195,169 @@ through the review card's Undo (designer history), the whole batch again through
 save or publish. Last, a proposal approved and applied from a second tab of the same Studio is refused by that tab's
 host before anything is applied. The driver checks the adapter trace for every command the browser retained.
 `require_workflow_batch` refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two
-cases (95 in all).
+cases.
+
+### Workflow explanation (spec 1193 T028)
+
+Next, `explain_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-explain`) against the same
+nested shape, seeded with b's text bound to a workflow variable that does not exist, so the owner's draft validation
+reports it by activity and input; the seed also holds one activity of the `QualificationBatchCatalog` seam's
+password-hinted activity (input `passphrase`, a name no probe redactor rewrites), with no value. With that seam selected, the native unsaved working state adds a JavaScript
+expression on the nested activity and two credential activities: one holding a credential literal, one bound to a
+visible Secret Reference. Four native read turns (`workflow_read_graph`, each in its own
+`auto-read-only` session, in each adapter's own pinned frame order) select the credential literal, the invalid input,
+the JavaScript expression and the Secret Reference in turn. The accepted message's admitted context
+(`data.message.context`), every admission in the turn and the read result must each equal the working state as Studio's
+bridge discloses it: activities and nested structure, the designer's diagnostics (the owner's validations by activity
+and input), the visible Secret Reference, and the selected activity's declared properties, with the credential literal
+only withheld and the server's own `interpretation: "unavailable"` on every non-literal expression (no Expression Module
+registers Weaver tools). The read result addresses each activity by its scope path. A control snapshot that reports the
+credential input as an ordinary literal with a value of its own is refused at admission (`agent.context.incomplete`,
+400, with the module's reason) before any provider call. The owner's draft is unchanged. The packaged consumer ships no
+JavaScript Expression Module and no graph activity definition: JavaScript is disclosed by type and content only, and
+graph activity references are covered by the server and Studio unit tests.
+
+Then the admin runs the actual packaged Studio journey `workflow-explain` with a fresh normal-login state: with autosave
+turned off for that editor, the invalid activity is selected and read (its input's Variable expression, the unavailable
+interpretation and the designer's own diagnostic for it are admitted); a hand edit moves an activity, and the next read
+is attributed to a new revision with the moved position, equal to the editor's own export. (Before the first read the
+journey waits until the designer's panel names the seeded unresolved variable: its structural checks render at once, the
+server's draft validations later, and the snapshot discloses what the panel shows.) Then the driver types a random
+credential canary into the password-hinted input's own masked field (Studio offers a credential input only the secret
+picker), as an unsaved edit, and the next read must disclose that input only as withheld; nothing is saved. The canary
+exists only in Studio's working state: it is searched for, in memory and unredacted, in every request the page sent to
+the agent API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
+agent stream it received (counted only when every stream was captured without a capture or validation error and at
+least one agent event stream's bytes were read; the driver checks the retained capture the same way); then in the
+browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
+adapter traces, HTTP receipts, owner reads, browser captures), and must appear in none, so a regression in Studio's
+withholding fails the case. `require_workflow_explain` refuses a missing, failed, duplicated or changed
+record, a missing turn or control, or a canary search that found anything; `witness_manifest()` counts the two cases
+(97 in all).
+
+### Workflow library and templates (spec 1193 T036)
+
+Then `library_journeys.py` runs four cases, `{copilot,anthropic}-workflow-{library,templates}`, against two seeded
+definitions and a template the template service creates from the batch seed. The library cases select the backend's
+test-only `QualificationLibraryResponses` seam (see the backend consumer README) and deselect it afterwards. Each native
+turn is its own full-auto session with the page context Studio sends (`workflows.library`, `workflows.create-dialog`,
+`workflows.template-list` or `workflows.template-editor`), compared by target identity in every admission:
+
+- `workflow_library_assign_tags` with an existing tag and a new one pauses at one review (server execution,
+  `requiresApproval`, the tag creation shown); once approved, the seam loses the committed creation's response, the tool
+  rereads by the frozen key, the change reports every target applied, and the owner holds exactly one such tag with the
+  identity the seam logged; `workflow_library_save_view` likewise resolves a lost response to exactly one view of the
+  visible query; `workflow_library_set_favorite` applies per target; each executed continuation completes the
+  originating turn once with no new call (checked structurally, as the lifecycle inventory checks it);
+- `workflow_library_set_list_state` is a reviewed client working-state proposal (denied); a commanded delete tool is never
+  advertised;
+- the library actor (tag assignment, neither tag management nor view sharing; its native page flags say so) is refused at
+  preparation for a new tag and for a shared view, and nothing is created;
+- with `WorkflowsDesignApi`'s `WorkflowOrganizationEnabled` false through the ordinary feature apply, the server's
+  `workflows.library-organization` read is unavailable with the backend's reason, a tag change is refused with it, and
+  list narrowing is still proposed; the original configuration is restored;
+- the template cases propose one batch for the template editor's working state (target `workflow-template`, the preview
+  naming the template and its persisted revision, never a definition) and a create-dialog prefill choosing the listed
+  template, both denied; the seed definition's draft and the template's revision are unchanged.
+
+The packaged Studio journeys: `workflow-library` applies a reviewed list narrowing on the list page, reverts it, and fills
+the open create dialog, whose Create is never pressed (no design API write, the page's total unchanged);
+`workflow-templates` applies a reviewed batch in the template editor as one history step (Undo and Redo), with autosave
+held past its interval, and the user's own Save carries the template's expected revision. An executed write's continuation is pinned per
+adapter (Copilot's as the c58c9f149 witness observed it, the same order as a denied proposal's continuation) and also
+checked structurally. Every control in these two journeys, on the page and in the dock, is activated through the keyboard:
+the nonmodal dock overlaps page controls (the c58c9f149 witness saw it intercept the list's Create workflow click) and an
+open page dialog overlaps the dock. `require_workflow_library` refuses a missing, failed,
+duplicated or changed record; `witness_manifest()` counts the four cases.
+
+### Workflow versions and Executables (spec 1193 T041)
+
+Then `inspection_journeys.py` runs four cases, `{copilot,anthropic}-workflow-{versions,executables}`. The packaged backend
+also references and selects `Elsa.Agent.Workflows.Runtime` (shell feature `FoundationWorkflowsRuntimeAgent`). Each case seeds
+one definition through the design API's own relations (`owner_resources.seed_versioned_workflow`): three versions promoted
+from the draft after ordinary draft replacements (a -> b; a -> b -> c with b's text changed; a -> c), the second published
+twice through the publishing API (its default slot, then side by side in `qualification-side`), so its content-addressed
+Executable carries two Source References. The caller sends only references (`workflows.version`: definition and version id;
+`workflows.executable`: artifact id bound to its Artifact Hash); the admitted context, read from `data.message.context` and
+repeated in every admission, must be the server's own read of exactly that resource:
+
+- `workflow_read_version` returns that version's activities by scope path (input names only) and connections, equal to the
+  version API's; with `compareToVersionId` it returns its own comparison (`computedBy: workflow_read_version`), equal to the
+  probe's comparison of the two version reads (added: in the version only; removed: in the compared version only) for the
+  aspects the probe models (`activityVersion`, `scope`, `inputs`, inputs compared as whole authored inputs), and complete;
+  the server's other aspects (`structure`, `childOrder`, `outputs`, `intrinsic`, `placement`) are tolerated, not asserted;
+- every seeded input value carries a per-run canary (`valueCanary`), which must be absent from the admitted context, the
+  turn's frames and the actual adapter's request rows of every version and Executable read: names only, never values;
+- `workflow_read_executable` returns the identity, Artifact Hash, graph, Source References (both publications') and
+  dependencies, equal to `GET runtime/workflows/executables/{artifactId}`;
+- an edit request with only the version or Executable in context (a build-mode, full-auto turn requesting
+  `workflow.propose-change` too): the engine admits no mutating workflow tool for that target, so the adapter is offered
+  the read tool and none of the module's mutating tools (`MUTATING_TOOLS`, listed explicitly); the read completes on its
+  pinned order, nothing is proposed, and the version, the draft and the Executable read back byte-equal;
+- refused at admission with the module's own text: an unknown version, another definition's version, an actor without
+  `workflows/design:read`; a stale Artifact Hash, an unknown artifact, an actor without `workflows/runtime:read`; a
+  comparison against another definition's version is refused at preparation;
+- deployment shapes: with `FoundationWorkflowsAgent` deselected a version reference, and with
+  `FoundationWorkflowsRuntimeAgent` deselected an Executable reference, is refused by the engine as no installed module
+  admitting the kind (`agent.context.kind_unsupported`); each feature is selected again afterwards. These controls run in the
+  packaged combined host; the AppDomain-wide Design-only and Runtime-only shapes (no `Elsa.Workflows.Design*` assembly in a
+  Runtime-only host) are proven by started-shell tests (`WorkflowDesignOnlyHostTests` in `Elsa.Agent.Tests`,
+  `WorkflowRuntimeOnlyHostTests` in `Elsa.Agent.Workflows.Runtime.Tests`), not by this probe.
+
+The packaged Studio journeys: `workflow-version-history` opens the editor's Properties, selects the published version and
+uses its Explain action (the prompt names `workflow_read_version`); `workflow-executable-inspector` opens the Executable
+Inspector and uses its Explain action (the prompt names `workflow_read_executable`). Each checks that the accepted message
+admitted the server's read of exactly the shown resource, that the turn completed, and that no owner changed. Every control is
+activated through the keyboard. Frame orders reuse the pinned read order (`explain_journeys.READ_FRAMES`) and refusal
+order (`batch_journeys.REFUSED_FRAMES`). `require_workflow_inspection` refuses a missing, failed, duplicated or changed
+record; `witness_manifest()` counts the four cases.
+
+### Workflow Runs (spec 1193 T045)
+
+Then `run_journeys.py` runs two cases, `{copilot,anthropic}-workflow-run`. Each case seeds, through the design, publishing
+and runtime APIs' own relations (`owner_resources.seed_faulted_run`), two Runs in the packaged consumer: one that faults (a
+Write Line whose text, a fresh private canary, is authored sensitive, then a Fault with one blocking incident) and one still
+in progress (an Event that does not start the workflow: the runtime keeps the Run `Running` and suspends the Event's activity
+execution on its bookmark, `Suspended`/`BookmarkWaiting`, which is the waiting signal the seed settles on, `run_waiting`). The runtime's default capture
+policy never captures a sensitive payload, so the case first selects the test-only host seam `QualificationRunCapture`
+(`fixtures/BackendConsumer/QualificationRunCapture.cs`), which captures sensitive activity inputs as full payloads; the
+driver requires the run API to report the canary input `payloadCaptured` (and sensitive), and confirms with one admin
+payload-API resolve (only its status and digest are retained) that the captured payload is the canary, before it checks
+that Weaver withholds it,
+so a regression that released a captured sensitive value would leak natively. Every design read that holds the authored
+canary is retained by digest only; every retained read is checked to hold no canary. The caller sends only the run
+page's reference (`workflows.run`: the Workflow Instance id and the selected activity execution id); the admitted context,
+read from `data.message.context` and repeated in every admission, must be the server's own read of exactly that Run and
+selection, equal to the run API's (an in-progress Run's admissions differ only by `readAt`). The Run actor (principal 10:
+`workflows/runtime:read` and `workflows/activity-executions:inspect`, no value inspection) is appended to the principals.
+
+- `explain-fault` and `explain-activity`: `workflow_read_run` returns the instance, Executable, incidents and activity
+  executions of `GET runtime/workflows/instances/{id}` and the selected execution's incidents and value evidence of its
+  activity execution read; each value's disclosure follows its evidence (`expected_disclosure`), a released value equals the
+  payload API's answer, and the Write Line's captured sensitive text is disclosed only as `withheld`, never as a value, and
+  its state view is withheld too (`canaryCaptured` is recorded);
+- `in-progress`: the waiting Run is read as in progress, attributed to its read time, with its bookmarks;
+- `not-permitted`: the Run actor reads incident messages as the run API's redaction, listed as not permitted, and no value;
+- `controls-refused`: a build-mode, full-auto turn asking to retry, cancel and delete with only the Run in context: the adapter
+  is offered the read and no mutating workflow tool or run control; the read completes and the Run reads back byte-equal;
+- refused at admission with the module's own text: an unknown Run, an activity execution the Run does not hold, and an actor
+  without `workflows/runtime:read`;
+- deployment shape: with `FoundationWorkflowsRuntimeAgent` deselected a Run reference is `agent.context.kind_unsupported`;
+  the feature is selected again afterwards. The deselection reloads the shell, which empties the consumer's in-memory run
+  stores, so this control runs last, after the browser journey; the seam is deselected after it.
+
+The packaged consumer cannot prune activity evidence and composes activity execution inspection as part of
+`WorkflowsRuntimeApi`, so a pruned execution and a backend without activity execution inspection are proven by the Runtime
+API and `Elsa.Agent.Workflows.Runtime.Tests` unit tests (that limit is recorded in the plan's Slice G deviation and in each
+case record's `native` controls, which hold no pruned or unsupported-backend control); natively the Fault's state view is
+reported unavailable by reason. The Write Line writes its text to the backend console (the host's own process log, not part of the
+case evidence). The packaged Studio journey `workflow-run` opens the run page with the Write Line's activity execution (the captured canary)
+selected,
+waits until the page discloses that selection (`data-run-selection` on its Explain action), opens Weaver and uses Explain
+(the restored `weaver.workflows.explain-instance` prompt names `workflow_read_run`), checks the accepted message admitted the
+server's read of exactly that Run and selection, and searches, raw and in page, every agent request, non-stream response and
+stream byte for the canary. The case's final canary search reads every retained evidence file. `require_workflow_run`
+refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two cases.
 
 ### Restart inventory over the packaged durable store (#3441 T031)
 

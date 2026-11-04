@@ -26,7 +26,7 @@ if (parameters.get("palette") === "classic") {
   for (const token of themeTokenNames) document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
 }
 const readonly = parameters.get("permissions") === "read";
-const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly, canShareViews: !readonly };
+const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly && parameters.get("permissions") !== "assign", canShareViews: !readonly };
 const date = "2026-10-31T12:00:00Z";
 const folderLayout = parameters.get("folder-layout") === "1";
 const folderName = folderLayout ? "Customer operations and international support" : "Finance";
@@ -180,7 +180,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
   postJson: async (url: string, body: unknown) => {
     record("POST", url, structuredClone(body));
     if (readonly) throw new Error("Permission denied");
-    if (url.endsWith("/tags")) { const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
+    if (url.endsWith("/tags")) { if (parameters.get("tag-create") === "reject") throw new Error("A tag with this name already exists (409)"); const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
     if (url.endsWith("/views")) { const created: WorkflowLibraryView = { ...(body as WorkflowLibraryView), id: `view-${nextIdentity++}`, ownerId: "current-user", revision: "1", schemaVersion: 1, canEdit: true, canDelete: true }; views.push(created); return created; }
     if (url.endsWith("/bulk")) {
       const input = body as { targets: { definitionId: string; revision: string }[]; add: WorkflowTagAssignment[]; remove: WorkflowTagAssignment[] };

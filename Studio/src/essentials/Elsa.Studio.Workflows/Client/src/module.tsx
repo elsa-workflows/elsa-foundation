@@ -53,6 +53,7 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
 export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
+export { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "./workflowAgentContext";
 
 /** A screen that edits one resource named by a query parameter; its list view (no parameter) may open in several tabs. */
 function workspaceResource(kind: string, parameter: string): StudioRouteWorkspaceOptions {
@@ -147,7 +148,7 @@ export function register(api: ElsaStudioModuleApi) {
       ] : []),
       { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], path: "/workflows/templates", label: "Workflow templates",
         workspace: workspaceResource("workflow-template", "template"),
-        component: ({ navigate }) => deferred("workflow templates", <WorkflowTemplatesPage api={api} navigate={navigate} />) },
+        component: ({ navigate }) => deferred("workflow templates", <WorkflowTemplatesPage api={api} navigate={navigate} weaver={weaver} />) },
       {
         id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/import-elsa3",
@@ -185,7 +186,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-executable-inspector", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/executables/:artifactId",
         label: "Executable Inspector",
-        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
+        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.agent} weaver={weaver} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-instances", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
@@ -197,7 +198,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.agent} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.agent} weaver={weaver} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],

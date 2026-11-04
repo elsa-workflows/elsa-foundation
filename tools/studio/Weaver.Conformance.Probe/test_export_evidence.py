@@ -110,7 +110,7 @@ class WitnessExportTests(unittest.TestCase):
     def test_complete_promoted_witness_exports_every_autonomy_reference(self):
         report = dict(self.complete, status="passed", independentPackageWitness=True)
         index = self.export(report)
-        self.assertEqual({"complete": True, "expectedCaseCount": 95, "gaps": []}, index["witnessCompleteness"])
+        self.assertEqual({"complete": True, "expectedCaseCount": 107, "gaps": []}, index["witnessCompleteness"])
         self.assertEqual("passed", index["qualificationStatus"]); self.assertFalse(index["qualificationStatusChanged"])
         root = self.base.root.resolve()
         for row in report[MATRIX_QUALIFICATION]["cases"]:

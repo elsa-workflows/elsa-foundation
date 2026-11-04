@@ -37,46 +37,46 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 ## Slice D: Explain and troubleshoot (story 1)
 
-- [ ] T023 Property, expression and credential context in the active-draft snapshot, bounded, with resource content marked as untrusted (FR-016, FR-017, FR-031).
-- [ ] T024 Graph read by scope path, and graph activities by definition and version (FR-014).
-- [ ] T025 Expression Module routing, or an unavailable outcome. Explanation guidance names the revision it describes and uses only the designer's diagnostics (FR-016, FR-018).
-- [ ] T026 Remove the `workflows.proposal` renderer, the explain-executable prompt and `getExecutableDetail`. Add the registered-reference behaviour test (FR-019, SC-007).
-- [ ] T027 Glossary entries in `Studio/CONTEXT.md` (FR-035).
-- [ ] T028 Probe case `workflow-explain` with a canary search, and a Playwright journey (SC-005).
+- [x] T023 Property, expression and credential context in the active-draft snapshot, bounded, with resource content marked as untrusted (FR-016, FR-017, FR-031).
+- [x] T024 Graph read by scope path, and graph activities by definition and version (FR-014).
+- [x] T025 Expression interpretation, semantic diagnostics and edits unconditionally unavailable (routing to an Expression Module deferred to #3711). Explanation guidance names the revision it describes and uses only the designer's diagnostics (FR-016, FR-018).
+- [x] T026 Remove the `workflows.proposal` renderer, the explain-executable prompt and `getExecutableDetail`. Add the registered-reference behaviour test (FR-019, SC-007).
+- [x] T027 Glossary entries in `Studio/CONTEXT.md` (FR-035).
+- [x] T028 Probe case `workflow-explain` with a canary search, and a Playwright journey (SC-005).
 
 ## Slice E: Library, create dialog and templates (stories 6, 7)
 
-- [ ] T029 Operation-key overloads on `IWorkflowLibraryStore`, the EF column with its unique index scoped by tenant scope key (and subject for views), migrations for four engines, and the API change (FR-021, FR-033).
-- [ ] T029a Extract `IWorkflowLibraryCommands` into `Elsa.Workflows.Design.Core`, implemented in the Api from the inline endpoint authority logic, and have the endpoints call it (D4).
-- [ ] T030 `workflows.library` context and the list-state client tool (FR-020).
-- [ ] T031 Library write tools for tags, favorites, folders and views, with per-target outcomes (FR-021, FR-025).
-- [ ] T032 Unavailable when organization is disabled (FR-022). Refuse deletes.
-- [ ] T033 `workflows.create-dialog` context and the prefill tool (FR-023).
-- [ ] T034 `workflows.template-list` and `workflows.template-editor` contexts, and template batches through the template adapter (FR-024).
-- [ ] T035 [P] Tests and EF provider-contract tests. Update the catalogs (FR-034).
-- [ ] T036 Probe cases `workflow-library` and `workflow-templates`, and Playwright journeys (SC-008).
+- [x] T029 Operation-key overloads on `IWorkflowLibraryStore`, the EF column with its unique index scoped by tenant scope key (and subject for views), migrations for four engines, and the API change (FR-021, FR-033).
+- [x] T029a Extract `IWorkflowLibraryCommands` into `Elsa.Workflows.Design.Core`, implemented in the Api from the inline endpoint authority logic. The endpoints keep the built-in decisions; a replacement decides only Weaver's writes (D4).
+- [x] T030 `workflows.library` context and the list-state client tool (FR-020).
+- [x] T031 Library write tools for tags, favorites, folders and views, with per-target outcomes (FR-021, FR-025).
+- [x] T032 Unavailable when organization is disabled (FR-022). Refuse deletes.
+- [x] T033 `workflows.create-dialog` context and the prefill tool (FR-023).
+- [x] T034 `workflows.template-list` and `workflows.template-editor` contexts, and template batches through the template adapter (FR-024).
+- [x] T035 [P] Tests and EF provider-contract tests. Update the catalogs (FR-034).
+- [x] T036 Probe cases `workflow-library` and `workflow-templates`, and Playwright journeys (SC-008).
 
 ## Slice F: Versions and Executables (story 8)
 
-- [ ] T037 Add `IWorkflowVersionReader` to `Elsa.Workflows.Design.Core`, implemented in the Api. Add the `workflows.version` context and the version tool with a two-version comparison, refusing edits (FR-015, FR-026, D4, R6).
-- [ ] T038 Add `IWorkflowExecutableInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Create the new package `Elsa.Agent.Workflows.Runtime` with its feature, the `workflows.executable` context and `workflow_read_executable`, and its own test project `Elsa.Agent.Workflows.Runtime.Tests` (FR-027, FR-028, D2, D4).
-- [ ] T039 Restore the explain-executable prompt against the registered tool (FR-019).
-- [ ] T040 Composition tests for the Design-only, Runtime-only and combined shapes (SC-009). Add the package to the conformance consumers.
-- [ ] T041 Probe cases `workflow-versions` and `workflow-executables`, and normal-host journeys for the version history and the Executable Inspector (FR-036).
+- [x] T037 Add `IWorkflowVersionReader` to `Elsa.Workflows.Design.Core`, implemented in the Api. Add the `workflows.version` context and the version tool with a two-version comparison, refusing edits (FR-015, FR-026, D4, R6).
+- [x] T038 Add `IWorkflowExecutableInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Create the new package `Elsa.Agent.Workflows.Runtime` with its feature, the `workflows.executable` context and `workflow_read_executable`, and its own test project `Elsa.Agent.Workflows.Runtime.Tests` (FR-027, FR-028, D2, D4).
+- [x] T039 Restore the explain-executable prompt against the registered tool (FR-019).
+- [x] T040 Composition tests for the Design-only, Runtime-only and combined shapes (SC-009). Add the package to the conformance consumers.
+- [x] T041 Probe cases `workflow-versions` and `workflow-executables`, and normal-host journeys for the version history and the Executable Inspector (FR-036).
 
 ## Slice G: One exact Run (story 9)
 
-- [ ] T042 Add `IWorkflowRunInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Add the `workflows.run` context and `workflow_read_run`, bound to the instance and the activity execution (FR-029, D4).
-- [ ] T043 Redaction and unavailable-by-reason. Refuse run controls.
-- [ ] T044 Studio run-page context provider.
-- [ ] T045 Probe case `workflow-run` with a canary search, and a normal-host journey on the run page (SC-005, FR-036).
-- [ ] T046 Full package conformance witness and the composed Studio suite on the final source. Record the acceptance evidence in spec.md, set its status to Implemented, and close #3442 (SC-010).
+- [x] T042 Add `IWorkflowRunInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Add the `workflows.run` context and `workflow_read_run`, bound to the instance and the activity execution (FR-029, D4).
+- [x] T043 Redaction and unavailable-by-reason. Refuse run controls.
+- [x] T044 Studio run-page context provider.
+- [x] T045 Probe case `workflow-run` with a canary search, and a normal-host journey on the run page (SC-005, FR-036). Implemented (`run_journeys.py`, the `workflow-run` browser journey and the `QualificationRunCapture` seam); native evidence: `{copilot,anthropic}-workflow-run` passed in the complete witness on `8e5657d39`. Pruned and unsupported-backend evidence is unit-tested only (see the plan's Slice G deviation).
+- [x] T046 Full package conformance witness and the composed Studio suite on the final source. Record the acceptance evidence in spec.md, set its status to Implemented, and close #3442 (SC-010).
 
 ## Cross-cutting, in every slice
 
-- [ ] T047 Every new replacement contract has a single-registration guard with a clear diagnostic. Every new implementation is `internal sealed` (FR-032).
-- [ ] T048 Catalogs are updated in the same PR as their code (FR-034), including `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, which lists `DefaultWorkflowAgentContextProvider`.
-- [ ] T049 Evidence is recorded by category, with failures, skips and quarantines as they occurred (FR-037).
+- [x] T047 Every new replacement contract has a single-registration guard with a clear diagnostic. Every new implementation is `internal sealed` (FR-032).
+- [x] T048 Catalogs are updated in the same PR as their code (FR-034), including `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, which lists `DefaultWorkflowAgentContextProvider`.
+- [x] T049 Evidence is recorded by category, with failures, skips and quarantines as they occurred (FR-037).
 
 ## Traceability
 

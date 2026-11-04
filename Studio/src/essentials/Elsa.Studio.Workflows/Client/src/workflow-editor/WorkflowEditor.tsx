@@ -257,11 +257,11 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError, lineageHold });
+  const { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, onSaveReconciled: acceptSavedDraft, setStatus, setError, lineageHold });
   const {
     details,
     setDetails,
@@ -395,6 +395,8 @@ export function WorkflowEditor({
     [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
+  const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
+  const versionAgent = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
   const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
@@ -598,7 +600,8 @@ export function WorkflowEditor({
   }, [addActivity, catalogByVersion, frames, navigateToScope, scope, scopeOwner]);
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
-  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory });
+  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
+    resourceType: documentAdapter?.agentResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -624,7 +627,8 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned });
+  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
+    agentResource: documentAdapter?.agentResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -1603,7 +1607,7 @@ export function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
+            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} versionAgent={documentAdapter ? undefined : versionAgent} /></fieldset></>
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />

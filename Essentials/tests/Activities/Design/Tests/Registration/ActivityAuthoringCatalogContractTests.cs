@@ -45,7 +45,13 @@ public sealed class ActivityAuthoringCatalogContractTests
         var credential = Assert.Single(result.Entries[0].Inputs, input => input.Name == "ApiKey");
         Assert.True(credential.IsCredential);
         Assert.True(credential.IsSensitive);
-        Assert.False(Assert.Single(result.Entries[0].Inputs, input => input.Name == "Text").IsCredential);
+        var text = Assert.Single(result.Entries[0].Inputs, input => input.Name == "Text");
+        Assert.False(text.IsCredential);
+        Assert.False(text.IsMasked);
+        Assert.True(credential.IsMasked);
+        // A password-hinted input is masked by the designer although it is neither sensitive nor a credential.
+        var password = Assert.Single(result.Entries[0].Inputs, input => input.Name == "Password");
+        Assert.Equal(("password", false, true), (password.UiHint, password.IsSensitive, password.IsMasked));
     }
 
     [Theory]
@@ -251,7 +257,7 @@ public sealed class ActivityAuthoringCatalogContractTests
             if (Failure is not null) throw Failure;
             return Task.FromResult(new ActivityAuthoringCatalogView([
                 Entry("version-available", "Acme.Available", "1.0.0", true, null,
-                    [Input("Text", isCredential: false), Input("ApiKey", isCredential: true)]),
+                    [Input("Text", isCredential: false), Input("ApiKey", isCredential: true), Input("Password", isCredential: false, uiHint: "password")]),
                 Entry("version-excluded", "Acme.Excluded", "2.1.0", false, "Excluded by the effective activity availability policy.", [])
             ]));
         }
@@ -261,8 +267,8 @@ public sealed class ActivityAuthoringCatalogContractTests
             available, reason, inputs, [], [], null, new("activity", versionId, new Dictionary<string, ActivityArgumentValue>(),
                 new Dictionary<string, ActivityArgumentValue>(), null));
 
-        private static ActivityInputDescriptorView Input(string name, bool isCredential) => new(name, name, "String", CollectionKind.Single,
-            name, null, 0, null, true, false, true, null, null, null, null, IsSensitive: isCredential, IsCredential: isCredential);
+        private static ActivityInputDescriptorView Input(string name, bool isCredential, string? uiHint = null) => new(name, name, "String", CollectionKind.Single,
+            name, null, 0, null, true, false, true, uiHint, null, null, null, IsSensitive: isCredential, IsCredential: isCredential);
     }
 
     private sealed class ReplacementCatalog : IActivityAuthoringCatalog

@@ -6,4 +6,9 @@ export interface WorkflowEditorDocumentAdapter {
   load(context: StudioEndpointContext, id: string): Promise<WorkflowDefinitionDetails>;
   save(context: StudioEndpointContext, draft: WorkflowDraft): Promise<WorkflowDraft>;
   metadata(context: StudioEndpointContext, id: string, patch: { name: string; description?: string | null }): Promise<WorkflowDefinitionDetails>;
+  /**
+   * The agent resource this document is (spec 1193 FR-024): a Reusable Workflow Template is its own resource, disclosed as
+   * `workflows.template-editor` with its persisted revision, never as a workflow definition. Absent for a definition.
+   */
+  agentResource?: { resourceType: "workflow-template"; contentType: "workflows.template-editor"; revision(): string | null };
 }

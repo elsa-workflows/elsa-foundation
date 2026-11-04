@@ -184,7 +184,8 @@ def _retained_ref(root, value):
 
 def witness_manifest():
     """The complete witness inventory: original38 + four current-authority + one workflow-authorization-unavailable
-    and one workflow-truth-seams and one workflow-batch case per actual adapter (spec 1193) + 13 cases per actual adapter
+    and one workflow-truth-seams, one workflow-batch, one workflow-explain, two workflow-library and two workflow-inspection
+    (versions, Executables) cases per actual adapter (spec 1193) + 13 cases per actual adapter
     + the #3441 restart inventory (ten restart cases per actual adapter and one negative control).
 
     Stage expectations are only the matrix's own named browser stages. No total stage count
@@ -196,13 +197,19 @@ def witness_manifest():
     from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASES
     from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES
     from batch_journeys import EXPECTED_CASES as BATCH_CASES
+    from explain_journeys import EXPECTED_CASES as EXPLAIN_CASES
+    from library_journeys import EXPECTED_CASES as LIBRARY_CASES
+    from inspection_journeys import EXPECTED_CASES as INSPECTION_CASES
+    from run_journeys import EXPECTED_CASES as RUN_CASES
     return {"originalCases": sorted(REQUIRED_CASES), "currentAuthorityCases": sorted(AUTHORITY_CASES),
             "workflowAuthorizationCases": sorted(WORKFLOW_AUTHORIZATION_CASES), "workflowTruthSeamCases": sorted(TRUTH_SEAM_CASES),
-            "workflowBatchCases": sorted(BATCH_CASES),
+            "workflowBatchCases": sorted(BATCH_CASES), "workflowExplainCases": sorted(EXPLAIN_CASES),
+            "workflowLibraryCases": sorted(LIBRARY_CASES), "workflowInspectionCases": sorted(INSPECTION_CASES), "workflowRunCases": sorted(RUN_CASES),
             "autonomyCases": sorted(AUTONOMY_CASES), "autonomyStages": sorted(autonomy_stages()),
             "restartCases": sorted(RESTART_CASES), "restartControls": [RESTART_CONTROL],
             "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(WORKFLOW_AUTHORIZATION_CASES) + len(TRUTH_SEAM_CASES)
-                                 + len(BATCH_CASES) + len(AUTONOMY_CASES) + len(RESTART_CASES) + 1}
+                                 + len(BATCH_CASES) + len(EXPLAIN_CASES) + len(LIBRARY_CASES) + len(INSPECTION_CASES) + len(RUN_CASES) + len(AUTONOMY_CASES)
+                                 + len(RESTART_CASES) + 1}
 
 
 def witness_gaps(report):
@@ -233,6 +240,14 @@ def witness_gaps(report):
     gaps += truth_seam_manifest_gaps(report.get(TRUTH_SEAM_SECTION), report.get("source"))
     from batch_journeys import SECTION as BATCH_SECTION, batch_manifest_gaps
     gaps += batch_manifest_gaps(report.get(BATCH_SECTION), report.get("source"))
+    from explain_journeys import SECTION as EXPLAIN_SECTION, explain_manifest_gaps
+    gaps += explain_manifest_gaps(report.get(EXPLAIN_SECTION), report.get("source"))
+    from library_journeys import SECTION as LIBRARY_SECTION, library_manifest_gaps
+    gaps += library_manifest_gaps(report.get(LIBRARY_SECTION), report.get("source"))
+    from inspection_journeys import SECTION as INSPECTION_SECTION, inspection_manifest_gaps
+    gaps += inspection_manifest_gaps(report.get(INSPECTION_SECTION), report.get("source"))
+    from run_journeys import SECTION as RUN_SECTION, run_manifest_gaps
+    gaps += run_manifest_gaps(report.get(RUN_SECTION), report.get("source"))
     if MODE_QUALIFICATION in report:
         gaps.append("A diagnostic mode section cannot stand in for the complete matrix")
     gaps += autonomy_manifest_gaps(report.get(MATRIX_QUALIFICATION), report.get("source"))
@@ -261,6 +276,14 @@ def validate_complete_witness(report, root, allowed_controls):
         require_workflow_truth_seams(report[TRUTH_SEAM_SECTION], root, source=report["source"])
         from batch_journeys import SECTION as BATCH_SECTION, require_workflow_batch
         require_workflow_batch(report[BATCH_SECTION], root, source=report["source"])
+        from explain_journeys import SECTION as EXPLAIN_SECTION, require_workflow_explain
+        require_workflow_explain(report[EXPLAIN_SECTION], root, source=report["source"])
+        from library_journeys import SECTION as LIBRARY_SECTION, require_workflow_library
+        require_workflow_library(report[LIBRARY_SECTION], root, source=report["source"])
+        from inspection_journeys import SECTION as INSPECTION_SECTION, require_workflow_inspection
+        require_workflow_inspection(report[INSPECTION_SECTION], root, source=report["source"])
+        from run_journeys import SECTION as RUN_SECTION, require_workflow_run
+        require_workflow_run(report[RUN_SECTION], root, source=report["source"])
         from autonomy_journeys import MATRIX_QUALIFICATION, require_complete_autonomy
         require_complete_autonomy(report[MATRIX_QUALIFICATION], root, source=report["source"])
         from restart_journeys import RESTART_QUALIFICATION, require_restart_inventory

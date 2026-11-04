@@ -92,7 +92,7 @@ export function WorkflowManagementPage({
     : (
       <WorkflowsPageFrame definitions>
         <WorkflowLazyBoundary label="workflow definitions">
-          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} />
+          <WorkflowDefinitions context={context} ai={ai} weaver={weaver} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} />
         </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );
@@ -130,7 +130,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
+export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; weaver?: WorkflowAgentController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
 
   useEffect(() => {
@@ -160,6 +160,7 @@ export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }
         <WorkflowExecutableInspectorWorkbench
           context={context}
           ai={ai}
+          weaver={weaver}
           runInputEditors={runInputEditors}
           artifactId={location.artifactId}
           sourceReferenceId={location.sourceReferenceId}
@@ -180,9 +181,11 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
+export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
+  /** The Workflows module's agent state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowAgentController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -229,7 +232,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
