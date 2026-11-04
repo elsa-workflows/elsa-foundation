@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Core.Models;
 using CShells.Features;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
@@ -141,6 +142,10 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddSingleton<IActivityPlacementHasher, Sha256ActivityPlacementHasher>();
         services.TryAddScoped<ActivityTemplatePlacer>();
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
+        services.TryAddScoped<IActivityPublicationReadiness, ActivityPublicationReadiness>();
+        services.TryAddScoped<IActivityPublicationCandidateEvaluator, ActivityPublicationCandidateEvaluator>();
+        services.TryAddScoped<IActivityCatalogProjection, ActivityCatalogProjection>();
+        services.TryAddScoped<IActivityPublicationVersionPolicy, ActivityPublicationVersions>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
         // The export producer is destination-agnostic. It reads the executable closure and provenance, while
