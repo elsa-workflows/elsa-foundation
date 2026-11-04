@@ -65,10 +65,16 @@ the deviation register.
   new value; this spec only fixes the format it is written in.
 - Number handling inside the script engine (ADR 0046 V6, V9).
 - Secrets `json` / `jsonb` columns, which the database normalizes (ADR 0091 decision 7).
-- Related, not a dependency: [#3799](https://github.com/elsa-workflows/elsa-foundation/issues/3799), a general Elsa 4 defect. An activity result is written camelCased and read
-  back case-sensitively, so a .NET-typed result can lose properties on its way to the next activity (research R-10).
-  If it is still open when S-9 is built, FR-012 fixes it as part of this work (US3 scenario 1). If it is fixed first,
-  S-9 moves that fix onto the data-boundary copy.
+- Related, not a dependency: [#3799](https://github.com/elsa-workflows/elsa-foundation/issues/3799), a general Elsa 4
+  defect, fixed on 2026-11-04 by #3801 (`4a81500f8`). The completion projector and the input hydrator now share one
+  options instance, `ActivityValueJson.Options` (Web, camelCase, strict numbers), so a .NET-typed result keeps its
+  members on the next activity's input. S-9 replaces that instance with the data-boundary copy (FR-012), keeping
+  #3801's tests. One change follows from ADR 0091 decision 2: `ActivityValueJson.Options` reads member names
+  case-insensitively (Web), and the data-boundary copy reads them exactly. A key that differs only in case then gives
+  the `json-unmatched-member` warning instead of filling the member.
+- Related, not a dependency: [#3728](https://github.com/elsa-workflows/elsa-foundation/issues/3728), fixed by #3731
+  (`4c002dadb`). Every start now applies the input contract through `WorkflowExecutableInputValidator`, so that
+  validator's conversion (FR-012) governs every start path: API, triggers, BPMN and child starts.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -124,14 +130,16 @@ default come back byte-identical.
 
 ### User Story 3 - A .NET-typed value survives from one activity to the next (Priority: P1)
 
-An activity returns a .NET object; the next activity takes the same type as input. Every property arrives. Today the
-result is written with Web options (camelCase) and read back with System.Text.Json's defaults (case-sensitive), so
-properties can be lost silently (inferred, not yet reproduced).
+An activity returns a .NET object; the next activity takes the same type as input. Every property arrives. Until
+#3801 the result was written camelCased and read back case-sensitively, so properties were lost silently (#3799).
+#3801 fixed that pair with one shared options instance. S-9 moves that pair, and every other conversion on the value
+path, onto one data-boundary copy.
 
-**Why this priority**: it is the highest-risk finding of the value-path search, and it fails silently.
+**Why this priority**: it was the highest-risk finding of the value-path search, and the other conversions still use
+differing options.
 
 **Independent Test**: a .NET-typed result bound to a .NET-typed input of the same type arrives with every property
-set. This test is written first, against today's code, to reproduce the suspected loss.
+set. #3801's `ActivityResultRoundTripTests` already covers this; it stays green.
 
 **Acceptance Scenarios**:
 

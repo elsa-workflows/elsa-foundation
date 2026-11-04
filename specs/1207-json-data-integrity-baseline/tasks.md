@@ -8,8 +8,8 @@
 ADR PRs are agreed (see the spec's *Approval*). T001 is the gate.
 
 **Tests**: framework §2.23 requires them for every logic-bearing change, and SC-001 to SC-006 require them too. The
-application declares no TDD cadence, so within each story tests follow the implementation. Two exceptions are written
-first: T013, which reproduces the suspected property loss, and T005, the guard's negative tests. The PR's bite-proof
+application declares no TDD cadence, so within each story tests follow the implementation. One exception is written
+first: T005, the guard's negative tests. The PR's bite-proof
 shows each new test failing without the change.
 
 **Build rule**: build and test only the projects a task touches (shared machine); CI runs the rest.
@@ -77,19 +77,19 @@ shows each new test failing without the change.
 
 ## Phase 4: User Story 3 - A .NET-typed value survives (P1)
 
-- [ ] T013 [US3] Write first, against today's code: a .NET-typed activity result bound to a .NET-typed input of the
-  same type, in `Essentials/tests/Activities/Behavioral`. Record whether it reproduces #3799 (research R-10) on
-  issue
+- [ ] T013 [US3] Keep #3801's `ActivityResultRoundTripTests` and `ActivityValueJsonTests` green through the move to
+  the data-boundary copy. Add a case for a key that differs only in case: it now gives `json-unmatched-member`, where
+  `ActivityValueJson.Options` filled the member (research R-10)
 - [ ] T014 [US3] Add `UnmatchedMemberScanner` in `Serialization/Core/` (Q1, research R-13) emitting
   `json-unmatched-member` (contract). Unit tests: top-level and nested keys, arrays of objects, annotated names
 - [ ] T015 [US3] Add the UTC `DateTime` converter to `JsonBaseline.DataBoundary` (FR-016, ADR 0046 *Dates*, Q8)
 - [ ] T016 [US3] Move every value-path conversion of research R-10 to `JsonBaseline.DataBoundary`, calling the
   scanner on reads:
-  - `ActivityCompletionProjector.cs` L16, L63;
-  - `ActivityInputHydrator.cs` L109;
+  - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109):
+    replace it with the data-boundary copy, and delete it;
   - `RuntimeActivityInputMaterializer.cs` L316, L679, L702;
   - `RuntimeInputBindingCompiler.cs` L719, L788–806, L1019, L1042;
-  - `WorkflowExecutableInputValidator.cs` L119;
+  - `WorkflowExecutableInputValidator.cs` L119 (since #3731 the admission check of every start);
   - `WorkflowExecutionStartDispatch.cs` L713;
   - `StatefulActivity.cs` L87, L89, L214, L399, L415;
   - `BackgroundActivityCompletionCodec.cs`;
@@ -191,7 +191,7 @@ shows each new test failing without the change.
   - US6 is independent after T004.
   - US7 needs every earlier story.
   - US8 is independent.
-- **Within US3**: T013 comes first.
+- **Within US3**: T013 runs with T016.
 - **Parallel**: T009 with T014 and T032; T034 to T036 together.
 
 ## Implementation strategy

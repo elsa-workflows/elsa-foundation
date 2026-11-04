@@ -304,7 +304,6 @@ checked again on `86bda483c`.
 
 Unchanged:
 
-- `ActivityCompletionProjector.cs` L16, L63 (Web writes the activity result);
 - `RuntimeInputBindingCompiler.cs` L719, L788–806, L1019, L1042;
 - `WorkflowExecutableInputValidator.cs` L119;
 - `StatefulActivity.cs` L87, L89, L214, L399, L415;
@@ -318,18 +317,32 @@ Unchanged:
 
 Moved:
 
-- `ActivityInputHydrator.cs` reads the input with the defaults at **L109** (`inline.Deserialize(PropertyType)`).
+- `ActivityCompletionProjector.cs` (L61) and `ActivityInputHydrator.cs` (L109) now share `ActivityValueJson.Options`
+  (#3801, see below).
 - `RuntimeActivityInputMaterializer.cs` JSON sites are now L316, L618, L679 and L702.
 - `WorkflowExecutionStartDispatch.cs` serializes at L713.
 - **ForEach no longer narrows numbers.** `ForEach.cs` keeps the collection as `JsonElement` (`ResolveJson` L261), and
   items become envelopes (L182–189). This was fixed in #3424. ADR 0091's Context still states the old behaviour.
   → **Finding F-6**.
 
-**The highest-risk site is confirmed in code.** An activity result is written with Web options (camelCase,
-`ActivityCompletionProjector.cs` L16, L63) and read back with the defaults (case-sensitive,
-`ActivityInputHydrator.cs` L109). A .NET-typed result bound to the same .NET type therefore loses every property whose
-camelCase name differs from its C# name (inferred; not yet run). This defect does not depend on any #3052 decision:
-any matching pair of options fixes it. → general defect **G-1**, [#3799](https://github.com/elsa-workflows/elsa-foundation/issues/3799); FR-012 covers it.
+**The highest-risk site was confirmed in code, and is now fixed.** An activity result was written with Web options
+(camelCase, `ActivityCompletionProjector.cs` L16, L63) and read back with the defaults (case-sensitive,
+`ActivityInputHydrator.cs` L109). A .NET-typed result bound to the same .NET type therefore lost every property whose
+camelCase name differs from its C# name. This defect does not depend on any #3052 decision, so it was filed as general
+defect **G-1**, [#3799](https://github.com/elsa-workflows/elsa-foundation/issues/3799).
+
+[#3801](https://github.com/elsa-workflows/elsa-foundation/pull/3801) fixed it on 2026-11-04 (`4a81500f8`). Both sides
+now use `ActivityValueJson.Options` (`Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityValueJson.cs`: Web,
+camelCase, strict numbers), at `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109. Its tests are
+`ActivityResultRoundTripTests` and `ActivityValueJsonTests`. S-9 replaces `ActivityValueJson.Options` with
+`JsonBaseline.DataBoundary` (T016). The reads then become exact (decision 2), where they are case-insensitive today.
+
+**Admission now runs on every start.** [#3731](https://github.com/elsa-workflows/elsa-foundation/pull/3731)
+(`4c002dadb`, #3728) makes `WorkflowStartDispatcher` apply the input contract to every new start through
+`IWorkflowExecutableInputValidator`. The validator's type check (`WorkflowExecutableInputValidator.cs` L119,
+`input.Value.Deserialize(targetType)` with the defaults) therefore governs the API, trigger, BPMN and child starts. On
+the data-boundary copy it agrees with the activity's own read, so a start is never admitted with a value the activity
+then refuses, or the reverse (FR-012, US3 scenario 6).
 
 **Scale** (all source roots: Essentials, Extensions, Studio; excluding migrations, `obj` and `bin`; approximate):
 

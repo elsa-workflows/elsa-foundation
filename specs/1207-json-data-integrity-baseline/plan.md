@@ -121,8 +121,8 @@ Essentials/src/Activities/Design/Api/ActivitiesDesign{JsonContext,ApiFeature}.cs
 Essentials/src/{Connections,Secrets}/Api/*                                   # no key policy
 Essentials/src/Workflows/Design/Api/Services/AuthoringSchemaExporter.cs
 Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/
-  ├── ActivityCompletionProjector.cs       # data-boundary copy
-  └── ActivityInputHydrator.cs             # data-boundary copy + pre-scan
+  ├── ActivityValueJson.cs                # replaced by the data-boundary copy (#3801)
+  └── ActivityInputHydrator.cs             # pre-scan
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputMaterializer.cs
 Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs
 Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/
