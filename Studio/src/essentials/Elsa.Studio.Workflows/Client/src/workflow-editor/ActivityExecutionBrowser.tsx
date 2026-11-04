@@ -140,7 +140,8 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   const retainedSelection = useRef<{ query: string; entry: ActivityExecutionBrowseEntry } | null>(null);
   const pageSelection = page?.items.find(item => item.execution.activityExecutionId === selectedActivityExecutionId) ?? (!selectedActivityExecutionId && (!requireExplicitSelection || page?.totalCount === 1) ? page?.items.at(-1) : undefined);
   useEffect(() => { if (pageSelection) retainedSelection.current = { query: queryIdentity, entry: pageSelection }; }, [pageSelection, queryIdentity]);
-  const selected = pageState.status === "denied" ? undefined : pageSelection ?? (retainedSelection.current?.query === queryIdentity ? retainedSelection.current.entry : undefined);
+  const retainSelection = pageState.status !== "ready" || cursor?.query === queryIdentity;
+  const selected = pageState.status === "denied" ? undefined : pageSelection ?? (retainSelection && retainedSelection.current?.query === queryIdentity ? retainedSelection.current.entry : undefined);
   const navigate = async (id: string | null | undefined) => {
     if (!id) return;
     const available = page?.items.find(item => item.execution.activityExecutionId === id);

@@ -242,6 +242,19 @@ it("brings navigation back when a singleton gains another recorded occurrence", 
   expect(button("Next activity execution")).toBeTruthy();
 });
 
+it("shows an unavailable selection when a refresh replaces the singleton with another occurrence", async () => {
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4)], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-4", hideSingleton: true });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(execution(4)));
+  expect(container.querySelector("button")).toBeNull();
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(5)], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-4", hideSingleton: true, refreshKey: 1 });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(null));
+  expect(container.textContent).toContain("This execution is not available in this scope.");
+  expect(container.textContent).not.toContain("Execution 4 of 1");
+  expect(onSelect).not.toHaveBeenCalled();
+});
+
 it("labels recorded iterations with scope context and keeps attempts as executions", async () => {
   const iteration = { ...entry(3), execution: { ...execution(3), executionSequence: 3, iterationId: "iteration-3" }, iterationPosition: 3 };
   const retry = { ...entry(4), execution: { ...execution(4), executionSequence: 4, iterationId: "iteration-3" }, iterationPosition: 3, attempt: { attemptNumber: 2 } };
