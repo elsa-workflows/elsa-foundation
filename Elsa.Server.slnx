@@ -344,6 +344,7 @@
   </Folder>
   <Folder Name="/Essentials/src/Foundation/Identity/ExternalAuthentication/">
     <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
     <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
     <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
   </Folder>

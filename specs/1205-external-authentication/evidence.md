@@ -4,7 +4,7 @@ Date: 2026-11-04. Starting Foundation main: `73040cd7b1368818820d2a60902443a9f8a
 
 ## State
 
-Incomplete delivery. Design and independent identity-isolation implementation are in progress. Provider catalog/lifecycle components and qualified-link persistence are implemented locally for draft PR #3806; broker, API, Studio and actual provider/deployment qualification remain incomplete. No merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
+Incomplete delivery. Design and independent identity-isolation implementation are in progress. Provider catalog/lifecycle components and qualified-link persistence are implemented locally for draft PR #3806; flow coordination and optional durable artifact storage are now implemented at component scope; HTTP broker/session integration, API, Studio and actual provider/deployment qualification remain incomplete. No merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
 
 Claims: #3579 comment 6627512912; prerequisite #2848 comment 6627557183. No competing claim/assignment/open PR found before this checkpoint. Owner authorization is recorded on #3579 comment 6627537005 and linked on #2771; #2771's Phase 2 description now names this scoped advancement without activating other phases. Baseline main CI 41790684918 passed; no open main-red CI issue was found at startup.
 
@@ -209,3 +209,83 @@ lock does not contain Pkcs; no unrelated dependency was upgraded here. Logs:
 Limitations: protocol contribution only. Global connection readiness/recovery still needs the session/broker/IAM
 adapters, and no actual Elsa callback/browser, interactive preview, cookie/access/refresh session, durable restart,
 two-node, external-product, Studio, required review/merge or resulting-main acceptance is claimed here.
+
+
+## Durable flow and preview artifact checkpoint
+
+T018 now has an optional `Identity.ExternalAuthentication` EF module, separate from IAM/provider configuration.
+Its `IdentityExternalAuthentication` schema family starts at `1.0.0`, with new migration histories/snapshots for
+SQLite, SQL Server, PostgreSQL and MySQL. No existing Initial migration/history was regenerated. The narrowly
+filtered generation command was:
+
+```sh
+ELSA_EF_CONFIGURATION=Debug bash tools/ef/generate-module-migrations.sh 'ExternalAuthentication(Sqlite|SqlServer|PostgreSql|MySql)DbContext'
+```
+
+The store requires scoped tenant access, hashed ID/bindings, bounded lifetime/payload, readable schema and an
+independently committed operation. Wrong tenant/purpose/browser/administrator and expired artifacts cannot
+consume the legitimate row. Conditional versioned deletion acknowledges one consumer. EF/ambient caller
+transactions are refused. Bounded cleanup deletes at most 64 expired current-schema rows of its own tenant,
+preserving foreign tenants and future-schema rows. The module is explicitly admitted to the Identity EF graph
+with only the provider-neutral four-package EF/Relational closure, and enrolled in the shared migration,
+content, history and ordinal comparison catalogs.
+
+The managed flow service generates cryptographic state/nonce/verifier; derives exact callback URLs only from
+trusted host configuration (including path base); validates return destinations at begin and callback; protects
+state with the host's shared Data Protection keys/application name; pins source record/material/issuer/secret;
+and consumes before code exchange. Missing authority and non-durable production authority refuse. Normal
+completion delegates to existing atomic IAM admission and returns server-only user/provenance for the future
+session adapter. Preview authorizes its initiating canonical administrator at every step, can select disabled or
+shadowed unarchived drafts, runs only pure assessment, and returns a separately protected one-use bounded
+result. Observation material changes produce a stale flag. Raw upstream roles do not grant Elsa permissions.
+
+Tests use owned SQLite files and owned Data Protection key directories, plus the existing actual HTTP OIDC
+fixture (registered exact callbacks, single-use code, PKCE/client authentication, signed tokens). One service
+provider starts a flow and is disposed; an independent provider sharing the database/key ring completes it;
+another restart rejects replay without another token request. A synchronized two-consumer test proves both read
+the row before competing to delete it. A disabled non-effective stored draft previews across nodes, returns the
+prospective existing Elsa role permissions, and leaves zero users/links. Result access is administrator/browser/
+purpose-bound, expires, is single-use and detects material changes. Stored flow and preview payloads expose no
+raw handles, browser bindings, nonce/verifier/credential binding or tested identity/profile/permission values.
+Wrong keys/application discriminator and altered protected payload fail closed before exchange. Secret rotation,
+source override, material/enable changes, expiry, changed callback/return policy and provider errors deny without
+provisioning. These are service-provider/restart component proofs, not separate-process or browser/cookie proof.
+
+Results:
+
+- First focused flow/store/protocol run: 53 passed, four failed. Fixtures used a configured deployment record ID
+  rather than the derived `deployment:company`, simulated a source transition by changing that ignored ID, and
+  expected the wrong schema-skew exception type. Corrected fixture inputs; the actual source transition now
+  promotes a persisted explicit override. Restored focused run: **57/57 passed**, zero skipped.
+- Extended full Identity run after key-ring/application and missing/non-durable authority cases and restored
+  mutation: **696/696 passed**, zero failures/skips, 12 seconds reported test duration.
+- Conditional-consume mutation: keep the delete but remove the requirement that it affected exactly one row.
+  The deliberately synchronized two-consumer regression fails with **two acknowledged artifacts**. Exact source
+  restored in `finally` before the 696-test passing run.
+- Initial focused architecture run: 34 passed, 24 failed because this worktree lacked the guard's separately
+  evaluated Debug restore assets. Ran `tools/architecture/restore-ci-project-graph.sh` for Release/isolated Debug.
+  Restored EF dependency/schema-stamp checks: **58/58 passed**, zero skipped. Core implementation-shape guard:
+  **1/1 passed**, zero skipped.
+- First shared migration/model/content/history/ordinal run: 59 passed, six failed because the new collating module
+  was absent from the migration assertion's separate decision list. Added the explicit module and its five hash/
+  version binding columns plus the non-collated protected payload. Restored run: **65/65 passed**, zero skipped.
+  This includes four-provider model/snapshot agreement and native SQLite installation of every enrolled module
+  into one shared fresh database with separate histories. SQL Server/PostgreSQL/MySQL checks here are offline
+  model/migration checks; no new native-engine sign-in claim is made.
+- Generated solution-filter check passed. Existing broad-graph dependency audit warnings (`Pkcs` 9.0.13 and
+  `MySqlConnector` 2.3.5) remain visible; no unrelated package upgrade was performed. Generated Initial files
+  retain EF's ordinary namespace style warnings.
+
+```sh
+dotnet test Essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --verbosity quiet
+bash tools/architecture/restore-ci-project-graph.sh --verbosity quiet
+dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --filter 'FullyQualifiedName~EfSchemaVersionStampGuardTests|FullyQualifiedName~EfCoreDependencyGuardTests' --logger 'console;verbosity=normal'
+dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~Core_projects_contain_no_implementation_shaped_types' --verbosity quiet
+dotnet test Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --filter 'FullyQualifiedName~ModuleMigrationTests|FullyQualifiedName~ModuleHistoryTableTests|FullyQualifiedName~EfSchemaContentDeclarationTests|FullyQualifiedName~OrdinalCollationMigrationTests|FullyQualifiedName~OrdinalKeyComparerTests' --logger 'console;verbosity=normal'
+dotnet run --project tools/maps/Elsa.Maps.Generator --no-restore -- check
+```
+
+T019's actual interactive preview/cookie witness and T013/T020/T023's ordinary session issuance/enforcement are
+still incomplete, as are management/Studio, native server-database/separate-process deployment, independent
+review/required CI/merge and resulting-main qualification. The considered recurring-role-mapping decision is
+still pending; withdrawn selection and elapsed time are not authorization. No end-to-end completion is claimed.

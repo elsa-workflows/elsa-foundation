@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">

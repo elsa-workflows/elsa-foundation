@@ -6,7 +6,7 @@ managed OIDC belongs to the optional ExternalAuthentication/Oidc adapter; existi
 and persistence scope contracts without adding them to every base Identity.Core consumer.
 
 Current implementation: live deployment/catalog selection, explicit complete overrides, catalog persistence/CAS,
-role-delegation checks, lifecycle commands, the final-path guard and policy assessment/atomic admission. Protocol/login/preview/session/API/Studio
+role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation. HTTP login/preview/session/API/Studio
 integration is still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
 This module alone is not a qualified external sign-in deployment.
 
@@ -20,6 +20,9 @@ host. `AddFoundationExternalAuthentication` is the programmatic registration ent
 - `AllowDatabaseManagement` defaults to false; disabled management never reads optional persisted catalog rows.
 - `AllowDeploymentOverrides` defaults to false; `AllowedOverrideKeys` may constrain the permitted keys.
 - `AllowedRoleIds` may further constrain default/mapped Elsa roles for database policy editing. The editor must also be authorized to delegate every role permission.
+- `PublicBaseUrl` is the trusted public backend URL, including its path base. Callback construction never uses an incoming Host header. `CallbackPath` defaults to `/identity/external` below that base.
+- `AllowedReturnUrlOrigins` explicitly permits additional HTTPS frontend origins; local return paths and the configured backend origin are accepted. The callback rechecks the policy. Loopback HTTP requires Development.
+- `FlowLifetime` defaults to ten minutes (maximum fifteen); `PreviewResultLifetime` defaults to five minutes (maximum ten). Both must be at least one second.
 
 The default catalog adapter uses the existing `IRevisionAwareProviderConfigurationStore`, one global
 `external-authentication` record of kind `external-connections/v1`. Compose a provider-configuration backend
@@ -41,7 +44,7 @@ catalog with CAS. Concurrent workers cannot both apply stale decisions against t
 
 ## Extension points and tests
 
-See [Core catalog](../Core/EXTENSION_POINTS.md). Seven replacement defaults are scoped. The immutable system clock and startup-only activation check are
+See [Core catalog](../Core/EXTENSION_POINTS.md). Replacement defaults are scoped. The immutable system clock and startup-only activation check are
 singletons. `ExternalAuthenticationActivation` implements both `IShellInitializer` and `IHostedService` so plain
 and shell hosts reject malformed deployment policy or missing opt-in persistence before serving requests.
 It performs no table queries ahead of the persistence feature's migrations. No event handlers or recurring tasks are added in this stage.
@@ -96,4 +99,33 @@ Both role IDs must already exist in Elsa and be declared for that connection. Ra
 claims never flow into the canonical principal. Policies return a closed failure category; no arbitrary provider
 message is exposed. Preview calls only `IExternalAdmissionService.AssessAsync`; normal admission calls `AdmitAsync`,
 which reloads current source/lifecycle/material state and reassesses before the atomic write. A disabled draft can
-be assessed but cannot establish a normal login. The broker and interactive preview endpoints remain pending.
+be assessed but cannot establish a normal login. Interactive preview endpoints and normal session issuance remain pending.
+
+## Protected one-time flows
+
+`IExternalAuthenticationFlowService` coordinates begin/callback and preview-result consumption. Compose an
+`IAuthenticationArtifactStore` authority and a shared Data Protection key ring with the same application name
+on every backend node. The optional [EF module](../Persistence/EntityFrameworkCore/README.md) owns these artifacts;
+the base IAM persistence package acquires no dependency on Secrets or managed authentication. Missing storage
+refuses the flow. Non-durable replacement stores are accepted only in Development, never by default.
+
+The API adapter must supply the purpose from its route and a cryptographically random browser binding from
+its protected correlation cookie. These service inputs are server-only; they are not request-body contracts.
+Normal and preview callbacks have distinct routes under the trusted base: `signin/{key}/callback` and
+`preview/{key}/callback`. Preview also pins the selected management record ID, allowing a disabled or shadowed
+unarchived draft to be tested without making it effective. Begin, callback and result read reauthorize the
+initiating canonical administrator; another administrator cannot consume that flow or result.
+
+Storage contains domain-separated hashes of handles/bindings and a Data Protection payload bound to tenant,
+purpose, artifact ID, browser and administrator. State includes nonce, PKCE verifier, source record/material
+revision, issuer, secret generation, exact callback and return destination. A matching callback consumes state
+before code exchange; failures do not reopen it. Wrong browser/purpose/route/admin does not consume the correct
+flow. Current source, lifecycle, material, callback, return policy and secret generation are checked again.
+Provider errors return closed categories rather than raw upstream messages.
+
+Normal completion returns a server-only admitted user ID and provenance; the session adapter must then issue
+the ordinary Elsa session. Preview runs pure admission assessment and creates a separately protected, bounded,
+short-lived result artifact. Result reads consume it once and flag observations whose source material changed.
+No raw upstream access/refresh tokens are persisted. Component tests use a real HTTP OIDC fixture, native SQLite
+and owned shared key directories across independent service providers/restarts. Actual cookie/session/browser,
+separate-process and PostgreSQL/SQL Server deployment qualification remain open in spec 1205.

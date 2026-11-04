@@ -14,6 +14,10 @@ public class ExternalAuthenticationFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Identity tenant", Description = "Deployment-owned host identity and administration tenant; not a per-connection field.", Category = "Identity", DefaultValue = "default")]
     public string TenantId { get; set; } = "default";
+    [ManifestSetting(DisplayName = "Public backend URL", Description = "Trusted public backend URL including its path base; used for provider callbacks.", Category = "Identity")]
+    public string? PublicBaseUrl { get; set; }
+    public string CallbackPath { get; set; } = "/identity/external";
+    public List<string> AllowedReturnUrlOrigins { get; set; } = [];
     [ManifestSetting(DisplayName = "Allow database management", Description = "Opt in to managed connections using the selected provider-configuration store.", Category = "Identity", DefaultValue = "false")]
     public bool AllowDatabaseManagement { get; set; }
     [ManifestSetting(DisplayName = "Allow explicit deployment overrides", Description = "Permit authorized full Studio overrides; a same-key row never overrides automatically.", Category = "Security", DefaultValue = "false")]
@@ -25,6 +29,9 @@ public class ExternalAuthenticationFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services) => services.AddFoundationExternalAuthentication(options =>
     {
         options.TenantId = TenantId;
+        options.PublicBaseUrl = PublicBaseUrl;
+        options.CallbackPath = CallbackPath;
+        options.AllowedReturnUrlOrigins = AllowedReturnUrlOrigins;
         options.AllowDatabaseManagement = AllowDatabaseManagement;
         options.AllowDeploymentOverrides = AllowDeploymentOverrides;
         options.AllowedOverrideKeys = AllowedOverrideKeys;

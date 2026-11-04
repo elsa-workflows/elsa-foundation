@@ -34,7 +34,8 @@ Read framework v6.1.0, Elsa v6.3.0 and the contribution review checklist. No con
 - `Essentials/src/Foundation/Identity/ExternalAuthentication/Core/` and `ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/`: optional managed-connection contracts and policy/registry/catalog behavior. This dependency envelope consumes Secrets.Core and persistence scope contracts without adding them to every base Identity.Core consumer. Managed protocol code belongs to an optional ExternalAuthentication/Oidc adapter; existing direct bearer consumers acquire no Secrets dependency.
 - `Essentials/src/Foundation/Identity/Oidc/`: retain direct bearer validation. `Identity/ExternalAuthentication/Oidc/`: optional managed protocol adapter consuming the managed Core contracts and installed OIDC validation libraries.
 - `Essentials/src/Foundation/Identity/AspNetCoreIdentity/`: admission/session bridge and canonical user projection.
-- `Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/`: catalog reuse, exact links, atomic admission/flow/session stores and migrations.
+- `Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/`: catalog reuse, exact links, atomic admission/session stores and migrations.
+- `Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/`: optional dedicated flow/preview artifact authority and four-provider migration history. This keeps Secrets/managed-auth dependencies out of base IAM persistence.
 - `Essentials/src/Foundation/Identity/Api/`: management/broker/login surfaces through Core; split optional dependency envelopes into named subfeatures as needed.
 - `Extensions/Identity/studio/`: optional external-auth React module and standalone SDK following Connections/Secrets conventions.
 - `Essentials/tests/Foundation/Identity/`, feature UI tests and real-provider harness: behavior/integration/qualification.

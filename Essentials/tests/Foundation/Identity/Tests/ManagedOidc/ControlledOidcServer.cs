@@ -25,6 +25,7 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
     public const string ClientId = "elsa-client";
     public const string ClientSecret = "client secret +/:?&";
     public const string Callback = "https://elsa.example/identity/external/company/callback";
+    public HashSet<string> RegisteredCallbacks { get; } = new(StringComparer.Ordinal) { Callback };
     public Action<Dictionary<string, object>>? ChangeMetadata { get; set; }
     public string TokenScenario { get; set; } = "valid";
     public string Authentication { get; set; } = "client_secret_basic";
@@ -79,12 +80,13 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
     private IResult Authorize(HttpContext context)
     {
         var query = context.Request.Query;
-        if (query["client_id"] != ClientId || query["redirect_uri"] != Callback || query["response_type"] != "code" ||
+        var callback = query["redirect_uri"].ToString();
+        if (query["client_id"] != ClientId || !RegisteredCallbacks.Contains(callback) || query["response_type"] != "code" ||
             query["code_challenge_method"] != "S256" || string.IsNullOrEmpty(query["nonce"]) || string.IsNullOrEmpty(query["state"]))
             return Results.BadRequest();
         var code = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        codes[code] = new(query["nonce"].ToString(), query["code_challenge"].ToString());
-        return Results.Redirect(QueryHelpers.AddQueryString(Callback, new Dictionary<string, string?>
+        codes[code] = new(query["nonce"].ToString(), query["code_challenge"].ToString(), callback);
+        return Results.Redirect(QueryHelpers.AddQueryString(callback, new Dictionary<string, string?>
             { ["code"] = code, ["state"] = query["state"], ["iss"] = Issuer }));
     }
 
@@ -107,7 +109,7 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
             return Results.Json(new { error = "invalid_client", error_description = ClientSecret }, statusCode: 400);
         var code = form["code"].ToString();
         var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(form["code_verifier"].ToString())));
-        if (form["grant_type"] != "authorization_code" || form["redirect_uri"] != Callback || !codes.TryGetValue(code, out var grant) ||
+        if (form["grant_type"] != "authorization_code" || !codes.TryGetValue(code, out var grant) || form["redirect_uri"] != grant.Callback ||
             grant.Challenge != challenge || !codes.TryRemove(new KeyValuePair<string, Grant>(code, grant)))
             return Results.Json(new { error = "invalid_grant", error_description = "sensitive upstream diagnostic" }, statusCode: 400);
         if (RotateOnToken) { RotateKey(); RotateOnToken = false; }
@@ -149,5 +151,5 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() { await application.DisposeAsync(); key.Dispose(); }
-    private sealed record Grant(string Nonce, string Challenge);
+    private sealed record Grant(string Nonce, string Challenge, string Callback);
 }
