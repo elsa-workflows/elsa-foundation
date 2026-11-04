@@ -266,6 +266,60 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await race.Commits.FindAsync(race.OtherClaim.OutboxItemId))?.Status);
     }
 
+    [Theory]
+    [InlineData(PersistenceMode.Balanced, 0, 1)]
+    [InlineData(PersistenceMode.Durable, 0, 1)]
+    [InlineData(PersistenceMode.Ephemeral, 0, 1)]
+    [InlineData(PersistenceMode.Balanced, 1, 1)]
+    [InlineData(PersistenceMode.Durable, 1, 1)]
+    [InlineData(PersistenceMode.Ephemeral, 1, 1)]
+    [InlineData(PersistenceMode.Balanced, 1, 2)]
+    [InlineData(PersistenceMode.Durable, 1, 2)]
+    [InlineData(PersistenceMode.Ephemeral, 1, 2)]
+    [InlineData(PersistenceMode.Balanced, 1, int.MaxValue)]
+    public async Task Previously_observed_deliveries_cannot_hide_a_later_delivery_behind_the_listing_limit(
+        PersistenceMode mode, int deliveryClockAheadSeconds, int listingLimit)
+    {
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false);
+        await using var provider = BuildProvider(shared, probe, mode: mode,
+            drainOptions: new WorkflowDrainOrchestratorOptions(outboxDeliveryBatchSize: listingLimit));
+        await using var scope = provider.CreateAsyncScope();
+        var commits = InnerCommitStore(scope.ServiceProvider);
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+        probe.DuringSchedule = () => DeliverNextStepAsync(2);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId), timeout.Token);
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(["schedule-1", "schedule-2", "schedule-3", "schedule-4"], result.Items.Select(item => item.WorkItemId));
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Equal(4L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+
+        async Task DeliverNextStepAsync(int number)
+        {
+            // Each delivery lands after this segment seeded its overlay. Earlier delivered rows still match the
+            // reseed time (equal clocks, or a slightly faster deliverer) and sort before this new delivery.
+            var step = ScheduleWork($"schedule-{number}", number);
+            var id = $"outbox-foreign-{number}";
+            await commits.AddPendingForTestingAsync(new RuntimePostCommitOutboxItem(id,
+                SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(step, $"activity-{step.WorkItemId}", step, Now),
+                RuntimePostCommitOutboxStatus.Pending, Now, Now, RuntimePostCommitRetryPolicy.None));
+            var claim = Assert.Single(await commits.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "other-continuation-worker", Now, TimeSpan.FromMinutes(10), limit: 1,
+                WorkflowExecutionId, RuntimePostCommitIntentKinds.EnqueueSchedulerWork)));
+            await shared.Queue.EnqueueAsync(step);
+            Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await commits.CompleteClaimAsync(
+                new RuntimePostCommitOutboxClaimCompletion(claim, new RuntimePostCommitOutboxDeliveryResult(
+                    id, RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(deliveryClockAheadSeconds)))));
+            if (number < 4)
+                probe.DuringSchedule = () => DeliverNextStepAsync(number + 1);
+        }
+    }
+
     /// <summary>
     /// The #3647 re-drive delivers the execution's flushed continuations before its first segment. It queues schedule-1 that
     /// way, but another deliverer holds the continuation for schedule-2, and queues that step only after the first segment
@@ -1364,7 +1418,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         // WorkflowResumeBookmarkSchedulerWorkHandler does, retaining its item when true, and then faults.
         public bool? ResumeCommitsInOwnScopeThenFaults => resumeCommitsInOwnScopeThenFaults;
         public int OwnScopeResumeRuns { get; set; }
-        // Runs once inside the first schedule's body, as another worker would act while user code runs.
+        // Runs once inside a schedule's body; it can rearm itself for a later step.
         public Func<Task>? DuringSchedule { get; set; }
 
         public bool ShouldDeferResume()
