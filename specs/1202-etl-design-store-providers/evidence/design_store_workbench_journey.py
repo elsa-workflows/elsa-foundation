@@ -110,7 +110,8 @@ class Database:
         command = ["docker", "run", "-d", "--rm", "--name", self.name, "-p", f"127.0.0.1::{port}"]
         for key, value in env.items():
             command += ["-e", f"{key}={value}"]
-        subprocess.run(command + [image], capture_output=True, text=True, check=True)
+        if subprocess.run(command + [image], capture_output=True, text=True).returncode != 0:
+            raise RuntimeError(f"The owned {provider} container could not start.")
         try:
             self.port = int(subprocess.check_output(["docker", "port", self.name, f"{port}/tcp"], text=True).strip().splitlines()[0].rsplit(":", 1)[1])
             wait_for(self._ready, bool, f"{provider} did not become ready.", 240)
@@ -122,7 +123,8 @@ class Database:
             try:
                 self.stop()
             except Exception as cleanup:
-                failure.add_note(f"Owned database cleanup failed ({type(cleanup).__name__}).")
+                if hasattr(failure, "add_note"):
+                    failure.add_note(f"Owned database cleanup failed ({type(cleanup).__name__}).")
             raise
 
     def _sqlcmd(self, sql: str) -> subprocess.CompletedProcess:
@@ -153,13 +155,17 @@ class Database:
         elif self.provider == "SqlServer":
             out = self._sqlcmd("SET NOCOUNT ON; SELECT name FROM elsa_etl.sys.tables WHERE name LIKE 'elsa[_]etl[_]%'").stdout
         else:
-            out = subprocess.check_output(["docker", "exec", self.name, "mysql", "-h", "127.0.0.1", "-uroot", f"-p{self.secret}", "-N",
+            result = subprocess.run(["docker", "exec", self.name, "mysql", "-h", "127.0.0.1", "-uroot", f"-p{self.secret}", "-N",
                                            "-e", "SELECT table_name FROM information_schema.tables WHERE table_schema = 'elsa_etl' AND table_name LIKE 'elsa_etl_%'"],
-                                          text=True, stderr=subprocess.DEVNULL)
+                                    capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError("The owned MySQL catalog could not be read.")
+            out = result.stdout
         return sorted(line.strip() for line in out.splitlines() if line.strip().startswith("elsa_etl_"))
 
     def stop(self) -> None:
-        subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
+        if subprocess.run(["docker", "rm", "-f", self.name], capture_output=True).returncode != 0:
+            raise RuntimeError("Owned database container cleanup failed.")
 
 
 class Host:
@@ -200,7 +206,8 @@ class Host:
             try:
                 self.stop()
             except Exception as cleanup:
-                failure.add_note(f"Owned Workbench cleanup failed ({type(cleanup).__name__}).")
+                if hasattr(failure, "add_note"):
+                    failure.add_note(f"Owned Workbench cleanup failed ({type(cleanup).__name__}).")
             raise
 
     def stop(self) -> None:
