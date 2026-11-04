@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD26 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD27 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -51,6 +51,7 @@ An author places substates inside a containing state and defines shared behavior
 4. **Given** a parent remains active while only its child changes, **when** that child transition occurs, **then** parent-owned waits remain intact unless the agreed exit boundary actually includes the parent.
 5. **Given** an authored transition exits a containing state, **when** that transition is selected, **then** waits and pending activity work in the exited scope are cancelled according to the agreed lifecycle contract.
 6. **Given** a non-final state with no local outgoing edge, **when** it relies on ancestor behavior or remains waiting, **then** it is not inferred to be complete. Explicit final-state intent and accidental-dead-end diagnostics remain distinct; complete scoped completion propagation is Q1.
+7. **Given** a transition exits or enters multiple nested states, **when** their authored work runs, **then** exited children finish Exit before their exited parents, and entered parents finish Entry before their entered children. All applicable exits finish before transition Action and Action finishes before entries, including across durable waits.
 
 ### User Story 3 — Model independent parallel regions (Priority: P1)
 
@@ -190,6 +191,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-035**: Studio MUST present a focused state/transition/region chart with summaries of entry, exit, trigger and action work. Authors MUST be able to drill into that ordinary work using the normal activity editor, with breadcrumbs back to the chart and chart context preserved on return. Detailed navigation and accessibility/responsive journeys remain Q3.
 - **FR-036**: Selecting a transition MUST expose a structured inspector for Trigger (or Automatic), Condition, Action and Destination, explicit transition order, and whether the reaction preserves the state visit or exits/re-enters. Ordinary activity work MUST use the normal activity editor and conditions MUST use Elsa's expression editor. The inspector MUST represent the supported transition semantics; detailed valid choices and diagnostics remain Q3.
 - **FR-037**: The machine, each compound state with sequential child-state selection, and each parallel region MUST have an explicit initial child state. Studio MUST validate missing or invalid selections. Entering a parallel state MUST activate every region at its own explicit initial state. Graph geometry MUST NOT determine startup behavior.
+- **FR-038**: For states a transition actually exits, child Exit work MUST finish before its exited parent runs Exit. For states it actually enters, parent Entry work MUST finish before its entered children run Entry. All applicable exits MUST complete before transition Action, and Action MUST complete before entries, including across durable waits. This requirement does not select an unagreed boundary calculation or independent-region ordering/concurrency policy.
 
 ### Platform constraints and design obligations
 
@@ -250,7 +252,7 @@ OD18 adds automatic transitions after entry work completes (FR-029). OD19 gives 
 
 OD20 requires explicit final-state intent (FR-031). OD26 requires explicit, validated initial child states at each applicable level and starts all regions when entering a parallel state (FR-037). Final entry work and complete scoped completion propagation remain open.
 
-OD22 settles source Exit → transition Action → target Entry for applicable authored phases (FR-033), with durable completion before the next phase starts. Complete hierarchical exit/entry boundaries and fault/recovery details remain open.
+OD22 settles source Exit → transition Action → target Entry for applicable authored phases (FR-033), with durable completion before the next phase starts. OD27 adds child-first Exit and parent-first Entry for states actually exited/entered (FR-038). Complete exit/entry boundary calculation, independent-region ordering/concurrency and fault/recovery details remain open.
 
 Proposed reference baseline: a persistent authored reaction remains usable after an action-without-exit completes. This proposal has not been accepted merely because a reference engine uses it.
 
