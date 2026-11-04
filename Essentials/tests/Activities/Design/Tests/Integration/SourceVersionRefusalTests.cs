@@ -68,6 +68,22 @@ public sealed class SourceVersionRefusalTests
     }
 
     [Fact]
+    public async Task A_complete_pass_drops_entries_for_versions_it_did_not_refuse()
+    {
+        // 1.0.0 was refused earlier and the source now contributes a fixed 1.0.1 instead; 2.0.0 is still refused.
+        var stale = ActivityCatalogStableIds.VersionId(TypeKey, "1.0.0")!;
+        var stillRefused = ActivityCatalogStableIds.VersionId(TypeKey, "2.0.0")!;
+        var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
+        diagnostics.Record(stale, [Diagnostic(stale)]);
+        var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.1"), Model("2.0.0"));
+
+        await InMemoryReconcilerHarness.BuildReconciler(new(), source, sourceVersionPublisher: new RefusingPublisher("2.0.0"), diagnosticStore: diagnostics)
+            .Reconcile(CancellationToken.None);
+
+        Assert.Equal([stillRefused], diagnostics.List().Keys);
+    }
+
+    [Fact]
     public void The_feature_registers_a_replaceable_in_memory_diagnostic_store()
     {
         var defaults = new ServiceCollection();

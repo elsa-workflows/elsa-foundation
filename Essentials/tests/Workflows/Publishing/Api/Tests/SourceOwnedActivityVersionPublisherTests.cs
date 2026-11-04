@@ -282,6 +282,10 @@ public sealed class SourceOwnedActivityVersionPublisherTests
             .PublishAsync(Definition(), ProviderVersion("version-1"));
 
         Assert.False(result.IsPublished);
+        // The refusal still names itself, so the reconciler has something to log and record.
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("activity.source.publication-refused", diagnostic.Code);
+        Assert.Equal(new ActivityDiagnosticSubject(SourceOwnedActivityVersionPublisher.SubjectKind, "version-1", "definition-1", Revision: 0), diagnostic.Subject);
         Assert.Empty(command.Commits);
     }
 

@@ -29,8 +29,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// Content whose provider key a registered <see cref="IActivityTemplateProviderCompiler"/> owns is judged exactly as a
 /// Studio draft is: validated by <see cref="IActivityDraftValidator"/>, compiled through the provider compiler (which runs
 /// the provider's own gates, such as a model capability check), and checked for storage and runtime readiness. A version
-/// any of that refuses is not written; its diagnostics are returned for the reconciler to record. Content no compiler owns
-/// (CLR and JSON sources) keeps the source-owned root compiled by <see cref="ExecutableNodeCompiler"/>.
+/// any of that refuses is not written; its diagnostics are returned for the reconciler to record. Content whose provider key
+/// no compiler owns (such as <c>elsa.clr-activity</c>) keeps the source-owned root compiled by <see cref="ExecutableNodeCompiler"/>.
 /// </para>
 /// </summary>
 public sealed class SourceOwnedActivityVersionPublisher(
@@ -189,7 +189,8 @@ public sealed class SourceOwnedActivityVersionPublisher(
             0,
             contract,
             new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload));
-        var subject = new ActivityDiagnosticSubject(SubjectKind, version.Id, definition.Id, version.Id, 0);
+        // The same subject shape the evaluator and the template compiler give this candidate.
+        var subject = new ActivityDiagnosticSubject(SubjectKind, version.Id, definition.Id, Revision: 0);
         if (templateCompiler is null || validator is null)
             return Refusal(subject, "activity.source.provider-compilation-unavailable",
                 "Provider-backed source content needs the activity draft validator and template compiler, and one is not registered.",
@@ -227,6 +228,18 @@ public sealed class SourceOwnedActivityVersionPublisher(
                     "Source-owned activity content cannot depend on other activity versions.",
                     subject,
                     Remediation: "Author content with activity dependencies in Studio, or remove the dependencies from the source.",
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal))))
+            };
+        // A replaced validator may refuse without saying why; the refusal still names itself, so it is logged and recorded.
+        if (!evaluated.IsPublishable && evaluated.Diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error))
+            return evaluated with
+            {
+                Diagnostics = ActivityDiagnosticOrderer.Order(evaluated.Diagnostics.Append(new(
+                    "activity.source.publication-refused",
+                    ActivityDiagnosticSeverity.Error,
+                    "The provider-backed source content was refused without a stated reason.",
+                    subject,
+                    Remediation: "Validate the source content in Studio or check the node log, correct it and reconcile again.",
                     Metadata: new Dictionary<string, string>(StringComparer.Ordinal))))
             };
         return evaluated;

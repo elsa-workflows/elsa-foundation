@@ -76,10 +76,17 @@ public sealed class ActivityVersionReconciler(
 
         var (definitionIndex, versionIndex) = await Prefetch(@event.Versions, cancellationToken);
 
+        var refused = new HashSet<string>(StringComparer.Ordinal);
         foreach (var version in @event.Versions)
         {
-            await ReconcileVersion(version, definitionIndex, versionIndex, cancellationToken);
+            await ReconcileVersion(version, definitionIndex, versionIndex, refused, cancellationToken);
         }
+
+        // A complete pass is the whole truth about refusals: an entry for a version this pass did not refuse (published,
+        // or no longer contributed, such as one a source replaced by a fixed next version) is no longer current.
+        if (diagnosticStore is not null && SingleSourceVersionPublisher() is not null)
+            foreach (var versionId in diagnosticStore.List().Keys.Where(id => !refused.Contains(id)))
+                diagnosticStore.Clear(versionId);
     }
 
     /// <summary>
@@ -116,6 +123,7 @@ public sealed class ActivityVersionReconciler(
         IActivityDefinitionVersion incomingVersion,
         DefinitionIndex definitionIndex,
         VersionIndex versionIndex,
+        ISet<string> refused,
         CancellationToken cancellationToken)
     {
         var sourceVersionPublisher = SingleSourceVersionPublisher();
@@ -139,7 +147,7 @@ public sealed class ActivityVersionReconciler(
                     newDefinition,
                     newVersion,
                     cancellationToken);
-            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, newDefinition, newVersion, cancellationToken))
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, newDefinition, newVersion, cancellationToken))
                 return;
 
             // Mirror the write into the indexes so a later candidate targeting the same definition
@@ -166,7 +174,7 @@ public sealed class ActivityVersionReconciler(
                     CreateOperationKey("append", incomingVersion),
                     appended,
                     cancellationToken);
-            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, definition, appended, cancellationToken))
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, appended, cancellationToken))
                 return;
             versionIndex.Add(appended);
             return;
@@ -200,7 +208,7 @@ public sealed class ActivityVersionReconciler(
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
-                    await PublishSourceVersionAsync(sourceVersionPublisher, definition, existingVersion, cancellationToken);
+                    await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
                 }
                 return;
             }
@@ -222,7 +230,7 @@ public sealed class ActivityVersionReconciler(
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
-            await PublishSourceVersionAsync(sourceVersionPublisher, definition, existingVersion, cancellationToken);
+            await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
         }
     }
 
@@ -255,6 +263,7 @@ public sealed class ActivityVersionReconciler(
     /// </summary>
     private async Task<bool> PublishSourceVersionAsync(
         IActivitySourceVersionPublisher publisher,
+        ISet<string> refused,
         ActivityDefinition definition,
         ActivityDefinitionVersion version,
         CancellationToken cancellationToken)
@@ -266,6 +275,7 @@ public sealed class ActivityVersionReconciler(
             return true;
         }
 
+        refused.Add(version.Id);
         diagnosticStore?.Record(version.Id, result.Diagnostics);
         if (logger.IsEnabled(LogLevel.Warning))
             foreach (var diagnostic in result.Diagnostics)

@@ -59,6 +59,11 @@ runtime consumer registered for the key/schema materializes it. For example, a J
 `elsa.clr-activity` schema `1` is catalogued with the same provider-neutral runtime identity as CLR
 scanning, without persisting a CLR `FullName` as universal dispatch identity.
 
+When the Publishing API bridge is installed, an entry whose `providerKey` a registered activity template
+provider compiler owns (for example `elsa.activity-graph`) is validated and compiled by that provider, as Studio
+content is, and a version it refuses is skipped with its diagnostics recorded; it is not published as a
+single-node root. Entries for keys no compiler owns, such as `elsa.clr-activity`, keep the single-node root.
+
 ## Registration
 
 Compose the feature alongside `ActivitiesDesignReconciliationFeature`; the universal

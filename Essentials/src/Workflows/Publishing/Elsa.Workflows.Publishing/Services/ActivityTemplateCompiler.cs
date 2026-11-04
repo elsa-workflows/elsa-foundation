@@ -50,9 +50,9 @@ public sealed record ActivityTemplateCompilerRequest(
     string CandidateVersion,
     long LayoutBytes)
 {
-    /// <summary>Compiles one exact Studio draft revision.</summary>
-    public ActivityTemplateCompilerRequest(ActivityDefinition definition, ActivityDefinitionDraft draft, string candidateDefinitionVersionId, string candidateVersion, long layoutBytes)
-        : this(definition, ActivityTemplateCandidate.FromDraft(draft), candidateDefinitionVersionId, candidateVersion, layoutBytes) { }
+    /// <summary>Compiles one exact Studio draft revision. Its parameter names match the primary constructor's, so callers that name them keep compiling.</summary>
+    public ActivityTemplateCompilerRequest(ActivityDefinition Definition, ActivityDefinitionDraft Draft, string CandidateDefinitionVersionId, string CandidateVersion, long LayoutBytes)
+        : this(Definition, ActivityTemplateCandidate.FromDraft(Draft), CandidateDefinitionVersionId, CandidateVersion, LayoutBytes) { }
 }
 
 public sealed record ActivityTemplateCompilerResult(
@@ -117,7 +117,7 @@ public sealed class ActivityTemplateCompiler(
             request.Definition.Id,
             request.Candidate.Id,
             request.Candidate.Revision,
-            request.Candidate.Provider), cancellationToken);
+            request.Candidate.Provider) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(discovery.Diagnostics);
         authoritativeDependencies = discovery.Dependencies.Select(x => new ActivityTemplateDependencyRequest(
             x.DefinitionVersionId,

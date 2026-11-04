@@ -31,7 +31,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 ### `IActivityReconciliationDiagnosticStore` *(Core contract — `Elsa.Activities.Design.Core`)*
 - **Default:** `InMemoryActivityReconciliationDiagnosticStore` *(intra-domain — default)*, registered with `TryAddSingleton` by `ActivitiesDesignReconciliationFeature`. It keeps this node's entries in memory; the next pass rebuilds them after a restart.
-- **What it holds:** the diagnostics of the latest pass that refused each source-owned version, keyed by definition version id. A pass that publishes the version clears its entry.
+- **Signature:**
+  ```
+  void Record(string definitionVersionId, IReadOnlyList<ActivityDiagnostic> diagnostics);
+  void Clear(string definitionVersionId);
+  IReadOnlyList<ActivityDiagnostic> Find(string definitionVersionId);
+  IReadOnlyDictionary<string, IReadOnlyList<ActivityDiagnostic>> List();
+  ```
+- **What it holds:** the source-owned versions the latest complete pass refused, each with its diagnostics, keyed by definition version id.
+- **Consumed by:** `ActivityVersionReconciler` (this feature): `Record` on a refusal, `Clear` when the version publishes, and, at the end of a complete pass with a publishing bridge, `Clear` for every entry that pass did not refuse (a version fixed, or replaced by a next version and no longer contributed).
 - **Replace when:** refusals must be shared across nodes or survive a restart. Register the replacement before the feature, or use `services.Replace(...)`.
 
 ### `IActivitySourceVersionPublisher` *(Core contract — `Elsa.Activities.Design.Core`)*

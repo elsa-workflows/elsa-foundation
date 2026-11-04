@@ -59,7 +59,11 @@ public sealed record ActivityTemplateDependencyDiscoveryRequest(
     string DefinitionId,
     string DraftId,
     long Revision,
-    ActivityProviderManifest Provider);
+    ActivityProviderManifest Provider)
+{
+    /// <summary>What <see cref="DraftId"/> names, for the diagnostic subject; see <see cref="ActivityTemplateCompilationRequest.SubjectKind"/>.</summary>
+    public string SubjectKind { get; init; } = "ActivityDraft";
+}
 
 public sealed record ActivityTemplateDependencyDeclaration(
     string DefinitionVersionId,

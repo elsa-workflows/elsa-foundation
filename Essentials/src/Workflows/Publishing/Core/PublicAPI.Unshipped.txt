@@ -406,6 +406,8 @@ Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.Provider.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.Revision.get -> long
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.Revision.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.SubjectKind.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.SubjectKind.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.ActivityTemplateOccurrenceCompilation(string! OccurrenceId, System.Text.Json.JsonElement InputBindings, Elsa.Workflows.Design.Core.Models.ActivityNodeStructure? Structure, System.Text.Json.JsonElement? OutputBindings = null) -> void
