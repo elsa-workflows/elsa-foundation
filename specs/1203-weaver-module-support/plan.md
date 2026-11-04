@@ -2,7 +2,7 @@
 
 **Branch**: agent/codex/3443-weaver-effects-plan
 **Date**: 2026-11-04
-**Status**: Draft — implementation planning; no contract freeze
+**Status**: Approved for task generation after independent plan review on 2026-11-04; proposed contracts remain Preview until demonstrated freeze
 **Spec**: [spec.md](spec.md), approved by [PR #3757](https://github.com/elsa-workflows/elsa-foundation/pull/3757)
 **Implementation base**: c0b61d8731de3266d14928e8b1624a31c386184d
 
@@ -45,7 +45,7 @@ Both ratified documents are loaded: framework6.1.0 and Elsa6.3.0. Their Gate ind
 | ElsaE2.2/E2.5 | Design-only, Runtime-only and combined shapes remain supported; no required application DbContext base or cross-side dependency. |
 | ElsaE6/E7 | New names follow domain rules. Reuse test projects; any justified new project must be assigned one real CI tier. |
 
-No constitutional exception is planned. Recheck this table after independent plan review and before implementation.
+No constitutional exception is planned. Independent correctness and standards round2 found no P1/P2 or material P3 findings on the complete corrected plan. Recheck this table before implementation; final-head review and delivery gates still apply.
 
 ## PD1: feature and package composition
 
