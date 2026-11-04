@@ -47,7 +47,8 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
     <InputIdentity title="Source input" alias={run.bindingAliases?.source} identity={run.sourceInput}
       emptyMessage={run.connector?.sourceKind === "http" ? "Source progress is tracked by page." : undefined}
       // A SQL table has no digest at admission: the run reads it once, when it is prepared.
-      missingDigest={run.connector?.sourceKind === "sql" ? "None; the table is read at preparation" : undefined} />
+      missingDigest={run.connector?.sourceKind === "sql" ? "None; the table is read at preparation"
+        : run.connector?.sourceKind === "rabbitMq" ? "None; the queue is read at preparation" : undefined} />
     <InputIdentity title="Lookup input" alias={run.bindingAliases?.lookup} identity={run.lookupInput}
       emptyMessage={run.connector && run.bindingAliases?.lookup === null ? "No lookup configured." : undefined} />
     {run.connector ? <section aria-label="Connector output progress">
@@ -98,11 +99,11 @@ function isHttpKind(kind: string) {
 
 /** An output's kind; a CSV output is a file, while a CSV source keeps the plain "CSV" label. */
 function outputKindLabel(kind: string) {
-  return kind === "csv" ? "CSV file" : kind === "sql" ? "SQL table" : kindLabel(kind);
+  return kind === "csv" ? "CSV file" : kind === "sql" ? "SQL table" : kind === "rabbitMq" ? "RabbitMQ exchange" : kindLabel(kind);
 }
 
 function kindLabel(kind: string) {
-  return ({ http: "HTTP JSON", csv: "CSV", jsonl: "JSON Lines", sql: "SQL table snapshot" } as Record<string, string>)[kind] ?? kind;
+  return ({ http: "HTTP JSON", csv: "CSV", jsonl: "JSON Lines", sql: "SQL table snapshot", rabbitMq: "RabbitMQ queue" } as Record<string, string>)[kind] ?? kind;
 }
 
 export function EtlPartitionTable({ partitions, now = Date.now() }: {

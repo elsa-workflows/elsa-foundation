@@ -31,8 +31,9 @@ internal sealed partial class EtlRuntimeOperations
             SourceRecordCount = connector.Prepared?.File?.RecordCount,
             BindingAliases = new(bindings.Source.Revision.Alias, bindings.Lookup?.Revision.Alias,
                 bindings.Main.Revision.Alias, bindings.Errors.Revision.Alias),
-            // A SQL source has no admission digest; its input identity is the retained snapshot (spec 1198).
-            SourceInput = bindings.Source.Kind is EtlConnectorKind.Csv or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql
+            // A SQL (spec 1198) or RabbitMQ (spec 1201) source has no admission digest; its input identity is the retained snapshot.
+            SourceInput = bindings.Source.Kind is EtlConnectorKind.Csv or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql or
+                    EtlConnectorKind.RabbitMq
                 ? InputIdentity(bindings.Source.Revision, connector.Prepared?.File?.Source) : null,
             LookupInput = InputIdentity(bindings.Lookup?.Revision, connector.Prepared?.Lookup),
             Connector = new(Kind(bindings.Source.Kind), Kind(bindings.Main.Kind), Kind(bindings.Errors.Kind),
@@ -80,10 +81,12 @@ internal sealed partial class EtlRuntimeOperations
     private static EtlRunEffectView? Effect(EtlConnectorEffectInspection? effect)
     {
         if (effect is null) return null;
-        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) ||
+        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                EtlConnectorKind.RabbitMq) ||
             effect.State is not ("retained" or "acknowledged" or "published") ||
             effect.State == "acknowledged" && effect.Kind != EtlConnectorKind.Http ||
-            effect.State == "published" && effect.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) ||
+            effect.State == "published" && effect.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                EtlConnectorKind.RabbitMq) ||
             effect.Kind != EtlConnectorKind.Http && effect.Retry is not null ||
             effect.Kind == EtlConnectorKind.Http &&
             ((effect.State == "acknowledged") != (effect.Retry?.Phase == "acknowledged")))
