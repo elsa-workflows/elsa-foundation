@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 namespace Elsa.Etl.Persistence.ProviderTests;
 
 /// <summary>Overlapping runtime transactions on actual servers; injected failures are tested separately.</summary>
-public abstract class EtlRuntimeConcurrencyTests(EtlNativeProviderFixture fixture, ITestOutputHelper output)
+public abstract partial class EtlRuntimeConcurrencyTests(EtlNativeProviderFixture fixture, ITestOutputHelper output)
 {
     [SkippableFact]
     public async Task Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation()
