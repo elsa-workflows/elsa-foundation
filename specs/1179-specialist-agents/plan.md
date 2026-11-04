@@ -142,6 +142,12 @@ Each leaf owns code, meaningful tests, catalogs/APIs/locks, host proof and revie
 | Durable Connections provider | Metadata currently disappears on restart | Secrets EF does not retain connection documents |
 
 
+## T067 shared schema-family preparation
+
+Shared revision rows retain the source family's schema stamp even when the consumer module's own schema advances independently. The common materialization/stamping interceptor selects the source chain for shared revision rows and the consumer chain for domain rows. Disposable tests use module version `7.0.0` and shared source version `1.0.0`, including refusal of a module-valid but source-incompatible stamp.
+
+This correction changes no schema/profile version, stored source content or live store. It prepares [the pre-GA reset boundary](contracts/revision-management.md#pre-ga-reset-boundary); coordinated admission, stop/drain, fresh initialization and incompatible-binary proofs remain T067 obligations. The eventual break reuses existing module admission/finalization and contracting-migration refusal gates, with no automatic reset or second migration coordinator.
+
 ## #3790 source slice: placement and transition
 
 The provider-neutral `Elsa.Persistence.Core` owns only source scope, working-copy, snapshot, pin and bounded reader/writer contracts. `Elsa.Persistence.EntityFramework` owns the single `EfSourceRevisions` implementation and composable `AddSourceRevisions` mapping. Both typed adapters use its CAS, capture, provenance and retention primitives. No EF, Activity Design DTO or runtime implementation enters the new Core project. Shared schema-family declaration covers the new document columns; physical tables remain in the composing module's migrations and finalization boundary.
@@ -157,10 +163,3 @@ Temporary boundary: the existing activity-backed Agent editor/provider publicati
 ### Breaking deployment boundary
 
 Affected stores are Workflow Design (`elsa_workflow_sources_*`, changed Workflow draft payload mapping) and Specialists (`elsa_agent_sources_*` beside unchanged turn/conversation/operation rows). Four-provider incremental migration artifacts preserve the existing chains, including #2898's retained Workflow history. Dropping the old draft payload column is intentionally breaking: no backfill or mixed-profile writer support is supplied. Do not apply this delivery to populated running stores. A coordinated T067 deployment must stop affected authoring/combined hosts, exclude old binaries, recreate the affected owned databases, initialize all composing modules, recreate source and explicitly republish before readiness. If stores share a database, inventory all modules in that database before recreation. Runtime/checkpoint/hosting/ETL schemas and #2892's lane are not changed by this slice. This delivery performs no live reset, host restart or migration execution against a demo store.
-
-
-## T067 shared schema-family preparation
-
-Shared revision rows retain the source family's schema stamp even when the consumer module's own schema advances independently. The common materialization/stamping interceptor selects the source chain for shared revision rows and the consumer chain for domain rows. Disposable tests use module version `7.0.0` and shared source version `1.0.0`, including refusal of a module-valid but source-incompatible stamp.
-
-This correction changes no schema/profile version, stored source content or live store. It prepares [the pre-GA reset boundary](contracts/revision-management.md#pre-ga-reset-boundary); coordinated admission, stop/drain, fresh initialization and incompatible-binary proofs remain T067 obligations. The eventual break reuses existing module admission/finalization and contracting-migration refusal gates, with no automatic reset or second migration coordinator.
