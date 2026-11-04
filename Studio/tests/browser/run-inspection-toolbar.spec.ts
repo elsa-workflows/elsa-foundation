@@ -97,3 +97,19 @@ test.describe("touch targets", () => {
     }
   });
 });
+
+test("keeps configuration input focus when editing makes the attached run stale", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&run-canvas=unique");
+  await page.getByRole("button", { name: "Test Run", exact: true }).click();
+  await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+  await page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
+  await page.getByRole("tab", { name: "Configuration", exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  const field = page.locator('.wf-inspector input[type="text"]:visible:enabled').first();
+  const original = await field.elementHandle();
+  await field.fill("Edited activity");
+  expect(await original!.evaluate(element => element.isConnected)).toBe(true);
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("Edited activity");
+});

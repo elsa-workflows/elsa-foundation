@@ -1758,7 +1758,7 @@ export function WorkflowEditor({
           ariaLabel: "Inspector panel",
           tabLabel: "Inspector panel tabs",
           tabs: rightPanelTabs,
-          keepMountedTabIds: runCanvas.attached ? ["inspector", "runtime"] : undefined,
+          keepMountedTabIds: runCanvas.attached ? ["inspector", "runtime"] : [],
           activeTabId: activeRightPanel.id,
           onSelect: setActiveRightPanelId
         }}
