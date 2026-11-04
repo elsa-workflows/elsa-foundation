@@ -65,7 +65,7 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(row).toHaveCount(0);
   await page.getByRole("complementary", { name: receipt.title, exact: true }).getByText("History", { exact: true }).click();
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).getByText("History", { exact: true }).scrollIntoViewIfNeeded();
+  await page.getByRole("complementary", { name: receipt.title, exact: true }).locator("details li").last().scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("task-history.png") });
   await page.getByRole("complementary", { name: receipt.title, exact: true }).getByRole("heading").scrollIntoViewIfNeeded();
   const screenshot = testInfo.outputPath(`user-task-${width}-${theme}.png`);
@@ -79,6 +79,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   const who = await (await page.request.get(`${base}/runtime/user-task-identity`)).json();
   const suffix = String(Date.now()); const formId = `studio-form-${suffix}`; const title = `Studio authored approval ${suffix}`;
   await page.goto("/user-tasks/forms?backend=legacy");
+  await expect(page.getByRole("table", { name: "Reusable task forms", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("forms-list.png") });
   await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await page.getByLabel("Form ID", { exact: true }).fill(formId); await page.getByLabel("Name", { exact: true }).fill(title);
@@ -88,6 +89,8 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.screenshot({ path: testInfo.outputPath("form-editor.png") });
   await page.setViewportSize({ width: 390, height: 1000 });
   await page.screenshot({ path: testInfo.outputPath("form-editor-narrow.png") });
+  await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("form-actions-narrow.png") });
   await page.setViewportSize({ width: 1600, height: 1100 });
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
   await expect(page.getByText("The immutable form version is available to new tasks.", { exact: true })).toBeVisible();

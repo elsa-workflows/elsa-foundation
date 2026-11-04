@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { userTasksJourney } from "./userTasksJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -21,6 +22,8 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
+
+test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);

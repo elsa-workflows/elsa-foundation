@@ -179,6 +179,7 @@ it("clears validation only for response fields that the user corrects", async ()
   expect(container.textContent).toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
   await input(container.querySelector("textarea")!, "Reviewed");
   expect(container.textContent).not.toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
+  expect(container.textContent).not.toContain("Correct the response");
 });
 
 it("keeps an empty inbox distinct from denied access and hides unavailable paging", async () => {

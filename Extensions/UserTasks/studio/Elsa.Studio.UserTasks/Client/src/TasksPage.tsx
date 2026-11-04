@@ -85,6 +85,7 @@ export function TasksPage({ api, initialId }: { api: ElsaStudioModuleApi; initia
 
 export function TaskDetail({ api, id, identity, changed, onClose, navigationGuard }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; changed(): void; onClose?(): void; navigationGuard?: { current: () => Promise<boolean> } }) {
   const [task, setTask] = useState<TaskItem>(); const [data, setData] = useState<Record<string, unknown>>({});
+  const [validationNotice, setValidationNotice] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const [missing, setMissing] = useState(false); const [stale, setStale] = useState(false);
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
@@ -95,20 +96,20 @@ export function TaskDetail({ api, id, identity, changed, onClose, navigationGuar
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
     try {
-      const next = await read(api, id); if (current !== sequence.current) return;
+      const next = await read(api, id); if (current !== sequence.current) return; setValidationNotice(false);
       setTask(next); setMissing(false); setStale(false);
       setNotice(next.status === "CompletionPending" ? responsePendingNotice : "");
       if (!edited.current || next.decision) setData(next.decision?.response.data ?? next.prefill ?? {});
       // A newer unaccepted revision proves the previous conditional write cannot still win.
       if (next.status === "Completed" || next.status === "Cancelled" ||
           (!next.decision && attempt.current && next.revision > attempt.current.revision)) attempt.current = null;
-    } catch (failure) { if (current !== sequence.current) return; setMissing(statusOf(failure) === 404); setNotice(message(failure)); setStale(true); }
+    } catch (failure) { if (current !== sequence.current) return; setValidationNotice(false); setMissing(statusOf(failure) === 404); setNotice(message(failure)); setStale(true); }
   }, [api, id]);
   useEffect(() => { void refresh(); return () => { sequence.current++; }; }, [refresh]);
   useEffect(() => { if (task?.status !== "CompletionPending") return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [task?.status, refresh]);
   const act = async (operation: string, action?: string) => {
     if (!task || busyRef.current) return;
-    busyRef.current = true; setBusy(true); setNotice(""); setErrors({}); ++sequence.current;
+    busyRef.current = true; setBusy(true); setNotice(""); setValidationNotice(false); setErrors({}); ++sequence.current;
     const retrying = operation === "complete" && attempt.current !== null;
     try {
       let request: Record<string, unknown> = { requestId: crypto.randomUUID() };
@@ -128,7 +129,7 @@ export function TaskDetail({ api, id, identity, changed, onClose, navigationGuar
       if (status === 409 || status === 403 || status === 404) setStale(true);
       if (status >= 400 && status < 500 && !retrying) attempt.current = null;
       const payload = typeof failure === "object" && failure !== null && "payload" in failure ? failure.payload : null;
-      if (payload && typeof payload === "object" && "errors" in payload && payload.errors && typeof payload.errors === "object") setErrors(payload.errors as Record<string, string>);
+      if (payload && typeof payload === "object" && "errors" in payload && payload.errors && typeof payload.errors === "object") { setErrors(payload.errors as Record<string, string>); setValidationNotice(true); }
     } finally { busyRef.current = false; setBusy(false); }
   };
   const canLeave = useCallback(async () => {
@@ -157,7 +158,7 @@ export function TaskDetail({ api, id, identity, changed, onClose, navigationGuar
     {task.description && <p className="user-task-description">{task.description}</p>}
     <StudioButton onClick={() => void refresh()} disabled={busy}><RefreshCw size={16} aria-hidden="true" />Refresh task</StudioButton>
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
-    {task.form ? Renderer ? <Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} />
+    {task.form ? Renderer ? <Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} />
       : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}
     <div className="user-task-actions">
       {!own && task.groupId && task.status === "Open" && identity.canAct ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
