@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "tool": "Microsoft.DotNet.ApiCompat.Tool10.0.100",
+  "framework": "Microsoft.NETCore.App10.0.13",
+  "baselineSource": "24bc183925c604a8574c46d2ba57975aa3f8f94b",
+  "publishStateRef": "c531beda43033460b39c669af6329bf81a1c873b",
+  "candidateProductSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+  "comparisons": [
+    {
+      "assembly": "Elsa.Etl.Core",
+      "baseline": "stackBase",
+      "leftSha256": "a8cb1da3c91bd46c71a75071cd00fb1e8445f99a0779a02a27526222e6f0933e",
+      "rightSha256": "547ffb520bf05d1c3a66060c736317fc2df404c71ff293af00e058c035d3113c",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    },
+    {
+      "assembly": "Elsa.Etl.Core",
+      "baseline": "released",
+      "leftSha256": "7609abeff282bfa5953e34e0ded90f19b1cdf0af40659bf1c1084faf2918f41a",
+      "rightSha256": "547ffb520bf05d1c3a66060c736317fc2df404c71ff293af00e058c035d3113c",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    },
+    {
+      "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "baseline": "stackBase",
+      "leftSha256": "1f17aadd7427afe12bc9bb642b7d655cf6c31ae7f0af0ff2645b262ef7b3a8cf",
+      "rightSha256": "2a83c3ba69f559c1333d158c7c25b759eda523cfa39e9d4be9a2a1f99551a0ba",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    },
+    {
+      "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "baseline": "released",
+      "leftSha256": "c7062fe6b5776ae030c04c599329a615bf6baaecdedc2eac9c9a156c20754ca7",
+      "rightSha256": "2a83c3ba69f559c1333d158c7c25b759eda523cfa39e9d4be9a2a1f99551a0ba",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    }
+  ],
+  "diagnostic": "Initial two zero-exit comparisons lacked framework references and are not used as proof; these four resolved runs supersede them.",
+  "releasedPackages": [
+    {
+      "package": "Elsa.Etl.Core",
+      "version": "4.0.12-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.etl.core/4.0.12-preview/elsa.etl.core.4.0.12-preview.nupkg",
+      "packageSha256": "19bea499f1915c4422fcfa3cc1c9796ddee59bf602c39e4de567060f3fd630db",
+      "assemblyEntry": "lib/net10.0/Elsa.Etl.Core.dll",
+      "assemblySha256": "7609abeff282bfa5953e34e0ded90f19b1cdf0af40659bf1c1084faf2918f41a"
+    },
+    {
+      "package": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "version": "4.0.14-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.etl.persistence.entityframeworkcore/4.0.14-preview/elsa.etl.persistence.entityframeworkcore.4.0.14-preview.nupkg",
+      "packageSha256": "e4f7b19c4f970e63ddba730a659df3daf14cd9b8fbd8ec61dc51f3acbecf9813",
+      "assemblyEntry": "lib/net10.0/Elsa.Etl.Persistence.EntityFrameworkCore.dll",
+      "assemblySha256": "c7062fe6b5776ae030c04c599329a615bf6baaecdedc2eac9c9a156c20754ca7"
+    }
+  ],
+  "strictCoreDelta": {
+    "exitCode": 1,
+    "meaning": "Expected equality-mode difference: only new public type Elsa.Etl.Core.Runtime.EtlStoreException; not a normal-mode binary break.",
+    "logSha256": "bab1779e60e3bc3557bfc4800e0afa109e7f0668dd4f0a1b31a590c456c96e31"
+  },
+  "pending": [
+    "Full candidate projects/architecture/restore/generators",
+    "Computed version against latest publish-state after final-main reconciliation",
+    "Complete implementation review and exact-head required checks"
+  ]
+}
