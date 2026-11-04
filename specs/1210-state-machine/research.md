@@ -53,6 +53,10 @@ The witness has not been implemented or executed. Its technical plan and any arc
 
 ## Additional integration constraints
 
+### Concurrent durable activity work is an explicit adaptation
+
+The [SCXML parallel-state reference](https://www.w3.org/TR/scxml/#parallel) describes simultaneously active regions with defined serial processing of executable content. OD28 deliberately allows independent ordinary Elsa activity work to progress concurrently within each phase, retaining hierarchy dependencies and selected-set phase barriers. This is an adaptation for the accepted durable-activity composition model, not SCXML execution conformance. Qualification must cover concurrent work, existing shared-value policies and the absence of a guaranteed independent-branch completion order rather than borrowing the reference's serial-processing assumptions.
+
 ### Automatic-cycle protection is not proved by drain limits
 
 OD19 requires automatic progress before queued business-event evaluation and protection against an indefinitely running automatic cycle. The existing [drain options](../../Essentials/src/Workflows/Runtime/Core/Models/WorkflowDrainOrchestratorOptions.cs) and [drain orchestrator](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs) bound generic execution for their own purposes: the no-progress count is reset by newly dispatched work IDs, the total-cycle limit is optional, and each drain creates its own cycle budget.
