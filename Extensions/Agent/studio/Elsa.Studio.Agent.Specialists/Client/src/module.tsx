@@ -3,12 +3,17 @@ import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorC
 import { AgentsPage } from "./AgentsPage";
 import { HumanReviewPage } from "./HumanReviewPage";
 import { SpecialistEditor } from "./SpecialistEditor";
+import { SpecialistPlayground } from "./SpecialistPlayground";
 import { specialistProviderKey } from "./agentsApi";
 import { continuitySchemaVersion, initialSpecialistManifest } from "./specialistManifest";
 import "./styles.css";
 
 const activityDesign = [{ id: "elsa.api.activity-design", contractVersion: "1" }];
 const specialistAuthoring = [...activityDesign, { id: "elsa.api.agent-specialists", contractVersion: "1" }];
+// The playground runs drafts through the generic Test Run routes and reads the agent's evidence beside them.
+const playground = [...activityDesign,
+  { id: "elsa.api.publishing", contractVersion: "1", relations: ["activity-draft-test-run-dispatch", "activity-draft-test-run-cancel"] },
+  { id: "elsa.api.agent-specialist-inspection", contractVersion: "1", relations: ["agent-specialist-test-run-evidence"] }];
 
 /** One form for both manifest schemas; schema "2" adds the explicit continuity choice. */
 export const specialistEditorContributions: StudioActivityDefinitionImplementationEditorContribution[] = ["1", continuitySchemaVersion].map(schemaVersion => ({
@@ -39,6 +44,13 @@ export function register(api: ElsaStudioModuleApi) {
     ]
   });
   for (const contribution of specialistEditorContributions) api.activityEditors.add(contribution);
+  api.routes.add({
+    id: "agent-playground",
+    requiresBackend: playground,
+    path: "/agents/drafts/:draftId/playground",
+    label: "Playground",
+    component: ({ navigate }) => <SpecialistPlayground context={api.backend} navigate={navigate} />
+  });
   // One exact wait addressed by URL; the occurrence link from run inspection is T034.
   api.routes.add({
     id: "agent-review",
