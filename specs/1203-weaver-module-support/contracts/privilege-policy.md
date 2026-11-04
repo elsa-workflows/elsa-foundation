@@ -63,7 +63,7 @@ Principal objects never enter JSON, prepared arguments, provider context, sessio
 ## Selected-store feature surface
 
 - FoundationAgentEffectsFeature, identity FoundationAgentEffects, in Elsa.Agent: inherits abstractions, virtual ConfigureServices, no schema requirement.
-- FoundationAgentEntityFrameworkCoreEffectsFeature, identity FoundationAgentEntityFrameworkCoreEffects, in existing Agent EF: inherits common behavior, directly declares Agent1.1.0, requires the existing EF store feature. It does not depend on the common sibling identity.
+- FoundationAgentEfEffectsFeature, identity FoundationAgentEfEffects, in existing Agent EF: inherits common behavior, directly declares Agent1.1.0, requires the existing EF store feature. It does not depend on the common sibling identity.
 
 Capture actual feature Type from the inherited ConfigureServices call. Use the existing owned store-selection marker with this additive overload:
 
@@ -72,9 +72,9 @@ Capture actual feature Type from the inherited ConfigureServices call. Use the e
         Func<IServiceProvider, IAgentSessionRecordStore> factory,
         Type? requiredEffectsFeatureType)
 
-Retain the existing two-argument public method; delegate with null so source and binary callers keep working. Extend its private selection metadata, not a second store registry. All AddAgentStores paths provide the EF effects Type. Common Agent code references no EF implementation.
+Retain the existing two-argument public method; delegate with null so source and binary callers keep working in legacy-only compositions. Null on an explicit selection means undeclared, never memory. Selecting any effects variation alongside an undeclared explicit store is a configuration error with a migration diagnostic; this includes the old factory overload and explicit null on the new overload. The private known process-local default marker explicitly requires the common effects Type; all AddAgentStores paths provide the EF effects Type. A custom store must opt into its supported feature Type through the new overload. Extend that existing private selection metadata, not a second store registry. Common Agent code neither references EF nor infers behavior from a factory/runtime store type.
 
-Validate the completed collection: one selected effects feature; a store's required feature Type must be an ancestor of the actual selection; reject both siblings, wrong-store selection, duplicate or foreign registrations. No effects selection remains valid for legacy-only composition, but new optional behavior refuses.
+Validate the completed collection: one selected effects feature when new behavior is enabled; a store's required feature Type must be an ancestor of the actual selection; reject both siblings, wrong-store selection, duplicate or foreign registrations. No effects selection remains valid for legacy-only composition, but new optional behavior refuses.
 
 Direct static declarations on the actual feature must include its required/base minimum declarations. Additional stricter requirements are allowed. RequiresSchemaVersionAttribute is not inherited. Use shared metadata extraction and exact declaration inclusion; do not invent version ordering. Custom specializations repeat the base minimum explicitly.
 
@@ -84,6 +84,6 @@ Internal scoped AgentEffectsAdmission reads only selected static metadata and th
 
 New behavior enters this one selected-feature check at tool collection/preparation/execution, nonempty preparation acceptance, fresh/retained source disclosure, and default/custom result acceptance. No tool descriptor contains a schema-version requirement or chooses a fleet. Legacy operations without new members do not acquire a new schema requirement; administrative veto remains independent.
 
-Catalog, Attention and capabilities use actual feature metadata and the shared checker. Host-owned readability/fleet composition remains the only observer. Direct service consumers have the same admission and store-selection checks.
+Catalog, Attention and capabilities use actual feature metadata and the shared checker. Host-owned readability/fleet composition remains the only observer. Direct service consumers have the same admission and store-selection checks. Tests cover an arbitrary old two-argument factory (including an old EF factory) plus common effects, explicit null plus either variation, and a declared custom feature. The undeclared paths must diagnose before activation/new behavior; they remain valid without effects.
 
 Qualification includes base/API ordering, explicit custom before API and Replace afterward, copied-root and repeated registration, zero/duplicate/wrong-lifetime sources, missing/both/wrong/specialized feature selections; normal memory; EF absent/held/unobserved/finalized and no-restart availability; direct consumer contexts; null/empty legacy bytes; current principal/tenant/authority failures; no replay and real composed/package journeys.

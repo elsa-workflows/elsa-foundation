@@ -16,11 +16,11 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 ## R2 — Feature inheritance and selected-store admission
 
-**Decision**: Distinct `FoundationAgentEffects` and `FoundationAgentEntityFrameworkCoreEffects` identities; the EF feature inherits common behavior and directly declares Agent 1.1.0. Extend the existing store-selection metadata with its required effects feature Type. Check the completed collection and actual selected type.
+**Decision**: Distinct `FoundationAgentEffects` and `FoundationAgentEfEffects` identities; the EF feature inherits common behavior and directly declares Agent 1.1.0. Extend the existing store-selection metadata with its required effects feature Type. Check the completed collection and actual selected type. Explicit null/old factory selection means undeclared support and refuses composition with effects; only the known memory marker declares common support. Custom stores opt in through the new overload.
 
 **Rationale**: CShells 0.0.31 feature discovery rejects different types with one name; inheritance does not substitute a dependency identity. [RequiresSchemaVersionAttribute](../../Essentials/src/Cluster/Core/Models/RequiresSchemaVersionAttribute.cs) is not inherited. [SchemaVersionRequirement](../../Essentials/src/Cluster/Core/Models/SchemaVersionRequirement.cs) extracts direct declarations. [AgentPersistenceSelection](../../Extensions/Agent/src/Elsa.Agent/Extensions/AgentPersistenceSelection.cs) already owns store selection. Common Agent must not reference EF implementation or guess store type.
 
-**Alternatives**: Reject a common-to-EF dependency, enabling both siblings, descriptor schema requirements, a second registry or version engine, and treating missing family observation as available. Validate direct minimum declarations for custom specializations; use the shared dormancy checker.
+**Alternatives**: Reject treating an arbitrary legacy factory as known memory, an overlong new EF feature type name (Elsa §E6 R1), a common-to-EF dependency, enabling both siblings, descriptor schema requirements, a second registry or version engine, and treating missing family observation as available. Validate direct minimum declarations for custom specializations; use the shared dormancy checker.
 
 ## R3 — Live policy and legacy digest
 
@@ -68,7 +68,7 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 **Rationale**: [Secrets revision repository](../../Essentials/src/Secrets/Core/Contracts/ISecretRepository.cs) supplies metadata CAS in EF; in-memory does not. [ConnectionDefinition](../../Essentials/src/Connections/Core/Models/ConnectionModels.cs) has IncarnationId but existing repository CAS uses integer Version. Name-only managers reload targets; comparing first then calling them is unsafe. Secret value deletion precedes metadata CAS and connection cleanup/external tests span independent effects. The PD3 table in the plan assigns barriers and truthful partial/uncertain outcomes to each interval.
 
-**Alternatives**: Reject unconditional fallback, integer version as creation identity, a local semaphore presented as a cluster fence, global consumer hash/refusal of all truncated advisory observations, or a final CAS described as undoing an earlier external effect. Native #3779 remains exactly scoped best-effort cleanup.
+**Alternatives**: Reject unconditional fallback, integer version as creation identity, a local semaphore presented as a cluster fence, global consumer hash/refusal of all truncated advisory observations, or a final CAS described as undoing an earlier external effect. Native #3779 remains exactly scoped best-effort cleanup. Freeze a Connection delete cleanup observation and compare it before execution: OAuth can create PKCE/grant secrets without changing Connection.Version ([OAuth2TokenService](../../Extensions/Integrations/src/Connectors/OAuth2/OAuth2TokenService.cs), BeginAuthorizationCodeAsync and WriteGrantAsync). A fresh complete scan cannot silently broaden the reviewed operation.
 
 ## R9 — Major semantics within the existing preview line
 
