@@ -152,13 +152,16 @@ table that answers every point.
 4. The coordinator records the agreed commit on the board and marks the PR ready for the normal
    [merge path](merging.md). Code Review still checks the final commit and its CI; it does not decide the architecture.
 
-**Substantive changes need renewed agreement.** An approval stays valid for a later commit as long as the files the PR
-changes (the ADR or spec text, and the approval plan in its description) are identical to the approved commit:
-`git diff <approved commit> <head> -- <the PR's changed files>` is empty. So a merge of `main` that only resolves a
-conflict elsewhere keeps the approvals, and the coordinator records which commits were compared. Any change to those
-files, including a status-only edit, needs fresh approvals and author confirmations on the new head. A changed
-approval plan also needs fresh agreement under that plan. Keep the PR in draft, or return it to draft, until that
-agreement is complete. If an already agreed PR changes, mark its board row in review again; dependent
+**Material changes need renewed agreement.** An approval stays valid for a later commit unless a change could
+seriously alter that reviewer's standpoint or decision. Trivial, non-semantic edits — the status line, formatting, a
+typo fix, wording that does not change meaning — keep the existing approvals, as does a merge of `main` that only
+resolves a conflict elsewhere and leaves the PR's own files (the ADR or spec text, and the approval plan in its
+description) unchanged. The coordinator records which commits were compared. Re-review is requested only when a change
+could materially change a reviewer's position; when it is, the coordinator requesting it MUST state, in the request,
+(a) exactly what changed since that reviewer approved, and (b) what it means for the specific answers or decisions that
+reviewer gave before — so the reviewer re-checks against their own prior position, not the whole PR again. A changed
+approval plan likewise needs fresh agreement under that plan. Keep the PR in draft, or return it to draft, until that
+agreement is complete. If an already agreed PR changes materially, mark its board row in review again; dependent
 work may use only the version actually agreed. Agreement and merge remain separate steps.
 
 **Scope.** Every ADR, ADR amendment and spec whose topic is on an initiative's board is agreed through that initiative,
