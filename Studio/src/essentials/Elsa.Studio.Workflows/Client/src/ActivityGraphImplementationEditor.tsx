@@ -135,6 +135,7 @@ const activityGraphSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
 };
 
 export function ActivityGraphPublicInterfaceEditor({
+  contractSection,
   context,
   contract,
   providerSchemaVersion,
@@ -208,9 +209,9 @@ export function ActivityGraphPublicInterfaceEditor({
   const unresolvedOutcomes = outcomeMappingOptions.boundaryOutcomes.filter(outcome => !mappedOutcomeTargets.has(outcome.referenceKey));
 
   return (
-    <div className="ad-graph-public-interface wf-tokens">
+    <div className={`ad-graph-public-interface wf-tokens${contractSection ? " is-section-focused" : ""}`}>
       <header className="ad-interface-connections-header"><h2>Designer connections</h2><p>Connect designer results to the public interface.</p></header>
-      <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
+      {(!contractSection || contractSection === "outputs") && <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Output values</h3>
         {(contract?.outputs ?? []).length > 0 ? <p>Choose where each output gets its value.</p> : null}
         {(contract?.outputs ?? []).length === 0
@@ -238,9 +239,9 @@ export function ActivityGraphPublicInterfaceEditor({
                 );
               })}
             </WorkflowReferenceAuthoringProvider>}
-      </section>
+      </section>}
 
-      {providerSchemaVersion === "2" ? <section className="ad-graph-outcome-mappings" aria-labelledby="activity-graph-outcome-mappings-title">
+      {(!contractSection || contractSection === "outcomes") && (providerSchemaVersion === "2" ? <section className="ad-graph-outcome-mappings" aria-labelledby="activity-graph-outcome-mappings-title">
         <h3 id="activity-graph-outcome-mappings-title">Completion paths</h3>
         <p>Choose an activity outcome for each designer path. Several paths can share an outcome.</p>
         {payload.outcomeMappings.length ? <ul>{payload.outcomeMappings.map(mapping => <li key={mapping.sourceOutcomeReferenceKey}>
@@ -255,7 +256,7 @@ export function ActivityGraphPublicInterfaceEditor({
         </div>}
       </section> : <section className="ad-inline-status" role="status">
         <details><summary>Compatibility details</summary>Schema 1 retains its historical single <code>done</code> boundary. Migrate explicitly to schema 2 to author outcome mappings.</details>
-      </section>}
+      </section>)}
     </div>
   );
 }
