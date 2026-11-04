@@ -24,7 +24,7 @@ const api = {
     getJson: async (path: string) => {
       if (path.includes("identity")) return { userId: "alice", canRead: !params.has("denied"), canAct: true, canManage: false, canReadForms: !params.has("denied"), canManageForms: !params.has("denied") };
       if (params.has("error")) throw new Error("The server is unavailable. Please try again.");
-      if (path.includes("forms")) return { items: [], next: params.has("form-error") ? "form-cursor" : null };
+      if (path.includes("forms")) return { items: params.has("populated-forms") ? [{ form: { ...task.form, id: "purchase-form-with-a-long-identifier" } }] : [], next: params.has("form-error") ? "form-cursor" : null };
       if (path.includes("?")) return { items: !params.has("empty") && !new URL(path, location.origin).searchParams.get("search") ? (params.has("two") ? [task, { ...task, id: "travel", title: "Approve travel request" }] : [task]) : [] };
       return path.endsWith("/travel") ? { ...task, id: "travel", title: "Approve travel request" } : task;
     }, postJson: async (_path: string, data: unknown) => {

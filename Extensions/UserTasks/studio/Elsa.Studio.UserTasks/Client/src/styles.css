@@ -37,3 +37,7 @@
 .user-task-field-author label:has(input[type="checkbox"]) { display: flex; align-items: center; gap: var(--studio-space-2); }
 
 .user-tasks input[type="checkbox"] { width: 1rem; height: 1rem; min-height: 0; padding: 0; margin: 0; flex: none; }
+
+.user-task-forms-table { min-width: 40rem; }
+.user-task-forms-table th:first-child { min-width: 12rem; }
+.user-task-forms-table .studio-button { white-space: nowrap; }

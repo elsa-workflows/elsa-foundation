@@ -71,7 +71,11 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
     await page.goto("/user-tasks/forms");
     await expect(page.getByRole("table", { name: "Reusable task forms", exact: true }).getByText(form.id, { exact: true })).toBeVisible();
+    const nextVersion = page.getByRole("button", { name: "Create next version", exact: true }).first();
+    expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);
+    expect((await nextVersion.boundingBox())!.height).toBeLessThan(48);
     await capture(page, info, "task-forms");
+    await nextVersion.scrollIntoViewIfNeeded(); await capture(page, info, "task-form-versions");
     await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Add field", exact: true }).click();

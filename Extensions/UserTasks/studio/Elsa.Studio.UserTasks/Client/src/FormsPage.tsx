@@ -29,7 +29,7 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
     {notice ? <p role="status">{notice}</p> : null}
     {!editing && <>
       <StudioTableContainer role="region" aria-label="Reusable form versions" tabIndex={0}>
-        {loading ? <SkeletonRows rows={3} label="Loading form versions" /> : versions.length ? <table className="studio-table" aria-label="Reusable task forms">
+        {loading ? <SkeletonRows rows={3} label="Loading form versions" /> : versions.length ? <table className="studio-table user-task-forms-table" aria-label="Reusable task forms">
           <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Version</th>{identity?.canManageForms && <th scope="col">Actions</th>}</tr></thead>
           <tbody>{versions.map(version => <tr key={`${version.form.id}/${version.form.version}`}><td><strong>{version.form.name}</strong></td><td>{version.form.id}</td><td>{version.form.version}</td>
             {identity?.canManageForms && <td>{version.form.provider === basicProvider && <StudioButton onClick={() => { setFormError(""); setNotice(""); setForm({ ...structuredClone(version.form), version: "" }); setEditing(true); }}>Create next version</StudioButton>}</td>}</tr>)}</tbody>

@@ -45,6 +45,15 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.goto(`/user-tasks-ux.html?forms&theme=${theme}`);
     await expect(page.getByRole("heading", { name: "No reusable forms yet", exact: true })).toBeVisible();
     await expect(page.getByRole("textbox")).toHaveCount(0);
+    await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
+    const nextVersion = page.getByRole("button", { name: "Create next version", exact: true });
+    await expect(nextVersion).toBeVisible();
+    expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);
+    expect((await nextVersion.boundingBox())!.height).toBeLessThan(48);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("forms-list.png"), fullPage: true });
+    await nextVersion.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath("form-version-action.png"), fullPage: true });
     await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await expect(page.getByRole("region", { name: "Reusable form versions" })).toHaveCount(0);
