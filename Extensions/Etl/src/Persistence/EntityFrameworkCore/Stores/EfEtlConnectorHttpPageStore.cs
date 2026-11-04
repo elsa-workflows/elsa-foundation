@@ -9,10 +9,26 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 internal sealed partial class EfEtlRuntimeStore
 {
     public ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease,
+        EtlRetainedHttpPage page, CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(AttachHttpPageAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return RunOperationAsync(nameof(AttachHttpPageAsync), lease?.Scope, lease?.RunId,
+            () => AttachHttpPageOnceAsync(lease, page, cancellationToken), cancellationToken);
+    }
+
+    private ValueTask<EtlConnectorPositionResult> AttachHttpPageOnceAsync(EtlConnectorPartitionLease lease,
         EtlRetainedHttpPage page, CancellationToken cancellationToken = default) =>
         TransitionHttpPageAsync(lease, page, advance: false, cancellationToken);
 
     public ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease,
+        CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(AdvanceEmptyHttpPageAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return RunOperationAsync(nameof(AdvanceEmptyHttpPageAsync), lease?.Scope, lease?.RunId,
+            () => AdvanceEmptyHttpPageOnceAsync(lease, cancellationToken), cancellationToken);
+    }
+
+    private ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageOnceAsync(EtlConnectorPartitionLease lease,
         CancellationToken cancellationToken = default) => TransitionHttpPageAsync(lease, null, advance: true, cancellationToken);
 
     private async ValueTask<EtlConnectorPositionResult> TransitionHttpPageAsync(EtlConnectorPartitionLease lease,

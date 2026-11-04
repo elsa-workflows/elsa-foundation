@@ -2150,3 +2150,8 @@ Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.Count.get -> int
 Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
 Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!
+Elsa.Etl.Core.Runtime.EtlStoreException
+Elsa.Etl.Core.Runtime.EtlStoreException.EtlStoreException(string! operation, Elsa.Etl.Core.EtlScope? scope, string? runId, System.Exception! innerException) -> void
+Elsa.Etl.Core.Runtime.EtlStoreException.Operation.get -> string!
+Elsa.Etl.Core.Runtime.EtlStoreException.Scope.get -> Elsa.Etl.Core.EtlScope?
+Elsa.Etl.Core.Runtime.EtlStoreException.RunId.get -> string?

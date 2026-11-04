@@ -8,9 +8,11 @@ namespace Elsa.Etl.Core.Runtime;
 public interface IEtlConnectorRuntimeInspector
 {
     int MaximumPageSize { get; }
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorRunInspection?> FindConnectorInspectionAsync(EtlScope scope, string runId,
         CancellationToken cancellationToken = default);
     /// <remarks>A short page means all matching partitions after the cursor have been exhausted.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<IReadOnlyList<EtlConnectorPartitionInspection>> ListConnectorPartitionsAsync(EtlScope scope, string runId,
         int afterPartitionOrdinal, int take, CancellationToken cancellationToken = default);
 }
