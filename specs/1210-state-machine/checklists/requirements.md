@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD28 are separated from proposals and open choices.
+- [x] Accepted OD1–OD29 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD28 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD29 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -48,6 +48,8 @@ OD26 requires explicit, validated initial states at each applicable level and st
 
 OD27 requires child-first Exit and parent-first Entry with durable phase completion. Complete boundary calculation remains Q1.
 
-OD28 allows independent regional work to progress concurrently within each phase, preserving hierarchy dependencies and selected-set phase barriers. Partial-failure behavior and runtime integration remain open; independent branch completion order is not promised.
+OD28 allows independent regional work to progress concurrently within each phase, preserving hierarchy dependencies and selected-set phase barriers. OD29 settles sibling preservation during regional Action recovery; other partial-failure paths and runtime integration remain open. Independent branch completion order is not promised.
+
+OD29 preserves completed sibling work during normal recovery from a regional Action failure and adds no automatic sibling cancellation. Normal incident policy controls pending work; phase advancement and later chart events remain blocked until required work succeeds. Other fault paths and exact integration remain Q2.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.

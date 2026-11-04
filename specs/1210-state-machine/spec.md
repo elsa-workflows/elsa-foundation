@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD28 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD29 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -71,6 +71,7 @@ An author models several concurrent lifecycle regions without enumerating every 
 6. **Given** a host restart while several regions are active, **when** execution resumes, **then** their active configuration and outstanding obligations are recovered without converting local progress into cancellation of unrelated regions.
 7. **Given** a parallel state whose regions each have an explicit initial state, **when** that parallel state is entered, **then** every region starts at its own initial state rather than one region being selected instead of the others.
 8. **Given** one input selects compatible transitions in independent regions, **when** one region's phase work waits durably, **then** independent work in the same phase can progress in other regions without a guaranteed branch completion order. Hierarchy dependencies remain enforced; all selected exits finish before actions, and all actions finish before entries. Later business events wait until the selected work finishes.
+9. **Given** a regional Action fails and normal Elsa fault handling leaves the machine awaiting recovery, **when** supported recovery retries that failed work, **then** completed sibling work is preserved and successful regions are not restarted. StateMachine adds no automatic sibling cancellation; still-running work follows normal incident policy. The phase and later chart-event evaluation remain blocked until required work succeeds, unless normal workflow cancellation ends the work.
 
 ### User Story 4 — Wait durably during selected transition work (Priority: P1)
 
@@ -193,7 +194,8 @@ An author declares values that span the machine's state changes and values local
 - **FR-036**: Selecting a transition MUST expose a structured inspector for Trigger (or Automatic), Condition, Action and Destination, explicit transition order, and whether the reaction preserves the state visit or exits/re-enters. Ordinary activity work MUST use the normal activity editor and conditions MUST use Elsa's expression editor. The inspector MUST represent the supported transition semantics; detailed valid choices and diagnostics remain Q3.
 - **FR-037**: The machine, each compound state with sequential child-state selection, and each parallel region MUST have an explicit initial child state. Studio MUST validate missing or invalid selections. Entering a parallel state MUST activate every region at its own explicit initial state. Graph geometry MUST NOT determine startup behavior.
 - **FR-038**: For states a transition actually exits, child Exit work MUST finish before its exited parent runs Exit. For states it actually enters, parent Entry work MUST finish before its entered children run Entry. All applicable exits MUST complete before transition Action, and Action MUST complete before entries, including across durable waits. This requirement does not select an unagreed boundary calculation or independent-region ordering/concurrency policy.
-- **FR-039**: Compatible selected work in independent parallel regions MUST be allowed to progress concurrently within each phase, so a durable wait in one region MUST NOT by itself block independent same-phase work in another. Hierarchy dependencies MUST be preserved. All selected exits MUST finish before selected actions begin, and all selected actions MUST finish before entries begin. Independent branch completion order is not guaranteed; later business events MUST wait for the selected work to finish. Partial-failure behavior remains Q2 and existing shared-value policies remain authoritative.
+- **FR-039**: Compatible selected work in independent parallel regions MUST be allowed to progress concurrently within each phase, so a durable wait in one region MUST NOT by itself block independent same-phase work in another. Hierarchy dependencies MUST be preserved. All selected exits MUST finish before selected actions begin, and all selected actions MUST finish before entries begin. Independent branch completion order is not guaranteed; later business events MUST wait for the selected work to finish. FR-040 governs sibling preservation during regional Action recovery; other partial-failure paths remain Q2 and existing shared-value policies remain authoritative.
+- **FR-040**: When a regional Action fails and normal Elsa fault handling leaves the machine awaiting recovery, StateMachine MUST preserve completed sibling work and MUST NOT add automatic sibling cancellation or restart successful regions. Still-running work MUST follow normal Elsa incident policy. The phase MUST NOT advance and later chart events MUST NOT be evaluated until required work succeeds. Normal workflow cancellation, supported recovery eligibility and external-effect guarantees remain authoritative; other fault paths and exact integration remain Q2.
 
 ### Platform constraints and design obligations
 
@@ -265,6 +267,8 @@ Proposed reference baseline: a persistent authored reaction remains usable after
 Specify configured bounds and overflow/unavailable behavior; deduplication/conflicting identity; receipts and retention; terminal/retired execution behavior; input disposition around faults and restart; and recovery of partial transition work with honest external-effect uncertainty. Do not equate accepted admission with exactly-once external effects. Demonstrate current sufficient seams or propose a reviewed bounded extension before freezing placement.
 
 OD23 requires recovery at the normal failed-activity boundary with completed earlier phases preserved (FR-034). Complete propagation, blocked-input handling, exact supported recovery paths and source-grounded integration proof remain open.
+
+OD29 requires completed sibling work to be preserved when a regional Action fails and the machine awaits normal recovery, without automatic sibling cancellation or restarting successful regions (FR-040). Still-running work follows normal incident policy; phase advancement and later chart-event evaluation wait for required work to succeed. Other fault paths and exact integration remain open.
 
 ### Q3 — Studio contract and remaining capability boundaries
 

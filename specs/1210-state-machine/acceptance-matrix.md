@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A28 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A29 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -36,6 +36,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD26 — explicit initial states and all-region startup | FR-037 | A26 |
 | OD27 — child-first Exit and parent-first Entry | FR-038 | A27 |
 | OD28 — concurrent regional work within phase barriers | FR-039 | A28 |
+| OD29 — preserve siblings during regional Action recovery | FR-040 | A29 |
 
 ## Witness definitions
 
@@ -68,7 +69,8 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A25 | Configure a transition in its inspector | Trigger/Automatic, Condition, Action, Destination, authored order and state-visit behavior are understandable together; ordinary activity/expression editors work and saved rules round-trip without visual-layout priority changes | Real Studio authoring/save/reload and exact published-rule execution witness; detailed valid combinations, diagnostics, keyboard/read-only/responsive behavior remain Q3 |
 | A26 | Explicit startup at each applicable level | Machine, sequential compound state and each parallel region use validated explicit initial child states; entering a parallel state starts every region; moving shapes does not change startup | Definition validation, save/reload and actual hierarchical/parallel Studio-to-runtime startup witnesses; scoped completion remains Q1 |
 | A27 | Nested phase ordering across durable waits | Exited children finish Exit before exited parents; entered parents finish Entry before entered children; all applicable exits precede Action and Action precedes entries despite suspension/restart | Ordered semantic and actual host/persistence witnesses with deliberately suspended child Exit and parent Entry; complete boundary calculation remains Q1 |
-| A28 | Independent regional progress and phase barriers | A durably waiting region does not prevent independent same-phase work in another; hierarchy dependencies and selected-set Exit/Action/Entry barriers hold; later business events wait for selected work; no independent completion order is promised | Controlled multi-region activity work, ordered phase history and actual host/persistence/restart witness; partial-failure handling remains Q2 and runtime integration is unproved |
+| A28 | Independent regional progress and phase barriers | A durably waiting region does not prevent independent same-phase work in another; hierarchy dependencies and selected-set Exit/Action/Entry barriers hold; later business events wait for selected work; no independent completion order is promised | Controlled multi-region activity work, ordered phase history and actual host/persistence/restart witness; regional Action recovery is A29, other failure paths remain Q2 and runtime integration is unproved |
+| A29 | Recover one failed regional Action | Completed sibling work survives failure/recovery/restart without being rerun; StateMachine adds no sibling cancellation; normal incident policy controls pending work and required-success barriers block phase advancement/later chart events | Controlled completed, faulted and durably pending regional participants plus actual incident/retry/restart history and cancellation control; exact recovery integration and other fault paths remain Q2 |
 
 ## Qualification rules
 
