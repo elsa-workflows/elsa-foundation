@@ -124,7 +124,7 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
         row.Revision = checked(expectedRevision + 1);
     }
     public Task<SourceWorkingCopy> CreateAsync(string sourceId, string copyId, string name, string profile, string content, CancellationToken cancellationToken = default) =>
-        Write(async ct => { var row = NewCopy(scope, sourceId, copyId, name, profile, content); if (singleCopyPerSource) row.SourceIdentity = EfRelationalIdentity.HashLengthFramed(ScopeHash(scope), sourceId); RejectTrackedDuplicate(row); db.Add(row); await Task.CompletedTask; return row; }, cancellationToken);
+        Write(async ct => { var row = NewCopy(scope, sourceId, copyId, name, profile, content); if (singleCopyPerSource) row.SourceIdentity = EfRelationalIdentity.HashLengthFramed(ScopeHash(scope), sourceId); RejectTrackedDuplicate(row); Add(row); await Task.CompletedTask; return row; }, cancellationToken);
     public Task<SourceWorkingCopy> ForkAsync(string sourceId, string copyId, string snapshotId, string newSourceId, string newCopyId, string name, CancellationToken cancellationToken = default) =>
         Write(async ct =>
         {
@@ -134,7 +134,7 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
             var copy = NewCopy(scope, newSourceId, newCopyId, name, snapshot.Profile, snapshot.Content);
             if (singleCopyPerSource) copy.SourceIdentity = EfRelationalIdentity.HashLengthFramed(ScopeHash(scope), newSourceId);
             copy.BaseSnapshotId = snapshot.Key;
-            RejectTrackedDuplicate(copy); db.Add(copy); db.Add(NewPin(snapshot.Key, "fork:" + copy.Key));
+            RejectTrackedDuplicate(copy); Add(copy); Add(NewPin(snapshot.Key, "fork:" + copy.Key));
             return copy;
         }, cancellationToken);
     public Task<SourceWorkingCopy> SaveAsync(string sourceId, string copyId, long expectedRevision, string name, string profile, string content, CancellationToken cancellationToken = default) =>
@@ -162,8 +162,8 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
             var snapshot = new SourceSnapshot { Key = key, WorkingCopyKey = copy.Key, OperationId = operationId,
                 Profile = copy.Profile, Content = copy.Content, Revision = copy.Revision, BaseSnapshotId = copy.BaseSnapshotId,
                 Fingerprint = EfRelationalIdentity.HashLengthFramed(copy.Profile, copy.Content) };
-            db.Add(snapshot);
-            db.Add(NewPin(key, "capture:" + operationId));
+            Add(snapshot);
+            Add(NewPin(key, "capture:" + operationId));
             return snapshot;
         }, cancellationToken);
     }
@@ -184,7 +184,7 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
             var existing = stamped?.Row;
             if (existing is not null && (existing.SnapshotKey != snapshotId || existing.Owner != owner)) throw new SourceRevisionException("identity-conflict");
             if (remove && existing is not null) db.Remove(existing);
-            if (!remove && existing is null) db.Add(value);
+            if (!remove && existing is null) Add(value);
             return true;
         }, cancellationToken);
     }
@@ -210,7 +210,11 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
         var row = await ReadCopy(sourceId, copyId, ct, discarded) ?? throw new SourceRevisionException("not-found");
         var tracked = db.ChangeTracker.Entries<SourceWorkingCopy>().SingleOrDefault(x => x.Entity.Key == row.Key);
         if (tracked is not null) tracked.State = EntityState.Detached;
-        db.Attach(row); return row;
+        db.Attach(row);
+        // The untracked read checked this stamp, but shadow values do not travel with the detached entity.
+        var stamp = db.Entry(row).Property<string>(EfSchemaVersion.ColumnName);
+        stamp.OriginalValue = stamp.CurrentValue = EfSourceModel.SchemaVersion;
+        return row;
     }
     /// <summary>Retires a source inside its domain's existing discard transaction without deleting history.</summary>
     public static void StageDiscard(DbContext db, SourceWorkingCopy copy, SourceScope scope, string sourceId, string copyId, long expectedRevision)
@@ -226,6 +230,9 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
         if (db.ChangeTracker.Entries<SourceWorkingCopy>().Any(x => x.Entity.Key == row.Key)) throw new SourceRevisionException("identity-conflict");
     }
     private static void Touch(SourceWorkingCopy copy) => copy.Fence = checked(copy.Fence + 1);
+    // Composed modules check stamps before SQL runs; a database default alone is too late for admission.
+    private void Add<T>(T row) where T : class =>
+        db.Add(row).Property<string>(EfSchemaVersion.ColumnName).CurrentValue = EfSourceModel.SchemaVersion;
     private static SourceSnapshotPin NewPin(string snapshotId, string owner) => new() { Key = EfRelationalIdentity.HashLengthFramed(snapshotId, owner), SnapshotKey = snapshotId, Owner = owner };
     private static void VerifySnapshot(SourceSnapshot row, string copyKey)
     {
