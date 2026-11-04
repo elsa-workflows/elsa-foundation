@@ -45,7 +45,10 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
       {run.diagnostic.field !== null && <p>Field: {run.diagnostic.field}</p>}
     </section>}
     <InputIdentity title="Source input" alias={run.bindingAliases?.source} identity={run.sourceInput}
-      emptyMessage={run.connector?.sourceKind === "http" ? "Source progress is tracked by page." : undefined} />
+      emptyMessage={run.connector?.sourceKind === "http" ? "Source progress is tracked by page." : undefined}
+      // A SQL table has no digest at admission: the run reads it once, when it is prepared.
+      missingDigest={run.connector?.sourceKind === "sql" ? "None; the table is read at preparation"
+        : run.connector?.sourceKind === "rabbitMq" ? "None; the queue is read at preparation" : undefined} />
     <InputIdentity title="Lookup input" alias={run.bindingAliases?.lookup} identity={run.lookupInput}
       emptyMessage={run.connector && run.bindingAliases?.lookup === null ? "No lookup configured." : undefined} />
     {run.connector ? <section aria-label="Connector output progress">
@@ -65,8 +68,8 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
   </section>;
 }
 
-function InputIdentity({ title, alias, identity, emptyMessage }: {
-  title: string; alias?: string | null; identity?: EtlRunInputIdentityView | null; emptyMessage?: string;
+function InputIdentity({ title, alias, identity, emptyMessage, missingDigest }: {
+  title: string; alias?: string | null; identity?: EtlRunInputIdentityView | null; emptyMessage?: string; missingDigest?: string;
 }) {
   return <section aria-label={title}>
     <h3>{title}</h3>
@@ -74,7 +77,7 @@ function InputIdentity({ title, alias, identity, emptyMessage }: {
     {identity ? <>
       <dl className="etl-facts">
         <dt>Binding revision</dt><dd>{identity.bindingRevision}</dd>
-        <dt>Expected SHA-256</dt><dd><code>{identity.expectedSha256 ?? "Not available"}</code></dd>
+        <dt>Expected SHA-256</dt><dd><code>{identity.expectedSha256 ?? missingDigest ?? "Not available"}</code></dd>
         <dt>Prepared snapshot SHA-256</dt><dd><code>{identity.snapshotSha256 ?? "Not yet prepared"}</code></dd>
         <dt>Prepared snapshot bytes</dt><dd>{identity.snapshotByteLength ?? "Not yet prepared"}</dd>
       </dl>
@@ -96,11 +99,11 @@ function isHttpKind(kind: string) {
 
 /** An output's kind; a CSV output is a file, while a CSV source keeps the plain "CSV" label. */
 function outputKindLabel(kind: string) {
-  return kind === "csv" ? "CSV file" : kindLabel(kind);
+  return kind === "csv" ? "CSV file" : kind === "sql" ? "SQL table" : kind === "rabbitMq" ? "RabbitMQ exchange" : kindLabel(kind);
 }
 
 function kindLabel(kind: string) {
-  return ({ http: "HTTP JSON", csv: "CSV", jsonl: "JSON Lines" } as Record<string, string>)[kind] ?? kind;
+  return ({ http: "HTTP JSON", csv: "CSV", jsonl: "JSON Lines", sql: "SQL table snapshot", rabbitMq: "RabbitMQ queue" } as Record<string, string>)[kind] ?? kind;
 }
 
 export function EtlPartitionTable({ partitions, now = Date.now() }: {

@@ -39,23 +39,26 @@ test("source reconciliation preserves manual library organization", async ({ pag
   expect(details.versions).toHaveLength(phase === "initial" ? 1 : 2);
   expect(details.definition.latestVersion).toBe(phase === "initial" ? "1.0.0" : "1.1.0");
 
-  const organizationResponse = page.waitForResponse(value => value.request().method() === "GET" &&
-    new URL(value.url()).pathname.endsWith(`/definitions/${definitionId}/organization`));
-  await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const response = await organizationResponse;
-  let organization = await response.json() as Organization;
-  const dialog = page.getByRole("dialog", { name: `Organize ${name}`, exact: true });
   if (phase === "initial") {
-    await dialog.getByRole("button", { name: "Move to folder", exact: true }).click();
+    await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
+    await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
     const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
     await move.getByRole("radio", { name: `${prefix} finance`, exact: true }).check();
     await move.getByRole("button", { name: "Move", exact: true }).click();
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(`${prefix} finance`);
-    await dialog.getByRole("checkbox", { name: `${prefix} critical`, exact: true }).check();
-    await dialog.getByRole("group", { name: `${prefix} owning team · choose one`, exact: true })
-      .getByRole("checkbox", { name: "Finance", exact: true }).check();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
+  const organizationResponse = page.waitForResponse(value => value.request().method() === "GET" &&
+    new URL(value.url()).pathname.endsWith(`/definitions/${definitionId}/organization`));
+  await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const response = await organizationResponse;
+  let organization = await response.json() as Organization;
+  const dialog = page.getByRole("dialog", { name: `Tags for ${name}`, exact: true });
+  if (phase === "initial") {
+    await dialog.getByRole("combobox", { name: "Tags", exact: true }).fill(`${prefix} critical`);
+    await dialog.getByRole("option", { name: `${prefix} critical`, exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Tags", exact: true }).fill(`${prefix} owning team`);
+    await dialog.getByRole("option", { name: `${prefix} owning team: Finance`, exact: true }).click();
     const saved = page.waitForResponse(value => value.request().method() === "PUT" &&
       new URL(value.url()).pathname.endsWith(`/definitions/${definitionId}/organization`));
     await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
@@ -69,9 +72,8 @@ test("source reconciliation preserves manual library organization", async ({ pag
     expect(organization.tags).toEqual(baseline.organization.tags);
     expect(organization.revision).toBe(baseline.organization.revision);
     for (const original of baseline.details.versions) expect(details.versions).toContainEqual(original);
-    await expect(dialog.getByRole("checkbox", { name: `${prefix} critical`, exact: true })).toBeChecked();
-    await expect(dialog.getByRole("group", { name: `${prefix} owning team · choose one`, exact: true })
-      .getByRole("checkbox", { name: "Finance", exact: true })).toBeChecked();
+    await expect(dialog.getByRole("button", { name: `Remove ${prefix} critical`, exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: `Remove ${prefix} owning team: Finance`, exact: true })).toBeVisible();
   }
   await testInfo.attach(`source-${phase}`, { body: JSON.stringify({ details, organization }, null, 2), contentType: "application/json" });
 });

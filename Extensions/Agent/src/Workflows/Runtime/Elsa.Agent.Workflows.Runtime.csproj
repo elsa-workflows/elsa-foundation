@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" />
+		<PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+	</ItemGroup>
+
+	<!-- Runtime-side Weaver workflow contributions (spec 1193 D2): Agent, Agent Core and Workflows Runtime Core only, never Design. -->
+	<ItemGroup>
+	  <ProjectReference Include="..\..\Elsa.Agent\Elsa.Agent.csproj" />
+	  <ProjectReference Include="..\..\Core\Elsa.Agent.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\..\Essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+	</ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Agent.Workflows.Runtime.Tests" />
+  </ItemGroup>
+
+</Project>

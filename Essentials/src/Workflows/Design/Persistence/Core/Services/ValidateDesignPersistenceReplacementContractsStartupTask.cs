@@ -15,7 +15,8 @@ public sealed class ValidateDesignPersistenceReplacementContractsStartupTask(ISe
             .Select(serviceType => (serviceType, Count: services.Count(descriptor => descriptor.ServiceType == serviceType)))
             // Library support is optional for existing design backends. Keeping its
             // contract in the ownership set still rejects an implicit second owner.
-            .Where(item => item.serviceType == typeof(IWorkflowLibraryStore) ? item.Count > 1 : item.Count != 1)
+            .Where(item => item.serviceType == typeof(IWorkflowLibraryStore) || item.serviceType == typeof(IWorkflowFolderDeletionStore)
+                ? item.Count > 1 : item.Count != 1)
             .Select(item => $"{item.serviceType.Name} ({item.Count} registrations)")
             .OrderBy(item => item, StringComparer.Ordinal)
             .ToArray();

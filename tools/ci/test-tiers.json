@@ -639,6 +639,11 @@
       "medianMinutes": 0.02
     },
     {
+      "project": "Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.02
+    },
+    {
       "project": "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Elsa3.Activities.Design.Import.Integration.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 2.82
@@ -692,6 +697,18 @@
     },
     {
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
       "medianMinutes": null
@@ -826,6 +843,7 @@
           "Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
           "Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj",
           "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+          "Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj",
           "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/Microsoft365/Tests/Elsa.Integrations.Connectors.Microsoft365.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj",
@@ -947,7 +965,9 @@
           "locking-database",
           "mysql-feasibility",
           "runtime",
-          "secrets-sqlserver"
+          "secrets-sqlserver",
+          "etl-sql",
+          "etl-rabbitmq"
         ]
       }
     ]
@@ -1077,6 +1097,16 @@
       "suite": "rules",
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-sql",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "require": "ELSA_ETL_SQL_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-rabbitmq",
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "require": "ELSA_ETL_RABBITMQ_REQUIRE_NATIVE_PROVIDERS"
     },
     {
       "suite": "connections",
