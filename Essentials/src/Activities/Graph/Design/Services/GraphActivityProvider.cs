@@ -43,7 +43,7 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/3.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/4.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -1314,7 +1314,9 @@ public sealed class GraphActivityProvider(
 
         return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
             request.ActivityTypeKey,
-            request.CandidateVersion,
+            // Release provenance belongs to the source reference. Pin the runtime contract
+            // schema, as source-owned CLR templates do, so a cosmetic republish keeps its hash.
+            RuntimeDescriptorSchemaVersion,
             WellKnownRuntimeActivityConsumers.GraphActivity,
             descriptorPayload,
             inputs,
