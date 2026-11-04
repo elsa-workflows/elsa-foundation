@@ -162,6 +162,9 @@
   <Folder Name="/tools/hosting/">
     <Project Path="tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj" />
   </Folder>
+  <Folder Name="/tools/identity/">
+    <Project Path="tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj" />
+  </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
     <Project Path="tools/maps/Elsa.Maps.Projects/Elsa.Maps.Projects.csproj" />

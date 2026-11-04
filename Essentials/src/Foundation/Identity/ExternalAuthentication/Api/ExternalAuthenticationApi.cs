@@ -90,9 +90,21 @@ public static partial class ExternalAuthenticationApi
 
     private static async Task Antiforgery(HttpContext context)
     {
-        var token = context.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(context).RequestToken;
-        if (token is null) { await Failure(context, 503); return; }
-        await Results.Json(new ExternalAntiforgeryResponse(token), ExternalAuthenticationApiJsonContext.Default.ExternalAntiforgeryResponse).ExecuteAsync(context);
+        var purpose = context.Request.Query["purpose"];
+        if (purpose.Count > 1 || purpose.Count == 1 && purpose[0] != "preview") { await Failure(context, 400); return; }
+        var principal = context.User;
+        if (purpose.Count == 1)
+        {
+            var administrator = await Administrator(context);
+            if (administrator is null) { await Failure(context, 401); return; }
+            context.User = administrator;
+        }
+        AntiforgeryTokenSet tokens;
+        try { tokens = context.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(context); }
+        finally { context.User = principal; }
+        if (tokens.RequestToken is null) { await Failure(context, 503); return; }
+        await Results.Json(new ExternalAntiforgeryResponse(tokens.RequestToken, tokens.FormFieldName, tokens.HeaderName),
+            ExternalAuthenticationApiJsonContext.Default.ExternalAntiforgeryResponse).ExecuteAsync(context);
     }
 
     private static async Task Chooser(HttpContext context)
@@ -139,7 +151,14 @@ public static partial class ExternalAuthenticationApi
         var flow = await context.RequestServices.GetRequiredService<IExternalAuthenticationFlowService>().CompleteAsync(
             new(key, purpose, handle, browser, query["code"].FirstOrDefault(), query["iss"].FirstOrDefault(), query["error"].Count == 1), actor, context.RequestAborted);
         if (flow.Failure is not (ExternalFlowFailure.ExpiredOrUsed or ExternalFlowFailure.Denied)) DeleteCorrelation(context, key, purpose, handle);
-        if (flow.Failure != ExternalFlowFailure.None) { await Failure(context, 400); return; }
+        if (flow.Failure != ExternalFlowFailure.None)
+        {
+            if (purpose == AuthenticationArtifactPurpose.Preview && flow.ReturnUrl is not null)
+                await Results.Redirect(QueryHelpers.AddQueryString(flow.ReturnUrl, new Dictionary<string, string?>
+                    { ["externalPreviewFailure"] = flow.Failure.ToString(), ["externalPreviewConnection"] = key })).ExecuteAsync(context);
+            else await Failure(context, 400);
+            return;
+        }
         if (purpose == AuthenticationArtifactPurpose.SignIn)
         {
             if (flow.UserId is null || flow.ReturnUrl is null || flow.Provenance?.ConnectionKey != key) { await Failure(context, 400); return; }
@@ -185,7 +204,14 @@ public static partial class ExternalAuthenticationApi
         var issuer = context.RequestServices.GetService<ICanonicalUserSignInService>();
         if (issuer is null) return null;
         var authenticated = await context.AuthenticateAsync(issuer.AuthenticationScheme);
-        return authenticated.Succeeded ? authenticated.Principal : null;
+        if (!authenticated.Succeeded || authenticated.Principal is null) return null;
+        var subjects = context.RequestServices.GetRequiredService<ITokenSubjectResolver>();
+        if (!subjects.TryResolve(authenticated.Principal, out var cookie) || cookie.CanonicalUserId is null) return null;
+        // A Studio bearer transport and the browser's cookie may name different users. Never silently
+        // run a preview as that other cookie identity, even if both accounts can manage providers.
+        if (context.User.Identity?.IsAuthenticated == true &&
+            (!subjects.TryResolve(context.User, out var current) || current != cookie)) return null;
+        return authenticated.Principal;
     }
 
     private static async Task<bool> SessionAuthorityAvailable(HttpContext context)

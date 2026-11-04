@@ -5,9 +5,10 @@ using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 
 internal sealed record ManagedConnectionResponse(ConnectionRecord Document, ConnectionSource Source, bool Effective,
-    string? ShadowedById, bool OverridePermitted, string MaterialRevision, bool ConfigurationEditable,
+    string? ShadowedById, bool OverridePermitted, string MaterialRevision, bool ConfigurationEditable, bool ConfigurationSupported,
     string? SignInCallback, string? PreviewCallback, ConnectionReadinessResult? Readiness = null);
 internal sealed record ManagedConnectionCatalogResponse(string TenantId, string ProtocolPath, string? Revision, bool DatabaseManagement,
+    bool CanManageConnections, IReadOnlyList<string> ProvisioningPolicies,
     EffectiveProviderCapabilities Capabilities, IReadOnlyList<ManagedConnectionResponse> Connections);
 internal sealed record ManagedConnectionDetailResponse(string? Revision, ManagedConnectionResponse Connection);
 internal sealed record ManagedConnectionAssessmentResponse(bool CanApply, string? Failure, ManagedConnectionCatalogResponse? Proposed);

@@ -4,7 +4,7 @@ using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 
-internal sealed record ExternalAntiforgeryResponse(string RequestToken);
+internal sealed record ExternalAntiforgeryResponse(string RequestToken, string FormFieldName, string? HeaderName);
 internal sealed record ExternalAuthenticationFailureResponse(string Error);
 internal sealed record ExternalAuthenticationStartRequest(string? ReturnUrl, string? ConnectionRecordId = null);
 

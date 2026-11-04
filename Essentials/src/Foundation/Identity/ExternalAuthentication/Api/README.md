@@ -84,16 +84,22 @@ implement read-only `CanSignInAsync` and current-subject authorization explicitl
 | GET `/lookups/users?skip=0&take=50&search=...` | Both provider manage and `identity/users:read`; bounded tenant-local identity labels/status, no credentials |
 | GET `/lookups/roles?skip=0&take=50` | Both provider manage and `identity/roles:read`; existing role IDs/names and current deployment/editor delegation eligibility |
 
-All JSON posts require the paired antiforgery cookie and `RequestVerificationToken` header, including technical
-clients. Fetch it from `{protocolPath}/antiforgery`; the catalog returns the configured `protocolPath`, including
+All JSON posts require the paired antiforgery cookie and configured header (`RequestVerificationToken` by default), including technical
+clients. Fetch it from `{protocolPath}/antiforgery`; the response supplies `requestToken`, `formFieldName` and `headerName`. The catalog returns the configured `protocolPath`, including
 custom callback routing. Resolve this relative to the trusted backend base, retaining its path base. JSON bodies
 are limited to 64 KiB; unknown members, inline credentials and recurring mapping fields are refused. Wire enums
 use their numeric Core values. Lookup page size is 1–100; skip is nonnegative and an optional user search is at most
 400 characters. Missing paging adapters return 503 rather than enumerating unbounded stores.
 
+The feature contributes backend capability `elsa.api.identity.external-authentication` contract 1, with the
+`external-connections` relation. The catalog also exposes current `canManageConnections` and installed unique
+provisioning-policy names. The optional [Studio module](../../../../../../Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md)
+uses these metadata and permission boundaries rather than assuming that installation grants write access.
+
 The catalog is bounded by the domain catalog limits. It projects only known OIDC settings and secret references;
 unknown adapter/settings data and private recovery/credential bindings never enter responses. Deployment records
-are read-only. `configurationEditable` describes a supported, unarchived database-owned configuration with database
+are read-only. `configurationSupported` distinguishes complete known configuration from a redacted unknown schema,
+so a client cannot prepare an incomplete full override. `configurationEditable` describes a supported, unarchived database-owned configuration with database
 management enabled; the caller still needs manage permission. Archived/unsupported records retain source metadata
 and explicit lifecycle operations. Database-disabled hosts refuse mutation. Existing Elsa roles are selected through
 the provisioning policy; no group-mapping editor or synchronization capability is advertised. Ownership capabilities
@@ -112,6 +118,14 @@ observed time/material and a stale flag if the catalog or record changed during 
 thirty-second cancellation bound in addition to protocol backchannel bounds. A test observation is returned to the
 caller, not retained as scheduled health history. Interactive preview continues through the separate protected
 administrator/browser-bound routes above; successful metadata testing alone never counts as recovery.
+
+For an interactive browser form, request `{protocolPath}/antiforgery?purpose=preview`. This authenticates the
+administrator's cookie explicitly and mints the token for that cookie identity; a bearer-minted token may not
+validate when the browser posts its form without a bearer header. An authenticated transport subject must match
+the cookie's complete typed subject. Different identities refuse even when both are administrators. Use the returned
+`formFieldName` in the form. A consumed protected preview may redirect a closed `externalPreviewFailure` category
+to its currently allowed return URL; unbound/invalid state and revoked return policy never provide a redirect.
+Successful preview still returns the one-time `externalPreviewHandle` and `externalPreviewConnection`.
 
 Owned real HTTP/native SQLite tests cover the complete draft-assess-save-test-enable-retire and explicit
 override/archive/restore paths, current permission/delegation changes, source/revision/CSRF/body/role/unknown-field

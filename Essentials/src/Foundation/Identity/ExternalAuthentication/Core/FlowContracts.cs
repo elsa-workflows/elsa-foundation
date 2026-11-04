@@ -44,6 +44,8 @@ public sealed record ExternalAuthenticationProvenance(string ConnectionKey, stri
     public string? CredentialBinding { get; init; }
     public string? RedirectUri { get; init; }
 }
+/// <summary>A failed preview can carry its protected, currently allowed return URL after state and actor validation.
+/// Untrusted/unbound state carries no return URL; normal sign-in failures never redirect.</summary>
 public sealed record ExternalFlowCompleted(string? UserId = null, string? ReturnUrl = null, string? PreviewResultHandle = null,
     ExternalAuthenticationProvenance? Provenance = null, ExternalFlowFailure Failure = ExternalFlowFailure.None,
     ExternalProtocolFailure ProtocolFailure = ExternalProtocolFailure.None, ExternalAdmissionFailure AdmissionFailure = ExternalAdmissionFailure.None);

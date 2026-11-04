@@ -11,12 +11,94 @@ using Elsa.Foundation.Identity.Authorization;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Api.Capabilities.Models;
+using Elsa.Foundation.Identity.ExternalAuthentication;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
 public sealed partial class ExternalAuthenticationHttpTests
 {
     private const string Management = "_elsa/identity/external-connections";
+
+    [Fact]
+    public async Task Management_discovery_and_form_metadata_describe_the_installed_client_contract_and_current_read_only_grants()
+    {
+        await using var host = await HttpHost.Start();
+        var declaration = Assert.Single(host.Services.GetServices<ApiCapabilityDeclaration>(), value => value.CapabilityId == "elsa.api.identity.external-authentication");
+        Assert.Contains(declaration.Links, link => link.Href == "_elsa/identity/external-connections");
+        using var browser = host.Browser();
+        using (var csrf = await browser.GetAsync("identity/external/antiforgery"))
+        {
+            Assert.Equal(HttpStatusCode.OK, csrf.StatusCode);
+            using var json = JsonDocument.Parse(await csrf.Content.ReadAsStreamAsync());
+            Assert.Equal("__csrf", json.RootElement.GetProperty("formFieldName").GetString());
+            Assert.Equal("RequestVerificationToken", json.RootElement.GetProperty("headerName").GetString());
+        }
+        await using (var scope = host.Scope())
+        {
+            var roles = scope.ServiceProvider.GetRequiredService<IRoleStore>();
+            await roles.SaveAsync((await roles.FindAsync("default", "reader"))! with { Permissions = new HashSet<string> { DefaultIdentityPermissionKeys.IdentityProvidersRead } });
+        }
+        var callback = await host.StartAndAuthorize(browser);
+        using (var returned = await browser.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
+        using var catalog = await browser.GetAsync(Management);
+        Assert.Equal(HttpStatusCode.OK, catalog.StatusCode);
+        using var response = JsonDocument.Parse(await catalog.Content.ReadAsStreamAsync());
+        Assert.False(response.RootElement.GetProperty("canManageConnections").GetBoolean());
+        Assert.Contains(response.RootElement.GetProperty("provisioningPolicies").EnumerateArray(), policy => policy.GetString() == "reject");
+        var company = Assert.Single(response.RootElement.GetProperty("connections").EnumerateArray(), row => row.GetProperty("document").GetProperty("key").GetString() == "company");
+        Assert.True(company.GetProperty("configurationSupported").GetBoolean());
+        Assert.False(company.GetProperty("configurationEditable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Preview_form_accepts_antiforgery_created_through_the_administrators_bearer_transport_without_replacing_the_cookie()
+    {
+        await using var host = await HttpHost.Start();
+        using var browser = host.Browser();
+        await host.LoginAdministrator(browser);
+        var pair = await Pair(browser);
+        var before = await host.Counts();
+        var administrator = await Session(browser);
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Get, "identity/external/antiforgery?purpose=preview");
+        tokenRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", pair.AccessToken);
+        using var tokenResponse = await browser.SendAsync(tokenRequest);
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+        using var json = JsonDocument.Parse(await tokenResponse.Content.ReadAsStreamAsync());
+        var field = json.RootElement.GetProperty("formFieldName").GetString()!;
+        var token = json.RootElement.GetProperty("requestToken").GetString()!;
+        using var started = await browser.PostAsync("identity/external/preview/company", new FormUrlEncodedContent(new Dictionary<string, string>
+            { [field] = token, ["connectionRecordId"] = "deployment:company", ["returnUrl"] = "/backend/resource" }));
+        Assert.Equal(HttpStatusCode.Found, started.StatusCode);
+        using var upstream = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+        using var authorized = await upstream.GetAsync(started.Headers.Location);
+        using var returned = await browser.GetAsync(authorized.Headers.Location);
+        Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
+        Assert.Equal(administrator.Subject, (await Session(browser)).Subject);
+        Assert.Equal(before, await host.Counts());
+    }
+
+    [Fact]
+    public async Task Preview_preparation_refuses_a_different_administrators_cookie_and_bearer_even_when_both_have_management_permission()
+    {
+        await using var host = await HttpHost.Start();
+        using var administrator = host.Browser(); using var external = host.Browser();
+        await host.LoginAdministrator(administrator); await MakeAdministrative(host, "company");
+        var callback = await host.StartAndAuthorize(external);
+        using (var returned = await external.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
+        var pair = await Pair(external);
+        var first = await Session(administrator); var second = await Session(external);
+        Assert.NotEqual(first.Subject, second.Subject);
+        var before = await host.Counts();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "identity/external/antiforgery?purpose=preview");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", pair.AccessToken);
+        using var denied = await administrator.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+        Assert.Equal(before, await host.Counts());
+        Assert.Equal(first.Subject, (await Session(administrator)).Subject);
+        Assert.Equal(second.Subject, (await Session(external)).Subject);
+    }
 
     [Fact]
     public async Task Management_endpoints_declare_api_denial_behavior_and_their_complete_permission_requirements()
@@ -175,6 +257,7 @@ public sealed partial class ExternalAuthenticationHttpTests
     [InlineData("media", HttpStatusCode.UnsupportedMediaType)]
     [InlineData("mapping", HttpStatusCode.BadRequest)]
     [InlineData("inline-secret", HttpStatusCode.BadRequest)]
+    [InlineData("issuer-credentials", HttpStatusCode.BadRequest)]
     [InlineData("enum", HttpStatusCode.BadRequest)]
     [InlineData("protocol", HttpStatusCode.BadRequest)]
     [InlineData("deployment", HttpStatusCode.NotFound)]
@@ -187,6 +270,7 @@ public sealed partial class ExternalAuthenticationHttpTests
         await host.LoginAdministrator(administrator);
         var record = host.Options.Connections[0] with { Id = "", Key = "new" };
         if (invalid == "inline-secret") record = record with { Settings = new Dictionary<string, string>(record.Settings) { ["clientSecret"] = "canary" } };
+        if (invalid == "issuer-credentials") record = record with { Settings = new Dictionary<string, string>(record.Settings) { ["authority"] = "https://user:password@identity.example/issuer" } };
         if (invalid == "protocol") record = record with { Protocol = "uninstalled" };
         if (invalid == "role") host.Options.AllowedRoleIds = ["other-role"];
         if (invalid == "database") host.Options.AllowDatabaseManagement = false;

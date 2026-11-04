@@ -79,20 +79,25 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
             return new(Failure: ExternalFlowFailure.InvalidState);
         if (state.RedirectUri != GetCallbackUri(request.ConnectionKey, request.Purpose)) return new(Failure: ExternalFlowFailure.StaleConnection);
         if (!ReturnUrl(state.ReturnUrl)) return new(Failure: ExternalFlowFailure.InvalidReturnUrl);
+        // Only a consumed, protected, browser/administrator-bound preview can return a failure to its
+        // currently allowed destination. Invalid or unbound state must never supply a redirect.
+        ExternalFlowCompleted Refuse(ExternalFlowFailure failure, ExternalProtocolFailure protocolFailure = ExternalProtocolFailure.None) =>
+            new(ReturnUrl: request.Purpose == AuthenticationArtifactPurpose.Preview ? state.ReturnUrl : null,
+                Failure: failure, ProtocolFailure: protocolFailure);
         var selected = await Select(state.ConnectionKey, request.Purpose == AuthenticationArtifactPurpose.Preview ? state.ConnectionRecordId : null, request.Purpose, cancellationToken);
         if (selected is null || selected.Record.Id != state.ConnectionRecordId || selected.MaterialRevision != state.MaterialRevision)
-            return new(Failure: ExternalFlowFailure.StaleConnection);
-        if (request.ProviderError) return new(Failure: ExternalFlowFailure.ProviderFailed);
+            return Refuse(ExternalFlowFailure.StaleConnection);
+        if (request.ProviderError) return Refuse(ExternalFlowFailure.ProviderFailed);
         if (string.IsNullOrWhiteSpace(request.Code) || request.Code.Length > 8192 || request.ResponseIssuer?.Length > 400)
-            return new(Failure: ExternalFlowFailure.InvalidState);
+            return Refuse(ExternalFlowFailure.InvalidState);
         var protocol = Protocol(scope.ServiceProvider, state.Protocol);
-        if (protocol is null) return new(Failure: ExternalFlowFailure.Unavailable);
+        if (protocol is null) return Refuse(ExternalFlowFailure.Unavailable);
         var verified = await protocol.RedeemAsync(selected.Record, new(state.RedirectUri, request.Code, state.Nonce, state.CodeVerifier,
             state.Issuer, state.CredentialBinding, request.ResponseIssuer), cancellationToken);
         if (verified.Failure != ExternalProtocolFailure.None || verified.Identity is null)
-            return new(Failure: ExternalFlowFailure.ProviderFailed, ProtocolFailure: verified.Failure);
+            return Refuse(ExternalFlowFailure.ProviderFailed, verified.Failure);
         if (verified.Identity.TenantId != options.Value.TenantId || verified.Identity.Provider != state.ConnectionKey || verified.Identity.Issuer != state.Issuer)
-            return new(Failure: ExternalFlowFailure.InvalidState);
+            return Refuse(ExternalFlowFailure.InvalidState);
         var admission = scope.ServiceProvider.GetRequiredService<IExternalAdmissionService>();
         var context = new ExternalAdmissionContext(selected, verified.Identity, verified.Claims);
         if (request.Purpose == AuthenticationArtifactPurpose.SignIn)
@@ -105,7 +110,7 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
         }
         var prospective = await admission.AssessAsync(context, cancellationToken);
         if (prospective.RoleIds.Count > 128 || prospective.Permissions.Count > 1024 || options.Value.PreviewResultLifetime < TimeSpan.FromSeconds(1) ||
-            options.Value.PreviewResultLifetime > TimeSpan.FromMinutes(10)) return new(Failure: ExternalFlowFailure.InvalidResult);
+            options.Value.PreviewResultLifetime > TimeSpan.FromMinutes(10)) return Refuse(ExternalFlowFailure.InvalidResult);
         var observed = Now();
         var preview = new ExternalAuthenticationPreview(state.ConnectionKey, state.ConnectionRecordId, state.MaterialRevision,
             verified.Identity.Issuer, verified.Identity.Subject, prospective.Kind, prospective.Kind == ExternalAdmissionKind.ExistingUser ? prospective.User?.Id : null,
@@ -113,10 +118,10 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
             prospective.RoleIds.Order(StringComparer.Ordinal).ToArray(), prospective.Permissions.Order(StringComparer.Ordinal).ToArray(), prospective.Failure, observed);
         var resultHandle = Random();
         var payload = new PreviewState(1, preview, observed, Milliseconds(observed + options.Value.PreviewResultLifetime));
-        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(payload)) > 131072) return new(Failure: ExternalFlowFailure.InvalidResult);
+        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(payload)) > 131072) return Refuse(ExternalFlowFailure.InvalidResult);
         var saved = await store!.TryCreateAsync(Protect(resultHandle, AuthenticationArtifactPurpose.PreviewResult, state.ConnectionKey,
             request.BrowserBinding, admin, observed, payload.ExpiresAt, payload), cancellationToken);
-        return saved ? new(ReturnUrl: state.ReturnUrl, PreviewResultHandle: resultHandle) : new(Failure: ExternalFlowFailure.Conflict);
+        return saved ? new(ReturnUrl: state.ReturnUrl, PreviewResultHandle: resultHandle) : Refuse(ExternalFlowFailure.Conflict);
     }
 
     public async ValueTask<ExternalPreviewResult> ReadPreviewAsync(string connectionKey, string handle, string browserBinding, ClaimsPrincipal administrator,

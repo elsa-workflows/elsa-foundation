@@ -237,4 +237,5 @@ not automatic constitution violations.
 ## Studio
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
+- [External sign-in Studio module and standalone management client](Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

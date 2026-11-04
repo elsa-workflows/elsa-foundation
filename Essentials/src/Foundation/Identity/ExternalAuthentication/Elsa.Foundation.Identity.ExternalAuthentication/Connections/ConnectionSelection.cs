@@ -65,6 +65,9 @@ internal static partial class ConnectionSelection
                 if (string.IsNullOrWhiteSpace(setting.Key) || setting.Key.Length > 80 || setting.Value is null || setting.Value.Length > 8192 ||
                     CredentialField(setting.Key))
                     throw new InvalidOperationException("Connection settings cannot contain inline credentials or invalid fields; use secret references.");
+            if (record.Protocol == "oidc" && record.Settings.TryGetValue("authority", out var authority) &&
+                Uri.TryCreate(authority, UriKind.Absolute, out var uri) && uri.UserInfo.Length != 0)
+                throw new InvalidOperationException("Issuer URLs cannot contain inline credentials; use secret references.");
             foreach (var binding in record.Secrets)
                 if (string.IsNullOrWhiteSpace(binding.Key) || binding.Key.Length > 80 || binding.Value is null ||
                     string.IsNullOrWhiteSpace(binding.Value.Name) || binding.Value.Name.Length > 256 ||

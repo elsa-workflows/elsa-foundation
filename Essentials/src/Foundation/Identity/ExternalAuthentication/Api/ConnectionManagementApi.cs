@@ -215,8 +215,14 @@ public static partial class ExternalAuthenticationApi
         var ownership = await scope.ServiceProvider.GetRequiredService<IOwnershipModeProvider>().GetAsync(Tenant(context), context.RequestAborted);
         var capabilities = scope.ServiceProvider.GetRequiredService<IEffectiveCapabilitiesResolver>().Resolve(ownership,
             scope.ServiceProvider.GetRequiredService<IOptions<FoundationIdentityOptions>>().Value.ProviderCapabilities) with { CanMapGroups = false };
+        var canManage = scope.ServiceProvider.GetRequiredService<ITokenSubjectResolver>().TryResolve(context.User, out var subject) && subject.CanonicalUserId is not null &&
+            (await scope.ServiceProvider.GetRequiredService<ICurrentSubjectPermissionAuthorizer>().AuthorizeAsync(
+                new(Tenant(context), subject.CanonicalUserId, DefaultIdentityPermissionKeys.IdentityProvidersManage), context.RequestAborted)).Status == CurrentSubjectPermissionStatus.Granted;
+        var policies = scope.ServiceProvider.GetServices<IExternalProvisioningPolicy>().Select(policy => policy.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name) && name.Length <= 80 && name != "reject").GroupBy(name => name, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1).Select(group => group.Key).Append("reject").Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(256).ToArray();
         return new(Tenant(context), context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.CallbackPath.TrimEnd('/'),
-            registry.Revision, registry.DatabaseManagement, capabilities, registry.Connections.Select(view => Projection(context, view)).ToArray());
+            registry.Revision, registry.DatabaseManagement, canManage, policies, capabilities, registry.Connections.Select(view => Projection(context, view)).ToArray());
     }
     private static ManagedConnectionResponse Projection(HttpContext context, ConnectionView view)
     {
@@ -230,7 +236,7 @@ public static partial class ExternalAuthenticationApi
         };
         var editable = view.Source == ConnectionSource.Database && record.ArchivedAt is null &&
             context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.AllowDatabaseManagement && Editable(record);
-        return new(projected, view.Source, view.Effective, view.ShadowedById, view.OverridePermitted, view.MaterialRevision, editable,
+        return new(projected, view.Source, view.Effective, view.ShadowedById, view.OverridePermitted, view.MaterialRevision, editable, Editable(record),
             flows.GetCallbackUri(record.Key, AuthenticationArtifactPurpose.SignIn), flows.GetCallbackUri(record.Key, AuthenticationArtifactPurpose.Preview));
     }
     private static bool Editable(ConnectionRecord record) => record.Protocol == "oidc" && record.Settings is not null && record.Secrets is not null &&

@@ -245,6 +245,63 @@ public sealed partial class ExternalAuthenticationHttpTests
     }
 
     [Theory]
+    [InlineData("provider", "ProviderFailed")]
+    [InlineData("stale", "StaleConnection")]
+    [InlineData("credential", "ProviderFailed")]
+    [InlineData("unbound", null)]
+    [InlineData("callback", null)]
+    [InlineData("return-policy", null)]
+    public async Task Preview_failures_return_only_to_the_protected_currently_allowed_destination(string scenario, string? failure)
+    {
+        await using var host = await HttpHost.Start();
+        using var browser = host.Browser();
+        await host.LoginAdministrator(browser);
+        var original = await Session(browser);
+        var originalCookie = browser.Cookies.GetCookies(host.BaseUri)[AspNetCoreIdentityDefaults.CookieScheme]!.Value;
+        host.Options.AllowedReturnUrlOrigins = ["https://studio.example"];
+        var before = await host.Counts();
+        var callback = await host.StartAndAuthorize(browser, purpose: "preview", returnUrl: "https://studio.example/security/external-sign-in?backend=selected&externalPreviewNonce=local-binding");
+        if (scenario == "provider")
+        {
+            var query = QueryHelpers.ParseQuery(callback.Query);
+            callback = new Uri(QueryHelpers.AddQueryString(callback.GetLeftPart(UriPartial.Path), new Dictionary<string, string?>
+                { ["state"] = query["state"].ToString(), ["error"] = "access_denied", ["error_description"] = "private-provider-detail" }));
+        }
+        if (scenario == "stale") host.Options.Connections[0] = host.Options.Connections[0] with { Preferred = !host.Options.Connections[0].Preferred,
+            Admission = new() { Type = "reject" } };
+        if (scenario == "credential") host.Secrets.Version++;
+        if (scenario == "unbound") callback = new Uri(QueryHelpers.AddQueryString(callback.GetLeftPart(UriPartial.Path),
+            new Dictionary<string, string?> { ["state"] = new string('a', 43), ["error"] = "access_denied" }));
+        if (scenario == "callback") host.Options.PublicBaseUrl = "https://elsewhere.example/backend";
+        if (scenario == "return-policy") host.Options.AllowedReturnUrlOrigins = [];
+        using var returned = await browser.GetAsync(callback);
+        if (failure is null)
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, returned.StatusCode);
+            Assert.Null(returned.Headers.Location);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
+            var destination = returned.Headers.Location!;
+            Assert.Equal("https://studio.example/security/external-sign-in", destination.GetLeftPart(UriPartial.Path));
+            var query = QueryHelpers.ParseQuery(destination.Query);
+            Assert.Equal(failure, query["externalPreviewFailure"]);
+            Assert.Equal("company", query["externalPreviewConnection"]);
+            Assert.Equal("selected", query["backend"]);
+            Assert.Equal("local-binding", query["externalPreviewNonce"]);
+            Assert.False(query.ContainsKey("externalPreviewHandle"));
+            Assert.DoesNotContain("private-provider-detail", destination.AbsoluteUri, StringComparison.Ordinal);
+            using var replay = await browser.GetAsync(callback);
+            Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+            Assert.Null(replay.Headers.Location);
+        }
+        Assert.Equal(before, await host.Counts());
+        Assert.Equal(original.Subject, (await Session(browser)).Subject);
+        Assert.Equal(originalCookie, browser.Cookies.GetCookies(host.BaseUri)[AspNetCoreIdentityDefaults.CookieScheme]!.Value);
+    }
+
+    [Theory]
     [InlineData("reject")]
     [InlineData("disabled")]
     [InlineData("secret")]
@@ -357,7 +414,7 @@ public sealed partial class ExternalAuthenticationHttpTests
                 .Resolve(OwnershipConfiguration.FromMode(mode), external.Capabilities);
             Assert.Equal(users, effective.CanManageUsers);
             Assert.Equal(roles, effective.CanManageRoles);
-            Assert.False(effective.CanMapGroups); // Recurring mapping semantics remain undecided.
+            Assert.False(effective.CanMapGroups); // The owner chose provisioning-only saved Elsa roles.
         }
         var known = await host.StartAndAuthorize(browser);
         using (var returned = await browser.GetAsync(known)) Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
@@ -549,9 +606,9 @@ public sealed partial class ExternalAuthenticationHttpTests
                 [AspNetCoreIdentityDefaults.AntiforgeryFieldName] = await Csrf(browser), ["returnUrl"] = returnUrl,
                 ["connectionRecordId"] = record ?? "deployment:" + key
             }));
-        public async Task<Uri> StartAndAuthorize(HttpClient browser, string key = "company", string purpose = "signin", string? record = null)
+        public async Task<Uri> StartAndAuthorize(HttpClient browser, string key = "company", string purpose = "signin", string? record = null, string returnUrl = "/backend/resource")
         {
-            using var start = await Begin(browser, key, purpose, record);
+            using var start = await Begin(browser, key, purpose, record, returnUrl);
             Assert.Equal(HttpStatusCode.Found, start.StatusCode);
             Assert.Contains(start.Headers.GetValues("Set-Cookie"), cookie => cookie.Contains("httponly", StringComparison.OrdinalIgnoreCase) && cookie.Contains("samesite=lax", StringComparison.OrdinalIgnoreCase));
             using var upstream = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });

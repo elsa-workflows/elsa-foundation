@@ -1,6 +1,8 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
@@ -24,6 +26,8 @@ public static class ExternalAuthenticationApiRegistration
         services.AddElsaEndpoints();
         services.AddAuthentication();
         services.AddAntiforgery();
+        ApiCapabilityRegistration.Add(services, new("elsa.api.identity.external-authentication", 1,
+            [new("external-connections", "_elsa/identity/external-connections")], "FoundationIdentityExternalAuthenticationApi"));
         services.AddOptions<ExternalAuthenticationApiOptions>();
         if (configure is not null) services.Configure(configure);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthenticationProviderSource, ManagedConnectionProviderSource>());
@@ -34,8 +38,10 @@ public static class ExternalAuthenticationApiRegistration
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Identity")]
 [ManifestFeatureCategory("Security")]
+[ManifestFeatureCategory("API")]
 [ShellFeature(name: "FoundationIdentityExternalAuthenticationApi", DisplayName = "External authentication API",
-    Description = "Backend-owned authentication, connection administration and administrator-only preview.")]
+    Description = "Backend-owned authentication, connection administration and administrator-only preview.",
+    DependsOn = new object[] { "ApiCapabilities" })]
 public class ExternalAuthenticationApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services) => services.AddFoundationExternalAuthenticationApi();
