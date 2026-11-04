@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -7,11 +8,16 @@ namespace Elsa.Activities.Runtime.Services;
 /// results with them and the input hydrator reads inputs with them, so a .NET object one activity returns reads back
 /// with the same members in the next activity's input (#3799).
 /// </summary>
-/// <remarks>Spec 1202 (S-9) replaces this instance with the shared serializer baseline.</remarks>
+/// <remarks>
+/// Numbers stay strict: the Web defaults would read a JSON string such as <c>"42"</c> into a numeric input, which
+/// the hydrator refused before and still refuses. Spec 1202 (S-9) replaces this instance with the shared serializer
+/// baseline.
+/// </remarks>
 internal static class ActivityValueJson
 {
     public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        NumberHandling = JsonNumberHandling.Strict
     };
 }

@@ -47,6 +47,15 @@ public sealed class ActivityValueJsonTests
         Assert.Equal(5m, activity.Order.Total);
     }
 
+    [Fact]
+    public void Hydrator_still_refuses_a_number_written_as_a_string()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Hydrate(JsonSerializer.SerializeToElement(new { customerName = "Ann", total = "5" })));
+
+        Assert.Contains("cannot be materialized", exception.Message);
+    }
+
     private static ActivityCompletionProjection Project(Order order) =>
         new ActivityCompletionProjector().Project(
             "invocation-1",
