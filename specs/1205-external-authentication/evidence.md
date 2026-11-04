@@ -503,3 +503,18 @@ all package/public-consumer checks, independent exact-head reviews/current hoste
 qualification remain required. This checkpoint does not close #3579/#2848 or advance general identity administration
 #2777/#2778/#2779. The full goal remains active and unachieved. Existing broad-graph audit/style warnings are unchanged;
 new generated migration files have the same namespace-style warnings as existing provider-generated migrations.
+
+## Studio host discovery gate correction (4 November)
+
+Hosted UI-head CI 41880630016 at `2e78bf007` failed the complete Studio .NET suite: **709 passed, 2 failed**,
+zero skips. The existing default-shell and shipped-feature discovery tests both reported
+`ExternalAuthenticationStudio` as undiscoverable. The module was shipped/referenced and enabled, but the Web
+host's explicit `WithStudioFeatureAssemblies` distribution list omitted its assembly. A .NET build alone had
+not proved that runtime discovery boundary. Added the module to that existing list; no test/guard/configuration
+exclusion was introduced.
+
+Restored real CShells discovery now lists the feature and passes **3/3** discovery cases. After building all Studio
+frontend packages with workspace concurrency limited to two, the **complete Studio .NET project passes 711/711**,
+zero skips. This corrects the actual host-registration omission; it does not turn the mounted component's browser
+evidence into a full Studio browser/deployment acceptance claim. Hosted checks for the pushed correction remain
+pending; no superseded failed run was retried. Full feature acceptance/review/merge/resulting-main remain required.
