@@ -7,6 +7,7 @@ using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Ownership;
+using Elsa.Foundation.Identity.Core.Security;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -84,6 +85,9 @@ public static partial class ExternalAuthenticationApi
         if (apply)
         {
             var result = await writer.ApplyAsync(request, context.User, context.RequestAborted);
+            await SecurityNotification(context, "connection." + request.Change.ToString().ToLowerInvariant(),
+                result.Saved ? AuthEventOutcome.Success : AuthEventOutcome.Denied, "external-connections", result.Saved ? "saved" : "refused",
+                category: AuthEventCategory.IdentityChange);
             await ManagementJson(context, result, ExternalAuthenticationApiJsonContext.Default.ConnectionWriteResult, result.Saved ? 200 : FailureStatus(result.Failure));
         }
         else

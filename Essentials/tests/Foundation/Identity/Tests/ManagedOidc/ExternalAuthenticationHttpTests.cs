@@ -486,7 +486,7 @@ public sealed partial class ExternalAuthenticationHttpTests
         public IServiceProvider Services => application.Services;
         public ExternalAuthenticationOptions Options => Services.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value;
 
-        public static async Task<HttpHost> Start()
+        public static async Task<HttpHost> Start(Action<IServiceCollection>? configure = null)
         {
             var host = new HttpHost { Company = await ControlledOidcServer.Start(), Partner = await ControlledOidcServer.Start() };
             Directory.CreateDirectory(host.directory);
@@ -521,6 +521,7 @@ public sealed partial class ExternalAuthenticationHttpTests
                 options.DefaultAuthenticateScheme = OpenIddictIdentityDefaults.SelectorScheme;
                 options.DefaultChallengeScheme = OpenIddictIdentityDefaults.SelectorScheme;
             });
+            configure?.Invoke(services);
             var app = host.application = builder.Build();
             app.UsePathBase("/backend");
             app.UseRouting(); app.UseAuthentication(); app.UseAuthorization();

@@ -62,7 +62,8 @@ binds canonical cookies/access/refresh to one random session ID and live account
 rejects that session's credentials without rotating the user's other sessions. Normal managed flow start/callback
 requires the authority's durable-session capability. User disable/delete and account-version changes reject
 already issued access/refresh as well as cookies; disable→enable cannot resurrect earlier sessions.
-Administration endpoints/events and cross-IAM mutation/recovery coordination remain T024 work.
+The administration operations below expose inspection, selected-session revocation and explicit link attachment.
+Link removal and cross-IAM mutation/recovery coordination remain T024 work.
 
 `ExternalAuthenticationHttpTests` drive actual owned Kestrel HTTP hosts and two actual HTTP OIDC fixtures with
 native SQLite IAM/artifact/vendor-token stores and owned key files. They cover normal cookie/access/refresh/
@@ -135,3 +136,34 @@ Successful preview still returns the one-time `externalPreviewHandle` and `exter
 Owned real HTTP/native SQLite tests cover the complete draft-assess-save-test-enable-retire and explicit
 override/archive/restore paths, current permission/delegation changes, source/revision/CSRF/body/role/unknown-field
 refusals, safe projections and bounded lookups. Studio/browser and deployment qualification remain in spec 1205.
+
+## Link and session administration
+
+These operations share the management base path and its JSON/antiforgery/body/paging protections. Each requires
+`identity/users:read` in addition to the dedicated permission below, with current saved grants checked again by
+the handler. Provider management and non-interactive credential management do not imply these grants.
+
+| Method and suffix | Dedicated permission / behavior |
+|---|---|
+| GET `/users/{userId}/sessions?skip=0&take=50` | `identity/sessions:read`; bounded tenant/user metadata, active/inactive/expired/revoked state, current-session flag, revision and current revocation availability |
+| POST `/users/{userId}/sessions/{sessionId}/revoke` | `identity/sessions:manage`; `expectedRevision`, durable CAS revocation of that session only, current ownership capability required |
+| GET `/users/{userId}/links?skip=0&take=50` | `identity/links:read`; provider, exact issuer and subject, timestamps, current link/user/catalog revisions and permitted attachment choices |
+| POST `/users/{userId}/links/attach` | `identity/links:manage`; existing user only, explicit connection record and opaque subject with expected catalog/user revisions |
+
+Session responses omit account security versions and upstream subjects/tokens. Revocation reports 409 for a stale
+revision, 404 for another user or a missing session, and 503 with `revoked:false` for a storage failure. A confirmed
+already-revoked session is idempotent. Retrying a failed write remains possible; unrelated sessions stay live.
+Inspection refuses an unavailable durable authority or a replacement returning records outside the requested scope.
+
+Attachment obtains the issuer from bounded server-side protocol validation, never a caller-supplied issuer. It
+rechecks source material, current permissions, user revision, membership and delegation after metadata work,
+then uses atomic IAM admission without creating a user or rebinding another owner. All existing user/membership
+roles and direct permissions must remain within the editor's authority and configured delegation boundary.
+Existing saved roles are preserved. The operation does not authenticate the linked user or issue a session.
+There is no link-removal endpoint yet; cross-authority final-login protection remains required before that action.
+
+Provider changes, admission/sign-in/preview outcomes, attachment and session revocation emit `IAuthEventSink`
+notifications when sinks are installed. Notifications use closed action/result categories, canonical actor/target
+identifiers and an optional opaque Elsa session ID. They omit upstream subjects, display/profile fields, secrets,
+tokens, protocol payloads and raw exceptions. A sink failure is logged by exception type and cannot undo a
+committed action or turn it into a failed mutation. This adds no audit database; the host owns notification sinks.

@@ -1212,3 +1212,7 @@ Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SessionId.init ->
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.SessionId = "elsa.identity.session_id" -> string!
 Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.ReadSessionAsync(Elsa.Foundation.Identity.Core.Authentication.TokenSubject! subject, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord?>
 Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.SupportsDurableSessions.get -> bool
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentitySessionsRead = "identity/sessions:read" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentitySessionsManage = "identity/sessions:manage" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityLinksRead = "identity/links:read" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityLinksManage = "identity/links:manage" -> string!

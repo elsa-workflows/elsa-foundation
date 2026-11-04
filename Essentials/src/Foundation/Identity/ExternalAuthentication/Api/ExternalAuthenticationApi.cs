@@ -5,6 +5,7 @@ using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Security;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Microsoft.AspNetCore.Antiforgery;
@@ -60,6 +61,7 @@ public static partial class ExternalAuthenticationApi
                 context => Run(context, Preview), name: "ExternalAuthenticationPreviewResult", containFailures: false)
             .RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
         MapManagement(endpoints);
+        MapIdentityAdministration(endpoints);
     }
 
     private static async Task Run(HttpContext context, Func<HttpContext, Task> handler, int maximumBody = 16384)
@@ -85,6 +87,32 @@ public static partial class ExternalAuthenticationApi
         {
             if (context.Response.HasStarted) { context.Abort(); return; }
             await Failure(context, StatusCodes.Status503ServiceUnavailable);
+        }
+        finally
+        {
+            if (!context.RequestAborted.IsCancellationRequested && context.Response.StatusCode >= 400 &&
+                !context.Items.ContainsKey(typeof(AuthEvent)))
+            {
+                var operation = context.GetEndpoint()?.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
+                var action = operation switch
+                {
+                    "ExternalAuthenticationStart" => "signin.start",
+                    "ExternalAuthenticationCallback" => "signin.complete",
+                    "ExternalAuthenticationPreviewStart" => "preview.start",
+                    "ExternalAuthenticationPreviewCallback" => "preview.complete",
+                    "ExternalConnectionsChange" => "connection.change",
+                    "ExternalIdentityAttachLink" => "link.attach",
+                    "ExternalIdentityRevokeSession" => "session.revoke",
+                    _ => null
+                };
+                if (action is not null)
+                    await SecurityNotification(context, action,
+                        context.Response.StatusCode >= 500 ? AuthEventOutcome.Failure : AuthEventOutcome.Denied,
+                        "external-authentication", "request-refused",
+                        category: action.StartsWith("signin.", StringComparison.Ordinal) || action.StartsWith("preview.", StringComparison.Ordinal)
+                            ? AuthEventCategory.Authentication : action.StartsWith("session.", StringComparison.Ordinal)
+                                ? AuthEventCategory.CredentialLifecycle : AuthEventCategory.IdentityChange);
+            }
         }
     }
 
@@ -131,7 +159,12 @@ public static partial class ExternalAuthenticationApi
         var browser = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
         var start = await context.RequestServices.GetRequiredService<IExternalAuthenticationFlowService>().BeginAsync(new(key, purpose, browser,
             form["returnUrl"].FirstOrDefault() ?? "/", purpose == AuthenticationArtifactPurpose.Preview ? form["connectionRecordId"].FirstOrDefault() : null), actor, context.RequestAborted);
-        if (start.Failure != ExternalFlowFailure.None || start.State is null || start.AuthorizationUrl is null) { await Failure(context, 400); return; }
+        if (start.Failure != ExternalFlowFailure.None || start.State is null || start.AuthorizationUrl is null)
+        {
+            await SecurityNotification(context, purpose == AuthenticationArtifactPurpose.SignIn ? "signin.start" : "preview.start", AuthEventOutcome.Denied,
+                "external-authentication", start.Failure.ToString(), category: AuthEventCategory.Authentication);
+            await Failure(context, 400); return;
+        }
         SetCorrelation(context, key, purpose, start.State, browser);
         await Results.Redirect(start.AuthorizationUrl).ExecuteAsync(context);
     }
@@ -153,6 +186,8 @@ public static partial class ExternalAuthenticationApi
         if (flow.Failure is not (ExternalFlowFailure.ExpiredOrUsed or ExternalFlowFailure.Denied)) DeleteCorrelation(context, key, purpose, handle);
         if (flow.Failure != ExternalFlowFailure.None)
         {
+            await SecurityNotification(context, purpose == AuthenticationArtifactPurpose.SignIn ? "signin.complete" : "preview.complete", AuthEventOutcome.Denied,
+                "external-authentication", flow.Failure.ToString(), category: AuthEventCategory.Authentication);
             if (purpose == AuthenticationArtifactPurpose.Preview && flow.ReturnUrl is not null)
                 await Results.Redirect(QueryHelpers.AddQueryString(flow.ReturnUrl, new Dictionary<string, string?>
                     { ["externalPreviewFailure"] = flow.Failure.ToString(), ["externalPreviewConnection"] = key })).ExecuteAsync(context);
@@ -162,6 +197,7 @@ public static partial class ExternalAuthenticationApi
         if (purpose == AuthenticationArtifactPurpose.SignIn)
         {
             if (flow.UserId is null || flow.ReturnUrl is null || flow.Provenance?.ConnectionKey != key) { await Failure(context, 400); return; }
+            await SecurityNotification(context, "signin.admit", AuthEventOutcome.Success, flow.UserId, "admitted", category: AuthEventCategory.Authentication);
             var issuer = context.RequestServices.GetRequiredService<ICanonicalUserSignInService>();
             var tenant = context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.TenantId;
             if (await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key))
@@ -169,7 +205,10 @@ public static partial class ExternalAuthenticationApi
                     ExternalIdentity = new(tenant, key, flow.Provenance.Issuer, flow.Provenance.Subject),
                     ConnectionRecordId = flow.Provenance.ConnectionRecordId
                 }, context.RequestAborted) is null)
-            { await Failure(context, 401); return; }
+            {
+                await SecurityNotification(context, "signin.complete", AuthEventOutcome.Denied, flow.UserId, "user-unavailable", category: AuthEventCategory.Authentication);
+                await Failure(context, 401); return;
+            }
             try
             {
                 await context.RequestServices.GetRequiredService<IConnectionSignInEvidence>().RecordAsync(flow.UserId, flow.Provenance, context.RequestAborted);
@@ -181,10 +220,12 @@ public static partial class ExternalAuthenticationApi
                 context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(ExternalAuthenticationApi))
                     .LogWarning("External recovery evidence was not recorded ({FailureType}).", exception.GetType().Name);
             }
+            await SecurityNotification(context, "signin.complete", AuthEventOutcome.Success, flow.UserId, "signed-in", category: AuthEventCategory.Authentication);
             await Results.Redirect(flow.ReturnUrl).ExecuteAsync(context);
             return;
         }
         if (flow.PreviewResultHandle is null || flow.ReturnUrl is null) { await Failure(context, 400); return; }
+        await SecurityNotification(context, "preview.complete", AuthEventOutcome.Success, "external-authentication", "previewed", category: AuthEventCategory.Authentication);
         SetCorrelation(context, key, AuthenticationArtifactPurpose.PreviewResult, flow.PreviewResultHandle, browser);
         await Results.Redirect(QueryHelpers.AddQueryString(flow.ReturnUrl, new Dictionary<string, string?>
             { ["externalPreviewHandle"] = flow.PreviewResultHandle, ["externalPreviewConnection"] = key })).ExecuteAsync(context);

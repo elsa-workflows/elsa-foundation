@@ -218,6 +218,10 @@ public static class DefaultIdentityPermissionKeys
     public const string IdentityProvidersManage = "identity/providers:manage";
 
     public const string IdentityCredentialsManage = "identity/credentials:manage";
+    public const string IdentitySessionsRead = "identity/sessions:read";
+    public const string IdentitySessionsManage = "identity/sessions:manage";
+    public const string IdentityLinksRead = "identity/links:read";
+    public const string IdentityLinksManage = "identity/links:manage";
 }
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;

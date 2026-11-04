@@ -26,7 +26,11 @@ public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog, IPerm
         Owned(DefaultIdentityPermissionKeys.IdentityApplicationsManage, "Manage applications", "Identity", "Create, update, and revoke applications and clients."),
         Owned(DefaultIdentityPermissionKeys.IdentityProvidersRead, "Read providers", "Identity", "Read configured authentication providers."),
         Owned(DefaultIdentityPermissionKeys.IdentityProvidersManage, "Manage providers", "Identity", "Create, update, test, and disable authentication providers."),
-        Owned(DefaultIdentityPermissionKeys.IdentityCredentialsManage, "Manage credentials", "Identity", "Issue, rotate, and revoke non-interactive credentials.")
+        Owned(DefaultIdentityPermissionKeys.IdentityCredentialsManage, "Manage credentials", "Identity", "Issue, rotate, and revoke non-interactive credentials."),
+        Owned(DefaultIdentityPermissionKeys.IdentitySessionsRead, "Read sessions", "Identity", "Inspect safe metadata and status of canonical user sessions."),
+        Owned(DefaultIdentityPermissionKeys.IdentitySessionsManage, "Manage sessions", "Identity", "Revoke canonical user sessions and their cookie/access/refresh credentials."),
+        Owned(DefaultIdentityPermissionKeys.IdentityLinksRead, "Read identity links", "Identity", "Inspect exact provider, issuer and subject links for Elsa users."),
+        Owned(DefaultIdentityPermissionKeys.IdentityLinksManage, "Manage identity links", "Identity", "Explicitly attach or remove external identity links within delegation and recovery policy.")
     ]);
 
     private static Permission Owned(string key, string displayName, string category, string description) =>

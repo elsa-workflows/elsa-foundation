@@ -22,6 +22,12 @@ internal sealed record ExternalAuthenticationStartRequest(string? ReturnUrl, str
 [JsonSerializable(typeof(ManagedUserPage))]
 [JsonSerializable(typeof(ManagedRolePage))]
 [JsonSerializable(typeof(ManagedConnectionError))]
+[JsonSerializable(typeof(ManagedSessionPage))]
+[JsonSerializable(typeof(ManagedSessionRevokeRequest))]
+[JsonSerializable(typeof(ManagedSessionRevokeResponse))]
+[JsonSerializable(typeof(ManagedIdentityLinkPage))]
+[JsonSerializable(typeof(ManagedLinkAttachRequest))]
+[JsonSerializable(typeof(ManagedLinkAttachResponse))]
 [JsonSerializable(typeof(ConnectionWrite))]
 [JsonSerializable(typeof(ConnectionWriteResult))]
 internal partial class ExternalAuthenticationApiJsonContext : JsonSerializerContext;

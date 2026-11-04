@@ -66,6 +66,7 @@
     { "id": "Elsa.Studio.Etl", "project": "Extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.ExtensionBuilder", "project": "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" },
     { "id": "Elsa.Studio.FeatureManagement", "project": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" },
+    { "id": "Elsa.Studio.Identity.ExternalAuthentication", "project": "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Elsa.Studio.Identity.ExternalAuthentication.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Samples.WeatherForecast", "project": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" },
     { "id": "Elsa.Studio.Secrets", "project": "Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" },
     { "id": "Elsa.Studio.Agent.Specialists", "project": "Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Elsa.Studio.Agent.Specialists.csproj", "introduced_after_consolidation": true },

@@ -42,7 +42,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 ## Phase 6 — US4: links, sessions and recovery
 
 - [x] T023 [US4] Implement durable session identity, status validation and scoped revocation across cookies/access/refresh under `Identity/`; use the same scope for disable/delete and selected-session revocation. Native SQLite store/restart/CAS tests and actual HTTP cookie/access/refresh tests prove selected-session and account invalidation, unchanged unrelated sessions, absolute expiry and no resurrection after disable→enable. Administrative APIs/events, cross-IAM last-path coordination and separate-process/server-database qualification remain T024/T026–T028.
-- [ ] T024 [US4] Implement link/session inspection and mutation APIs plus redacted `IAuthEventSink` notifications under `Identity/`; cover conflict/revocation failure and unrelated-user survival.
+- [ ] T024 [US4] Implement link/session inspection and mutation APIs plus redacted `IAuthEventSink` notifications under `Identity/`; cover conflict/revocation failure and unrelated-user survival. Inspection, explicit atomic attachment, selected-session revocation and redacted notifications are implemented and HTTP-tested; qualified unlink and cross-IAM final-login coordination remain required before completion.
 - [ ] T025 [US4] Add Studio links/sessions/recovery, source-owned/read-only, ownership-mode, missing-module and denied-action surfaces in `Extensions/Identity/studio/`; cover loading/empty/error/conflict states.
 
 ## Phase 7 — US5: actual provider and deployment qualification

@@ -518,3 +518,63 @@ frontend packages with workspace concurrency limited to two, the **complete Stud
 zero skips. This corrects the actual host-registration omission; it does not turn the mounted component's browser
 evidence into a full Studio browser/deployment acceptance claim. Hosted checks for the pushed correction remain
 pending; no superseded failed run was retried. Full feature acceptance/review/merge/resulting-main remain required.
+
+## Link/session API and notification checkpoint (4 November)
+
+Added four dedicated default permission keys: `identity/sessions:read`, `identity/sessions:manage`,
+`identity/links:read` and `identity/links:manage`. All four new administration routes also require
+`identity/users:read`; handlers recheck current canonical eligibility, saved grants and applicable ownership
+capabilities. The existing non-interactive credential permission does not grant session or link administration.
+The API README documents the exact routes, safe projections, bounded paging and revisioned request bodies.
+
+Session inspection projects only the requested tenant/user's safe session metadata and live state. It omits
+account security versions and upstream subjects/tokens, and refuses an overbound or wrong-scope replacement
+result. Selected-session revoke preserves the user's other sessions, uses the durable expected revision and
+keeps storage failure at 503/`revoked:false` so retry remains possible. Another user's session is not a valid target.
+Actual HTTP tests repeat cookie, access and refresh attempts after revocation and verify sibling survival.
+
+Link attachment targets an existing user and a configured unarchived connection. The server tests provider
+metadata to obtain the issuer, rejects caller-supplied issuer/unknown fields, rechecks source material and current
+user/catalog revisions after remote work, and uses the existing atomic admission authority without creating a
+user or rebinding another owner. Saved role assignments remain unchanged. Role, direct-permission, membership,
+deployment delegation and ownership boundaries apply before a credential can be attached to that account.
+Real provider sign-in then resolves the manually linked existing user with its saved Reader role; attachment
+itself neither exchanges an authorization code nor issues a session/token.
+
+Provider mutations, sign-in/admission and preview outcomes, attachment and selected-session revocation emit
+redacted existing `IAuthEventSink` notifications. Closed action/result values and canonical IDs replace upstream
+subjects/profile data, settings, secrets, tokens and raw exception messages. Unbound or failed callbacks and
+stale command refusals emit closed denials too. An installed sink throwing does not undo a committed mutation.
+The host still owns sinks; no audit database was introduced.
+
+Validation: **831/831** complete Release Identity cases, zero skips; discovery also lists **831**. The 28 new
+cases cover the administration boundaries, selected revocation/retry/fault behavior, safe notifications and
+attachment conflict/ownership/delegation/source checks. Full Release architecture passes **616/616**, zero skips,
+with new sources staged before enumeration. Generated filters and whitespace checks pass. Logs:
+`/tmp/elsa-3579-access-complete-identity.log`, `/tmp/elsa-3579-access-list-tests.log`,
+`/tmp/elsa-3579-access-architecture.log`, `/tmp/elsa-3579-access-maps.log`.
+
+Mutation proof: removing only target-role delegation from attachment makes the actual role-boundary regression
+fail (`canAttach:true` instead of false); the other three boundary cases pass. Original source was restored in
+`finally`. The restored complete Identity run is retained in `/tmp/elsa-3579-access-restored-identity.log`;
+the expected failed control is `/tmp/elsa-3579-access-delegation-mutation.log`.
+
+Hosted CI **41887842254** at `04f5d50d6` passed the Studio test/build stages but failed the subsequent complete
+NuGet inventory check: the new `Elsa.Studio.Identity.ExternalAuthentication` project was absent from the current
+package inventory. Added it as a post-consolidation package without changing the frozen consolidation manifest.
+Also removed dependency suppression from that module: its packed public references must include Studio Core
+and CShells rather than depending on a consuming application to provide them implicitly. The existing verifier
+now checks that dependency metadata too; no package, guard or failure was excluded.
+
+The existing verifier self-test passes. A fresh actual Release solution pack using the built frontend payloads
+and isolated output `/tmp/elsa-3579-studio-nuget-access-20261104-1` passes exact **26-package** inventory/version,
+MIT/icon, dependency and static-payload-byte verification, including the new module and its standalone SDK.
+Report: `/tmp/elsa-3579-access-studio-archive-verification.json`. Version: `4.0.0-extauth.20261104.1`.
+This proves the archive checkpoint; it does not replace the remaining public-consumer/runtime qualification.
+
+T024 remains unchecked: qualified unlink and atomic cross-IAM final-login coordination are still required.
+The API exposes no unprotected removal action. T025 Studio link/session surfaces and T026–T031 actual full
+Studio/external IdP product/cross-site/server-database/restart/separate-process/two-node, all consumer/artifact,
+independent exact-head review/current required CI/merge and resulting-main proofs remain required. The PR stays
+draft, #3579/#2848 stay open and the complete delivery goal remains active and unachieved. This checkpoint does
+not close general identity-administration issues #2777/#2778/#2779.
