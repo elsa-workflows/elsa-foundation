@@ -140,6 +140,24 @@ public sealed class SourceRevisionTests
     }
 
     [Fact]
+    public async Task Collection_cannot_rebind_an_active_captures_operation_identity()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Agent);
+        await store.CreateAsync("agent", "draft", "Agent", "agent/1", "original");
+        var snapshot = await store.CaptureAsync("agent", "draft", 0, "review");
+        await store.UnpinAsync("agent", "draft", snapshot.Key, "capture:review");
+        Assert.Equal("source-active", (await Assert.ThrowsAsync<SourceRevisionException>(() => store.DeleteSnapshotAsync("agent", "draft", snapshot.Key))).Code);
+        await store.SaveAsync("agent", "draft", 0, "Agent", "agent/1", "changed");
+        Assert.Equal("operation-conflict", (await Assert.ThrowsAsync<SourceRevisionException>(() => store.CaptureAsync("agent", "draft", 1, "review"))).Code);
+        Assert.Equal("original", (await store.CaptureAsync("agent", "draft", 0, "review")).Content);
+        await store.DiscardAsync("agent", "draft", 1);
+        await store.DeleteSnapshotAsync("agent", "draft", snapshot.Key);
+        Assert.Equal("not-found", (await Assert.ThrowsAsync<SourceRevisionException>(() => store.CaptureAsync("agent", "draft", 2, "review"))).Code);
+    }
+
+    [Fact]
     public async Task Snapshot_content_cannot_be_updated_even_by_an_ef_consumer()
     {
         await using var file = new TemporarySqliteDatabase();

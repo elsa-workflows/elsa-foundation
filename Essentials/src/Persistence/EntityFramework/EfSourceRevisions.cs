@@ -194,6 +194,8 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
             var copy = await RequireCopy(sourceId, copyId, ct, true); Touch(copy);
             var snapshot = await RequireSnapshot(snapshotId, copy.Key, ct);
             if (await db.Set<SourceSnapshotPin>().AnyAsync(x => x.SnapshotKey == snapshotId, ct)) throw new SourceRevisionException("snapshot-pinned");
+            // Retain operation identity while this copy can still capture; retired copies cannot recreate it.
+            if (!copy.Discarded) throw new SourceRevisionException("source-active");
             db.Remove(snapshot); return true;
         }, cancellationToken);
     public async Task DiscardAsync(string sourceId, string copyId, long expectedRevision, CancellationToken cancellationToken = default) =>

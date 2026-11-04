@@ -74,7 +74,11 @@ internal static class SourceRevisionNativeWitness
 
         // Competing retention and collection may conflict, but may never leave a dangling reference.
         await using (var db = create(fixture.ConnectionString))
-            await new EfSourceRevisions(db, scope).UnpinAsync("writer", "draft", snapshotId, "capture:review");
+        {
+            var store = new EfSourceRevisions(db, scope);
+            await store.DiscardAsync("writer", "draft", 2);
+            await store.UnpinAsync("writer", "draft", snapshotId, "capture:review");
+        }
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var pin = Compete(true);
         var delete = Compete(false);
@@ -88,7 +92,9 @@ internal static class SourceRevisionNativeWitness
             Assert.False(pinned && !exists);
             if (pin.Result is null) { Assert.True(exists); Assert.True(pinned); Assert.NotNull(delete.Result); }
             if (delete.Result is null) { Assert.False(exists); Assert.False(pinned); Assert.NotNull(pin.Result); }
-            Assert.Contains("winner", (await new EfSourceRevisions(check, scope).FindAsync("writer", "draft"))!.Content);
+            var retainedCopy = await check.Set<SourceWorkingCopy>().SingleAsync(x => x.Key == EfSourceRevisions.CopyKey(scope, "writer", "draft"));
+            Assert.True(retainedCopy.Discarded);
+            Assert.Contains("winner", retainedCopy.Content);
         }
 
         async Task<SourceRevisionException?> Compete(bool retain)
