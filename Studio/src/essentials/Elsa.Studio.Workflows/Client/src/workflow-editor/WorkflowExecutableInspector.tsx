@@ -60,7 +60,7 @@ import {
   useExecutableWorkflowRun
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
-import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
@@ -358,7 +358,10 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
         )}
       </header>
       <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
-      <div className="wf-instance-canvas">
+      <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
+        const node = canvas.nodes.find(candidate => candidate.id === nodeId);
+        if (node) onSelectNode(node.data.runtimeNodeId ?? node.id);
+      })}>
         {canvas.mode === "compensation" ? (
           <CompensationScopeDesigner key={scopeKey} owner={canvas.owner} nodes={canvas.nodes}
             selectedNodeId={selectedNodeId} readOnly canvasRef={canvasRef}
@@ -379,6 +382,10 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
+            ariaLabelConfig={{
+              "node.a11yDescription.default": "Press Enter or Space to select and inspect this activity.",
+              "node.a11yDescription.keyboardDisabled": "Press Enter or Space to select and inspect this activity."
+            }}
             deleteKeyCode={null}
             edgesReconnectable={false}
             onNodeClick={(_, node) => onSelectNode(node.data.runtimeNodeId ?? node.id)}

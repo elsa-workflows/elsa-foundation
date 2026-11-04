@@ -99,6 +99,12 @@ export function buildExecutableActivityGraph(
     const adaptedNodePresentation = presentation || displayName
       ? { nodeId, displayName, description: presentation?.description }
       : undefined;
+    // The Runtime API can return a reusable workflow root's sidecar under its authored id.
+    // Only that unique root may fall back: repeated placements must never borrow each other's source.
+    const nodeAuthoredInputs = authoredInputsByNodeId.get(node.executableNodeId)
+      ?? (node === root && nodeId === node.authoredActivityId ? authoredInputsByNodeId.get(node.authoredActivityId) : undefined)
+      ?? [];
+    const inputBindings = compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [];
     factsByNodeId.set(nodeId, {
       executableNodeId: node.executableNodeId,
       authoredActivityId: node.authoredActivityId,
@@ -106,9 +112,9 @@ export function buildExecutableActivityGraph(
       activityTypeVersion: node.activityTypeVersion,
       structureKind: node.structureKind ?? null,
       available: !!catalogItem,
-      inputBindings: compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [],
+      inputBindings,
       outputCaptures: node.outputCaptures ?? [],
-      authoredInputs: authoredInputsByNodeId.get(node.executableNodeId) ?? [],
+      authoredInputs: nodeAuthoredInputs,
       authoredInputsAccess,
       presentation: adaptedNodePresentation
     });
@@ -121,11 +127,11 @@ export function buildExecutableActivityGraph(
       activityVersionId: catalogItem?.activityVersionId ?? ghostActivityVersionId(node),
       // Only the authorized pinned sidecar supplies previews. Never fall back to today's draft
       // or expose a sensitive/redacted source through the shared designer's summary or tooltip.
-      inputs: authoredInputsByNodeId.get(node.executableNodeId)?.filter(input =>
+      inputs: nodeAuthoredInputs.filter(input =>
         sourceCanBePreviewed(authoredInputsAccess) &&
         sourceCanBePreviewed(input.accessState ?? input.access) && !input.isSensitive &&
-        !factsByNodeId.get(nodeId)?.inputBindings.some(binding => (binding.inputKey ?? binding.inputName) === input.inputKey && binding.isSensitive)
-      ).map(input => ({ referenceKey: input.inputKey, value: { expressionType: input.expressionType ?? "Literal", value: input.value } })) ?? [],
+        !inputBindings.some(binding => (binding.inputKey ?? binding.inputName) === input.inputKey && binding.isSensitive)
+      ).map(input => ({ referenceKey: input.inputKey, value: { expressionType: input.expressionType ?? "Literal", value: input.value } })),
       outputs: [],
       structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
     };

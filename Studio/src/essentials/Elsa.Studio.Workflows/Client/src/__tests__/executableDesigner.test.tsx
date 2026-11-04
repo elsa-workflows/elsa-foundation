@@ -43,6 +43,25 @@ describe("Executable designer parity", () => {
     expect(canvas.nodes[0].data.summary).toBe(formatActivitySummary({ ...graph.root, inputs: [{ referenceKey: "Text", value: { expressionType: "Literal", value: "Pinned hello" } }] }, line));
   });
 
+  it("previews the unique reusable root sidecar under its authored identity", () => {
+    const line = { ...writeLine, inputs: [{ name: "Text", referenceKey: "Text", type: "String", isBrowsable: true }] };
+    const graph = buildExecutableActivityGraph({ ...leaf("root"), executableNodeId: "placed-1" }, [line],
+      [{ executableNodeId: "root", inputKey: "Text", expressionType: "Literal", value: "Pinned root", accessState: "allowed" }], [], "allowed");
+    const canvas = buildExecutableInspectorCanvas(graph, [line], [], [], () => {});
+    expect(canvas.nodes[0].data.summary).toBe('"Pinned root"');
+    const hidden = buildExecutableActivityGraph({ ...leaf("root"), executableNodeId: "placed-1" }, [line],
+      [{ executableNodeId: "root", inputKey: "Text", expressionType: "Literal", value: "MUST NOT APPEAR", isSensitive: true }], [], "allowed");
+    expect(hidden.root.inputs).toEqual([]);
+  });
+
+  it("never borrows an ambiguous authored sidecar for repeated placements", () => {
+    const tree = sequence("root", [{ ...leaf("root"), executableNodeId: "placed-1" }]);
+    const graph = buildExecutableActivityGraph(tree, catalog,
+      [{ executableNodeId: "root", inputKey: "Text", expressionType: "Literal", value: "AMBIGUOUS" }], [], "allowed");
+    expect(graph.root.inputs).toEqual([]);
+    expect(JSON.stringify(graph.root)).not.toContain("AMBIGUOUS");
+  });
+
   it.each(["permissionHidden", "sensitive", "bindingSensitive", "recordHidden"])("does not preview a %s input", protection => {
     const line = { ...writeLine, inputs: [{ name: "Text", referenceKey: "Text", type: "String", isBrowsable: true }] };
     const sources = [{ executableNodeId: "exec-first", inputKey: "Text", expressionType: "Literal", value: "MUST NOT APPEAR",

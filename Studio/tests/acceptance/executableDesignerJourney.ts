@@ -26,7 +26,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     version("Elsa.Activities.Flowchart.Activities.Flowchart"), version("Elsa.Activities.Compensation.Activities.CompensationScope"),
     version("Elsa.Activities.Bpmn.Activities.BpmnProcess")
   ]);
-  const line = (id: string, text: string): Node => ({ nodeId: id, activityVersionId: lineVersion, inputs: [{ referenceKey: "Text", value: { expressionType: "Literal", value: text } }], outputs: [] });
+  const line = (id: string, text: string): Node => ({ nodeId: id, activityVersionId: lineVersion, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: text } }], outputs: [] });
   const structure = (id: string, activityVersionId: string, kind: string, payload: Record<string, unknown>): Node => ({ nodeId: id, activityVersionId, inputs: [], outputs: [], structure: { kind, schemaVersion: "1.0.0", payload } });
   const seq = (id: string, activities: Node[]) => structure(id, sequenceVersion, "elsa.sequence.structure", { activities });
   const definitions: string[] = [];
@@ -112,6 +112,10 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     await inspect(bpmn.published);
     await expect(canvas.locator(".wf-bpmn-node")).toHaveCount(3);
     await expect(canvas.locator(".react-flow__edge")).toHaveCount(2);
+    const boundTask = canvas.locator('.react-flow__node[data-id="task"]');
+    await boundTask.press("Enter"); await expect(boundTask).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("complementary", { name: "Executable details panel", exact: true })).toContainText("Write Line");
+    await boundTask.press("Delete"); await expect(canvas.locator(".wf-bpmn-node")).toHaveCount(3);
     await capture(page, info, "bpmn");
   } finally {
     for (const id of definitions) await api(`/design/workflows/definitions/${id}`, "DELETE");
