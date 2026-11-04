@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -278,12 +279,12 @@ public sealed class ActivityVersionReconciler(
         // A bridge may refuse without an error saying why; the refusal still names itself, so it is logged and recorded.
         IReadOnlyList<ActivityDiagnostic> diagnostics = result.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error)
             ? result.Diagnostics
-            : [.. result.Diagnostics, new(
+            : ActivityDiagnosticOrderer.Order([.. result.Diagnostics, new(
                 "activity.source.publication-refused",
                 ActivityDiagnosticSeverity.Error,
                 "The publishing bridge refused the source-owned version without a stated reason.",
                 new("ActivitySourceVersion", version.Id, definition.Id, Revision: 0),
-                Remediation: "Check the node log for the publishing bridge, correct the source content and reconcile again.")];
+                Remediation: "Check the node log for the publishing bridge, correct the source content and reconcile again.")]);
         refused.Add(version.Id);
         diagnosticStore?.Record(version.Id, diagnostics);
         if (logger.IsEnabled(LogLevel.Warning))

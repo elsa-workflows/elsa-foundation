@@ -98,13 +98,12 @@ public sealed class SourceVersionRefusalTests
 
         var recorded = diagnostics.Find(versionId);
         Assert.Equal(withWarning ? 2 : 1, recorded.Count);
-        var refusal = recorded[^1];
-        Assert.Equal("activity.source.publication-refused", refusal.Code);
+        var refusal = Assert.Single(recorded, x => x.Code == "activity.source.publication-refused");
         Assert.Equal(ActivityDiagnosticSeverity.Error, refusal.Severity);
         Assert.Equal(new ActivityDiagnosticSubject("ActivitySourceVersion", versionId, ActivityCatalogStableIds.DefinitionId(TypeKey), Revision: 0), refusal.Subject);
         Assert.Equal(recorded.Count, logger.Entries.Count);
         Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
-        Assert.Contains("activity.source.publication-refused", logger.Entries[^1].Message, StringComparison.Ordinal);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("activity.source.publication-refused", StringComparison.Ordinal));
     }
 
     [Fact]
