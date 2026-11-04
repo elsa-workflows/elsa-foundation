@@ -168,6 +168,19 @@ it("uses advertised operation relations and encodes opaque task identities", asy
   await read(context, "opaque/id"); expect(get).toHaveBeenCalledWith("/custom/human-work/opaque%2Fid");
 });
 
+it("clears validation only for response fields that the user corrects", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [
+    { key: "Note", label: "Note", kind: "multiline", required: true, readOnly: false },
+    { key: "Amount", label: "Amount", kind: "number", required: true, readOnly: false }
+  ] } };
+  const post = vi.fn().mockRejectedValue(new StudioHttpError(400, "Correct the response", null, { errors: { Note: "Enter a note", Amount: "Enter an amount" } }));
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} changed={vi.fn()} />));
+  await click("Approve");
+  expect(container.textContent).toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
+  await input(container.querySelector("textarea")!, "Reviewed");
+  expect(container.textContent).not.toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
+});
+
 it("keeps an empty inbox distinct from denied access and hides unavailable paging", async () => {
   const get = vi.fn(async (path: string) => path.includes("identity") ? identity : { items: [] });
   await act(async () => root.render(<TasksPage api={api(get)} />));

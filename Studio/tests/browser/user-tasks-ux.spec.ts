@@ -15,7 +15,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     const search = page.getByRole("searchbox", { name: "Search tasks", exact: true });
     expect((await search.boundingBox())!.width).toBeGreaterThan(200);
     await page.screenshot({ path: info.outputPath("empty.png"), fullPage: true });
-    await page.goto(`/user-tasks-ux.html?theme=${theme}`);
+    await page.goto(`/user-tasks-ux.html?two&theme=${theme}`);
     const link = page.getByRole("link", { name: /^Review purchase request/ });
     await expect(link).toBeVisible();
     await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
@@ -27,6 +27,13 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(detail.getByRole("heading")).toBeFocused();
     await detail.getByRole("textbox", { name: "Note" }).fill("Reviewed with keyboard");
     await expect(detail.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
+    await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
+    await expect(detail.getByRole("textbox", { name: "Note" })).toHaveValue("Reviewed with keyboard");
+    await page.getByRole("button", { name: "Clear search", exact: true }).last().click();
+    page.once("dialog", dialog => dialog.dismiss());
+    await page.getByRole("link", { name: "Approve travel request", exact: true }).click();
+    await expect(detail.getByRole("textbox", { name: "Note" })).toHaveValue("Reviewed with keyboard");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("task-detail.png"), fullPage: true });
     page.once("dialog", dialog => dialog.dismiss());
@@ -42,6 +49,9 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await expect(page.getByRole("region", { name: "Reusable form versions" })).toHaveCount(0);
     await page.getByRole("button", { name: "Add field", exact: true }).click();
+    const checkbox = page.getByRole("checkbox", { name: "Required", exact: true });
+    expect((await checkbox.boundingBox())!.width).toBeLessThanOrEqual(20);
+    expect((await checkbox.boundingBox())!.height).toBeLessThanOrEqual(20);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("form-authoring.png"), fullPage: true });
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -56,4 +66,34 @@ test("User Tasks distinguish denied and failed requests from an empty inbox", as
     await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toHaveCount(0);
     await expect(page.locator("aside")).toHaveCount(0);
   }
+});
+
+test("an unconfirmed response survives filtering and refuses task switches until resolved", async ({ page }) => {
+  await page.goto("/user-tasks-ux.html?two&ambiguous");
+  await page.getByRole("link", { name: /^Review purchase request/ }).click();
+  const detail = page.getByRole("complementary", { name: /^Review purchase request/ });
+  await detail.getByRole("textbox", { name: /^Note/ }).fill("Keep this exact response");
+  await detail.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(detail.getByRole("button", { name: "Retry Approve", exact: true })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeDisabled();
+  await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
+  await page.getByRole("button", { name: "Clear search", exact: true }).last().click();
+  await page.getByRole("link", { name: "Approve travel request", exact: true }).click();
+  await expect(detail.getByRole("textbox", { name: /^Note/ })).toHaveValue("Keep this exact response");
+  await detail.getByRole("button", { name: "Retry Approve", exact: true }).click();
+  const sent = await page.evaluate(() => (window as unknown as { taskRequests: unknown[] }).taskRequests);
+  expect(sent).toHaveLength(2); expect(sent[1]).toEqual(sent[0]);
+});
+
+ test("a failed form publication does not break the collection or its paging", async ({ page }) => {
+  await page.goto("/user-tasks-ux.html?forms&form-error");
+  await expect(page.getByRole("button", { name: "More form versions", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
+  await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("purchase");
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("Purchase response");
+  await page.getByRole("button", { name: "Publish form version", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("This version already exists");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "More form versions", exact: true })).toBeVisible();
 });

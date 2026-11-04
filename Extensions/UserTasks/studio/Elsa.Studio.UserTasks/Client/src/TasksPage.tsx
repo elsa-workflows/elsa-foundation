@@ -16,6 +16,7 @@ export function TasksPage({ api, initialId }: { api: ElsaStudioModuleApi; initia
   const [view, setView] = useState("mine"); const [page, setPage] = useState<TaskPage>();
   const [cursor, setCursor] = useState<string | null>(null); const [search, setSearch] = useState("");
   const [selection, setSelection] = useState(initialId); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
+  const leaveGuard = useRef<() => Promise<boolean>>(async () => true); const selecting = useRef(false);
   const sequence = useRef(0); const root = useRef<HTMLDivElement>(null);
   const refresh = useCallback(async () => {
     const current = ++sequence.current; setLoading(true);
@@ -27,7 +28,12 @@ export function TasksPage({ api, initialId }: { api: ElsaStudioModuleApi; initia
   }, [api, view, cursor, search]);
   useEffect(() => { void refresh(); return () => { sequence.current++; }; }, [refresh]);
   useEffect(() => { setSelection(initialId); }, [initialId]);
-  const changeScope = () => { setPage(undefined); setCursor(null); setSelection(undefined); };
+  const changeScope = () => { setPage(undefined); setCursor(null); };
+  const selectTask = async (id: string) => {
+    if (id === selection || selecting.current) return;
+    selecting.current = true;
+    try { if (await leaveGuard.current()) setSelection(id); } finally { selecting.current = false; }
+  };
   const closeDetail = () => {
     const selected = selection; setSelection(undefined);
     requestAnimationFrame(() => {
@@ -60,7 +66,7 @@ export function TasksPage({ api, initialId }: { api: ElsaStudioModuleApi; initia
               actions={filtered ? <StudioButton onClick={() => { changeScope(); setSearch(""); }}>Clear search</StudioButton> : cursor ? <StudioButton onClick={() => setCursor(null)}>First page</StudioButton> : undefined} /> : page ?
             <table className="studio-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
               <tbody>{page.items.map(task => <tr key={task.id} data-selected={selection === task.id}>
-                <td><a data-task-id={task.id} className="user-task-link" href={qualifyStudioBackendPath(`/user-tasks/${encodeURIComponent(task.id)}`)} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); setSelection(task.id); }} aria-current={selection === task.id ? "true" : undefined}>{task.title}</a></td>
+                <td><a data-task-id={task.id} className="user-task-link" href={qualifyStudioBackendPath(`/user-tasks/${encodeURIComponent(task.id)}`)} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); void selectTask(task.id); }} aria-current={selection === task.id ? "true" : undefined}>{task.title}</a></td>
                 <td><TaskStatus status={task.status} /></td><td>{task.claimantId ?? task.assigneeId ?? task.groupId ?? "Unassigned"}</td>
               </tr>)}</tbody></table> : null}
         </StudioTableContainer>
@@ -72,12 +78,12 @@ export function TasksPage({ api, initialId }: { api: ElsaStudioModuleApi; initia
           </div>}
         </StudioCollectionFooter>}
       </div>
-      {selection && identity && !denied ? <TaskDetail key={selection} api={api} id={selection} identity={identity} changed={() => void refresh()} onClose={closeDetail} /> : null}
+      {selection && identity && !denied ? <TaskDetail key={selection} api={api} id={selection} identity={identity} changed={() => void refresh()} onClose={closeDetail} navigationGuard={leaveGuard} /> : null}
     </div></div>
   </StudioPage>;
 }
 
-export function TaskDetail({ api, id, identity, changed, onClose }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; changed(): void; onClose?(): void }) {
+export function TaskDetail({ api, id, identity, changed, onClose, navigationGuard }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; changed(): void; onClose?(): void; navigationGuard?: { current: () => Promise<boolean> } }) {
   const [task, setTask] = useState<TaskItem>(); const [data, setData] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const [missing, setMissing] = useState(false); const [stale, setStale] = useState(false);
@@ -125,11 +131,17 @@ export function TaskDetail({ api, id, identity, changed, onClose }: { api: ElsaS
       if (payload && typeof payload === "object" && "errors" in payload && payload.errors && typeof payload.errors === "object") setErrors(payload.errors as Record<string, string>);
     } finally { busyRef.current = false; setBusy(false); }
   };
-  const close = async () => {
-    if (edited.current && !task?.decision && !(await api.dialogs.confirm({ title: "Discard task response?", message: "Your unsent response will be discarded when you return to the task list.", confirmLabel: "Discard response", cancelLabel: "Keep editing", tone: "danger" }))) return;
-    onClose?.();
-  };
-  const back = onClose ? <StudioButton variant="ghost" disabled={busy || Boolean(attempt.current)} onClick={() => void close()}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton> : null;
+  const canLeave = useCallback(async () => {
+    if (busyRef.current || attempt.current) return false;
+    if (edited.current && !task?.decision) return api.dialogs.confirm({ title: "Discard task response?", message: "Your unsent response will be discarded when you leave this task.", confirmLabel: "Discard response", cancelLabel: "Keep editing", tone: "danger" });
+    return true;
+  }, [api, task?.decision]);
+  useEffect(() => {
+    if (!navigationGuard) return;
+    navigationGuard.current = canLeave;
+    return () => { navigationGuard.current = async () => true; };
+  }, [navigationGuard, canLeave]);
+  const back = onClose ? <StudioButton variant="ghost" disabled={busy || Boolean(attempt.current)} onClick={() => { void canLeave().then(allowed => { if (allowed) onClose(); }); }}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton> : null;
   if (missing) return <aside className="user-task-detail">{back}<StudioResultState title="Task not found" description="It may no longer be assigned to you or available to your group." /></aside>;
   if (!task) return <aside className="user-task-detail" aria-busy={!notice}>{back}{notice ? <p role="alert">{notice}</p> : <p>Loading task…</p>}<StudioButton onClick={() => void refresh()}>Retry</StudioButton></aside>;
   const terminal = task.status === "Completed" || task.status === "Cancelled";
@@ -145,7 +157,7 @@ export function TaskDetail({ api, id, identity, changed, onClose }: { api: ElsaS
     {task.description && <p className="user-task-description">{task.description}</p>}
     <StudioButton onClick={() => void refresh()} disabled={busy}><RefreshCw size={16} aria-hidden="true" />Refresh task</StudioButton>
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
-    {task.form ? Renderer ? <Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} />
+    {task.form ? Renderer ? <Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} />
       : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}
     <div className="user-task-actions">
       {!own && task.groupId && task.status === "Open" && identity.canAct ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
