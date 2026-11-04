@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD37 are separated from proposals and open choices.
+- [x] Accepted OD1–OD38 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD37 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD38 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -67,5 +67,7 @@ OD35 chooses accepted-event deduplication by sender ID scoped to a machine invoc
 OD36 preserves per-invocation durable admission order across waits/restarts, assigns observable concurrent order and retains original positions on duplicate retry. Existing internal-progress precedence and timer/trigger competition remain in force; atomic ordering and source integration are unproved.
 
 OD37 records final not-processed completion/cancellation outcomes for accepted queued unselected events, retains receipts under policy, rejects new admissions and prevents automatic movement to another invocation. Terminal/admission atomicity, exact retention and selected-work cancellation outcomes remain Q2.
+
+OD38 continues bounded durable event acceptance while an active machine awaits recovery, with visible blockage and no evaluation before recovery permits it. Accepted capacity, terminal, order and deduplication rules remain in force; recovery-gate/admission integration and races remain Q2.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.
