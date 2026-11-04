@@ -42,9 +42,10 @@ public static class SpecialistsEntityFrameworkCoreRegistration
             throw new InvalidOperationException("Agent source persistence requires exactly one explicitly selected reader/writer backend per shell. Remove the previous selection explicitly before choosing another.");
         // Re-entering this explicit selection boundary after both ports were removed retires its old guard.
         foreach (var previous in services.Where(x => x.ImplementationInstance is AgentSourceRegistrationStartupTask).ToArray()) services.Remove(previous);
-        services.AddScoped<EfAgentSources<TContext>>();
-        var reader = ServiceDescriptor.Scoped<IAgentSourceReader>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
-        var writer = ServiceDescriptor.Scoped<IAgentSourceWriter>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
+        // The ports share the scoped context; an extra concrete registration would outlive explicit reselection.
+        EfAgentSources<TContext> Create(IServiceProvider provider) => new(provider.GetRequiredService<TContext>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>());
+        var reader = ServiceDescriptor.Scoped<IAgentSourceReader>(Create);
+        var writer = ServiceDescriptor.Scoped<IAgentSourceWriter>(Create);
         services.Add(reader); services.Add(writer);
         services.AddSingleton<IStartupTask>(new AgentSourceRegistrationStartupTask(services, reader, writer));
         services.AddPersistenceCore();
