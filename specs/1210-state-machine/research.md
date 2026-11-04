@@ -53,9 +53,9 @@ The witness has not been implemented or executed. Its technical plan and any arc
 
 ## Additional integration constraints
 
-### Parent-to-descendant transition boundaries still need agreement
+### Parent-to-descendant modes are chosen; full boundaries remain open
 
-The [SCXML transition reference](https://www.w3.org/TR/scxml/#transition) distinguishes whether a transition targeting a descendant exits its source state. This is reference evidence for the remaining parent-visit preservation/re-entry decision, not adoption of an Elsa schema, default or implementation. OD15 already distinguishes action-without-exit from deliberate self-re-entry; it does not by itself settle parent-to-descendant transition modes.
+The [SCXML transition reference](https://www.w3.org/TR/scxml/#transition) distinguishes whether a transition targeting a descendant exits its source state. OD41 explicitly chooses both parent-visit preservation and re-entry for a compound parent with one active child targeting a descendant, extending OD15's earlier same-state distinction. This reference does not select an Elsa schema, default, implementation or parallel-parent behavior. Full boundary calculation, validation and source/Studio proof remain open, and OD39 still excludes direct cross-region edges initially.
 
 ### Concurrent durable activity work is an explicit adaptation
 
