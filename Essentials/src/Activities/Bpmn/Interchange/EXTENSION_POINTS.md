@@ -44,8 +44,10 @@ active recommended 1.0.0 profile versions (including build metadata) to their re
 instead of silently selecting a newer version. Missing inventory or recommendation cannot qualify CanExecute; normal
 publication validation remains required. A retained task binding (`elsa:taskBinding`) is proposed on its capability
 (`RetainedBinding`) and keeps the task `RequiresBinding`; only an element named in `BpmnImportOptions.ConfirmedBindings`
-becomes a `RetainedBinding` child, and the catalog pass refuses it as Unsupported when this host's version is missing, or does
-not declare a carried input or declares it sensitive, credential or connection. The timer binding converts ISO duration text to an invariant
+becomes a `RetainedBinding` child, and the catalog pass refuses it as Unsupported when it names a binding-profile placeholder,
+when this host's version is missing or unreadable, or when the version does not declare a carried input or declares it
+sensitive, credential or connection. A replacement importer must keep these rules: propose only, stay `RequiresBinding`
+until confirmed, and check a confirmed binding against the importing host's own catalog. The timer binding converts ISO duration text to an invariant
 TimeSpan literal for Delay; the authored event descriptor retains the XML text for export. This check is distinct from runtime/Studio qualification.
 
 ## Owned interchange contracts
@@ -55,11 +57,13 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
 - `elsa:taskBinding` attribute on a `task`, `userTask`, `serviceTask`, `scriptTask`, `manualTask` or `businessRuleTask`:
   JSON `{"activityVersionId": "...", "inputs": {"<referenceKey>": <literal JSON>}}`, at most 16 KiB UTF-8 and depth 32.
   Export writes it only when the visible catalog resolves the version and declares every bound input, the binding has
-  no output captures, storage, evaluation or conversion settings, every input is a literal, and no declaration is
-  sensitive, a credential, a connection or a password hint. Omission codes: `catalog-unavailable`,
+  no output captures, storage, evaluation or conversion settings, every input is a literal not marked sensitive on the
+  binding, and no declaration is sensitive, a credential, a connection or a password hint. Omission codes: `catalog-unavailable`,
   `unresolvable-version`, `unresolvable-input`, `sensitive-input`, `non-literal-input`, `unsupported-input-setting`,
-  `unsupported-output`, `structured-child`. An unreadable value, or one on an element this host binds itself, is
-  reported Degraded and never proposed.
+  `unsupported-output`, `structured-child`, `oversized-binding` (beyond the limits import reads) and `ambiguous-element`
+  (two bound tasks share the element id). An unreadable value, or one on an element this host binds itself, is
+  reported Degraded and never proposed, as is one that names an input twice. An element carrying the attribute under both
+  vendor namespace aliases is refused, as `elsa:directBinding` is.
 - The authored `diagram` payload shape (`shapes: {id: {x,y,width,height}}`,
   `edges: {id: {waypoints: [{x,y}]}}`) mirrors BPMNDI and is treated as opaque by the runtime.
 - **Event-definition mapping (spec 118)** between BPMN XML and `BpmnEventDefinition` properties:

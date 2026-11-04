@@ -22,9 +22,10 @@ namespace Elsa.Agent.Specialists.Tests.Composition;
 /// The editorial BPMN process leaves the host with its exact task bindings (T063): each agent and review task carries its
 /// activity version and literal inputs in <c>elsa:taskBinding</c>, because the visible catalog declares every bound input a
 /// portable literal. Import proposes each retained binding and refuses to execute until the author confirms them; the
-/// confirmed import binds every task to its exact version and inputs, verifies them against the host catalog, and its
-/// graph compiles and remaps through the shipped BPMN structure handler and runs the same revision loop, admitting one
-/// human decision after a restart. Omissions (sensitive, credential, non-literal and unresolvable inputs) are proved per
+/// confirmed import binds every task to its exact version and inputs and verifies them against the host catalog (asserted
+/// on the imported structure). Its graph compiles and remaps through the shipped BPMN structure handler onto this host's
+/// placed children and runs the same revision loop, admitting one human decision after a restart; the imported inputs
+/// reaching execution through publication is proved with T036. Omissions (sensitive, credential, non-literal and unresolvable inputs) are proved per
 /// element in the Interchange tests. Publishing the confirmed process as a workflow definition is proved in M5 (T036).
 /// </summary>
 public sealed class EditorialInterchangeTests

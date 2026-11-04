@@ -51,6 +51,12 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
         var omissions = new List<BpmnExportOmission>();
         var candidates = new List<(BpmnElement Element, ActivityNode Child)>();
         CollectTaskBindings(structure, candidates);
+        // A binding is keyed by its element id in the document, so one shared by tasks in different scopes travels for none.
+        var ambiguous = candidates.GroupBy(candidate => candidate.Element.ElementId, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
+        foreach (var elementId in ambiguous.Order(StringComparer.Ordinal))
+            omissions.Add(new(elementId, "ambiguous-element", "More than one bound task uses this element id; no binding travels for it."));
+        candidates.RemoveAll(candidate => ambiguous.Contains(candidate.Element.ElementId));
         if (candidates.Count > 0)
         {
             // ListDefinitions is the visible picker inventory: a version of a removed or hidden definition never travels.
@@ -62,8 +68,14 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
                 var omission = visible is null
                     ? new BpmnExportOmission(element.ElementId, "catalog-unavailable", "No activity catalog is available to resolve this task's binding.")
                     : await PlanAsync(element, child, visible, cancellationToken);
+                var attribute = omission is null
+                    ? BpmnTaskBindingMetadata.ToAttribute(child.ActivityVersionId, child.Inputs.Where(input => input.IsBound()).ToArray())
+                    : null;
+                // Never write what import refuses to read: the same size, depth and id limits decide here.
+                if (attribute is not null && !BpmnTaskBindingMetadata.TryRead(attribute.Value, out _, out _, out var problem))
+                    omission = new(element.ElementId, "oversized-binding", problem!);
                 if (omission is null)
-                    carried[element.ElementId] = BpmnTaskBindingMetadata.ToAttribute(child.ActivityVersionId, child.Inputs.Where(input => input.IsBound()).ToArray());
+                    carried[element.ElementId] = attribute!;
                 else
                     omissions.Add(omission);
             }

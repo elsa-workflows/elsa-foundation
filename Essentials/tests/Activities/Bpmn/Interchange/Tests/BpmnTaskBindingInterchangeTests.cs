@@ -115,6 +115,49 @@ public sealed class BpmnTaskBindingInterchangeTests
     }
 
     [Fact]
+    public async Task A_binding_import_could_not_read_is_omitted_rather_than_written()
+    {
+        var exported = await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(Process(Literal("brief", new string('x', 20_000))));
+
+        Assert.Equal("oversized-binding", Assert.Single(exported.Omissions).Code);
+        Assert.DoesNotContain("elsa:taskBinding", exported.Xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Tasks_sharing_an_element_id_across_scopes_carry_no_binding()
+    {
+        // The outer task and the task inside the subprocess both use the element id "summarize".
+        var inner = Structure(Process(Literal("brief", Brief)));
+        var nested = new ActivityNode("child-sub", BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId, [], [],
+            new ActivityNodeStructure(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(inner, Web)));
+        var outer = Structure(Process(Literal("brief", "other value")));
+        var structure = new BpmnAuthoredStructure(
+            outer.Activities.Append(nested).ToArray(),
+            outer.Elements.Append(new BpmnElement("sub", BpmnElementTypes.SubProcess, "Sub", nested.NodeId)).ToArray(),
+            outer.SequenceFlows);
+        var node = new ActivityNode("process", BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId, [], [],
+            new ActivityNodeStructure(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
+
+        var exported = await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(node);
+
+        Assert.Equal("ambiguous-element", Assert.Single(exported.Omissions).Code);
+        Assert.DoesNotContain("elsa:taskBinding", exported.Xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_task_binding_under_both_namespace_aliases_is_refused()
+    {
+        var xml = await RetainedXml("{\"activityVersionId\":\"acme.summarize@1.0.0\",\"inputs\":{}}");
+        var document = System.Xml.Linq.XDocument.Parse(xml);
+        var task = document.Descendants().Single(x => x.Attribute("id")?.Value == "summarize");
+        task.SetAttributeValue(System.Xml.Linq.XName.Get("taskBinding", global::Bpmn.Interchange.BpmnXmlNames.VendorNamespaceName),
+            "{\"activityVersionId\":\"acme.other@1.0.0\"}");
+
+        await Assert.ThrowsAsync<Exceptions.BpmnInterchangeException>(() =>
+            new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief"))).ImportAsync(document.ToString()));
+    }
+
+    [Fact]
     public async Task Without_a_catalog_no_binding_travels_and_each_is_reported()
     {
         var node = Process(Literal("brief", Brief));
@@ -159,20 +202,30 @@ public sealed class BpmnTaskBindingInterchangeTests
         Assert.Equal(BpmnImportCapabilityAvailability.Unknown, Assert.Single(result.Analysis.Capabilities, x => x.ElementId == "summarize").Availability);
     }
 
+    [Fact]
+    public async Task A_confirmed_binding_naming_a_binding_profile_placeholder_is_refused()
+    {
+        // The placeholder resolves to a real Delay version through the binding profile, so only the retained-binding check
+        // stands between an undeclared carried input and execution.
+        var xml = await RetainedXml("{\"activityVersionId\":\"Elsa.Delay\",\"inputs\":{\"anything\":1}}");
+
+        var result = await new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief"), withDelay: true))
+            .ImportAsync(xml, new BpmnImportOptions { ConfirmedBindings = ["summarize"] });
+
+        Assert.False(result.Analysis.CanExecute);
+        Assert.Equal(BpmnImportCapabilityAvailability.Unsupported, Assert.Single(result.Analysis.Capabilities, x => x.ElementId == "summarize").Availability);
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("[]")]
     [InlineData("{\"activityVersionId\":\"x\",\"inputs\":[]}")]
+    [InlineData("{\"activityVersionId\":\"acme.summarize@1.0.0\",\"inputs\":{\"brief\":\"a\",\"brief\":\"b\"}}")]
     [InlineData("not json")]
     public async Task An_unreadable_retained_binding_is_reported_and_never_proposed(string value)
     {
-        var xml = (await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(Process(Literal("brief", Brief)))).Xml;
-        var document = System.Xml.Linq.XDocument.Parse(xml);
-        var attribute = document.Descendants().SelectMany(x => x.Attributes()).Single(x => x.Name.LocalName == "taskBinding");
-        attribute.Value = value;
-
         var result = await new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief")))
-            .ImportAsync(document.ToString(), new BpmnImportOptions { ConfirmedBindings = ["summarize"] });
+            .ImportAsync(await RetainedXml(value), new BpmnImportOptions { ConfirmedBindings = ["summarize"] });
 
         Assert.False(result.Analysis.CanExecute);
         Assert.Null(Assert.Single(result.Analysis.Capabilities, x => x.ElementId == "summarize").RetainedBinding);
@@ -214,6 +267,15 @@ public sealed class BpmnTaskBindingInterchangeTests
         Assert.True(imported.Analysis.CanExecute);
     }
 
+    /// <summary>An exported document whose task binding attribute is replaced by <paramref name="value"/>.</summary>
+    private static async Task<string> RetainedXml(string value)
+    {
+        var xml = (await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(Process(Literal("brief", Brief)))).Xml;
+        var document = System.Xml.Linq.XDocument.Parse(xml);
+        document.Descendants().SelectMany(x => x.Attributes()).Single(x => x.Name.LocalName == "taskBinding").Value = value;
+        return document.ToString();
+    }
+
     private static InputDefinition Declared(string referenceKey) =>
         new(referenceKey, referenceKey, new TypeReference("String"), "Json", referenceKey, null, IsNullable: true);
 
@@ -239,14 +301,17 @@ public sealed class BpmnTaskBindingInterchangeTests
     private static BpmnAuthoredStructure Structure(ActivityNode node) => node.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!;
 
     /// <summary>A visible catalog with the BPMN process and, when visible, <see cref="VersionId"/> declaring one input.</summary>
-    private sealed class Catalog(InputDefinition declaration, bool versionVisible = true) : IActivityDefinitionLookup
+    private sealed class Catalog(InputDefinition declaration, bool versionVisible = true, bool withDelay = false) : IActivityDefinitionLookup
     {
         private static readonly Definition ProcessDefinition = new("catalog-process", "Elsa.Activities.Bpmn.Activities.BpmnProcess");
         private static readonly Definition SummarizeDefinition = new("catalog-summarize", "Acme.Summarize");
+        private static readonly Definition DelayDefinition = new("catalog-delay", "Elsa.Activities.Scheduling.Activities.Delay");
 
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null,
             string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IEnumerable<IActivityDefinition>>(versionVisible ? [ProcessDefinition, SummarizeDefinition] : [ProcessDefinition]);
+            Task.FromResult<IEnumerable<IActivityDefinition>>(new[] { ProcessDefinition }
+                .Concat(versionVisible ? [SummarizeDefinition] : [])
+                .Concat(withDelay ? [DelayDefinition] : []));
 
         public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Exact bindings never consult version ordering.");

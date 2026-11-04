@@ -29,6 +29,16 @@ internal static class BpmnTaskBindingMetadata
         BpmnElementTypes.ScriptTask, BpmnElementTypes.ManualTask, BpmnElementTypes.BusinessRuleTask
     };
 
+    /// <summary>Refuses an element carrying the attribute under both vendor namespace aliases, before translation could keep only one.</summary>
+    public static void ValidateSourceAttributes(System.Xml.Linq.XDocument document)
+    {
+        foreach (var element in document.Descendants())
+            if (element.Attributes().Count(attribute => attribute.Name.LocalName == AttributeName &&
+                    (attribute.Name.NamespaceName == BpmnVendorNamespace.NamespaceName ||
+                     attribute.Name.NamespaceName == LibInterchange.BpmnXmlNames.VendorNamespaceName)) > 1)
+                throw new Exceptions.BpmnInterchangeException($"Element '{element.Attribute("id")?.Value ?? element.Name.LocalName}' has ambiguous task binding attributes.");
+    }
+
     public static bool IsAttribute(LibModel.BpmnForeignAttribute attribute) =>
         attribute.Name.Namespace == LibInterchange.BpmnXmlNames.VendorNamespaceName &&
         attribute.Name.LocalName == AttributeName;
@@ -68,6 +78,12 @@ internal static class BpmnTaskBindingMetadata
                 root.TryGetProperty("inputs", out var carried) && carried.ValueKind != JsonValueKind.Object)
             {
                 problem = "The retained task binding must name an activity version and carry its inputs as an object.";
+                return false;
+            }
+            if (root.TryGetProperty("inputs", out var keyed) &&
+                keyed.EnumerateObject().GroupBy(input => input.Name, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            {
+                problem = "The retained task binding names an input more than once.";
                 return false;
             }
             activityVersionId = id.GetString()!;

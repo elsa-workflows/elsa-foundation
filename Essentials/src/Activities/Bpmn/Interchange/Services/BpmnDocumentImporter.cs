@@ -83,7 +83,10 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
     {
         var document = BpmnVendorNamespace.TryParse(xml);
         if (document is not null)
+        {
             BpmnDirectBindingMetadata.ValidateSourceAttributes(document);
+            BpmnTaskBindingMetadata.ValidateSourceAttributes(document);
+        }
         IReadOnlyDictionary<string, string> boundaryDrops = document is null
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : BpmnUnboundHostPolicy.ScanBoundariesOnUnboundHosts(document);
@@ -297,9 +300,9 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 throw new BpmnInterchangeException($"The work binder returned an incompatible activity identity/availability for '{source.ElementId}'.");
             var capability = binding.GetType().Name;
             var retained = source.Extensions.ForeignAttributes.Where(BpmnTaskBindingMetadata.IsAttribute).ToArray();
-            if (retained.Length > 0 && (request.Kind != BpmnWorkBindingKind.UnboundTask || result.Activity is not null || retained.Length > 1))
-                Degraded(source.ElementId, "The retained task binding was ignored: it is honored only once, on a task this host leaves unbound.");
-            else if (retained.Length == 1)
+            if (retained.Length > 0 && (request.Kind != BpmnWorkBindingKind.UnboundTask || result.Activity is not null))
+                Degraded(source.ElementId, "The retained task binding was ignored: it is honored only on a task this host leaves unbound.");
+            else if (retained.Length > 0)
                 return Retained(binding, source, retained[0].Value, capability, result);
             _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, result.Availability, result.Reason) { BindingRef = binding.BindingRef });
             if (result.Availability is BpmnImportCapabilityAvailability.Unsupported or BpmnImportCapabilityAvailability.Unknown)

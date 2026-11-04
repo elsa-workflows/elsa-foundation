@@ -98,16 +98,21 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
     }
 
     /// <summary>
-    /// Why a confirmed retained binding cannot run here, or null: this host's version must declare every carried input, and
-    /// declare it portable. The exporting host's declaration is not trusted for the importing one.
+    /// Why a confirmed retained binding cannot run here, or null: it must name an exact version (never a binding-profile
+    /// placeholder), and this host's version must declare every carried input, and declare it portable. The exporting
+    /// host's declaration is not trusted for the importing one. Anything this pass cannot check is refused.
     /// </summary>
     private async Task<string?> RefusedRetainedInputAsync(string nodeId, CancellationToken cancellationToken)
     {
-        if (!_nodes.TryGetValue(nodeId, out var node) || !_resolvedNodes.GetValueOrDefault(nodeId))
-            return null;
+        if (!_nodes.TryGetValue(nodeId, out var node))
+            return "The confirmed retained binding was not found in the imported process.";
+        if (Profile.ContainsKey(node.ActivityVersionId))
+            return $"A retained task binding must name an exact activity version, not the binding profile '{node.ActivityVersionId}'.";
+        if (!_resolvedNodes.GetValueOrDefault(nodeId))
+            return null; // Already refused as an unavailable ActivityReference.
         var version = await catalog.FindVersion(node.ActivityVersionId, cancellationToken);
         if (version is null)
-            return null;
+            return $"Activity version '{node.ActivityVersionId}' could not be read from the visible host catalog.";
         var declarations = version.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         foreach (var input in node.Inputs)
         {
