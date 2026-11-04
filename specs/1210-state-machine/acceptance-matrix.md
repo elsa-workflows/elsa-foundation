@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A35 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A36 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -43,6 +43,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD33 — stop excessive internal progress and require recovery | FR-044 | A33 |
 | OD34 — immediate full-capacity rejection | FR-045 | A34 |
 | OD35 — scoped accepted-event deduplication | FR-046 | A35 |
+| OD36 — durable per-invocation business-event order | FR-047 | A36 |
 
 ## Witness definitions
 
@@ -83,6 +84,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A33 | Loop protection stops without automatic repetition | Excessive automatic/completion progress stops; committed progress and actionable causal evidence survive; normal operations expose an incident requiring recovery and the detected cycle does not automatically repeat | Protection-boundary tests plus actual host/incident/restart witness with controlled effects; concrete limits, detection lifetime and supported recovery actions remain technical design work and integration is unproved |
 | A34 | Full capacity rejects new admissions | At declared capacity C, new admissions receive an immediate explicit capacity rejection; accepted events remain intact, rejected attempts are not accepted and admission does not wait for space | Actual ingress and controlled full-queue/concurrent last-slot witnesses with retained accepted-event evidence; exact accounting, deduplication/retention integration and source integration remain Q2 |
 | A35 | Retry accepted admission after a lost response | Identical retained event ID/contents for one machine invocation return its existing receipt/current outcome without another queue entry; conflicting contents are rejected and invocation scopes remain distinct | Actual ingress/lost-response/concurrent-retry/restart witnesses and identity/conflict controls; declared retention/comparison boundaries and source integration remain Q2; no exactly-once external-effect claim |
+| A36 | Ordered business-event evaluation across waits/restart | Queued events follow per-invocation durable admission order after internal progress settles; concurrent order is observable and duplicate retries preserve position; accepted timer/activity-trigger competition remains intact | Actual ingress/host/persistence witness with deliberately competing admissions, duplicate retries and a suspended phase/restart; atomic ordering and exact source integration remain unproved |
 
 ## Qualification rules
 
