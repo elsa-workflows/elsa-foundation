@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Data.Common;
 using DotNet.Testcontainers.Builders;
 using Microsoft.Data.SqlClient;
@@ -144,7 +145,7 @@ public sealed class EtlPostgreSqlProviderFixture : EtlNativeProviderFixture
         var container = new PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("elsa_etl_admin")
             .WithUsername("postgres")
-            .WithPassword("postgres")
+            .WithPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(24)) + "!aA1")
             .Build();
         try
         {
@@ -176,7 +177,9 @@ public sealed class EtlSqlServerProviderFixture : EtlNativeProviderFixture
 
     protected override async Task<(IAsyncDisposable Container, string ConnectionString)> StartContainerAsync()
     {
-        var container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04").Build();
+        var container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04")
+            .WithPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(24)) + "!aA1")
+            .Build();
         try
         {
             await container.StartAsync();
@@ -212,7 +215,7 @@ public sealed class EtlMySqlProviderFixture : EtlNativeProviderFixture
         var container = new MySqlBuilder(Image)
             .WithDatabase("elsa_etl_admin")
             .WithUsername("root")
-            .WithPassword("root")
+            .WithPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(24)) + "!aA1")
             .Build();
         try
         {
