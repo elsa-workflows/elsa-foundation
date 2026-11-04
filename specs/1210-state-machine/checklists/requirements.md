@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD32 are separated from proposals and open choices.
+- [x] Accepted OD1–OD33 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD32 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD33 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -57,5 +57,7 @@ OD30 adds authored completion-triggered transitions for completed compound/paral
 OD31 allows ordinary entry work in final states and requires success before completion propagates. Normal waiting, fault/recovery and restart behavior apply; remaining completion conflicts and exact integration remain open.
 
 OD32 orders automatic progress before still-applicable completion reactions, rechecks automatic paths after each reaction and delays business events until internal progress settles. Concrete cycle protection/recovery, exact completion representation and remaining cross-state/region conflicts remain open.
+
+OD33 stops detected excessive automatic/completion progress, preserves committed progress and requires recovery through normal operations without automatic repetition. Concrete limits, detection lifetime, diagnostics and supported recovery actions remain technical design work; no numeric default or runtime integration is claimed.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.

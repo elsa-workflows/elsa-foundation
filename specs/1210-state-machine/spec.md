@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD32 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD33 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -116,6 +116,7 @@ An author uses ordinary activities/composites as transition triggers and disting
 9. **Given** an authored automatic transition with no trigger, **when** its source state's entry work finishes, **then** its condition can be evaluated and an eligible automatic path can proceed without an artificial event. It is not evaluated before pending entry work finishes; complete automatic-candidate arbitration, reevaluation and protection remain Q1.
 10. **Given** eligible automatic transitions and an already queued business event, **when** the machine progresses, **then** it runs eligible automatic transitions until none remain before evaluating that queued event against the resulting configuration. Automatic cycles cannot run indefinitely; the protection contract remains Q1.
 11. **Given** an eligible automatic path, a ready nested-state completion and queued business events, **when** the machine progresses, **then** automatic transitions are exhausted before still-applicable completion reactions. Automatic paths are checked again after each reaction; queued business events are evaluated only after this internal progress settles. Loop protection applies.
+12. **Given** loop protection detects excessive automatic/completion progress, **when** protection takes effect, **then** further internal progress stops, committed progress is preserved and an actionable incident is visible through normal Elsa operations. Recovery is required; the detected cycle does not automatically repeat. The concrete limit, detection boundary and supported recovery actions remain technical design work.
 
 ### User Story 6 — Inspect, diagnose and operate the actual machine (Priority: P1)
 
@@ -203,6 +204,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-041**: Authors MUST be able to define completion-triggered transitions for a compound state reaching its final child and for a parallel state with every region final. Nested completion MUST remain local and MUST NOT by itself complete the whole machine. Reaching the machine's own top-level final state MUST complete the StateMachine activity. Final-entry timing follows FR-042 and automatic/completion precedence follows FR-043; remaining completion conflicts and exact lifetime/representation remain Q1; no external delivery authority is chosen by this requirement.
 - **FR-042**: Final states MUST support ordinary entry work, including durable waits. A final state MUST count as complete only after its entry work succeeds. Pending waits or normal recovery MUST NOT cause premature region, enclosing-state or whole-machine completion. Existing Elsa waiting, fault and recovery behavior MUST apply, including across restart.
 - **FR-043**: StateMachine MUST exhaust eligible automatic transitions before processing still-applicable completion reactions and MUST check automatic transitions again after each reaction. Queued business events MUST be evaluated only after that internal progress settles. Loop protection MUST apply. This rule MUST preserve accepted eligibility, hierarchy, explicit same-state transition order and compatible regional behavior; it does not change unrelated workflow scheduling.
+- **FR-044**: When loop protection detects excessive automatic/completion progress, StateMachine MUST stop further internal progress, preserve committed progress and report an actionable incident through normal Elsa operations. Recovery MUST be required and the detected cycle MUST NOT automatically repeat. The technical design MUST specify the limit, detection scope/lifetime, diagnostics and supported recovery actions using existing runtime authorities; this requirement does not choose a numeric default or a new incident/recovery authority.
 
 ### Platform constraints and design obligations
 
@@ -260,6 +262,8 @@ The following are review prompts, not accepted semantics. Interview the owner on
 OD17 settles same-state selection order for one input (FR-028). Complete conflict arbitration across different states/regions remains open.
 
 OD18 adds automatic transitions after entry work completes (FR-029). OD19 gives eligible automatic progress precedence over queued business events (FR-030). OD32 orders automatic progress before still-applicable completion reactions, rechecks automatic paths after each reaction and delays queued business events until this internal progress settles (FR-043). Complete automatic-candidate conflict arbitration, other reevaluation rules and cycle/protection/recovery rules still need agreement.
+
+OD33 requires detected excessive automatic/completion progress to stop with committed progress preserved and an actionable incident in normal Elsa operations, requiring recovery without automatic repetition (FR-044). The concrete limit, detection scope/lifetime, diagnostics, supported recovery actions and integration proof remain open; no numeric default is accepted.
 
 OD20 requires explicit final-state intent (FR-031). OD26 requires explicit, validated initial child states at each applicable level and starts all regions when entering a parallel state (FR-037). OD30 supports authored completion-triggered transitions for completed compound/parallel states, keeps nested completion local and completes the StateMachine at its own top-level final state (FR-041). OD31 allows ordinary final-state entry work and requires its success before completion can propagate (FR-042). OD32 settles automatic/completion precedence (FR-043); exact completion lifetime/representation and remaining cross-state/region conflicts remain open.
 

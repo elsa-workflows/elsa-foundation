@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A32 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A33 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -40,6 +40,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD30 — completion-triggered transitions and scoped completion | FR-041 | A30 |
 | OD31 — final entry succeeds before completion | FR-042 | A31 |
 | OD32 — automatic, completion, then business-event processing | FR-043 | A32 |
+| OD33 — stop excessive internal progress and require recovery | FR-044 | A33 |
 
 ## Witness definitions
 
@@ -77,6 +78,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A30 | Local nested completion and machine finality | Completed compound/parallel lifecycles enable authored completion-triggered transitions without implicitly finishing the whole machine; its own top-level final state completes the activity and permits normal enclosing workflow continuation | Semantic and actual Studio/host witnesses for compound, all-region parallel and root/nested-machine completion; final-entry timing is A31 and automatic/completion precedence is A32; remaining completion conflicts and exact representation remain Q1 |
 | A31 | Final entry waits, fails and recovers | Ordinary final-state entry work may wait durably or fail; no region/container/machine completion occurs before entry succeeds, including after restart and normal recovery | Actual Studio/host/persistence witness with controlled pending and faulted final entry, normal recovery and ordered completion evidence; exact completion integration remains unproved |
 | A32 | Internal progress before queued business events | Automatic paths precede still-applicable completion reactions and are checked again after each reaction; queued business events wait until internal progress settles; accepted selection rules and loop protection apply | Ordered semantic and actual host/restart witness with both kinds of internal progress and queued input; exact completion representation and concrete cycle protection remain open |
+| A33 | Loop protection stops without automatic repetition | Excessive automatic/completion progress stops; committed progress and actionable causal evidence survive; normal operations expose an incident requiring recovery and the detected cycle does not automatically repeat | Protection-boundary tests plus actual host/incident/restart witness with controlled effects; concrete limits, detection lifetime and supported recovery actions remain technical design work and integration is unproved |
 
 ## Qualification rules
 
