@@ -1,4 +1,4 @@
-import { indexActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
+import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
@@ -388,6 +388,7 @@ export function ActivityGraphImplementationEditor({
     buildModel,
     applyModel,
     reconcileDocument,
+    documentSignature: activityGraphDocumentSignature,
     onChange
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
@@ -1433,6 +1434,12 @@ function nodeIdAtJsonPointer(payload: ActivityGraphPayload, pointer: string | nu
     if (typeof nodeId === "string" && nodeId) closestNodeId = nodeId;
   }
   return closestNodeId;
+}
+
+function activityGraphDocumentSignature(document: StudioActivityDefinitionImplementationEditorProps["value"]) {
+  // Server normalization (trimmed strings and explicit nulls) acknowledges the same edit.
+  // A different provider, layout, or presentation value still resets external-change history.
+  return JSON.stringify({ ...document, activityPresentation: normalizeActivityPresentation(document.activityPresentation) });
 }
 
 function unsupportedGraphFocus(): StudioActivityDiagnosticFocusResult {

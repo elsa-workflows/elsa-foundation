@@ -33,6 +33,7 @@ export function useGraphAuthoringCanvas<TDocument>({
   buildModel,
   applyModel,
   reconcileDocument,
+  documentSignature = stableSignature,
   onChange
 }: {
   document: TDocument;
@@ -52,6 +53,8 @@ export function useGraphAuthoringCanvas<TDocument>({
     options?: GraphCanvasCommitOptions
   ): TDocument;
   reconcileDocument?(previous: TDocument, next: TDocument): TDocument;
+  /** Compare server acknowledgements using the host's persisted representation. */
+  documentSignature?(document: TDocument): string;
   onChange(document: TDocument): void;
 }) {
   const selectedNodeIdRef = useRef(selectedNodeId);
@@ -73,7 +76,7 @@ export function useGraphAuthoringCanvas<TDocument>({
   const emittedSignatureRef = useRef<string | null>(null);
   const historyRef = useRef(createActivityGraphHistory<TDocument>(resetKey));
   const [, setHistoryVersion] = useState(0);
-  const signature = stableSignature(document);
+  const signature = documentSignature(document);
 
   useEffect(() => {
     historyRef.current = resetActivityGraphHistory(historyRef.current, resetKey);
@@ -99,13 +102,13 @@ export function useGraphAuthoringCanvas<TDocument>({
       historyRef.current = recordActivityGraphEdit(historyRef.current, documentRef.current);
     }
     documentRef.current = next;
-    emittedSignatureRef.current = stableSignature(next);
+    emittedSignatureRef.current = documentSignature(next);
     const model = derive(next);
     setNodes(model.nodes);
     setEdges(model.edges);
     setHistoryVersion(version => version + 1);
     onChange(next);
-  }, [derive, onChange, reconcileDocument]);
+  }, [derive, documentSignature, onChange, reconcileDocument]);
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],
