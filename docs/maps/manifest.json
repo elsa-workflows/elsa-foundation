@@ -8,7 +8,7 @@
     "direct_project_references": 2109,
     "direct_package_references": 1685,
     "feature_classes": 142,
-    "specs": 332
+    "specs": 333
   },
   "generated_files": [
     "docs/maps/project-reference-map.md",
