@@ -1,0 +1,17 @@
+using System.Text.Json;
+
+namespace Elsa.Activities.Runtime.Services;
+
+/// <summary>
+/// The JSON options for activity values crossing from one activity to the next. The completion projector writes
+/// results with them and the input hydrator reads inputs with them, so a .NET object one activity returns reads back
+/// with the same members in the next activity's input (#3799).
+/// </summary>
+/// <remarks>Spec 1202 (S-9) replaces this instance with the shared serializer baseline.</remarks>
+internal static class ActivityValueJson
+{
+    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+}
