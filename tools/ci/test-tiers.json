@@ -1151,11 +1151,6 @@
       "since": "2026-10-22"
     },
     {
-      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
-      "issue": 3261,
-      "since": "2026-10-22"
-    },
-    {
       "test": "Elsa.Expressions.JavaScript.Jint.Tests.StatementBindingTests.Statement_body_honors_cancellation_during_evaluation",
       "issue": 3262,
       "since": "2026-10-22"
