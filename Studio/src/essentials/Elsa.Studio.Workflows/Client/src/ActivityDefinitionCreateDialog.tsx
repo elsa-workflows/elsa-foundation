@@ -98,7 +98,8 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
           outputs: [],
           outcomes: initialGraph?.outcomes ?? choice.capability.requiredOutcomes.map(outcome => ({ ...outcome, description: outcome.description ?? null }))
         },
-        layout: implementation.layout
+        layout: implementation.layout,
+        ...(implementation.activityPresentation ? { activityPresentation: implementation.activityPresentation } : {})
       });
       observeActivityDefinitions({ event: "create-success", surface: "creation", outcome: "ready", providerKey: choice.providerKey, providerSchemaVersion: choice.schemaVersion });
       onCreated(response);
