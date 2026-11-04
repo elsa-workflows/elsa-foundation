@@ -49,7 +49,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task A_null_predecessor_outside_a_compacted_base_is_refused_by_the_claim_audit()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlRuntimeTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("request-base", new("tenant", "request-base"), httpShardIds: ["shard"]);
