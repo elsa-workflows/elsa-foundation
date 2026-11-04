@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356",
+  "last_publish_commit": "6bb6969e543e292cbb93d16f635f3f77a4767116",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -24,8 +24,8 @@
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
-      "version": "4.0.21-preview",
-      "commit": "774b1e05c53efc99763b1c836609cb57378e7e83"
+      "version": "4.0.22-preview",
+      "commit": "6bb6969e543e292cbb93d16f635f3f77a4767116"
     },
     {
       "package_id": "Elsa.Activities.Compensation",
