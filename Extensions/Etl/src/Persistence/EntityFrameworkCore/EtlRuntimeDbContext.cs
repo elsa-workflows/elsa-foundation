@@ -13,6 +13,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
     internal DbSet<EtlConnectorBatchRecord> ConnectorBatches => Set<EtlConnectorBatchRecord>();
     internal DbSet<EtlConnectorHttpRequestRecord> ConnectorHttpRequests => Set<EtlConnectorHttpRequestRecord>();
     internal DbSet<EtlConnectorHttpPageRecord> ConnectorHttpPages => Set<EtlConnectorHttpPageRecord>();
+    internal DbSet<EtlConnectorSourceWatermarkRecord> ConnectorSourceWatermarks => Set<EtlConnectorSourceWatermarkRecord>();
     internal DbSet<EtlRuntimePreparedRecord> PreparedRuns => Set<EtlRuntimePreparedRecord>();
     internal DbSet<EtlRuntimePartitionRecord> Partitions => Set<EtlRuntimePartitionRecord>();
     internal DbSet<EtlRuntimeReservationRecord> Reservations => Set<EtlRuntimeReservationRecord>();
@@ -334,6 +335,14 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         terminals.Property(row => row.ResultJson).IsRequired();
         ConfigureHash(terminals.Property(row => row.ResultHash));
         terminals.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+
+        var watermarks = modelBuilder.Entity<EtlConnectorSourceWatermarkRecord>();
+        watermarks.ToTable(EtlRuntimeEfModule.ConnectorSourceWatermarkTableName);
+        watermarks.HasKey(row => new { row.ScopeKey, row.CheckpointKey });
+        watermarks.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        watermarks.Property(row => row.CheckpointKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        watermarks.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
+        watermarks.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
 
         var outbox = modelBuilder.Entity<EtlRuntimeOutboxRecord>();
         outbox.ToTable(EtlRuntimeEfModule.OutboxTableName);

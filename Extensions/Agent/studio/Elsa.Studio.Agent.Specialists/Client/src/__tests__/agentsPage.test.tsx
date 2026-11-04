@@ -225,13 +225,19 @@ describe("agents page", () => {
     await settle();
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
+    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
+    expect(container.querySelector('[role="table"]')).toBeNull();
+    await settle();
     const name = container.querySelector(".agent-create-form input");
     expect(document.activeElement).toBe(name);
     finish({ items: [row("a")], totalCount: 1 });
     await settle();
 
-    expect(container.querySelector(".agent-collection-count")?.textContent).toBe("1 agent");
+    expect(container.querySelector(".agent-collection-count")).toBeNull();
     expect(document.activeElement).toBe(name);
+    [...container.querySelectorAll("button")].find(x => x.textContent === "Cancel")!.click();
+    await settle();
+    expect(container.querySelector(".agent-collection-count")?.textContent).toBe("1 agent");
   });
 
   it("keeps the list when another refusal stops loading more", async () => {
@@ -254,7 +260,7 @@ describe("agents page", () => {
     await settle();
 
     expect(new URL(listPaths(getJson).at(-1)!, "http://studio").searchParams.get("search")).toBe("moss");
-    expect(container.textContent).toContain("No agents match this search.");
+    expect(container.textContent).toContain("No matching agents");
   });
 
   it("explains a denied list without showing rows", async () => {
@@ -271,6 +277,9 @@ describe("agents page", () => {
     const container = await render(context, navigate);
 
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
+    await settle();
+    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
+    expect(container.querySelector('[role="table"]')).toBeNull();
     await settle();
     input(container.querySelector(".agent-create-form input")!, "Copywriter");
     input(container.querySelector(".agent-create-form textarea")!, "Writes short articles.");
@@ -319,6 +328,9 @@ describe("agents page", () => {
     const container = await render(context);
 
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
+    await settle();
+    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
+    expect(container.querySelector('[role="table"]')).toBeNull();
     await settle();
     input(container.querySelector(".agent-create-form input")!, "Copywriter");
     await settle();

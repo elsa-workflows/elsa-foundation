@@ -12,6 +12,7 @@ no implicit ephemeral encryption key or memory-journal fallback.
 | `IActivityActivationStrategy` | Scoped custom activation of `elsa.specialist/1`, without CLR hydration of dynamic business members. |
 | `IRuntimeActivityConsumerCapability` | Declares the installed specialist descriptor/schema consumer. |
 | `IStartupTask` | Registers the actual facade and background worker under their frozen runtime aliases. |
+| `IActivityStateViewProjector` | Projects every node of descriptor kind `elsa.specialist` (user-defined agents, whatever their activity type) as view `elsa.specialist.invocation` v1, carrying only whether it is the agent's own invocation boundary, so run inspection can link it to the invocation evidence page. |
 
 Within the domain, the feature also registers the scoped default `ISpecialistInvocationInspector` (`TryAdd`) over the
 native binding and the selected journal; see [Invocation evidence](../Core/EXTENSION_POINTS.md#invocation-evidence).
@@ -102,6 +103,26 @@ inputs and outputs against both the exact schema and declared native conversion.
 encryption-required and secret-reference business inputs are refused before model dispatch.
 Root-variable captures resolve their current committed destination policy at native entry and worker
 binding checks; encryption-required or withheld destinations are refused before opening a client.
+
+**Playground continuity.** The root specialist of an activity draft Test Run converses in its candidate's workspace,
+not in its workflow. This applies when the run is a Test Run whose runtime-pinned source has kind `ActivityDraftTestRun`.
+Its identity then carries `ConversationWorkspace` `activity-draft:{draftId}`, and the conversation owner uses that
+workspace in place of the workflow execution. The owner still binds the tenant, the partition, the exact candidate
+version (`activity-test-version-…`, one per saved draft revision) and the template hash. As a result:
+
+- successive playground runs of one saved revision continue one conversation explicitly through
+  `$specialist.options` `{conversationId, revision}`, which a fresh run passes as `{}`;
+- an edited revision, a stale revision, a published run and a nested specialist cannot continue it;
+- history follows the ordinary content retention of each accepted turn's own Test Run workflow; once the latest accepted
+  turn's content is purged, a continuation faults with `specialist.journal.content-unavailable` and a fresh conversation is needed.
+
+The workspace is shared like the generic Test Run itself: any caller who can manage draft Test Runs in the tenant and
+holds the conversation reference can continue it. That reference is the `Conversation` output of a run,
+which any such caller can read through the generic Test Run.
+
+Pre-release data: a draft Test Run root turn journaled before this change keeps an identity without the workspace,
+so it no longer matches its native binding. An in-flight one faults on resume, retention pins it as a delivery
+mismatch, and the evidence read shows no turn for it. Reset development journals that hold such runs.
 
 `SpecialistsInMemoryJournal` is an explicit development/test profile, retaining at most 10,000 turns
 for one host lifetime through scoped adapters over shared in-memory state. Both backends enforce the

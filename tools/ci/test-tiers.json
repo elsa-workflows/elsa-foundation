@@ -702,6 +702,18 @@
       "medianMinutes": null
     },
     {
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
@@ -953,7 +965,9 @@
           "locking-database",
           "mysql-feasibility",
           "runtime",
-          "secrets-sqlserver"
+          "secrets-sqlserver",
+          "etl-sql",
+          "etl-rabbitmq"
         ]
       }
     ]
@@ -1085,6 +1099,16 @@
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
+      "suite": "etl-sql",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "require": "ELSA_ETL_SQL_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-rabbitmq",
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "require": "ELSA_ETL_RABBITMQ_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
       "suite": "connections",
       "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
@@ -1124,11 +1148,6 @@
     {
       "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
       "issue": 3260,
-      "since": "2026-10-22"
-    },
-    {
-      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
-      "issue": 3261,
       "since": "2026-10-22"
     },
     {

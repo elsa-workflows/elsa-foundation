@@ -163,7 +163,8 @@ internal sealed partial class EfEtlRuntimeStore
         var state = output.Kind switch
         {
             EtlConnectorKind.Http => delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged ? "acknowledged" : "retained",
-            EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => published ? "published" : "retained",
+            EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq =>
+                published ? "published" : "retained",
             _ => throw new InvalidDataException("The retained connector route kind is unsupported.")
         };
         var retry = output.Kind == EtlConnectorKind.Http && delivery is not null

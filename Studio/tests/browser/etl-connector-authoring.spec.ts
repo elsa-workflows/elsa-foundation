@@ -3,7 +3,8 @@ import axe, { type AxeResults, type RunOptions } from "axe-core";
 import { createDefaultEtlConnectorPipeline } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
 
 // Browser-level product components against a deterministic API fixture. Actual Workbench HTTP acceptance is T019.
-async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean } = {}) {
+async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean; sqlMain?: boolean; sqlSource?: boolean;
+  rabbitMqMain?: boolean; rabbitMqSource?: boolean } = {}) {
   let pipeline = createDefaultEtlConnectorPipeline();
   let revision = 1;
   let created = false;
@@ -25,7 +26,9 @@ async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvError
     else if (path === "etl/v2/bindings") json = { items: [
       { alias: "source", role: "Source", kind: "http" }, { alias: "csv-only", role: "Source", kind: "csv" },
       { alias: "output", role: "MainOutput", kind: "http" }, { alias: "errors", role: "ErrorOutput", kind: "http" },
-      { alias: "error-file", role: "ErrorOutput", kind: "jsonl" }
+      { alias: "error-file", role: "ErrorOutput", kind: "jsonl" }, { alias: "warehouse", role: "MainOutput", kind: "sql" },
+      { alias: "people-db", role: "Source", kind: "sql" }, { alias: "events", role: "MainOutput", kind: "rabbitMq" },
+      { alias: "events-in", role: "Source", kind: "rabbitMq" }
     ], nextCursor: null };
     else if (path === "etl/v2/definitions") {
       if (request.method() === "POST") {
@@ -41,7 +44,19 @@ async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvError
       if (request.method() === "PUT") {
         const body = request.postDataJSON();
         expect(body.expectedRevision).toBe(revision);
-        if (options.continuous) {
+        if (options.sqlSource) {
+          expect(body.pipeline.source).toEqual({ kind: "sql", binding: "people-db", table: "dbo.people",
+            columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: ["id"],
+            watermark: "id" });
+          expect(body.pipeline.continuous).toBeUndefined();
+        } else if (options.rabbitMqSource) {
+          expect(body.pipeline.source).toMatchObject({ kind: "rabbitmq", binding: "events-in", queue: "people", maxMessages: 250 });
+          expect(body.pipeline.continuous).toBeUndefined();
+        } else if (options.rabbitMqMain) {
+          expect(body.pipeline.routes.main).toEqual({ kind: "rabbitmq", binding: "events", exchange: "etl.people", routingKey: "people.loaded" });
+        } else if (options.sqlMain) {
+          expect(body.pipeline.routes.main).toEqual({ kind: "sql", binding: "warehouse", table: "dbo.people", key: ["name"] });
+        } else if (options.continuous) {
           expect(body.pipeline.continuous).toEqual({ pollIntervalSeconds: 30 });
         } else if (options.csvErrors) {
           expect(body.pipeline.routes.errors).toEqual({ kind: "csv", binding: "error-file" });
@@ -195,6 +210,74 @@ for (const width of [320, 1024]) {
   });
 }
 
+// Spec 1197: the accepted route can be a keyed SQL table selected from the host's SQL approvals.
+for (const width of [320, 1024]) {
+  test(`SQL destination authoring saves the table and key and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { sqlMain: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Rejected records destination kind", { exact: true }).locator("option", { hasText: "SQL table" })).toHaveCount(0);
+    await page.getByLabel("Accepted records destination kind", { exact: true }).selectOption("sql");
+    await page.getByLabel("Accepted records binding", { exact: true }).selectOption("warehouse");
+    await page.getByLabel("Accepted records table", { exact: true }).fill("dbo.people");
+    await page.getByRole("checkbox", { name: "name", exact: true }).check();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Accepted records table", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1197-studio-sql-route-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+// Spec 1200: the accepted route can be a RabbitMQ exchange selected from the host's RabbitMQ approvals.
+for (const width of [320, 1024]) {
+  test(`RabbitMQ destination authoring saves the exchange and routing key and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { rabbitMqMain: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Rejected records destination kind", { exact: true }).locator("option", { hasText: "RabbitMQ exchange" })).toHaveCount(0);
+    await page.getByLabel("Accepted records destination kind", { exact: true }).selectOption("rabbitmq");
+    await page.getByLabel("Accepted records binding", { exact: true }).selectOption("events");
+    await page.getByLabel("Accepted records exchange", { exact: true }).fill("etl.people");
+    await page.getByLabel("Accepted records routing key", { exact: true }).fill("people.loaded");
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Accepted records routing key", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1200-studio-rabbitmq-route-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
 // Spec 1192: a cursor-paginated HTTP source can run continuously with a poll interval.
 for (const width of [320, 1024]) {
   test(`continuous run authoring saves the poll interval and fits ${width}px`, async ({ page }) => {
@@ -216,6 +299,77 @@ for (const width of [320, 1024]) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Poll interval (seconds)", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1192-studio-continuous-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+// Spec 1198: the source can be a SQL table snapshot selected from the host's SQL source approvals.
+for (const width of [320, 1024]) {
+  test(`SQL source authoring saves the table, columns and key and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { sqlSource: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await page.getByLabel("Source kind", { exact: true }).selectOption("sql");
+    await expect(page.getByText("Read one snapshot of the table", { exact: true })).toBeVisible();
+    await expect(page.getByText("Run continuously", { exact: true })).toHaveCount(0);
+    await page.getByLabel("Source SQL binding", { exact: true }).selectOption("people-db");
+    await page.getByLabel("Source table", { exact: true }).fill("dbo.people");
+    await page.getByRole("group", { name: "Source key" }).getByRole("checkbox", { name: "id", exact: true }).check();
+    await page.getByLabel("Watermark column", { exact: true }).selectOption("id");
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Source table", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1198-studio-sql-source-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+// Spec 1201: the source can be a RabbitMQ queue selected from the host's RabbitMQ source approvals.
+for (const width of [320, 1024]) {
+  test(`RabbitMQ source authoring saves the queue and message maximum and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { rabbitMqSource: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await page.getByLabel("Source kind", { exact: true }).selectOption("rabbitmq");
+    await expect(page.getByText("Drain queued messages", { exact: true })).toBeVisible();
+    await expect(page.getByText("Run continuously", { exact: true })).toHaveCount(0);
+    await page.getByLabel("Source RabbitMQ binding", { exact: true }).selectOption("events-in");
+    await page.getByLabel("Source queue", { exact: true }).fill("people");
+    await page.getByLabel("Messages per run", { exact: true }).fill("250");
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Source queue", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1201-studio-rabbitmq-source-${width}.png` });
     await page.addScriptTag({ content: axe.source });
     const violations = await page.evaluate(async () => (await (window as unknown as {
       axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
