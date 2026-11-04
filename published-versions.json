@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb",
+  "last_publish_commit": "73040cd7b1368818820d2a60902443a9f8a82c7f",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -364,13 +364,13 @@
     },
     {
       "package_id": "Elsa.Etl.Core",
-      "version": "4.0.11-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.12-preview",
+      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
     },
     {
       "package_id": "Elsa.Etl.Design",
-      "version": "4.0.11-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.12-preview",
+      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
     },
     {
       "package_id": "Elsa.Etl.Design.Api",
@@ -379,23 +379,23 @@
     },
     {
       "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
-      "version": "4.0.12-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.13-preview",
+      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
     },
     {
       "package_id": "Elsa.Etl.RabbitMq",
-      "version": "4.0.0-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.1-preview",
+      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
     },
     {
       "package_id": "Elsa.Etl.Runtime",
-      "version": "4.0.12-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.13-preview",
+      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
     },
     {
       "package_id": "Elsa.Etl.Runtime.Api",
-      "version": "4.0.12-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.13-preview",
+      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
     },
     {
       "package_id": "Elsa.Etl.Sql.PostgreSql",
