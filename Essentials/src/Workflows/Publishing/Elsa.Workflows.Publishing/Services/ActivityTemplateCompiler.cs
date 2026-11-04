@@ -266,7 +266,7 @@ public sealed class ActivityTemplateCompiler(
             request.Candidate.Contract,
             request.Candidate.Provider,
             resolved,
-            provider.CompilerFingerprint), cancellationToken);
+            provider.CompilerFingerprint) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
 
         if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))

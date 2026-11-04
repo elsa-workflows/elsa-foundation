@@ -124,7 +124,7 @@ public sealed class GraphActivityProvider(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var subject = new ActivityDiagnosticSubject(
-            "ActivityDraft",
+            request.SubjectKind,
             request.DraftId,
             request.DefinitionId,
             Revision: request.Revision);

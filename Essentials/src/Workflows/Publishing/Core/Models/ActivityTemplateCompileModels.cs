@@ -15,7 +15,14 @@ public sealed record ActivityTemplateCompilationRequest(
     Elsa.Activities.Design.Core.Models.ActivityContract Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityResolvedDependency> ResolvedDirectDependencies,
-    string ProviderFingerprint);
+    string ProviderFingerprint)
+{
+    /// <summary>
+    /// What <see cref="DraftId"/> names, for the diagnostic subject: <c>ActivityDraft</c> for a Studio draft revision, or the
+    /// kind of other saved content compiled the same way (such as <c>ActivitySourceVersion</c>, whose id is the version id).
+    /// </summary>
+    public string SubjectKind { get; init; } = "ActivityDraft";
+}
 
 public sealed record ActivityTemplateCompilation(
     ExecutableNode? ExecutableRoot,

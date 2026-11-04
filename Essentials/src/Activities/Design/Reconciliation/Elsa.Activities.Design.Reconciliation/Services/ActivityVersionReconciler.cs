@@ -60,7 +60,8 @@ public sealed class ActivityVersionReconciler(
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddActivityDefinitionVersionCommand addVersionCommand,
     IRefreshActivityDefinitionVersionCommand refreshVersionCommand,
-    IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null
+    IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null,
+    IActivityReconciliationDiagnosticStore? diagnosticStore = null
 )
     : IActivityVersionReconciler
 {
@@ -138,8 +139,8 @@ public sealed class ActivityVersionReconciler(
                     newDefinition,
                     newVersion,
                     cancellationToken);
-            else
-                await sourceVersionPublisher.PublishAsync(newDefinition, newVersion, cancellationToken);
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, newDefinition, newVersion, cancellationToken))
+                return;
 
             // Mirror the write into the indexes so a later candidate targeting the same definition
             // observes it exactly as a per-candidate re-read would (the same-new-definition-twice case).
@@ -165,8 +166,8 @@ public sealed class ActivityVersionReconciler(
                     CreateOperationKey("append", incomingVersion),
                     appended,
                     cancellationToken);
-            else
-                await sourceVersionPublisher.PublishAsync(definition, appended, cancellationToken);
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, definition, appended, cancellationToken))
+                return;
             versionIndex.Add(appended);
             return;
         }
@@ -199,7 +200,7 @@ public sealed class ActivityVersionReconciler(
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
-                    await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+                    await PublishSourceVersionAsync(sourceVersionPublisher, definition, existingVersion, cancellationToken);
                 }
                 return;
             }
@@ -221,7 +222,7 @@ public sealed class ActivityVersionReconciler(
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
-            await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+            await PublishSourceVersionAsync(sourceVersionPublisher, definition, existingVersion, cancellationToken);
         }
     }
 
@@ -245,6 +246,37 @@ public sealed class ActivityVersionReconciler(
             existingVersion.DesignFacetsSource = refresh.DesignFacetsSource;
             existingVersion.LastModifiedAt = refresh.LastModifiedAt;
         }
+    }
+
+    /// <summary>
+    /// Publishes one source-owned version and says whether it was published. A refused version is logged with each of its
+    /// diagnostics and recorded in the reconciliation diagnostic store; nothing of it was written, so the caller skips it
+    /// and the pass goes on. A version that publishes clears what an earlier pass recorded for it.
+    /// </summary>
+    private async Task<bool> PublishSourceVersionAsync(
+        IActivitySourceVersionPublisher publisher,
+        ActivityDefinition definition,
+        ActivityDefinitionVersion version,
+        CancellationToken cancellationToken)
+    {
+        var result = await publisher.PublishAsync(definition, version, cancellationToken);
+        if (result.IsPublished)
+        {
+            diagnosticStore?.Clear(version.Id);
+            return true;
+        }
+
+        diagnosticStore?.Record(version.Id, result.Diagnostics);
+        if (logger.IsEnabled(LogLevel.Warning))
+            foreach (var diagnostic in result.Diagnostics)
+                logger.LogWarning(
+                    "Source-owned activity version '{DefinitionVersionId}' ({ActivityTypeKey} {Version}) was not published: {DiagnosticCode}: {DiagnosticMessage}",
+                    version.Id,
+                    definition.ActivityTypeKey,
+                    version.Version,
+                    diagnostic.Code,
+                    diagnostic.Message);
+        return false;
     }
 
     private IActivitySourceVersionPublisher? SingleSourceVersionPublisher()

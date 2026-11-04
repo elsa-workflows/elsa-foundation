@@ -27,6 +27,20 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 ---
 
+## Replacement contracts
+
+### `IActivityReconciliationDiagnosticStore` *(Core contract — `Elsa.Activities.Design.Core`)*
+- **Default:** `InMemoryActivityReconciliationDiagnosticStore` *(intra-domain — default)*, registered with `TryAddSingleton` by `ActivitiesDesignReconciliationFeature`. It keeps this node's entries in memory; the next pass rebuilds them after a restart.
+- **What it holds:** the diagnostics of the latest pass that refused each source-owned version, keyed by definition version id. A pass that publishes the version clears its entry.
+- **Replace when:** refusals must be shared across nodes or survive a restart. Register the replacement before the feature, or use `services.Replace(...)`.
+
+### `IActivitySourceVersionPublisher` *(Core contract — `Elsa.Activities.Design.Core`)*
+- **Kind:** optional bridge, at most one. Without it the reconciler persists catalog rows only.
+- **Implementation:** `SourceOwnedActivityVersionPublisher` *(cross-domain contribution)* in `Elsa.Workflows.Publishing.Api` — see [its catalog](../../../../Workflows/Publishing/Api/EXTENSION_POINTS.md).
+- **Outcome:** `PublishAsync` returns `ActivitySourceVersionPublicationResult`: published (or already published), or refused with that version's `ActivityDiagnostic`s. On a refusal the reconciler logs one warning per diagnostic, records them in `IActivityReconciliationDiagnosticStore`, leaves the version out of what the pass has seen, and goes on with the remaining candidates. A failure to commit content that passed still throws and fails the pass.
+
+---
+
 ## Events
 
 Every `IEvent` type in the `Elsa.Activities.Design.Core.Reconciliation` namespace has a `### <EventClassName>` heading here, and every such heading names one; review keeps the two in step.
