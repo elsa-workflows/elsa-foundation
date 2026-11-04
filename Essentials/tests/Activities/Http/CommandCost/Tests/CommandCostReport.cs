@@ -12,7 +12,7 @@ namespace Elsa.Activities.Http.CommandCost;
 internal static class CommandCostReport
 {
     /// <summary>The WriteLine counts the series fits over.</summary>
-    public static readonly int[] WriteLineSeries = [5, 10, 20, 40];
+    public static readonly int[] WriteLineSeries = [1, 5, 10, 20, 40];
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 

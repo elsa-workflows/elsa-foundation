@@ -15,7 +15,7 @@ using Xunit.Sdk;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 
 [Collection(RuntimeBookmarksPostgreSqlFixture.CollectionName)]
-public sealed class RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests(RuntimeBookmarksPostgreSqlFixture fixture)
+public sealed partial class RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
     [SkippableFact]
     public Task PostgreSql_full_runtime_aggregate_model_checkpoint_and_rollback() =>
@@ -35,7 +35,7 @@ public sealed class RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests(Runt
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
-public sealed class RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests(RuntimeBookmarksSqlServerFixture fixture)
+public sealed partial class RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests(RuntimeBookmarksSqlServerFixture fixture)
 {
     [SkippableFact]
     public Task SqlServer_full_runtime_aggregate_model_checkpoint_and_rollback() =>
@@ -55,7 +55,7 @@ public sealed class RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests(Runti
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
-public sealed class RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests(RuntimeBookmarksMySqlFixture fixture)
+public sealed partial class RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests(RuntimeBookmarksMySqlFixture fixture)
 {
     [SkippableFact]
     public Task MySql_full_runtime_aggregate_model_checkpoint_and_rollback() =>
@@ -74,7 +74,7 @@ public sealed class RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests(RuntimeBo
             RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
-internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
+internal static partial class RuntimeEntityFrameworkCoreAggregateProviderSmoke
 {
     private const string RecoverySigningKey = "ef-runtime-aggregate-native-recovery-key-32-bytes";
     private const string HierarchySigningKey = "ef-runtime-aggregate-native-hierarchy-key-32-bytes";
