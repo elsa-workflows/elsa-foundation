@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "378b641689cd12cf972536d3ddd5372e055655e3",
+  "last_publish_commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -364,13 +364,13 @@
     },
     {
       "package_id": "Elsa.Etl.Core",
-      "version": "4.0.8-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.9-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Design",
-      "version": "4.0.8-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.9-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Design.Api",
@@ -379,28 +379,28 @@
     },
     {
       "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
-      "version": "4.0.9-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.10-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Runtime",
-      "version": "4.0.9-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.10-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Runtime.Api",
-      "version": "4.0.10-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.11-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Sql.PostgreSql",
-      "version": "4.0.0-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.1-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Sql.SqlServer",
-      "version": "4.0.0-preview",
-      "commit": "a06e281084069c9c2e2c53f517c9bd724399b326"
+      "version": "4.0.1-preview",
+      "commit": "e2baec0a09ec97b2571f3eedc0459cc94227f356"
     },
     {
       "package_id": "Elsa.Etl.Workflows.Design",
