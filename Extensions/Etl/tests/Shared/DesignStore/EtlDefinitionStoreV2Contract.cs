@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-/// <summary>Version 2 draft and publication behaviour of the ETL design store on whichever engine <see cref="CreateDatabaseAsync"/> provides (spec 1202).</summary>
+/// <summary>Version 2 draft and publication behaviour of the ETL design store on whichever engine <see cref="CreateDatabaseAsync"/> provides.</summary>
 public abstract class EtlDefinitionStoreV2Contract
 {
     /// <summary>A fresh, migrated design database.</summary>

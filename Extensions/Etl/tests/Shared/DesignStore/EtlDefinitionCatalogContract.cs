@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-/// <summary>Catalog paging of the ETL design store on whichever engine <see cref="CreateDatabaseAsync"/> provides (spec 1202).</summary>
+/// <summary>Catalog paging of the ETL design store on whichever engine <see cref="CreateDatabaseAsync"/> provides.</summary>
 public abstract class EtlDefinitionCatalogContract
 {
     /// <summary>A fresh, migrated design database.</summary>

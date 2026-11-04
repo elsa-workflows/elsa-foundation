@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Persistence.ProviderTests;
 
-/// <summary>What only a server engine can show about the ETL design schema: its migrations, collations and registration (spec 1202).</summary>
+/// <summary>What only a server engine can show about the ETL design schema: its migrations, collations and registration.</summary>
 public abstract class EtlDesignProviderTests(EtlNativeProviderFixture fixture)
 {
     [SkippableFact]
