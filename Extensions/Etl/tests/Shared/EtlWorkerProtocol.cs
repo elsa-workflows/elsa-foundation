@@ -16,7 +16,12 @@ internal enum EtlConnectorWorkerGate
     AfterErrorAcknowledgement,
     BeforeAcceptance,
     /// <summary>After a route's effect is applied and before the runtime records it (spec 1197).</summary>
-    BeforePublicationRecord
+    BeforePublicationRecord,
+    /// <summary>
+    /// After preparation published its input snapshot and before the store records it (spec 1198). The checkpoint's lease
+    /// has partition ordinal -1, because a preparation holds no partition.
+    /// </summary>
+    BeforePreparationCommit
 }
 
 internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings,
