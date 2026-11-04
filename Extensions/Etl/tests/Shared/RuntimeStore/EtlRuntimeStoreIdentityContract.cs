@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-// Run identities and check constraints on every engine (spec 1203): the server engines key runs by a hash of the id.
+// Run identities and check constraints on every engine: the server engines key runs by a hash of the id.
 public abstract partial class EtlRuntimeStoreContract
 {
     [SkippableFact]

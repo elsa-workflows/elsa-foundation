@@ -1,5 +1,17 @@
 # Handoff: #2908 ETL delivery, from spec 1203 onward (2026-11-04)
 
+## Codex continuation checkpoint — 4 November
+
+Live GitHub state overrides older statuses below; refresh the existing stack before acting. Part of #2908.
+
+- PR3737 is ready at `6bc9562b5` after clean full review 10; CI/GitGuardian remain merge gates. Its later changes are code-comment and evidence updates.
+- PR3803 remains draft. Fresh whole qualification at `24bc18392` passes ETL 1325 / provider 804 / architecture 616, locked graph restore and both generator checks, with zero skips/failures. Provider 804 includes three controlled fixture-initialization cases plus 801 native cases. The receipts below are committed under evidence/qualification-current-stack.json. Subsequent edits only reconcile parent comments/receipts, spec-number references and the guard's obsolete diagnostic suffix; runtime refusal and retained migrations/state remain.
+- Next full schema review is round 4 on the new exact head; previous clean round 3 is historical, not a new-head pass.
+- The runtime concurrency successor is spec1206/PR3804 because 1204 and 1205 were already allocated. It has genuine native contention controls and 36 actual both-store server host/restart checks, with native persistence SQLite. Completed-state readback is not mid-work/upgrade recovery or Studio acceptance.
+- Main has advanced to `9daaa3206`; final reconciliation and affected qualification remain before protected base-first delivery. Never bypass current checks/holds. Keep feature/program/Project #62 In Progress.
+- Continue the original next-slice order: runtime concurrency/delivery, then #3789 off main, transforms/admission, recovery/stale-writer proofs, BPMN and Studio. Use Codex App identity and retain the owner's standing continuation authorization; do not repeat settled permission questions.
+
+
 Written by a Claude session that ran out of credits. Everything below is source-bound to branch
 `agent/claude/2908-etl-runtime-providers`; verify against the code before acting.
 
@@ -54,7 +66,7 @@ Done, at `a93f1d045`:
 - the runtime-store tests turned into contracts (`Extensions/Etl/tests/Shared/RuntimeStore`), with server subclasses in `Elsa.Etl.Persistence.ProviderTests`;
 - two store reads restructured so no query runs inside an open reader.
 
-The registration still refuses server engines with the message "spec 1204". The `etl-ef` provider suite passed 696/696 at `a93f1d045`, and four bite-proofs bite (`evidence/bite-proofs.json`).
+The registration still refuses server engines with the message "spec 1206". The `etl-ef` provider suite passed 696/696 at `a93f1d045`, and four bite-proofs bite (`evidence/bite-proofs.json`).
 
 Committed with this handoff but **not yet verified**:
 - the README bullets;
@@ -72,7 +84,7 @@ Remaining for 1203:
 
 ## Next slices (in order)
 
-1. **Spec 1204, runtime concurrency on the server engines:**
+1. **Spec 1206, runtime concurrency on the server engines:**
    - wrap each runtime transition in `EfWriteRetry` as one unit (the pattern is in the 1202 design store, `EfEtlDefinitionStore` `PublishRetry`);
    - race tests and a soak on all three engines;
    - lift the registration guard (`DependencyInjection/EtlRuntimeEntityFrameworkCoreRegistration.cs`) via `Binding.Select`;

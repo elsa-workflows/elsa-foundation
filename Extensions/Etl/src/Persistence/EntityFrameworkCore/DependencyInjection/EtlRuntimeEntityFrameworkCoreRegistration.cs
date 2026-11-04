@@ -35,8 +35,8 @@ internal static class EtlRuntimeEntityFrameworkCoreRegistration
 
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         if (!StringComparer.Ordinal.Equals(provider, "sqlite"))
-            // The server engines have a schema (spec 1203) but are not yet qualified under concurrent writers (spec 1204).
-            throw new NotSupportedException("The ETL runtime EF module supports SQLite only until its transitions are qualified on other engines (spec 1204).");
+            // The server schemas are available, but concurrent runtime transitions are not yet qualified.
+            throw new NotSupportedException("The ETL runtime EF module supports SQLite only until its transitions are qualified on other engines.");
 
         Binding.AddContext<EtlRuntimeSqliteDbContext>(services, options.Pooling, (serviceProvider, builder) =>
             Binding.Apply(builder, serviceProvider, provider, options.ConnectionString, options.ConnectionName, options.Schema));
