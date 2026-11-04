@@ -225,12 +225,22 @@ not publish successful values or outcomes through mutable execution-context `Set
 completion.** A successful completion carries an *outcome selection* instead of exactly one outcome.
 
 - **A selection** is one of three things:
-  - unspecified, which means the activity's default outcome, `Done`;
+  - unspecified, which means `Done` (see *The `Done` rule*);
   - one or more declared outcome names;
   - explicitly empty, meaning a successful completion with no outgoing path.
 
   Unspecified and explicitly empty stay distinct through completion, parent and join handling, persistence and
-  recovery.
+  recovery. An explicitly empty selection ends this invocation's outgoing paths; it does not itself cancel other
+  running branches. It is a successful completion, so the step's pending engine-owned changes still commit. A parent
+  that does not route by outcomes (a sequence, the workflow root, a loop body) treats it like any other successful
+  completion.
+- **The `Done` rule.** `Done` means "completed without choosing a branch". An activity whose completion may choose no
+  branch declares `Done` (a WriteLine, a Sequence, a RunJavaScript); an activity whose every completion chooses a branch
+  does not (an If with `True` and `False`, a Switch, a SendHttpRequest with expected status codes). `Done` is never
+  selected together with a branch. An unspecified selection on a node without `Done` is a defect in the activity's
+  code: it faults with `VF-ACT-006`, and the fault says that the activity completed without selecting an outcome and
+  declares no `Done`. This is the shape Elsa 4's activities already have. Elsa 3, where `Done` fired on every
+  completion next to any branch, is converted by mapping its `Done` onto every branch (below).
 - **Selecting.** A C# activity returns the selection in its `Complete` transition.
   - A script selects through `setOutcome(name)` and `setOutcomes([names])`. Each call replaces the pending selection,
     so the last call wins.
@@ -249,17 +259,24 @@ completion.** A successful completion carries an *outcome selection* instead of 
   become a port.
   - Studio and publication use the same provider rules.
   - When provider-relevant configuration changes, the ports refresh and affected connections are exposed for repair.
-  - Publication pins the resolved per-node set in the executable.
+  - Publication pins the resolved per-node set in the executable, and refuses a connection whose source port is not in
+    its source node's set.
   - Outcome names are never invented at run time.
 - **Validation in two layers,** depending on how a name is written:
   - a literal name (`setOutcome('Approved')`) that is not in the node's set is a publish diagnostic, so a typo is
     caught before run time;
   - a computed name (`setOutcome(variables.status)`) is checked at run time against the node's pinned set. An unknown
-    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a fallback
-    outcome. Dynamic outcomes stay possible, within the set the designer declared.
+    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a valid fallback
+    outcome. The fallback must itself be declared in the node's pinned outcome set. It never excuses an undeclared
+    result projection. Dynamic selections stay possible, within the set the designer declared.
 - **Unconnected outcomes.** A declared outcome with no connected edge is valid; selecting it ends that path.
-- **Several outcomes.** An activity contract declares whether its completions may select more than one outcome.
-  - The connections of every selected outcome are scheduled.
+- **Several outcomes.** Whether a node's completions may select more than one outcome is resolved at design time with
+  its outcome set, from the activity's static declaration or a provider over the node's configuration (a Switch may
+  in "match any" mode only), and pinned per node.
+  - The runtime rejects a selection of several outcomes on a node that does not permit it.
+  - The connections of every selected outcome are scheduled. When two of them lead to the same node, each is an
+    arrival at that node, and its implicit join ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md))
+    runs it once.
   - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
     warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
     and inspection treat a node that may select several outcomes as an inclusive fork.
@@ -270,16 +287,24 @@ completion.** A successful completion carries an *outcome selection* instead of 
 - Switch in "match any" mode;
 - `Complete` with several outcomes.
 
-Elsa 3 had no checked outcome set, so for a computed `setOutcome(…)` the converter derives the possible outcomes (from
-the node's `PossibleOutcomes` and the literal names in the script). If it cannot, it refuses with guidance
-(faithful-or-refuse).
+Elsa 3 had no checked outcome set. A computed selection such as `setOutcome(variables.status)` remains supported,
+but the converter must establish a suitable set of possible names and preserve the original routing behavior.
+S-3 defines supported derivations and declarations, using the node's `PossibleOutcomes` and supported script analysis.
+Literal names found in a script are evidence, not necessarily an exhaustive set for a computed selection. The
+converter need not know which outcome a particular execution will select. If it cannot establish faithful conversion,
+it refuses with actionable guidance, such as supplying a suitable outcome declaration (faithful-or-refuse).
 
-A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps Elsa 3's
-`Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it becomes
-`Done` to `Done`, which fixes #3295 at its cause.
+Elsa 3's `Done`, which fired next to any branch, maps onto every branch outcome of the converted node, as the
+converter already does for If, Switch and DispatchWorkflow; SendHttpRequest with expected status codes follows the same
+rule. A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps
+Elsa 3's `Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it
+becomes `Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution,
+including the connected RunJavaScript cases behind #3295.
 
 *Left to the implementing spec (S-3):*
-- removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule;
+- removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule, with
+  conversion, publication and execution evidence;
+- the supported derivations and declarations for faithful conversion of computed outcome selections;
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
 - the fallback configuration;
