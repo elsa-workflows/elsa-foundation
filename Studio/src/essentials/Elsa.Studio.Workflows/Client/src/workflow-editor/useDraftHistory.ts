@@ -66,6 +66,7 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
   const lastCapturedDraftRef = useRef<WorkflowDraft | null>(null);
   const lastCapturedSignatureRef = useRef("");
   const restoringRef = useRef(false);
+  const pendingCaptureRef = useRef<number | null>(null);
   // The latest committed draft. A flush reads this, never a render-time closure, so an edit committed after the
   // caller rendered is still captured before a batch.
   const latestDraftRef = useRef<WorkflowDraft | null>(draft);
@@ -122,13 +123,33 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     if (signature === lastCapturedSignatureRef.current) return;
 
     const timeoutId = window.setTimeout(() => {
+      pendingCaptureRef.current = null;
       // Checked again when the timer fires: a flush or a recorded batch may already have captured this state.
       if (getDraftSignature(draft) === lastCapturedSignatureRef.current) return;
       capture(draft);
     }, historyCaptureDelayMs);
+    pendingCaptureRef.current = timeoutId;
 
-    return () => window.clearTimeout(timeoutId);
+    return () => { window.clearTimeout(timeoutId); if (pendingCaptureRef.current === timeoutId) pendingCaptureRef.current = null; };
   }, [capture, draft]);
+
+  // A save may normalize representation (for example, omitted layout dimensions become null). It acknowledges
+  // the current edit; it is not another author edit. Keep the real edit's history entry, including a still-pending
+  // capture, and rebase only that position. In particular, an Undo's autosave must leave its Redo intact.
+  const acceptSavedDraft = useCallback((requested: WorkflowDraft, saved: WorkflowDraft) => {
+    const latest = latestDraftRef.current;
+    if (!latest || latest.id !== requested.id || latest.definitionId !== requested.definitionId
+      || saved.id !== requested.id || saved.definitionId !== requested.definitionId
+      || getDraftSignature(latest) !== getDraftSignature(requested)) return;
+    if (pendingCaptureRef.current !== null) window.clearTimeout(pendingCaptureRef.current);
+    pendingCaptureRef.current = null;
+    if (getDraftSignature(latest) !== lastCapturedSignatureRef.current) capture(latest);
+    lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(saved);
+    lastCapturedSignatureRef.current = getDraftSignature(saved);
+    // The persistence hook adopts this copy immediately after acknowledgement. A second queued save can
+    // acknowledge the same request before React renders that adoption; it must see this accepted position.
+    latestDraftRef.current = saved;
+  }, [capture]);
 
   // Collapses any pending (debounced-but-not-yet-captured) edit into the history stack so
   // undo/redo always operate on a consistent baseline.
@@ -234,5 +255,5 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     }
   }), [changed, isLineageHeld, lineageHeld]);
 
-  return { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, batchHistory, lineageHold };
+  return { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold };
 }

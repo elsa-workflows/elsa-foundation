@@ -103,9 +103,10 @@
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Api\Elsa.Agent.Specialists.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Anthropic\Elsa.Agent.Specialists.Anthropic.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\AzureOpenAI\Elsa.Agent.Specialists.AzureOpenAI.csproj" />
-		<!-- The specialist runtime and its durable turn journal, so agents can be test-run and published here. -->
+		<!-- The specialist runtime, its durable turn journal and its evidence reads, so agents can be test-run, inspected and published here. -->
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Elsa.Agent.Specialists\Elsa.Agent.Specialists.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Persistence\EntityFrameworkCore\Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Inspection\Api\Elsa.Agent.Specialists.Inspection.Api.csproj" />
 		<!-- ETL is discoverable here and enabled only by an explicit shell composition. -->
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Design\Api\Elsa.Etl.Design.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Api\Elsa.Etl.Runtime.Api.csproj" />

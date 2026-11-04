@@ -18,5 +18,5 @@ public sealed class Endpoint(IBpmnDocumentImporter importer) : ApiEndpoint<Analy
     }
 
     public override Task<BpmnImportAnalysis> HandleAsync(AnalyzeBpmnDocumentRequest request, CancellationToken cancellationToken) =>
-        importer.AnalyzeAsync(request.Xml, new BpmnImportOptions { ProcessId = request.ProcessId }, cancellationToken);
+        importer.AnalyzeAsync(request.Xml, new BpmnImportOptions { ProcessId = request.ProcessId, ConfirmedBindings = request.ConfirmedBindings ?? [] }, cancellationToken);
 }
