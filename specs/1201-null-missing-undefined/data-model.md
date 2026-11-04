@@ -34,10 +34,15 @@ Hashed with the binding only when `AsNull`.
 
 ## Admission (state transition)
 
+`WorkflowStartDispatcher.ApplyInputContract`, added by #3731, before the start policy and enqueue. Steps marked
+*S-2* are what this spec adds; the rest is on `main` already.
+
 ```text
-request ──validate──▶ refused (unknown name, missing required, null for non-nullable without policy)
-        └─complete──▶ every declared member: supplied | declared default | ExplicitNull (nullable) | type default
-                    ──seed──▶ start checkpoint
+request ──default-on-null (S-2)──▶ null for a non-nullable input with a type default → type default
+        ──validate──▶ refused (blank, unknown, duplicate or mistyped name/value, missing required;
+                                null for non-nullable without policy: S-2)
+        └─complete──▶ every declared member: supplied | declared default | ExplicitNull (nullable, S-2) | type default (S-2)
+                    ──enqueue──▶ start command ──▶ start checkpoint (seed)
 ```
 
 ## `Elsa3MappingOptions` (new)

@@ -1,6 +1,7 @@
 # Research: Null, missing and undefined
 
-**Spec**: [spec.md](spec.md) · **Date**: 2026-11-03 · Line numbers are from `origin/main` at `6796592c4`.
+**Spec**: [spec.md](spec.md) · **Date**: 2026-11-03, rechecked 2026-11-04 against #3731 · Line numbers are from
+`origin/main` at `4c002dadb`.
 
 ## R-1 What the code does today
 
@@ -13,7 +14,7 @@
 | Run-time presence | `RuntimeActivityInputMaterializer.ValidatePresence` (L605–612); `ActivityInputHydrator.Materialize` (L83–115) | `Absent` or `ExplicitNull` for a non-nullable contract fails with `VF-ACT-004` (#3172). The hydrator repeats the guard from CLR nullability. |
 | Intrinsic execution | `WorkflowIntrinsicExecutor` (L640–642, L656–657) | An expression null or `undefined` becomes `ExplicitNull`; an `Absent` source fails. A null literal never reaches it. |
 | Workflow inputs | `WorkflowDeclaredInput` (`WorkflowExecutableInputContract.cs` L51–84); `WorkflowExecutableCompiler.BuildInputContract` (L511–528) | `Name`, `Type`, `IsRequired`, `DefaultValue`. **No nullability**: the compiler drops `InputDefinition.IsNullable`. |
-| Admission | `WorkflowExecutableInputValidator` (L80–99); `RuntimeWorkflowStateSeed.BuildSeedChanges` (L63–77) | The validator refuses a missing required input and appends declared defaults, but it runs only from test runs and dispatch, not from every start. Only supplied inputs are seeded, so an unsupplied optional member has no envelope and the first read fails (`RuntimePortableExpressionEvaluator` L388–389, `RuntimeInputBindingResolver` L57–63) (#3288). |
+| Admission | `WorkflowStartDispatcher.ApplyInputContract` (L465–481, called at L212 before the start policy at L213); `WorkflowExecutableInputValidator` (L80–99 required and defaults, L119 type check); `RuntimeWorkflowStateSeed.BuildSeedChanges` (L63–77) | Since #3731 every new start runs the validator in complete-bag mode before enqueue: declared defaults are appended, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start (`WorkflowExecutableStartRejectedException`, category `Input`, `400`; the stimulus router reports `Refused`). A legacy artifact without a contract keeps its supplied inputs. An optional input with no declared default is still left out of the bag, so it gets no envelope and the first read fails (`RuntimePortableExpressionEvaluator` L388–389, `RuntimeInputBindingResolver` L57–63) (#3288). An explicit `null` passes for a `String` input and fails as `incompatible-value` for an `Int32` one: the outcome comes from the L119 conversion, not from a declared nullability. |
 | JavaScript results | `JintResultMaterializer.Materialize` (L32–73) | The intrinsic `JSON.stringify`: `undefined` properties dropped silently, `NaN` / `Infinity` → `null` silently (#3170). |
 | `undefined` result | `JintPortableJavaScriptEvaluator` L71–72; `JintJavaScriptScriptEvaluator` L21–22 | Bindings throw (ADR 0083). Script activities return C# `null`. |
 | Spec 262 lowering | `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` (`AddNullCoalescing`, L333–336) | The converter wraps each top-level expression result as `(...) ?? null`. |
@@ -39,24 +40,39 @@
 
 ## R-3 Admission that always completes the request
 
-- **Decision**: one admission step, `WorkflowRequestAdmission`, in `Elsa.Workflows.Runtime`, run by
-  `WorkflowStartSchedulerWorkHandler` before the start checkpoint for every start path. It calls the existing
-  `IWorkflowExecutableInputValidator`, then completes the request: declared default, else `ExplicitNull` when nullable,
-  else the type default. A member with none of these was refused at publication (FR-006). The seed then writes an
-  envelope for every declared member.
-- **Rationale**: the validator exists but is not on every path. Running it once in `WorkflowStartDispatcher`, which
-  every start passes through, and adding D-10's completion there meets FR-008 ("before the start checkpoint") and
-  FR-009 (every declared member has a value). This also fixes #3728; if #3728 is fixed first, S-2 extends that fix
-  instead. S-2 does not wait for it.
-- **Alternatives**: materialize on first read (rejected by ADR 0045 §2: admission, not a later step); fix each caller
-  (rejected: misses new start paths).
+- **What #3731 already does**: `WorkflowStartDispatcher.ApplyInputContract` is the one admission step. Every start
+  reaches it: the runtime API, the stimulus router (triggers, live and saved), BPMN, test runs
+  (`TestRunTargetDispatcher`) and DispatchWorkflow children (retained dispatch). It runs after the keyed and retained
+  duplicate answers and before the start policy and enqueue, so before the start checkpoint. It fills declared
+  defaults, refuses a missing required input, and normalizes the bag the start command carries. The early checks in
+  `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow` stay, because they refuse before their own side effects.
+  BPMN declares no workflow inputs, so nothing changes for it.
+- **Decision**: S-2 extends that step and adds no new one (no `WorkflowRequestAdmission`, no change to
+  `WorkflowStartSchedulerWorkHandler`):
+  1. the validator's complete-bag normalization also completes an omitted optional input without a declared default:
+     JSON `null` when the input is nullable (R-4), otherwise the type default from `NullPolicyDefaults` (R-6). A member
+     with none of these was refused at publication (FR-006, T007). Known-inputs mode (Design-time DispatchWorkflow)
+     stays as it is;
+  2. the validator refuses an explicit `null` for a non-nullable input with a new reason code (R-4). An explicit
+     `null` for a nullable input is accepted without the L119 conversion, which a `null` for a nullable value type
+     would otherwise fail. The conversion itself is unchanged (S-9 moves it);
+  3. under default-on-null, `ApplyInputContract` replaces an explicit `null` for a non-nullable input that has a type
+     default before it calls the validator, from the executable's pinned `ValuePolicies` (R-6). The early checks in
+     the test-run handler and `DispatchWorkflow` apply the same `NullPolicyDefaults` substitution before validating,
+     so they give the same answer.
+  The seed already writes every member of the normalized bag; T014 checks that a completed `null` is stored as an
+  explicit null.
+- **Rationale**: #3731 put the contract on every start path. Completion and the null refusal belong in the same
+  normalization that already fills declared defaults, so one place decides what a declared workflow input holds.
+- **Alternatives**: a separate admission step in the start work handler (rejected: a second place deciding inputs,
+  and it would run after enqueue); materialize on first read (rejected by ADR 0045 §2: admission, not a later step).
 
 ## R-4 Workflow input nullability
 
 - **Decision**: add `IsNullable` to `WorkflowDeclaredInput`, fill it from `InputDefinition.IsNullable` in
   `BuildInputContract`, and hash it in `inputContract` only when `true`, so existing hashes are unchanged for inputs
   that stay non-nullable. The validator refuses an explicit JSON `null` for a non-nullable input unless default-on-null
-  applies.
+  applies (R-3 step 2 and 3).
 - **Rationale**: FR-005; the authored model already has the flag.
 - **Alternatives**: infer nullability from the type alias (rejected: it would change meaning silently).
 
@@ -77,7 +93,8 @@
   the type default for value types and enums and nothing for other types. It is applied in three places, each only
   when the workflow's pinned `DefaultOnNull` is on: publication (`ValidateNull`: pin the default literal instead of
   failing), run-time materialization (`ValidatePresence`: replace `ExplicitNull` with the default and record a
-  `substituted-default` diagnostic on the invocation), and admission (R-3). The hydrator's CLR guard stays as a
+  `substituted-default` diagnostic on the invocation), and admission (`WorkflowStartDispatcher.ApplyInputContract`,
+  R-3). The hydrator's CLR guard stays as a
   backstop; it never sees a null for such an input once the materializer substituted.
 - **Rationale**: one rule, three entry points; the hydrator stays a pure contract check.
 - **Alternatives**: substitute in the hydrator (rejected: the invocation record would not show the substitution).

@@ -51,10 +51,27 @@ variable reads; the Elsa 3 converter option; the stored representation of explic
 - Literal and computed variable names in general (S-4, ADR 0089). This spec defines only the outcome of a computed name
   that matches nothing.
 - Absent or blank Elsa 3 members whose converted value differs (#3281, S-0).
-- Related, not a dependency: [#3728](https://github.com/elsa-workflows/elsa-foundation/issues/3728), a general Elsa 4
-  defect (the input contract is not applied on every start path). If it is still open when S-2 is built, S-2's
-  admission step (FR-008, FR-009) fixes it as part of this work; if it is fixed first, S-2 extends that fix.
+- Applying the input contract on every start: fixed by
+  [#3731](https://github.com/elsa-workflows/elsa-foundation/pull/3731) (#3728, merged 2026-11-04 as `4c002dadb`).
+  `WorkflowStartDispatcher` validates every new start (API, triggers, BPMN, test runs, child workflows) with
+  `IWorkflowExecutableInputValidator` in complete-bag mode, before the start policy and before the start command is
+  enqueued. It fills declared defaults into the start payload and refuses a blank, unknown, duplicate or mistyped
+  input, or a missing required one, with `WorkflowExecutableStartRejectedException` (category `Input`, rendered as
+  `400`); the stimulus router reports such a start as `Refused`. S-2 extends that admission and does not add another
+  one (see *Admission* below).
+- The validator's type conversion (`WorkflowExecutableInputValidator` L119, System.Text.Json defaults today). S-9
+  (spec 1207) moves it onto the shared data-boundary options; S-2 does not change it.
 - Studio editing surfaces beyond what FR-024 names.
+
+**Admission**: "admission" in this spec is #3731's input-contract step in `WorkflowStartDispatcher`. It already
+delivers FR-008 for an omitted required input and the declared-default half of FR-006 for workflow inputs, on every
+start path. S-2 adds three things to it:
+- an omitted optional input without a declared default materializes as `null` when nullable, otherwise as its type
+  default (FR-006, FR-009);
+- workflow-input nullability is pinned in the input contract (FR-005), so admission refuses an explicit `null` for a
+  non-nullable input unless default-on-null applies (FR-008, FR-013);
+- FR-008's "before the start checkpoint" holds for these new outcomes too: they are decided where #3731 decides, before
+  the start command is enqueued.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -93,11 +110,11 @@ FlowDecision reads `ShouldFault` as `null` and the flow continues.
 **Acceptance Scenarios**:
 
 1. **Given** an optional input with a declared default, **When** it is omitted, **Then** admission completes it with
-   that default before the start checkpoint.
+   that default before the start checkpoint (already true since #3731).
 2. **Given** an optional nullable input with no default, **When** it is omitted, **Then** it reads `null`.
 3. **Given** an optional non-nullable input with no default, **When** it is omitted, **Then** it reads its type default.
 4. **Given** a required input, **When** it is omitted, **Then** the start is refused with a diagnostic naming the input,
-   no instance runs a step, and nothing is scheduled.
+   no instance runs a step, and nothing is scheduled (already true since #3731).
 5. **Given** a request that supplies an explicit `null` for a nullable input, **Then** the input reads `null`, not its
    declared default.
 
@@ -256,11 +273,14 @@ omitted; after resume, the first reads explicit null and the invocation record s
   example `String` or a JSON object) has no type default: such an optional member still needs a declared default, as
   publication requires today (`VF-ACT-003`).
 - **FR-007**: An omitted required activity input MUST still fail publication (`VF-ACT-003`).
-- **FR-008**: An omitted required workflow input MUST be refused when the workflow instance is admitted, before the start
-  checkpoint, with a diagnostic naming the member. No step runs and no work item is scheduled. This
-  holds on every start path (API, triggers, BPMN, test runs, child workflows).
+- **FR-008**: An omitted required workflow input, and an explicit `null` for a non-nullable workflow input without the
+  default-on-null policy, MUST be refused at admission, before the start checkpoint, with a diagnostic naming the
+  member. No step runs and no work item is scheduled. This holds on every start path (API, triggers, BPMN, test runs,
+  child workflows). #3731 already does this for the omitted required input; S-2 adds the explicit-null refusal at the
+  same point.
 - **FR-009**: After admission, every declared workflow input MUST have a value, so a later read never fails because a
-  member was omitted.
+  member was omitted. #3731 fills declared defaults; S-2 adds `null` or the type default for an optional input without
+  one (FR-006).
 
 **Null and absent representation (ADR 0091 decision 8)**
 - **FR-010**: Declared members MUST keep explicit null and absent distinct by reusing `ValueEnvelope`'s existing

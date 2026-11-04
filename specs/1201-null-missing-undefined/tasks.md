@@ -60,14 +60,20 @@ red without the change.
 
 **Independent test**: `composition-bulk-dispatch-sub-workflow` starts with no input and completes.
 
-- [ ] T013 [US2] Check #3728. If it is open, move the input contract check into `WorkflowStartDispatcher` so every
-  start runs it, remove the separate calls in the test-run handler and `DispatchWorkflow`, and close #3728 from the
-  delivery PR; if it is fixed, start from that check. Then extend it: refuse `null` for non-nullable inputs without
-  `DefaultOnNull`, and complete every declared member without a declared default with `ExplicitNull` or its type
-  default (R-3)
-- [ ] T014 [US2] Seed an envelope for every declared member in `RuntimeWorkflowStateSeed.BuildSeedChanges`
-- [ ] T015 [US2] Tests for each US2 acceptance scenario on each start path (API, trigger, BPMN, test run, child
-  workflow), including a refused start that schedules nothing
+- [ ] T013 [US2] Extend #3731's admission (R-3); the contract check on every start, declared defaults and the
+  missing-required refusal are on `main` already. In `WorkflowExecutableInputValidator`'s complete-bag normalization:
+  complete an omitted optional input without a declared default with JSON `null` when nullable, otherwise its type
+  default (`NullPolicyDefaults`); refuse an explicit `null` for a non-nullable input with `VF-WF-REQ-002`; accept an
+  explicit `null` for a nullable input without running the L119 conversion, and leave that conversion as it is (S-9
+  owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and in the early checks of
+  `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for such a `null` before
+  validating when the pinned `DefaultOnNull` is on
+- [ ] T014 [US2] Check that `RuntimeWorkflowStateSeed.BuildSeedChanges` stores a completed JSON `null` as an explicit
+  null envelope, not a present JSON `null`, and fix it if not
+- [ ] T015 [US2] Tests for S-2's additions (US2 scenarios 2, 3 and 5, and the `null` refusal) on the API, trigger,
+  test-run and child-workflow paths, beside #3731's `WorkflowStartInputContractTests`; scenarios 1 and 4 are covered
+  there already. Include a refused start that schedules nothing, and one test per validator mode proving known-inputs
+  mode does not complete members
 - [ ] T016 [US2] Behavioural test: a JavaScript condition reads an omitted optional input as `null`
   (`Essentials/tests/Activities/Behavioral/Tests`)
 
@@ -137,7 +143,9 @@ red without the change.
 ## Phase 10: Polish
 
 - [ ] T035 [P] Docs: workflow settings authoring reference (`nullHandling`), glossary rows for *default-on-null* and
-  *undefined-as-null*, Elsa 3 Mapping README and migration readiness guide (spec 262 and 267 sections)
+  *undefined-as-null*, Elsa 3 Mapping README and migration readiness guide (spec 262 and 267 sections), and the
+  `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` *Usage* lines in the Runtime `EXTENSION_POINTS.md`
+  (completion, `null` refusal, default-on-null at admission)
 - [ ] T036 Rerun the #3052 JTest measurement and post it on #3052 (SC-002, SC-003)
 - [ ] T038 [P] Q5 audit (R-12): list built-in activity inputs that cannot hold `null` and whose Elsa 3 counterparts
   accepted it; declare each nullable where the Elsa 4 activity handles `null`, with a test, and record the rest in the
@@ -147,7 +155,7 @@ red without the change.
 
 ## Dependencies
 
-- T001 gates everything. Phase 2 blocks every story. #3728 is not a prerequisite (T013 covers it if it is open).
+- T001 gates everything. Phase 2 blocks every story. T013 builds on #3731 (merged 2026-11-04, `4c002dadb`).
 - US1, US2 and US7 (P1) can run in parallel after Phase 2. US3 needs T019/T020's policy from T006. US4 needs T008.
   US5 needs US3 and US4 (the policies it records must work). US6 is independent after Phase 2.
 - MVP: Phases 1–5.

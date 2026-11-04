@@ -10,7 +10,8 @@ here is implemented until #3052's specs are defined and this spec is approved.
 Make explicit null a value, omission a defined outcome and `undefined` a visible policy, as ADR 0045 §2 (D-10, D-11)
 says. The technical approach (research R-2 to R-10):
 - intrinsics take their target's nullability;
-- one admission step completes every workflow request before the start checkpoint;
+- #3731's admission step (`WorkflowStartDispatcher.ApplyInputContract`, on every start) also completes optional
+  inputs without a declared default and refuses `null` for non-nullable inputs;
 - workflow inputs carry nullability in the pinned input contract;
 - two workflow-level policies, `DefaultOnNull` and `UndefinedAsNull`, are authored on `WorkflowStrategyOptions`,
   pinned and hashed on `WorkflowExecutable`, and the undefined policy is also pinned per JavaScript binding;
@@ -54,10 +55,10 @@ admission.
 | §E2.1 domain boundaries | PASS | Value rules stay in `Workflows.Runtime.Core` (`NullPolicyDefaults`); Jint changes stay in `Expressions/JavaScript/Jint`. |
 | §E2.7 Elsa 3 stays behind the import boundary | PASS | Elsa 4 gains general policies, usable by any workflow. The converter only selects them (D-11: no "converted from Elsa 3" marker). |
 | §E5 versioning / §2.23.3 visibility | PASS | Additive public surface: `WorkflowStrategyOptions.NullHandling`, `WorkflowExecutable.ValuePolicies`, `WorkflowDeclaredInput.IsNullable`, `Elsa3MappingOptions`. Removal: `Elsa3ExpressionRewriter.AddNullCoalescing` (internal behaviour, pre-GA, ADR 0080). New services internal. |
-| §2.6.2 replacement contracts | PASS | None added. `IWorkflowExecutableInputValidator` unchanged; admission calls it. |
+| §2.6.2 replacement contracts | PASS | None added. `IWorkflowExecutableInputValidator`'s signature is unchanged; its complete-bag normalization also completes omitted optional inputs and refuses `null` for non-nullable ones (R-3). The catalog entry's *Usage* line says so (T035). |
 | §2.17 duplication beats dependency | PASS | The type-default table is one helper in `Runtime.Core`, which every caller already references. |
 | §2.24.2 sanctioned patterns | PASS | Feature options bound from configuration; hashed strategy options. No new extension point. |
-| §2.22 / §2.22.1 docs and extension points | ACTION | Spec 095 contracts (already amended by #3388), the authoring reference for workflow settings, the Elsa 3 Mapping README and migration readiness guide, glossary rows for *default-on-null* and *undefined-as-null*. No contributor or replacement contract changes. |
+| §2.22 / §2.22.1 docs and extension points | ACTION | Spec 095 contracts (already amended by #3388), the authoring reference for workflow settings, the Elsa 3 Mapping README and migration readiness guide, glossary rows for *default-on-null* and *undefined-as-null*, and the *Usage* line of `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` in the Runtime extension-point catalog. No contributor or replacement contract is added. |
 | §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash-stability tests. |
 | §2.23.5 exception boundaries | PASS | Publication and admission refusals keep their diagnostic exceptions; boundary warnings are diagnostics, not exceptions. |
 | ADR 0038 content-addressed executables | PASS | Policies and input nullability are hashed, written only when set (R-2, R-4). |
@@ -70,7 +71,7 @@ admission.
 | D-1 | Intrinsic `value` takes the target's nullability | R-5. `name` / `outcome` stay non-nullable strings. |
 | D-2 | Variable nullability from the type | R-5: nullable unless a non-nullable value type. Verified in T004. |
 | D-3 | Workflow input nullability pinned | R-4. Hashed only when `true`. |
-| D-4 | One admission step | R-3. The input contract checked once in `WorkflowStartDispatcher` for every start, plus D-10's completion, before the start checkpoint. Fixes #3728 if still open; no dependency on it. |
+| D-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds D-10's completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
 | D-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; undefined policy also pinned on each JavaScript binding. |
 | D-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
 | D-7 | Jint replacer | R-7. Warnings `js-undefined-dropped`, `js-nonfinite-null`; policy turns `undefined` into `null`. |
@@ -110,9 +111,11 @@ Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/
   └── WorkflowExecutableCompiler.cs    # input contract, policies
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/
   ├── Executables/WorkflowExecutableHasher.cs
-  ├── Values/RuntimeActivityInputMaterializer.cs
-  ├── Values/WorkflowRequestAdmission.cs                  # new
-  └── WorkHandlers/WorkflowStartSchedulerWorkHandler.cs
+  ├── Executables/WorkflowExecutableInputValidator.cs     # completion, null refusal (not the L119 conversion)
+  ├── Executions/WorkflowStartDispatcher.cs               # default-on-null before validation
+  └── Values/RuntimeActivityInputMaterializer.cs
+Essentials/src/Workflows/Publishing/Api/Handlers/StartWorkflowTestRunRequestHandler.cs  # same substitution
+Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs       # same substitution
 Essentials/src/Expressions/JavaScript/Jint/Services/
   ├── JintResultMaterializer.cs
   ├── JintJavaScriptScriptEvaluator.cs
@@ -124,8 +127,8 @@ Extensions/Elsa3/src/Mapping/
   └── ActivityMap/Elsa3BuiltInActivityMap.Entries.cs
 ```
 
-**Structure Decision**: existing projects only; two new files in Runtime and Runtime.Core, one in the Elsa 3
-extension.
+**Structure Decision**: existing projects only; one new file in Runtime.Core (`NullPolicyDefaults`), one in the
+Elsa 3 extension.
 
 ## Complexity Tracking
 
