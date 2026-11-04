@@ -1,6 +1,6 @@
 # Tasks: JSON data integrity baseline
 
-**Input**: Design documents from `specs/1202-json-data-integrity-baseline/`
+**Input**: Design documents from `specs/1207-json-data-integrity-baseline/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/json-baseline.md, quickstart.md
 

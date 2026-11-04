@@ -95,7 +95,7 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in a ra
 ### Documentation (this feature)
 
 ```text
-specs/1202-json-data-integrity-baseline/
+specs/1207-json-data-integrity-baseline/
 ├── spec.md
 ├── plan.md
 ├── research.md
