@@ -156,8 +156,57 @@
       "recomputedFromRetainedProduct": true,
       "disposition": "False positive (public product checksum)",
       "dashboardChanged": false
+    },
+    {
+      "incident": "39605445",
+      "commit": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 291,
+      "productSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+      "productFile": "Elsa.Secrets.Core.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39605446",
+      "commit": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 289,
+      "productSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+      "productFile": "Elsa.Secrets.Api.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39605447",
+      "commit": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 293,
+      "productSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+      "productFile": "Elsa.Secrets.Persistence.EntityFrameworkCore.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
     }
   ],
   "recordedAtUtc": "2026-11-04T21:16:23.217036+00:00",
-  "statusNote": "DashboardChanged records the state at this checksum classification, before dashboard triage; use later PR checkpoints and current checks for live state."
+  "statusNote": "DashboardChanged records the state at this checksum classification, before dashboard triage; use later PR checkpoints and current checks for live state.",
+  "triageVerification": {
+    "checksumIncidents": 16,
+    "checksumStatus": "Ignored",
+    "checksumReason": "Not a secret (false positive)",
+    "historicalTestIncidents": [
+      "39471203",
+      "39471729"
+    ],
+    "historicalTestStatus": "Ignored",
+    "historicalTestReason": "Test credential",
+    "verifiedThrough": "Signed-in GitGuardian visible UI on 2026-11-04",
+    "githubCheckResults": "Not yet confirmed green; re-evaluation required."
+  }
 }
