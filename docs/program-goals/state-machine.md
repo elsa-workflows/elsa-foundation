@@ -15,7 +15,12 @@ sample application concepts, not StateMachine domain types.
 The program's [owner decisions](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026)
 and M0 open-decision register distinguish accepted product direction from proposals. In particular, root/nested
 use is agreed; native-composite versus separate execution-model placement is still to be assessed against actual
-Elsa 4 contracts. Detailed activity/event/lifecycle, data, persistence and failure semantics require M0 agreement.
+Elsa 4 contracts. Ordinary activities and composites may durably suspend in entry, exit and transition actions;
+their pending phase must be visible. Selected transition work finishes before later business events are evaluated.
+New machine-addressed business events are durably accepted for later evaluation under explicit capacity and
+delivery guarantees; an event with no eligible transition finishes with an observable unhandled outcome rather
+than being revived by a later state change. Detailed slot, ingress, lifecycle, data, persistence and failure
+contracts still require M0 agreement. Late completions tied to cancelled waits remain stale.
 Full SCXML compatibility/interchange, migration/import and history-state support have no implied commitment.
 
 ## Sequencing and relationships
@@ -54,9 +59,11 @@ agreement; newly created records remain `needs-triage` until a maintainer change
 
 ## Current objective and completion
 
-Finish establishment #3826, then continue the owner design session through #3820. The still-open M0 choices
-include event handling/interruption during long-running activity work, event/trigger lifetime and matching, hierarchical/parallel
-selection and recovery semantics, data/outcomes/versioning, Studio journeys and saga composition.
+Establishment #3826 records the program setup and deferral reconciliation; #3820 owns the continuing owner
+design session. The still-open M0 choices include the implementable event ordering/capacity/delivery and outcome
+contract, event/trigger lifetime and matching, complete hierarchical/parallel selection and recovery semantics,
+data/outcomes/versioning, Studio journeys and saga composition. The program issue owns the evolving decision
+register; the accepted product direction does not by itself approve an internal engine design.
 
 The program completes only when the accepted first-release requirements have actual native/Studio authoring,
 execution and persistence evidence, appropriate reviewed/merged changes and resulting-main qualification.
