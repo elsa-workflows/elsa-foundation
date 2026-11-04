@@ -63,7 +63,8 @@ authorizes resuming #3440's native baseline after its three failed runs (`1495b5
 in the probe driver, a regression check for it and at most two fresh native attempts. It is not a waiver
 of the three-failure stop or any other gate. The same record hands the Program to Claude. On the owner's
 instruction, Claude [posts through the owner account with the `[Claude]` tag](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6563355491)
-while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge.
+while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge,
+except under the 3 November standing authorization recorded below.
 
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
@@ -96,7 +97,8 @@ The lane reads it as a standing owner exception to merging.md's one-action owner
 author merges its own PR" fallback, used while Code Review is unavailable; that reading and that condition
 are the lane's, not the owner's words. Otherwise the native-baseline paragraph's Code Review route stands.
 [Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
-implementation leaf, under [spec1203](../../specs/1203-weaver-module-support/spec.md).
+implementation feature, under [spec1203](../../specs/1203-weaver-module-support/spec.md), delivered as leaves
+that are native sub-issues of #3443.
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
 The current inventory also includes workflow library folders, tags and saved views added on main
 during M2.
