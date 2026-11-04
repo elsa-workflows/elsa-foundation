@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Draft
+**Status**: Approved
 
 **Issue**: [#3198](https://github.com/elsa-workflows/elsa-foundation/issues/3198), part of epic
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)
