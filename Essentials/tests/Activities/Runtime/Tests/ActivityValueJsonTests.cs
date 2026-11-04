@@ -37,6 +37,16 @@ public sealed class ActivityValueJsonTests
     }
 
     [Fact]
+    public void Hydrator_still_reads_PascalCase_members_written_with_default_options()
+    {
+        // Literal, variable and secret envelopes are written with System.Text.Json defaults, so they keep PascalCase.
+        var activity = Hydrate(JsonSerializer.SerializeToElement(new Order { CustomerName = "Ann", Total = 5m }));
+
+        Assert.Equal("Ann", activity.Order!.CustomerName);
+        Assert.Equal(5m, activity.Order.Total);
+    }
+
+    [Fact]
     public void A_projected_result_hydrates_the_next_input_unchanged()
     {
         var result = Project(new Order { CustomerName = "Ann", Total = 5m }).Completion.Result.InlineValue!.Value;
