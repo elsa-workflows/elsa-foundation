@@ -148,6 +148,11 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
     );
   };
 
+  const advancedHasProblems = ["tokens", "calls", "timeout"].some(field => fieldMessage(field as NumberField,
+    field === "tokens" ? problems.outputTokens : field === "calls" ? problems.modelCalls : problems.timeout));
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  useEffect(() => { if (advancedHasProblems) setAdvancedOpen(true); }, [advancedHasProblems]);
+
   const retry = <StudioButton size="sm" onClick={() => setReload(current => current + 1)}>Retry</StudioButton>;
 
   return (
@@ -160,13 +165,16 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
         </StudioAlert>
       ) : null}
 
-      <StudioField label="Instructions" description="What the agent does and how it answers. Business data arrives through the public inputs, not here.">
+      <div className="agent-specialist-main">
+      <div className="agent-specialist-instructions">
+      <StudioField label="Instructions" description="Describe the task, tone and constraints. Workflow inputs supply the data for each run.">
         <textarea value={manifest.instructions} disabled={readOnly} rows={8} maxLength={specialistBounds.instructionsLength}
           aria-invalid={problems.instructions ? true : undefined} aria-describedby={problems.instructions ? `${id}-instructions-problem` : undefined}
           onChange={event => patch({ instructions: event.target.value })} />
         {problems.instructions ? <small id={`${id}-instructions-problem`} className="agent-field-problem">{problems.instructions}</small> : null}
       </StudioField>
 
+      </div>
       {/* Not disabled as a whole: Retry and search must work in read-only mode, and every editing control is disabled on its own. */}
       <fieldset className="agent-specialist-model">
         <legend>Model</legend>
@@ -230,6 +238,9 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
         {!model && Object.keys(savedSettings).length > 0 ? <p className="agent-model-summary">Saved model settings: {Object.entries(savedSettings).map(([key, setting]) => `${key} ${JSON.stringify(setting)}`).join(", ")}</p> : null}
       </fieldset>
 
+      </div>
+      <details className="agent-specialist-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
+        <summary>Advanced settings<span>Limits and conversation</span></summary>
       <fieldset className="agent-specialist-limits" disabled={readOnly}>
         <legend>Limits</legend>
         {numberInput("tokens", "Maximum output tokens", model ? `Optional. At most ${model.maximumOutputTokens.toLocaleString()} for this model.` : "Optional.", problems.outputTokens, { min: 1, max: model?.maximumOutputTokens })}
@@ -244,6 +255,7 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
           <span>Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one.</span>
         </label>
       ) : null}
+      </details>
     </div>
   );
 }
