@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "9810757feeca31791caa226148ca29809615d130",
+  "last_publish_commit": "4dd9010077cb2d86a9332ae6daa04af76381864e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -179,8 +179,8 @@
     },
     {
       "package_id": "Elsa.Agent.Specialists.AzureOpenAI",
-      "version": "4.0.2-preview",
-      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      "version": "4.0.3-preview",
+      "commit": "4dd9010077cb2d86a9332ae6daa04af76381864e"
     },
     {
       "package_id": "Elsa.Agent.Specialists.Connections",
@@ -206,6 +206,11 @@
       "package_id": "Elsa.Agent.Specialists.JsonSchema",
       "version": "4.0.3-preview",
       "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+    },
+    {
+      "package_id": "Elsa.Agent.Specialists.OpenAI",
+      "version": "4.0.0-preview",
+      "commit": "4dd9010077cb2d86a9332ae6daa04af76381864e"
     },
     {
       "package_id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
