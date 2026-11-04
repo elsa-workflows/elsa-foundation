@@ -7,15 +7,15 @@ Cadence: risk-based implementation with paired focused behavior tests, then red/
 ## Setup and foundations
 
 - [x] T001 Verify the existing schemas and review spec → plan in `specs/1206-etl-runtime-concurrency/`; preserve source-bound parent #3803.
-- [ ] T002 Add the public `EtlStoreException` contract in `Extensions/Etl/src/Core/Runtime/EtlStoreException.cs`, track it in `Core/PublicAPI.Unshipped.txt` and document storage failures on all three runtime store interfaces.
-- [ ] T003 Add the private operation boundary under `Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/`: transaction/cancellation preflight, one EfWriteRetry budget, per-attempt cancellation and cleanup, final ETL failure mapping; preserve schema refusal and existing validation/corruption handling.
+- [x] T002 Add the public `EtlStoreException` contract in `Extensions/Etl/src/Core/Runtime/EtlStoreException.cs`, track it in `Core/PublicAPI.Unshipped.txt` and document storage failures on all three runtime store interfaces.
+- [x] T003 Add the private operation boundary under `Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/`: transaction/cancellation preflight, one EfWriteRetry budget, per-attempt cancellation and cleanup, final ETL failure mapping; preserve schema refusal and existing validation/corruption handling.
 
 ## US2 — authoritative concurrent transitions (prerequisite to activation)
 
 Independent test: separate contexts on one real engine contend and preserve scoped authority, exact accounting, immutable input snapshots and one result/outbox identity.
 
-- [ ] T004 [US2] Split and wrap the v1 operations in `Stores/EfEtlRuntimeStore.cs`, retaining bounded effects capture outside retry and replacing the old two-attempt claim loop.
-- [ ] T005 [US2] Wrap connector and inspection operations in `Stores/EfEtlConnector*.cs`, retain admission pins across retries and use an unretried private connector-run read inside inspection transactions. Physical connector I/O stays outside this boundary.
+- [x] T004 [US2] Split and wrap the v1 operations in `Stores/EfEtlRuntimeStore.cs`, retaining bounded effects capture outside retry and replacing the old two-attempt claim loop.
+- [x] T005 [US2] Wrap connector and inspection operations in `Stores/EfEtlConnector*.cs`, retain admission pins across retries and use an unretried private connector-run read inside inspection transactions. Physical connector I/O stays outside this boundary.
 - [ ] T006 [US2] Add boundary/snapshot/cleanup controls to the existing shared `EtlRuntimeStoreContract` partial in `Extensions/Etl/tests/Shared/RuntimeStore/EtlRuntimeRetryContract.cs`, inherited by existing SQLite/provider subclasses: raw/wrapped/exhausted/nonretryable failures through all three ports, cancellation, caller/ambient/enlisted refusal before mutation, preserved corruption/schema refusals, input mutation after first attempt and successful reuse after failure.
 - [ ] T007 [US2] Add a multi-save preparation rollback control in `Shared/RuntimeStore/EtlRuntimeRetryContract.cs`: classified failure after a real successful save and before commit; retry reconstructs one graph; exhaustion retains no partial persisted/tracked preparation.
 - [ ] T008 [US2] Add overlapping native-provider races in `Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.cs` for admission/replay/conflict, preparation/partition authority, reservation budget, final acceptance/cancellation and delivery. Require a native classified conflict and record retry removal/restoration for the admission race.
