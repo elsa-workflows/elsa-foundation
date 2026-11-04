@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,6 +15,12 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
 
     public void Validate()
     {
+        var principals = registrations.Where(descriptor => descriptor.ServiceType == typeof(IAgentPrincipalSource)
+            && !descriptor.IsKeyedService).ToArray();
+        if (principals.Length > 1)
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentPrincipalSource).FullName}' allows at most one registration, but found {principals.Length}. Use services.Replace(...) to replace its existing implementation.");
+        if (principals.Any(descriptor => descriptor.Lifetime != ServiceLifetime.Scoped))
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentPrincipalSource).FullName}' must be scoped so it reads the genuine current principal for each operation.");
         var count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentToolAuthorizer));
         if (count != 1)
             throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentToolAuthorizer).FullName}' requires exactly one registration, but found {count}. Use services.Replace(...) to replace its existing implementation.");
