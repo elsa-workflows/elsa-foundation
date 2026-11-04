@@ -6511,6 +6511,19 @@
       "edges": []
     },
     {
+      "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
+      "name": "Elsa.Persistence.Core",
+      "kind": "source",
+      "domain": "Elsa.Persistence",
+      "sub_domain": "Core",
+      "role": "contract",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Persistence.Core",
+      "line": "B",
+      "edges": []
+    },
+    {
       "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "name": "Elsa.Persistence.EntityFramework",
       "kind": "source",
@@ -6522,6 +6535,11 @@
       "package_id": "Elsa.Persistence.EntityFramework",
       "line": "B",
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Persistence.Schema",
@@ -8178,6 +8196,11 @@
           "type": "internal",
           "id": "Elsa.Events.Core",
           "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj"
         },
         {
           "type": "internal",
@@ -20363,6 +20386,11 @@
           "path": "Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -22992,6 +23020,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.Connections",
           "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
         },
@@ -23167,6 +23200,11 @@
       "package_id": "Elsa.Agent.Specialists.Core",
       "line": "B",
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
         {
           "type": "external",
           "id": "Microsoft.Extensions.AI.Abstractions",
@@ -23531,6 +23569,11 @@
           "type": "internal",
           "id": "Elsa.Persistence.EntityFramework",
           "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
         },
         {
           "type": "internal",
