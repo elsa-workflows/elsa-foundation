@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD16 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD17 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -101,6 +101,7 @@ An author uses ordinary activities/composites as transition triggers and disting
 5. **Given** an authored action-without-exit reaction, **when** it runs, **then** the existing state visit, deadline and independent waits are preserved.
 6. **Given** deliberate self-re-entry, **when** it runs, **then** exit/entry work occurs and a fresh state visit is created.
 7. **Given** trigger work already performed an external effect, **when** another transition cancels it or rejection restarts it, **then** cancellation is not reported as undoing that effect. Restarting a composite can execute its work again.
+8. **Given** one input makes several transitions on the same state eligible, **when** selection occurs, **then** the first eligible transition in the explicit authored order is selected; moving graph elements alone does not alter that order.
 
 ### User Story 6 — Inspect, diagnose and operate the actual machine (Priority: P1)
 
@@ -156,6 +157,7 @@ Authors and operators understand the definition and execution they actually use,
 - **FR-019**: Completions tied to cancelled/obsolete timer, task or activity activations MUST NOT be redirected to a later visit.
 - **FR-020**: Cancellation/rearming MUST NOT be represented as compensating already-performed external effects. Composite trigger rearming can repeat its work.
 - **FR-021**: Actual Studio authoring-to-runtime execution, durable wait/resume, restart/race/failure qualification and resulting-main evidence MUST establish first-release completion; planning artifacts or in-memory tests alone are insufficient.
+- **FR-028**: When one input makes several transitions on the same state eligible, the machine MUST select the first eligible transition in an explicit author-visible order. Graph geometry or visual rearrangement MUST NOT silently determine or alter that priority. This does not change child/ancestor precedence or compatible regional selection.
 
 ### Platform constraints and design obligations
 
@@ -208,9 +210,11 @@ The following are review prompts, not accepted semantics. Interview the owner on
 
 ### Q1 — Complete statechart execution contract
 
-[NEEDS CLARIFICATION: Confirm or amend the remaining initial/final/eventless, complete entry/exit/action, same-event conflict and rearming/loop rules before declaring the behavior contract approved.]
+[NEEDS CLARIFICATION: Confirm or amend the remaining initial/final/eventless, complete entry/exit/action, cross-state/region conflict and rearming/loop rules before declaring the behavior contract approved.]
 
-Proposed reference baseline: explicit initial/final intent; source Exit → transition Action → target Entry where those phases apply; deterministic selection among competing same-input alternatives; automatic transitions evaluated without a busy loop; a persistent authored reaction remains usable after an action-without-exit completes. These proposals have not been accepted merely because a reference engine uses them.
+OD17 settles same-state selection order for one input (FR-028). Complete conflict arbitration across different states/regions remains open.
+
+Proposed reference baseline: explicit initial/final intent; source Exit → transition Action → target Entry where those phases apply; automatic transitions evaluated without a busy loop; a persistent authored reaction remains usable after an action-without-exit completes. These proposals have not been accepted merely because a reference engine uses them.
 
 ### Q2 — Durable admission, event outcomes and recovery
 
