@@ -1,6 +1,6 @@
 # Parcel Room login
 
-**Status**: In progress
+**Status**: Implemented — delivery PR #3836; status takes effect when that PR merges
 **Issue**: #3835 · **Goal**: none/free-flow · **Owner selection**: M2, 4 November 2026
 
 ## User scenarios and acceptance
