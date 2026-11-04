@@ -409,8 +409,13 @@ function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, bl
   const walk = (value: unknown, path: string, expression = false) => {
     if (Array.isArray(value)) { value.forEach((item, index) => walk(item, `${path}[${index}]`, expression)); return; }
     if (record(value)) {
-      const opaque = expression || typeof value.expressionType === "string" || (typeof value.type === "string" && ["JavaScript", "CSharp", "Liquid", "Python"].includes(value.type));
+      const syntaxes = [value.expressionType, value.syntax, value.type].filter(item => typeof item === "string");
+      const literal = syntaxes.length > 0 && syntaxes.every(item => item === "Literal");
+      const opaque = expression || typeof value.expressionType === "string" || typeof value.syntax === "string" || (typeof value.type === "string" && ["JavaScript", "CSharp", "Liquid", "Python"].includes(value.type));
       for (const [key, child] of Object.entries(value)) {
+        // Literal scalars are data, even when text happens to contain the wrapper ID. Objects can
+        // carry typed references; those and conflicting syntax markers stay conservative.
+        if (key === "value" && literal && (child === null || typeof child !== "object")) continue;
         if (value === block && key === "nodeId") continue;
         if (endpoints.has(value) && key === "nodeId" && child === block.nodeId) continue;
         if (owner.structure?.kind === flowchartStructureKind && value === owner.structure.payload && key === "startNodeId" && child === block.nodeId) continue;

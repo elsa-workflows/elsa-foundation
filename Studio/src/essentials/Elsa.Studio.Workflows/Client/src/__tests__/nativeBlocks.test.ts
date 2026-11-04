@@ -279,10 +279,28 @@ describe("linear Flowchart transformation", () => {
 });
 
 describe("no-loss Ungroup", () => {
+  it.each(["canonical", "editor", "graph-mapping"])("preserves literal data mentioning a wrapper identity in %s form", form => {
+    const ctx = context();
+    const producer = (payload(ctx).activities as ActivityNode[])[1];
+    const literal = form === "graph-mapping" ? "new-block" : "Keep new-block as ordinary text";
+    if (form === "canonical") producer.inputs = [{ referenceKey: "text", value: { expressionType: "Literal", value: literal } }];
+    if (form === "editor") producer.text = { expression: { type: "Literal", value: literal } };
+    const plan = accepted(extract(ctx));
+    const referenceContext = form === "graph-mapping" ? [{ outputMappings: [{ outputReferenceKey: "text", source: { syntax: "Literal", value: literal } }] }] : [];
+    const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document, referenceContext }, "new-block"));
+    expect(inverse.document.rootActivity).toEqual(ctx.document.rootActivity);
+  });
+
   it("refuses a boundary result used by resource-owned mappings outside rootActivity", () => {
     const original = context(); const plan = accepted(extract(original));
     const ctx = { ...original, document: plan.document, referenceContext: [{ outputMappings: [{ outputReferenceKey: "result", source: { expressionType: "ActivityResult", value: { producerNodeId: "new-block", projectionKey: "$result", producerScopeId: "scope:root" } } }] }] };
     refused(planUngroupNativeBlock(ctx, "new-block"), "referenced-boundary");
+  });
+
+  it.each(["Literal", "Object"])("keeps structured reference fields conservative inside %s payloads", expressionType => {
+    const original = context(); const plan = accepted(extract(original));
+    const referenceContext = [{ value: { expressionType, value: { declaringScopeId: "new-block", referenceKey: "target" } } }];
+    refused(planUngroupNativeBlock({ ...original, document: plan.document, referenceContext }, "new-block"), "referenced-boundary");
   });
 
   it("fences changes to resource-owned bindings even when the resource revision has not changed", () => {
