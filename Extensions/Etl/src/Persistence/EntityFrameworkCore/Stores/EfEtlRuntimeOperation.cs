@@ -12,7 +12,9 @@ internal sealed partial class EfEtlRuntimeStore
     private static readonly EfWriteRetry OperationRetry = new(EfWriteRetry.DefaultMaxAttempts,
         exception => exception is not (EtlStoreException or SchemaWriteRefusedException or OperationCanceledException) &&
                      (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey) ||
-                      EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)));
+                      EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)),
+        // Spread serialization-conflict bursts without increasing the operation's attempt budget.
+        delay: number => TimeSpan.FromMilliseconds(Random.Shared.Next(1, Math.Min(1000, 10 << Math.Min(number, 7)) + 1)));
 
     private void PrepareOperation(string operation, EtlScope? scope, string? runId, CancellationToken cancellationToken)
     {

@@ -20,7 +20,7 @@ Independent test: separate contexts on one real engine contend and preserve scop
 - [x] T007 [US2] Add a multi-save preparation rollback control in `Shared/RuntimeStore/EtlRuntimeRetryContract.cs`: classified failure after a real successful save and before commit; retry reconstructs one graph; exhaustion retains no partial persisted/tracked preparation.
 - [x] T008 [US2] Add overlapping native-provider races in `Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.cs` for admission/replay/conflict, preparation/partition authority, reservation budget, final acceptance/cancellation and delivery. Require a native classified conflict and record retry removal/restoration for the admission race.
 - [x] T009 [US2] Add separate continuous-compaction controls in `ProviderTests/EtlRuntimeConcurrencyTests.cs`, staging failure around set-based writes rather than the first-save barrier; verify exact compacted counters, predecessor/request/batch integrity, one live claim and rollback-restored history on exhaustion.
-- [ ] T010 [US2] Run a four-writer, 32-run correctness soak on each server engine in `ProviderTests/EtlRuntimeConcurrencyTests.cs`; assert exact final/outstanding counters, unique terminal/outbox identities and stale-fence refusal. Record results and unproven guards under this spec's `evidence/`.
+- [x] T010 [US2] Run a four-writer, 32-run correctness soak on each server engine in `ProviderTests/EtlRuntimeConcurrencyTests.cs`; assert exact final/outstanding counters, unique terminal/outbox identities and stale-fence refusal. Record results and unproven guards under this spec's `evidence/`.
 
 ## US1 — ordinary host activation and restart readback
 
