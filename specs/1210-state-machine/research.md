@@ -53,6 +53,12 @@ The witness has not been implemented or executed. Its technical plan and any arc
 
 ## Additional integration constraints
 
+### Existing Studio inspection is a candidate integration surface
+
+Read-only current-worktree inspection of [AttachedRunActivityInspector](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/AttachedRunActivityInspector.tsx) shows exact activity-execution selection, scope navigation and ordinary activity details in the attached Test Run experience. This is a possible place to integrate root/nested StateMachine inspection, not proof of such support.
+
+The existing [WorkflowInstanceTimeline](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowInstanceTimeline.tsx) presents activity executions ordered by their start/schedule timestamps. It does not establish a StateMachine event/transition causal journal, admission receipts or semantic phase evidence. The accepted observable admission/selection order needs its actual recorded authority and cannot be inferred solely from that timestamp ordering. Inspection placement and detailed journeys remain Q3 decisions; no Studio witness has run here.
+
 ### Parent-to-descendant modes are chosen; full boundaries remain open
 
 The [SCXML transition reference](https://www.w3.org/TR/scxml/#transition) distinguishes whether a transition targeting a descendant exits its source state. OD41 explicitly chooses both parent-visit preservation and re-entry for a compound parent with one active child targeting a descendant, extending OD15's earlier same-state distinction. This reference does not select an Elsa schema, default, implementation or parallel-parent behavior. Full boundary calculation, validation and source/Studio proof remain open, and OD39 still excludes direct cross-region edges initially.

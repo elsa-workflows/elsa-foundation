@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD42 are separated from proposals and open choices.
+- [x] Accepted OD1–OD43 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD42 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD43 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -77,5 +77,7 @@ OD40 resolves unrelated-region conflicts through explicit authored order, preser
 OD41 supports explicit parent-visit preservation or re-entry for compound-parent transitions to descendants, retaining parent waits/deadlines or starting a fresh parent visit respectively. Complete boundaries, validation, schema/defaults and source/Studio integration remain open; this does not select parallel-parent behavior or permit direct cross-region edges.
 
 OD42 re-arms only a successful trigger-based action-without-exit's own trigger while the same visit remains active, preserving independent waits/deadlines and requiring new event input. It replaces the prior persistent-reaction proposal; scheduling/recovery, losing-trigger disposition and immediate-completion loop protection remain open.
+
+OD43 chooses collapsible state/region chart containers with a synchronized hierarchy outline for keyboard and non-canvas navigation. Preserve parent context and normal activity-editor drill-in without changing execution semantics; detailed interactions, view-state persistence and accessible/read-only/responsive journeys remain Q3.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.

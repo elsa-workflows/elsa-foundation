@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD42 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD43 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -143,6 +143,7 @@ Authors and operators understand the definition and execution they actually use,
 4. **Given** an existing instance pinned to a published version, **when** a later version is edited/published, **then** that instance follows the existing platform version/pin contract rather than silently adopting the edited machine.
 5. **Given** a state/transition/region chart with summaries of its entry, exit, trigger and action work, **when** the author opens ordinary activity work and returns, **then** the normal activity editor and breadcrumbs support the round trip and the chart context is preserved.
 6. **Given** a selected transition, **when** the author configures it, **then** a structured inspector presents Trigger (or Automatic), Condition, Action and Destination together with explicit transition order and state-visit behavior. Activity work opens in the normal editor and conditions use Elsa's expression editor.
+7. **Given** nested states and parallel regions, **when** the author navigates their structure, **then** expandable/collapsible chart containers and a synchronized hierarchy outline support keyboard and non-canvas navigation while retaining parent context. Ordinary activity work still opens in its normal editor; navigation does not change initial selections or transition priority.
 
 ### User Story 7 — Use machine-wide and state-visit data (Priority: P1)
 
@@ -223,6 +224,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-051**: For one input enabling conflicting transition candidates sourced in unrelated parallel regions, precedence MUST use an explicit author-visible order. Accepted child-over-parent precedence and compatible regional selection MUST be preserved; diagram geometry MUST NOT determine priority and parallel-container exits MUST NOT receive implicit preference. Formal compatible-set selection, exact boundaries and losing-trigger disposition remain Q1 design/proof work.
 - **FR-052**: For a transition defined on a compound parent with one active child and targeting its descendant, authors MUST be able to explicitly choose either to preserve the parent visit while changing the child, retaining parent-owned waits/deadlines, or to exit/re-enter the parent, running its exit/entry work and starting a fresh parent visit. Accepted phase, hierarchy, state-visit and recovery rules MUST apply. This requirement does not permit direct cross-region edges or select behavior for parallel parents; complete boundary calculation, validation, schema/defaults and source/Studio integration remain open.
 - **FR-053**: A trigger-based action-without-exit reaction MUST re-arm only its own trigger after its action succeeds, provided the same source visit remains active. It MUST NOT re-arm before action success or after that visit ends. Other waits/deadlines MUST remain intact and an event wait MUST listen for new input without replaying the consumed event. Repeated composite trigger work retains existing external-effect guarantees. Automatic paths without an activity trigger retain their separate rules; exact scheduling/recovery integration and immediately completing trigger-loop protection remain open.
+- **FR-054**: Studio MUST show nested states and parallel regions as expandable/collapsible chart containers paired with a synchronized hierarchy outline for keyboard and non-canvas navigation. Authors MUST be able to retain parent context while collapsing detail, and ordinary activity work MUST retain the normal-editor navigation agreed in FR-035. Navigation and expand/collapse MUST NOT change execution semantics, including initial selections and transition priority. Detailed interactions, view-state persistence under existing owners and accessible/read-only/responsive journeys remain Q3.
 
 ### Platform constraints and design obligations
 
@@ -315,9 +317,9 @@ OD29 requires completed sibling work to be preserved when a regional Action fail
 
 [NEEDS CLARIFICATION: Agree the concrete graph/outline/navigation, slots/conditions, diagnostics/inspection and accessibility/responsive journeys; classify remaining advanced capabilities and data/outcome/reuse details without silently expanding first-release scope.]
 
-Remaining proposed authoring/inspection baseline: a non-canvas navigation path; clear current configuration, pending phases and causal outcomes; exact-version inspection. These details still need agreement alongside the accepted chart/editor choices below. History destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
+Remaining proposed inspection baseline: clear current configuration, pending phases and causal outcomes; exact-version inspection. These details still need agreement alongside the accepted chart/editor/navigation choices below. History destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
 
-OD24 settles the focused chart, activity summaries and drill-in normal activity editing with breadcrumbs and preserved chart context (FR-035). Detailed hierarchy/region navigation, accessibility and responsive journeys remain open.
+OD24 settles the focused chart, activity summaries and drill-in normal activity editing with breadcrumbs and preserved chart context (FR-035). OD43 chooses expandable/collapsible state/region containers with a synchronized hierarchy outline for keyboard and non-canvas navigation, preserving parent context without changing execution semantics (FR-054). Detailed interactions, view-state persistence, accessibility/read-only and responsive journeys remain open.
 
 OD25 settles structured transition configuration and the normal activity/expression editors (FR-036). Exact valid combinations, diagnostics and the keyboard/read-only/responsive journeys remain open; the inspector choice does not expand transition semantics.
 
