@@ -1,0 +1,62 @@
+{
+ "spec": "1203-etl-runtime-store-schema",
+ "note": "Each entry names the revision it was recorded at, and every entry bit there.",
+ "results": [
+  {
+   "mutation": "runtime-server-run-key-hash",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeDbContext.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlRuntimeStoreSqlServerTests.Run_ids_of_maximum",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreSqlServerTests.Run_ids_of_maximum_length_or_differing_only_by_case_are_distinct_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        return EfRelationalIdentity.HashLengthFramed(RunKeyDomain, runId);",
+   "mutated_text": "        return Stores.EtlRuntimeRecordCodec.EncodeIdentity(runId, \"run id\");",
+   "sourceRevision": "a93f1d0452a4ce77511fea578954b48c950854ad"
+  },
+  {
+   "mutation": "runtime-dialect-postgresql-booleans",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeConstraintDialect.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlRuntimePostgreSqlProviderTests.A_fresh_runtime_database",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlRuntimePostgreSqlProviderTests.A_fresh_runtime_database_migrates_validates_and_matches_the_model"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "new(name => $\"\\\"{name}\\\"\", \"length\", \"TRUE\", \"FALSE\")",
+   "mutated_text": "new(name => $\"\\\"{name}\\\"\", \"length\", \"1\", \"0\")",
+   "sourceRevision": "a93f1d0452a4ce77511fea578954b48c950854ad"
+  },
+  {
+   "mutation": "runtime-dialect-mysql-char-length",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeConstraintDialect.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlRuntimeMySqlProviderTests.A_fresh_runtime_database",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeMySqlProviderTests.A_fresh_runtime_database_migrates_validates_and_matches_the_model"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "new(name => $\"`{name}`\", \"CHAR_LENGTH\", \"1\", \"0\")",
+   "mutated_text": "new(name => $\"`{name}`\", \"LENGTH\", \"1\", \"0\")",
+   "sourceRevision": "a93f1d0452a4ce77511fea578954b48c950854ad"
+  },
+  {
+   "mutation": "runtime-dialect-sqlserver-len",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeConstraintDialect.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlRuntimeSqlServerProviderTests.A_fresh_runtime_database",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeSqlServerProviderTests.A_fresh_runtime_database_migrates_validates_and_matches_the_model"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "new(name => $\"[{name}]\", \"LEN\", \"1\", \"0\")",
+   "mutated_text": "new(name => $\"[{name}]\", \"length\", \"1\", \"0\")",
+   "sourceRevision": "a93f1d0452a4ce77511fea578954b48c950854ad"
+  }
+ ]
+}
