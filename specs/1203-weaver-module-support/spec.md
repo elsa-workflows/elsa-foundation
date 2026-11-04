@@ -95,10 +95,10 @@ The user also sees:
 11. **Given** an approved effect whose owning module persisted nothing, **When** it is recorded, **Then** it is *performed*, with the no-persisted-effect scope, and the review shell shows it.
 12. **Given** a code outside the declared set, **When** it is recorded in a receipt, refusal, preparation or execution error, authorization violation or context diagnostic, **Then** it is replaced by a generic code. The generic code keeps the original classification, owner-unavailable included, and no canary is disclosed, in the code or in the message.
 13. **Given** a pending effect whose module is removed, before or after a restart, **When** it is approved, **Then** approval succeeds on Agent core's own checks. **When** it is then executed or recovered, **Then** it is unavailable, with zero effect.
-14. **Given** a server effect pending approval across the leaf 0 upgrade, **When** it is approved and executed, **Then** it runs as before, because its empty class set leaves its digest unchanged. A classed proposal cannot predate leaf 0.
-15. **Given** a server effect approved before dispatch across the upgrade, **When** it is executed, **Then** it runs as before.
+14. **Given** a server effect pending approval across the leaf 0 upgrade, **When** it is approved and executed, **Then** its empty class set leaves its digest unchanged, and it executes subject to the current privilege policy. A legacy `Admin` preparation still requires the administrative class; switching it off refuses approval/execution with zero dispatch. A classed proposal cannot predate leaf 0.
+15. **Given** a server effect approved before dispatch across the upgrade, **When** it is executed, **Then** its original digest is preserved and execution still applies the current privilege policy, including the administrative requirement for a legacy `Admin` preparation.
 16. **Given** either of those effects, where the upgrade outlasted its prepared deadline, **When** it is executed, **Then** it is refused with `agent.proposal.expired`.
-17. **Given** an approved client invocation waiting across the upgrade, **When** it is resumed, **Then** spec 1189's restart rules apply unchanged.
+17. **Given** an approved client invocation waiting across the upgrade, **When** it is resumed, **Then** spec 1189's restart protocol applies, with the current privilege-policy veto still enforced.
 18. **Given** pre-upgrade rows of every kind, **When** the upgraded store reads them, **Then** they read with default values.
 19. **Given** an Agent EF store whose 1.1.0 is not finalized, **When** an operation of the new leaf 0 feature is prepared, **Then** it is refused before review with `schema-version-not-finalized`. The feature catalog, Attention and `/capabilities` report that feature as dormant; existing Agent features remain available. **When** the hold is released, **Then** 1.1.0 finalizes, and the new feature is available.
 20. **Given** a host with the in-memory Agent store, **When** such a tool is prepared, **Then** it is available, because that store carries no dormancy requirement.
@@ -447,6 +447,8 @@ Negative cases:
   - **administrative**: required by every effect whose effective risk is `Admin`. Agent core adds it when a module's declared set omits it.
   - **irrecoverable**: a module MUST declare this class for its own irrecoverable effects. A third-party irrecoverable effect that is not `Admin` and declares no class is not caught, which is a recorded limitation.
   - **activation**: feature selection apply on the Server host.
+
+  Legacy preparations with an empty class set retain their original digest. At approval, execution and recovery, Agent core also derives the administrative veto from their frozen `Admin` risk; it never retrofits classes into the old prepared payload. The review shows that effective requirement. Upgrade tests cover pending and already-approved legacy `Admin` operations with that class off and on, proving zero dispatch when off and unchanged digest when on.
 
   Each effect declares a set of classes and needs all of them. The owning module declares the set at preparation, and a non-empty set is frozen into the approval digest. An empty set is left out of the digest, so unclassed proposals keep the digest an older build computes. Every class is off by default, so an unconfigured host refuses every classed effect.
 
