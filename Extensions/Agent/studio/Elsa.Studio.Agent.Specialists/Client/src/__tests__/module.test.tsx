@@ -39,4 +39,17 @@ describe("agent specialists module", () => {
       requiresBackend: [{ id: "elsa.api.agent-reviews", contractVersion: "1" }]
     }));
   });
+
+  it("keeps the playground behind the generic draft Test Run and the agent evidence capabilities", () => {
+    const { routes } = registered();
+
+    expect(routes).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/agents/drafts/:draftId/playground",
+      requiresBackend: [
+        { id: "elsa.api.activity-design", contractVersion: "1" },
+        { id: "elsa.api.publishing", contractVersion: "1", relations: ["activity-draft-test-run-dispatch", "activity-draft-test-run-cancel"] },
+        { id: "elsa.api.agent-specialist-inspection", contractVersion: "1", relations: ["agent-specialist-test-run-evidence"] }
+      ]
+    }));
+  });
 });

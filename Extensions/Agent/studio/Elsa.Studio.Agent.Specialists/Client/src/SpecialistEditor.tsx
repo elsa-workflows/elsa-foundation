@@ -8,6 +8,7 @@ import {
 import {
   continuitySchemaVersion, readSpecialistManifest, record, secondsToMilliseconds, specialistBounds, specialistProblems, unreadableMembers
 } from "./specialistManifest";
+import { playgroundPath } from "./SpecialistPlayground";
 
 type Remote<T> = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; value: T } | { kind: "denied" } | { kind: "unusable" } | { kind: "unavailable" };
 type NumberField = "temperature" | "tokens" | "calls" | "timeout";
@@ -28,7 +29,7 @@ const optionValue = (providerKey: string, connectionName: string) => `${encodeUR
  * onChange, member by member, so values it does not edit stay as saved. Model credentials stay in Connections, and only
  * options the selected model declares are offered.
  */
-export function SpecialistEditor({ context, value, readOnly, onChange, providerSchemaVersion, historyResetKey }: StudioActivityDefinitionImplementationEditorProps) {
+export function SpecialistEditor({ context, value, readOnly, onChange, providerSchemaVersion, historyResetKey, draftId }: StudioActivityDefinitionImplementationEditorProps) {
   const raw = record(value.payload);
   const manifest = readSpecialistManifest(raw, providerSchemaVersion);
   const patch = (changes: Record<string, unknown>) => onChange({ ...value, payload: { ...raw, ...changes } });
@@ -151,6 +152,7 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
 
   return (
     <div className="agent-specialist-editor" data-testid="specialist-editor">
+      {draftId ? <p className="agent-specialist-editor__playground"><a href={playgroundPath(draftId)}>Test the saved revision in the playground</a></p> : null}
       {unreadable.unknown.length > 0 || unreadable.malformed.length > 0 ? (
         <StudioAlert tone="warning">
           The saved settings contain {[...unreadable.unknown, ...unreadable.malformed].join(", ")}, which agents do not accept, so validation and publication will refuse them.{" "}
