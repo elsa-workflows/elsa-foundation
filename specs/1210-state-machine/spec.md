@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD23 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD24 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -122,6 +122,7 @@ Authors and operators understand the definition and execution they actually use,
 2. **Given** a malformed condition, unavailable activity or execution failure, **when** the author/operator encounters it, **then** the interface distinguishes it from a false condition or an unhandled event and supplies actionable context.
 3. **Given** a read-only or narrow-width view, **when** the user navigates states, regions and activities, **then** the agreed inspection and non-canvas operations remain usable and mutation availability is clear.
 4. **Given** an existing instance pinned to a published version, **when** a later version is edited/published, **then** that instance follows the existing platform version/pin contract rather than silently adopting the edited machine.
+5. **Given** a state/transition/region chart with summaries of its entry, exit, trigger and action work, **when** the author opens ordinary activity work and returns, **then** the normal activity editor and breadcrumbs support the round trip and the chart context is preserved.
 
 ### User Story 7 — Use machine-wide and state-visit data (Priority: P1)
 
@@ -183,6 +184,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-032**: Authors MUST be able to use machine-wide values spanning state changes and state-local values whose lifetime is one state visit and which start fresh on re-entry. Existing Elsa value, binding, durability, secret and parallel-write contracts MUST remain authoritative; this scope choice MUST NOT silently replace those policies.
 - **FR-033**: After selection, applicable authored phases MUST run in the order source Exit → transition Action → target Entry. A later applicable phase MUST NOT start until the previous one completes, including across durable waits. Complete hierarchical boundaries and fault/recovery behavior remain to be agreed.
 - **FR-034**: Recovery of failed transition work MUST use the normal Elsa activity recovery boundary and preserve completed earlier phases. StateMachine MUST NOT automatically rewind the whole transition. Retry retains existing platform/external-effect guarantees and MUST NOT be represented as exactly-once external execution or implicit compensation.
+- **FR-035**: Studio MUST present a focused state/transition/region chart with summaries of entry, exit, trigger and action work. Authors MUST be able to drill into that ordinary work using the normal activity editor, with breadcrumbs back to the chart and chart context preserved on return. Detailed navigation and accessibility/responsive journeys remain Q3.
 
 ### Platform constraints and design obligations
 
@@ -260,5 +262,7 @@ OD23 requires recovery at the normal failed-activity boundary with completed ear
 [NEEDS CLARIFICATION: Agree the concrete graph/outline/navigation, slots/conditions, diagnostics/inspection and accessibility/responsive journeys; classify remaining advanced capabilities and data/outcome/reuse details without silently expanding first-release scope.]
 
 Proposed authoring baseline: dedicated state/transition/region graph with a non-canvas navigation path; ordinary activity pickers/editors; a suitable condition workspace; clear current configuration, pending phases and causal outcomes; exact-version inspection. History destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
+
+OD24 settles the focused chart, activity summaries and drill-in normal activity editing with breadcrumbs and preserved chart context (FR-035). Detailed hierarchy/region navigation, transition configuration, conditions, accessibility and responsive journeys remain open.
 
 OD21 chooses machine-wide and state-visit-local value scopes (FR-032). Their concrete authoring/visibility/binding integration and outcome details remain to be specified against the existing platform contracts.

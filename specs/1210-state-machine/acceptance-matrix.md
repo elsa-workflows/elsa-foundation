@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A23 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A24 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -31,6 +31,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD21 — machine and state-visit value scopes | FR-032 | A21 |
 | OD22 — exit/action/entry phase ordering | FR-033 | A22 |
 | OD23 — recover failed work, preserve completed phases | FR-034 | A23 |
+| OD24 — focused chart and ordinary activity drill-in | FR-035 | A24 |
 
 ## Witness definitions
 
@@ -59,6 +60,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A21 | Machine-wide and state-visit values | Machine-wide scope spans state changes; state-local values start fresh on re-entry; a continuing parent visit retains its local scope; normal platform policies remain authoritative | Ordinary activity/binding and Studio declaration witnesses; exact visibility/binding/outcome integration remains Q3 |
 | A22 | Ordered applicable transition phases | Source Exit finishes before transition Action, which finishes before target Entry; a durably suspended phase does not permit a later phase to start early | Ordered semantic and actual-host/persistence witnesses; complete hierarchical boundaries and recovery remain Q1/Q2 |
 | A23 | Recovery after a completed phase | A completed Exit is preserved when later Action work fails; supported recovery resumes/retries failed work at its ordinary boundary without whole-transition rewind or false exactly-once/compensation claims | Actual incident/recovery/restart witness with completed-phase history and controlled participant evidence; complete propagation/input/recovery integration remains Q2 |
+| A24 | Chart/activity editing round trip | State/transition/region chart shows activity summaries; entry, exit, trigger and action work open in normal activity editors, with breadcrumbs and preserved chart context on return | Real Studio authoring/navigation and save/reload witness in root and nested use; detailed keyboard, read-only and responsive journeys remain Q3 |
 
 ## Qualification rules
 
