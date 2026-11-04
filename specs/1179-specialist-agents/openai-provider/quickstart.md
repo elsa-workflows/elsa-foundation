@@ -6,6 +6,10 @@ For connections that survive restart, select `ConnectionsEntityFrameworkCore` wi
 Workbench makes that feature available without selecting it by default. Use Secrets persistence and a
 stable local encryption key, and keep credentials out of the activity definition.
 
+This recipe uses the current activity-backed Agent editor and publication path. The newer
+Agent-owned source API stores unpublished working copies and snapshots; T066/T068 still own
+its publication and Studio integration. See the [source delivery boundary](../plan.md#3790-source-slice-placement-and-transition).
+
 ## Connection
 
 In Connections, create a connection with these values. The provider's capability declarations follow
