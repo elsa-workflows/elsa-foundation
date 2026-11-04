@@ -2,7 +2,7 @@ using Elsa.Agent.Specialists.Core.Models;
 
 namespace Elsa.Agent.Specialists.Core.Contracts;
 
-/// <summary>Agent source reads in the caller's trusted, domain-authorized scope.</summary>
+/// <summary>Replacement contract: one selected source backend per shell, paired with IAgentSourceWriter. Reads use trusted domain-authorized scope.</summary>
 public interface IAgentSourceReader
 {
     Task<AgentSourceDraft?> FindAsync(string agentId, string draftId, CancellationToken cancellationToken = default);
@@ -11,7 +11,7 @@ public interface IAgentSourceReader
     Task<IReadOnlyList<AgentSourceRevision>> HistoryAsync(string agentId, string draftId, int skip = 0, int take = 100, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Typed Agent authoring; source capture is not executable publication.</summary>
+/// <summary>Replacement contract: one selected source backend per shell, paired with IAgentSourceReader. Typed capture is not executable publication.</summary>
 public interface IAgentSourceWriter
 {
     Task<AgentSourceDraft> CreateAsync(string agentId, string draftId, string name, AgentSourceContent content, CancellationToken cancellationToken = default);

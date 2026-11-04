@@ -40,4 +40,38 @@ public sealed class AgentSourceCompositionTests
         }
         finally { Directory.Delete(directory, true); }
     }
+    private sealed class ApplicationSourceContext : DbContext;
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Competing_source_contexts_are_refused_in_both_registration_orders(bool applicationFirst)
+    {
+        var services = new ServiceCollection();
+        if (applicationFirst) services.AddAgentSourceStore<ApplicationSourceContext>();
+        else services.AddSpecialistsEntityFrameworkCore(new() { Provider = "Sqlite" });
+        var error = Assert.Throws<InvalidOperationException>(() =>
+        {
+            if (applicationFirst) services.AddSpecialistsEntityFrameworkCore(new() { Provider = "Sqlite" });
+            else services.AddAgentSourceStore<ApplicationSourceContext>();
+        });
+        Assert.Contains("exactly one", error.Message);
+        Assert.Single(services, x => x.ServiceType == typeof(IAgentSourceReader));
+        Assert.Single(services, x => x.ServiceType == typeof(IAgentSourceWriter));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Startup_refuses_late_duplicate_or_substituted_source_ports(bool duplicate)
+    {
+        var services = new ServiceCollection();
+        services.AddAgentSourceStore<ApplicationSourceContext>();
+        var check = Assert.Single(services, x => x.ImplementationInstance is AgentSourceRegistrationStartupTask).ImplementationInstance as AgentSourceRegistrationStartupTask;
+        if (!duplicate)
+            foreach (var descriptor in services.Where(x => x.ServiceType == typeof(IAgentSourceWriter)).ToArray()) services.Remove(descriptor);
+        services.AddScoped<IAgentSourceWriter>(_ => throw new InvalidOperationException("This foreign backend must never be resolved."));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => check!.ExecuteAsync(default));
+    }
+
 }

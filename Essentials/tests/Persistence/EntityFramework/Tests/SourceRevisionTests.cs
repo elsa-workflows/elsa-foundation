@@ -1,3 +1,6 @@
+using System.Data.Common;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Elsa.Persistence.Core;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -8,15 +11,53 @@ public sealed class SourceRevisionTests
 {
     private static readonly SourceScope Agent = new("partition", "tenant", "agent", "studio");
     private static readonly SourceScope Workflow = Agent with { Kind = "workflow" };
-    private sealed class SourceContext(string connection) : DbContext
+    private sealed class SourceContext(string connection, DbTransactionInterceptor? interceptor = null) : DbContext
     {
-        protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseSqlite(connection);
+        protected override void OnConfiguring(DbContextOptionsBuilder options)
+        {
+            options.UseSqlite(connection);
+            if (interceptor is not null) options.AddInterceptors(interceptor);
+        }
         protected override void OnModelCreating(ModelBuilder model) => model.AddSourceRevisions("source", Database.ProviderName!);
     }
     private static async Task<SourceContext> Open(TemporarySqliteDatabase file)
     {
         var db = new SourceContext(file.ConnectionString);
         await db.Database.EnsureCreatedAsync(); return db;
+    }
+
+    private sealed class LostCommitReply : DbTransactionInterceptor
+    {
+        public bool Armed { get; set; }
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (Armed) { Armed = false; throw new SqliteException("Synthetic lost commit acknowledgement.", 10); }
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Lost_capture_commit_acknowledgement_is_unknown_and_recovers_snapshot_and_pin_after_reopen()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using (var db = new SourceContext(file.ConnectionString, new LostCommitReply()))
+            await db.Database.EnsureCreatedAsync();
+        var acknowledgement = new LostCommitReply();
+        await using (var db = new SourceContext(file.ConnectionString, acknowledgement))
+        {
+            var store = new EfSourceRevisions(db, Agent);
+            await store.CreateAsync("agent", "draft", "Agent", "agent/1", "exact");
+            acknowledgement.Armed = true;
+            Assert.Equal("outcome-unknown", (await Assert.ThrowsAsync<SourceRevisionException>(() => store.CaptureAsync("agent", "draft", 0, "publish"))).Code);
+        }
+        await using (var db = await Open(file))
+        {
+            var store = new EfSourceRevisions(db, Agent);
+            var recovered = await store.CaptureAsync("agent", "draft", 0, "publish");
+            Assert.Equal("exact", recovered.Content);
+            Assert.Single(await store.HistoryAsync("agent", "draft"));
+            Assert.Single(await db.Set<SourceSnapshotPin>().ToListAsync());
+        }
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Tasks.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,9 +38,13 @@ public static class SpecialistsEntityFrameworkCoreRegistration
     public static IServiceCollection AddAgentSourceStore<TContext>(this IServiceCollection services) where TContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(services);
+        if (services.Any(x => x.ServiceType == typeof(IAgentSourceReader) || x.ServiceType == typeof(IAgentSourceWriter)))
+            throw new InvalidOperationException("Agent source persistence requires exactly one explicitly selected reader/writer backend per shell. Remove the previous selection explicitly before choosing another.");
         services.AddScoped<EfAgentSources<TContext>>();
-        services.AddScoped<IAgentSourceReader>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
-        services.AddScoped<IAgentSourceWriter>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
+        var reader = ServiceDescriptor.Scoped<IAgentSourceReader>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
+        var writer = ServiceDescriptor.Scoped<IAgentSourceWriter>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
+        services.Add(reader); services.Add(writer);
+        services.AddSingleton<IStartupTask>(new AgentSourceRegistrationStartupTask(services, reader, writer));
         services.AddPersistenceCore();
         return services;
     }
@@ -67,4 +72,17 @@ public sealed class SpecialistsEntityFrameworkCoreOptions
     public string? ConnectionName { get; set; }
     public string? Schema { get; set; }
     public bool Pooling { get; set; }
+}
+
+internal sealed class AgentSourceRegistrationStartupTask(IServiceCollection services, ServiceDescriptor reader, ServiceDescriptor writer) : IStartupTask
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var readers = services.Where(x => x.ServiceType == typeof(IAgentSourceReader)).ToArray();
+        var writers = services.Where(x => x.ServiceType == typeof(IAgentSourceWriter)).ToArray();
+        if (readers.Length != 1 || writers.Length != 1 || !ReferenceEquals(readers[0], reader) || !ReferenceEquals(writers[0], writer))
+            throw new InvalidOperationException("Agent source persistence requires exactly one selected reader/writer backend; registrations changed outside its selection boundary.");
+        return Task.CompletedTask;
+    }
 }

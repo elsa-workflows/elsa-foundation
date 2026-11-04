@@ -64,6 +64,7 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
                 .Select(x => new { Row = x, Stamp = EF.Property<string>(x, EfSchemaVersion.ColumnName) }).SingleOrDefaultAsync(cancellationToken);
             if (stamped is null) return null;
             EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, stamped.Stamp);
+            if (!StringComparer.Ordinal.Equals(stamped.Row.Key, snapshotId)) return null;
             VerifySnapshot(stamped.Row, copy.Key);
             return stamped.Row;
         }
@@ -236,6 +237,7 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
             .Select(x => new { Row = x, Stamp = EF.Property<string>(x, EfSchemaVersion.ColumnName) }).SingleOrDefaultAsync(ct) ?? throw new SourceRevisionException("not-found");
         EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, stamped.Stamp);
         var row = stamped.Row;
+        if (!StringComparer.Ordinal.Equals(row.Key, key)) throw new SourceRevisionException("not-found");
         VerifySnapshot(row, copyKey); return row;
     }
     private async Task<T> Write<T>(Func<CancellationToken, Task<T>> stage, CancellationToken ct)

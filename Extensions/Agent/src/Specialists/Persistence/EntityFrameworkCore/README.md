@@ -148,3 +148,5 @@ path until T066/T068 switch it together; the new API does not publish or run an 
 mirror content into generic editable activity drafts. Workflow and Agent source migrations are a
 pre-GA break requiring coordinated clean-store deployment, never an automatic live reset. See
 [the delivery boundary](../../../../../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition).
+
+Source reader/writer ports are paired replacement contracts. A competing context selection fails immediately; startup also refuses late duplicate or substituted registrations. The database is never selected by registration order.

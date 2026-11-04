@@ -40,6 +40,7 @@ internal static class SourceRevisionNativeWitness
             Assert.Equal("identity-conflict", (await Assert.ThrowsAsync<SourceRevisionException>(() => agents.CreateAsync("writer", "other-draft", "Duplicate", content))).Code);
             var snapshot = await agents.CaptureAsync("writer", "draft", 0, "review");
             snapshotId = snapshot.Id;
+            Assert.Null(await new EfSourceRevisions(db, scope).FindSnapshotAsync("writer", "draft", snapshotId + " "));
             await agents.SaveAsync("writer", "draft", 0, "Copywriter", content with { Instructions = "Edited" });
             Assert.Equal(snapshotId, (await agents.CaptureAsync("writer", "draft", 0, "review")).Id);
             Assert.Single(await agents.HistoryAsync("writer", "draft"));
