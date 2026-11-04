@@ -82,6 +82,49 @@ host, port, database and user, never the password.
 - **Ledger retention.** The runtime never deletes ledger rows. Delete only the rows of terminal runs: deleting a running
   run's row can allow a second write.
 
+## SQL snapshot reads
+
+[Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
+its declared columns and a key of one to eight required columns. Add an `EtlRuntimeFeature.SqlBindings` entry with role
+`Source`, as for destinations; `AllowedTables` must name the table.
+
+- **One point in time.** Preparation reads the declared columns once, ordered by the key, in a single transaction:
+  `REPEATABLE READ READ ONLY` on PostgreSQL, which first takes an `ACCESS SHARE` table lock so a read behind a
+  truncate-and-reload sees the reloaded rows rather than an empty table (where PostgreSQL refuses the lock, as for a role
+  with column-level grants only, a materialized view or a foreign table, the read runs without it; a lock that times out
+  or is cancelled never falls back to an unlocked read: the read fails, or retries when the engine classes the error as
+  transient), and `SNAPSHOT` on
+  SQL Server, which needs `ALLOW_SNAPSHOT_ISOLATION ON` for the
+  database (`etl.sql-read-rejected` otherwise). The rows are retained as a JSON Lines input snapshot, and from there the
+  run is a JSON Lines run: its partitions, positions and replay are unchanged, every partition sees the same rows, and no
+  connection is held while records are processed. A unique key keeps record numbers reproducible; rows with equal keys
+  keep the order the engine returns.
+- **Recovery.** A worker that dies after publishing the snapshot is replaced by one that reuses it, and a replacement that
+  started reading before a lapsed predecessor published adopts that snapshot, so a run never reads a second, different
+  point in time. A transient read failure (a connection loss or an unreachable database) records nothing and logs a
+  warning, and preparation runs again once its lease lapses, so an outage pauses the run. The read has no command
+  timeout and nothing else bounds it: a read blocked on a lock (for example behind `ALTER TABLE` or `TRUNCATE`) waits
+  until the lock is released or the worker stops. To detect a database host that vanishes mid-read, give a PostgreSQL
+  binding's connection string a `Keepalive` interval (Npgsql has none by default; SqlClient keeps connections alive).
+- **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and timestamps or times of day (ISO 8601 invariant
+  text); a `date` column is written as `yyyy-MM-dd`, and an interval or a zoned time of day (PostgreSQL `timetz`, with or without a precision) is refused.
+  On PostgreSQL, Npgsql maps `infinity` and `-infinity` to the extreme dates, so a `date`, `timestamp` or `timestamptz` at
+  those extremes (including a finite `9999-12-31`) is refused; SQL Server's extremes, such as a temporal table's open
+  period end, are real values and are kept; `Int64` accepts 8- to
+  64-bit integers; `Decimal` accepts exact decimals within .NET `decimal` range and integers; `Boolean` accepts booleans
+  (`bit` on SQL Server). Any other value, including a floating-point column, fails preparation with
+  `etl.sql-column-type-unsupported`, naming the column. A NULL in a required column is a record error on the error route.
+- **Limits.** The snapshot is bounded by `MaxSnapshotBytes` (`etl.snapshot-too-large`); a row longer than
+  `MaxRecordBytes` is a record error, `etl.record-too-large`. A SQL source is finite only. SQL Server's driver replaces
+  an unpaired surrogate in `nvarchar` text with U+FFFD before the run sees it. A driver materialises each value before
+  the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
+  run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
+  names the exception type, not the error number.
+  Watermark (incremental) reads, authored queries and log CDC are not supported.
+- **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
+  retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope
+  before such a pipeline is admitted.
+
 ## Continuous HTTP runs
 
 [Spec 1192](../../specs/1192-etl-continuous-http/spec.md) lets an HTTP pipeline run continuously: set

@@ -60,6 +60,7 @@ public sealed record EtlContinuousRunPolicy([property: JsonRequired] int PollInt
 [JsonDerivedType(typeof(EtlCsvSource), "csv")]
 [JsonDerivedType(typeof(EtlHttpJsonSource), "httpJson")]
 [JsonDerivedType(typeof(EtlJsonlSource), "jsonl")]
+[JsonDerivedType(typeof(EtlSqlSource), "sql")]
 public abstract record EtlSource;
 
 /// <summary>A host-bound CSV input source with a declared CSV schema.</summary>
@@ -88,6 +89,21 @@ public sealed record EtlHttpJsonSource(
 public sealed record EtlJsonlSource(
     [property: JsonRequired] string Binding,
     [property: JsonRequired] IReadOnlyList<EtlJsonField> Fields) : EtlSource;
+
+/// <summary>A host-approved SQL table read as of one point in time (spec 1198).</summary>
+/// <remarks>
+/// Preparation reads the declared columns in one snapshot transaction, ordered by the key, and retains them as a JSON Lines
+/// input snapshot; the run then processes that snapshot. The connection string is never authored here.
+/// </remarks>
+/// <param name="Binding">The host-approved SQL source alias.</param>
+/// <param name="Table">The table, as <c>name</c> or <c>schema.name</c>; the binding must allow it.</param>
+/// <param name="Columns">The ordered columns read and their scalar types.</param>
+/// <param name="Key">One to eight required columns ordering the snapshot.</param>
+public sealed record EtlSqlSource(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] string Table,
+    [property: JsonRequired] IReadOnlyList<EtlColumn> Columns,
+    [property: JsonRequired] IReadOnlyList<string> Key) : EtlSource;
 
 /// <summary>Selects one named scalar value by JSON Pointer within a source record.</summary>
 /// <param name="Name">The field name used by mappings and filters.</param>

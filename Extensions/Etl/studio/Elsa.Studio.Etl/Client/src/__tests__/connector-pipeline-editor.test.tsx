@@ -180,6 +180,73 @@ describe("connector pipeline editor", () => {
     expect(editor.pipeline.routes.main).toMatchObject({ key: [] });
   });
 
+  it("reads a SQL table snapshot selected from SQL source approvals, with columns and a key of required columns", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.continuous = { pollIntervalSeconds: 60 };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "sql");
+    editor.render();
+    expect(editor.pipeline.source).toEqual({
+      kind: "sql", binding: "source", table: "",
+      columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: []
+    });
+    // A SQL source runs finitely: the continuous policy is dropped and the run mode is not offered.
+    expect(editor.pipeline.continuous).toBeUndefined();
+    expect(editor.host.textContent).not.toContain("Run continuously");
+    expect(editor.host.textContent).toContain("Read one snapshot of the table");
+    const binding = control<HTMLSelectElement>(editor.host, "Source SQL binding");
+    expect(Array.from(binding.options).map(option => option.value)).toEqual(["", "source", "people-db"]);
+    setSelect(binding, "people-db");
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Source table"), "dbo.people");
+    editor.render();
+    clickCheckbox(control<HTMLInputElement>(editor.host, "id"));
+    editor.render();
+
+    expect(editor.pipeline.source).toMatchObject({ kind: "sql", binding: "people-db", table: "dbo.people", key: ["id"] });
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "jsonl");
+    expect(editor.pipeline.source).toEqual({
+      kind: "jsonl", binding: "people-db",
+      fields: [{ name: "id", pointer: "/id", type: "int64", required: true }, { name: "name", pointer: "/name", type: "string", required: true }]
+    });
+  });
+
+  it("keeps an existing SQL source key's order and appends a newly selected column", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.source = {
+      kind: "sql", binding: "people-db", table: "people",
+      columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: ["name"]
+    };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+
+    // The key orders the snapshot; adding "id" must not reorder it to the column order.
+    clickCheckbox(control<HTMLInputElement>(editor.host, "id"));
+
+    expect(editor.pipeline.source).toMatchObject({ key: ["name", "id"] });
+
+    // Renaming a key column carries it through in place; the key order is unchanged.
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Source table columns field 2 name"), "full_name");
+    expect(editor.pipeline.source).toMatchObject({ key: ["full_name", "id"] });
+  });
+
+  it("follows the edited row when a rename briefly shares another column's name", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.source = {
+      kind: "sql", binding: "people-db", table: "people",
+      columns: [{ name: "code", type: "string", required: true }, { name: "codeId", type: "string", required: true }], key: ["codeId"]
+    };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+
+    for (const value of ["code", "codeK", "codeKey"]) {
+      setInput(control<HTMLInputElement>(editor.host, "Source table columns field 2 name"), value);
+      editor.render();
+    }
+
+    expect(editor.pipeline.source).toMatchObject({ key: ["codeKey"] });
+  });
+
   it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
     const editor = renderEditor();
     expect(editor.pipeline.continuous).toBeUndefined();

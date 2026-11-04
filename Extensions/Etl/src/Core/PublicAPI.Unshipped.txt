@@ -2007,6 +2007,31 @@ override Elsa.Etl.Core.Runtime.EtlSqlTarget.GetHashCode() -> int
 override Elsa.Etl.Core.Runtime.EtlSqlTarget.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlSqlTarget.operator !=(Elsa.Etl.Core.Runtime.EtlSqlTarget? left, Elsa.Etl.Core.Runtime.EtlSqlTarget? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlSqlTarget.operator ==(Elsa.Etl.Core.Runtime.EtlSqlTarget? left, Elsa.Etl.Core.Runtime.EtlSqlTarget? right) -> bool
+Elsa.Etl.Core.EtlSqlSource
+Elsa.Etl.Core.EtlSqlSource.Binding.get -> string!
+Elsa.Etl.Core.EtlSqlSource.Binding.init -> void
+Elsa.Etl.Core.EtlSqlSource.Columns.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlSqlSource.Columns.init -> void
+Elsa.Etl.Core.EtlSqlSource.Deconstruct(out string! Binding, out string! Table, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Columns, out System.Collections.Generic.IReadOnlyList<string!>! Key) -> void
+Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSqlSource? other) -> bool
+Elsa.Etl.Core.EtlSqlSource.EtlSqlSource(string! Binding, string! Table, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Columns, System.Collections.Generic.IReadOnlyList<string!>! Key) -> void
+Elsa.Etl.Core.EtlSqlSource.Key.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Etl.Core.EtlSqlSource.Key.init -> void
+Elsa.Etl.Core.EtlSqlSource.Table.get -> string!
+Elsa.Etl.Core.EtlSqlSource.Table.init -> void
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SelectSnapshot(string! table, System.Collections.Generic.IReadOnlyList<string!>! columns, System.Collections.Generic.IReadOnlyList<string!>! keyColumns) -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotIsolation.get -> System.Data.IsolationLevel
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.IsLockRefusal(System.Exception! exception) -> bool
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotLock(string! table) -> string?
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotSetup.get -> string?
+override Elsa.Etl.Core.EtlSqlSource.<Clone>$() -> Elsa.Etl.Core.EtlSqlSource!
+override Elsa.Etl.Core.EtlSqlSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSqlSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSqlSource.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+static Elsa.Etl.Core.EtlSqlSource.operator !=(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
+static Elsa.Etl.Core.EtlSqlSource.operator ==(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.ExtremeDatesAreInfinite.get -> bool
 Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
 Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

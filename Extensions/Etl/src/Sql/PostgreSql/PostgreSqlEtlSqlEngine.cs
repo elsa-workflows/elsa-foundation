@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Elsa.Etl.Core.Runtime;
@@ -5,7 +6,7 @@ using Npgsql;
 
 namespace Elsa.Etl.Sql.PostgreSql;
 
-/// <summary>The PostgreSQL engine for keyed ETL SQL delivery (spec 1197), over Npgsql.</summary>
+/// <summary>The PostgreSQL engine for keyed ETL SQL delivery and snapshot reads (specs 1197 and 1198), over Npgsql.</summary>
 /// <remarks>Identifiers are quoted exactly as authored, so they are case-sensitive here.</remarks>
 internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
 {
@@ -15,6 +16,27 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     public int MaxParameters => 30_000;
 
     public string? SessionSetup => null;
+
+    // REPEATABLE READ is snapshot isolation in PostgreSQL: every statement of the transaction sees one snapshot.
+    public IsolationLevel SnapshotIsolation => IsolationLevel.RepeatableRead;
+
+    public string? SnapshotSetup => "SET TRANSACTION READ ONLY";
+
+    // TRUNCATE and table-rewriting ALTER TABLE are not MVCC-safe: a snapshot taken before them sees the rewritten table as
+    // empty. LOCK TABLE takes no snapshot, so waiting for it here makes the SELECT's snapshot follow any such rewrite.
+    public string? SnapshotLock(string table) => $"LOCK TABLE {Quote(table)} IN ACCESS SHARE MODE";
+
+    // LOCK needs table-level SELECT (42501) and a lockable relation (42809); a materialized view or foreign table is not one.
+    public bool IsLockRefusal(Exception exception) => exception is PostgresException
+    {
+        SqlState: PostgresErrorCodes.InsufficientPrivilege or PostgresErrorCodes.WrongObjectType
+    };
+
+    // Npgsql maps infinity and -infinity to the extreme values, so a finite 9999-12-31 cannot be told apart from them.
+    public bool ExtremeDatesAreInfinite => true;
+
+    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
+        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
 
