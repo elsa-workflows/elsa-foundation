@@ -109,6 +109,11 @@ def require_turn_refusal(frames, rows, *, provider, command_id, expected, cause)
         check(isinstance(admitted, dict) and admitted.get("diagnostics") == [] and isinstance(admitted.get("attachments"), list)
               and any(isinstance(item, dict) and item.get("contentType") == "workflow.definition" for item in admitted["attachments"]),
               "The actual owner did not admit the workflow snapshot before the replacement decided")
+        # Spec 1193 slice B: the host composes the Activities Design API, so the workflow module's catalog is the real
+        # one, read for the admin; an unavailable catalog would also have added a diagnostic above.
+        check(any(isinstance(item, dict) and item.get("contentType") == "workflow.catalog" and isinstance(item.get("content"), dict)
+                  and item["content"].get("status") == "available" for item in admitted["attachments"]),
+              "The admitted context did not carry the host's available activity catalog")
     for frame in values:
         if frame.get("kind") in ("toolCallRequested", "toolCallStarted"):
             payload = frame.get("payload")

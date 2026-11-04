@@ -5,7 +5,6 @@ using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.GitHubCopilot.Services;
 using Elsa.Agent.Workflows;
-using Elsa.Agent.Workflows.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Tests;
@@ -34,7 +33,6 @@ public sealed class AgentFeatureRegistrationTests
         using var scope = root.CreateScope();
         var provider = scope.ServiceProvider;
 
-        Assert.NotNull(provider.GetRequiredService<IWorkflowChangeProposalService>());
         Assert.Contains(provider.GetServices<IAgentCapabilityProvider>(), x => x.GetCapabilitiesAsync().AsTask().Result.Any(c => c.Id == "workflow.explain"));
         Assert.Contains(provider.GetServices<IAgentContextProvider>(), x => x.ScopeKind == "workflow");
     }

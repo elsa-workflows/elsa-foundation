@@ -90,6 +90,14 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_NotBeforeUtcTicks",
                 Constraint("{NotBeforeUtcTicks} IS NULL OR {NotBeforeUtcTicks} > 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_PollGeneration", Constraint("{PollGeneration} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedPageCount", Constraint("{CompactedPageCount} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedBatchCount", Constraint("{CompactedBatchCount} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedAcceptedRecords", Constraint("{CompactedAcceptedRecords} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedRejectedRecords", Constraint("{CompactedRejectedRecords} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedFilteredRecords", Constraint("{CompactedFilteredRecords} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedMainEffects", Constraint("{CompactedMainEffects} >= 0"));
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedErrorEffects", Constraint("{CompactedErrorEffects} >= 0"));
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_CurrentRequestPointer",
                 Constraint("({CurrentRequestSequence} IS NULL AND {CurrentRequestHash} IS NULL) OR ({CurrentRequestSequence} IS NOT NULL AND {CurrentRequestHash} IS NOT NULL)"));
@@ -107,6 +115,14 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorPartitions.Property(row => row.AcceptedRecords).HasDefaultValue(0L);
         connectorPartitions.Property(row => row.RejectedRecords).HasDefaultValue(0L);
         connectorPartitions.Property(row => row.FilteredRecords).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.PollGeneration).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedPageCount).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedBatchCount).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedAcceptedRecords).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedRejectedRecords).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedFilteredRecords).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedMainEffects).HasDefaultValue(0L);
+        connectorPartitions.Property(row => row.CompactedErrorEffects).HasDefaultValue(0L);
         connectorPartitions.Property(row => row.Revision).IsConcurrencyToken();
         connectorPartitions.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.Completed, row.ExpiresAtUtcTicks });
@@ -204,7 +220,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
                 "({FetchJson} IS NOT NULL AND {FetchDigest} IS NOT NULL AND {length}({FetchDigest}) = 64))"));
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_http_requests_SequencePredecessor",
-                Constraint("({PageSequence} = 0 AND {PreviousPageSequence} IS NULL AND {PreviousHasContinuation} IS NULL) OR ({PageSequence} > 0 AND {PreviousPageSequence} IS NOT NULL AND {PreviousHasContinuation} IS NOT NULL AND {PreviousPageSequence} = {PageSequence} - 1 AND {PreviousHasContinuation} = {true})"));
+                Constraint("({PreviousPageSequence} IS NULL AND {PreviousHasContinuation} IS NULL) OR ({PageSequence} > 0 AND {PreviousPageSequence} IS NOT NULL AND {PreviousHasContinuation} IS NOT NULL AND {PreviousPageSequence} = {PageSequence} - 1 AND {PreviousHasContinuation} = {true})"));
         });
         connectorHttpRequests.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence });
         connectorHttpRequests.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();

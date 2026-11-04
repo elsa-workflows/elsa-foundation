@@ -1,6 +1,6 @@
 # Runtime Efficiency continuation evidence
 
-Program [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531), draft integration [#3601](https://github.com/elsa-workflows/elsa-foundation/pull/3601).
+Program [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531), integration [#3601](https://github.com/elsa-workflows/elsa-foundation/pull/3601) (a draft when this receipt was written; merged as `ea5c4de47`).
 This is an in-progress receipt. It does not establish completion of M0–M5 or current-main throughput. Independent-host capacity below covers independent starts sharing one PostgreSQL server; failure injection and remote Cancel are reported separately, including what did not qualify.
 The [baseline assessment](native-runtime-performance-2026-10-31.md) and [first implementation receipt](native-runtime-performance-implementation-2026-10-31.md) retain their original cohorts and exclusions.
 
@@ -9,7 +9,7 @@ The [baseline assessment](native-runtime-performance-2026-10-31.md) and [first i
 Hydration metadata (#2657) merged in #3598 as `11a07e86686c68bb523334409e66f39deaed068c`, after review and required checks on `f445cea8d370e24c7b9f80a9ce89c4ce6e927e27`.
 The first main run was cancelled when main advanced. Containing main `1d77ed131de3305da8b8236f739c63085bff3e73` then passed [CI 41289485400](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41289485400).
 
-Integration head `36444c42792d96e13f9c05a98bd73e9c07ed3ddb` adds demand-driven input reads and weak immutable JavaScript/conversion preparation. Independent early review found fresh-hydration script misses and missing closed-scope read-budget proof; both were addressed and the next three-lens review was clear. Final integrated qualification remains due.
+Integration head `36444c42792d96e13f9c05a98bd73e9c07ed3ddb` adds demand-driven input reads and weak immutable JavaScript/conversion preparation. Independent early review found fresh-hydration script misses and missing closed-scope read-budget proof; both were addressed and the next three-lens review was clear. Final integrated qualification remains due (point-in-time; #3601 later merged as `ea5c4de47`).
 
 ## Owned activity reads: rejected experiment
 
@@ -59,7 +59,8 @@ Recovery assertions now check sweep failures, settled outbox and empty scheduler
 that does no work. Replacing the first sweep with a no-op fails all twelve cases; restoration passes all twelve.
 The corrected whole suites pass: runtime 3,122, Distributed 114, HTTP integration 107, zero failed/skipped. Discovery
 accounts for all cases (runtime's same three delayed theories expand 3,111 discoveries into 3,122 executions).
-All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due.
+All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due
+(point-in-time; #3601 later merged as `ea5c4de47`).
 
 ## Unchanged native roots: candidate #2586
 
@@ -215,8 +216,9 @@ The current SQLite references pass with Durable ten WriteLines **269** commands 
 long suspension/resume **2,137** (2,737). Other reference counts are unchanged. Disabling only the successful-commit
 receipt fails exactly those three lowered budget cases; restoration passes all thirteen. The ten-WriteLine result
 meets #2584's original under-300 objective without reviving its obsolete per-hop persistence layer. #2584's
-other acceptance item, an owner-reviewed spec of every crash window it changes, is posted on the issue (analysis in
-`specs/1183-runtime-efficiency-program/plan.md`) and stays open until the owner reviews it.
+remaining acceptance item, an owner-reviewed spec of every crash window it changes, is posted on the issue (analysis in
+`specs/1183-runtime-efficiency-program/plan.md`) and stays open until the owner reviews it (point-in-time; the owner
+accepted the spec on 2026-11-03 and #2584 is closed).
 
 Nine focused cases cover accepted versus retaining/attempt/unfenced/unrelated decisions, failed physical writes and
 nested receipt isolation. Eight independent mutations each fail their corresponding case and pass the other eight;
@@ -288,7 +290,8 @@ six engine and four focused cases; all 21 existing/new delayed-delivery cases pa
 and an initial query-only candidate that omitted the overlay's claim path are retained, not counted as causal reds.
 The restored whole suites pass: runtime 3,134, Distributed 114, EF 1,851 and HTTP integration 113, zero
 failed/skipped. Discovery reconciles every execution. The final source differs from the saved mutation candidate
-only in a comment describing the provenance handoff. Independent final review and program integration remain due.
+only in a comment describing the provenance handoff. Independent final review and program integration remain due
+(point-in-time; #3601 later merged as `ea5c4de47`).
 
 The original memory harness counted successful state lookups over its submitted-ID bag, rather than independently
 counting distinct stored executions. Its raw `PendingOutbox: 0` field was a placeholder; the incomplete snapshot
@@ -422,7 +425,7 @@ All preflight attempts remain visible: the first stopped before workload because
 the next found an undefined operator storage-path variable before host launch; the third completed warmup but
 stopped when its unprivileged collector could not read the root-created host log. The fourth fixes log ownership
 and passes. These are fixture failures, not passing workload samples. No failed attempt is replaced in the ledger.
-The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open (point-in-time; see [Independent-host failure qualification](#independent-host-failure-qualification) for the later results).
+The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open (point-in-time; the later results are in [Persisted diagnostics and storage placement](#persisted-diagnostics-and-storage-placement), [Independent-host native PostgreSQL capacity](#independent-host-native-postgresql-capacity) and [Independent-host failure qualification](#independent-host-failure-qualification)).
 
 Additional affected-model qualification at production source `63e4c1fc4`: the whole ETL suite passes **1,009 tests** and the real-host BPMN suite passes **46**, both with zero failed/skipped cases. Discovery reconciles every case. These are correctness/hosting results on the shared macOS machine, not model throughput or independent-host evidence. Custody: `m5-model-*` in the program evidence root.
 
@@ -651,7 +654,8 @@ A second owner-approved fixture ran owner A and recoverer B on separate D2s_v6 w
 container on a third host, all on one private subnet. Every case used a fresh database. The retained-boundary Worker
 was published self-contained from this branch; `two-host-controller.py` drove both workers over a task-only SSH key.
 
-On the final engine (Worker r8, including the fence-renewal fix below) all **68 cases pass**:
+On the final engine (Worker r8, including the fence-renewal fix below) all **68 cases pass** (series `f4`; the preceding
+`f3` rerun of the 18 reclaim and interrupt cases, on Worker r7 before that fix, also passed 18/18):
 
 | Kind | Cases | What is checked |
 | --- | --- | --- |
@@ -667,7 +671,10 @@ series (`failure-r2`) the reclaim and default-interrupt cases hit a stale per-ca
 cases measured a host `RetryAfter` policy: all six runs stalled silently in Running with no incident, because nothing
 re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRetryAt`, but no sweep reads it). That
 pre-existing defect is already tracked as [#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275) and is
-outside this delivery.
+outside this delivery (point-in-time; #3656, merged as `180da1476`, closed #3275: a `RetryAfter` is now either released
+until it is due, for the resumption sweep to re-drive, or recorded `Poisoned` with an incident; the conditions are in
+[What happens when something fails at runtime](../runtime-fault-behavior.md#what-it-does). It was not re-run on this
+fixture).
 
 ### A lease heartbeat failed fenced checkpoints (found and fixed)
 
@@ -699,8 +706,12 @@ Cancelling a **progressing** drain on another node did **not** qualify, and no C
 - In `c5` and `c6` the execution's **placement had moved to the sender node B** before the Cancel was sent, while node
   A, which still held runtime ownership, kept executing the loop. The sender's precondition check (placement on the
   owner) therefore failed, correctly. Placement and the executing node can disagree during a long inline drain.
-- In `c7` and in the one-run comparisons `p-main` and `p-branch`, placement stayed on node A throughout (150 one-second
-  samples each), yet the sender never progressed past picking up its request; the cause is not established.
+- In `c7` and in the one-run comparisons `p-main` and `p-branch`, placement was on node A before and after the Cancel
+  (`p-main` and `p-branch` were also sampled 150 times at one-second intervals per build on the database host; the
+  samples and their command output are not in the archive, and `c7` records only the before and after rows), yet the sender
+  never progressed past picking up its request. The cause is not established. #3669 later found a placement pump that
+  awaited each dispatched drain and stopped renewing, but that does not match these runs: node A's placement row kept
+  renewing (revision 26 to 163 in each), and #3669's own runs on `main` saw placement move to node B, unlike `p-main`.
 - `c4` is invalid: a leftover sender from `c3` held the port, so the new sender never started.
 - Before the fence fix, `c1`'s loop was poisoned on node A (one incident, rows stalled at 1,618); `c2` never formed
   the cluster, because its control folders already existed.
@@ -709,6 +720,8 @@ The main build showed the same stalled sender in its single run. Local cooperati
 covered by the in-process tests only. #3669 addresses the cross-node case (#2831): the placement pump no longer waits
 for a dispatched drain, so it keeps renewing placement and delivers a forwarded Cancel to the drain's mailbox. In its
 two-node runs, placement stayed on node A and the progressing loop was cancelled in 3 to 13 s, three times out of three.
+Those runs used two Workbench processes and PostgreSQL 16 on one machine; progressing cross-node Cancel has no
+independent-machine result.
 
 ### Second fixture cleanup
 
