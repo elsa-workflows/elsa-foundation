@@ -15,7 +15,7 @@ function container(kind: "sequence" | "flowchart", children: ActivityNode[], ext
   return result;
 }
 function context(rootActivity = container("sequence", [node("a"), node("b"), node("c"), node("d")])): NativeBlockContext {
-  return { document: { rootActivity, layout: [{ nodeId: "a", x: 400, y: 350 }, { nodeId: "b", x: 100, y: 80, additionalProperties: { preserve: true } }, { nodeId: "c", x: 300, y: 180 }], activityPresentation: [{ nodeId: "b", displayName: "Original", description: "Unchanged", extra: "keep" } as never] }, catalog: structuredClone(catalog), scope: [], canEdit: true, sourceKey: "workflow:1/revision:3" };
+  return { document: { rootActivity, layout: [{ nodeId: "a", x: 400, y: 350 }, { nodeId: "b", x: 100, y: 80, additionalProperties: { preserve: true } }, { nodeId: "c", x: 300, y: 180 }], activityPresentation: [{ nodeId: "b", displayName: "Original", description: "Unchanged", extra: "keep" } as never] }, catalog: structuredClone(catalog), scope: [], canEdit: true, referenceContext: [], sourceKey: "workflow:1/revision:3" };
 }
 const request = { nodeId: "new-block", activityVersionId: sequenceActivity.activityVersionId, displayName: "  Review order  ", description: " Details " };
 function accepted(plan: NativeBlockPlan) {
@@ -279,6 +279,24 @@ describe("linear Flowchart transformation", () => {
 });
 
 describe("no-loss Ungroup", () => {
+  it("refuses a boundary result used by resource-owned mappings outside rootActivity", () => {
+    const original = context(); const plan = accepted(extract(original));
+    const ctx = { ...original, document: plan.document, referenceContext: [{ outputMappings: [{ outputReferenceKey: "result", source: { expressionType: "ActivityResult", value: { producerNodeId: "new-block", projectionKey: "$result", producerScopeId: "scope:root" } } }] }] };
+    refused(planUngroupNativeBlock(ctx, "new-block"), "referenced-boundary");
+  });
+
+  it("fences changes to resource-owned bindings even when the resource revision has not changed", () => {
+    const ctx = { ...context(), referenceContext: [] as unknown[] };
+    const plan = accepted(extract(ctx));
+    ctx.referenceContext.push({ outputMappings: [{ outputReferenceKey: "later" }] });
+    refused(applyNativeBlockPlan(ctx, plan), "stale-source");
+  });
+
+  it("requires the host to disclose its reference context before planning", () => {
+    const ctx = { ...context(), referenceContext: undefined } as unknown as NativeBlockContext;
+    refused(extract(ctx), "missing-reference-context");
+  });
+
   it.each(["local", "input", "output", "setting", "structured-reference", "opaque-reference"]) ("refuses a used/configured boundary: %s", fault => {
     const ctx = context(); const plan = accepted(extract(ctx));
     const block = (planPayload(plan).activities as ActivityNode[])[1];

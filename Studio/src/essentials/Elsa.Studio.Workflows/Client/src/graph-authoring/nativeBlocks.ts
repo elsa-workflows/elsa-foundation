@@ -13,6 +13,8 @@ export interface NativeBlockContext {
   catalog: ActivityCatalogItem[];
   scope: ScopeFrame[];
   canEdit: boolean;
+  /** Resource-owned declarations/bindings outside rootActivity, including reusable output mappings. */
+  referenceContext: unknown[];
   /** Host resource/revision identity, including changes outside the normalized graph document. */
   sourceKey: string;
 }
@@ -78,7 +80,7 @@ function guarded(action: () => NativeBlockPlan): NativeBlockPlan {
 }
 
 function source(context: NativeBlockContext) {
-  return signature([context.sourceKey, context.canEdit, context.document, context.scope, context.catalog]);
+  return signature([context.sourceKey, context.canEdit, context.document, context.referenceContext, context.scope, context.catalog]);
 }
 
 function ready(context: NativeBlockContext, document: NativeBlockDocument, selection: string[]): NativeBlockPlan {
@@ -102,6 +104,8 @@ export function applyNativeBlockPlan(context: NativeBlockContext, plan: NativeBl
 function prepare(context: NativeBlockContext) {
   if (!context.canEdit) refuse("read-only", "source", "This resource cannot be edited.");
   if (!context.sourceKey) refuse("missing-source", "source", "A current resource identity is required.");
+  if (!Array.isArray(context.referenceContext))
+    refuse("missing-reference-context", "referenceContext", "The resource's declarations and bindings outside this graph must be included before refactoring.");
   const identities = new Set<string>();
   const retainedMetadataIdentities = new Set<string>();
   const visit = (node: ActivityNode, path: string) => {
@@ -399,7 +403,7 @@ function assertDisposableBoundary(block: ActivityNode, context: NativeBlockConte
   }
 }
 
-function assertUnreferenced(document: NativeBlockDocument, owner: ActivityNode, block: ActivityNode) {
+function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, block: ActivityNode) {
   const connections = owner.structure?.kind === flowchartStructureKind && Array.isArray(owner.structure.payload.connections) ? owner.structure.payload.connections : [];
   const endpoints = new Set(connections.flatMap(value => record(value) ? [value.source, value.target] : []));
   const walk = (value: unknown, path: string, expression = false) => {
@@ -417,7 +421,8 @@ function assertUnreferenced(document: NativeBlockDocument, owner: ActivityNode, 
     if (typeof value === "string" && (value === block.nodeId || (expression && value.includes(block.nodeId))))
       refuse("referenced-boundary", path, "This value refers to the block identity. Keep the block or remove that reference before Ungroup.");
   };
-  walk(document.rootActivity, "rootActivity");
+  walk(context.document.rootActivity, "rootActivity");
+  walk(context.referenceContext, "referenceContext");
 }
 
 export function planUngroupNativeBlock(context: NativeBlockContext, blockId: string): NativeBlockPlan {
@@ -427,7 +432,7 @@ export function planUngroupNativeBlock(context: NativeBlockContext, blockId: str
     if (!block || block.structure?.kind !== kinds[scope.kind] || block.structure.schemaVersion !== "1.0.0")
       refuse("unsupported-block", `nodes.${blockId}`, "Choose a native block of the enclosing structure kind.");
     assertDisposableBoundary(block, context, scope.kind);
-    assertUnreferenced(context.document, scope.owner, block);
+    assertUnreferenced(context, scope.owner, block);
     const children = block.structure.payload.activities as ActivityNode[];
     const ids = new Set(children.map(x => x.nodeId));
     const blockPosition = context.document.layout.find(x => x.nodeId === blockId) ?? { x: 0, y: 0 };

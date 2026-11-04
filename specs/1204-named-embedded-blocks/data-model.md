@@ -22,6 +22,8 @@ Editor history compares presentation using the persisted normalization rules, so
 
 Internal Studio plan input: current resource document, scope address, selected node/element identities, exact authorized catalog and requested name/body kind. Output is either located refusal diagnostics or a complete document edit including structure, layout, presentation and post-apply selection. Apply only against the unchanged source snapshot and catalog identities.
 
+The native planner requires an explicit reference context for resource-owned declarations and bindings outside `rootActivity`, including reusable graph output mappings. Hosts supply those values alongside the normalized graph document; Ungroup inspects them for wrapper references, and preview freshness includes them even before a new server revision exists. An omitted context refuses the edit; an explicit empty array means the resource has no such bindings.
+
 ## Promotion proposal
 
 Internal Studio proposal contains exact source fingerprint, candidate schema-2 Activity Graph manifest, public contract, explicit input/output/outcome mappings, call-site replacement and diagnostics. Existing public authoring APIs persist/validate/publish the target; the planner is not a second catalog or publication engine. Published target selection triggers fresh comparison/review before replacement. No cross-resource atomic transaction or destructive cleanup is implied.

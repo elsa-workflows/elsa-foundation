@@ -31,7 +31,7 @@ try {
     if (typeof test.name !== "string" || !test.name || names.has(test.name)) throw new Error("Case names must be unique and nonempty");
     names.add(test.name);
     if (test.operation !== undefined && !["create", "extract"].includes(test.operation)) throw new Error(`${test.name}: unknown operation`);
-    const context = { document: test.document, catalog: input.catalog, scope: test.scope ?? [], sourceKey: `${source}/${test.name}`, canEdit: true };
+    const context = { document: test.document, catalog: input.catalog, scope: test.scope ?? [], referenceContext: test.referenceContext ?? [test.variables ?? []], sourceKey: `${source}/${test.name}`, canEdit: true };
     const plan = test.operation === "create" ? planner.planCreateNativeBlock(context, test.request) : planner.planExtractNativeBlock(context, test.request);
     const applied = planner.applyNativeBlockPlan(context, plan);
     if (test.refusal) {
