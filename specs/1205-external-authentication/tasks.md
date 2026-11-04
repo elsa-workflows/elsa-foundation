@@ -20,7 +20,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 ## Phase 3 — US1: exact identity and admission
 
 - [x] T010 [US1] Extend exact issuer/subject link and atomic admission contracts in `Identity/Core/Iam/` and implementation/store counterparts under `Identity/AspNetCoreIdentity/` and `Identity/Persistence/EntityFrameworkCore/`. Exact-link contracts/stores, additive migration, content-preserving schema upgrade and atomic admission are implemented. Policy/protocol composition and actual provider qualification remain in their following tasks.
-- [ ] T011 [US1] Implement reject-default, explicit JIT/default Elsa roles and configured matcher policies with preview-safe assessment under `Identity/`; include disabled/ambiguous/conflicting-user behavior tests.
+- [x] T011 [US1] Implement reject-default, explicit JIT/default Elsa roles and configured matcher policies with preview-safe assessment under `Identity/`; include disabled/ambiguous/conflicting-user behavior tests.
 - [ ] T012 [US1] After T003, implement explicit existing-Elsa-role mapping, deployment/editor delegation and permission projection under `Identity/`; cover claim injection and deleted roles.
 - [ ] T013 [US1] Compose external admission into ordinary cookie/OpenIddict sessions in `Identity/AspNetCoreIdentity/`; honor FoundationOwned/ExternalOwned/Hybrid capabilities.
 

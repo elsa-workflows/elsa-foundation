@@ -138,3 +138,37 @@ Logs: `/tmp/elsa-3579-admission-focused-fixed.log`, `/tmp/elsa-3579-admission-at
 The earlier GitHub server push failures cleared on a later normal app-authenticated push: draft PR #3806
 was verified at `436ee191b`. This supersedes the earlier publication limitation; no credentials or branch
 rules were changed. Atomic admission is a later local checkpoint until its own push is verified.
+
+
+## Provisioning policy and canonical projection checkpoint
+
+Implemented pure `IExternalAdmissionService.AssessAsync` and separate actual admission with effective source,
+enablement and material rechecks. Unknown identities are rejected by default. Explicit `jit` selects existing
+Elsa default roles; explicit `match`/`verified-email` requires unique verified boolean evidence and an eligible
+Foundation-managed target. Integrators register a uniquely named read-only `IExternalProvisioningPolicy` selecting
+existing users or a subset of declared role targets. Host/editor role boundaries also constrain matching against
+privileged users. Upstream role/permission claims never project automatically. The mapped-role choice remains open.
+
+Admission uses a fresh owned tenant scope without rebinding the caller. Qualified/atomic authority capabilities
+are explicit; read-only authorities can resolve existing links without promising JIT. Matching passes a frozen
+tenant-membership snapshot into the atomic store to close changes that do not alter UserRecord fields. Both EF
+and in-memory authorities check that snapshot. The old principal factory's automatic creation and raw-claim import
+were retired: its pre-GA context is now canonical `(TenantId, UserId, Provider?)`, and it refuses unavailable users.
+
+Final complete Identity run passed **636/636**, no failures/skips. New component cases cover pure preview (zero
+writes), JIT and repeated sign-in, equal email at two providers, verified-email evidence/ambiguity/eligibility,
+ownership/capability denial, custom policy selection and role escalation, matching privilege bounds, membership
+races, disabled/stale connections, proof scope, owned scopes and inactive linked identities. A real SQLite composed
+service verifies preview without user creation, actual atomic admission, dispose/reopen and canonical permission
+projection. This is not an actual external-provider or HTTP cookie/token/session witness.
+
+Three deliberate mutations each fail their focused regression: making reject fall through to JIT, removing the
+new-user role-subset boundary, and ignoring the EF membership snapshot. Exact sources were restored before the
+complete passing run. The early compile attempts caught new public API tracking and a test scope-property typo;
+those were fixed and not counted as passed tests. All remaining protocol/session/API/Studio/deployment and merge/
+resulting-main requirements remain open. No existing host/store was changed.
+
+Logs: `/tmp/elsa-3579-policy-capabilities-final.log`, `/tmp/elsa-3579-policy-integration.log`,
+`/tmp/elsa-3579-policy-mutant-default-jit.log`, `/tmp/elsa-3579-policy-mutant-role-boundary.log`,
+`/tmp/elsa-3579-policy-mutant-membership.log`. The affected IAM EF suite passed **206/206**, no failures/skips
+(`/tmp/elsa-3579-policy-iam.log`). The solution-filter check passed (`/tmp/elsa-3579-policy-maps.log`).

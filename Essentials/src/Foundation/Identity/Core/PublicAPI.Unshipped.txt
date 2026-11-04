@@ -87,19 +87,8 @@ Elsa.Foundation.Identity.Core.Authentication.ITokenSubjectResolver
 Elsa.Foundation.Identity.Core.Authentication.ITokenSubjectResolver.TryResolve(System.Security.Claims.ClaimsPrincipal! principal, out Elsa.Foundation.Identity.Core.Authentication.TokenSubject? subject) -> bool
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.CatalogPermissions.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.CatalogPermissions.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Deconstruct(out string! TenantId, out string! Provider, out string! ProviderSubject, out System.Security.Claims.ClaimsPrincipal! ExternalPrincipal, out System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.ClaimMappingRule!>! MappingRules, out System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>! CatalogPermissions) -> void
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Equals(Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext? other) -> bool
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ExternalPrincipal.get -> System.Security.Claims.ClaimsPrincipal!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ExternalPrincipal.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.MappingRules.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.ClaimMappingRule!>!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.MappingRules.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.PrincipalFactoryContext(string! TenantId, string! Provider, string! ProviderSubject, System.Security.Claims.ClaimsPrincipal! ExternalPrincipal, System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.ClaimMappingRule!>! MappingRules, System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>! CatalogPermissions) -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Provider.get -> string!
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Provider.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ProviderSubject.get -> string!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ProviderSubject.init -> void
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.TenantId.get -> string!
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.TenantId.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest
@@ -1150,3 +1139,12 @@ static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.operator !=(Elsa.
 static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? right) -> bool
 static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? right) -> bool
 static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? right) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ExpectedMembership.get -> Elsa.Foundation.Identity.Core.Iam.TenantMembershipRecord?
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ExpectedMembership.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Deconstruct(out string! TenantId, out string! UserId, out string? Provider) -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.PrincipalFactoryContext(string! TenantId, string! UserId, string? Provider = null) -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Provider.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.UserId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.UserId.init -> void
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.SupportsQualifiedKeys.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.SupportsAtomicAdmission.get -> bool

@@ -4,6 +4,9 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 
 public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIdentityStore, ITenantMembershipStore
 {
+    public bool SupportsQualifiedKeys => true;
+    public bool SupportsAtomicAdmission => true;
+
     private readonly object _syncRoot = new();
     private readonly List<UserRecord> _users = [];
     private readonly List<RoleRecord> _roles = [];
@@ -19,7 +22,10 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
     public ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default)
     {
         lock (_syncRoot)
-            return ValueTask.FromResult(_users.FirstOrDefault(x => Same(x.TenantId, tenantId) && Same(x.Email, email)));
+        {
+            var matches = _users.Where(x => Same(x.TenantId, tenantId) && Same(x.Email, email)).Take(2).ToArray();
+            return ValueTask.FromResult(matches.Length == 1 ? matches[0] : null);
+        }
     }
 
     public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default)
@@ -136,6 +142,12 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
                     return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "user-unavailable"));
                 if (current != user with { RoleIds = current.RoleIds, DirectPermissions = current.DirectPermissions } ||
                     !current.RoleIds.SetEquals(user.RoleIds) || !current.DirectPermissions.SetEquals(user.DirectPermissions))
+                    return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "admission-conflict"));
+                var membership = _memberships.FirstOrDefault(x => Same(x.TenantId, user.TenantId) && Same(x.UserId, user.Id));
+                var expected = request.ExpectedMembership;
+                if (membership is null ? expected is not null : expected is null ||
+                    membership != expected with { RoleIds = membership.RoleIds, DirectPermissions = membership.DirectPermissions } ||
+                    !membership.RoleIds.SetEquals(expected.RoleIds) || !membership.DirectPermissions.SetEquals(expected.DirectPermissions))
                     return ValueTask.FromResult(new ExternalUserAdmissionResult(false, Failure: "admission-conflict"));
             }
             _externalIdentities.Add(link);

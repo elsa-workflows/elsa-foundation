@@ -69,3 +69,19 @@ Owner authorization on 4 November covers #3579 end to end and necessary #2848 in
 Managed connection contracts and implementation use the optional `Identity/ExternalAuthentication` submodule. The Core references Identity.Core and Secrets.Core, and the implementation consumes Runtime.Core scope contracts, keeping those dependencies out of the base Identity.Core. Catalog persistence still reuses the existing provider-configuration authority and its schema.
 
 Configuration readiness is distinct from recovery eligibility. A valid enabled provider with default rejection and no eligible link cannot count as a recovery path. Removing/replacing an enabled effective path needs a proved remaining external path or actual local recovery, then whole-catalog CAS. A source transition may be safe even if the retired record itself is disabled; the effective baseline/override result is what matters. Protocol/session adapters must supply these checks before runtime qualification; their unavailable defaults make no readiness/recovery claim.
+
+
+## Admission implementation refinement
+
+The managed service separates pure assessment from atomic admission. Default rejection cannot be overridden by a
+contribution named `reject`. Built-in `jit` uses explicit default Elsa roles; `match` plus `verified-email` requires
+one boolean verification claim and a unique active Foundation-managed target. It does not auto-link an earlier
+unverified imported profile. A custom named policy may choose a subset of the connection's declared role boundary;
+matching also checks the candidate's complete effective role/direct-permission boundary. These are routine safe
+implementation choices within explicit provisioning/matching acceptance, independent of the open mapping card.
+
+Host ownership/capability settings govern whether new user/link state may be written; existing qualified links
+remain readable. Matching passes a frozen membership snapshot to the atomic authority because membership changes
+can add privilege without changing UserRecord fields. The old IPrincipalFactory auto-create/import behavior is
+retired; its pre-GA context is canonical `(tenant, user ID, optional provider metadata)` only. Neither managed
+assessment nor canonical projection imports upstream grants. Direct bearer normalization remains separate.

@@ -93,6 +93,26 @@ public sealed class ExternalUserAdmissionTests
     }
 
     [Fact]
+    public async Task Sqlite_matching_rejects_a_membership_changed_after_the_user_was_assessed()
+    {
+        await using var database = new ExternalIdentityLinkTests.LinkDatabase();
+        await using var db = await database.Open();
+        var user = Candidate("existing");
+        await new EfUserStore(db, database.Access).SaveAsync(user);
+        var membership = new TenantMembershipRecord("tenant", user.Id, TenantMembershipStatus.Active,
+            new HashSet<string> { "manual" }, new HashSet<string>());
+        await new EfTenantMembershipStore(db, database.Access).SaveAsync(membership);
+        var store = new EfExternalIdentityStore(db, database.Access);
+        var stale = await store.AdmitAsync(new(Key, user, false, ExternalIdentityLinkPolicy.Auto));
+        Assert.False(stale.Admitted);
+        Assert.Equal("admission-conflict", stale.Failure);
+        Assert.Empty(await db.ExternalIdentities.ToListAsync());
+        var fresh = await store.AdmitAsync(new(Key, user, false, ExternalIdentityLinkPolicy.Auto) { ExpectedMembership = membership });
+        Assert.True(fresh.Admitted);
+        Assert.Equal(membership.RoleIds, (await new EfTenantMembershipStore(db, database.Access).FindAsync("tenant", user.Id))!.RoleIds);
+    }
+
+    [Fact]
     public async Task Missing_default_role_or_existing_user_identifier_refuses_creation_without_partial_writes()
     {
         await using var database = new ExternalIdentityLinkTests.LinkDatabase();

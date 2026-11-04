@@ -21,6 +21,9 @@ public sealed class EfExternalIdentityStore(
         new EfIdentityAtomicWrite(context, accessContextAccessor: accessContextAccessor),
         accessContextAccessor);
 
+    public bool SupportsQualifiedKeys => true;
+    public bool SupportsAtomicAdmission => true;
+
     public ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
         new EfExternalUserAdmission(context, accessContextAccessor,
             aggregateCoordinator ?? new(context, accessContextAccessor), relationship,

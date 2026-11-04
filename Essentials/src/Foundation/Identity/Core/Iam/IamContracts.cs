@@ -8,6 +8,7 @@ public interface IUserStore
 {
     ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns only a unique normalized email match; missing or ambiguous addresses return null.</summary>
     ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
@@ -112,6 +113,9 @@ public interface IRevisionAwareCredentialStore
 [ReplacementContract]
 public interface IExternalIdentityStore
 {
+    bool SupportsQualifiedKeys => false;
+    bool SupportsAtomicAdmission => false;
+
     /// <summary>Commits a policy-assessed new user and login atomically, or links an unchanged active existing user.</summary>
     ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This external identity authority does not support atomic admission.");

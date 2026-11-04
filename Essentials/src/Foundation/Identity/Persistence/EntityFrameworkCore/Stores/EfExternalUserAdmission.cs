@@ -62,6 +62,8 @@ internal sealed class EfExternalUserAdmission(
                     var current = await users.FindWithRevisionAsync(user.TenantId, user.Id, token);
                     if (current is null || current.Record.Status != UserStatus.Active) return Reject("user-unavailable");
                     if (!SameSnapshot(current.Record, user)) return Reject("admission-conflict");
+                    var membership = await new EfTenantMembershipStore(context, access, relationships).FindAsync(user.TenantId, user.Id, token);
+                    if (!SameMembership(membership, request.ExpectedMembership)) return Reject("admission-conflict");
                     IdentityEntityFrameworkRevisionCodec.TryGetVersion(current.Revision, out var version);
                     expectedOwnerVersion = version;
                 }
@@ -89,4 +91,8 @@ internal sealed class EfExternalUserAdmission(
     private static bool SameSnapshot(UserRecord current, UserRecord expected) =>
         current == expected with { RoleIds = current.RoleIds, DirectPermissions = current.DirectPermissions } &&
         current.RoleIds.SetEquals(expected.RoleIds) && current.DirectPermissions.SetEquals(expected.DirectPermissions);
+    private static bool SameMembership(TenantMembershipRecord? current, TenantMembershipRecord? expected) =>
+        current is null ? expected is null : expected is not null &&
+            current == expected with { RoleIds = current.RoleIds, DirectPermissions = current.DirectPermissions } &&
+            current.RoleIds.SetEquals(expected.RoleIds) && current.DirectPermissions.SetEquals(expected.DirectPermissions);
 }

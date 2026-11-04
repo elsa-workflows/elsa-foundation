@@ -152,3 +152,12 @@ Managed external links use `ExternalIdentityKey` and `FindByKeyAsync` (or its re
 It creates a user and qualified link together or links an unchanged active user snapshot. A concurrent first
 sign-in returns the active canonical owner; it cannot overwrite another user or leave an orphan candidate.
 Authorities that cannot offer the transaction refuse this capability. Preview must not call it.
+
+Qualified-link authorities explicitly declare `SupportsQualifiedKeys` and `SupportsAtomicAdmission` on
+`IExternalIdentityStore`; defaults are false. A read-only qualified authority can resolve existing links without
+promising local provisioning. `FindByEmailAsync` returns only a unique normalized match, never an arbitrary first
+row. Existing-user admission includes its expected tenant membership; null expects no membership.
+
+`IPrincipalFactory` now projects an admitted `(tenant, Elsa user ID, optional provider metadata)` only. It does not
+accept an external principal, map raw claims or create an unknown user. Interactive policies belong to the
+[managed authentication contracts](../ExternalAuthentication/Core/EXTENSION_POINTS.md).

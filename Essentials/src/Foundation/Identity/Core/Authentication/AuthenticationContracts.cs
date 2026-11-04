@@ -90,13 +90,8 @@ public sealed record AuthSession(
 
 public sealed record AuthenticationSessionInvalidationContext(ClaimsPrincipal Principal);
 
-public sealed record PrincipalFactoryContext(
-    string TenantId,
-    string Provider,
-    string ProviderSubject,
-    ClaimsPrincipal ExternalPrincipal,
-    IReadOnlyCollection<ClaimMappingRule> MappingRules,
-    IReadOnlyCollection<Permission> CatalogPermissions);
+/// <summary>Projects an already admitted canonical Elsa user; this factory never provisions or imports claims.</summary>
+public sealed record PrincipalFactoryContext(string TenantId, string UserId, string? Provider = null);
 
 public sealed record TokenIssueRequest(TokenSubject Subject, IReadOnlyCollection<string> Scopes);
 

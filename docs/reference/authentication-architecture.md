@@ -40,7 +40,7 @@ registers their default implementations:
 | `ITokenService` | protocol | Issue / refresh / validate / revoke access tokens, and revoke all of a subject's tokens at sign-out. The seam behind which "how tokens are minted" is swappable. |
 | `IAuthSessionService` | protocol | Project the current `ClaimsPrincipal` into an `AuthSession` (status, subject, roles, permissions, freshness). |
 | `IAuthenticationProviderModule` / `IAuthenticationProviderResolver` | protocol | Each auth provider (local, OIDC, …) describes itself (id, kind, challenge metadata) so the API can enumerate providers. |
-| `IPrincipalFactory` | seam | Turn an external principal into a provisioned, normalized Elsa principal. |
+| `IPrincipalFactory` | seam | Project an already admitted canonical Elsa user from saved IAM authority, without provisioning or importing claims. |
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
 | `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, `{resource}:{verb}` matching, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
@@ -450,7 +450,7 @@ yet options on the module** — do not expect them to work from configuration al
    you would configure the handler yourself via `AddFoundationIdentityOidc(configure)` or a
    `PostConfigure<OpenIdConnectOptions>`/`PostConfigure<JwtBearerOptions>`. Use the separate `Audience` setting for an API audience.
 
-2. **Interactive normalization/provisioning remains host-owned.** The opt-in bearer bridge uses current owned mappings without a local account. It does not normalize interactive OIDC login or call `IPrincipalFactory`; an interactive integration still supplies that provisioning/linking bridge. Default-false bearer behavior stays compatible. Dynamic tenancy, multiple normalized external schemes and deployed IdP interoperability remain separate proof boundaries.
+2. **Interactive admission is separate.** The opt-in bearer bridge uses current owned mappings without a local account and does not call `IPrincipalFactory` or provision links. Optional managed external-authentication modules own interactive admission; their provider/broker integration remains under spec 1205. Default-false bearer behavior stays compatible. Dynamic tenancy, multiple normalized external schemes and deployed IdP interoperability remain separate proof boundaries.
 
 ---
 
@@ -461,3 +461,27 @@ yet options on the module** — do not expect them to work from configuration al
 - [`../glossary/elsa.md`](../glossary/elsa.md) — canonical short definitions.
 </content>
 </invoke>
+
+
+## Managed external admission
+
+Elsa users, role definitions and permissions remain in Elsa's IAM authority. An external provider supplies verified
+identity evidence, not Elsa permissions. Managed links use the tenant, logical connection key, exact issuer and
+exact opaque subject; legacy issuer-less links form a separate namespace and are never a fallback.
+
+The optional managed feature rejects unknown identities by default. Explicit per-connection policies can provision
+a new user with existing Elsa roles or match an eligible existing user under configured evidence and delegation
+bounds. Integrators supply named `IExternalProvisioningPolicy` implementations through the managed Core contract.
+Policy assessment is read-only and also supplies preview; only actual admission invokes the authority's atomic
+user/link mutation. Saved manual assignments are preserved. The optional recurring group-mapping membership choice
+in spec 1205 is still open and has not been inferred from the withdrawn card response.
+
+`PrincipalFactoryContext` now takes `(TenantId, UserId, Provider?)`, after admission. Its old external-principal,
+claim-rule and automatic-provisioning contract is retired as a pre-GA source-breaking change. The factory refuses
+missing/inactive users and suspended memberships and projects only saved Elsa roles/permissions. Direct bearer
+normalization keeps its separate explicit bridge and does not acquire managed-connection dependencies.
+
+Composition, policy configuration and the integrator example belong to the
+[managed feature README](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
+Actual provider/session/API/Studio and deployment qualification remain required by
+[spec 1205](../../specs/1205-external-authentication/spec.md); the policy and persistence component tests alone do not prove them.
