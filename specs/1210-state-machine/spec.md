@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD25 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD26 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -33,6 +33,7 @@ A workflow author creates a StateMachine through the normal workflow/activity au
 1. **Given** a new workflow, **when** the author chooses StateMachine, creates a small lifecycle, saves, reloads and publishes, **then** its states, transitions, conditions and activity slots retain their intended meaning and the published definition executes.
 2. **Given** a larger workflow with work before and after a nested machine, **when** that machine runs to its agreed completion, **then** the parent continues through the normal activity-composition contract.
 3. **Given** a machine intended for reuse, **when** it is published through the existing reusable-activity mechanism, **then** callers use the ordinary definition/version/publication lifecycle rather than a separately managed StateMachine definition type.
+4. **Given** a machine, compound state with sequential child-state selection, or parallel region, **when** the author configures startup, **then** an explicit initial child state is required and missing or invalid selections are diagnosed. Moving shapes does not change startup behavior.
 
 ### User Story 2 — Share behavior through state hierarchy (Priority: P1)
 
@@ -67,6 +68,7 @@ An author models several concurrent lifecycle regions without enumerating every 
 4. **Given** every region has reached a final state, **when** completion is evaluated, **then** the parallel state is complete under the agreed enclosing-state completion contract.
 5. **Given** an explicit authored transition leaves the shared parallel parent, **when** it is selected, **then** the relevant descendant work is cancelled; early exit is not an implicit any/threshold completion policy.
 6. **Given** a host restart while several regions are active, **when** execution resumes, **then** their active configuration and outstanding obligations are recovered without converting local progress into cancellation of unrelated regions.
+7. **Given** a parallel state whose regions each have an explicit initial state, **when** that parallel state is entered, **then** every region starts at its own initial state rather than one region being selected instead of the others.
 
 ### User Story 4 — Wait durably during selected transition work (Priority: P1)
 
@@ -187,6 +189,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-034**: Recovery of failed transition work MUST use the normal Elsa activity recovery boundary and preserve completed earlier phases. StateMachine MUST NOT automatically rewind the whole transition. Retry retains existing platform/external-effect guarantees and MUST NOT be represented as exactly-once external execution or implicit compensation.
 - **FR-035**: Studio MUST present a focused state/transition/region chart with summaries of entry, exit, trigger and action work. Authors MUST be able to drill into that ordinary work using the normal activity editor, with breadcrumbs back to the chart and chart context preserved on return. Detailed navigation and accessibility/responsive journeys remain Q3.
 - **FR-036**: Selecting a transition MUST expose a structured inspector for Trigger (or Automatic), Condition, Action and Destination, explicit transition order, and whether the reaction preserves the state visit or exits/re-enters. Ordinary activity work MUST use the normal activity editor and conditions MUST use Elsa's expression editor. The inspector MUST represent the supported transition semantics; detailed valid choices and diagnostics remain Q3.
+- **FR-037**: The machine, each compound state with sequential child-state selection, and each parallel region MUST have an explicit initial child state. Studio MUST validate missing or invalid selections. Entering a parallel state MUST activate every region at its own explicit initial state. Graph geometry MUST NOT determine startup behavior.
 
 ### Platform constraints and design obligations
 
@@ -231,7 +234,7 @@ These are conceptual specification terms, not approved public types or a committ
 - Scope does not imply full SCXML interchange/conformance, history states, shared-trigger object identity, Elsa 3 import/migration, a new saga engine or compensation of external effects.
 - Existing native compensation/saga work retains its ownership. Any integration proposal identifies the actual contract and evidence needed rather than merging programs by terminology.
 - No arbitrary throughput/latency target, wall-clock CI gate, release or deployment is introduced by this draft.
-- Final state/initial configuration, complete transition ordering, delivery/recovery and Studio contracts remain provisional until Q1–Q3 are resolved. Production implementation must wait for the applicable approved design/spec artifacts.
+- Complete scoped completion, hierarchical phase/transition ordering, delivery/recovery and Studio contracts remain provisional until Q1–Q3 are resolved. Production implementation must wait for the applicable approved design/spec artifacts.
 
 ## Open decisions and proposed defaults
 
@@ -239,17 +242,17 @@ The following are review prompts, not accepted semantics. Interview the owner on
 
 ### Q1 — Complete statechart execution contract
 
-[NEEDS CLARIFICATION: Confirm or amend the remaining initial configuration/scoped completion, complete entry/exit/action, cross-state/region and automatic-candidate conflict, reevaluation and rearming/loop rules before declaring the behavior contract approved.]
+[NEEDS CLARIFICATION: Confirm or amend the remaining scoped completion, complete hierarchical entry/exit/action, cross-state/region and automatic-candidate conflict, reevaluation and rearming/loop rules before declaring the behavior contract approved.]
 
 OD17 settles same-state selection order for one input (FR-028). Complete conflict arbitration across different states/regions remains open.
 
 OD18 adds automatic transitions after entry work completes (FR-029). OD19 gives eligible automatic progress precedence over queued business events (FR-030). Complete automatic-candidate arbitration, reevaluation and cycle/protection/recovery rules still need agreement.
 
-OD20 requires explicit final-state intent (FR-031). Initial configuration, final entry work and complete scoped completion propagation remain open.
+OD20 requires explicit final-state intent (FR-031). OD26 requires explicit, validated initial child states at each applicable level and starts all regions when entering a parallel state (FR-037). Final entry work and complete scoped completion propagation remain open.
 
 OD22 settles source Exit → transition Action → target Entry for applicable authored phases (FR-033), with durable completion before the next phase starts. Complete hierarchical exit/entry boundaries and fault/recovery details remain open.
 
-Proposed reference baseline: explicit initial configuration; a persistent authored reaction remains usable after an action-without-exit completes. These proposals have not been accepted merely because a reference engine uses them.
+Proposed reference baseline: a persistent authored reaction remains usable after an action-without-exit completes. This proposal has not been accepted merely because a reference engine uses it.
 
 ### Q2 — Durable admission, event outcomes and recovery
 
