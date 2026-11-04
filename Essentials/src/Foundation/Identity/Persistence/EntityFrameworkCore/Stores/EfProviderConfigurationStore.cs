@@ -4,19 +4,102 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// EF-backed tenant/global provider configuration store. It owns only I06/I07 and never delegates
-/// to another store or requires a provider engine in this assembly.
+/// EF-backed tenant/global provider configuration store. Coordinated global writes own a serializable
+/// transaction with IAM revision guards when both modules use one database target.
 /// </summary>
 public sealed class EfProviderConfigurationStore(
     IdentityProviderConfigurationDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor)
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IdentityIamDbContext? iamContext = null)
     : IProviderConfigurationStore, IRevisionAwareProviderConfigurationStore
 {
+    public EfProviderConfigurationStore(IdentityProviderConfigurationDbContext context, IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(context, accessContextAccessor, null) { }
+
+    public bool SupportsIdentityRevisionGuards => iamContext is not null && context.Database.IsRelational() && iamContext.Database.IsRelational() &&
+        OwnsConfiguredTarget(context) && OwnsConfiguredTarget(iamContext) &&
+        context.Database.ProviderName == iamContext.Database.ProviderName &&
+        !string.IsNullOrEmpty(context.Database.GetConnectionString()) &&
+        string.Equals(context.Database.GetConnectionString(), iamContext.Database.GetConnectionString(), StringComparison.Ordinal);
+
+    private static bool OwnsConfiguredTarget(DbContext configured)
+    {
+        var relational = configured.GetService<IDbContextOptions>().Extensions.OfType<RelationalOptionsExtension>().Single();
+        return relational.Connection is null && string.Equals(relational.ConnectionString, configured.Database.GetConnectionString(), StringComparison.Ordinal);
+    }
+
+    public async ValueTask<IamRevisionSaveResult> SaveWithIdentityRevisionGuardsAsync(ProviderConfigurationRecord configuration,
+        string? expectedRevision, IReadOnlyList<IamRevisionGuard> guards, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(guards);
+        ValidateConfiguration(configuration);
+        IdentityEntityFrameworkAccessGuard.EnsurePrivilegedGlobal(accessContextAccessor);
+        if (configuration.TenantId is not null) throw new ArgumentException("A coordinated provider configuration must be global.", nameof(configuration));
+        if (guards.Count is < 1 or > 513 || guards.Any(guard => guard is null))
+            throw new ArgumentException("Coordinated IAM guards must be present and bounded.", nameof(guards));
+        if (guards.Select(guard => (guard.Kind, Tenant: EfIdentityStoreSupport.Normalize(guard.TenantId), Id: EfIdentityStoreSupport.Normalize(guard.Id)))
+            .Distinct().Count() != guards.Count) throw new ArgumentException("Coordinated IAM guards must be unique.", nameof(guards));
+        if (expectedRevision is not null && !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out _))
+            return EfIdentityStoreSupport.InvalidRevision();
+        var versions = new List<(IamRevisionGuard Guard, long Version)>();
+        foreach (var guard in guards)
+        {
+            if (!EfIamRevisionGuards.TryGetVersion(guard.Revision, out var version)) return EfIdentityStoreSupport.InvalidRevision();
+            versions.Add((guard, version));
+        }
+        if (!SupportsIdentityRevisionGuards) throw new NotSupportedException("Coordinated IAM and provider configuration require one relational database target.");
+        if (context.Database.CurrentTransaction is not null || iamContext!.Database.CurrentTransaction is not null ||
+            System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges() || iamContext.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("A coordinated provider write owns its transaction and cannot borrow caller changes.");
+        context.EnsureProviderBinding(); iamContext.EnsureProviderBinding();
+        try
+        {
+            await using var transaction = await EfSharedTransaction.BeginSerializableAsync([context, iamContext], cancellationToken);
+            var ownedIam = transaction.Context<IdentityIamDbContext>();
+            foreach (var (guard, version) in versions.OrderBy(item => item.Guard.Kind)
+                         .ThenBy(item => item.Guard.TenantId, StringComparer.Ordinal).ThenBy(item => item.Guard.Id, StringComparer.Ordinal))
+            {
+                var id = EfIdentityStoreSupport.RecordId(guard.TenantId, guard.Id);
+                int changed;
+                if (guard.Kind == IamRevisionGuardKind.User)
+                {
+                    var row = await ownedIam.Users.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id && row.Revision == version, cancellationToken);
+                    if (row is null) return new(IamRevisionSaveStatus.Conflict);
+                    EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
+                    if (EfIamRevisionGuards.User(row)?.Revision != guard.Revision) return new(IamRevisionSaveStatus.Conflict);
+                    changed = await ownedIam.Users.Where(current => current.Id == id && current.Revision == version && current.SchemaVersion == row.SchemaVersion)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(current => current.Revision, checked(version + 1)), cancellationToken);
+                }
+                else
+                {
+                    var row = await ownedIam.Roles.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id && row.Revision == version, cancellationToken);
+                    if (row is null) return new(IamRevisionSaveStatus.Conflict);
+                    EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
+                    if (EfIamRevisionGuards.Role(row).Revision != guard.Revision) return new(IamRevisionSaveStatus.Conflict);
+                    changed = await ownedIam.Roles.Where(current => current.Id == id && current.Revision == version && current.SchemaVersion == row.SchemaVersion)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(current => current.Revision, checked(version + 1)), cancellationToken);
+                }
+                if (changed != 1) return new(IamRevisionSaveStatus.Conflict);
+            }
+            var ownedStore = new EfProviderConfigurationStore(transaction.Context<IdentityProviderConfigurationDbContext>(), accessContextAccessor);
+            var saved = await ownedStore.SaveWithRevisionAsync(configuration, expectedRevision, cancellationToken);
+            if (saved.Status != IamRevisionSaveStatus.Saved) return saved;
+            await transaction.CommitAsync(cancellationToken);
+            return saved;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (EfCommitOutcomeUnknownException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey))
+        { return new(IamRevisionSaveStatus.Conflict); }
+    }
+
     public async ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
         string provider,
         CancellationToken cancellationToken = default)

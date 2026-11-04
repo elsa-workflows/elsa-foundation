@@ -639,3 +639,57 @@ T024 remains unchecked for qualified unlink and atomic cross-IAM final-login coo
 surfaces, the full Studio/external IdP product/cross-site/server-DB/restart/separate-process/two-node matrix,
 independent exact-head review/current required CI/merge and resulting-main qualification remain required.
 The complete #3579/#2848 goal remains active and unachieved; PR #3806 remains draft.
+
+## Coordinated IAM/provider persistence operation (4 November)
+
+Added the required storage operation for T024: `IamRevisionGuard`, optional read-only guard capture on user/role
+revision stores, and `IRevisionAwareProviderConfigurationStore.SaveWithIdentityRevisionGuardsAsync`. Unsupported
+implementations default to no guards/no coordination. The selected EF store advertises support only for owned,
+same-provider/same-connection-string IAM/provider targets. Its original two-argument constructor remains available.
+
+The existing `EfSharedTransaction` now also offers an explicitly serializable owner. The new path refuses supplied
+connections and runtime retargeting before opening a connection, then verifies fresh contexts preserve the target.
+Its original default-isolation path remains unchanged. In one owned physical transaction the provider store verifies
+opaque root snapshots, conditionally advances their metadata revisions, then CAS-saves the global configuration.
+It preserves account epochs, permissions and readable payload schema. Unknown future schemas fail with the existing
+typed skew exception. Caller transactions, ambient transactions and unsaved caller changes are refused.
+
+Numeric versions alone are insufficient: real delete/recreate tests produce the same user/role numeric revision.
+User guards also bind the account instance; role guards bind the definition contents. They use existing framed
+exact-UTF-16 hashing. A recreated account or changed role cannot satisfy an older snapshot. Serializable snapshot
+reads prevent a further delete/recreate between validation and conditional update. No new table, column, migration,
+lock journal, lease or distributed transaction was added. Split targets/custom authorities require proven atomic
+coordination rather than an optimistic fallback.
+
+Eighteen native SQLite cases prove all-or-nothing commit, user/role/catalog/tenant conflicts, metadata preservation,
+independent-writer races, recreated instances, old-readable/future schema, caller-state/target refusals, provider save
+failure rollback and a controlled lost commit acknowledgement. The last occurs after a real commit, verifies all
+rows committed together, and requires `EfCommitOutcomeUnknownException` even when the inner error looks like a
+concurrency exception. It cannot falsely report a plain conflict or success. An actual Kestrel/managed-host case
+proves default DI selects coordination and guard-only metadata advances preserve the administrator cookie, access
+and refresh credentials.
+
+Guard-removal mutation: bypassing only the guard loop makes **six** of seven focused cases fail, including stale
+IAM/tenant and recreated-instance acceptance plus missing root revision advancement. The ordinary stale-catalog
+case still refuses. Source restored in `finally`; complete restored suites pass. Control:
+`/tmp/elsa-3579-coordinated-guards-mutation.log`. Intermediate test corrections were record/set value comparison,
+the existing typed schema-skew outcome, and missing test imports; no production guard or test was waived.
+
+Current Release validation: Identity **838/838** (discovery **838**), IAM EF **225/225**, ASP.NET Identity EF **59/59**,
+architecture **616/616**, zero skips in those suites. Shared persistence **725 passed, 1 skipped**: the existing
+`EfSqliteSerialOpenStressTests.Concurrent_opens_of_one_file_never_share_a_pooled_connection` explicitly requires
+`ELSA_SQLITE_POOL_STRESS=1`; that opt-in stress workload was not run. Both existing Design shared-transaction caller
+regressions pass **2/2**. Generated filters and whitespace checks pass. Logs:
+`/tmp/elsa-3579-coordinated-final-identity.log`, `/tmp/elsa-3579-coordinated-list-tests.log`,
+`/tmp/elsa-3579-coordinated-final-iam.log`, `/tmp/elsa-3579-coordinated-aspnet-ef.log`,
+`/tmp/elsa-3579-coordinated-final-architecture.log`, `/tmp/elsa-3579-coordinated-shared-ef.log`,
+`/tmp/elsa-3579-coordinated-existing-shared-callers.log`, `/tmp/elsa-3579-coordinated-maps.log`.
+
+This checkpoint completes the persistence operation, not the managed mutation integration. Existing catalog
+retirement still needs revision-guard capture around real editor authorization, role delegation and recovery checks,
+and must route its write through this operation. Qualified unlink also needs exact link-revision session/proof binding,
+monotonic link/owner counters through remove/recreate, and atomic removal/catalog CAS. The implementation sequence
+and counter invariants are recorded in `research.md`. **T024 remains unchecked**; there is no removal endpoint yet.
+T025 and all actual full Studio/external-product/cross-site/server-DB/restart/separate-process/two-node qualification,
+remaining exact-head package/consumer gates, independent review/required CI/merge/resulting-main proof remain required.
+The complete goal remains active and unachieved; this storage proof does not qualify server engines or close the feature.

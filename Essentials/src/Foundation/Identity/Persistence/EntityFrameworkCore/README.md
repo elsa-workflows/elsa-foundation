@@ -54,3 +54,26 @@ Atomic external admission nests the existing user/relationship mutations under o
 acknowledgement. New users receive a security stamp and no local password. Missing default roles, stale matched
 user snapshots, disabled users and conflicting identifiers refuse admission; linking an existing user preserves
 saved roles. Its regression suite injects a link-write failure and races independent SQLite contexts.
+
+## Coordinated provider and IAM revisions
+
+The revision-aware user/role stores can return opaque `IamRevisionGuard` snapshots. User guards bind the account
+instance and revision; role guards bind definition contents and revision. Capturing them never initializes an
+account epoch. Missing accounts, unsupported authorities and older accounts without an epoch return no guard.
+
+`IRevisionAwareProviderConfigurationStore.SupportsIdentityRevisionGuards` reports whether the selected EF IAM
+and provider contexts target the same relational provider and exact connection string. When available,
+`SaveWithIdentityRevisionGuardsAsync` CAS-saves a global provider configuration and advances the guarded IAM
+revisions in one fresh serializable physical transaction. It preserves account security stamps, permissions and
+readable payload schema. A recreated root cannot reuse an older guard at the same numeric revision. Stale IAM
+or provider state, provider-save failure and unsupported schema never commit a partial unit. The operation
+requires privileged global access and refuses caller transactions, ambient transactions and pending caller changes.
+Supplied connection objects and runtime-retargeted contexts do not qualify: fresh contexts must provably own the
+configured connection-string target before opening it. Lost commit acknowledgement stays an unknown outcome,
+requiring a current-state read rather than blind replay or a plain-conflict report.
+The existing two-argument store constructor and ordinary saves remain available.
+
+This is the storage operation for managed-authentication recovery coordination. Managed catalog-writer and
+qualified-unlink integration remain tracked by spec 1205 T024; the new storage operation alone does not provide
+those product-level guarantees. Split-target or custom authorities must supply proven atomic coordination
+before their revision guards can authorize a managed destructive change.

@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -66,9 +67,16 @@ public sealed class EfSharedTransaction : IAsyncDisposable
     /// first, begins one transaction, and enlists the rest in it.
     /// </summary>
     /// <exception cref="EfSharedTransactionTargetMismatchException">The contexts name different providers or connection strings.</exception>
-    public static async Task<EfSharedTransaction> BeginAsync(
+    public static Task<EfSharedTransaction> BeginAsync(
         IReadOnlyList<DbContext> configuredContexts,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) => BeginCoreAsync(configuredContexts, IsolationLevel.Unspecified, cancellationToken);
+
+    /// <summary>Owns a serializable transaction when validation reads must remain valid through the coordinated commit.</summary>
+    public static Task<EfSharedTransaction> BeginSerializableAsync(IReadOnlyList<DbContext> configuredContexts,
+        CancellationToken cancellationToken = default) => BeginCoreAsync(configuredContexts, IsolationLevel.Serializable, cancellationToken);
+
+    private static async Task<EfSharedTransaction> BeginCoreAsync(IReadOnlyList<DbContext> configuredContexts,
+        IsolationLevel isolation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(configuredContexts);
         if (configuredContexts.Count == 0)
@@ -79,6 +87,13 @@ public sealed class EfSharedTransaction : IAsyncDisposable
             throw new ArgumentException("A shared transaction enlists each context type once.", nameof(configuredContexts));
 
         var providerName = EnsureSingleTarget(configuredContexts);
+        if (isolation == IsolationLevel.Serializable)
+            foreach (var configured in configuredContexts)
+            {
+                var relational = configured.GetService<IDbContextOptions>().Extensions.OfType<RelationalOptionsExtension>().Single();
+                if (relational.Connection is not null || !StringComparer.Ordinal.Equals(relational.ConnectionString, configured.Database.GetConnectionString()))
+                    throw new EfSharedTransactionTargetMismatchException("A serializable owner requires configured connection strings; supplied connections and runtime retargeting cannot be borrowed.");
+            }
         cancellationToken.ThrowIfCancellationRequested();
 
         var created = new List<DbContext>(configuredContexts.Count);
@@ -87,9 +102,13 @@ public sealed class EfSharedTransaction : IAsyncDisposable
         {
             foreach (var configured in configuredContexts)
                 created.Add(CreateFresh(configured));
+            if (isolation == IsolationLevel.Serializable && created.Any(fresh => Target(fresh) != Target(configuredContexts[0])))
+                throw new EfSharedTransactionTargetMismatchException("Fresh serializable contexts must preserve the configured database target.");
 
             var anchor = created[0];
-            transaction = await anchor.Database.BeginTransactionAsync(cancellationToken);
+            transaction = isolation == IsolationLevel.Unspecified
+                ? await anchor.Database.BeginTransactionAsync(cancellationToken)
+                : await anchor.Database.BeginTransactionAsync(isolation, cancellationToken);
             var connection = anchor.Database.GetDbConnection();
             var dbTransaction = transaction.GetDbTransaction();
             foreach (var enlisted in created.Skip(1))

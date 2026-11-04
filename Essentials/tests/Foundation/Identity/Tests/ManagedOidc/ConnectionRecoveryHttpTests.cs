@@ -1,10 +1,12 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.ExternalAuthentication;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
@@ -20,6 +22,33 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
 public sealed partial class ExternalAuthenticationHttpTests
 {
+    [Fact]
+    public async Task Actual_managed_host_coordinates_provider_and_IAM_revisions_without_invalidating_existing_credentials()
+    {
+        await using var host = await HttpHost.Start(); using var administrator = host.Browser();
+        await host.LoginAdministrator(administrator);
+        var user = (await Session(administrator)).Subject!; var pair = await Pair(administrator);
+        IamRevisionGuard guard;
+        await using (var scope = host.Scope())
+            guard = (await scope.ServiceProvider.GetRequiredService<IRevisionAwareUserStore>().FindRevisionGuardAsync("default", user))!;
+        Assert.NotNull(guard);
+        await using (var global = host.Services.CreateAsyncScope())
+        {
+            global.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("test-guarded-provider-write")));
+            var store = global.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
+            Assert.True(store.SupportsIdentityRevisionGuards);
+            var result = await store.SaveWithIdentityRevisionGuardsAsync(new("guarded-provider-probe", null, "test", true, false,
+                ProviderCapabilities.ExternalOidcDefault, new Dictionary<string, string>()), null, [guard]);
+            Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+        }
+        Assert.Equal(user, (await Session(administrator)).Subject);
+        using (var access = await Bearer(administrator, pair.AccessToken)) Assert.Equal(HttpStatusCode.OK, access.StatusCode);
+        using (var refresh = await administrator.PostAsJsonAsync("_elsa/identity/refresh", new { refreshToken = pair.RefreshToken }))
+            Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+        await using var current = host.Scope();
+        Assert.NotEqual(guard.Revision, (await current.ServiceProvider.GetRequiredService<IRevisionAwareUserStore>().FindRevisionGuardAsync("default", user))!.Revision);
+    }
+
     [Fact]
     public async Task Recovery_observations_require_the_actual_issued_session_for_the_same_user_and_connection()
     {

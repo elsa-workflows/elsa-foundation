@@ -45,6 +45,9 @@ public interface IPagedUserStore
 [ReplacementContract]
 public interface IRevisionAwareUserStore
 {
+    /// <summary>Captures a non-reusable account-instance/revision binding for a coordinated write; null means unsupported or absent.</summary>
+    ValueTask<IamRevisionGuard?> FindRevisionGuardAsync(string tenantId, string userId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IamRevisionGuard?>(null);
+
     ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(UserRecord user, string? expectedRevision, CancellationToken cancellationToken = default);
@@ -63,6 +66,9 @@ public interface IRoleStore
 [ReplacementContract]
 public interface IRevisionAwareRoleStore
 {
+    /// <summary>Captures the role definition and revision for a coordinated write; null means unsupported or absent.</summary>
+    ValueTask<IamRevisionGuard?> FindRevisionGuardAsync(string tenantId, string roleId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IamRevisionGuard?>(null);
+
     ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(RoleRecord role, string? expectedRevision, CancellationToken cancellationToken = default);
@@ -202,6 +208,14 @@ public interface IProviderConfigurationStore
 [ReplacementContract]
 public interface IRevisionAwareProviderConfigurationStore
 {
+    /// <summary>True only when IAM roots and provider configuration can commit in one physical transaction.</summary>
+    bool SupportsIdentityRevisionGuards => false;
+
+    /// <summary>CAS-saves a global configuration and advances the guarded IAM revisions as one committed unit.</summary>
+    ValueTask<IamRevisionSaveResult> SaveWithIdentityRevisionGuardsAsync(ProviderConfigurationRecord configuration, string? expectedRevision,
+        IReadOnlyList<IamRevisionGuard> guards, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This provider configuration authority cannot coordinate IAM revisions.");
+
     ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(string provider, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(string tenantId, string provider, CancellationToken cancellationToken = default);

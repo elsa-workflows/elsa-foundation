@@ -1218,3 +1218,16 @@ const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.
 const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentitySessionsManage = "identity/sessions:manage" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityLinksRead = "identity/links:read" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityLinksManage = "identity/links:manage" -> string!
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareProviderConfigurationStore.SaveWithIdentityRevisionGuardsAsync(Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationRecord! configuration, string? expectedRevision, System.Collections.Generic.IReadOnlyList<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard!>! guards, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionSaveResult!>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareProviderConfigurationStore.SupportsIdentityRevisionGuards.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.IamRevisionGuard(Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind kind, string! tenantId, string! id, string! revision) -> void
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.Id.get -> string!
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.Kind.get -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.Revision.get -> string!
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind.Role = 1 -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind.User = 0 -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareRoleStore.FindRevisionGuardAsync(string! tenantId, string! roleId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard?>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareUserStore.FindRevisionGuardAsync(string! tenantId, string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard?>

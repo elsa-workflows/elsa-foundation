@@ -98,3 +98,48 @@ Primary protocol constraints were checked against OIDC Core §3.1.3.7, RFC 9700 
 the adapter README). A controlled Kestrel provider fixture exercises actual HTTP client authentication, PKCE,
 single-use codes, signed tokens, malformed evidence and bounded failures. It is not an external-product or
 composed Elsa browser/deployment witness, and T026-T029 remain open.
+
+## Coordinated IAM/provider persistence refinement
+
+Decision: reuse `EfSharedTransaction` for one physical, serializable transaction over the existing IAM and
+provider-configuration contexts. The selected EF coordinator requires the same relational provider and exact
+configured connection string. A different authority can implement the Core coordination contract; unsupported
+or split-target compositions must not claim atomic recovery protection. No lock journal, lease, fence table or
+distributed transaction is introduced.
+
+`IRevisionAwareUserStore` and `IRevisionAwareRoleStore` can capture opaque `IamRevisionGuard` snapshots. A user
+guard includes the account instance/security version and numeric revision; a role guard includes its definition
+contents and revision. This prevents delete/recreate at the same numeric revision from satisfying an older
+snapshot. Guard capture is read-only and old accounts without an epoch return no guard. The provider store can
+save a global configuration together with conditional IAM revision advances, preserving account epochs,
+permissions and payload schema. Any stale guard, stale catalog, save failure or unknown schema aborts the whole
+owned transaction. Caller transactions/changes are refused. Serializable reads protect the snapshot check until
+its conditional update, including deletion/recreation between those operations.
+
+Implemented primitive proof: native SQLite commit/rollback, competing independent writers, stale user/role/
+catalog/tenant guards, recreated user/role instances, old-readable/future schema, split target, caller transaction
+and pending changes. An actual managed HTTP composition resolves the coordinator and preserves existing cookie,
+access and refresh credentials after a guard-only revision advance. This does not yet wire managed retirement or
+unlink; T024 remains open.
+
+Remaining integration:
+
+1. Capture user and all referenced role guards before and after actual authorization, delegation and recovery
+   checks. Include the editor, outbound admission roles and selected local/external recovery identity. Merge equal
+   guards; conflicting snapshots require a retry. Default unsupported contributions fail closed.
+2. Carry guards as server-only catalog write metadata and route managed mutations through coordinated provider
+   saves. Preserve the source/material model and existing full-catalog expected revision. Expose actual missing
+   coordination capability in API/Studio guidance.
+3. Bind external sessions and protected recovery observations to the exact qualified link revision as well as
+   account epoch. Qualified removal must not revive old credentials after the same link is recreated.
+4. Preserve monotonic qualified-link revisions through deletion/recreation without another schema column: a new
+   link's revision must exceed its owner's previous root revision, ownership changes must advance both root counters to
+   at least the link revision, and removal must advance the owner's counter beyond the removed link's revision.
+   Creation/admission and all qualified writes must maintain that invariant. An account recreation changes its
+   epoch. Verify with a frozen clock and ownership round trips; do not rely on timestamps or a numeric revision
+   that restarts at one. Ordinary sign-in must preserve sibling sessions.
+5. Remove a qualified link and touch the unchanged catalog revision in that same coordinated transaction, using
+   the expected owner guard/link revision. Preserve other credentials and evidence when only that link is removed;
+   explicit ownership rebind still rotates affected account epochs. Prove per-user alternative sign-in and global
+   administrative recovery, including forced catalog/link/IAM races and truthful storage failures, before exposing
+   the removal endpoint or completing T024. Finish T025 and the full deployment/acceptance matrix afterward.
