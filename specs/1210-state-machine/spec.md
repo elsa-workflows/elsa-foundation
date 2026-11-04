@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD41 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD42 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -125,6 +125,7 @@ An author uses ordinary activities/composites as transition triggers and disting
 10. **Given** eligible automatic transitions and an already queued business event, **when** the machine progresses, **then** it runs eligible automatic transitions until none remain before evaluating that queued event against the resulting configuration. Automatic cycles cannot run indefinitely; the protection contract remains Q1.
 11. **Given** an eligible automatic path, a ready nested-state completion and queued business events, **when** the machine progresses, **then** automatic transitions are exhausted before still-applicable completion reactions. Automatic paths are checked again after each reaction; queued business events are evaluated only after this internal progress settles. Loop protection applies.
 12. **Given** loop protection detects excessive automatic/completion progress, **when** protection takes effect, **then** further internal progress stops, committed progress is preserved and an actionable incident is visible through normal Elsa operations. Recovery is required; the detected cycle does not automatically repeat. The concrete limit, detection boundary and supported recovery actions remain technical design work.
+13. **Given** a trigger-based action-without-exit reaction succeeds and its source visit remains active, **when** that reaction becomes available again, **then** only its own trigger restarts and other waits/deadlines remain intact. Event waits listen for new input without replaying the consumed event; composite trigger work can repeat. The trigger does not re-arm before action success or after the source visit ends.
 
 ### User Story 6 — Inspect, diagnose and operate the actual machine (Priority: P1)
 
@@ -221,6 +222,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-050**: The initial release MUST disallow direct transition edges between states in independent regions of a shared parallel container. Definition validation and Studio MUST diagnose these edges clearly and MUST NOT silently reinterpret them as shared-container exit/re-entry. Region-local transitions, compatible shared-event regional reactions and explicit exits from the containing parallel state MUST remain supported. This restriction does not reduce the agreed hierarchy/parallel first-release scope or select unagreed exit/entry boundaries and conflict arbitration.
 - **FR-051**: For one input enabling conflicting transition candidates sourced in unrelated parallel regions, precedence MUST use an explicit author-visible order. Accepted child-over-parent precedence and compatible regional selection MUST be preserved; diagram geometry MUST NOT determine priority and parallel-container exits MUST NOT receive implicit preference. Formal compatible-set selection, exact boundaries and losing-trigger disposition remain Q1 design/proof work.
 - **FR-052**: For a transition defined on a compound parent with one active child and targeting its descendant, authors MUST be able to explicitly choose either to preserve the parent visit while changing the child, retaining parent-owned waits/deadlines, or to exit/re-enter the parent, running its exit/entry work and starting a fresh parent visit. Accepted phase, hierarchy, state-visit and recovery rules MUST apply. This requirement does not permit direct cross-region edges or select behavior for parallel parents; complete boundary calculation, validation, schema/defaults and source/Studio integration remain open.
+- **FR-053**: A trigger-based action-without-exit reaction MUST re-arm only its own trigger after its action succeeds, provided the same source visit remains active. It MUST NOT re-arm before action success or after that visit ends. Other waits/deadlines MUST remain intact and an event wait MUST listen for new input without replaying the consumed event. Repeated composite trigger work retains existing external-effect guarantees. Automatic paths without an activity trigger retain their separate rules; exact scheduling/recovery integration and immediately completing trigger-loop protection remain open.
 
 ### Platform constraints and design obligations
 
@@ -289,7 +291,7 @@ OD22 settles source Exit → transition Action → target Entry for applicable a
 
 OD41 explicitly supports parent-visit preservation or re-entry for a transition defined on a compound parent with one active child and targeting its descendant (FR-052). Parent waits/deadlines follow that choice. Complete boundary calculation, validation, schema/defaults and parallel-parent behavior remain open; direct cross-region edges remain excluded.
 
-Proposed reference baseline: a persistent authored reaction remains usable after an action-without-exit completes. This proposal has not been accepted merely because a reference engine uses it.
+OD42 keeps trigger-based action-without-exit reactions available by re-arming only their own trigger after successful action completion while the same visit remains active, preserving other waits/deadlines and requiring new event input (FR-053). Exact scheduling/recovery integration, losing-trigger disposition and immediately completing trigger-loop protection remain open. Automatic paths without an activity trigger retain their separate rules.
 
 ### Q2 — Durable admission, event outcomes and recovery
 

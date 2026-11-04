@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A41 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A42 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -49,6 +49,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD39 — reject direct cross-region edges initially | FR-050 | A39 |
 | OD40 — explicit unrelated-region conflict precedence | FR-051 | A40 |
 | OD41 — explicit parent-to-descendant visit behavior | FR-052 | A41 |
+| OD42 — re-arm a successful action-without-exit reaction | FR-053 | A42 |
 
 ## Witness definitions
 
@@ -95,6 +96,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A39 | Direct cross-region edge validation | Definition validation and Studio reject direct edges between independent regions with a clear diagnostic; valid local transitions, shared-event reactions and explicit container exits still work | Definition-validation and actual Studio author/save/reload/publish controls with valid parallel runtime witnesses; complete allowed boundaries/conflict arbitration remain Q1 and editor integration is unproved |
 | A40 | Local regional path competes with a container exit | Explicit authored order resolves conflicting candidates sourced in unrelated regions without implicit container-exit preference; child-over-parent precedence and compatible selections remain intact and shape movement does not alter priority | Semantic conflict-set controls and actual Studio order/save/reload/published execution witness; formal compatible-set algorithm, exact boundaries and losing-trigger disposition remain Q1 |
 | A41 | Parent-to-descendant preservation versus re-entry | A compound parent's authored transition to a descendant preserves parent visit/waits/deadline or deliberately exits/re-enters with a fresh visit according to explicit choice; accepted child cancellation, phase/hierarchy and recovery rules hold | Actual Studio choice/save/reload/publish and host/timer/phase/restart witnesses for both modes, including obsolete-child completion controls; complete boundaries, schema/defaults and integration remain open |
+| A42 | Repeated reaction within one visit | After successful trigger-based action without exit, only that trigger re-arms while the same visit remains active; other waits/deadlines persist, consumed input is not replayed, and pending/failed action or ended visit does not re-arm it | Actual event/timer/composite-trigger and host/restart/recovery witnesses with repeated new inputs and controlled trigger-work counts; exact scheduling/recovery and immediate-completion loop protection remain open |
 
 ## Qualification rules
 
