@@ -146,6 +146,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityPublicationCandidateEvaluator, ActivityPublicationCandidateEvaluator>();
         services.TryAddScoped<IActivityCatalogProjection, ActivityCatalogProjection>();
         services.TryAddScoped<IActivityPublicationVersionPolicy, ActivityPublicationVersions>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityPublishingReplacementContractsStartupTask>());
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
         // The export producer is destination-agnostic. It reads the executable closure and provenance, while
