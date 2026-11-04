@@ -41,7 +41,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Drafts.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft",
         ["Drafts.Replace"] = "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraftRequest",
         ["Drafts.UpdatePresentation"] = "Elsa.Activities.Design.Api.Commands.UpdateReusableActivityDraftPresentation",
-        ["Drafts.ConflictCopy"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftConflictCopyRequest",
+        ["Drafts.ConflictCopy"] = "Elsa.Activities.Design.Api.Commands.DraftConflictCopyRequest",
         ["Drafts.Validate"] = "Elsa.Activities.Design.Api.Commands.ValidateReusableActivityDraft",
         ["Drafts.MigrateProvider"] = "Elsa.Activities.Design.Api.Commands.MigrateReusableActivityDraft",
         ["Drafts.ProposeContract"] = "Elsa.Activities.Design.Api.Commands.ProposeReusableActivityContract",

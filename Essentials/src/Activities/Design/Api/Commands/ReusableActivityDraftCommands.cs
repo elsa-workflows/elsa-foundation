@@ -73,10 +73,10 @@ public sealed record CreateReusableActivityDraftRequest(
 public sealed record ActivityLayoutRecordsPayload(IReadOnlyList<ActivityLayoutRecord> Records);
 
 /// <summary>Preserves omitted versus explicit-empty arrays through endpoint body binding.</summary>
-[JsonConverter(typeof(ActivityNodePresentationPayloadJsonConverter))]
+[JsonConverter(typeof(ActivityPresentationPayloadConverter))]
 public sealed record ActivityNodePresentationPayload(IReadOnlyList<ActivityNodePresentationRecord> Records);
 
-internal sealed class ActivityNodePresentationPayloadJsonConverter : JsonConverter<ActivityNodePresentationPayload>
+internal sealed class ActivityPresentationPayloadConverter : JsonConverter<ActivityNodePresentationPayload>
 {
     public override ActivityNodePresentationPayload Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {

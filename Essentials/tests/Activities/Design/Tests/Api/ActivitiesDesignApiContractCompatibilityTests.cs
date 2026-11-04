@@ -75,7 +75,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(CreateReusableActivityDraftBody),
         typeof(CreateReusableActivityDefinitionRequest),
         typeof(ReplaceReusableActivityDraftRequest),
-        typeof(CreateReusableActivityDraftConflictCopyRequest),
+        typeof(DraftConflictCopyRequest),
         typeof(ActivityManagementPageView<>),
         typeof(ActivityManagementSnapshotView),
         typeof(ActivityOutcomeContractView),
@@ -231,7 +231,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
         // #3750 adds node-presentation body init properties and thin wire envelopes. The existing
         // command constructors/deconstructors are retained and explicitly covered above.
-        Assert.Equal("85536677e8a4823d7216a1e4a8288c3fe2bdfbc108ce3b31cef241e1e625ce08", PublicShapeHash(ContractTypes));
+        Assert.Equal("4180874702ea7eac813efba4dc50a9b2463bab7970f125ecd4a06796db22730d", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

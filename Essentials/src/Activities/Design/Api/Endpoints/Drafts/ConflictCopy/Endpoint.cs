@@ -15,18 +15,18 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts.ConflictCopy;
 [Post("/design/activities/drafts/{draftId}/conflict-copies")]
 [RequirePermission(ActivityDesignPermissions.Manage)]
 [AuthoringProblems]
-public sealed class Endpoint(IReusableActivityAuthoringService service) : ApiEndpoint<CreateReusableActivityDraftConflictCopyRequest, ReusableActivityDraftView>
+public sealed class Endpoint(IReusableActivityAuthoringService service) : ApiEndpoint<DraftConflictCopyRequest, ReusableActivityDraftView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
         options.Operation = "DraftsConflictCopy";
         options.Accepts = ["application/json"];
         options.BodyMode = EndpointBodyMode.RequiredWithContentType;
-        options.Convention(builder => builder.AddOpenApiOperationTransformer(ActivityNodePresentationOpenApi.ConfigureAsync<CreateReusableActivityDraftConflictCopyRequest>));
+        options.Convention(builder => builder.AddOpenApiOperationTransformer(ActivityNodePresentationOpenApi.ConfigureAsync<DraftConflictCopyRequest>));
         options.SuccessStatus = StatusCodes.Status201Created;
     }
 
-    public override async Task<ReusableActivityDraftView> HandleAsync(CreateReusableActivityDraftConflictCopyRequest request, CancellationToken cancellationToken)
+    public override async Task<ReusableActivityDraftView> HandleAsync(DraftConflictCopyRequest request, CancellationToken cancellationToken)
     {
         var response = await service.CreateConflictCopyAsync(request.ToCommand(), cancellationToken);
         HttpContext.Response.Headers.Location = $"/{RouteConstants.GetRoute($"drafts/{response.DraftId}")}";

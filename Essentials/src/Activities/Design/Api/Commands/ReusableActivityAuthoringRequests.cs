@@ -46,7 +46,7 @@ public sealed record ReplaceReusableActivityDraftRequest(
         new(DraftId, ExpectedRevision, Contract, Provider, Layout, PresentationLabel) { ActivityPresentation = ActivityPresentation };
 }
 
-public sealed record CreateReusableActivityDraftConflictCopyRequest(
+public sealed record DraftConflictCopyRequest(
     [property: JsonIgnore] string DraftId,
     long ExpectedSourceRevision,
     ActivityContractView Contract,

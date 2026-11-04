@@ -79,7 +79,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(CreateReusableActivityDraftBody))]
 [JsonSerializable(typeof(CreateReusableActivityDefinitionRequest))]
 [JsonSerializable(typeof(ReplaceReusableActivityDraftRequest))]
-[JsonSerializable(typeof(CreateReusableActivityDraftConflictCopyRequest))]
+[JsonSerializable(typeof(DraftConflictCopyRequest))]
 [JsonSerializable(typeof(ActivityLayoutRecordsPayload))]
 [JsonSerializable(typeof(GetReusableActivityDraft))]
 [JsonSerializable(typeof(ReplaceReusableActivityDraft))]
