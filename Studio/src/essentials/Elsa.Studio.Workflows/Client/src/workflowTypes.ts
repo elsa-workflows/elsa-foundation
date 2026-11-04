@@ -1062,6 +1062,7 @@ export interface ActivityExecutionLayoutConnection {
 }
 
 export interface ActivityExecutionLayout {
+  activityPresentation?: WorkflowExecutableActivityPresentation[];
   workflowExecutionId: string;
   activityExecutionId: string;
   artifactId: string;

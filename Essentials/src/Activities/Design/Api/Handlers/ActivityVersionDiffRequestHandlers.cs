@@ -96,7 +96,7 @@ public sealed class ActivityVersionDiffService(
             draft.Revision,
             draft.State,
             draftLayout.Records.ToArray(),
-            baseline?.DefinitionVersionId), cancellationToken);
+            baseline?.DefinitionVersionId) { ActivityPresentation = draftLayout.ActivityPresentation.ToArray() }, cancellationToken);
         var candidateDiagnostics = candidate.Diagnostics;
         if (candidate.TemplateHash is null && candidateDiagnostics.Count == 0)
         {
@@ -127,7 +127,11 @@ public sealed class ActivityVersionDiffService(
                 candidate.ResumeTargetCount,
                 ActivityLayoutHasher.Compute(draftLayout.Records),
                 draftLayout.Records.Count,
-                candidate.RuntimeRequirements),
+                candidate.RuntimeRequirements)
+            {
+                PresentationHash = ActivityNodePresentationHasher.Compute(draftLayout.ActivityPresentation),
+                PresentationCount = draftLayout.ActivityPresentation.Count
+            },
             CompareDependencies: candidate.TemplateHash is not null,
             Diagnostics: candidateDiagnostics), cancellationToken);
         return result.ToView();
@@ -185,7 +189,11 @@ public sealed class ActivityVersionDiffService(
         version.ResumeTargetCount,
         LayoutHash: layout is null ? null : ActivityLayoutHasher.Compute(layout.Records),
         LayoutCount: layout?.Records.Count,
-        RuntimeRequirements: version.RuntimeRequirements.ToArray());
+        RuntimeRequirements: version.RuntimeRequirements.ToArray())
+    {
+        PresentationHash = ActivityNodePresentationHasher.Compute(layout?.ActivityPresentation),
+        PresentationCount = layout?.ActivityPresentation.Count ?? 0
+    };
 
     private async Task<ActivityDefinitionVersionPublication> GetPublicationAsync(
         string versionId,

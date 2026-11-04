@@ -185,7 +185,7 @@ internal sealed partial class EtlPublishedWorkflowFixture : IAsyncDisposable
 
                 var sourcePublisher = services.GetRequiredService<IActivitySourceVersionPublisher>();
                 foreach (var entry in sourceCatalog)
-                    await sourcePublisher.PublishAsync(entry.Definition, entry.Version);
+                    Assert.True((await sourcePublisher.PublishAsync(entry.Definition, entry.Version)).IsPublished);
 
                 var state = CreateWorkflowState(sourceCatalog, originalArtifact, flowchart);
                 var definition = new WorkflowDefinition { Id = DefinitionId, Name = "Published ETL parent" };

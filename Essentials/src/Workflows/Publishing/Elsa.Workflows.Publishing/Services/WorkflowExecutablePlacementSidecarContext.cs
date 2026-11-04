@@ -7,10 +7,17 @@ namespace Elsa.Workflows.Publishing.Services;
 public sealed class WorkflowExecutablePlacementSidecarContext
 {
     private readonly ConcurrentDictionary<string, ExecutableLayoutSidecar> _values = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, IReadOnlyList<WorkflowExecutableActivityPresentationRecord>> _presentation = new(StringComparer.Ordinal);
 
     public void Set(string definitionVersionId, IEnumerable<ExecutableLayoutBoundarySegment> segments) =>
         _values[definitionVersionId] = new(segments.ToArray());
 
     public ExecutableLayoutSidecar Get(string definitionVersionId) =>
         _values.GetValueOrDefault(definitionVersionId, ExecutableLayoutSidecar.Empty);
+
+    public void SetPresentation(string definitionVersionId, IEnumerable<WorkflowExecutableActivityPresentationRecord> records) =>
+        _presentation[definitionVersionId] = records.ToArray();
+
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> GetPresentation(string definitionVersionId) =>
+        _presentation.GetValueOrDefault(definitionVersionId, []);
 }

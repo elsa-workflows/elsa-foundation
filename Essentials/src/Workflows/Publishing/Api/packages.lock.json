@@ -112,6 +112,9 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
       },
+      "elsa.persistence.core": {
+        "type": "Project"
+      },
       "elsa.pipelines.core": {
         "type": "Project",
         "dependencies": {
@@ -157,6 +160,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",

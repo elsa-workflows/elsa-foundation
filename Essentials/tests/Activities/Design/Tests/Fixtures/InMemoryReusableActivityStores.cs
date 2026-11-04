@@ -667,6 +667,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             var layout = Clone(_draftLayouts[request.DraftId]);
             layout.Revision = nextRevision;
             layout.Records = request.Layout.Select(Clone).ToList();
+            if (request.ActivityPresentation is not null)
+                layout.ActivityPresentation = ActivityNodePresentationRecord.NormalizeCollection(request.ActivityPresentation).ToList();
             layout.LastModifiedAt = updated.LastModifiedAt;
 
             _drafts[request.DraftId] = updated;
@@ -1124,6 +1126,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         DraftId = source.DraftId,
         Revision = source.Revision,
         Records = source.Records.Select(Clone).ToList(),
+        ActivityPresentation = source.ActivityPresentation.ToList(),
         CreatedAt = source.CreatedAt,
         LastModifiedAt = source.LastModifiedAt
     };
@@ -1199,6 +1202,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         TenantId = source.TenantId,
         DefinitionVersionId = source.DefinitionVersionId,
         Records = source.Records.Select(Clone).ToList(),
+        ActivityPresentation = source.ActivityPresentation.ToList(),
         CreatedAt = source.CreatedAt,
         LastModifiedAt = source.LastModifiedAt
     };

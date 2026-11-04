@@ -28,6 +28,9 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.persistence.core": {
+        "type": "Project"
+      },
       "elsa.pipelines.core": {
         "type": "Project",
         "dependencies": {
