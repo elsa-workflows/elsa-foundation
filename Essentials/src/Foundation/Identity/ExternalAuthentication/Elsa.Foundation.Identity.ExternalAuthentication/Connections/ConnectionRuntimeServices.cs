@@ -65,10 +65,15 @@ internal sealed class ConnectionRuntimeServices(IServiceScopeFactory scopes, IOp
         return new();
     }
 
-    public ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) => External(connection, cancellationToken);
-    public ValueTask<bool> IsUsableForAsync(ConnectionRecord connection, ClaimsPrincipal actor, CancellationToken cancellationToken = default) => External(connection, cancellationToken);
-    public ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default) => Local(null, cancellationToken);
-    public ValueTask<bool> IsUsableForAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) => Local(actor, cancellationToken);
+    public async ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) =>
+        await External(connection, cancellationToken) is not null;
+    public ValueTask<bool> IsUsableForAsync(ConnectionRecord connection, ClaimsPrincipal actor, CancellationToken cancellationToken = default) => IsUsableAsync(connection, cancellationToken);
+    public async ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default) => await Local(null, cancellationToken) is not null;
+    public async ValueTask<bool> IsUsableForAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) => await Local(actor, cancellationToken) is not null;
+    public ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ConnectionRecord connection, ClaimsPrincipal actor,
+        CancellationToken cancellationToken = default) => External(connection, cancellationToken);
+    public ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ClaimsPrincipal actor,
+        CancellationToken cancellationToken = default) => Local(actor, cancellationToken);
 
     public async ValueTask RecordAsync(string userId, ExternalAuthenticationProvenance provenance, CancellationToken cancellationToken = default)
     {
@@ -95,65 +100,73 @@ internal sealed class ConnectionRuntimeServices(IServiceScopeFactory scopes, IOp
         var now = clock.GetUtcNow();
         await proofs.RecordAsync(view.Record.Key, new(view.Record.Id, view.MaterialRevision, provenance.RedirectUri, provenance.Issuer, provenance.Subject,
             userId, provenance.CredentialBinding, now)
-            { AuthenticationSessionId = session.Id, SecurityVersion = session.SecurityVersion, SessionProvider = session.Provider },
+            { AuthenticationSessionId = session.Id, SecurityVersion = session.SecurityVersion, SessionProvider = session.Provider,
+                ExternalLinkRevision = session.ExternalLinkRevision },
             now - options.Value.RecoveryEvidenceLifetime, cancellationToken);
     }
 
-    private async ValueTask<bool> External(ConnectionRecord connection, CancellationToken token)
+    private async ValueTask<IReadOnlyList<IamRevisionGuard>?> External(ConnectionRecord connection, CancellationToken token)
     {
-        if (!options.Value.AllowDatabaseManagement || !WindowValid() || !connection.Enabled || connection.ArchivedAt is not null || !await IsReadyAsync(connection, token)) return false;
+        if (!options.Value.AllowDatabaseManagement || !WindowValid() || !connection.Enabled || connection.ArchivedAt is not null || !await IsReadyAsync(connection, token)) return null;
         var material = ConnectionSelection.MaterialRevision(ConnectionSelection.Snapshot(connection));
         var now = clock.GetUtcNow();
         var candidates = (await proofs.ReadAsync(connection.Key, token)).Where(proof => proof.RecordId == connection.Id && proof.MaterialRevision == material &&
             proof.ObservedAt <= now && proof.ObservedAt >= now - options.Value.RecoveryEvidenceLifetime).ToArray();
-        if (candidates.Length == 0) return false;
+        if (candidates.Length == 0) return null;
         await using var scope = CreateScope(); var services = scope.ServiceProvider;
         var protocol = Protocol(services, connection.Protocol);
-        if (protocol is null) return false;
+        if (protocol is null) return null;
         var callback = services.GetRequiredService<IExternalAuthenticationFlowService>().GetCallbackUri(connection.Key, AuthenticationArtifactPurpose.SignIn);
         // Metadata/JWKS readiness is bounded by the protocol. A configured but unreachable provider is not recovery.
         var tested = await protocol.TestAsync(connection, token);
-        if (tested.Failure != ExternalProtocolFailure.None || tested.Issuer is null || tested.CredentialBinding is null) return false;
+        if (tested.Failure != ExternalProtocolFailure.None || tested.Issuer is null || tested.CredentialBinding is null) return null;
         foreach (var proof in candidates.Where(proof => proof.Issuer == tested.Issuer && proof.CredentialBinding == tested.CredentialBinding && proof.RedirectUri == callback))
         {
-            // Historical credential evidence has its own bounded window. Recheck its account/link
-            // binding; an ended individual session cannot create or renew this observation.
-            if (proof.AuthenticationSessionId is null || proof.SecurityVersion is null || proof.SessionProvider is null ||
-                services.GetService<ICanonicalUserSignInService>() is not { } authority ||
-                !await authority.ValidateSessionAsync(new(proof.AuthenticationSessionId, options.Value.TenantId, proof.UserId,
-                    proof.SessionProvider, proof.SecurityVersion, proof.ObservedAt,
-                    proof.ObservedAt + options.Value.RecoveryEvidenceLifetime)
-                    { ConnectionKey = connection.Key, ConnectionRecordId = connection.Id, Issuer = proof.Issuer, ExternalSubject = proof.Subject }, token)) continue;
-            if (!await Eligible(services, proof.UserId, false, token)) continue;
-            var assessment = await services.GetRequiredService<IExternalAdmissionService>().AssessAsync(new(
-                new(connection, ConnectionSource.Database, true, null, false, material),
-                new(options.Value.TenantId, connection.Key, proof.Issuer, proof.Subject), [new("iss", proof.Issuer), new("sub", proof.Subject)]), token);
-            if (assessment.Kind == ExternalAdmissionKind.ExistingUser && assessment.User?.Id == proof.UserId) return true;
+            var guards = await IdentitySnapshot.CaptureAsync(services, options.Value.TenantId, proof.UserId, connection.Admission.DefaultRoleIds, async () =>
+            {
+                // Historical evidence has its own bounded window, with current account and exact link binding.
+                if (proof.AuthenticationSessionId is null || proof.SecurityVersion is null || proof.SessionProvider is null || proof.ExternalLinkRevision is null ||
+                    services.GetService<ICanonicalUserSignInService>() is not { } authority ||
+                    !await authority.ValidateSessionAsync(new(proof.AuthenticationSessionId, options.Value.TenantId, proof.UserId,
+                        proof.SessionProvider, proof.SecurityVersion, proof.ObservedAt,
+                        proof.ObservedAt + options.Value.RecoveryEvidenceLifetime)
+                        { ConnectionKey = connection.Key, ConnectionRecordId = connection.Id, Issuer = proof.Issuer, ExternalSubject = proof.Subject,
+                            ExternalLinkRevision = proof.ExternalLinkRevision }, token)) return false;
+                if (!await Eligible(services, proof.UserId, false, token)) return false;
+                var assessment = await services.GetRequiredService<IExternalAdmissionService>().AssessAsync(new(
+                    new(connection, ConnectionSource.Database, true, null, false, material),
+                    new(options.Value.TenantId, connection.Key, proof.Issuer, proof.Subject), [new("iss", proof.Issuer), new("sub", proof.Subject)]), token);
+                return assessment.Kind == ExternalAdmissionKind.ExistingUser && assessment.User?.Id == proof.UserId;
+            }, token);
+            if (guards is not null) return guards;
         }
-        return false;
+        return null;
     }
 
-    private async ValueTask<bool> Local(ClaimsPrincipal? actor, CancellationToken token)
+    private async ValueTask<IReadOnlyList<IamRevisionGuard>?> Local(ClaimsPrincipal? actor, CancellationToken token)
     {
-        if (options.Value.RecoveryScanLimit is < 1 or > 10000) return false;
+        if (options.Value.RecoveryScanLimit is < 1 or > 10000) return null;
         await using var scope = CreateScope(); var services = scope.ServiceProvider;
         var issuer = services.GetService<ICanonicalUserSignInService>(); var schemes = services.GetService<IAuthenticationSchemeProvider>();
-        if (issuer is null || schemes is null || await schemes.GetSchemeAsync(issuer.AuthenticationScheme) is null) return false;
+        if (issuer is null || schemes is null || await schemes.GetSchemeAsync(issuer.AuthenticationScheme) is null) return null;
         string? actingId = null;
         if (actor is not null && services.GetRequiredService<ITokenSubjectResolver>().TryResolve(actor, out var subject) && subject.TenantId == options.Value.TenantId)
             actingId = subject.CanonicalUserId;
-        if (actingId is not null && await Eligible(services, actingId, true, token)) return true;
+        if (actingId is not null && await Candidate(actingId) is { } ownGuards) return ownGuards;
         var users = services.GetService<IPagedUserStore>();
-        if (users is null) return false;
+        if (users is null) return null;
         for (var skip = 0; skip < options.Value.RecoveryScanLimit;)
         {
             var page = await users.ListPageAsync(options.Value.TenantId, new(skip, Math.Min(IamPageRequest.MaximumTake, options.Value.RecoveryScanLimit - skip)), cancellationToken: token);
             foreach (var user in page.Items)
-                if (user.Id != actingId && user.Status == UserStatus.Active && await Eligible(services, user.Id, true, token)) return true;
+                if (user.Id != actingId && user.Status == UserStatus.Active && await Candidate(user.Id) is { } guards) return guards;
             skip += page.Items.Count;
             if (page.Items.Count == 0 || skip >= page.TotalCount) break;
         }
-        return false; // No unexamined account is optimistically treated as usable.
+        return null; // No unexamined account is optimistically treated as usable.
+
+        ValueTask<IReadOnlyList<IamRevisionGuard>?> Candidate(string id) => IdentitySnapshot.CaptureAsync(services,
+            options.Value.TenantId, id, [], async () => await Eligible(services, id, true, token), token);
     }
 
     private async Task<bool> Eligible(IServiceProvider services, string userId, bool password, CancellationToken token)

@@ -121,6 +121,20 @@ saved admission policy and recheck its roles against current saved administrator
 the command body cannot bypass delegation. Catalog conflicts and final-path refusal return 409; denied source/role
 policy returns 403; invalid commands return 400 and missing database records return 404.
 
+Every managed catalog mutation captures the editor's current user and saved role definitions, the proposed
+provisioning roles, and any selected recovery user's authority roots around the actual checks. Those opaque
+revisions and the complete catalog CAS commit in one owned transaction. A changed authority snapshot returns
+409 (`identity-authority-changed` before commit, or `revision-conflict` at commit); refresh and reassess rather
+than replaying the old assessment. Coordination advances numeric root revisions while preserving account
+security versions, role permissions and unrelated credentials.
+
+The default EF coordinator requires IAM and provider configuration to use the same relational provider and
+exact configured database target, with connections and transaction owned by the operation. Custom authorities
+can implement the Core guard/capture/coordination contracts. Unsupported storage returns 503
+`identity-coordination-unavailable`; the catalog reports `canManageConnections:false` and
+`managementUnavailableReason:identity-coordination-unavailable`, and Studio explains the unavailable host
+management. Deployment-only sign-in remains available without enabling database connection management.
+
 A test targets a saved unarchived record, including disabled/shadowed drafts. It performs no admission, code exchange,
 user/link/session/token write or recovery-proof recording. Its response contains only closed failure categories,
 observed time/material and a stale flag if the catalog or record changed during the test. It has an overall

@@ -93,6 +93,27 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     public Task<EfIdentityWriteResult> DeleteExternalIdentityAsync(string tenantId, string userId, string provider, string providerSubject, long expectedUserVersion, CancellationToken cancellationToken = default) =>
         DeleteExternalIdentityCoreAsync(tenantId, userId, provider, providerSubject, expectedUserVersion, cancellationToken);
 
+    internal Task<EfIdentityWriteResult> DeleteQualifiedExternalIdentityAsync(ExternalIdentityKey key, IamRevisionGuard owner,
+        long expectedLinkVersion, CancellationToken cancellationToken) =>
+        ExecuteAsync(key.TenantId, "delete-qualified-external-login",
+            Fingerprint(key.TenantId, key.Provider, key.Issuer, key.Subject, owner.Id, owner.Revision,
+                expectedLinkVersion.ToString(CultureInfo.InvariantCulture)), async token =>
+        {
+            var user = await LoadUserAsync(key.TenantId, owner.Id, token);
+            if (user is null) return new(EfIdentityWriteStatus.NotFound);
+            if (EfIamRevisionGuards.User(user)?.Revision != owner.Revision) return Conflict(user.Id);
+            var id = EfIdentityStoreSupport.ExternalIdentityId(key.TenantId, key.Provider, key.Subject, key.Issuer);
+            var login = await context.ExternalIdentities.SingleOrDefaultAsync(row => row.Id == id, token);
+            if (login is null) return new(EfIdentityWriteStatus.NotFound);
+            EfIdentityStoreSupport.EnsureExternalIdentity(login, key.TenantId, key.Provider, key.Subject, issuer: key.Issuer);
+            if (!Same(login.UserId, owner.Id) || login.Revision != expectedLinkVersion) return Conflict(login.Id);
+            var ids = Registry(user, UserRegistry.Logins); ids.Remove(id); SetRegistry(user, UserRegistry.Logins, ids);
+            user.Revision = Math.Max(checked(user.Revision + 1), checked(login.Revision + 1));
+            user.SchemaVersion = IdentityIamEfModule.SchemaVersion;
+            context.ExternalIdentities.Remove(login);
+            return new(EfIdentityWriteStatus.Deleted, user.Revision, Id: id);
+        }, cancellationToken);
+
     public Task<EfIdentityWriteResult> AddUserRoleAsync(string tenantId, string userId, string roleId, long expectedUserVersion, UserRoleEntity link, CancellationToken cancellationToken = default) =>
         MutateUserRoleAsync(tenantId, userId, roleId, expectedUserVersion, link, delete: false, cancellationToken);
 
@@ -414,6 +435,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             if (existing is not null && !replaceProviderDisplayName)
                 login.ProviderDisplayName = existing.ProviderDisplayName;
             var newRevision = existing is null ? 1 : checked(existing.Revision + 1);
+            if (login.Issuer is not null) newRevision = Math.Max(checked(loaded[newOwnerKey].Revision + 1), newRevision);
             login.Revision = newRevision;
             if (existing is null)
                 context.ExternalIdentities.Add(login);
@@ -435,7 +457,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 // A login returning to an earlier owner must not reactivate that owner's old
                 // cookie/access/refresh credentials. Fence both owners in this same IAM commit.
                 if (changesOwner) pair.Value.SecurityStamp = Guid.NewGuid().ToString("N");
-                pair.Value.Revision = checked(pair.Value.Revision + 1);
+                pair.Value.Revision = login.Issuer is null ? checked(pair.Value.Revision + 1) : Math.Max(checked(pair.Value.Revision + 1), newRevision);
+                pair.Value.SchemaVersion = IdentityIamEfModule.SchemaVersion;
                 if (string.Equals(pair.Key, newOwnerKey, StringComparison.Ordinal))
                     ownerResult = Updated(pair.Value.Id, pair.Value.Revision);
             }

@@ -23,7 +23,7 @@ public sealed class AuthenticationSessionPersistenceTests
     public async Task Restart_and_paging_preserve_exact_session_owners_and_protected_provenance()
     {
         using var data = new OwnedData();
-        var item = Session() with { ConnectionKey = "company", ConnectionRecordId = "deployment:company", Issuer = "https://company.example/issuer", ExternalSubject = "Opaque-Subject" };
+        var item = Session() with { ConnectionKey = "company", ConnectionRecordId = "deployment:company", Issuer = "https://company.example/issuer", ExternalSubject = "Opaque-Subject", ExternalLinkRevision = "link-revision" };
         await using (var node = await Node(data))
         {
             await using var scope = Scope(node);

@@ -266,6 +266,7 @@ public sealed class ExternalConnectionTests
             options.AllowedRoleIds = allowedRoles?.ToList() ?? [];
             options.Connections = baseline?.ToList() ?? [];
         });
+        ImmutableConnectionAuthorization.Register(services);
         services.AddNormalizedAuthenticationType("connection-test");
         return services.BuildServiceProvider();
     }
@@ -285,9 +286,17 @@ public sealed class ExternalConnectionTests
             ValueTask.FromResult(connection.Settings.TryGetValue("ready", out var ready) && ready == "yes");
     }
     private sealed class TestExternalRecovery : IConnectionRecovery
-    { public ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) => ValueTask.FromResult(!connection.Settings.ContainsKey("no-eligible-user")); }
+    {
+        public ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) => ValueTask.FromResult(!connection.Settings.ContainsKey("no-eligible-user"));
+        public ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ConnectionRecord connection, ClaimsPrincipal actor, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(connection.Settings.ContainsKey("no-eligible-user") ? null : []);
+    }
     private sealed class TestRecovery(bool usable) : ILocalLoginRecovery
-    { public ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(usable); }
+    {
+        public ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(usable);
+        public ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(usable ? [] : null);
+    }
 
     private sealed class TestRoles(params RoleRecord[] roles) : IRoleStore
     {
@@ -298,6 +307,7 @@ public sealed class ExternalConnectionTests
 
     private sealed class MemoryCatalog(IReadOnlyList<ConnectionRecord>? initial = null, bool synchronizeFirstTwoReads = false) : IConnectionCatalogStore
     {
+        public bool SupportsIdentityRevisionGuards => true;
         private readonly object gate = new();
         private ConnectionRecord[] records = initial?.ToArray() ?? [];
         private long version = initial is null ? 0 : 1;

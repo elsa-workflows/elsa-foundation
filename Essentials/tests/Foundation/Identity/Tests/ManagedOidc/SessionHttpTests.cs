@@ -20,6 +20,53 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 public sealed partial class ExternalAuthenticationHttpTests
 {
     [Fact]
+    public async Task Removing_and_recreating_one_qualified_link_cannot_revive_its_credentials_and_preserves_another_link_for_the_same_user()
+    {
+        await using var host = await HttpHost.Start();
+        using var company = host.Browser(); using var partner = host.Browser(); using var fresh = host.Browser();
+        var callback = await host.StartAndAuthorize(company);
+        using (var completed = await company.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var user = (await Session(company)).Subject!; var pair = await Pair(company);
+        await LinkPartnerToSameUser(host, user);
+        var otherCallback = await host.StartAndAuthorize(partner, "partner");
+        using (var completed = await partner.GetAsync(otherCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var otherPair = await Pair(partner);
+        Assert.Equal(user, (await Session(partner)).Subject);
+        await RemoveAndRecreateCompanyLink(host, user);
+        // Keep the old cookie untouched until recreation, so rejection during removal cannot hide revival.
+        Assert.Equal("anonymous", (await Session(company)).Status);
+        using (var denied = await Bearer(company, pair.AccessToken)) Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+        using (var denied = await company.PostAsJsonAsync("_elsa/identity/refresh", new { refreshToken = pair.RefreshToken })) Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+        Assert.Equal(user, (await Session(partner)).Subject);
+        using (var live = await Bearer(partner, otherPair.AccessToken)) Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        using (var live = await partner.PostAsJsonAsync("_elsa/identity/refresh", new { refreshToken = otherPair.RefreshToken })) Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        var freshCallback = await host.StartAndAuthorize(fresh);
+        using (var completed = await fresh.GetAsync(freshCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        Assert.Equal(user, (await Session(fresh)).Subject); Assert.Equal(["reader"], (await Session(fresh)).Roles);
+    }
+
+    private static async Task LinkPartnerToSameUser(HttpHost host, string user)
+    {
+        await using var scope = host.Scope();
+        await scope.ServiceProvider.GetRequiredService<IExternalIdentityStore>().SaveAsync(new("default", "partner", "opaque-Subject", user,
+            host.Clock.GetUtcNow(), host.Clock.GetUtcNow(), ExternalIdentityLinkPolicy.Admin) { Issuer = host.Partner.Issuer });
+    }
+
+    private static async Task RemoveAndRecreateCompanyLink(HttpHost host, string user)
+    {
+        await using var scope = host.Scope(); var services = scope.ServiceProvider;
+        var key = new ExternalIdentityKey("default", "company", host.Company.Issuer, "opaque-Subject");
+        var store = services.GetRequiredService<IRevisionAwareExternalIdentityStore>();
+        var link = (await store.FindByKeyWithRevisionAsync(key))!;
+        var guard = (await services.GetRequiredService<IRevisionAwareUserStore>().FindRevisionGuardAsync("default", user))!;
+        Assert.Equal(ExternalIdentityRemovalStatus.Removed, (await store.RemoveWithRevisionAsync(key, guard, link.Revision)).Status);
+        await services.GetRequiredService<IExternalIdentityStore>().SaveAsync(link.Record);
+        var recreated = (await store.FindByKeyWithRevisionAsync(key))!;
+        Assert.NotEqual(link.Revision, recreated.Revision);
+        Assert.Equal(link.Record.LinkedAt, recreated.Record.LinkedAt);
+    }
+
+    [Fact]
     public void Canonical_sign_in_session_bindings_cannot_be_serialized_or_bound_from_client_JSON()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);

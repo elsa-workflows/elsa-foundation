@@ -140,6 +140,13 @@ public interface IExternalIdentityStore
 [ReplacementContract]
 public interface IRevisionAwareExternalIdentityStore
 {
+    bool SupportsQualifiedKeys => false;
+    bool SupportsQualifiedRemoval => false;
+    /// <summary>Owns a conditional qualified removal and advances the owner counter beyond the removed link without changing other credentials.</summary>
+    ValueTask<ExternalIdentityRemovalResult> RemoveWithRevisionAsync(ExternalIdentityKey key, IamRevisionGuard owner,
+        string expectedLinkRevision, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This identity authority does not support conditional qualified removal.");
+
     ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindByKeyWithRevisionAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This external identity authority does not support issuer-qualified links.");
 

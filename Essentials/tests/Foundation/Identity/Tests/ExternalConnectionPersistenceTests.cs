@@ -133,6 +133,7 @@ public sealed class ExternalConnectionPersistenceTests
         services.AddSingleton<IConnectionRecovery>(paths);
         services.AddSingleton<ILocalLoginRecovery>(paths);
         services.AddFoundationExternalAuthentication(options => options.AllowDatabaseManagement = true);
+        ImmutableConnectionAuthorization.Register(services);
         services.AddNormalizedAuthenticationType("catalog-race");
         return services.BuildServiceProvider();
     }
@@ -147,6 +148,10 @@ public sealed class ExternalConnectionPersistenceTests
         public ValueTask<bool> IsReadyAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ConnectionRecord connection, ClaimsPrincipal actor, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(connection.Key is "a" or "b" ? [] : null);
+        public ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(null);
     }
 
     private sealed class ReadBarrier
@@ -166,13 +171,14 @@ public sealed class ExternalConnectionPersistenceTests
 
     private sealed class SynchronizedCatalog(IConnectionCatalogStore inner, ReadBarrier barrier) : IConnectionCatalogStore
     {
+        public bool SupportsIdentityRevisionGuards => true;
         public async ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default)
         {
             var snapshot = await inner.ReadAsync(cancellationToken);
             await barrier.Arrive(cancellationToken);
             return snapshot;
         }
-        public ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default) => inner.SaveAsync(catalog, cancellationToken);
+        public ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default) => inner.SaveAsync(catalog with { IdentityRevisionGuards = null }, cancellationToken);
     }
 
     private static async Task<ServiceProvider> Create(string file)

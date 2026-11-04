@@ -1231,3 +1231,16 @@ Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind.Role = 1 -> Elsa.Foundati
 Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind.User = 0 -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
 Elsa.Foundation.Identity.Core.Iam.IRevisionAwareRoleStore.FindRevisionGuardAsync(string! tenantId, string! roleId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard?>
 Elsa.Foundation.Identity.Core.Iam.IRevisionAwareUserStore.FindRevisionGuardAsync(string! tenantId, string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard?>
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExternalLinkRevision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExternalLinkRevision.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult.ExternalIdentityRemovalResult(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus status, string? userRevision = null) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult.Status.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult.UserRevision.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus.Conflict = 2 -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus.Missing = 1 -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus.Removed = 0 -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.RemoveWithRevisionAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard! owner, string! expectedLinkRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult!>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.SupportsQualifiedKeys.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.SupportsQualifiedRemoval.get -> bool

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Microsoft.Extensions.Options;
 
@@ -35,6 +36,7 @@ internal sealed class ConnectionWriter(
         cancellationToken.ThrowIfCancellationRequested();
         if (!await authorizer.AuthorizeAsync(actor, cancellationToken)) return Reject("not-authorized");
         if (!options.Value.AllowDatabaseManagement) return Reject("database-management-disabled");
+        if (!store.SupportsIdentityRevisionGuards) return Reject("identity-coordination-unavailable");
         var current = await store.ReadAsync(cancellationToken);
         if (current.Revision != request.ExpectedRevision) return Reject("revision-conflict");
         ConnectionSelection.Validate(current.Records);
@@ -69,6 +71,9 @@ internal sealed class ConnectionWriter(
         catch (InvalidOperationException) { return Reject("invalid-configuration"); }
         if (request.Change is not (ConnectionChange.Disable or ConnectionChange.Archive or ConnectionChange.Remove) &&
             !await authorizer.AuthorizePolicyAsync(actor, proposed, cancellationToken)) return Reject("role-delegation-forbidden");
+        var policy = request.Change is ConnectionChange.Disable or ConnectionChange.Archive or ConnectionChange.Remove ? null : proposed;
+        var guards = await authorizer.CaptureRevisionGuardsAsync(actor, policy, cancellationToken);
+        if (guards is null) return Reject("identity-authority-changed");
         var before = ConnectionSelection.Select(options.Value, current);
         if (request.Change is ConnectionChange.CreateOverride or ConnectionChange.PromoteOverride)
         {
@@ -82,14 +87,20 @@ internal sealed class ConnectionWriter(
         ConnectionSelection.Validate(records);
         var desired = new ConnectionCatalog(records, current.Revision);
         var after = ConnectionSelection.Select(options.Value, desired);
-        if (RemovesEnabledPath(before, after) && !await localRecovery.IsUsableForAsync(actor, cancellationToken) &&
-            !await HasExternalPath(after, actor, cancellationToken))
-            return Reject("final-login-path");
+        if (RemovesEnabledPath(before, after))
+        {
+            var recoveryGuards = await localRecovery.CaptureRevisionGuardsAsync(actor, cancellationToken) ??
+                await ExternalPath(after, actor, cancellationToken);
+            if (recoveryGuards is null) return Reject("final-login-path");
+            guards = IdentitySnapshot.Merge(guards, recoveryGuards);
+            if (guards is null) return Reject("identity-authority-changed");
+        }
+        desired = desired with { IdentityRevisionGuards = guards };
         cancellationToken.ThrowIfCancellationRequested();
         return new PreparedWrite(desired, after, proposed.Id);
     }
 
-    private async ValueTask<bool> HasExternalPath(ConnectionRegistryView registry, ClaimsPrincipal actor, CancellationToken cancellationToken)
+    private async ValueTask<IReadOnlyList<IamRevisionGuard>?> ExternalPath(ConnectionRegistryView registry, ClaimsPrincipal actor, CancellationToken cancellationToken)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(30));
@@ -97,10 +108,10 @@ internal sealed class ConnectionWriter(
         {
             foreach (var view in registry.Connections.Where(view => view.Effective && view.Record.Enabled))
                 if (await readiness.IsReadyAsync(view.Record, deadline.Token) &&
-                    await recovery.IsUsableForAsync(view.Record, actor, deadline.Token)) return true;
+                    await recovery.CaptureRevisionGuardsAsync(view.Record, actor, deadline.Token) is { } guards) return guards;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return false; }
-        return false;
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return null; }
+        return null;
     }
 
     private static bool RemovesEnabledPath(ConnectionRegistryView before, ConnectionRegistryView after) =>

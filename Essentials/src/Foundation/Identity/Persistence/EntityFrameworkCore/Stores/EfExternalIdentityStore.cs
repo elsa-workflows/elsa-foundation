@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
@@ -23,6 +24,40 @@ public sealed class EfExternalIdentityStore(
 
     public bool SupportsQualifiedKeys => true;
     public bool SupportsAtomicAdmission => true;
+    public bool SupportsQualifiedRemoval
+    {
+        get
+        {
+            if (!context.Database.IsRelational()) return false;
+            var relational = context.GetService<IDbContextOptions>().Extensions.OfType<RelationalOptionsExtension>().Single();
+            return relational.Connection is null && !string.IsNullOrEmpty(relational.ConnectionString) &&
+                string.Equals(relational.ConnectionString, context.Database.GetConnectionString(), StringComparison.Ordinal);
+        }
+    }
+
+    public async ValueTask<ExternalIdentityRemovalResult> RemoveWithRevisionAsync(ExternalIdentityKey key, IamRevisionGuard owner,
+        string expectedLinkRevision, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key); ArgumentNullException.ThrowIfNull(owner);
+        Validate(key.Provider, nameof(key)); Validate(key.Subject, nameof(key)); EfIdentityStoreSupport.ValidateIssuer(key.Issuer);
+        Prepare(key.TenantId, cancellationToken);
+        if (context.Database.CurrentTransaction is not null || System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("Qualified removal owns its transaction and cannot borrow caller changes.");
+        if (!SupportsQualifiedRemoval) throw new NotSupportedException("Qualified removal requires an owned configured relational target.");
+        if (owner.Kind != IamRevisionGuardKind.User || EfIdentityStoreSupport.RecordId(owner.TenantId, owner.Id) !=
+            EfIdentityStoreSupport.RecordId(key.TenantId, owner.Id) ||
+            !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedLinkRevision, out var linkVersion) ||
+            !EfIamRevisionGuards.TryGetVersion(owner.Revision, out _)) return new(ExternalIdentityRemovalStatus.Conflict);
+        await using var transaction = await EfSharedTransaction.BeginSerializableAsync([context], cancellationToken);
+        var owned = transaction.Context<IdentityIamDbContext>();
+        var coordinator = new EfIdentityAuthorityRelationshipCoordinator(owned,
+            new EfIdentityAtomicWrite(owned, accessContextAccessor: accessContextAccessor), accessContextAccessor);
+        var result = await coordinator.DeleteQualifiedExternalIdentityAsync(key, owner, linkVersion, cancellationToken);
+        if (result.Status == EfIdentityWriteStatus.Deleted) await transaction.CommitAsync(cancellationToken);
+        return new(result.Status == EfIdentityWriteStatus.Deleted ? ExternalIdentityRemovalStatus.Removed :
+                result.Status == EfIdentityWriteStatus.NotFound ? ExternalIdentityRemovalStatus.Missing : ExternalIdentityRemovalStatus.Conflict,
+            result.Status == EfIdentityWriteStatus.Deleted && result.Version is { } version ? IdentityEntityFrameworkRevisionCodec.FromVersion(version) : null);
+    }
 
     public ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
         new EfExternalUserAdmission(context, accessContextAccessor,

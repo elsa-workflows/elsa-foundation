@@ -24,7 +24,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// Contract-level behavior for the EF authority and relationship stores. The tests resolve only
 /// provider-neutral IAM interfaces so they remain useful when the concrete EF store wiring evolves.
 /// </summary>
-public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
+public sealed partial class IdentityAuthorityEntityFrameworkCoreBehaviorTests
 {
     [Fact]
     public async Task User_and_role_records_round_trip_lossless_fields_after_a_store_reopen()

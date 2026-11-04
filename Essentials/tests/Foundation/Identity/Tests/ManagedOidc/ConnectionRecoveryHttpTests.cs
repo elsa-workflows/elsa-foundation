@@ -23,6 +23,29 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 public sealed partial class ExternalAuthenticationHttpTests
 {
     [Fact]
+    public async Task Qualified_link_recreation_cannot_revive_its_recovery_proof_and_preserves_another_provider_proof_for_the_same_user()
+    {
+        await using var host = await HttpHost.Start();
+        await MakeAdministrative(host, "company"); await MakeAdministrative(host, "partner");
+        using var company = host.Browser(); using var partner = host.Browser(); using var fresh = host.Browser();
+        var callback = await host.StartAndAuthorize(company);
+        using (var completed = await company.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var user = (await Session(company)).Subject!; await LinkPartnerToSameUser(host, user);
+        var otherCallback = await host.StartAndAuthorize(partner, "partner");
+        using (var completed = await partner.GetAsync(otherCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        Assert.Equal(user, (await Session(partner)).Subject);
+        await using var scope = host.Scope(); var recovery = scope.ServiceProvider.GetRequiredService<IConnectionRecovery>();
+        Assert.True(await recovery.IsUsableAsync((await View(host, "company")).Record));
+        Assert.True(await recovery.IsUsableAsync((await View(host, "partner")).Record));
+        await RemoveAndRecreateCompanyLink(host, user);
+        Assert.False(await recovery.IsUsableAsync((await View(host, "company")).Record));
+        Assert.True(await recovery.IsUsableAsync((await View(host, "partner")).Record));
+        var freshCallback = await host.StartAndAuthorize(fresh);
+        using (var completed = await fresh.GetAsync(freshCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        Assert.True(await recovery.IsUsableAsync((await View(host, "company")).Record));
+    }
+
+    [Fact]
     public async Task Actual_managed_host_coordinates_provider_and_IAM_revisions_without_invalidating_existing_credentials()
     {
         await using var host = await HttpHost.Start(); using var administrator = host.Browser();
@@ -398,7 +421,7 @@ public sealed partial class ExternalAuthenticationHttpTests
             a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, one), principal).AsTask(),
             b.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, two), principal).AsTask());
         Assert.Single(outcomes, outcome => outcome.Saved);
-        Assert.Single(outcomes, outcome => outcome.Failure == "revision-conflict");
+        Assert.Contains(Assert.Single(outcomes, outcome => !outcome.Saved).Failure, new[] { "revision-conflict", "identity-authority-changed" });
         Assert.Equal(2, barrier.Reads);
         var latest = await a.ServiceProvider.GetRequiredService<IConnectionCatalogStore>().ReadAsync();
         var remaining = Assert.Single(latest.Records, record => record.Enabled);
@@ -446,6 +469,7 @@ public sealed partial class ExternalAuthenticationHttpTests
     }
     private sealed class RecoverySynchronizedCatalog(IConnectionCatalogStore inner, RecoveryReadBarrier barrier) : IConnectionCatalogStore
     {
+        public bool SupportsIdentityRevisionGuards => inner.SupportsIdentityRevisionGuards;
         public async ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default)
         {
             var snapshot = await inner.ReadAsync(cancellationToken);

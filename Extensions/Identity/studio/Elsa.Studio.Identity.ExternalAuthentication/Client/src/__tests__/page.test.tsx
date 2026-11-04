@@ -157,6 +157,13 @@ describe("connection administration page", () => {
     expect(field(host.container, "Issuer URL").closest("fieldset")!.disabled).toBe(true);
     expect(host.postJson).not.toHaveBeenCalled();
   });
+  it("explains unavailable host management and keeps connection controls read-only", async () => {
+    const host = harness({ ...fixtureCatalog, canManageConnections: false, managementUnavailableReason: "identity-coordination-unavailable" });
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Ask the host administrator"));
+    expect((await button(host.container, "Add connection")).disabled).toBe(true);
+    expect(host.container.textContent).not.toContain("Test configuration");
+    expect(host.postJson).not.toHaveBeenCalled();
+  });
   it("keeps an unsaved editor under workspace probes and reports safe conflict messages without discarding it", async () => {
     const host = harness();
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull()); click(host.container.querySelector(".external-auth-row")!);

@@ -693,3 +693,61 @@ and counter invariants are recorded in `research.md`. **T024 remains unchecked**
 T025 and all actual full Studio/external-product/cross-site/server-DB/restart/separate-process/two-node qualification,
 remaining exact-head package/consumer gates, independent review/required CI/merge/resulting-main proof remain required.
 The complete goal remains active and unachieved; this storage proof does not qualify server engines or close the feature.
+
+
+### Qualified link instance binding and native removal
+
+Canonical external sessions and protected recovery observations now bind the exact qualified link revision. The native
+removal operation compares the opaque owner guard and exact link revision in its own serializable transaction, removes
+the registry child and row together, and advances the owning counter beyond the removed instance. Subsequent qualified
+links start above that counter. The account security version and other provider links are preserved. Both IAM and
+authentication-state schema families advance to 1.2.0 through additive semantic migrations and content-preserving
+upcasters; initial histories and physical models remain intact.
+
+Actual controlled-provider HTTP tests exercise removal/recreation with identical record timestamps: the removed
+instance's old cookie, access token, refresh token and recovery observation fail; another linked provider for the same
+user retains its credentials and proof, and a fresh sign-in can establish new evidence. A mutation bypassing the exact
+link-revision comparison makes both HTTP cases fail; source was restored afterward. Native ownership, stale user/link
+revisions, exact issuer, historical counter, receipt replay and injected-save-fault cases preserve atomicity.
+
+Current native IAM tests pass **232/232**, and shared module migration tests pass **508/508**. Final Identity and
+architecture requalification are recorded below when complete. These checks cover native SQLite and controlled HTTP
+providers; they do not claim the full deployment matrix. **T024 remains open**: the removal endpoint is unavailable
+until the final-login and authority snapshot checks are coordinated with its commit.
+
+
+### Managed catalog writes coordinate their actual IAM checks
+
+The default writer now captures opaque actor/current-role/provisioning-role guards around saved-grant, delegation
+and canonical eligibility checks. Local and external recovery return the exact selected identity/role guards after
+rechecking live account/framework/membership/link/protocol/admission conditions. The writer merges consistent
+snapshots and sends them only as server-owned, JSON-excluded catalog metadata. Administrative persistence uses the
+owned serializable IAM/provider transaction plus the full-catalog CAS. Split/unsupported coordination refuses writes
+and appears as read-only host management in API/Studio with closed guidance. Trusted nonadministrative catalog
+seeding retains its separate unguarded store operation.
+
+Seven actual managed-host cases force independent actor/recovery-user/membership/framework-lockout/role/qualified-link
+or proposed provisioning-role changes after final checks and before save. Every stale administrative catalog save
+refuses without changing catalog revision or enabled paths. Bypassing the coordinated storage branch makes **7/7**
+cases fail; production source was restored before the full run. Existing real concurrent retirement still permits
+only one save; the loser may detect either the IAM snapshot change before save or the catalog conflict at commit.
+The HTTP unsupported-authority case proves read-only metadata and a 503 command response with no attempted save.
+
+Current full Identity suite: **848/848 passed**, zero skips, Debug. SDK/component cases: **26/26 passed**;
+frontend type checking, Vite/standalone SDK build and ESLint pass. The initial frontend typecheck/lint commands used
+the wrong workspace/base directory; corrected workspace/root invocations pass without changing package or lint
+configuration. An architecture run during active source edits correctly refused a stale compiled assembly; final
+architecture qualification follows after source freeze. Native IAM **232/232** and shared migrations **508/508**
+remain green from this link-binding stage. Hosted CI **41907993152** passed for preceding head `ba98c2a1b66c2d14688972775a2126821e231c56`;
+new-head hosted evidence is still required.
+
+**T024 remains unchecked** for guarded attachment and prospective unlink with catalog/link/IAM atomicity. T025
+Studio link/session screens and the full actual Studio/external-product/deployment/server-engine/restart/process/node
+acceptance, final consumer qualification, independent review/merge and resulting-main proof remain outstanding.
+
+Final frozen-source architecture suite: **616/616 passed**, zero skips. The earlier stale-assembly refusal is
+resolved by rebuilding after the source freeze; no architecture rule or permission boundary was waived.
+
+Final ASP.NET Identity EF suite: **59/59 passed**, zero skips.
+Generated solution-filter check and staged/worktree whitespace checks pass. No project references or dependency
+versions changed in this increment.

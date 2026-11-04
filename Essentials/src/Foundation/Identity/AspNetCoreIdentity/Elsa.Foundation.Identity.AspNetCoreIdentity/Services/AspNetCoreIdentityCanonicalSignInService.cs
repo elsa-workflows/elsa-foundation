@@ -21,7 +21,8 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
     IUserStore users, ITenantMembershipStore memberships, ITokenSubjectResolver subjects, IAuthSessionService sessions,
     IHttpContextAccessor http, IPersistenceAccessContextAccessor access, IPersistenceAccessContextBinder binder,
     IOptions<AspNetCoreIdentityOptions> options, IAuthenticationSessionStore? sessionStore = null, IServiceScopeFactory? scopes = null,
-    IExternalIdentityStore? links = null, TimeProvider? clock = null) : ICanonicalUserSignInService
+    IExternalIdentityStore? links = null, TimeProvider? clock = null,
+    IRevisionAwareExternalIdentityStore? linkRevisions = null) : ICanonicalUserSignInService
 {
     public string AuthenticationScheme => AspNetCoreIdentityDefaults.CookieScheme;
     public bool SupportsDurableSessions => sessionStore?.IsDurable == true && userManager.SupportsUserSecurityStamp &&
@@ -51,13 +52,21 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
             if (!sessionStore.IsDurable || string.IsNullOrWhiteSpace(user.SecurityStamp) || options.Value.SessionLifetime < TimeSpan.FromMinutes(1) ||
                 options.Value.SessionLifetime > TimeSpan.FromDays(30)) return null;
             if (context.ExternalIdentity is { } origin && origin.TenantId != context.TenantId) return null;
+            IamRevisionedRecord<ExternalIdentityRecord>? linked = null;
+            if (context.ExternalIdentity is { } key)
+            {
+                if (links?.SupportsQualifiedKeys != true || linkRevisions?.SupportsQualifiedKeys != true) return null;
+                linked = await linkRevisions.FindByKeyWithRevisionAsync(key, cancellationToken);
+                if (linked is null || (await users.FindAsync(context.TenantId, linked.Record.UserId, cancellationToken))?.Id != context.UserId) return null;
+            }
             var now = DateTimeOffset.FromUnixTimeMilliseconds((clock ?? TimeProvider.System).GetUtcNow().ToUnixTimeMilliseconds());
             var id = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             var record = new AuthenticationSessionRecord(id, context.TenantId, context.UserId, context.Provider ?? options.Value.ProviderId,
                 SecurityVersion(user.SecurityStamp), now, now + options.Value.SessionLifetime)
             {
                 ConnectionKey = context.ExternalIdentity?.Provider, ConnectionRecordId = context.ConnectionRecordId,
-                Issuer = context.ExternalIdentity?.Issuer, ExternalSubject = context.ExternalIdentity?.Subject
+                Issuer = context.ExternalIdentity?.Issuer, ExternalSubject = context.ExternalIdentity?.Subject,
+                ExternalLinkRevision = linked?.Revision
             };
             if (!await sessionStore.TryCreateAsync(record, cancellationToken)) return null;
             foreach (var previous in identity.FindAll(IdentityClaimTypes.SessionId).ToArray()) identity.RemoveClaim(previous);
@@ -79,9 +88,10 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
         if (user is null || string.IsNullOrWhiteSpace(user.SecurityStamp) ||
             !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(SecurityVersion(user.SecurityStamp)), Encoding.UTF8.GetBytes(session.SecurityVersion))) return false;
         if (session.ConnectionKey is null) return true;
-        if (links?.SupportsQualifiedKeys != true || session.Issuer is null || session.ExternalSubject is null) return false;
-        var link = await links.FindByKeyAsync(new(session.TenantId, session.ConnectionKey, session.Issuer, session.ExternalSubject), cancellationToken);
-        return link?.UserId == session.UserId;
+        if (links?.SupportsQualifiedKeys != true || linkRevisions?.SupportsQualifiedKeys != true || session.Issuer is null || session.ExternalSubject is null || session.ExternalLinkRevision is null) return false;
+        var link = await linkRevisions.FindByKeyWithRevisionAsync(new(session.TenantId, session.ConnectionKey, session.Issuer, session.ExternalSubject), cancellationToken);
+        return link?.Revision == session.ExternalLinkRevision &&
+            (await users.FindAsync(session.TenantId, link.Record.UserId, cancellationToken))?.Id == session.UserId;
     }
 
     public async ValueTask<AuthenticationSessionRecord?> ReadSessionAsync(TokenSubject subject, string id, CancellationToken cancellationToken = default)

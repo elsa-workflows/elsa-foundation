@@ -16,6 +16,16 @@ internal sealed class ProviderConnectionCatalog(IServiceScopeFactory scopes) : I
     private const string CatalogSetting = "catalog";
     private const int MaximumCharacters = 1_048_576;
 
+    public bool SupportsIdentityRevisionGuards
+    {
+        get
+        {
+            using var scope = scopes.CreateScope();
+            Bind(scope.ServiceProvider, write: true);
+            return scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>().SupportsIdentityRevisionGuards;
+        }
+    }
+
     public async ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default)
     {
         await using var scope = scopes.CreateAsyncScope();
@@ -49,9 +59,11 @@ internal sealed class ProviderConnectionCatalog(IServiceScopeFactory scopes) : I
         await using var scope = scopes.CreateAsyncScope();
         Bind(scope.ServiceProvider, write: true);
         var store = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
-        var result = await store.SaveWithRevisionAsync(new ProviderConfigurationRecord(Provider, null, Kind,
-            true, false, ProviderCapabilities.ExternalOidcDefault, new Dictionary<string, string> { [CatalogSetting] = json }),
-            catalog.Revision, cancellationToken);
+        var configuration = new ProviderConfigurationRecord(Provider, null, Kind,
+            true, false, ProviderCapabilities.ExternalOidcDefault, new Dictionary<string, string> { [CatalogSetting] = json });
+        var result = catalog.IdentityRevisionGuards is { } guards
+            ? await store.SaveWithIdentityRevisionGuardsAsync(configuration, catalog.Revision, guards, cancellationToken)
+            : await store.SaveWithRevisionAsync(configuration, catalog.Revision, cancellationToken);
         return new CatalogSaveResult(result.Status == IamRevisionSaveStatus.Saved, result.Revision);
     }
 

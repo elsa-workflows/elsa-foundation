@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Core;
@@ -39,12 +41,18 @@ public sealed record ConnectionView(
     bool OverridePermitted,
     string MaterialRevision);
 
-public sealed record ConnectionCatalog(IReadOnlyList<ConnectionRecord> Records, string? Revision = null);
+public sealed record ConnectionCatalog(IReadOnlyList<ConnectionRecord> Records, string? Revision = null)
+{
+    /// <summary>Server-owned snapshot checks for an administrative write; never supplied through management JSON.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<IamRevisionGuard>? IdentityRevisionGuards { get; init; }
+}
 public sealed record ConnectionRegistryView(IReadOnlyList<ConnectionView> Connections, string? Revision, bool DatabaseManagement);
 
 [ReplacementContract]
 public interface IConnectionCatalogStore
 {
+    bool SupportsIdentityRevisionGuards => false;
     ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default);
     /// <summary>Atomically saves the complete proposed catalog, only at its expected revision.</summary>
     ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default);
@@ -71,6 +79,9 @@ public interface IConnectionWriteAuthorizer
 {
     ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default);
     ValueTask<bool> AuthorizePolicyAsync(ClaimsPrincipal actor, ConnectionRecord proposed, CancellationToken cancellationToken = default);
+    /// <summary>Rechecks current authorization and returns the IAM roots it depends on; null refuses coordinated writes.</summary>
+    ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ClaimsPrincipal actor, ConnectionRecord? proposed,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(null);
 }
 
 /// <summary>Checks installed protocol, required configuration and current secret resolution without network sign-in.</summary>
@@ -107,6 +118,9 @@ public interface IConnectionRecovery
 {
     ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default);
     ValueTask<bool> IsUsableForAsync(ConnectionRecord connection, ClaimsPrincipal actor, CancellationToken cancellationToken = default) => IsUsableAsync(connection, cancellationToken);
+    /// <summary>Returns the live IAM roots of a proved recovery identity; null means no coordinated recovery path.</summary>
+    ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ConnectionRecord connection, ClaimsPrincipal actor,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(null);
 }
 
 /// <summary>Reports a genuinely usable local recovery path, not merely an enabled login option.</summary>
@@ -115,6 +129,8 @@ public interface ILocalLoginRecovery
 {
     ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default);
     ValueTask<bool> IsUsableForAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) => IsUsableAsync(cancellationToken);
+    ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ClaimsPrincipal actor,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyList<IamRevisionGuard>?>(null);
 }
 
 [ReplacementContract]

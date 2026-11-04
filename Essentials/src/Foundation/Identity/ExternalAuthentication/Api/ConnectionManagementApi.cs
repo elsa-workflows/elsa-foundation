@@ -222,11 +222,13 @@ public static partial class ExternalAuthenticationApi
         var canManage = scope.ServiceProvider.GetRequiredService<ITokenSubjectResolver>().TryResolve(context.User, out var subject) && subject.CanonicalUserId is not null &&
             (await scope.ServiceProvider.GetRequiredService<ICurrentSubjectPermissionAuthorizer>().AuthorizeAsync(
                 new(Tenant(context), subject.CanonicalUserId, DefaultIdentityPermissionKeys.IdentityProvidersManage), context.RequestAborted)).Status == CurrentSubjectPermissionStatus.Granted;
+        var coordinated = !registry.DatabaseManagement || context.RequestServices.GetRequiredService<IConnectionCatalogStore>().SupportsIdentityRevisionGuards;
         var policies = scope.ServiceProvider.GetServices<IExternalProvisioningPolicy>().Select(policy => policy.Name)
             .Where(name => !string.IsNullOrWhiteSpace(name) && name.Length <= 80 && name != "reject").GroupBy(name => name, StringComparer.Ordinal)
             .Where(group => group.Count() == 1).Select(group => group.Key).Append("reject").Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(256).ToArray();
         return new(Tenant(context), context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.CallbackPath.TrimEnd('/'),
-            registry.Revision, registry.DatabaseManagement, canManage, policies, capabilities, registry.Connections.Select(view => Projection(context, view)).ToArray());
+            registry.Revision, registry.DatabaseManagement, canManage && coordinated, policies, capabilities,
+            registry.Connections.Select(view => Projection(context, view)).ToArray(), coordinated ? null : "identity-coordination-unavailable");
     }
     private static ManagedConnectionResponse Projection(HttpContext context, ConnectionView view)
     {
@@ -239,7 +241,8 @@ public static partial class ExternalAuthenticationApi
             Secrets = record.Protocol == "oidc" ? record.Secrets.Where(pair => pair.Key == "clientSecret").ToDictionary() : new Dictionary<string, Elsa.Secrets.Core.Models.SecretReference>()
         };
         var editable = view.Source == ConnectionSource.Database && record.ArchivedAt is null &&
-            context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.AllowDatabaseManagement && Editable(record);
+            context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.AllowDatabaseManagement &&
+            context.RequestServices.GetRequiredService<IConnectionCatalogStore>().SupportsIdentityRevisionGuards && Editable(record);
         return new(projected, view.Source, view.Effective, view.ShadowedById, view.OverridePermitted, view.MaterialRevision, editable, Editable(record),
             flows.GetCallbackUri(record.Key, AuthenticationArtifactPurpose.SignIn), flows.GetCallbackUri(record.Key, AuthenticationArtifactPurpose.Preview));
     }
@@ -267,6 +270,8 @@ public static partial class ExternalAuthenticationApi
         "not-authorized" or "role-delegation-forbidden" or "deployment-override-forbidden" or "database-management-disabled" => 403,
         "database-record-not-found" => 404,
         "revision-conflict" or "connection-key-in-use" or "final-login-path" => 409,
+        "identity-authority-changed" => 409,
+        "identity-coordination-unavailable" => 503,
         _ => 400
     };
     private static Task ManagementJson<T>(HttpContext context, T response, JsonTypeInfo<T> type, int status = 200) => Results.Json(response, type, statusCode: status).ExecuteAsync(context);

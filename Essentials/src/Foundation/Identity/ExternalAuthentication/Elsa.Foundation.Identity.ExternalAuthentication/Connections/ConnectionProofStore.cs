@@ -17,6 +17,7 @@ internal sealed record ConnectionProof(string RecordId, string MaterialRevision,
     public string? AuthenticationSessionId { get; init; }
     public string? SecurityVersion { get; init; }
     public string? SessionProvider { get; init; }
+    public string? ExternalLinkRevision { get; init; }
 }
 
 /// <summary>Private, protected successful-login observations; deliberately separate from authentication material.</summary>
@@ -39,7 +40,7 @@ internal sealed class ConnectionProofStore(IServiceScopeFactory scopes, IDataPro
 
     public async ValueTask RecordAsync(string key, ConnectionProof proof, DateTimeOffset oldest, CancellationToken token)
     {
-        if (!Valid(proof) || proof.AuthenticationSessionId is null || proof.SecurityVersion is null || proof.SessionProvider is null)
+        if (!Valid(proof) || proof.AuthenticationSessionId is null || proof.SecurityVersion is null || proof.SessionProvider is null || proof.ExternalLinkRevision is null)
             throw new InvalidOperationException("Invalid recovery observation.");
         await using var scope = CreateScope(true);
         var store = scope.ServiceProvider.GetService<IRevisionAwareProviderConfigurationStore>();
@@ -102,7 +103,8 @@ internal sealed class ConnectionProofStore(IServiceScopeFactory scopes, IDataPro
     private static bool Valid(ConnectionProof proof) => Text(proof.RecordId, 128) && Text(proof.MaterialRevision, 128) && Text(proof.Issuer, 8192) &&
         Text(proof.RedirectUri, 8192) && Text(proof.Subject, 8192) && Text(proof.UserId, 400) && Text(proof.CredentialBinding, 512) && proof.ObservedAt != default &&
         (proof.AuthenticationSessionId is null && proof.SecurityVersion is null && proof.SessionProvider is null ||
-            Hex(proof.AuthenticationSessionId) && Text(proof.SecurityVersion, 400) && Text(proof.SessionProvider, 400));
+            Hex(proof.AuthenticationSessionId) && Text(proof.SecurityVersion, 400) && Text(proof.SessionProvider, 400)) &&
+        (proof.ExternalLinkRevision is null || Text(proof.ExternalLinkRevision, 128));
     private static bool Hex(string? value) => value is { Length: 64 } && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static bool Text(string? value, int limit) => !string.IsNullOrWhiteSpace(value) && value.Length <= limit;
     private sealed record Envelope(int Format, string Tenant, string Key, ConnectionProof[] Proofs);

@@ -187,7 +187,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     {busy ? <p role="status">{busy}…</p> : null}
     {loading && !visible ? <p role="status">Loading external sign-in connections…</p> : null}
     {visible ? <>
-      {!visible.databaseManagement ? <p className="external-auth-callout">This deployment manages connections in configuration. Studio changes are disabled.</p> : !visible.canManageConnections ? <p className="external-auth-callout">You have read-only access to these connections.</p> : null}
+      {!visible.databaseManagement ? <p className="external-auth-callout">This deployment manages connections in configuration. Studio changes are disabled.</p> : visible.managementUnavailableReason === "identity-coordination-unavailable" ? <p className="external-auth-callout">Connection changes are unavailable on this host. Ask the host administrator to finish configuring identity management.</p> : !visible.canManageConnections ? <p className="external-auth-callout">You have read-only access to these connections.</p> : null}
       <div className="external-auth-workspace"><section className="external-auth-list" aria-label="Sign-in connections">
         <label htmlFor="external-auth-search">Find a connection</label><input id="external-auth-search" type="search" value={search} onChange={event => setSearch(event.target.value)} />
         {!matches.length ? <p>{visible.connections.length ? "No connections match this search." : "No external sign-in connections yet. Add one to prepare a disabled draft."}</p> : <ul>{matches.map(view => <li key={view.document.id}>

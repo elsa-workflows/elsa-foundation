@@ -25,8 +25,8 @@ internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbConte
             session.CreatedAt.Ticks % TimeSpan.TicksPerMillisecond != 0 || session.ExpiresAt.Ticks % TimeSpan.TicksPerMillisecond != 0 ||
             session.ExpiresAt <= session.CreatedAt || session.ExpiresAt - session.CreatedAt > TimeSpan.FromDays(30) ||
             session.RevokedAt is not null || session.Revision is not null ||
-            (session.ConnectionKey is null ? session.ConnectionRecordId is not null || session.Issuer is not null || session.ExternalSubject is not null :
-                !Text(session.ConnectionKey, 80) || !Text(session.ConnectionRecordId, 400) || !Text(session.Issuer, 400) || !Text(session.ExternalSubject, 400)))
+            (session.ConnectionKey is null ? session.ConnectionRecordId is not null || session.Issuer is not null || session.ExternalSubject is not null || session.ExternalLinkRevision is not null :
+                !Text(session.ConnectionKey, 80) || !Text(session.ConnectionRecordId, 400) || !Text(session.Issuer, 400) || !Text(session.ExternalSubject, 400) || !Text(session.ExternalLinkRevision, 128)))
             throw new ArgumentException("Invalid authentication session.", nameof(session));
         var json = JsonSerializer.Serialize(session);
         if (Encoding.UTF8.GetByteCount(json) > 16384) throw new ArgumentException("Oversized authentication session.", nameof(session));

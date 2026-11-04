@@ -19,6 +19,7 @@ export interface ConnectionView {
 export interface ConnectionCatalog {
   tenantId: string; protocolPath: string; revision: string | null; databaseManagement: boolean; canManageConnections: boolean;
   provisioningPolicies: string[];
+  managementUnavailableReason?: "identity-coordination-unavailable" | null;
   capabilities: { canManageUsers: boolean; canManageRoles: boolean; canMapGroups: boolean; canRevokeTokens: boolean };
   connections: ConnectionView[];
 }
@@ -135,6 +136,8 @@ export function externalAuthenticationError(error: unknown): string {
   const messages: Record<string, string> = {
     "final-login-path": "Keep another usable administrator sign-in method before making this change.",
     "revision-conflict": "Connections changed on the server. Refresh and review the latest configuration before retrying.",
+    "identity-authority-changed": "User access or role definitions changed. Refresh and review this change before retrying.",
+    "identity-coordination-unavailable": "Connection changes are unavailable on this host. Ask the host administrator to finish configuring identity management.",
     "role-delegation-forbidden": "Choose existing Elsa roles within your permission and deployment limits.",
     "deployment-override-forbidden": "This deployment does not permit an override for this connection.",
     "database-management-disabled": "Connections are managed by this deployment and are read-only here.",

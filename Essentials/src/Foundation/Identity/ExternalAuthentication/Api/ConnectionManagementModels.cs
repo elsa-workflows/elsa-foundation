@@ -9,7 +9,7 @@ internal sealed record ManagedConnectionResponse(ConnectionRecord Document, Conn
     string? SignInCallback, string? PreviewCallback, ConnectionReadinessResult? Readiness = null);
 internal sealed record ManagedConnectionCatalogResponse(string TenantId, string ProtocolPath, string? Revision, bool DatabaseManagement,
     bool CanManageConnections, IReadOnlyList<string> ProvisioningPolicies,
-    EffectiveProviderCapabilities Capabilities, IReadOnlyList<ManagedConnectionResponse> Connections);
+    EffectiveProviderCapabilities Capabilities, IReadOnlyList<ManagedConnectionResponse> Connections, string? ManagementUnavailableReason = null);
 internal sealed record ManagedConnectionDetailResponse(string? Revision, ManagedConnectionResponse Connection);
 internal sealed record ManagedConnectionAssessmentResponse(bool CanApply, string? Failure, ManagedConnectionCatalogResponse? Proposed);
 internal sealed record ManagedConnectionTestRequest(string ConnectionRecordId, string? ExpectedRevision);

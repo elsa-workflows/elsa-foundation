@@ -143,3 +143,24 @@ Remaining integration:
    explicit ownership rebind still rotates affected account epochs. Prove per-user alternative sign-in and global
    administrative recovery, including forced catalog/link/IAM races and truthful storage failures, before exposing
    the removal endpoint or completing T024. Finish T025 and the full deployment/acceptance matrix afterward.
+
+
+### Managed catalog coordination integrated
+
+Integration items 1–4 above are implemented: the default authorizer captures the live editor account, current saved
+role definitions and proposed provisioning roles around current grants/delegation and canonical sign-in eligibility.
+Local and external recovery capture the eligible identity and its saved/admission role roots around actual checks.
+Repeated guards must agree; mismatched snapshots refuse. The writer passes server-only guard metadata to the catalog,
+which routes administrative saves through the owned serializable IAM/provider transaction. Missing storage capability
+refuses writes and is projected as read-only host management in API/Studio. No fallback to an uncoordinated save occurs.
+
+Actual managed-host tests change actor/recovery status, membership, framework lockout, role definitions or the exact
+qualified link from an independent scope after all final-login checks and before save. Every catalog mutation is
+rejected without changing its revision or enabled paths. A provisioning-role definition change also rejects a draft.
+Bypassing coordinated storage makes all seven race cases fail; restored source uses the coordinated branch.
+
+Qualified link/session revision binding and monotonic remove/recreate counters are also implemented, with semantic
+1.2.0 schema markers preventing an older host from silently ignoring these semantics. Item 5 (prospective guarded
+unlink, including the unchanged catalog in database-managed mode and preserving deployment-only operation) remains
+required before exposing removal or checking T024. Manual attachment must also carry the delegation snapshot into
+its atomic commit. T025 and the deployment/acceptance matrix remain unchanged.

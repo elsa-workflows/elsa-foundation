@@ -16,6 +16,36 @@ internal sealed class PermissionConnectionAuthorizer(
     IServiceScopeFactory scopes,
     IOptions<ExternalAuthenticationOptions> options) : IConnectionWriteAuthorizer
 {
+    public async ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureRevisionGuardsAsync(ClaimsPrincipal actor, ConnectionRecord? proposed,
+        CancellationToken cancellationToken = default)
+    {
+        var tenant = options.Value.TenantId;
+        if (!subjects.TryResolve(actor, out var subject) || subject.TenantId != tenant || subject.CanonicalUserId is null) return null;
+        await using var scope = scopes.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        services.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        return await IdentitySnapshot.CaptureAsync(services, tenant, subject.CanonicalUserId, proposed?.Admission.DefaultRoleIds ?? [], async () =>
+        {
+            if (!await AuthorizeAsync(actor, cancellationToken) || proposed is not null && !await AuthorizePolicyAsync(actor, proposed, cancellationToken)) return false;
+            if (services.GetService<ICanonicalUserSignInService>() is not { } authority ||
+                !await authority.CanSignInAsync(new(tenant, subject.CanonicalUserId), cancellationToken: cancellationToken)) return false;
+            var permissions = services.GetService<ICurrentSubjectPermissionAuthorizer>();
+            if (permissions is null || (await permissions.AuthorizeAsync(new(tenant, subject.CanonicalUserId,
+                    DefaultIdentityPermissionKeys.IdentityProvidersManage), cancellationToken)).Status != CurrentSubjectPermissionStatus.Granted) return false;
+            if (proposed is null) return true;
+            var roles = services.GetRequiredService<IRoleStore>();
+            foreach (var id in proposed.Admission.DefaultRoleIds.Distinct(StringComparer.Ordinal))
+            {
+                var role = await roles.FindAsync(tenant, id, cancellationToken);
+                if (role is null) return false;
+                foreach (var permission in role.Permissions)
+                    if ((await permissions.AuthorizeAsync(new(tenant, subject.CanonicalUserId, permission, role), cancellationToken)).Status != CurrentSubjectPermissionStatus.Granted)
+                        return false;
+            }
+            return true;
+        }, cancellationToken);
+    }
+
     public async ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) =>
         subjects.TryResolve(actor, out var subject) && subject.TenantId == options.Value.TenantId &&
         (await authorization.AuthorizeAsync(new(actor, DefaultIdentityPermissionKeys.IdentityProvidersManage, options.Value.TenantId), cancellationToken)).Succeeded;
@@ -26,8 +56,7 @@ internal sealed class PermissionConnectionAuthorizer(
         if (!await AuthorizeAsync(actor, cancellationToken)) return false;
         var roleIds = proposed.Admission.DefaultRoleIds.Distinct(StringComparer.Ordinal).ToArray();
         if (roleIds.Length == 0) return true;
-        // A catalog with no role assignments does not require a local IAM store. External-owned hosts may
-        // supply their own role read adapter and authorization service through the existing contracts.
+        // Delegation uses Elsa role definitions. Coordinated writes separately capture their live revisions.
         await using var scope = scopes.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
         var roles = scope.ServiceProvider.GetService<IRoleStore>();

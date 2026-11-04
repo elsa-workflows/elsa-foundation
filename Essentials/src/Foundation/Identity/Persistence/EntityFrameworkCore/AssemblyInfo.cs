@@ -35,7 +35,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // The schema families these modules own, each at the version its skew check reads. A host's
 // readability report is derived from these alone; every family the stores check must be declared
 // here, at the version they read; that holds by review until #2606 restores a compiled check.
-[assembly: EfSchemaFamily(IdentityIamEfModule.SchemaFamily, "Identity.Iam", IdentityIamEfModule.SchemaVersion, Upcasters = [typeof(IdentityIamV1Upcaster)])]
+[assembly: EfSchemaFamily(IdentityIamEfModule.SchemaFamily, "Identity.Iam", IdentityIamEfModule.SchemaVersion, Upcasters = [typeof(IdentityIamV1Upcaster), typeof(IdentityIamV2Upcaster)])]
 [assembly: EfSchemaFamily(IdentityProviderConfigurationEfModule.SchemaFamily, "Identity.ProviderConfiguration", IdentityProviderConfigurationEfModule.SchemaVersion)]
 
 // Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".

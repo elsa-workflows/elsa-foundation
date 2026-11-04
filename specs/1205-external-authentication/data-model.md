@@ -20,7 +20,7 @@ Separate Identity-owned persistence: purpose, hashed handle, expiry, protected s
 
 Managed links extend the existing `ExternalIdentityRecord` with a validated issuer and use `ExternalIdentityKey`
 for qualified lookup. Null issuer is a separate legacy namespace, never a fallback. The additive IAM migrations
-preserve old rows and histories; the 1.0.0-to-1.1.0 chain preserves existing content while new writes stamp 1.1.0.
+preserve old rows and histories; the 1.0.0-to-1.1.0 chain preserves existing content. Both IAM and authentication state now write schema 1.2.0, with additive semantic migrations and content-preserving upcasters so an older host cannot silently ignore the qualified-link session binding.
 
 The optional authentication EF module also advances to schema `1.1.0` with an additive `DurableSessions` table,
 preserving its Initial history and prior flow payloads through a content-preserving upcaster. The table uses exact
@@ -34,6 +34,14 @@ caller-owned transactions. Session paging is capped at 100; per-creation expiry 
 rows of the current tenant. Cookie/access/refresh reference the same session and absolute lifetime; refresh never
 extends it. Direct non-user bearer compositions retain their separate typed external subject boundary.
 
+Qualified external sessions and recovery observations bind the exact link revision. Removing a qualified link advances
+the owning user root beyond the removed link revision; new qualified links start above that root. Deleting and
+recreating the same key, owner and timestamps therefore cannot revive the removed instance's credentials. Issuer-less
+legacy links retain their existing revision behavior. Older external sessions without an exact link binding require a fresh sign-in; an upcaster never invents that binding. Removal preserves the account security version and other links,
+so another provider for the same user remains usable. The native removal primitive owns a serializable transaction,
+checks opaque user and exact link revisions, and updates the root registry and link row atomically. It remains internal
+to trusted store callers until prospective final-login recovery coordination protects the administrative endpoint.
+
 ## Private recovery observations
 
 Every new observation also binds the actual issued durable Elsa session and its opaque account version. The
@@ -43,4 +51,4 @@ within the observation's own lifetime. A login ownership rebind rotates both aff
 so neither old credentials nor old observations revive after a link returns to its earlier owner. Older unbound
 observations require a fresh normal administrative sign-in. Individual session termination cannot renew evidence.
 
-Separate host-tenant/logical-key rows in the existing revision-aware global provider configuration store hold a versioned, Data Protection-protected bounded envelope of successful normal administrative sign-ins. Each proof carries source record, material revision, trusted callback, exact issuer/subject/user, opaque credential binding and observed UTC. No upstream tokens or secret values are retained. Up to sixteen recent observations per key; default eligibility window 24 hours, maximum thirty days. Expired entries never count and are pruned on the next record write. Preview never writes proofs. Configuration changes and live IAM/link/permission/credential/callback checks can invalidate proof earlier. These observations do not change material revision and are never a public management projection. Existing catalog CAS still coordinates concurrent connection retirement; cross-IAM/link/session mutation integration remains T024.
+Separate host-tenant/logical-key rows in the existing revision-aware global provider configuration store hold a versioned, Data Protection-protected bounded envelope of successful normal administrative sign-ins. Each proof carries source record, material revision, trusted callback, exact issuer/subject/user, opaque credential binding and observed UTC. No upstream tokens or secret values are retained. Up to sixteen recent observations per key; default eligibility window 24 hours, maximum thirty days. Expired entries never count and are pruned on the next record write. Preview never writes proofs. Configuration changes and live IAM/link/permission/credential/callback checks can invalidate proof earlier. These observations do not change material revision and are never a public management projection. Administrative catalog saves coordinate the complete catalog CAS with opaque editor, provisioning-role and selected recovery IAM revisions in one owned serializable transaction. Qualified unlink and guarded attachment integration remain T024.
