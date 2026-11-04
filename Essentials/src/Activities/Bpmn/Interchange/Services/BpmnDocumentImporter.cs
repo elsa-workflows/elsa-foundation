@@ -117,8 +117,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
         BpmnImportOptions? options,
         IBpmnWorkBinder binder)
     {
-        private readonly Dictionary<string, LibInterchange.BpmnWorkBinding> _bindings =
-            read.Bindings.ToDictionary(binding => binding.BindingRef, StringComparer.Ordinal);
+        private readonly Dictionary<string, LibInterchange.BpmnWorkBinding> _bindings = IndexBindings(read.Bindings);
 
         private readonly List<BpmnImportIssue> _issues = read.Analysis.Issues
             // A boundary Elsa drops for its own reason must not also carry the library's differently-reasoned
@@ -132,6 +131,23 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
         private readonly List<BpmnImportCapability> _capabilities = [];
         private readonly HashSet<string> _confirmed = new(options?.ConfirmedBindings ?? [], StringComparer.Ordinal);
         private readonly HashSet<string> _proposed = new(StringComparer.Ordinal);
+
+        // Confirmations name element ids, so a retained binding on an id another element in the document shares (another
+        // pool's process or a subprocess body) is never proposed: one confirmation would bind every element with that id.
+        private readonly HashSet<string> _sharedElementIds = read.Definitions.Processes.SelectMany(process => process.Elements)
+            .Concat(read.Bindings.OfType<LibInterchange.BpmnWorkBinding.NestedProcess>().SelectMany(nested => nested.Definition.Elements))
+            .GroupBy(element => element.ElementId, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        /// <summary>Work bindings by reference. Two elements sharing an id share a reference, which no import can place twice.</summary>
+        private static Dictionary<string, LibInterchange.BpmnWorkBinding> IndexBindings(IEnumerable<LibInterchange.BpmnWorkBinding> bindings)
+        {
+            var indexed = new Dictionary<string, LibInterchange.BpmnWorkBinding>(StringComparer.Ordinal);
+            foreach (var binding in bindings)
+                if (!indexed.TryAdd(binding.BindingRef, binding))
+                    throw new BpmnInterchangeException($"The document binds work under reference '{binding.BindingRef}' more than once; element ids must be unique across its processes.");
+            return indexed;
+        }
 
         public BpmnImportResult Build()
         {
@@ -205,6 +221,9 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 }, source.ElementId);
                 if (source.Script is not null)
                     Degraded(source.ElementId, "The script body and script format are not represented by the frozen Foundation authoring contract; bind an activity explicitly.");
+                if (source.Extensions.ForeignAttributes.Any(BpmnTaskBindingMetadata.IsAttribute) &&
+                    (source.BindingRef is not { } workRef || !_bindings.ContainsKey(workRef)))
+                    Degraded(source.ElementId, "The retained task binding was ignored: this element has no work to bind.");
                 if (boundaryDrops.ContainsKey(source.ElementId))
                 {
                     dropped.Add(source.ElementId);
@@ -302,6 +321,8 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
             var retained = source.Extensions.ForeignAttributes.Where(BpmnTaskBindingMetadata.IsAttribute).ToArray();
             if (retained.Length > 0 && (request.Kind != BpmnWorkBindingKind.UnboundTask || result.Activity is not null))
                 Degraded(source.ElementId, "The retained task binding was ignored: it is honored only on a task this host leaves unbound.");
+            else if (retained.Length > 0 && _sharedElementIds.Contains(source.ElementId))
+                Degraded(source.ElementId, "The retained task binding was ignored: another element in the document uses this element id; bind it explicitly.");
             else if (retained.Length > 0)
                 return Retained(binding, source, retained[0].Value, capability, result);
             _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, result.Availability, result.Reason) { BindingRef = binding.BindingRef });

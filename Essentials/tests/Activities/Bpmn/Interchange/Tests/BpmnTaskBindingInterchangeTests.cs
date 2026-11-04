@@ -256,6 +256,68 @@ public sealed class BpmnTaskBindingInterchangeTests
     }
 
     [Fact]
+    public async Task A_retained_binding_on_an_element_without_work_is_reported()
+    {
+        const string xml = """
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:elsa="https://elsa-workflows.io/schemas/bpmn" id="defs" targetNamespace="urn:test">
+              <process id="p" isExecutable="true">
+                <startEvent id="start"/>
+                <exclusiveGateway id="choose" elsa:taskBinding='{"activityVersionId":"acme.summarize@1.0.0","inputs":{}}'/>
+                <endEvent id="end"/>
+                <sequenceFlow id="a" sourceRef="start" targetRef="choose"/><sequenceFlow id="b" sourceRef="choose" targetRef="end"/>
+              </process>
+            </definitions>
+            """;
+
+        var result = await new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief"))).ImportAsync(xml);
+
+        Assert.False(result.Analysis.CanExecute);
+        Assert.Contains(result.Analysis.Issues, x => x.ElementId == "choose" && x.Severity == BpmnImportIssueSeverity.Degraded);
+    }
+
+    [Fact]
+    public async Task A_retained_binding_on_an_element_id_another_process_shares_is_never_bound()
+    {
+        const string binding = """{"activityVersionId":"acme.summarize@1.0.0","inputs":{"brief":"moss gardens"}}""";
+        var xml = $$"""
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:elsa="https://elsa-workflows.io/schemas/bpmn" id="defs" targetNamespace="urn:test">
+              <collaboration id="c"><participant id="pa" processRef="pa-process"/><participant id="pb" processRef="pb-process"/></collaboration>
+              <process id="pa-process" isExecutable="true">
+                <startEvent id="a-start"/><serviceTask id="summarize" elsa:taskBinding='{{binding}}'/><endEvent id="a-end"/>
+                <sequenceFlow id="a1" sourceRef="a-start" targetRef="summarize"/><sequenceFlow id="a2" sourceRef="summarize" targetRef="a-end"/>
+              </process>
+              <process id="pb-process" isExecutable="true">
+                <startEvent id="b-start"/><exclusiveGateway id="summarize"/><endEvent id="b-end"/>
+                <sequenceFlow id="b1" sourceRef="b-start" targetRef="summarize"/><sequenceFlow id="b2" sourceRef="summarize" targetRef="b-end"/>
+              </process>
+            </definitions>
+            """;
+
+        var result = await new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief")))
+            .ImportAsync(xml, new BpmnImportOptions { ConfirmedBindings = ["summarize"] });
+
+        Assert.False(result.Analysis.CanExecute);
+        Assert.All(result.ProcessNodes, process => Assert.Empty(Structure(process.Node).Activities));
+        Assert.All(result.Analysis.Capabilities.Where(x => x.ElementId == "summarize"), x => Assert.Null(x.RetainedBinding));
+        Assert.Contains(result.Analysis.Issues, x => x.ElementId == "summarize" && x.Severity == BpmnImportIssueSeverity.Degraded);
+    }
+
+    [Fact]
+    public async Task Two_processes_binding_work_under_one_element_id_are_refused()
+    {
+        const string xml = """
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:test">
+              <collaboration id="c"><participant id="pa" processRef="pa-process"/><participant id="pb" processRef="pb-process"/></collaboration>
+              <process id="pa-process" isExecutable="true"><serviceTask id="work"/></process>
+              <process id="pb-process" isExecutable="true"><serviceTask id="work"/></process>
+            </definitions>
+            """;
+
+        await Assert.ThrowsAsync<Exceptions.BpmnInterchangeException>(() =>
+            new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief"))).ImportAsync(xml));
+    }
+
+    [Fact]
     public async Task Confirming_an_element_without_a_retained_binding_is_reported_and_not_executable()
     {
         var xml = new BpmnDocumentExporter().Export(Process(Literal("brief", Brief)));

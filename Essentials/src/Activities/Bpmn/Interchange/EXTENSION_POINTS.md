@@ -62,7 +62,9 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
   `unresolvable-version`, `unresolvable-input`, `duplicate-input`, `sensitive-input`, `non-literal-input`, `unsupported-input-setting`,
   `unsupported-output`, `structured-child`, `oversized-binding` (beyond the limits import reads) and `ambiguous-element`
   (another element in any scope shares the task's element id). An unreadable value, or one on an element this host binds itself, is
-  reported Degraded and never proposed, as is one that names a member or an input twice. An element carrying the attribute under both
+  reported Degraded and never proposed, as is one that names a member or an input twice, one on an element with no work to
+  bind, and one on an element id another element in the document shares (another pool's process or a subprocess body).
+  A document that binds work under one element id twice is refused. An element carrying the attribute under both
   vendor namespace aliases is refused, as `elsa:directBinding` is.
 - The authored `diagram` payload shape (`shapes: {id: {x,y,width,height}}`,
   `edges: {id: {waypoints: [{x,y}]}}`) mirrors BPMNDI and is treated as opaque by the runtime.
