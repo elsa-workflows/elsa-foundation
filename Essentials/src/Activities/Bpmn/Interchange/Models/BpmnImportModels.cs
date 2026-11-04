@@ -109,7 +109,7 @@ public sealed record BpmnExportResult(string Xml, IReadOnlyList<BpmnExportOmissi
 
 /// <summary>
 /// A task binding export did not carry. <see cref="Code"/> is one of <c>catalog-unavailable</c>, <c>unresolvable-version</c>,
-/// <c>unresolvable-input</c>, <c>sensitive-input</c>, <c>non-literal-input</c>, <c>unsupported-input-setting</c>,
+/// <c>unresolvable-input</c>, <c>duplicate-input</c>, <c>sensitive-input</c>, <c>non-literal-input</c>, <c>unsupported-input-setting</c>,
 /// <c>unsupported-output</c>, <c>structured-child</c>, <c>oversized-binding</c> or <c>ambiguous-element</c>; <see cref="ReferenceKey"/> names the input when one input decided it.
 /// </summary>
 public sealed record BpmnExportOmission(string ElementId, string Code, string Message, string? ReferenceKey = null);

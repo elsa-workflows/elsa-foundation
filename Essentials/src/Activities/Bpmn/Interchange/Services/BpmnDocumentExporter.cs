@@ -114,6 +114,8 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
         if (version is null || !visibleDefinitions.Contains(version.DefinitionId))
             return new(element.ElementId, "unresolvable-version", $"Activity version '{child.ActivityVersionId}' is not in the visible catalog.");
         var declarations = version.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        if (child.Inputs.Where(input => input.IsBound()).GroupBy(input => input.ReferenceKey, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1) is { } repeated)
+            return new(element.ElementId, "duplicate-input", "The task binds the same input more than once.", repeated.Key);
         foreach (var input in child.Inputs.Where(input => input.IsBound()))
         {
             if (!declarations.TryGetValue(input.ReferenceKey, out var declaration))

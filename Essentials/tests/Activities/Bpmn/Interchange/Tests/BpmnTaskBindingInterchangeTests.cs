@@ -115,6 +115,24 @@ public sealed class BpmnTaskBindingInterchangeTests
     }
 
     [Fact]
+    public async Task A_task_binding_the_same_input_twice_is_omitted()
+    {
+        var node = Process(Literal("brief", Brief));
+        var structure = Structure(node);
+        var child = Assert.Single(structure.Activities);
+        var doubled = new BpmnAuthoredStructure([child with { Inputs = [Literal("brief", Brief), Literal("brief", "again")] }], structure.Elements, structure.SequenceFlows);
+
+        var exported = await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(node with
+        {
+            Structure = new ActivityNodeStructure(node.Structure!.Kind, node.Structure.SchemaVersion, JsonSerializer.SerializeToElement(doubled, Web))
+        });
+
+        var omission = Assert.Single(exported.Omissions);
+        Assert.Equal("duplicate-input", omission.Code);
+        Assert.Equal("brief", omission.ReferenceKey);
+    }
+
+    [Fact]
     public async Task A_binding_import_could_not_read_is_omitted_rather_than_written()
     {
         var exported = await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(Process(Literal("brief", new string('x', 20_000))));

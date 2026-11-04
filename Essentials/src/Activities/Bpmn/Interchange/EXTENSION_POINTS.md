@@ -59,7 +59,7 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
   Export writes it only when the visible catalog resolves the version and declares every bound input, the binding has
   no output captures, storage, evaluation or conversion settings, every input is a literal not marked sensitive on the
   binding, and no declaration is sensitive, a credential, a connection or a password hint. Omission codes: `catalog-unavailable`,
-  `unresolvable-version`, `unresolvable-input`, `sensitive-input`, `non-literal-input`, `unsupported-input-setting`,
+  `unresolvable-version`, `unresolvable-input`, `duplicate-input`, `sensitive-input`, `non-literal-input`, `unsupported-input-setting`,
   `unsupported-output`, `structured-child`, `oversized-binding` (beyond the limits import reads) and `ambiguous-element`
   (another element in any scope shares the task's element id). An unreadable value, or one on an element this host binds itself, is
   reported Degraded and never proposed, as is one that names a member or an input twice. An element carrying the attribute under both
