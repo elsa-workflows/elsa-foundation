@@ -84,7 +84,7 @@ Elsa does not provide exactly-once delivery or a reconciliation framework; these
 
 ## Pass data from a step to its compensation
 
-A compensation usually needs something the step produced: the reservation id to release. Bind the compensation's input to the step's result, a reference to one of the step's outputs. The compensation then reads the result of the exact run of the step it undoes: in a loop each iteration's compensation gets its own iteration's result, and an outer scope that undoes a nested scope's step after a hand-over still gets that step's result. The sample's workflows bind the **Release** compensation's `reservation` input to the result of the **Reserve** step it undoes:
+A compensation usually needs something the step produced: the reservation id to release. Bind the compensation's input to the step's result, a reference to one of the step's outputs. The compensation then reads the result of the exact run of the step it undoes: in a loop each iteration's compensation gets its own iteration's result, and an outer scope that undoes a nested scope's step after a hand-over still gets that step's result. For example, bind a **Release** compensation's `reservation` input to the result of the **Reserve** step it undoes:
 
 ```json
 { "referenceKey": "reservation", "value": { "expressionType": "ActivityResult", "value": { "producerNodeId": "reserve-inventory", "projectionKey": "reservation", "producerScopeId": "order" } } }
@@ -92,7 +92,7 @@ A compensation usually needs something the step produced: the reservation id to 
 
 A workflow variable also works for a step that runs once: capture the step's output into the variable and bind the compensation's input to it. In a loop, a later iteration overwrites the variable before an earlier iteration's compensation reads it, so use the step's result there.
 
-A step whose outcome is uncertain has no result for its compensation to read. Its compensation still gets the step's operation key as `TargetOperationKey`, which is enough to find the effect; the sample's **Release** works from that key alone when it is given no reservation.
+A step whose outcome is uncertain has no result for its compensation to read. Its compensation still gets the step's operation key as `TargetOperationKey`, which is enough to find the effect.
 
 A republished workflow does not change the steps or compensations of a run already in flight: a run always uses the version it started on.
 
@@ -106,7 +106,7 @@ if (LoseResponse == true)
     return ActivityTransition.Fault<ReservationResult>(new ActivityFault("reservation.timeout", $"No response from the {Resource} service.", category: "outcome-unknown"));
 ```
 
-This is the sample's **Reserve** activity, whose **Lose response** input applies the reservation and then reports this fault; a test keeps the snippet identical to the sample's code.
+Here a **Lose response** input simulates the lost response: the activity applies the reservation and then reports this fault.
 
 The scope records the step as **Uncertain** and starts recovery with that step included. Its compensation gets the step's operation key as `TargetOperationKey` and undoes the effect if it is there (rule 3 above covers the case where it is not there yet).
 
