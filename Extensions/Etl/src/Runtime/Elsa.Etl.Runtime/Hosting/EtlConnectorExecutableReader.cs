@@ -70,7 +70,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
             limits.MaxBatchRecords > options.Capacity.Records || limits.MaxBatchBytes > options.Capacity.InputBytes ||
             limits.MaxOutputBatchBytes > options.Capacity.OutputBytes || limits.MaxSnapshotBytes > options.MaxSnapshotBytes)
             throw Refused("etl.executable.limits-exceeded");
-        var sourceFields = pipeline.Source switch { EtlCsvSource csv => csv.Schema.Count, EtlHttpJsonSource json => json.Fields.Count, EtlJsonlSource jsonl => jsonl.Fields.Count, EtlSqlSource sql => sql.Columns.Count, _ => 0 };
+        var sourceFields = pipeline.Source switch { EtlCsvSource csv => csv.Schema.Count, EtlHttpJsonSource json => json.Fields.Count, EtlJsonlSource jsonl => jsonl.Fields.Count, EtlSqlSource sql => sql.Columns.Count, EtlRabbitMqSource rabbitMq => rabbitMq.Fields.Count, _ => 0 };
         if (sourceFields <= 0 || sourceFields > limits.MaxFields || pipeline.Mapping.Count is <= 0 or > 2048 || pipeline.Filters.Count > 2048)
             throw Refused("etl.executable.limits-exceeded");
         if (pipeline.Lookup is { } lookup &&
@@ -132,6 +132,15 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                     !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)) ||
                     sql.Watermark is { } watermark &&
                     !sql.Columns.Any(column => column.Name == watermark && column.Type == EtlColumnType.Int64 && column.Required))
+                    throw Refused("etl.executable.invalid-pipeline");
+                break;
+            case EtlRabbitMqSource rabbitMq:
+                RequireAlias(rabbitMq.Binding);
+                foreach (var field in rabbitMq.Fields) _ = new EtlJsonPointer(field.Pointer);
+                // The queue reaches the broker as a protocol short string and the maximum bounds a run (spec 1201).
+                if (rabbitMq.Queue is not { Length: >= 1 and <= 255 } queue ||
+                    !queue.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':') ||
+                    rabbitMq.MaxMessages is < 1 or > EtlRabbitMqSource.MaxMessagesLimit)
                     throw Refused("etl.executable.invalid-pipeline");
                 break;
             default: throw Refused("etl.executable.invalid-pipeline");

@@ -6,7 +6,7 @@ using Testcontainers.RabbitMq;
 namespace Elsa.Etl.RabbitMq.ProviderTests;
 
 /// <summary>
-/// A real RabbitMQ broker for the ETL RabbitMQ delivery suite (spec 1200). A supplied AMQP URI wins; otherwise a container
+/// A real RabbitMQ broker for the ETL RabbitMQ delivery and ingestion suites (specs 1200 and 1201). A supplied AMQP URI wins; otherwise a container
 /// starts. Without Docker the suite skips, unless <see cref="RequireVariable"/> makes it fail, as CI does.
 /// </summary>
 public sealed class EtlRabbitMqBrokerFixture : IAsyncLifetime

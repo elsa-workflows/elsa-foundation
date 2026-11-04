@@ -61,6 +61,7 @@ public sealed record EtlContinuousRunPolicy([property: JsonRequired] int PollInt
 [JsonDerivedType(typeof(EtlHttpJsonSource), "httpJson")]
 [JsonDerivedType(typeof(EtlJsonlSource), "jsonl")]
 [JsonDerivedType(typeof(EtlSqlSource), "sql")]
+[JsonDerivedType(typeof(EtlRabbitMqSource), "rabbitmq")]
 public abstract record EtlSource;
 
 /// <summary>A host-bound CSV input source with a declared CSV schema.</summary>
@@ -112,6 +113,27 @@ public sealed record EtlSqlSource(
     /// </summary>
     /// <remarks>A null watermark is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
     public string? Watermark { get; init; }
+}
+
+/// <summary>A host-approved RabbitMQ queue drained up to a bound when a run prepares (spec 1201).</summary>
+/// <remarks>
+/// Preparation receives up to <see cref="MaxMessages"/> messages without acknowledging them, retains their JSON bodies as a
+/// JSON Lines input snapshot, and acknowledges them only once that snapshot is recorded as the run's prepared input; the run
+/// then processes the snapshot as a JSON Lines source with <see cref="Fields"/>. Ingestion is at least once. The AMQP URI is
+/// never authored here.
+/// </remarks>
+/// <param name="Binding">The host-approved RabbitMQ source alias.</param>
+/// <param name="Queue">The queue; the binding must allow it.</param>
+/// <param name="Fields">The JSON fields read from each message body.</param>
+/// <param name="MaxMessages">The most messages one run takes, 1 to 100,000; the rest stay queued.</param>
+public sealed record EtlRabbitMqSource(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] string Queue,
+    [property: JsonRequired] IReadOnlyList<EtlJsonField> Fields,
+    [property: JsonRequired] int MaxMessages) : EtlSource
+{
+    /// <summary>The largest <see cref="MaxMessages"/> a source may declare.</summary>
+    public const int MaxMessagesLimit = 100_000;
 }
 
 /// <summary>Selects one named scalar value by JSON Pointer within a source record.</summary>

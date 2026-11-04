@@ -162,3 +162,5 @@ Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.TenantId.get -> string?
 Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.TenantId.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.RabbitMqBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions!>!
 Elsa.Etl.Runtime.EtlRuntimeFeature.RabbitMqBindings.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedQueues.get -> System.Collections.Generic.IList<string!>!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedQueues.set -> void

@@ -104,8 +104,8 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         try
         {
             var authored = ReadPipeline(admission);
-            // A SQL source is processed as the JSON Lines view of its retained snapshot (spec 1198).
-            var sqlSource = authored.Source is EtlSqlSource;
+            // A SQL (spec 1198) or RabbitMQ (spec 1201) source is processed as the JSON Lines view of its retained snapshot.
+            var sqlSource = authored.Source is EtlSqlSource or EtlRabbitMqSource;
             var pipeline = EtlSqlSnapshotReader.ProcessingView(authored);
             var root = Path.GetFullPath(hostApprovedSnapshotRoot);
             if (!Directory.Exists(root))
@@ -801,7 +801,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         if (!sqlSource)
             return PreparedPin(admission, alias, EtlFileRole.Source, fileKind).ExpectedSha256!;
         var revision = admission.Bindings.Source?.Revision;
-        if (admission.Bindings.Source?.Kind != EtlConnectorKind.Sql || revision is null || revision.Alias != alias ||
+        if (admission.Bindings.Source?.Kind is not (EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq) || revision is null || revision.Alias != alias ||
             revision.ExpectedSha256 is not null || !EtlConnectorCsvSupport.IsHash(revision.Handle) ||
             string.IsNullOrWhiteSpace(revision.Revision) || !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash))
             throw Invalid("etl.binding-unavailable");

@@ -27,9 +27,16 @@ internal static class EtlSqlSnapshotReader
     internal static EtlJsonlSource AsJsonl(EtlSqlSource source) => new(source.Binding,
         Array.AsReadOnly(source.Columns.Select(column => new EtlJsonField(column.Name, "/" + column.Name, column.Type, column.Required)).ToArray()));
 
-    /// <summary>The pipeline as it is processed: a SQL source becomes its JSON Lines view; any other pipeline is unchanged.</summary>
-    internal static EtlPipelineV2 ProcessingView(EtlPipelineV2 pipeline) =>
-        pipeline.Source is EtlSqlSource sql ? pipeline with { Source = AsJsonl(sql) } : pipeline;
+    /// <summary>
+    /// The pipeline as it is processed: a SQL source (spec 1198) or a RabbitMQ source (spec 1201) becomes the JSON Lines view of
+    /// its retained snapshot; any other pipeline is unchanged.
+    /// </summary>
+    internal static EtlPipelineV2 ProcessingView(EtlPipelineV2 pipeline) => pipeline.Source switch
+    {
+        EtlSqlSource sql => pipeline with { Source = AsJsonl(sql) },
+        EtlRabbitMqSource queue => pipeline with { Source = new EtlJsonlSource(queue.Binding, queue.Fields) },
+        _ => pipeline
+    };
 
     /// <summary>
     /// Streams the ordered rows in one transaction at the engine's snapshot isolation. A deterministic refusal is a

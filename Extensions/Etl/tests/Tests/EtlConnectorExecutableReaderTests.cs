@@ -77,6 +77,31 @@ public sealed class EtlConnectorExecutableReaderTests
             Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
     }
 
+    [Theory]
+    [InlineData("people", 10, true)]
+    [InlineData("bad queue", 10, false)]
+    [InlineData("", 10, false)]
+    [InlineData("people", 0, false)]
+    [InlineData("people", 100_001, false)]
+    public void Reader_refuses_a_rabbitmq_source_the_compiler_would_refuse(string queue, int maxMessages, bool valid)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with
+        {
+            Source = new EtlRabbitMqSource("events-in", queue, [new EtlJsonField("id", "/id", EtlColumnType.Int64, true)], maxMessages),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")],
+            Filters = []
+        };
+
+        // The queue reaches the broker as a protocol short string and the maximum bounds a run (spec 1201).
+        if (valid)
+            Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline)));
+        else
+            Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+    }
+
     [Fact]
     public void Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key()
     {
