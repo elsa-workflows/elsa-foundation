@@ -93,7 +93,7 @@ export interface EtlContinuousRunPolicy {
   pollIntervalSeconds: number;
 }
 
-export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource;
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource | EtlSqlSource;
 
 export interface EtlCsvSource {
   kind: "csv";
@@ -114,6 +114,20 @@ export interface EtlJsonlSource {
   kind: "jsonl";
   binding: string;
   fields: EtlJsonField[];
+}
+
+/**
+ * A host-approved PostgreSQL or SQL Server table, read once as of one point in time when the run is prepared and then
+ * processed like a JSON Lines file (finite runs only).
+ */
+export interface EtlSqlSource {
+  kind: "sql";
+  binding: string;
+  /** `name` or `schema.name`. */
+  table: string;
+  columns: EtlColumn[];
+  /** One to eight required columns ordering the snapshot. */
+  key: string[];
 }
 
 export interface EtlJsonField {

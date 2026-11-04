@@ -26,6 +26,61 @@ public sealed class EtlConnectorExecutableReaderTests
         Assert.Equal(artifact.Pipeline.GetRawText(), EtlArtifactV2Json.Write(reader.Read(artifact)).GetRawText());
     }
 
+    [Theory]
+    [InlineData("people;drop", "id", "id")]
+    [InlineData("people", "full name", "full name")]
+    [InlineData("people", "id", "missing")]
+    [InlineData("p234567890123456789012345678901234567890123456789012345678901234", "id", "id")]
+    [InlineData("people", "c234567890123456789012345678901234567890123456789012345678901234", "c234567890123456789012345678901234567890123456789012345678901234")]
+    public void Reader_refuses_a_sql_source_whose_identifiers_or_key_the_compiler_would_refuse(string table, string column, string key)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with
+        {
+            Source = new EtlSqlSource("people-db", table, [new EtlColumn(column, EtlColumnType.Int64, true)], [key]),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, column)],
+            Filters = []
+        };
+
+        // A worker re-checks what the compiler enforced, because the dialect quotes these identifiers (spec 1198).
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+        Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline with
+        {
+            Source = new EtlSqlSource("people-db", "dbo.people", [new EtlColumn("id", EtlColumnType.Int64, true)], ["id"]),
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")]
+        })));
+    }
+
+    [Fact]
+    public void Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key()
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        EtlPipelineV2 With(EtlColumn[] columns, string[] key) => defaults with
+        {
+            Source = new EtlSqlSource("people-db", "people", columns, key),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")],
+            Filters = []
+        };
+
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ID", EtlColumnType.Int64, true)], ["id"])))).Code);
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true)], ["id", "id"])))).Code);
+        // The key columns are required, so a key value is never null.
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, false)], ["id"])))).Code);
+        // The key is one to eight columns.
+        var nine = Enumerable.Range(0, 9).Select(index => new EtlColumn(index == 0 ? "id" : $"k{index}", EtlColumnType.Int64, true)).ToArray();
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With(nine, nine.Select(column => column.Name).ToArray())))).Code);
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true)], [])))).Code);
+    }
+
     [Fact]
     public void Reader_refuses_http_policy_above_independent_host_ceiling()
     {

@@ -97,7 +97,10 @@ public class EtlRuntimeFeature : IShellFeature
             provider.GetRequiredService<IFileChunkPublisherFactory>()));
         services.AddScoped(provider => new EtlConnectorPreparer(
             provider.GetRequiredService<HostFileBindings>(), options.SnapshotRoot,
-            provider.GetRequiredService<IFileChunkPublisherFactory>()));
+            provider.GetRequiredService<IFileChunkPublisherFactory>())
+        {
+            SqlBindings = provider.GetRequiredService<HostSqlBindings>()
+        });
         services.AddScoped<EtlHttpTransport>();
         // Resolve this optional execution path only after the worker discovers a connector-capable store.
         services.AddScoped(provider => ActivatorUtilities.CreateInstance<EtlConnectorExecution>(provider));

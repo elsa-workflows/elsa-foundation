@@ -15,6 +15,15 @@ namespace Elsa.Etl.Runtime.Preparation;
 internal sealed record EtlConnectorPreparationResult(EtlConnectorPreparedRun? Prepared, EtlPreparationDiagnostic? Diagnostic)
 {
     public bool Succeeded => Prepared is not null && Diagnostic is null;
+
+    /// <summary>
+    /// Neither prepared nor failed: a source was transiently unavailable, so the caller records nothing and the lapsed
+    /// lease lets preparation run again (spec 1198).
+    /// </summary>
+    public bool Transient => Prepared is null && Diagnostic is null;
+
+    /// <summary>The driver failure behind a transient result, for the caller's log; never persisted or exposed.</summary>
+    public Exception? TransientCause { get; init; }
 }
 
 /// <summary>Retains and validates only the file-backed connector inputs pinned by one admitted v2 invocation.</summary>
@@ -27,6 +36,9 @@ internal sealed class EtlConnectorPreparer
     private readonly IFileChunkPublisher _jsonlPublisher;
     private readonly IFileChunkPublisher _indexPublisher;
     private readonly long _maxSourceRecords;
+
+    /// <summary>The host SQL bindings a SQL source reads through; without them a SQL source is unavailable.</summary>
+    internal HostSqlBindings? SqlBindings { get; init; }
 
     public EtlConnectorPreparer(HostFileBindings bindings, string hostApprovedSnapshotRoot)
         : this(bindings, hostApprovedSnapshotRoot, new FileChunkPublisherFactory())
@@ -79,6 +91,10 @@ internal sealed class EtlConnectorPreparer
                     pipeline.Limits.MaxSnapshotBytes,
                     pipeline.Source is EtlJsonlSource ? _jsonlPublisher : _csvPublisher, cancellationToken);
             }
+            else if (pipeline.Source is EtlSqlSource sql)
+            {
+                sourceChunk = await PublishSqlSnapshotAsync(admission, pipeline, sql, cancellationToken);
+            }
 
             EtlObjectReference? lookup = null;
             if (pipeline.Lookup is { } lookupDeclaration)
@@ -97,7 +113,9 @@ internal sealed class EtlConnectorPreparer
             {
                 var index = pipeline.Source is EtlCsvSource csvSource
                     ? await PublishSourceIndexAsync(admission, pipeline, csvSource, sourcePin!, sourceChunk, cancellationToken)
-                    : await PublishJsonlSourceIndexAsync(admission, pipeline, sourcePin!, sourceChunk, cancellationToken);
+                    // A SQL snapshot has no admission digest; its anchor is its own published hash (spec 1198).
+                    : await PublishJsonlSourceIndexAsync(admission, pipeline, admission.Bindings.Source.Revision.Handle,
+                        sourcePin?.ExpectedSha256 ?? sourceChunk.ContentHash, sourceChunk, cancellationToken);
                 file = new EtlPreparedCsvInput(EtlRuntimeMetadata.ToReference(sourceChunk), EtlRuntimeMetadata.ToReference(index),
                     ReadIndexRecordCount(index));
             }
@@ -107,6 +125,10 @@ internal sealed class EtlConnectorPreparer
         catch (EtlConnectorPreparationFailure failure)
         {
             return new(null, failure.Diagnostic);
+        }
+        catch (EtlSqlTransientException exception)
+        {
+            return new(null, null) { TransientCause = exception.InnerException };
         }
         catch (CsvReadException exception)
         {
@@ -180,6 +202,40 @@ internal sealed class EtlConnectorPreparer
             }, cancellationToken);
     }
 
+    /// <summary>
+    /// Reuses the run's published SQL snapshot when one exists, so a replacement never reads a second, different point in
+    /// time; otherwise reads the table once (spec 1198). The identity matches a file snapshot's, keyed by the pinned handle.
+    /// </summary>
+    private async ValueTask<EtlChunk> PublishSqlSnapshotAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,
+        EtlSqlSource sql, CancellationToken cancellationToken)
+    {
+        var revision = admission.Bindings.Source.Revision;
+        var identity = JsonSerializer.Serialize(new
+        {
+            FormatVersion = 2,
+            Kind = "connector-input-snapshot",
+            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
+            Role = EtlFileRole.Source.ToString(),
+            PinHandle = revision.Handle
+        });
+        var maxBytes = pipeline.Limits.MaxSnapshotBytes;
+        if (await _jsonlPublisher.FindAsync(_snapshotRoot, identity, maxBytes, cancellationToken) is { } published)
+            return published;
+        var bindings = SqlBindings ?? throw new EtlBindingException("etl.sql-unavailable", "No ETL SQL bindings are configured.");
+        var binding = bindings.ResolveExact(admission.Invocation.Scope, sql.Binding, EtlFileRole.Source.ToString(),
+            revision.Revision, revision.Handle, sql.Table);
+        try
+        {
+            return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
+                (destination, ct) => EtlSqlSnapshotReader.WriteAsync(binding, sql, maxBytes, destination, ct), cancellationToken);
+        }
+        catch (EtlEffectException exception) when (exception.Code == "etl.effect-conflict")
+        {
+            // A predecessor whose lease lapsed mid-read published first; its point in time is the run's, so adopt it.
+            return await _jsonlPublisher.FindAsync(_snapshotRoot, identity, maxBytes, cancellationToken) ?? throw exception;
+        }
+    }
+
     private async ValueTask<EtlChunk> PublishSourceIndexAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,
         EtlCsvSource csv, PinnedFileBinding sourcePin, EtlChunk source, CancellationToken cancellationToken)
     {
@@ -233,7 +289,7 @@ internal sealed class EtlConnectorPreparer
     }
 
     private async ValueTask<EtlChunk> PublishJsonlSourceIndexAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,
-        PinnedFileBinding sourcePin, EtlChunk source, CancellationToken cancellationToken)
+        string sourcePinHandle, string expectedSourceHash, EtlChunk source, CancellationToken cancellationToken)
     {
         // Unlike CSV there is no header, so an empty snapshot is a valid zero-record input.
         var identity = JsonSerializer.Serialize(new
@@ -241,7 +297,7 @@ internal sealed class EtlConnectorPreparer
             FormatVersion = 2,
             Kind = "connector-jsonl-source-index",
             Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
-            SourcePinHandle = sourcePin.Handle,
+            SourcePinHandle = sourcePinHandle,
             SourceKey = source.Key,
             SourceHash = source.ContentHash
         });
@@ -251,9 +307,9 @@ internal sealed class EtlConnectorPreparer
             {
                 await using var file = EtlConnectorCsvSupport.OpenSnapshot(_snapshotRoot,
                     EtlRuntimeMetadata.ToReference(source), ".jsonl", pipeline.Limits.MaxSnapshotBytes,
-                    sourcePin.ExpectedSha256!);
+                    expectedSourceHash);
                 using var verified = new EtlConnectorCsvVerifiedReadStream(file, source.ByteLength,
-                    pipeline.Limits.MaxSnapshotBytes, sourcePin.ExpectedSha256!, source.ContentHash);
+                    pipeline.Limits.MaxSnapshotBytes, expectedSourceHash, source.ContentHash);
                 await EtlJsonlLineIndexer.WriteIndexAsync(verified, destination, _maxSourceRecords, ct);
                 verified.VerifyComplete();
             }, cancellationToken);
@@ -289,12 +345,13 @@ internal sealed class EtlConnectorPreparer
             pipeline = EtlArtifactV2Json.Read(admission.Invocation.Artifact.Pipeline);
             ValidatePolicy(pipeline);
             var source = admission.Bindings.Source;
-            if (source?.Revision is null || source.Kind is not (EtlConnectorKind.Csv or EtlConnectorKind.Http or EtlConnectorKind.Jsonl) ||
+            if (source?.Revision is null || source.Kind is not (EtlConnectorKind.Csv or EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql) ||
                 !StringComparer.Ordinal.Equals(source.Revision.Alias, pipeline.Source switch
                 {
                     EtlCsvSource csv => csv.Binding,
                     EtlHttpJsonSource http => http.Binding,
                     EtlJsonlSource jsonl => jsonl.Binding,
+                    EtlSqlSource sql => sql.Binding,
                     _ => null
                 }))
                 throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.binding-unavailable"));
@@ -303,6 +360,7 @@ internal sealed class EtlConnectorPreparer
             {
                 EtlCsvSource => EtlConnectorKind.Csv,
                 EtlJsonlSource => EtlConnectorKind.Jsonl,
+                EtlSqlSource => EtlConnectorKind.Sql,
                 _ => EtlConnectorKind.Http
             };
             if (source.Kind != expectedSourceKind)
@@ -313,6 +371,10 @@ internal sealed class EtlConnectorPreparer
                 if (!EtlConnectorCsvSupport.IsHash(source.Revision.ExpectedSha256))
                     throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.binding-unavailable"));
             }
+            // A SQL source's content is unknown until it is read, so its pin carries no digest.
+            if (pipeline.Source is EtlSqlSource && (source.Revision.ExpectedSha256 is not null ||
+                    !EtlConnectorCsvSupport.IsHash(source.Revision.Handle) || string.IsNullOrWhiteSpace(source.Revision.Revision)))
+                throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.binding-unavailable"));
 
             if (pipeline.Lookup is { } lookup)
             {
@@ -328,7 +390,7 @@ internal sealed class EtlConnectorPreparer
             }
 
             if (pipeline.Source is EtlHttpJsonSource && admission.Bindings.HttpShardIds is not { Count: > 0 } ||
-                pipeline.Source is EtlCsvSource or EtlJsonlSource && admission.Bindings.HttpShardIds is { Count: > 0 })
+                pipeline.Source is EtlCsvSource or EtlJsonlSource or EtlSqlSource && admission.Bindings.HttpShardIds is { Count: > 0 })
                 throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
 
             return true;
@@ -364,6 +426,9 @@ internal sealed class EtlConnectorPreparer
             throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
         if (pipeline.Source is EtlJsonlSource jsonl &&
             (jsonl.Fields is null || jsonl.Fields.Count is 0 || jsonl.Fields.Count > limits.MaxFields))
+            throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
+        if (pipeline.Source is EtlSqlSource sql && (sql.Columns is null || sql.Columns.Count is 0 ||
+                sql.Columns.Count > limits.MaxFields || sql.Key is not { Count: > 0 } || string.IsNullOrEmpty(sql.Table)))
             throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.pipeline-invalid"));
         if (pipeline.Lookup is { } lookup &&
             (lookup.Schema is null || lookup.Schema.Count is 0 || lookup.Schema.Count > limits.MaxFields))

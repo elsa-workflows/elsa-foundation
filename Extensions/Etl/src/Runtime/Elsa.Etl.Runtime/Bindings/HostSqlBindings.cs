@@ -6,7 +6,7 @@ using Elsa.Etl.Core.Runtime;
 namespace Elsa.Etl.Runtime.Bindings;
 
 /// <summary>
-/// Trusted host SQL bindings (spec 1197). A pinned handle hashes the provider, the target the engine parses out of the
+/// Trusted host SQL bindings for SQL sources and destinations (specs 1197 and 1198). A pinned handle hashes the provider, the target the engine parses out of the
 /// connection string, the allowed tables and the ledger settings, never the connection string or its password.
 /// </summary>
 internal sealed class HostSqlBindings(IEnumerable<EtlHostSqlBindingOptions> options, IEnumerable<IEtlSqlEngine> engines)
@@ -53,7 +53,7 @@ internal sealed class HostSqlBindings(IEnumerable<EtlHostSqlBindingOptions> opti
             throw new EtlBindingException("etl.sql-unavailable", "No ETL SQL engine is installed for the binding's provider.");
         // Exact comparison: PostgreSQL's quoted identifiers are case-sensitive, so "Orders" never approves "orders".
         if (!binding.AllowedTables.Contains(table, StringComparer.Ordinal))
-            throw new EtlBindingException("etl.sql-table-not-allowed", "The SQL binding does not allow the destination table.");
+            throw new EtlBindingException("etl.sql-table-not-allowed", "The SQL binding does not allow the table.");
         if (string.IsNullOrWhiteSpace(binding.ConnectionString) || !IsTableIdentifier(binding.LedgerTable))
             throw Unavailable();
         EtlSqlTarget target;

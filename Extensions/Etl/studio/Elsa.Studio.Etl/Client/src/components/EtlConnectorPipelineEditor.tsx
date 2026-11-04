@@ -40,7 +40,7 @@ export function EtlConnectorPipelineEditor({
       </header>
 
       <ol className="etl-editor-order" aria-label="ETL operation order">
-        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : "Read bounded HTTP JSON pages"}</small></div></li>
+        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : pipeline.source.kind === "sql" ? "Read one snapshot of the table" : "Read bounded HTTP JSON pages"}</small></div></li>
         <li><span>2</span><div><strong>Match optional lookup</strong><small>{pipeline.lookup ? "Join CSV rows by exact typed keys" : "No lookup is configured"}</small></div></li>
         <li><span>3</span><div><strong>Map output fields</strong><small>Use declared source or lookup values</small></div></li>
         <li><span>4</span><div><strong>Apply output filters</strong><small>Equality or inequality over typed fields</small></div></li>
@@ -76,7 +76,7 @@ export function EtlConnectorPipelineEditor({
         disabled={readOnly}
         onChange={lookup => update("lookup", lookup)}
       />
-      <MappingEditor mapping={pipeline.mapping} sourceSchema={sourceSchema} lookupSchema={lookupSchema} sourceLabel={pipeline.source.kind === "csv" ? "Source CSV" : "Source JSON"} disabled={readOnly} onChange={mapping => update("mapping", mapping)} />
+      <MappingEditor mapping={pipeline.mapping} sourceSchema={sourceSchema} lookupSchema={lookupSchema} sourceLabel={pipeline.source.kind === "csv" ? "Source CSV" : pipeline.source.kind === "sql" ? "Source table" : "Source JSON"} disabled={readOnly} onChange={mapping => update("mapping", mapping)} />
       <FilterEditor filters={pipeline.filters} mapping={pipeline.mapping} sourceSchema={sourceSchema} lookupSchema={lookupSchema} disabled={readOnly} onChange={filters => update("filters", filters)} />
 
       <section className="etl-editor-section" aria-labelledby={`${titleId}-routes`}>
@@ -211,7 +211,7 @@ function RunModeEditor({ pipeline, disabled, onChange }: {
 }
 
 function columns(pipeline: EtlPipelineV2): EtlColumn[] {
-  return pipeline.source.kind === "csv"
-    ? pipeline.source.schema
-    : pipeline.source.fields.map(({ name, type, required }) => ({ name, type, required }));
+  if (pipeline.source.kind === "csv") return pipeline.source.schema;
+  if (pipeline.source.kind === "sql") return pipeline.source.columns;
+  return pipeline.source.fields.map(({ name, type, required }) => ({ name, type, required }));
 }
