@@ -20,7 +20,7 @@ The scope comprises:
 
 The prerequisites #3440, #3441 and #3442 are complete.
 
-**Review**: Twenty-one independent review rounds took place on 3 and 4 November 2026, each with a correctness lens and a standards lens. Every finding was verified against `origin/main`. The approval basis is the standing authorization and the owner decisions recorded under Assumptions.
+**Review**: The PR records the cumulative independent correctness and standards review on 3 and 4 November 2026. Round 22's interrupted correctness review was resumed with fresh reviewers in round 23. Every finding is verified against `origin/main`; the approval basis is the standing authorization and the owner decisions under Assumptions.
 
 This spec contains:
 - the M4 delivery matrix (FR-001);
@@ -436,7 +436,7 @@ Negative cases:
 
 - **FR-014**: **Common effect outcomes.** Every effect MUST be tested, at the cheapest level that proves it, for each of these:
   - **Review**: the effect is reviewed in every autonomy mode, including `full-auto`.
-  - **Approval**: approval calls no module or registry. It checks only what Agent core holds: the live privilege policy against the frozen class set, the prepared deadline, and the proposal's state.
+  - **Approval**: approval calls no module or registry. It checks only what Agent core holds: the live privilege policy against the frozen class set and frozen risk (including the legacy administrative veto in FR-015), the prepared deadline, and the proposal's state.
   - **Refusal**: the policy is read again at preparation, approval, execution and recovery. An effect whose class is off at a step is refused there, and the proposal ends. Nothing is dispatched at execution. An effect without the owning module's permission is refused before review, and again at execution if the permission is gone.
   - **Owner-unavailable**: when the owner contract fails closed (FR-006), at preparation or at execution, the outcome is owner-unavailable, with zero effect.
   - **Module removed after review**: approval proceeds on core's checks, and execution is unavailable, with zero effect.
