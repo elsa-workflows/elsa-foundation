@@ -88,6 +88,34 @@ internal static class PostCommitOutboxClaimedListingContract
         Assert.Equal(["held"], await ListAsync(backend, limit: 10));
     }
 
+    public static async Task ExcludesObservedDeliveriesBeforeTheProviderPageLimitAsync(Backend backend)
+    {
+        var since = ClaimedAt.AddMinutes(1);
+        // More observed rows than EF's 500-row page cap. Increasing the requested limit cannot get past them.
+        var observed = new List<string>();
+        for (var i = 0; i <= RuntimeStorePageRequest.MaximumLimit; i++)
+        {
+            var id = $"delivered-{i:D4}";
+            await backend.AddPendingAsync(Pending(id, Execution, Continuation, ClaimedAt.AddTicks(i)));
+            await CompleteAsync(backend, await ClaimAsync(backend, "sweep", TimeSpan.FromMinutes(15), Execution, Continuation),
+                RuntimePostCommitOutboxStatus.Delivered, since);
+            if (i < RuntimeStorePageRequest.MaximumLimit)
+                observed.Add(id);
+        }
+        await backend.AddPendingAsync(Pending("held", Execution, Continuation, ClaimedAt.AddMinutes(1)));
+        var held = await ClaimAsync(backend, "sweep", TimeSpan.FromMinutes(15), Execution, Continuation);
+        observed.Add("held");
+        // Exclusions use logical ordinal identity, including on providers with case-insensitive text collations.
+        observed.Add($"DELIVERED-{RuntimeStorePageRequest.MaximumLimit:D4}");
+        var query = new RuntimePostCommitOutboxClaimedQuery(Execution, Continuation, 1, since, observed);
+        observed.Clear(); // The request owns an immutable snapshot, even across a later provider read.
+
+        Assert.Equal(["held"], (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+        await CompleteAsync(backend, held, RuntimePostCommitOutboxStatus.FailedFinal, since);
+        Assert.Equal([$"delivered-{RuntimeStorePageRequest.MaximumLimit:D4}"],
+            (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+    }
+
     private static async Task<RuntimePostCommitOutboxClaim> ClaimAsync(
         Backend backend,
         string ownerId,

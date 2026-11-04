@@ -39,7 +39,9 @@ public interface IRuntimePostCommitOutboxClaimStore
     /// <see cref="RuntimePostCommitOutboxClaimTransitions.ClaimableAt"/> first, at most
     /// <see cref="RuntimePostCommitOutboxClaimedQuery.Limit"/> of them. Nothing is written. With
     /// <see cref="RuntimePostCommitOutboxClaimedQuery.DeliveredByClaimSince"/> it also lists the items a claim delivered
-    /// since then, after every unsettled one, in recording order.
+    /// since then, after every unsettled one, in recording order. Previously observed delivered IDs in
+    /// <see cref="RuntimePostCommitOutboxClaimedQuery.ExcludedDeliveredOutboxItemIds"/> are excluded before limiting;
+    /// held items with those IDs remain listed.
     /// </summary>
     /// <remarks>
     /// A live drain reads this when its own delivery step delivered nothing (#2225). The resumption sweep claims across

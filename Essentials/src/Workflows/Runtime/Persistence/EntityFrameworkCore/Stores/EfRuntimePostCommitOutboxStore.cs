@@ -615,6 +615,11 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             var sinceTicks = since.UtcTicks;
             rows = rows.Where(row => row.Status == delivering || row.Status == failedRetryable ||
                                      row.Status == delivered && row.ClaimDeliveredAtUtcTicks >= sinceTicks);
+            if (query.ExcludedDeliveredOutboxItemIds.Count > 0)
+            {
+                var excluded = query.ExcludedDeliveredOutboxItemIds.Select(EfRuntimeOperationalStoreSupport.Encode).ToArray();
+                rows = rows.Where(row => row.Status != delivered || !excluded.Contains(row.OutboxItemId));
+            }
         }
         else
             rows = rows.Where(row => row.Status == delivering || row.Status == failedRetryable);

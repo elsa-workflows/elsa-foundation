@@ -43,6 +43,19 @@ public sealed class PostCommitOutboxClaimedListingContractTests : IAsyncDisposab
         await AlsoListsTheDeliveriesAClaimFinishedSinceAsync(await EntityFrameworkAsync());
     }
 
+    [Fact]
+    public Task The_in_memory_store_excludes_observed_deliveries_before_the_provider_page_limit()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        return ExcludesObservedDeliveriesBeforeTheProviderPageLimitAsync(new Backend(store, store, item => store.AddPendingForTestingAsync(item)));
+    }
+
+    [Fact]
+    public async Task The_entity_framework_store_excludes_observed_deliveries_before_the_provider_page_limit()
+    {
+        await ExcludesObservedDeliveriesBeforeTheProviderPageLimitAsync(await EntityFrameworkAsync());
+    }
+
     /// <summary>
     /// A row last written before the claim delivery time was projected has none, so it reads and is simply not listed. A
     /// projected time that differs from the row's content is corrupt and refused like every other outbox projection.

@@ -484,12 +484,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // An active segment reads queued work from the overlay it filled, which misses work a delivery that finished
         // since then queued durably. The listing returns such deliveries too, at no extra read.
         var overlayFilledAt = segment.Session.IsActive ? segment.Session.QueueSeededAt : null;
-        // A delivery already observed can still match after the next seed (equal timestamps or a faster deliverer).
-        // Make room for those rows before the store limits its results, so they cannot hide a new delivery.
-        var listingLimit = (int)Math.Min((long)_options.OutboxDeliveryBatchSize + settledElsewhere.Count, int.MaxValue);
         var finishedElsewhere = new HashSet<string>(StringComparer.Ordinal);
         var poll = FirstClaimPoll;
-        var held = Unsettled(await ListHeldContinuationsAsync(workflowExecutionId, overlayFilledAt, listingLimit, cancellationToken));
+        var held = Unsettled(await ListHeldContinuationsAsync(workflowExecutionId, overlayFilledAt, settledElsewhere, cancellationToken));
         while (held.Count > 0)
         {
             // A failed attempt is not known to have queued anything, and its retry, after the policy's delay, is the sweep's
@@ -519,7 +516,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
             await Task.Delay(UntilNextPoll(poll, held, now, deadline), _timeProvider, cancellationToken);
             poll = poll * 2 < MaxClaimPoll ? poll * 2 : MaxClaimPoll;
-            held = Unsettled(await ListHeldContinuationsAsync(workflowExecutionId, overlayFilledAt, listingLimit, cancellationToken));
+            held = Unsettled(await ListHeldContinuationsAsync(workflowExecutionId, overlayFilledAt, settledElsewhere, cancellationToken));
         }
 
         // The other deliverer finished. A delivery that failed for good is no longer listed, so the items are looked up: a
@@ -527,9 +524,13 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // gone back for once: a later listing still returns it when the other deliverer's clock runs ahead.
         settledElsewhere.UnionWith(finishedElsewhere);
         if (taken.Count > 0 || finishedElsewhere.Count > 0)
-            return await AnyDeliveryFailedAsync(taken, cancellationToken, settledDeliveryIds)
-                ? ContinuationSettlement.Undelivered
-                : ContinuationSettlement.ConcurrentDeliverySettled;
+        {
+            if (await AnyDeliveryFailedAsync(taken, cancellationToken, settledDeliveryIds))
+                return ContinuationSettlement.Undelivered;
+            // Superseded and waited-for deliveries are observed too; listing them again would repeat an empty refresh.
+            settledElsewhere.UnionWith(taken);
+            return ContinuationSettlement.ConcurrentDeliverySettled;
+        }
 
         return await HasUndrainedWorkAsync(request, drainResult, cancellationToken)
             ? ContinuationSettlement.DrainAgain
@@ -555,14 +556,15 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListHeldContinuationsAsync(
         string workflowExecutionId,
         DateTimeOffset? deliveredByClaimSince,
-        int listingLimit,
+        IReadOnlyCollection<string> excludedDeliveredIds,
         CancellationToken cancellationToken) =>
         _claimStore.ListClaimedAsync(
             new RuntimePostCommitOutboxClaimedQuery(
                 workflowExecutionId,
                 RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-                listingLimit,
-                deliveredByClaimSince),
+                _options.OutboxDeliveryBatchSize,
+                deliveredByClaimSince,
+                excludedDeliveredIds),
             cancellationToken);
 
     // A lapsed claim keeps its fencing token, and a claim-free delivery cannot complete a fenced item (#1798), so the drain

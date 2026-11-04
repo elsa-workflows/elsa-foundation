@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.Json.Serialization;
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -953,7 +954,21 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
         string intentKind,
         int limit,
         DateTimeOffset? deliveredByClaimSince = null)
+        : this(workflowExecutionId, intentKind, limit, deliveredByClaimSince, [])
     {
+    }
+
+    public RuntimePostCommitOutboxClaimedQuery(
+        string workflowExecutionId,
+        string intentKind,
+        int limit,
+        DateTimeOffset? deliveredByClaimSince,
+        IReadOnlyCollection<string> excludedDeliveredOutboxItemIds)
+    {
+        ArgumentNullException.ThrowIfNull(excludedDeliveredOutboxItemIds);
+        var excluded = excludedDeliveredOutboxItemIds.ToFrozenSet(StringComparer.Ordinal);
+        foreach (var id in excluded)
+            ArgumentException.ThrowIfNullOrWhiteSpace(id, nameof(excludedDeliveredOutboxItemIds));
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
         if (limit <= 0)
@@ -963,6 +978,7 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
         IntentKind = intentKind;
         Limit = limit;
         DeliveredByClaimSince = deliveredByClaimSince;
+        ExcludedDeliveredOutboxItemIds = excluded;
     }
 
     public string WorkflowExecutionId { get; }
@@ -976,6 +992,11 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
     /// owns or owned the execution makes, is never returned (#3661).
     /// </summary>
     public DateTimeOffset? DeliveredByClaimSince { get; }
+
+    /// <summary>Previously observed delivered IDs to exclude before applying the limit. Held items remain listed.
+    /// The input is copied using ordinal identity comparison.</summary>
+    public IReadOnlySet<string> ExcludedDeliveredOutboxItemIds { get; }
+
 
     /// <summary>Whether <paramref name="item"/> is one this query lists.</summary>
     public bool Matches(RuntimePostCommitOutboxItem item)
@@ -991,7 +1012,8 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
         DeliveredByClaimSince is { } since &&
         item.Status == RuntimePostCommitOutboxStatus.Delivered &&
         item.DeliveryFencingToken > 0 &&
-        item.DeliveredAt >= since;
+        item.DeliveredAt >= since &&
+        !ExcludedDeliveredOutboxItemIds.Contains(item.OutboxItemId);
 }
 
 public sealed class RuntimePostCommitOutboxDeliveryResult
