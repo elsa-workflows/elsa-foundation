@@ -4,7 +4,7 @@ Date: 2026-11-04. Starting Foundation main: `73040cd7b1368818820d2a60902443a9f8a
 
 ## State
 
-Incomplete delivery. Design and independent identity-isolation implementation are in progress. Provider catalog/lifecycle components are implemented in draft PR #3806; broker, API, Studio and actual provider/deployment qualification remain incomplete. No merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
+Incomplete delivery. Design and independent identity-isolation implementation are in progress. Provider catalog/lifecycle components and qualified-link persistence are implemented locally for draft PR #3806; broker, API, Studio and actual provider/deployment qualification remain incomplete. No merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
 
 Claims: #3579 comment 6627512912; prerequisite #2848 comment 6627557183. No competing claim/assignment/open PR found before this checkpoint. Owner authorization is recorded on #3579 comment 6627537005 and linked on #2771; #2771's Phase 2 description now names this scoped advancement without activating other phases. Baseline main CI 41790684918 passed; no open main-red CI issue was found at startup.
 
@@ -80,3 +80,34 @@ This assessment is distinct from the pending real interactive sign-in preview.
 Draft PR: https://github.com/elsa-workflows/elsa-foundation/pull/3806 (Codex app, retained as draft). Startup GitHub
 publication returned errors, including an HTTP 502 after creation; authoritative read confirmed PR #3806 rather
 than retrying into a duplicate. No merge/release/deployment action was taken.
+
+
+## Qualified external-link checkpoint
+
+`ExternalIdentityKey` carries tenant/logical connection and exact validated issuer/subject. Existing
+issuer-less links stay in a separate legacy namespace; qualified lookups never fall back. EF keys and unique
+subject lookup hashes are domain-separated and length-framed without normalizing issuer or subject. Shared
+user registries, revision-controlled rebind and aggregate deletion handle qualified links. The in-memory
+store also refuses an unconditional attempt to steal another user's link. `IUserManager` accepts an explicit
+issuer without changing saved user roles.
+
+All four IAM provider histories retain their original Initial migrations and add the nullable issuer column.
+IAM schema 1.1.0 reads existing 1.0.0 content through an identity upcaster; a committed UserEntity fixture pair
+and the standard three upcaster proofs exercise the real SQLite user-store read path. Native SQLite verifies
+migration down to the original schema and back with existing legacy users/links, qualified-link restart,
+legacy framework isolation, revision rebind and aggregate deletion. Ten new Identity cases pass (including
+three fixture proofs). An intentionally case-folded issuer/subject hash makes both focused SQLite isolation
+regressions fail; exact sources were restored and the full suite passed **606/606**, no failures/skips.
+IAM EF tests passed **206/206**. Offline provider tests passed **9/9**, including migration snapshot/model
+consistency and SQL generation for SQL Server, PostgreSQL and MySQL. This does not claim native execution on
+those three servers, atomic new-user admission, actual provider sign-in or multi-node runtime qualification.
+
+Logs: `/tmp/elsa-3579-exact-final.log`, `/tmp/elsa-3579-exact-case-mutant.log`,
+`/tmp/elsa-3579-iam-tests.log`, `/tmp/elsa-3579-provider-model-updated.log`.
+The first fixture attempt used ordinary strings instead of the IAM codec's UTF-16/base64 set representation;
+that fixture failure was corrected before the passing proof run. Intermediate public-API/test compilation
+errors were corrected and are not counted as passed runs.
+
+Publication remains separate from local verification: normal app-authenticated pushes of the catalog commit
+have returned GitHub server errors; authoritative remote reads still showed the earlier draft head at the
+last check. No alternate credentials or branch-rule bypass was used.

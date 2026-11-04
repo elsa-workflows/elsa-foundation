@@ -34,6 +34,27 @@ public sealed class EfExternalIdentityStore(
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException) { context.ChangeTracker.Clear(); throw Failure("Unable to find the external Identity login.", exception); }
     }
 
+    public async ValueTask<ExternalIdentityRecord?> FindByKeyAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default)
+    {
+        var row = await FindByKeyWithRevisionAsync(key, cancellationToken);
+        return row?.Record;
+    }
+
+    public async ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindByKeyWithRevisionAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        Validate(key.TenantId, nameof(key.TenantId)); Validate(key.Provider, nameof(key.Provider)); Validate(key.Subject, nameof(key.Subject));
+        EfIdentityStoreSupport.ValidateIssuer(key.Issuer);
+        _ = EfIdentityStoreSupport.ExternalOrderKey(key.Provider, key.Subject);
+        Prepare(key.TenantId, cancellationToken);
+        var id = EfIdentityStoreSupport.ExternalIdentityId(key.TenantId, key.Provider, key.Subject, key.Issuer);
+        var row = await EfIdentityStoreSupport.ReadAsync(context, "Unable to find the issuer-qualified Identity login.",
+            () => context.ExternalIdentities.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
+        if (row is null) return null;
+        EfIdentityStoreSupport.EnsureExternalIdentity(row, key.TenantId, key.Provider, key.Subject, issuer: key.Issuer);
+        return new(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
+    }
+
     public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         Prepare(tenantId, cancellationToken); Validate(userId, nameof(userId));
@@ -85,6 +106,7 @@ public sealed class EfExternalIdentityStore(
     private async Task<EfIdentityWriteResult> SaveCoreAsync(ExternalIdentityRecord record, long? expectedVersion, bool createOnly, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(record); Validate(record.TenantId, nameof(record.TenantId)); Validate(record.Provider, nameof(record.Provider)); Validate(record.ProviderSubject, nameof(record.ProviderSubject)); _ = EfIdentityStoreSupport.ExternalOrderKey(record.Provider, record.ProviderSubject); Validate(record.UserId, nameof(record.UserId));
+        EfIdentityStoreSupport.ValidateIssuer(record.Issuer);
         Prepare(record.TenantId, cancellationToken);
         var row = ToEntity(record);
         return await relationship.SaveExternalIdentityPreservingProviderDisplayNameAsync(row, expectedNewOwnerVersion: null, expectedLoginVersion: createOnly ? 0 : expectedVersion, enforceLoginVersion: createOnly || expectedVersion is not null, ownershipPolicy: createOnly || expectedVersion is null ? EfExternalLoginOwnershipPolicy.CreateOrSameOwner : EfExternalLoginOwnershipPolicy.RevisionEnforcedRebind, returnOwnerResult: false, cancellationToken);
@@ -100,11 +122,11 @@ public sealed class EfExternalIdentityStore(
     }
 
     private IQueryable<ExternalIdentityEntity> QueryForUser(string tenantId, string userId) => context.ExternalIdentities.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.UserLookupKey == EfIdentityStoreSupport.Lookup(tenantId, userId));
-    private static ExternalIdentityEntity ToEntity(ExternalIdentityRecord record) => new() { TenantId = record.TenantId, Provider = record.Provider, ProviderSubject = record.ProviderSubject, UserId = record.UserId, LinkedAt = record.LinkedAt, LastSeenAt = record.LastSeenAt, LinkPolicy = (int)record.LinkPolicy };
+    private static ExternalIdentityEntity ToEntity(ExternalIdentityRecord record) => new() { TenantId = record.TenantId, Provider = record.Provider, ProviderSubject = record.ProviderSubject, Issuer = record.Issuer, UserId = record.UserId, LinkedAt = record.LinkedAt, LastSeenAt = record.LastSeenAt, LinkPolicy = (int)record.LinkPolicy };
     private static ExternalIdentityRecord Map(ExternalIdentityEntity row)
     {
         EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
-        return new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy);
+        return new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy) { Issuer = row.Issuer };
     }
 
     private static string Id(string tenantId, string provider, string subject) => EfIdentityStoreSupport.CompoundKey(tenantId, provider, subject);

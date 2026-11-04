@@ -78,10 +78,21 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
         lock (_syncRoot)
         {
             return ValueTask.FromResult(_externalIdentities.FirstOrDefault(x =>
-                Same(x.TenantId, tenantId) &&
+                x.Issuer is null && Same(x.TenantId, tenantId) &&
                 Same(x.Provider, provider) &&
                 Same(x.ProviderSubject, providerSubject)));
         }
+    }
+
+    public ValueTask<ExternalIdentityRecord?> FindByKeyAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+            return ValueTask.FromResult(_externalIdentities.FirstOrDefault(x =>
+                Same(x.TenantId, key.TenantId) && Same(x.Provider, key.Provider) &&
+                string.Equals(x.Issuer, key.Issuer, StringComparison.Ordinal) &&
+                string.Equals(x.ProviderSubject, key.Subject, StringComparison.Ordinal)));
     }
 
     public ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
@@ -92,14 +103,18 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
 
     public ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(externalIdentity);
+        if (externalIdentity.Issuer is not null) ArgumentException.ThrowIfNullOrWhiteSpace(externalIdentity.Issuer);
+        cancellationToken.ThrowIfCancellationRequested();
         lock (_syncRoot)
         {
+            var existing = _externalIdentities.FirstOrDefault(x => SameLogin(x, externalIdentity));
+            if (existing is not null && !Same(existing.UserId, externalIdentity.UserId))
+                throw new InvalidOperationException("External identity is already linked to another user.");
             Upsert(
                 _externalIdentities,
                 externalIdentity,
-                x => Same(x.TenantId, externalIdentity.TenantId) &&
-                     Same(x.Provider, externalIdentity.Provider) &&
-                     Same(x.ProviderSubject, externalIdentity.ProviderSubject));
+                x => SameLogin(x, externalIdentity));
         }
 
         return ValueTask.CompletedTask;
@@ -127,6 +142,12 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
         else
             items.Add(item);
     }
+
+    private static bool SameLogin(ExternalIdentityRecord left, ExternalIdentityRecord right) =>
+        Same(left.TenantId, right.TenantId) && Same(left.Provider, right.Provider) &&
+        string.Equals(left.Issuer, right.Issuer, StringComparison.Ordinal) &&
+        (left.Issuer is null ? Same(left.ProviderSubject, right.ProviderSubject) :
+            string.Equals(left.ProviderSubject, right.ProviderSubject, StringComparison.Ordinal));
 
     private static bool Same(string? left, string? right) => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 }

@@ -19,7 +19,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 ## Phase 3 — US1: exact identity and admission
 
-- [ ] T010 [US1] Extend exact issuer/subject link and atomic admission contracts in `Identity/Core/Iam/` and implementation/store counterparts under `Identity/AspNetCoreIdentity/` and `Identity/Persistence/EntityFrameworkCore/`.
+- [ ] T010 [US1] Extend exact issuer/subject link and atomic admission contracts in `Identity/Core/Iam/` and implementation/store counterparts under `Identity/AspNetCoreIdentity/` and `Identity/Persistence/EntityFrameworkCore/`. Exact-link contracts/stores, additive migration and content-preserving schema upgrade are implemented; atomic admission remains.
 - [ ] T011 [US1] Implement reject-default, explicit JIT/default Elsa roles and configured matcher policies with preview-safe assessment under `Identity/`; include disabled/ambiguous/conflicting-user behavior tests.
 - [ ] T012 [US1] After T003, implement explicit existing-Elsa-role mapping, deployment/editor delegation and permission projection under `Identity/`; cover claim injection and deleted roles.
 - [ ] T013 [US1] Compose external admission into ordinary cookie/OpenIddict sessions in `Identity/AspNetCoreIdentity/`; honor FoundationOwned/ExternalOwned/Hybrid capabilities.
@@ -32,7 +32,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 ## Phase 5 — US2: configure, test, preview, enable
 
-- [ ] T017 [US2] Implement OIDC adapter/discovery/exchange/token validation and point-of-use Secrets resolution under `Identity/Oidc/` through Core; preserve direct bearer mode.
+- [ ] T017 [US2] Implement OIDC adapter/discovery/exchange/token validation and point-of-use Secrets resolution under `Identity/ExternalAuthentication/Oidc/` through managed Core; preserve direct bearer mode.
 - [ ] T018 [US2] Implement durable purpose/browser/revision/secret-bound atomic flow and preview stores under `Identity/Persistence/EntityFrameworkCore/`, including provider migrations and expiry/replay tests.
 - [ ] T019 [US2] Implement bounded non-interactive tests, pure prospective admission/permissions and administrator-bound non-provisioning preview under `Identity/`; prove no normal session/identity mutation.
 - [ ] T020 [US1] Integrate real backend chooser/challenge/callback with local login under `Identity/Api/` and `Identity/AspNetCoreIdentity/`; preserve return-path/CSRF and theme behavior.

@@ -17,3 +17,7 @@ Exact tuple `(tenant, logical key, issuer, subject)` maps to one Elsa user. No i
 ## Flow, preview and session
 
 Separate Identity-owned persistence: purpose, hashed handle, expiry, protected sensitive state, browser/admin binding, tenant, selected record/logical key/material revision and secret generation. Atomic consume rejects expired/replayed callbacks across nodes. Preview result is separately purpose/admin/tenant-bound and cannot issue a normal session. Session records carry ID, tenant/user/connection provenance, creation/expiry/revocation and safe metadata; no raw upstream credentials. Normal cookies and token entries reference session identity for inspection/revocation. User disable/delete must invalidate access/refresh/cookies under the same canonical user scope.
+
+Managed links extend the existing `ExternalIdentityRecord` with a validated issuer and use `ExternalIdentityKey`
+for qualified lookup. Null issuer is a separate legacy namespace, never a fallback. The additive IAM migrations
+preserve old rows and histories; the 1.0.0-to-1.1.0 chain preserves existing content while new writes stamp 1.1.0.

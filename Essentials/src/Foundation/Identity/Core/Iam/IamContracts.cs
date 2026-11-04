@@ -112,6 +112,10 @@ public interface IRevisionAwareCredentialStore
 [ReplacementContract]
 public interface IExternalIdentityStore
 {
+    /// <summary>Finds an exact issuer/subject link. Legacy issuer-less links are never used as a fallback.</summary>
+    ValueTask<ExternalIdentityRecord?> FindByKeyAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This external identity authority does not support issuer-qualified links.");
+
     ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
@@ -122,6 +126,9 @@ public interface IExternalIdentityStore
 [ReplacementContract]
 public interface IRevisionAwareExternalIdentityStore
 {
+    ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindByKeyWithRevisionAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This external identity authority does not support issuer-qualified links.");
+
     ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ExternalIdentityRecord externalIdentity, string? expectedRevision, CancellationToken cancellationToken = default);
@@ -321,7 +328,11 @@ public sealed record ExternalIdentityRecord(
     string UserId,
     DateTimeOffset LinkedAt,
     DateTimeOffset? LastSeenAt,
-    ExternalIdentityLinkPolicy LinkPolicy);
+    ExternalIdentityLinkPolicy LinkPolicy)
+{
+    /// <summary>Validated issuer, compared ordinally. Null identifies the separate legacy ASP.NET login namespace.</summary>
+    public string? Issuer { get; init; }
+}
 
 public sealed record ProviderConfigurationRecord(
     string Provider,
@@ -347,7 +358,10 @@ public sealed record LinkExternalIdentityRequest(
     string ProviderSubject,
     string UserId,
     ExternalIdentityLinkPolicy LinkPolicy,
-    bool DuplicateEmailWasExplicitlyApproved);
+    bool DuplicateEmailWasExplicitlyApproved)
+{
+    public string? Issuer { get; init; }
+}
 
 public sealed record CreateRoleRequest(string TenantId, string Name, string? Description, IReadOnlySet<string> Permissions);
 

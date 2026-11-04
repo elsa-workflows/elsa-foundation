@@ -42,3 +42,10 @@ OpenIddict remains in its separate vendor-owned context. This module does not re
 
 - Contract ownership and replacement semantics: [Foundation Identity abstractions](../../Core/EXTENSION_POINTS.md).
 - ASP.NET Core Identity adapter composition and framework surfaces: [ASP.NET Core Identity EF adapter](../../AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md).
+
+Issuer-qualified login migration `IssuerQualifiedExternalLogins` is additive for all four providers and preserves the
+original Initial histories. Existing login rows keep a null issuer; no issuer is guessed from a connection's current
+configuration. IAM schema family 1.1.0 reads 1.0.0 through a content-preserving upcaster. Qualified keys hash exact
+issuer/subject values separately from legacy keys, while retaining the same authoritative user registry, CAS and
+aggregate-delete boundary. The framework `UserLoginInfo` adapter lists only issuer-less links because it cannot
+represent an issuer; managed link inspection uses the provider-neutral external-identity store.

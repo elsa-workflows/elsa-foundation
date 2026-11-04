@@ -3,12 +3,32 @@ using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests;
 
 public sealed class IdentityIamProviderModelTests
 {
+    [Theory]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    [InlineData("MySql")]
+    public void Qualified_login_migration_matches_the_provider_model_and_scripts_without_a_server(string provider)
+    {
+        using var context = CreateContext(provider, provider);
+        Assert.False(context.Database.HasPendingModelChanges());
+        var migrations = context.Database.GetMigrations().ToArray();
+        Assert.Equal(2, migrations.Length);
+        var script = context.GetService<IMigrator>().GenerateScript(migrations[0], migrations[1]);
+        Assert.Contains("identity_external_logins", script, StringComparison.Ordinal);
+        Assert.Contains("Issuer", script, StringComparison.Ordinal);
+        var entity = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(Entities.ExternalIdentityEntity))!;
+        var issuer = entity.FindProperty(nameof(Entities.ExternalIdentityEntity.Issuer))!;
+        Assert.True(issuer.IsNullable);
+        Assert.Equal(EfOrdinalCollation.ForProvider(EfRelationalProviderBinding.ExpectedProviderName(provider)), issuer.GetCollation());
+    }
+
     private const int SortableIdentityKeyWidth = 400 * sizeof(char) + sizeof(ushort);
 
     private static readonly HashSet<string> TechnicalKeyProperties =

@@ -31,8 +31,8 @@ Read framework v6.1.0, Elsa v6.3.0 and the contribution review checklist. No con
 
 - `Essentials/src/Foundation/Identity/Core/`: scoped subjects and connection/admission/session/flow contracts.
 - `Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/`: shared identity defaults.
-- `Essentials/src/Foundation/Identity/ExternalAuthentication/Core/` and `ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/`: optional managed-connection contracts and policy/registry/catalog behavior. This dependency envelope consumes Secrets.Core and persistence scope contracts without adding them to every base Identity.Core consumer. Protocol-heavy code remains in Oidc.
-- `Essentials/src/Foundation/Identity/Oidc/`: retain direct bearer and add managed protocol adapter behind Core.
+- `Essentials/src/Foundation/Identity/ExternalAuthentication/Core/` and `ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/`: optional managed-connection contracts and policy/registry/catalog behavior. This dependency envelope consumes Secrets.Core and persistence scope contracts without adding them to every base Identity.Core consumer. Managed protocol code belongs to an optional ExternalAuthentication/Oidc adapter; existing direct bearer consumers acquire no Secrets dependency.
+- `Essentials/src/Foundation/Identity/Oidc/`: retain direct bearer validation. `Identity/ExternalAuthentication/Oidc/`: optional managed protocol adapter consuming the managed Core contracts and installed OIDC validation libraries.
 - `Essentials/src/Foundation/Identity/AspNetCoreIdentity/`: admission/session bridge and canonical user projection.
 - `Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/`: catalog reuse, exact links, atomic admission/flow/session stores and migrations.
 - `Essentials/src/Foundation/Identity/Api/`: management/broker/login surfaces through Core; split optional dependency envelopes into named subfeatures as needed.

@@ -385,7 +385,7 @@ public sealed class EfCoreIdentityUserStore(
             db,
             "Unable to read ASP.NET Core Identity user logins.",
             () => db.ExternalIdentities.AsNoTracking()
-                    .Where(x => x.TenantLookupKey == TenantKey(user.TenantId) && x.UserLookupKey == UserKey(user.TenantId, user.Id))
+                    .Where(x => x.TenantLookupKey == TenantKey(user.TenantId) && x.UserLookupKey == UserKey(user.TenantId, user.Id) && x.Issuer == null)
                     .OrderBy(x => x.Id).Take(MaximumMaterializedRelationshipEntries + 1).ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(rows.Count, "external logins");
         return rows

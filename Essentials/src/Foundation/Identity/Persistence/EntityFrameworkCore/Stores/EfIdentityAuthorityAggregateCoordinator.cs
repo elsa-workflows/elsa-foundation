@@ -247,7 +247,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 foreach (var childId in loginIds)
                 {
                     var login = RequireRegistered(loginRows.GetValueOrDefault(childId), "external login", childId);
-                    EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, login.Provider, login.ProviderSubject, userId);
+                    EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, login.Provider, login.ProviderSubject, userId, login.Issuer);
                     context.ExternalIdentities.Remove(login);
                 }
 

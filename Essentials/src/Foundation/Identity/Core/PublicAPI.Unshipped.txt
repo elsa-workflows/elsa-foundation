@@ -1096,3 +1096,22 @@ static Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities.operator !=(
 static Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities.operator ==(Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities? left, Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities? right) -> bool
 static Elsa.Foundation.Identity.Core.Security.AuthEvent.operator !=(Elsa.Foundation.Identity.Core.Security.AuthEvent? left, Elsa.Foundation.Identity.Core.Security.AuthEvent? right) -> bool
 static Elsa.Foundation.Identity.Core.Security.AuthEvent.operator ==(Elsa.Foundation.Identity.Core.Security.AuthEvent? left, Elsa.Foundation.Identity.Core.Security.AuthEvent? right) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.<Clone>$() -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Equals(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? other) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.ExternalIdentityKey(string! tenantId, string! provider, string! issuer, string! subject) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Issuer.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Provider.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Subject.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord.Issuer.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord.Issuer.init -> void
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.FindByKeyAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord?>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.FindByKeyWithRevisionAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionedRecord<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord!>?>
+override Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.ToString() -> string!
+static Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? left, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? left, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? right) -> bool
+Elsa.Foundation.Identity.Core.Iam.LinkExternalIdentityRequest.Issuer.get -> string?
+Elsa.Foundation.Identity.Core.Iam.LinkExternalIdentityRequest.Issuer.init -> void

@@ -42,4 +42,9 @@
 		<Using Include="Xunit" />
 	</ItemGroup>
 
+    <ItemGroup>
+        <Compile Include="../../../Persistence/EntityFramework/Tests/EfSchemaUpcasterFixtureSupport.cs" Link="Support/EfSchemaUpcasterFixtureSupport.cs" />
+        <None Update="Fixtures/SchemaUpcasters/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>
