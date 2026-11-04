@@ -409,9 +409,11 @@ function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, bl
   const walk = (value: unknown, path: string, expression = false) => {
     if (Array.isArray(value)) { value.forEach((item, index) => walk(item, `${path}[${index}]`, expression)); return; }
     if (record(value)) {
-      const syntaxes = [value.expressionType, value.syntax, value.type].filter(item => typeof item === "string");
-      const literal = syntaxes.length > 0 && syntaxes.every(item => item === "Literal");
-      const opaque = expression || typeof value.expressionType === "string" || typeof value.syntax === "string" || (typeof value.type === "string" && ["JavaScript", "CSharp", "Liquid", "Python"].includes(value.type));
+      const syntaxes = [value.expressionType, value.syntax, value.type]
+        .filter((item): item is string => typeof item === "string")
+        .map(item => item.toLowerCase());
+      const literal = syntaxes.length > 0 && syntaxes.every(item => item === "literal");
+      const opaque = expression || typeof value.expressionType === "string" || typeof value.syntax === "string" || syntaxes.some(item => ["javascript", "csharp", "liquid", "python"].includes(item));
       for (const [key, child] of Object.entries(value)) {
         // Literal scalars are data, even when text happens to contain the wrapper ID. Objects can
         // carry typed references; those and conflicting syntax markers stay conservative.

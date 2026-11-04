@@ -279,14 +279,14 @@ describe("linear Flowchart transformation", () => {
 });
 
 describe("no-loss Ungroup", () => {
-  it.each(["canonical", "editor", "graph-mapping"])("preserves literal data mentioning a wrapper identity in %s form", form => {
+  it.each(["canonical", "editor", "graph-mapping"].flatMap(form => ["Literal", "literal", "lItErAl"].map(syntax => [form, syntax])))("preserves literal data mentioning a wrapper identity in %s / %s form", (form, syntax) => {
     const ctx = context();
     const producer = (payload(ctx).activities as ActivityNode[])[1];
     const literal = form === "graph-mapping" ? "new-block" : "Keep new-block as ordinary text";
-    if (form === "canonical") producer.inputs = [{ referenceKey: "text", value: { expressionType: "Literal", value: literal } }];
-    if (form === "editor") producer.text = { expression: { type: "Literal", value: literal } };
+    if (form === "canonical") producer.inputs = [{ referenceKey: "text", value: { expressionType: syntax, value: literal } }];
+    if (form === "editor") producer.text = { expression: { type: syntax, value: literal } };
     const plan = accepted(extract(ctx));
-    const referenceContext = form === "graph-mapping" ? [{ outputMappings: [{ outputReferenceKey: "text", source: { syntax: "Literal", value: literal } }] }] : [];
+    const referenceContext = form === "graph-mapping" ? [{ outputMappings: [{ outputReferenceKey: "text", source: { syntax, value: literal } }] }] : [];
     const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document, referenceContext }, "new-block"));
     expect(inverse.document.rootActivity).toEqual(ctx.document.rootActivity);
   });
