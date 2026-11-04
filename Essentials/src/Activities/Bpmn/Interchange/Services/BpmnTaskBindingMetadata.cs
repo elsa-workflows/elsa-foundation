@@ -72,6 +72,11 @@ internal static class BpmnTaskBindingMetadata
         {
             using var document = JsonDocument.Parse(value, new JsonDocumentOptions { MaxDepth = MaximumDepth });
             var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object && HasDuplicateNames(root))
+            {
+                problem = "The retained task binding names a member more than once.";
+                return false;
+            }
             if (root.ValueKind != JsonValueKind.Object ||
                 !root.TryGetProperty("activityVersionId", out var id) || id.ValueKind != JsonValueKind.String ||
                 string.IsNullOrWhiteSpace(id.GetString()) || id.GetString()!.Length > MaximumIdLength ||
@@ -80,8 +85,7 @@ internal static class BpmnTaskBindingMetadata
                 problem = "The retained task binding must name an activity version and carry its inputs as an object.";
                 return false;
             }
-            if (root.TryGetProperty("inputs", out var keyed) &&
-                keyed.EnumerateObject().GroupBy(input => input.Name, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            if (root.TryGetProperty("inputs", out var keyed) && HasDuplicateNames(keyed))
             {
                 problem = "The retained task binding names an input more than once.";
                 return false;
@@ -101,6 +105,9 @@ internal static class BpmnTaskBindingMetadata
             return false;
         }
     }
+
+    private static bool HasDuplicateNames(JsonElement value) =>
+        value.EnumerateObject().GroupBy(member => member.Name, StringComparer.Ordinal).Any(group => group.Count() > 1);
 
     private sealed record Carried(string ActivityVersionId, IReadOnlyDictionary<string, JsonElement> Inputs);
 }

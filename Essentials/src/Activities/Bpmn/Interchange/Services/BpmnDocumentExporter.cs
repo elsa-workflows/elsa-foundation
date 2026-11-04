@@ -50,12 +50,15 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
         var carried = new Dictionary<string, LibModel.BpmnForeignAttribute>(StringComparer.Ordinal);
         var omissions = new List<BpmnExportOmission>();
         var candidates = new List<(BpmnElement Element, ActivityNode Child)>();
-        CollectTaskBindings(structure, candidates);
-        // A binding is keyed by its element id in the document, so one shared by tasks in different scopes travels for none.
-        var ambiguous = candidates.GroupBy(candidate => candidate.Element.ElementId, StringComparer.Ordinal)
-            .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
+        var elementIds = new List<string>();
+        CollectTaskBindings(structure, candidates, elementIds);
+        // A binding is keyed by its element id in the document, so a task whose id any other element shares, in any
+        // scope, carries none: the attribute would land on every element with that id.
+        var shared = elementIds.GroupBy(id => id, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var ambiguous = candidates.Select(candidate => candidate.Element.ElementId).Where(shared.Contains).ToHashSet(StringComparer.Ordinal);
         foreach (var elementId in ambiguous.Order(StringComparer.Ordinal))
-            omissions.Add(new(elementId, "ambiguous-element", "More than one bound task uses this element id; no binding travels for it."));
+            omissions.Add(new(elementId, "ambiguous-element", "Another element in the document uses this element id; no binding travels for it."));
         candidates.RemoveAll(candidate => ambiguous.Contains(candidate.Element.ElementId));
         if (candidates.Count > 0)
         {
@@ -84,16 +87,17 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
         return new(Write(structure, processNode, options, carried), omissions);
     }
 
-    /// <summary>Every task (in this process and its nested subprocesses) bound to an author-chosen child.</summary>
-    private static void CollectTaskBindings(BpmnAuthoredStructure structure, List<(BpmnElement Element, ActivityNode Child)> candidates)
+    /// <summary>Every task (in this process and its nested subprocesses) bound to an author-chosen child, and every element id in all scopes.</summary>
+    private static void CollectTaskBindings(BpmnAuthoredStructure structure, List<(BpmnElement Element, ActivityNode Child)> candidates, List<string> elementIds)
     {
         var childrenByNodeId = structure.Activities.ToDictionary(activity => activity.NodeId, StringComparer.Ordinal);
         foreach (var element in structure.Elements)
         {
+            elementIds.Add(element.ElementId);
             if (element.ChildNodeId is not { } childNodeId || !childrenByNodeId.TryGetValue(childNodeId, out var child))
                 continue;
             if (StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind))
-                CollectTaskBindings(ReadStructure(child), candidates);
+                CollectTaskBindings(ReadStructure(child), candidates, elementIds);
             else if (BpmnTaskBindingMetadata.TaskTypes.Contains(element.ElementType))
                 candidates.Add((element, child));
         }

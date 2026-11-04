@@ -124,10 +124,11 @@ public sealed class BpmnTaskBindingInterchangeTests
     }
 
     [Fact]
-    public async Task Tasks_sharing_an_element_id_across_scopes_carry_no_binding()
+    public async Task A_task_whose_element_id_another_scope_shares_carries_no_binding()
     {
-        // The outer task and the task inside the subprocess both use the element id "summarize".
-        var inner = Structure(Process(Literal("brief", Brief)));
+        // The outer bound task and an unbound end event inside the subprocess both use the element id "summarize".
+        var inner = new BpmnAuthoredStructure([], [new BpmnElement("inner-start", BpmnElementTypes.StartEvent), new BpmnElement("summarize", BpmnElementTypes.EndEvent)],
+            [new BpmnSequenceFlow("inner-flow", "inner-start", "summarize")]);
         var nested = new ActivityNode("child-sub", BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId, [], [],
             new ActivityNodeStructure(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(inner, Web)));
         var outer = Structure(Process(Literal("brief", "other value")));
@@ -207,13 +208,15 @@ public sealed class BpmnTaskBindingInterchangeTests
     {
         // The placeholder resolves to a real Delay version through the binding profile, so only the retained-binding check
         // stands between an undeclared carried input and execution.
-        var xml = await RetainedXml("{\"activityVersionId\":\"Elsa.Delay\",\"inputs\":{\"anything\":1}}");
+        var xml = await RetainedXml("{\"activityVersionId\":\"Elsa.Delay\",\"inputs\":{\"brief\":1}}");
 
         var result = await new BpmnDocumentImporter(new BpmnWorkBinder(), new Catalog(Declared("brief"), withDelay: true))
             .ImportAsync(xml, new BpmnImportOptions { ConfirmedBindings = ["summarize"] });
 
         Assert.False(result.Analysis.CanExecute);
-        Assert.Equal(BpmnImportCapabilityAvailability.Unsupported, Assert.Single(result.Analysis.Capabilities, x => x.ElementId == "summarize").Availability);
+        var refused = Assert.Single(result.Analysis.Capabilities, x => x.ElementId == "summarize");
+        Assert.Equal(BpmnImportCapabilityAvailability.Unsupported, refused.Availability);
+        Assert.Contains("binding profile", refused.Reason, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -221,6 +224,7 @@ public sealed class BpmnTaskBindingInterchangeTests
     [InlineData("[]")]
     [InlineData("{\"activityVersionId\":\"x\",\"inputs\":[]}")]
     [InlineData("{\"activityVersionId\":\"acme.summarize@1.0.0\",\"inputs\":{\"brief\":\"a\",\"brief\":\"b\"}}")]
+    [InlineData("{\"activityVersionId\":\"acme.summarize@1.0.0\",\"inputs\":{\"other\":1},\"inputs\":{\"brief\":\"ok\"}}")]
     [InlineData("not json")]
     public async Task An_unreadable_retained_binding_is_reported_and_never_proposed(string value)
     {
@@ -322,8 +326,11 @@ public sealed class BpmnTaskBindingInterchangeTests
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
+        // With the delay in the inventory, even the placeholder id reads back as a version declaring the input, so only the
+        // binding-profile rule can refuse a retained binding that names it.
         public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IActivityDefinitionVersion?>(versionId == VersionId ? new CatalogVersion(versionId, SummarizeDefinition, [declaration]) : null);
+            Task.FromResult<IActivityDefinitionVersion?>(versionId == VersionId ? new CatalogVersion(versionId, SummarizeDefinition, [declaration])
+                : withDelay && versionId is "Elsa.Delay" or "catalog-delay-v1" ? new CatalogVersion(versionId, DelayDefinition, [declaration]) : null);
     }
 
     private sealed record Definition(string Id, string ActivityTypeKey) : IActivityDefinition

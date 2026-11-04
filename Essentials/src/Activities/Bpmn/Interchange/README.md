@@ -24,7 +24,7 @@ Default markers are derived from the source element's DefaultFlowId. Import/edit
 
 A task's own bound work travels as `elsa:taskBinding`: its exact activity version and literal inputs. `ExportAsync` writes it only when the visible catalog resolves the version and declares every bound input a portable literal; a sensitive, credential, connection or password input, an expression, an unresolvable version or input, an output capture, or a storage, evaluation or conversion setting leaves the whole binding out, reported for its element. Synchronous `Export` has no catalog and carries none.
 
-Import never executes what a document says on its own. A retained binding is proposed on the task's capability with its version and input keys, and the task stays `RequiresBinding`, so `CanExecute` is false. Confirming the element (`confirmedBindings` on analyze or import) binds it; the catalog pass then refuses it as Unsupported unless this host's visible version exists and declares every carried input as portable. Confirming an element with no retained binding is reported Degraded.
+Import never executes what a document says on its own. A retained binding is proposed on the task's capability with its version and input keys, and the task stays `RequiresBinding`, so `CanExecute` is false. Confirming the element (`confirmedBindings` on analyze or import) binds it; the catalog pass then refuses it as Unsupported unless it names an exact version (never a binding-profile placeholder) that this host's visible catalog can read and that declares every carried input as portable. Confirming an element with no retained binding is reported Degraded.
 
 ## Direct binding metadata retention
 
