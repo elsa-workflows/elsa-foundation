@@ -32,6 +32,7 @@ export function useGraphAuthoringCanvas<TDocument>({
   selectedNodeId = null,
   buildModel,
   applyModel,
+  reconcileDocument,
   onChange
 }: {
   document: TDocument;
@@ -43,20 +44,21 @@ export function useGraphAuthoringCanvas<TDocument>({
    * uncommitted canvas state) on every selection change.
    */
   selectedNodeId?: string | null;
-  buildModel(root: ReturnType<GraphDocumentAdapter<TDocument>["readRoot"]>, layout: ReturnType<GraphDocumentAdapter<TDocument>["readLayout"]>): GraphAuthoringCanvasModel;
+  buildModel(root: ReturnType<GraphDocumentAdapter<TDocument>["readRoot"]>, layout: ReturnType<GraphDocumentAdapter<TDocument>["readLayout"]>, document: TDocument): GraphAuthoringCanvasModel;
   applyModel(
     document: TDocument,
     nodes: Node<WorkflowNodeData>[],
     edges: WorkflowEdge[],
     options?: GraphCanvasCommitOptions
   ): TDocument;
+  reconcileDocument?(previous: TDocument, next: TDocument): TDocument;
   onChange(document: TDocument): void;
 }) {
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const derive = useCallback(
     (source: TDocument): GraphAuthoringCanvasModel => {
-      const model = buildModel(adapter.readRoot(source), adapter.readLayout(source));
+      const model = buildModel(adapter.readRoot(source), adapter.readLayout(source), source);
       return {
         ...model,
         nodes: model.nodes.map(node => ({ ...node, selected: node.id === selectedNodeIdRef.current }))
@@ -91,7 +93,8 @@ export function useGraphAuthoringCanvas<TDocument>({
     setHistoryVersion(version => version + 1);
   }, [resetKey, signature]);
 
-  const emit = useCallback((next: TDocument, record = true) => {
+  const emit = useCallback((candidate: TDocument, record = true) => {
+    const next = reconcileDocument?.(documentRef.current, candidate) ?? candidate;
     if (record) {
       historyRef.current = recordActivityGraphEdit(historyRef.current, documentRef.current);
     }
@@ -102,7 +105,7 @@ export function useGraphAuthoringCanvas<TDocument>({
     setEdges(model.edges);
     setHistoryVersion(version => version + 1);
     onChange(next);
-  }, [derive, onChange]);
+  }, [derive, onChange, reconcileDocument]);
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],

@@ -49,6 +49,46 @@ afterEach(() => {
 });
 
 describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
+  it("renames a selected activity with one undo/redo and prunes presentation on delete without losing history", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const value = {
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Review order", description: "Keep this context" }]
+    };
+    const rendered = renderControlledDesigner(value);
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Review order");
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const displayName = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    setInput(displayName, "Approve order");
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
+    click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual(value.activityPresentation);
+    click(rendered.container.querySelector("button[aria-label='Redo Activity Graph edit']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
+    confirmOnce();
+    click(buttonByText(rendered.container, "Remove"));
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([]);
+    click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
+    expect(rendered.container.querySelector("[data-graph-node-id='write-line-1']")).not.toBeNull();
+  });
+
+  it("copies node names and descriptions when duplicating a Sequence child", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner({
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Named step", description: "Useful context" }]
+    });
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click(rendered.container.querySelector("button[aria-label='Duplicate Named step']")!);
+    const next = rendered.onChange.mock.calls.at(-1)![0];
+    expect(next.activityPresentation).toHaveLength(2);
+    expect(next.activityPresentation[0]).toMatchObject({ nodeId: "write-line-1", displayName: "Named step" });
+    expect(next.activityPresentation[1]).toMatchObject({ displayName: "Named step (copy)", description: "Useful context" });
+    expect(next.activityPresentation[1].nodeId).not.toBe("write-line-1");
+  });
+
   it("adds a stable root-outcome mapping and preserves existing mappings", () => {
     const onChange = vi.fn();
     const rendered = renderEditor({

@@ -367,7 +367,7 @@ public sealed class EfActivityUpgradePlanStore(
                         draft.Revision + 1,
                         draft.State with { Provider = await RewriteActivityAsync(draft.State.Provider, direct, cancellationToken) },
                         layout.Records.ToArray(),
-                        authoring.HeadVersionId);
+                        authoring.HeadVersionId) { ActivityPresentation = layout.ActivityPresentation.ToArray() };
                 return new(owner with { Revision = draft.Revision, TenantId = draft.TenantId }, authoring.HeadVersionId, draft.SourceVersionId, direct, [path], blocked, DiffCandidate: candidate);
             }
             case "ActivityVersion" when allowClone:
@@ -387,7 +387,7 @@ public sealed class EfActivityUpgradePlanStore(
                         1,
                         new(version.Contract, await RewriteActivityAsync(version.Provider, direct, cancellationToken), new Dictionary<string, string>()),
                         layout?.Records.ToArray() ?? [],
-                        version.DefinitionVersionId);
+                        version.DefinitionVersionId) { ActivityPresentation = layout?.ActivityPresentation.ToArray() ?? [] };
                 return new(owner with { TenantId = version.TenantId }, authoring.HeadVersionId, version.DefinitionVersionId, direct, [path], blocked, DiffCandidate: candidate);
             }
             case "WorkflowDraft":
@@ -504,6 +504,7 @@ public sealed class EfActivityUpgradePlanStore(
             TenantId = source.TenantId,
             Revision = 1,
             Records = sourceLayout?.Records.ToList() ?? [],
+            ActivityPresentation = sourceLayout?.ActivityPresentation.ToList() ?? [],
             CreatedAt = now,
             LastModifiedAt = now
         };

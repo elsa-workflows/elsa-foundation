@@ -1793,9 +1793,16 @@ export interface StudioActivityDefinitionLayoutRecord {
   data: unknown;
 }
 
+export interface StudioActivityNodePresentationRecord {
+  nodeId: string;
+  displayName?: string | null;
+  description?: string | null;
+}
+
 export interface StudioActivityDefinitionImplementationState {
   payload: unknown;
   layout: StudioActivityDefinitionLayoutRecord[];
+  activityPresentation?: StudioActivityNodePresentationRecord[];
 }
 
 export type StudioActivityDiagnosticSeverity = "Error" | "Warning" | "Info";

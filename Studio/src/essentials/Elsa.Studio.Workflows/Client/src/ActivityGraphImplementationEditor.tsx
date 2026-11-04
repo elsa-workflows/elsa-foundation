@@ -1,3 +1,4 @@
+import { indexActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
@@ -15,6 +16,7 @@ import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
+  collectActivityNodeIds,
   createActivityNode,
   findNodeScopePath,
   getActivityDisplay,
@@ -308,7 +310,7 @@ export function ActivityGraphImplementationEditor({
   const expressionState = useActivityGraphExpressionDescriptors(context);
   const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
 
-  const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>) => {
+  const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>, document: typeof value) => {
     const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
     if (!documentScope) return { nodes: [], edges: [] };
     const { owner: documentOwner, slot: documentSlot } = documentScope;
@@ -317,11 +319,11 @@ export function ActivityGraphImplementationEditor({
     // A BPMN scope's canvas nodes are its process ELEMENTS (an activity-bearing element carries its
     // child through `childNodeId`), not the slot activities — see the bpmn adapter.
     const model = documentSlot.mode === "bpmn"
-      ? buildBpmnCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout) as unknown as {
+      ? buildBpmnCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout, document.activityPresentation) as unknown as {
           nodes: Node<WorkflowNodeData>[];
           edges: Edge[];
         }
-      : buildCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout);
+      : buildCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout, undefined, document.activityPresentation);
     return { nodes: model.nodes.map(node => {
       const activity = documentSlot.activities.find(candidate => candidate.nodeId === (node.data.runtimeNodeId ?? node.id));
       return activity ? { ...node, data: { ...node.data, collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)) } } : node;
@@ -367,6 +369,17 @@ export function ActivityGraphImplementationEditor({
     return activityGraphDocumentAdapter.replaceGraph(document, nextRoot, nextLayout);
   }, [catalogByVersion, scopePath]);
 
+  const reconcileDocument = useCallback((previous: typeof value, next: typeof value) => {
+    const previousIds = collectActivityNodeIds(activityGraphDocumentAdapter.readRoot(previous), catalogByVersion);
+    const nextIds = collectActivityNodeIds(activityGraphDocumentAdapter.readRoot(next), catalogByVersion);
+    const removed = new Set([...previousIds].filter(id => !nextIds.has(id)));
+    if (!next.activityPresentation) return next;
+    return {
+      ...next,
+      activityPresentation: next.activityPresentation.filter(record => !removed.has(record.nodeId))
+    };
+  }, [catalogByVersion]);
+
   const canvas = useGraphAuthoringCanvas({
     document: value,
     adapter: activityGraphDocumentAdapter,
@@ -374,6 +387,7 @@ export function ActivityGraphImplementationEditor({
     selectedNodeId,
     buildModel,
     applyModel,
+    reconcileDocument,
     onChange
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
@@ -725,7 +739,7 @@ export function ActivityGraphImplementationEditor({
       scopeOwner: owner,
       catalog: catalogByVersion,
       layout: activityGraphDocumentAdapter.readLayout(value),
-      presentation: []
+      presentation: value.activityPresentation ?? []
     });
     if (!snapshot) return;
     const draft: WorkflowDraft = {
@@ -733,7 +747,7 @@ export function ActivityGraphImplementationEditor({
       definitionId,
       state: { rootActivity: root },
       layout: activityGraphDocumentAdapter.readLayout(value),
-      activityPresentation: [],
+      activityPresentation: value.activityPresentation ?? [],
       validationErrors: []
     };
     const plan = planActivityDuplicate({ snapshot, draft, frames: scopeFrames, catalog: catalogByVersion });
@@ -741,7 +755,7 @@ export function ActivityGraphImplementationEditor({
     const duplicate = applyActivityDuplicatePlan(draft, scopeFrames, plan, catalogByVersion, nodeId);
     const nextRoot = duplicate?.state.rootActivity;
     if (!duplicate || !nextRoot) return;
-    commitDocument(activityGraphDocumentAdapter.replaceGraph(value, nextRoot, duplicate.layout));
+    commitDocument(activityGraphDocumentAdapter.replaceGraph({ ...value, activityPresentation: duplicate.activityPresentation }, nextRoot, duplicate.layout));
     const duplicatedNodeId = plan.selectedNodeIds[0] ?? null;
     setSelectedNodeId(duplicatedNodeId);
     if (duplicatedNodeId) interactions.queueCanvasNodeFocus(duplicatedNodeId);
@@ -866,7 +880,12 @@ export function ActivityGraphImplementationEditor({
             context={context}
             workflowState={workflowState}
             selectedNode={inspectedNode}
-            selectedNodeLabel={inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode?.nodeId ?? "Activity graph"}
+            selectedNodeLabel={resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(inspectedNode?.nodeId ?? ""), inspectedCatalogItem, inspectedNode?.nodeId ?? "Activity graph")}
+            selectedPresentation={indexActivityPresentation(value.activityPresentation).get(inspectedNode?.nodeId ?? "")}
+            onSelectedPresentationChange={inspectedNode ? presentation => {
+              if (readOnly) return;
+              commitDocument({ ...value, activityPresentation: updateActivityPresentation(value.activityPresentation ?? [], inspectedNode.nodeId, presentation) });
+            } : undefined}
             selectedActivityType={inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey ?? "Unknown"}
             selectedDescriptor={inspectedDescriptor}
             selectedNodeAvailability={null}

@@ -56,6 +56,8 @@ public sealed class ActivityDefinitionDraftLayout : TenantEntity
     public long Revision { get; set; }
 
     public ICollection<ActivityLayoutRecord> Records { get; set; } = [];
+
+    public ICollection<ActivityNodePresentationRecord> ActivityPresentation { get; set; } = [];
 }
 
 public sealed class ActivityDraftValidationState : TenantEntity
@@ -138,6 +140,8 @@ public sealed class ActivityDefinitionVersionLayout : TenantEntity
     public string DefinitionVersionId { get; init; } = null!;
 
     public ICollection<ActivityLayoutRecord> Records { get; init; } = [];
+
+    public ICollection<ActivityNodePresentationRecord> ActivityPresentation { get; init; } = [];
 }
 
 /// <summary>Authoritative direct dependency fact emitted by one successful publication.</summary>
