@@ -22,6 +22,8 @@ Evidence:
 
 **Decision:** the prototype must reproduce and compare outside-producer/inside-consumer and inside-producer/outside-consumer cases, including repeated occurrences. If confirmed, design and prove a narrow completion-causality bridge through existing runtime-owned records. Never substitute a newest-result fallback or weaken branch, iteration, ambiguity or closed-boundary checks. Production extraction cannot advertise the affected profile until it passes.
 
+**S001 result:** the committed paired baseline reproduced inside-to-outside result loss. PR #3767 records the direct completed-child edge using existing runtime metadata, guarded by committed matching completions and exact parent ownership. Existing visibility/branch/iteration/ambiguity filtering remains intact. The [prototype receipts](evidence/prototype/README.md) include actual composed-host crossings, distinct occurrences, strict restart/resume, cancellation, supported native rescheduling and nearest control targets. This is bounded linear proof, not general fork/join visibility.
+
 **Finding:** nesting Flowchart adds an ordinary composite incident on child failure; Sequence leaves its parent waiting on the faulted child. The additional inspection node is expected, but successful recovery and downstream behavior are unproved. Grouping must not add an independent retry/transaction/compensation policy.
 
 **Decision:** prove waits/resumption, cancellation, child fault/recovery and nearest-loop Break/nearest-graph Complete behavior in paired baselines. Promotion refuses external Break targets and Complete targets that would change at the new reusable boundary.
@@ -33,6 +35,8 @@ Evidence:
 **Decision:** extend the existing presentation model through Activity Definition graph lifecycle, editor state, history and source inspection. Keep presentation outside executable material and behavior hashes, following Studio ADR 0012 on activity presentation and Foundation ADR 0050. Do not hide block names in opaque layout properties.
 
 **Finding:** React Flow already supports multi-selection; Sequence's public selection contract is singular.
+
+**S001 result:** the real Workflow Editor also exposed phantom history entries when saving normalized optional layout fields. PR #3767 makes an accepted live save rebase the current captured position without creating another author edit; queued duplicate acknowledgements are idempotent, stale responses cannot rebase newer edits, and Undo's autosave preserves Redo. Working-state signature/revision checks are unchanged. Equivalent Activity Definition lifecycle/history remains T001/T003 work.
 
 **Decision:** add accessible contiguous/range selection to Sequence and consume actual canvas selections elsewhere. Shared pure transformations feed each resource host through its existing persistence controls. A graph edit never acquires workflow lifecycle responsibilities (Studio ADRs 0015 and 0018).
 

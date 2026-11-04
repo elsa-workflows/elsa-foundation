@@ -61,6 +61,9 @@
     <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/RabbitMq/Elsa.Etl.RabbitMq.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Elsa.Agent\Elsa.Agent.csproj" />
@@ -77,6 +80,7 @@
     <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
     <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj" />
     <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows\Elsa.Agent.Workflows.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Runtime\Elsa.Agent.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />

@@ -18,14 +18,17 @@ native run; hosts without the slot or the runtime capability show no link.
 
 The structured editor supports the v1 file topology in [spec 255](../../../../specs/255-finite-file-etl/spec.md)
 and the v2 connector topology in [spec 996](../../../../specs/996-http-etl/spec.md) and
-[spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md). Connector drafts select HTTP, CSV or JSON Lines sources,
-optional CSV lookup, and HTTP, JSONL or CSV routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)) through scoped alias/role/kind choices.
+[spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md). Connector drafts select HTTP, CSV, JSON Lines or SQL table sources ([spec 1198](../../../../specs/1198-etl-sql-source/spec.md): table, columns and
+key; [spec 1199](../../../../specs/1199-etl-sql-watermark/spec.md): an optional watermark column) or RabbitMQ queue
+sources ([spec 1201](../../../../specs/1201-etl-rabbitmq-source/spec.md): queue, JSON fields and a message maximum), optional CSV lookup, and HTTP, JSONL or CSV routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)), or a keyed SQL table for accepted
+records ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)) or a RabbitMQ exchange and routing key
+([spec 1200](../../../../specs/1200-etl-rabbitmq-delivery/spec.md)), through scoped alias/role/kind choices.
 Its local draft is separate from the saved revision. Validation and explicit publication operate on the saved
 revision/version/hash tuple. Published artifacts are read-only. Binding choices are scoped aliases, never
 host paths. Integer and decimal literals retain their JSON numeric representation through the lossless client.
 
 Runtime inspection reads retained run/partition facts and safe diagnostics. V2 inspection uses the separately
-advertised connector endpoint, distinguishes HTTP page/item/exhaustion from file ranges, and presents durable
+advertised connector endpoint, distinguishes HTTP page/item/exhaustion from file ranges (a SQL source is a retained snapshot read by file range, with no admission digest), and presents durable
 retry state, owed receipts and accepted route-body counts without inventing an HTTP total or percentage. It does not probe storage or claim
 that a cancelled run has stopped every external operation. API failure/missing capability must remain visible;
 an empty page is not a substitute for unavailable or forbidden access.

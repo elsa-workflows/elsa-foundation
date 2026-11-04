@@ -97,6 +97,13 @@ const configured = () => ({
 });
 
 describe("specialist editor", () => {
+  it("links the saved draft revision to the agent playground", async () => {
+    const { context } = fakeContext();
+    const { container } = await render(context, { ...initialSpecialistManifest(), allowContinuity: false });
+
+    expect(container.querySelector<HTMLAnchorElement>(".agent-specialist-editor__playground a")!.getAttribute("href")).toBe("/agents/drafts/draft-1/playground");
+  });
+
   it("lists every provider's connections in one choice and takes the provider and model from the connection", async () => {
     const { context, postJson } = fakeContext();
     const { container, latest } = await render(context, { ...initialSpecialistManifest(), allowContinuity: false });
