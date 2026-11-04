@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD34 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD35 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -95,6 +95,7 @@ An author uses an ordinary activity or composite in entry, exit or transition ac
 8. **Given** source Exit completed and later transition Action work failed, **when** supported normal Elsa recovery is requested, **then** the failed work is resumed/retried at its normal activity recovery boundary and completed earlier phases are preserved rather than restarting the entire transition.
 9. **Given** a final state has ordinary entry work that waits durably or fails, **when** its entry is pending or awaits normal recovery, **then** that state does not yet count as complete and cannot cause enclosing-state or whole-machine completion. Completion becomes possible only after the entry work succeeds, including across restart.
 10. **Given** a machine's configured event capacity is full, **when** a new admission is attempted, **then** it is rejected immediately with a clear capacity result, without waiting for capacity or evicting accepted events. The rejected attempt is not reported as accepted and the sender decides when to retry.
+11. **Given** an event was accepted and its sender lost the response, **when** the sender retries the same event ID and contents within the declared retention window for that machine invocation, **then** the existing receipt/current outcome is returned without another queue entry. Reusing the retained ID with different contents is rejected as a conflict; identical IDs in different machine invocations have distinct scopes.
 
 ### User Story 5 — Compose triggers and choose deliberate re-entry (Priority: P1)
 
@@ -207,6 +208,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-043**: StateMachine MUST exhaust eligible automatic transitions before processing still-applicable completion reactions and MUST check automatic transitions again after each reaction. Queued business events MUST be evaluated only after that internal progress settles. Loop protection MUST apply. This rule MUST preserve accepted eligibility, hierarchy, explicit same-state transition order and compatible regional behavior; it does not change unrelated workflow scheduling.
 - **FR-044**: When loop protection detects excessive automatic/completion progress, StateMachine MUST stop further internal progress, preserve committed progress and report an actionable incident through normal Elsa operations. Recovery MUST be required and the detected cycle MUST NOT automatically repeat. The technical design MUST specify the limit, detection scope/lifetime, diagnostics and supported recovery actions using existing runtime authorities; this requirement does not choose a numeric default or a new incident/recovery authority.
 - **FR-045**: When configured machine-event capacity is full, new admission attempts MUST be rejected immediately with a clear capacity result. Admission MUST NOT wait for capacity or evict previously accepted events. A rejected attempt MUST NOT be reported as accepted; the sender decides when to retry. Exact capacity accounting and atomic concurrent admission remain Q2 design/proof work.
+- **FR-046**: Accepted machine-addressed business events MUST support admission deduplication by a sender-provided event ID scoped to the target machine invocation. Within a declared retention window, the same ID and contents MUST return the existing receipt/current outcome without another queue entry, and the same ID with different contents MUST be rejected as a conflict. The technical design MUST define content comparison, retention boundaries, concurrent retry behavior and existing-runtime integration. Admission deduplication MUST NOT be represented as exactly-once activity/external effects; expiry and terminal/retired behavior remain Q2.
 
 ### Platform constraints and design obligations
 
@@ -279,7 +281,7 @@ Proposed reference baseline: a persistent authored reaction remains usable after
 
 Specify configured bounds and overflow/unavailable behavior; deduplication/conflicting identity; receipts and retention; terminal/retired execution behavior; input disposition around faults and restart; and recovery of partial transition work with honest external-effect uncertainty. Do not equate accepted admission with exactly-once external effects. Demonstrate current sufficient seams or propose a reviewed bounded extension before freezing placement.
 
-OD34 requires immediate explicit capacity rejection without waiting or evicting accepted events (FR-045). Exact accounting, atomic concurrent admission, identity/deduplication and storage-unavailable behavior remain open.
+OD34 requires immediate explicit capacity rejection without waiting or evicting accepted events (FR-045). OD35 deduplicates accepted events within a declared retention window by sender-provided ID scoped to the machine invocation, returns existing receipts/outcomes for identical retries and rejects conflicting contents (FR-046). Exact accounting, atomic concurrent admission/retries, content comparison/retention boundaries, expiry/terminal behavior and storage-unavailable behavior remain open.
 
 OD23 requires recovery at the normal failed-activity boundary with completed earlier phases preserved (FR-034). Complete propagation, blocked-input handling, exact supported recovery paths and source-grounded integration proof remain open.
 
