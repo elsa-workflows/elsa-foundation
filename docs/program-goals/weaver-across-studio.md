@@ -64,7 +64,7 @@ in the probe driver, a regression check for it and at most two fresh native atte
 of the three-failure stop or any other gate. The same record hands the Program to Claude. On the owner's
 instruction, Claude [posts through the owner account with the `[Claude]` tag](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6563355491)
 while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge,
-except under the 3 November standing authorization recorded below.
+The 3 November standing authorization is recorded below.
 
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
@@ -93,9 +93,6 @@ cases on both actual adapters against the packaged EF store. M2 #3431 is verifie
 the closeout links its slices and its resulting-main evidence. The slices merged after converged self-review
 loops under the owner's [standing delivery and merge authorization of 3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669),
 whose words are "enter the self review loop with as many iterations as reasonably necessary and then merge".
-The lane reads it as a standing owner exception to merging.md's one-action owner exception and its "no
-author merges its own PR" fallback, used while Code Review is unavailable; that reading and that condition
-are the lane's, not the owner's words. Otherwise the native-baseline paragraph's Code Review route stands.
 [Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
 implementation feature, under [spec1203](../../specs/1203-weaver-module-support/spec.md), delivered as leaves
 that are native sub-issues of #3443.
