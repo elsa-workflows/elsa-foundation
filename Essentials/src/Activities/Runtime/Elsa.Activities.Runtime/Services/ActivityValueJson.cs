@@ -10,7 +10,7 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 /// <remarks>
 /// Numbers stay strict: the Web defaults would read a JSON string such as <c>"42"</c> into a numeric input, which
-/// the hydrator refused before and still refuses. Spec 1202 (S-9) replaces this instance with the shared serializer
+/// the hydrator refused before and still refuses. S-9 (#3805) replaces this instance with the shared serializer
 /// baseline.
 /// </remarks>
 internal static class ActivityValueJson
