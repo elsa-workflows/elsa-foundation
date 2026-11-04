@@ -101,7 +101,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   initialPage?: ActivityExecutionBrowsePage;
   contextLabel?: string;
   hideSingleton?: boolean;
-  restoreChoiceFocus?: { current: string | null };
+  restoreChoiceFocus?: { request: { current: string | null }; ready: boolean };
   context: StudioEndpointContext; workflowExecutionId: string; executableNodeId: string;
   ancestorActivityExecutionId?: string; selectedActivityExecutionId?: string; refreshKey: number;
   parentActivityExecutionId?: string;
@@ -166,8 +166,8 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
     }
   }, [neighbor, neighborState.page, neighborState.status, queryIdentity]);
   useEffect(() => {
-    if (restoreChoiceFocus?.current && restoreChoiceFocus.current === selected?.execution.activityExecutionId && pageState.status === "ready" && triggerRef.current) {
-      triggerRef.current.focus(); restoreChoiceFocus.current = null;
+    if (restoreChoiceFocus?.ready && restoreChoiceFocus.request.current && restoreChoiceFocus.request.current === selected?.execution.activityExecutionId && pageState.status === "ready" && triggerRef.current) {
+      triggerRef.current.focus(); restoreChoiceFocus.request.current = null;
     }
   }, [pageState.status, restoreChoiceFocus, selected]);
   // Keep all reads and resolution effects active: a singleton can become unavailable or gain another occurrence.
@@ -194,7 +194,15 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
       if (event.key === "Escape") { event.preventDefault(); setExpanded(false); triggerRef.current?.focus(); }
     }}>
       <ol className="wf-execution-list" aria-label="Recorded activity executions">{page.items.map(entry => <ExecutionRow key={entry.execution.activityExecutionId} entry={entry} selected={entry.execution.activityExecutionId === selectedActivityExecutionId}
-        label={occurrenceLabel(entry)} onSelect={() => { setCursor(null); if (collapseOnSelect) { setExpanded(false); triggerRef.current?.focus(); } onSelect(entry.execution); }} onIncident={onIncident} />)}</ol>
+        label={occurrenceLabel(entry)} onSelect={() => {
+          setCursor(null);
+          if (collapseOnSelect) {
+            setExpanded(false); triggerRef.current?.focus();
+            // Resolution can remount the navigator. Arrow navigation keeps focus on its own button.
+            if (restoreChoiceFocus) restoreChoiceFocus.request.current = entry.execution.activityExecutionId;
+          }
+          onSelect(entry.execution);
+        }} onIncident={onIncident} />)}</ol>
       <PageNavigation page={page} onPage={value => setCursor({ query: queryIdentity, value })} />
       <p className="wf-execution-note">Recorded evidence · counts reflect this read</p>
     </div> : null}
@@ -267,12 +275,8 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
     : supported?.context === context && !supported.value ? seed : null;
   const navigation = <ActivityExecutionNavigator context={context} workflowExecutionId={workflowExecutionId} executableNodeId={nodeId}
     ancestorActivityExecutionId={ancestorId} selectedActivityExecutionId={exactId} refreshKey={refreshKey} requireExplicitSelection={requireExplicitSelection} initialPage={initialPage} hideSingleton collapseOnSelect
-    restoreChoiceFocus={execution ? restoreChoiceFocus : undefined}
-    onResolve={value => { setResolved({ key, execution: value }); if (!value && confirmedExecution) onUnavailable?.(); if (value && !exactId) onSelect(value); }} onSelect={value => {
-      // The first explicit choice replaces the placeholder with details, remounting its navigator.
-      restoreChoiceFocus.current = value.activityExecutionId;
-      onSelect(value);
-    }} onIncident={onIncident} />;
+    restoreChoiceFocus={{ request: restoreChoiceFocus, ready: Boolean(execution) }}
+    onResolve={value => { setResolved({ key, execution: value }); if (!value && confirmedExecution) onUnavailable?.(); if (value && !exactId) onSelect(value); }} onSelect={onSelect} onIncident={onIncident} />;
   const children = execution ? <ChildExecutionBrowser key={execution.activityExecutionId} context={context} execution={execution} refreshKey={refreshKey} labelFor={labelFor} onEnter={onEnter} onIncident={onIncident} /> : null;
   return execution ? renderDetails(execution, navigation, children) : <>
     <section className="wf-instance-section"><h4>{nodeLabel}</h4></section>{navigation}
