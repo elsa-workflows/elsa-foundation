@@ -54,7 +54,7 @@ internal sealed class SpecialistActivityProvider(
 
     public async ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default)
     {
-        var prepared = await PrepareAsync(request.Provider, request.Contract, new("ActivityDraft", request.DraftId, request.DefinitionId, Revision: request.Revision), cancellationToken);
+        var prepared = await PrepareAsync(request.Provider, request.Contract, new(request.SubjectKind, request.DraftId, request.DefinitionId, Revision: request.Revision), cancellationToken);
         if (prepared.Descriptor is null)
             return new(null, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], new(0, 0, 0, 0, 0, 0, 0), request.ProviderFingerprint, [], prepared.Diagnostics);
 

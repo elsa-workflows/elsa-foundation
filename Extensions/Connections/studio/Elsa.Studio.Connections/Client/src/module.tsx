@@ -16,6 +16,7 @@ export function register(api: ElsaStudioModuleApi) {
     defaultEnabled: true,
     order: 46,
     nav: {
+      icon: Cable,
       requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
       title: "Connections",
       path: "/security/connections",

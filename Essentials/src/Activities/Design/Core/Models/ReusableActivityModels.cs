@@ -277,7 +277,10 @@ public sealed record ReusableActivityDraft(
     IReadOnlyList<ActivityLayoutRecord> Layout,
     ActivityDraftValidation? Validation,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public IReadOnlyList<ActivityNodePresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public sealed record ActivityDiagnosticSubject(
     string Kind,
@@ -377,7 +380,11 @@ public sealed record ActivityVersionImplementationFacts(
     long? ResumeTargetCount = null,
     string? LayoutHash = null,
     int? LayoutCount = null,
-    IReadOnlyList<ActivityRuntimeRequirementDeclaration>? RuntimeRequirements = null);
+    IReadOnlyList<ActivityRuntimeRequirementDeclaration>? RuntimeRequirements = null)
+{
+    public string? PresentationHash { get; init; }
+    public int? PresentationCount { get; init; }
+}
 
 public sealed record ActivityDraftDiffCandidateRequest(
     string DefinitionId,
@@ -385,7 +392,10 @@ public sealed record ActivityDraftDiffCandidateRequest(
     long Revision,
     ActivityDefinitionDraftState State,
     IReadOnlyList<ActivityLayoutRecord> Layout,
-    string? BaseVersionId);
+    string? BaseVersionId)
+{
+    public IReadOnlyList<ActivityNodePresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public sealed record ActivityDraftDiffCandidate(
     string? TemplateHash,
@@ -730,7 +740,14 @@ public sealed record ActivityDraftValidationRequest(
     string DefinitionId,
     string DraftId,
     long Revision,
-    ActivityDefinitionDraftState State);
+    ActivityDefinitionDraftState State)
+{
+    /// <summary>
+    /// What <see cref="DraftId"/> names, for the diagnostic subject: <c>ActivityDraft</c> for a Studio draft revision, or the
+    /// kind of other saved content validated by the same rules (such as <c>ActivitySourceVersion</c>).
+    /// </summary>
+    public string SubjectKind { get; init; } = "ActivityDraft";
+}
 
 public sealed record ActivityVersionDiffRequest(
     ActivityVersionIdentity From,

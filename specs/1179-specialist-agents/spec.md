@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-31
 
-**Status**: Draft — proposed shared revision, ownership and pre-GA reset amendment under ADR 0094
+**Status**: Implementation in progress — shared revision amendment accepted; source slice #3790 authorized
 
 **Input**: Program [#3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519):
 deliver user-defined specialist agents through native Elsa workflows and BPMN, with real models,
@@ -13,7 +13,7 @@ and [design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues
 The owner authorized end-to-end delivery and recommended defaults. This specification describes
 the product to implement, not behavior established by M0 research or by merging the design packet.
 
-**Design-only amendment (4 November 2026)**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](contracts/revision-management.md) and [Agent ownership](contracts/agent-ownership.md) propose Agent-owned typed source backed by reusable working-copy/snapshot mechanics shared with Workflow. A publication candidate is an exact snapshot referenced by a shared publication operation, not another Agent-specific versioned entity. The owner subsequently waived backward compatibility for pre-GA breaking changes; clean database recreation supersedes the initial legacy-adoption requirement. The baseline at `8d4919a37` remains historical evidence until agreement; checked receipts do not prove this model. This PR implements no code, rename, reset or runtime change.
+**Shared revision amendment (4 November 2026)**: Owner agreement is recorded by merged PR #3783 (`4043cbfb1`); the owner separately authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026. This delivery implements the source-storage slice of T065/T069. It does not ratify provisional constitution sections or infer additional human approvals. W1–W8 remain open until their complete witnesses pass. [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](contracts/revision-management.md) and [Agent ownership](contracts/agent-ownership.md) govern the delivery. Candidates reference shared snapshots; they do not own another source store. Pre-GA clean database recreation supersedes legacy adoption, but no current database is reset by this change. Historical receipts remain evidence of the earlier implementation only.
 
 **Terminology**: Agent is the canonical product/domain noun; specialist describes a role and historical naming. Clean implementation may rename Specialist identifiers without compatibility shims. Keep the pinned `Elsa.Agent` root and this spec directory; exact API/package changes belong to delivery review. See the [glossary](../../docs/glossary/elsa.md).
 
