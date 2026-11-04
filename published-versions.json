@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a06e281084069c9c2e2c53f517c9bd724399b326",
+  "last_publish_commit": "378b641689cd12cf972536d3ddd5372e055655e3",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -164,8 +164,8 @@
     },
     {
       "package_id": "Elsa.Agent.Specialists",
-      "version": "4.0.3-preview",
-      "commit": "8d4919a37472dae72bec63754b18de4335f922bc"
+      "version": "4.0.4-preview",
+      "commit": "378b641689cd12cf972536d3ddd5372e055655e3"
     },
     {
       "package_id": "Elsa.Agent.Specialists.Anthropic",
@@ -189,8 +189,8 @@
     },
     {
       "package_id": "Elsa.Agent.Specialists.Core",
-      "version": "4.0.2-preview",
-      "commit": "8d4919a37472dae72bec63754b18de4335f922bc"
+      "version": "4.0.3-preview",
+      "commit": "378b641689cd12cf972536d3ddd5372e055655e3"
     },
     {
       "package_id": "Elsa.Agent.Specialists.Design",
@@ -199,8 +199,8 @@
     },
     {
       "package_id": "Elsa.Agent.Specialists.Inspection.Api",
-      "version": "4.0.0-preview",
-      "commit": "8d4919a37472dae72bec63754b18de4335f922bc"
+      "version": "4.0.1-preview",
+      "commit": "378b641689cd12cf972536d3ddd5372e055655e3"
     },
     {
       "package_id": "Elsa.Agent.Specialists.JsonSchema",
