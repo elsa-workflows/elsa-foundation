@@ -8,12 +8,12 @@ using Npgsql;
 namespace Elsa.Etl.Sql.ProviderTests;
 
 /// <summary>Spec 1197: the SQL delivery protocol on each real engine.</summary>
-public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
+public abstract partial class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
 {
     private static readonly EtlColumn[] Columns =
         [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("score", EtlColumnType.Decimal, false)];
 
-    private readonly string _table = "people_" + Guid.NewGuid().ToString("N")[..12];
+    private protected readonly string _table = "people_" + Guid.NewGuid().ToString("N")[..12];
     private readonly string _ledger = "ledger_" + Guid.NewGuid().ToString("N")[..12];
 
     protected abstract string CreateTableSql(string table, bool keyed);
@@ -154,10 +154,17 @@ public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
         public string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row) => inner.Upsert(table, columns, keyColumns, row);
         public string Parameter(string column, int row) => inner.Parameter(column, row);
         public EtlSqlErrorKind Classify(Exception exception) => inner.Classify(exception);
+        public System.Data.IsolationLevel SnapshotIsolation => inner.SnapshotIsolation;
+        public string? SnapshotSetup => inner.SnapshotSetup;
+        public string? SnapshotLock(string table) => inner.SnapshotLock(table);
+        public bool IsLockRefusal(Exception exception) => inner.IsLockRefusal(exception);
+        public bool ExtremeDatesAreInfinite => inner.ExtremeDatesAreInfinite;
+        public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
+            inner.SelectSnapshot(table, columns, keyColumns);
     }
 }
 
-public sealed class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixture)
+public sealed partial class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixture)
     : EtlSqlProviderTests(fixture), IClassFixture<EtlSqlPostgreSqlFixture>
 {
     private static readonly EtlColumn[] RowColumns =
@@ -229,7 +236,7 @@ public sealed class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixtur
     }
 }
 
-public sealed class EtlSqlServerProviderTests(EtlSqlServerFixture fixture)
+public sealed partial class EtlSqlServerProviderTests(EtlSqlServerFixture fixture)
     : EtlSqlProviderTests(fixture), IClassFixture<EtlSqlServerFixture>
 {
     protected override string CreateTableSql(string table, bool keyed) =>

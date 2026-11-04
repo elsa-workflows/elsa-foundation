@@ -20,7 +20,7 @@ public sealed class SpecialistInspectionApiWireTests
             new(SpecialistTurnStatus.Accepted, null, SpecialistTurnApplicationStatus.SettlementPending, now, 8,
                 [new("request-1", now, 4096, "anthropic", "claude-fable-5-1")], new(now, true, 5, 3, 8, "claude-fable-5-1"),
                 new("conversation", 0, 1, false, false), null));
-        var view = new SpecialistTestRunEvidenceView("run", "draft", 1, "artifact", "workflow-1", "Completed", evidence);
+        var view = new SpecialistTestRunEvidenceView("run", "draft", 1, "artifact", "workflow-1", "Completed", evidence, true);
 
         var wire = JsonNode.Parse(JsonSerializer.Serialize(view, SpecialistInspectionApiJsonContext.WireContext.SpecialistTestRunEvidenceView))!;
 
@@ -32,5 +32,8 @@ public sealed class SpecialistInspectionApiWireTests
         Assert.Equal("Payload", (string?)wire["invocation"]!["output"]!["captureMode"]);
         Assert.Equal("text", (string?)wire["invocation"]!["output"]!["value"]!["Article"]);
         Assert.Equal("activity-test-version-abc", (string?)wire["invocation"]!["specialist"]!["definitionVersionId"]);
+        Assert.True((bool)wire["valuesPermitted"]!);
+        var occurrence = JsonNode.Parse(JsonSerializer.Serialize(new SpecialistInvocationEvidenceView(evidence, false), SpecialistInspectionApiJsonContext.WireContext.SpecialistInvocationEvidenceView))!;
+        Assert.Equal(("Accepted", false), ((string?)occurrence["invocation"]!["turn"]!["status"], (bool)occurrence["valuesPermitted"]!));
     }
 }

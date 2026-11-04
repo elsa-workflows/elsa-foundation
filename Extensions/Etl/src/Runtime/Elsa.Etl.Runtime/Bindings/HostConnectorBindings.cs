@@ -48,6 +48,13 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
                     throw new EtlBindingException("etl.http-shard-limit", "The HTTP source exceeds the permitted partition count.");
                 source = Http(binding);
             }
+            else if (pipeline.Source is EtlSqlSource table)
+            {
+                // A SQL source's content is unknown until preparation reads it, so its pin carries no digest (spec 1198).
+                CheckUnambiguous(scope, table.Binding, "Source");
+                var resolved = sql.ResolveCurrent(scope, table.Binding, "Source", table.Table);
+                source = new(EtlConnectorKind.Sql, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
+            }
             else
                 throw Unavailable();
             var lookup = pipeline.Lookup is { } lookupDefinition ? File(scope, lookupDefinition.Binding, EtlFileRole.Lookup) : null;

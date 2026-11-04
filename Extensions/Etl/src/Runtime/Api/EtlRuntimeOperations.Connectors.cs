@@ -31,7 +31,8 @@ internal sealed partial class EtlRuntimeOperations
             SourceRecordCount = connector.Prepared?.File?.RecordCount,
             BindingAliases = new(bindings.Source.Revision.Alias, bindings.Lookup?.Revision.Alias,
                 bindings.Main.Revision.Alias, bindings.Errors.Revision.Alias),
-            SourceInput = bindings.Source.Kind is EtlConnectorKind.Csv or EtlConnectorKind.Jsonl
+            // A SQL source has no admission digest; its input identity is the retained snapshot (spec 1198).
+            SourceInput = bindings.Source.Kind is EtlConnectorKind.Csv or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql
                 ? InputIdentity(bindings.Source.Revision, connector.Prepared?.File?.Source) : null,
             LookupInput = InputIdentity(bindings.Lookup?.Revision, connector.Prepared?.Lookup),
             Connector = new(Kind(bindings.Source.Kind), Kind(bindings.Main.Kind), Kind(bindings.Errors.Kind),
