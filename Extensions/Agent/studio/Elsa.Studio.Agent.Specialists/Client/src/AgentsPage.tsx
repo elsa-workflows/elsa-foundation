@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
-  EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
+  SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
   StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, type StudioDataGridColumn
 } from "@elsa-workflows/studio-ui";
 import {
@@ -160,6 +160,12 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
   };
 
   const canCreate = mayCreate && authoring !== "loading" && authoring !== null;
+  if (creating && canCreate) return <StudioPage className="agent-agents-page" data-testid="agents-page">
+    <CreateAgentForm context={context} authoring={authoring}
+      onCancel={() => { restoreFocus.current = true; setCreating(false); }}
+      onCreated={(definitionId, draftId) => navigate(activityDefinitionPath(definitionId, draftId))} />
+  </StudioPage>;
+
   const columns: StudioDataGridColumn<AgentRow>[] = [
     { id: "name", header: "Agent", render: row => (
       <span className="agent-row-name">
@@ -178,12 +184,7 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
         title="Agents"
         icon={<Bot aria-hidden="true" />}
         description="Agents you define here or in configuration. Each one is a reusable activity with typed inputs and results that workflows and BPMN processes can use."
-        actions={canCreate && !creating ? <StudioButton ref={newAgentRef} variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> New agent</StudioButton> : null} />
-
-      {creating && canCreate ? (
-        <CreateAgentForm context={context} authoring={authoring} onCancel={() => { restoreFocus.current = true; setCreating(false); }}
-          onCreated={(definitionId, draftId) => navigate(activityDefinitionPath(definitionId, draftId))} />
-      ) : null}
+        actions={<>{canCreate ? <StudioButton ref={newAgentRef} variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> New agent</StudioButton> : null}<StudioButton onClick={reload} disabled={collection.kind === "loading"}><RefreshCw aria-hidden="true" /> Refresh</StudioButton></>} />
 
       <StudioCollectionToolbar>
         <StudioSearchInput aria-label="Search agents" placeholder="Search agents" value={search} onChange={event => setSearch(event.target.value)} />
@@ -197,13 +198,18 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
       ) : null}
       {collection.kind === "ready" ? (
         <>
-          <p ref={countRef} tabIndex={-1} className="agent-collection-count" role="status">{collection.totalCount === 1 ? "1 agent" : `${collection.totalCount.toLocaleString()} agents`}</p>
-          <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
+          {collection.items.length === 0 ? <div className="studio-table-container">
+            <StudioResultState headingLevel={3} icon={<Bot aria-hidden="true" />}
+              title={query ? "No matching agents" : "No agents yet"}
+              description={query ? "Try a different name or clear your search." : canCreate ? "Create an agent to use it in workflows." : "Agents will appear here when available."}
+              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} />
+          </div> : <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
             onSelect={row => void open(row)}
-            gridColumns="minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)"
-            emptyState={<EmptyState>{query ? "No agents match this search." : canCreate ? "No agents yet. Create one to use it in workflows." : "No agents yet."}</EmptyState>} />
+            gridColumns="minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)" />}
+          <StudioCollectionFooter>
+          <p ref={countRef} tabIndex={-1} className="agent-collection-count" role="status">{collection.totalCount === 1 ? "1 agent" : `${collection.totalCount.toLocaleString()} agents`}</p>
           {collection.continuation || collection.moreFailed || collection.restart ? (
-            <StudioCollectionFooter>
+            <div>
               {collection.moreFailed ? <StudioAlert tone="warning">More agents could not be loaded.</StudioAlert> : null}
               {collection.restart ? <StudioAlert tone="warning">{collection.restart === "expired"
                 ? "This list has expired since it was loaded, so it cannot continue. Reload it to see the current agents."
@@ -211,8 +217,9 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
               {collection.restart
                 ? <StudioButton onClick={reload}><RefreshCw aria-hidden="true" /> Reload from the start</StudioButton>
                 : <StudioButton disabled={collection.loadingMore} onClick={() => void loadMore()}>{collection.loadingMore ? "Loading…" : "Load more"}</StudioButton>}
-            </StudioCollectionFooter>
+            </div>
           ) : null}
+          </StudioCollectionFooter>
         </>
       ) : null}
     </StudioPage>
@@ -287,8 +294,8 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   return (
     <form className="agent-create-form" aria-labelledby={`${nameId}-title`} onSubmit={submit}
       onKeyDown={event => { if (event.key === "Escape" && !submitting) onCancel(); }}>
-      <h2 id={`${nameId}-title`}>New agent</h2>
-      <p>Give it a name and a purpose. You choose its model, instructions, inputs and results in the editor next.</p>
+      <StudioPageHeader title="New agent" titleId={`${nameId}-title`}
+        description="Give it a name and a purpose. Choose its model, instructions, inputs and results in the editor next." />
       <StudioField label="Name">
         <input ref={nameRef} id={nameId} value={name} required maxLength={200} disabled={submitting} onChange={event => setName(event.target.value)} />
       </StudioField>

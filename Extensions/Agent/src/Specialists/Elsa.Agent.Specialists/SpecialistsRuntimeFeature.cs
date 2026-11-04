@@ -51,6 +51,7 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddScoped<SpecialistSchemaValidator>();
         services.TryAddScoped<SpecialistNativeBinding>();
         services.TryAddScoped<ISpecialistInvocationInspector, SpecialistInvocationInspector>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStateViewProjector, SpecialistInvocationStateViewProjector>());
         services.TryAddScoped<SpecialistTurnJournal>();
         services.TryAddScoped<SpecialistModelRunner>();
         services.TryAddScoped<SpecialistTurnBudgetAllocator>();

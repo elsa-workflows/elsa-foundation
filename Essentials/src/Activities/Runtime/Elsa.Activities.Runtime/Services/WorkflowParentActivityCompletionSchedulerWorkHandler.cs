@@ -745,7 +745,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 payload,
                 currentParentState,
                 [completionProjection.Completion.OutcomeKey],
-                completedAt);
+                completedAt,
+                completedChildState.Status == ActivityExecutionStatus.Completed &&
+                completedChildState.Completion is { } childCompletion &&
+                StringComparer.Ordinal.Equals(childCompletion.InvocationId, completedChildState.InvocationId) &&
+                StringComparer.Ordinal.Equals(completedChildState.ParentActivityExecutionId, currentParentState.InvocationId)
+                    ? completedChildState.InvocationId
+                    : null);
 
             // Only a container that actually owns scoped variables gets its scope marked completed; this
             // keeps the completion of ordinary containers untouched (#210).

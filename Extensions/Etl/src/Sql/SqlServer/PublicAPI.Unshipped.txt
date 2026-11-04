@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Etl.Sql.SqlServer.EtlSqlServerFeature
+Elsa.Etl.Sql.SqlServer.EtlSqlServerFeature.EtlSqlServerFeature() -> void
+virtual Elsa.Etl.Sql.SqlServer.EtlSqlServerFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

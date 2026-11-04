@@ -103,6 +103,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Persistence/EntityFramework/EfSchemaWriteRefusedException.cs",
         "Essentials/src/Persistence/EntityFramework/EfSettingsSection.cs",
         "Essentials/src/Persistence/EntityFramework/EfSharedTransaction.cs",
+        "Essentials/src/Persistence/EntityFramework/EfSourceModel.cs",
+        "Essentials/src/Persistence/EntityFramework/EfSourceRevisions.cs",
         "Essentials/src/Persistence/EntityFramework/EfSqliteMigrationLock.cs",
         "Essentials/src/Persistence/EntityFramework/EfSqliteSerialOpenInterceptor.cs",
         "Essentials/src/Persistence/EntityFramework/EfWriteConflict.cs",
@@ -294,6 +296,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Persistence/EntityFramework/Tests/SchemaChains.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SchemaGateSupport.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SharedPersistenceLayoutTests.cs",
+        "Essentials/tests/Persistence/EntityFramework/Tests/SourceRevisionTests.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SqliteMigrationLockRow.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/StartupInsertRace.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SyntheticOrders.cs",
@@ -326,7 +329,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreReuseSecretsModel.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs",
-        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs"
+        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs",
     ];
 
     [Fact]

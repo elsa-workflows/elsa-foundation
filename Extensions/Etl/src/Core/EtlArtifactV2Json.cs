@@ -100,7 +100,9 @@ public static class EtlArtifactV2Json
             HasNullEntries(pipeline.Lookup?.Schema) ||
             pipeline.Source is EtlCsvSource csv && HasNullEntries(csv.Schema) ||
             pipeline.Source is EtlHttpJsonSource http && HasNullEntries(http.Fields) ||
-            pipeline.Source is EtlJsonlSource jsonl && HasNullEntries(jsonl.Fields))
+            pipeline.Source is EtlJsonlSource jsonl && HasNullEntries(jsonl.Fields) ||
+            pipeline.Source is EtlSqlSource sql && (HasNullEntries(sql.Columns) || HasNullEntries(sql.Key)) ||
+            pipeline.Source is EtlRabbitMqSource rabbitMq && HasNullEntries(rabbitMq.Fields))
             throw new JsonException("ETL v2 declaration collections must not contain null entries.");
     }
 
@@ -169,6 +171,13 @@ public static class EtlArtifactV2Json
             var continuousName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlPipelineV2.Continuous));
             var continuous = typeInfo.Properties.Single(property => property.Name == continuousName);
             continuous.ShouldSerialize = static (_, value) => value is not null;
+        }
+
+        if (typeInfo.Type == typeof(EtlSqlSource))
+        {
+            var watermarkName = JsonNamingPolicy.CamelCase.ConvertName(nameof(EtlSqlSource.Watermark));
+            var watermark = typeInfo.Properties.Single(property => property.Name == watermarkName);
+            watermark.ShouldSerialize = static (_, value) => value is not null;
         }
 
         if (typeInfo.Type == typeof(EtlConnectorLimits))

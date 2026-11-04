@@ -193,7 +193,7 @@ public sealed class ActivityDraftTestRunService(
             draft,
             candidateVersionId,
             candidateVersion,
-            Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(layout.Records))), cancellationToken);
+            Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(layout.Records)) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation).LongLength), cancellationToken);
         if (!compilation.IsSuccessful || compilation.Template is null)
             return await RejectValidationAsync(
                 receipt,
@@ -221,6 +221,7 @@ public sealed class ActivityDraftTestRunService(
             candidateVersion,
             compilation.Template,
             layout.Records.ToArray(),
+            layout.ActivityPresentation.ToArray(),
             now,
             expiresAt);
         var publication = CreateEphemeralPublication(
@@ -310,7 +311,8 @@ public sealed class ActivityDraftTestRunService(
             null,
             WorkflowExecutableReferenceScope.TestRun,
             expiresAt,
-            LayoutSidecar: placement.LayoutSidecar);
+            LayoutSidecar: placement.LayoutSidecar,
+            ActivityPresentation: placement.ActivityPresentation);
         try
         {
             await workflowExecutables.SaveAsync(executable, cancellationToken);
@@ -910,6 +912,7 @@ public sealed class ActivityDraftTestRunService(
         string version,
         ExecutableActivityTemplate template,
         IReadOnlyCollection<ActivityLayoutRecord> layout,
+        IReadOnlyCollection<ActivityNodePresentationRecord> presentation,
         DateTimeOffset now,
         DateTimeOffset expiresAt)
     {
@@ -934,7 +937,8 @@ public sealed class ActivityDraftTestRunService(
             null,
             WorkflowExecutableReferenceScope.TestRun,
             expiresAt,
-            LayoutSidecar: new([new(versionId, origin, template.TemplateHash, records, [])]));
+            LayoutSidecar: new([new(versionId, origin, template.TemplateHash, records, [])]),
+            ActivityPresentation: ActivityTemplatePresentation.CopyFrom(presentation, template));
     }
 
     private static ActivityPublicationRejectedException Reject(
