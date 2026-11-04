@@ -115,7 +115,9 @@ class Database:
             self.port = int(subprocess.check_output(["docker", "port", self.name, f"{port}/tcp"], text=True).strip().splitlines()[0].rsplit(":", 1)[1])
             wait_for(self._ready, bool, f"{provider} did not become ready.", 240)
             if provider == "SqlServer":
-                self._sqlcmd("CREATE DATABASE elsa_etl").check_returncode()
+                if self._sqlcmd("CREATE DATABASE elsa_etl").returncode != 0:
+                    # A CalledProcessError would include the generated password in its command arguments.
+                    raise RuntimeError("The owned SQL Server database could not be created.")
         except BaseException as failure:
             try:
                 self.stop()

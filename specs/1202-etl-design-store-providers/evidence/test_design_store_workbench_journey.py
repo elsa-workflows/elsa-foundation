@@ -38,10 +38,14 @@ class ControllerTests(unittest.TestCase):
             port.side_effect = InitializationFailure("port mapping failed")
         elif stage == "ready":
             wait.side_effect = InitializationFailure("readiness failed")
+        sql = Mock(side_effect=InitializationFailure("database setup failed"))
+        if stage == "setup-status":
+            sql = Mock(return_value=subprocess.CompletedProcess(["private-command-placeholder"], 1))
         with patch.object(journey.subprocess, "run", command), patch.object(journey.subprocess, "check_output", port), \
-                patch.object(journey, "wait_for", wait), patch.object(journey.Database, "_sqlcmd", side_effect=InitializationFailure("database setup failed")):
-            with self.assertRaises(InitializationFailure):
-                journey.Database("SqlServer" if stage == "setup" else "PostgreSql")
+                patch.object(journey, "wait_for", wait), patch.object(journey.Database, "_sqlcmd", sql):
+            with self.assertRaises(RuntimeError) as failure:
+                journey.Database("SqlServer" if stage.startswith("setup") else "PostgreSql")
+            self.assertNotIn("private-command-placeholder", str(failure.exception))
         self.assertFalse(owned["alive"], "Constructor failure retained its owned container.")
 
     def test_database_port_failure_removes_owned_container(self):
@@ -52,6 +56,9 @@ class ControllerTests(unittest.TestCase):
 
     def test_database_setup_failure_removes_owned_container(self):
         self.check_database_cleanup("setup")
+
+    def test_unsuccessful_database_setup_keeps_command_arguments_out_of_error(self):
+        self.check_database_cleanup("setup-status")
 
     def check_host_cleanup(self, stage):
         original_popen = subprocess.Popen
