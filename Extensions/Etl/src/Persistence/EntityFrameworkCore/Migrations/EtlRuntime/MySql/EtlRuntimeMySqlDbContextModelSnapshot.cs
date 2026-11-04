@@ -337,7 +337,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.EtlRuntime.MySql
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes", "`MetadataBytes` >= 0");
 
-                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(`PageSequence` = 0 AND `PreviousPageSequence` IS NULL AND `PreviousHasContinuation` IS NULL) OR (`PageSequence` > 0 AND `PreviousPageSequence` IS NOT NULL AND `PreviousHasContinuation` IS NOT NULL AND `PreviousPageSequence` = `PageSequence` - 1 AND `PreviousHasContinuation` = 1)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(`PreviousPageSequence` IS NULL AND `PreviousHasContinuation` IS NULL) OR (`PageSequence` > 0 AND `PreviousPageSequence` IS NOT NULL AND `PreviousHasContinuation` IS NOT NULL AND `PreviousPageSequence` = `PageSequence` - 1 AND `PreviousHasContinuation` = 1)");
 
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SourceFetchMetadata", "`FetchMetadataBytes` >= 0 AND `SourceMetadataReserveBytes` >= 0 AND `InputReservationBytes` >= 0 AND ((`FetchJson` IS NULL AND `FetchDigest` IS NULL AND `FetchMetadataBytes` = 0 AND `SourceMetadataReserveBytes` = 0 AND `InputReservationBytes` = 0) OR (`FetchJson` IS NOT NULL AND `FetchDigest` IS NOT NULL AND CHAR_LENGTH(`FetchDigest`) = 64))");
                         });
@@ -372,6 +372,41 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.EtlRuntime.MySql
 
                     b.Property<long>("BatchMetadataBytes")
                         .HasColumnType("bigint");
+
+                    b.Property<long>("CompactedAcceptedRecords")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<long>("CompactedBatchCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<long>("CompactedErrorEffects")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<long>("CompactedFilteredRecords")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<long>("CompactedMainEffects")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<long>("CompactedPageCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<long>("CompactedRejectedRecords")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<bool>("Completed")
                         .HasColumnType("tinyint(1)");
@@ -418,6 +453,11 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.EtlRuntime.MySql
                     b.Property<long>("PageCount")
                         .HasColumnType("bigint");
 
+                    b.Property<long>("PollGeneration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
                     b.Property<string>("PositionJson")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -463,6 +503,20 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.EtlRuntime.MySql
 
                     b.ToTable("elsa_etl_connector_partitions", null, t =>
                         {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedAcceptedRecords", "`CompactedAcceptedRecords` >= 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedBatchCount", "`CompactedBatchCount` >= 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedErrorEffects", "`CompactedErrorEffects` >= 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedFilteredRecords", "`CompactedFilteredRecords` >= 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedMainEffects", "`CompactedMainEffects` >= 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedPageCount", "`CompactedPageCount` >= 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedRejectedRecords", "`CompactedRejectedRecords` >= 0");
+
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(`CurrentRequestSequence` IS NULL AND `CurrentRequestHash` IS NULL) OR (`CurrentRequestSequence` IS NOT NULL AND `CurrentRequestHash` IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeAcceptanceCounts", "`AcceptedBatchCount` >= 0 AND `AcceptedRecords` >= 0 AND `RejectedRecords` >= 0 AND `FilteredRecords` >= 0");
@@ -470,6 +524,8 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.EtlRuntime.MySql
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "`PageCount` >= 0 AND `PageBytes` >= 0 AND `MetadataBytes` >= 0 AND `BatchMetadataBytes` >= 0");
 
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NotBeforeUtcTicks", "`NotBeforeUtcTicks` IS NULL OR `NotBeforeUtcTicks` > 0");
+
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_PollGeneration", "`PollGeneration` >= 0");
 
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_RetainedOutputBytes", "`RetainedOutputBytes` >= 0");
 
