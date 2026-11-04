@@ -168,6 +168,7 @@ def evaluate(case: dict) -> dict:
             and [v["selection"] for v in case["versions"]["items"]] == [case["selection"]],
         "bothStoreTablesOnServer": {"elsa_etl_definition_drafts", "elsa_etl_published_artifacts", "elsa_etl_runtime_runs",
             "elsa_etl_connector_runs", "elsa_etl_connector_partitions", "elsa_etl_runtime_outbox", "elsa_etl_runtime_terminals"}.issubset(case["tables"]),
+        "intendedExecutionProductsUnchanged": case["executedProducts"]["unchanged"] and case["executedProducts"]["fileCount"] > 0,
         "noGeneratedSecretInEvidence": not case["secretInEvidence"],
     }
 
@@ -177,6 +178,16 @@ def run_engine(provider: str, assembly: Path, output: Path) -> dict:
     try:
         database = legacy.Database(provider)
         root = Path(tempfile.mkdtemp(prefix="elsa-etl-runtime-journey-"))
+        # Nuplane writes its local store state beside the assembly. Give each
+        # engine an owned execution copy so the verified published tree stays immutable.
+        expected_products = {str(f.relative_to(assembly.parent)): legacy.sha256(f.read_bytes())
+                             for f in assembly.parent.rglob("*") if f.is_file()}
+        execution_directory = root / "product"
+        shutil.copytree(assembly.parent, execution_directory)
+        copied_products = {name: legacy.sha256((execution_directory / name).read_bytes()) for name in expected_products}
+        if copied_products != expected_products:
+            raise ValueError("The owned execution copy differs from the verified products.")
+        execution_assembly = execution_directory / assembly.name
         for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
             shutil.copyfile(REPO / "Essentials/apps/Elsa.Workbench" / name, root / name)
         (root / "etl-snapshots").mkdir()
@@ -201,7 +212,7 @@ def run_engine(provider: str, assembly: Path, output: Path) -> dict:
             "EtlWorkflowsDesign": {}, "EtlWorkflowsRuntime": {}})
         (root / "shells.json").write_text(json.dumps(shells, indent=2))
         log_path = output / f"workbench-{provider.lower()}.log"
-        host = legacy.Host(assembly, root, log_path, 0)
+        host = legacy.Host(execution_assembly, root, log_path, 0)
         first_pid, api = host.process.pid, host.api
         definition = "runtime-" + uuid.uuid4().hex[:8]
         draft = api.request("/etl/v2/definitions", {"id": definition, "pipeline": legacy.pipeline()})
@@ -235,7 +246,7 @@ def run_engine(provider: str, assembly: Path, output: Path) -> dict:
         legacy.wait_for(lambda: database_scalars(database), lambda value: value["acknowledged"] == 1, "Result was not acknowledged.")
         before = snapshot(api, database, root, run_id, workflow_id)
         host.stop()
-        host = legacy.Host(assembly, root, log_path, 0)
+        host = legacy.Host(execution_assembly, root, log_path, 0)
         after = snapshot(host.api, database, root, run_id, workflow_id)
         case = {"provider": provider, "stores": {"design": provider, "runtime": provider, "native": "Sqlite"},
                 "definition": definition, "selection": selection, "publishedDraftRevision": published_draft["revision"],
@@ -244,6 +255,10 @@ def run_engine(provider: str, assembly: Path, output: Path) -> dict:
                 "firstPid": first_pid, "secondPid": host.process.pid, "inputSha256": legacy.sha256(data), "inputBytes": len(data),
                 "before": before, "after": after, "reopenedDraft": host.api.request(f"/etl/v2/definitions/{definition}"),
                 "versions": host.api.request(f"/etl/v2/definitions/{definition}/versions"), "tables": database.tables()}
+        case["executedProducts"] = {"fileCount": len(expected_products),
+            "manifestSha256": legacy.sha256(json.dumps(expected_products, sort_keys=True).encode()),
+            "unchanged": all(legacy.sha256((execution_directory / name).read_bytes()) == digest
+                             for name, digest in expected_products.items())}
         case["secretInEvidence"] = any(value in json.dumps(case) for value in (database.secret, design_cursor_key, runtime_cursor_key))
         return case
     finally:
