@@ -80,23 +80,24 @@ host, with no restart of the hosts that already had it. A host that is stopped l
 entry expires.
 
 **Seeing which host holds a version back.** One command, from any machine that can reach the shared database, shows the
-family's finalization state, names each host that cannot read a pending version, and lists the cluster's members:
+family's finalization state, names each host that cannot read a pending version, and lists the cluster's members (here
+for an example `Orders` module):
 
 ```bash
-dotnet elsa persistence status --host /app --provider PostgreSql --modules SamplesNotes,Cluster.Membership \
-  --family SamplesNotes --connection-env ELSA_EF_CONNECTION
+dotnet elsa persistence status --host /app --provider PostgreSql --modules Orders,Cluster.Membership \
+  --family Orders --connection-env ELSA_EF_CONNECTION
 ```
 
 ```text
-SamplesNotes (SamplesNotes): finalized at 1.0.0; this host reads [1.0.0, 2.0.0]
+Orders (Orders): finalized at 1.0.0; this host reads [1.0.0, 2.0.0]
   2.0.0: pending, held by nothing; waits for every counted member to read it
     waits for: foundation-host-a (reads 1.0.0)
 
 members: 2 in Cluster.Membership, judged at 2026-09-29T12:00:00Z with a skew allowance of 00:00:05
   foundation-host-a: Active, live, last heartbeat 2026-09-29T11:59:58Z
-    SamplesNotes: reads 1.0.0
+    Orders: reads 1.0.0
   foundation-host-b: Active, live, last heartbeat 2026-09-29T11:59:58Z
-    SamplesNotes: reads 1.0.0, 2.0.0
+    Orders: reads 1.0.0, 2.0.0
 ```
 
 Each `waits for` line is a live host that counts toward the version and does not report reading it, with the versions it

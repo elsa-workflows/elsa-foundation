@@ -379,6 +379,7 @@
     <Project Path="Essentials/src/Modularity/Planning/Elsa.Modularity.Planning.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Persistence/">
+    <Project Path="Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj" />
     <Project Path="Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
     <Project Path="Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj" />
   </Folder>

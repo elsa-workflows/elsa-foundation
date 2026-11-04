@@ -558,6 +558,7 @@
       "elsa.agent.specialists.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
@@ -568,6 +569,7 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
@@ -835,11 +837,15 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
       },
+      "elsa.persistence.core": {
+        "type": "Project"
+      },
       "elsa.persistence.entityframework": {
         "type": "Project",
         "dependencies": {
           "CShells": "[0.0.31, )",
           "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
@@ -935,6 +941,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
