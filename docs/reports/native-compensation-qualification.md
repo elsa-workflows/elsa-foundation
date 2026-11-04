@@ -95,7 +95,7 @@ Each limit is stated in the [compensation guide](../../website/docs/essentials/c
 | No jitter, no per-handler backoff, no "retry now" during a wait. | Spec 261 out of scope | None planned |
 | The journal keeps a retry's due time only while it waits; once the attempt runs, its record no longer shows when it was due. | Spec 261 data model (`CompensationHandlerAttempt`), found by the sample test (section 7) | None filed; the incidents' times show when each attempt failed |
 | The replay-safe warning covers leaves only; a `ReplaySafe` activity inside a composite step does not warn. | Spec 261 OD20 A | By design |
-| A step-result reference to an uncertain step has nothing to read; that step's compensation must work from `TargetOperationKey`. | Spec 250 FR-010, the causal result resolver; guide "Pass data from a step to its compensation" | By design; the sample's Release works from the key alone |
+| A step-result reference to an uncertain step has nothing to read; that step's compensation must work from `TargetOperationKey`. | Spec 250 FR-010, the causal result resolver; guide "Pass data from a step to its compensation" | By design |
 | Live-instance migration of a running scope to a new workflow version. | Program non-goal (runs keep their pinned executable) | By design |
 | Deleting a run that has not finished cancels it first, so a waiting recovery is never undone and the effects it had not undone stay. | Spec 261 FR-519 (section 7) | Documented in the guide; by design |
 | A plain Studio test run that waits past its 30-minute window keeps waiting and stays resumable from its run page; a trigger test run is cancelled when its window ends. | Spec 261 research R10 | Documented in the guide; by design |

@@ -78,8 +78,6 @@ Each scenario is an acceptance test an Elsa 3 implementation can reuse with its 
 | E19 | Backoff between undo attempts, with a restart during the wait | Each attempt once, not before its due time | Spec 261 BK1–BK6; sample S3 |
 | E20 | Stale or duplicate operator actions | Refused or replayed; nothing applied twice | Spec 260 O5, O5r |
 
-The sample's three workflows (S1 to S3) are also usable as an end-to-end smoke for an Elsa 3 implementation: S1 is E1 with a participant, S2 is E13 with E15, and S3 is E8, E19 and E10 in one run.
-
 ## 4. Gaps an Elsa 3 implementation would face
 
 Questions for that effort, not answers:
@@ -93,7 +91,7 @@ Questions for that effort, not answers:
 
 ## 5. Recommendation
 
-- **Reuse** the scenarios above and the participant contract as the Elsa 3 acceptance suite, with the sample participant as a reference.
+- **Reuse** the scenarios above and the participant contract as the Elsa 3 acceptance suite.
 - **Do not port** the Elsa 4 runtime seams, private state or Studio components; they rest on Elsa 4's checkpoint and outbox model.
 - **Decide** the Elsa 3 mechanism for each guarantee in section 2 in that effort, under its own program.
 
