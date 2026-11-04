@@ -746,8 +746,9 @@ documented two-host topology, the database host had a public IP, open only to SS
 - Node logs survive only for the last series of each process name (see `cancel-i69-custody.json`). Every case ledger
   and sender receipt is kept.
 - Limits: two nodes only, so four-node results remain open; one parked and three progressing runs; no owner failure
-  or database interruption during a Cancel; and placement was on node A in every before and after snapshot (nothing
-  sampled it in between), so the `c5`/`c6` mode above was not exercised. No throughput or allocation is claimed.
+  or database interruption during a Cancel. Placement was on node A in the controller's before/after snapshots and
+  the sender hook's pre-dispatch snapshot; no continuous placement trace was retained. The sender's owner check
+  passed in every case, unlike `c5`/`c6`. No throughput or allocation is claimed.
 
 ### Second fixture cleanup
 
