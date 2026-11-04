@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD27 are separated from proposals and open choices.
+- [x] Accepted OD1–OD28 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD27 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD28 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -46,6 +46,8 @@ OD25 chooses a structured transition inspector with the normal activity and expr
 
 OD26 requires explicit, validated initial states at each applicable level and starts all regions on parallel entry. Complete entry/exit boundaries and scoped completion remain Q1.
 
-OD27 requires child-first Exit and parent-first Entry with durable phase completion. Complete boundary calculation and independent-region ordering/concurrency remain Q1.
+OD27 requires child-first Exit and parent-first Entry with durable phase completion. Complete boundary calculation remains Q1.
+
+OD28 allows independent regional work to progress concurrently within each phase, preserving hierarchy dependencies and selected-set phase barriers. Partial-failure behavior and runtime integration remain open; independent branch completion order is not promised.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.
