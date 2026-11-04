@@ -164,7 +164,11 @@ public static partial class ExternalAuthenticationApi
             if (flow.UserId is null || flow.ReturnUrl is null || flow.Provenance?.ConnectionKey != key) { await Failure(context, 400); return; }
             var issuer = context.RequestServices.GetRequiredService<ICanonicalUserSignInService>();
             var tenant = context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.TenantId;
-            if (await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key)), context.RequestAborted) is null)
+            if (await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key))
+                {
+                    ExternalIdentity = new(tenant, key, flow.Provenance.Issuer, flow.Provenance.Subject),
+                    ConnectionRecordId = flow.Provenance.ConnectionRecordId
+                }, context.RequestAborted) is null)
             { await Failure(context, 401); return; }
             try
             {
@@ -217,7 +221,7 @@ public static partial class ExternalAuthenticationApi
     private static async Task<bool> SessionAuthorityAvailable(HttpContext context)
     {
         var issuer = context.RequestServices.GetService<ICanonicalUserSignInService>();
-        return issuer is not null && await context.RequestServices.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(issuer.AuthenticationScheme) is not null;
+        return issuer?.SupportsDurableSessions == true && await context.RequestServices.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(issuer.AuthenticationScheme) is not null;
     }
 
     private static void SetCorrelation(HttpContext context, string key, AuthenticationArtifactPurpose purpose, string handle, string browser)

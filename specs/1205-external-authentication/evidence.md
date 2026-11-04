@@ -430,3 +430,76 @@ Validation at implementation scope:
 - Local module NuGet pack succeeds; inspected archive includes feature assembly, module JS/CSS, standalone SDK JS/declarations. An isolated temporary consumer imports the extracted SDK without React/workspace/source dependencies and exercises custom protocol/antiforgery names, revisioned command transport and cookie-bound preview submission. This is the new Studio artifact boundary only; all-backend packed/public-consumer acceptance remains T031.
 
 This completes the T022 implementation checkpoint only. The probe uses a **controlled HTTP provider, native SQLite and the mounted product component**, not the full Studio host or an external IdP product. It does not establish separate Studio/cross-site cookie topology, server-database, restart or separate-process/shared-node acceptance. Durable selected-session/access/refresh status and revocation (T023), link/session APIs/events and cross-IAM last-path mutations (T024), their Studio surfaces (T025), full acceptance/deployment matrix (T026–T029), all operator/package/public-consumer checks, independent exact-head review/required CI/merge and resulting-main proof remain required. The full goal stays active and unachieved; #2777/#2778/#2779 are not closed by these bounded supporting operations. Existing broad server-graph audit/style warnings remain unchanged.
+
+## Durable canonical sessions and live token status (4 November)
+
+T023 implements `IAuthenticationSessionStore` in the existing optional managed EF module. Base Core defines the
+server-owned session record and committed create/read/bounded owner-page/revisioned revoke contract; the optional
+store protects immutable tenant/user/provider/exact-link/account-version/time metadata under shared Data Protection
+keys, uses random 256-bit IDs/revisions and tenant/user/expiry indexes, and returns explicit revoked/already-revoked/
+missing/conflict outcomes. It stores no upstream token, client secret, password or raw framework security stamp.
+Create/revoke reject caller-owned EF/ambient transactions. Provider failure stays a failure, never acknowledged
+success; retry can still revoke. Pages are capped at 100 and per-create cleanup at 64 expired current-schema rows
+of its own tenant. The additive four-provider `DurableSessions` migrations preserve the existing Initial history
+and protected flow content; `IdentityExternalAuthentication` advances 1.0.0→1.1.0 with a content-preserving upcaster.
+
+Ordinary local and external canonical sign-in now create a durable record before cookie issuance when this authority
+is installed. The cookie and trusted token-exchange request carry its internal ID; access JWTs and protected refresh
+payloads retain it. Refresh rotation and access-token expiry are bounded by the session's absolute expiry. Default
+lifetime is eight hours, configurable in ASP.NET options/the shell feature from one minute to thirty days. Invalid
+lifetime refuses managed start/callback before protocol/admission. The canonical authority explicitly declares
+`SupportsDurableSessions`; its default capability/read/validation methods refuse unsupported implementations.
+
+Every first-party bearer invokes current session validation. The existing canonical authority owns a fresh tenant
+scope derived from the signed typed subject before resource-scope selection, and reads live framework user,
+security-stamp hash, IAM status/membership, lockout/second-factor eligibility and exact qualified-link owner. The
+OpenIddict behavior acquires no Workflows/Secrets/managed-EF dependency. Cookie validation checks the same record
+and live authority. Canonical credentials without the binding refuse when the managed store is installed; an
+already bound credential refuses if its authority is removed. Existing token-only/non-user direct bearer
+compositions retain their typed external subject behavior. Both OIDC input filtering and shared normalization strip
+incoming session-ID claims; real bearer regressions include an uppercase forged claim.
+
+IAM user status transitions rotate the existing security stamp inside the same authority transaction, through both
+SetStatus and whole-record saves. Disable→enable cannot resurrect old cookies/access/refresh even with no request
+during the disabled interval. Newly saved Core IAM users receive an epoch. Older/programmatically seeded users with
+no epoch initialize it only after verified admission at sign-in; eligibility and preview remain read-only. Actual
+HTTP verified-email matching tests cover both cases, preserve the existing Elsa user/roles and create no password.
+
+Native SQLite tests prove protected reopen/shared keys, exact tenant/user paging, private provenance protection,
+selected revisioned/idempotent revocation, a deliberately synchronized two-node CAS race (one acknowledgment),
+provider-fault retry, wrong-key/payload/index/schema refusal, transaction rejection and incremental upgrade preserving
+a preceding one-time flow. Actual HTTP tests prove one session's cookie/access/rotated refresh become unauthorized
+while another session of the **same** user and an unrelated provider/user survive. Live disable/delete, membership,
+stamp, enabled lockout, second-factor and unlink cases reject issued access/refresh/cookies. Cross-user/tenant/kind
+session attachment and missing bindings refuse before any token row is created. A controlled clock proves absolute
+expiry and that refresh cannot extend it. Revocation is driven from a separately constructed node sharing native
+stores/keys; this is not a separate-process or server-database claim.
+
+Validation/corrections:
+
+- Complete restored Release Identity **803/803**, zero skips; `--list-tests` lists **803**. The 29 added cases cover
+  ten native session persistence cases and nineteen actual HTTP session/matching/ownership/lifetime cases; existing
+  sign-in/preview/recovery/management/manual-role/isolation regressions remain in that full run.
+- Complete Release architecture **616/616**, IAM EF **206/206**, ASP.NET Core Identity EF **59/59**, shared migration
+  guards **508/508**, zero skips. Generated solution-filter check passes. Core public API tracking includes the new
+  contracts/capabilities/bindings. There is no project-reference/package/lock change in this checkpoint.
+- Mutation removing only live session validation from the bearer handler makes the selected-session regression
+  fail **200 instead of 401**. Source restored in `finally`; restored complete Identity passes 803/803. Native store
+  fault injection separately proves an unacknowledged revoke remains retryable. No guard/test waiver.
+- Earlier diagnostic runs caught missing Core API declarations/imports, a wrongly assumed qualified-link method
+  name, the test's lockout-disabled fixture and a nested C# variable collision. Corrected the owning API usage and
+  fixture setup; those failed runs are not counted as passes. Scope ownership stays in the existing canonical
+  adapter rather than introducing a workflow dependency into OpenIddict behavior.
+- The owned probe builds and its actual Chromium configure/test/preview/enable/ordinary-reader journey passes with
+  **users 1→1, links 0→0, token rows 2→2, durable sessions 1→1** through preview and the administrator unchanged.
+  Reader access remains `identity/users:read`, no wildcard. Classic-light axe scan has zero WCAG 2 A/AA + 2.1 AA
+  violations; 390px has no horizontal overflow. Local owned receipt: `elsa-3579-browser-vZJPnp/browser-receipt.json`.
+  Runner ESLint passes. The probe is still the mounted component/controlled HTTP provider/native SQLite boundary.
+
+T023 is complete at implementation scope. T024 still requires authorized link/session inspection/mutation APIs,
+redacted notifications and atomic recovery coordination with IAM/link/session mutations; T025 requires those Studio
+surfaces. Full Studio host/external IdP product/cross-site/server-database/separate-process/restart/two-node matrix,
+all package/public-consumer checks, independent exact-head reviews/current hosted gates/merge and resulting-main
+qualification remain required. This checkpoint does not close #3579/#2848 or advance general identity administration
+#2777/#2778/#2779. The full goal remains active and unachieved. Existing broad-graph audit/style warnings are unchanged;
+new generated migration files have the same namespace-style warnings as existing provider-generated migrations.

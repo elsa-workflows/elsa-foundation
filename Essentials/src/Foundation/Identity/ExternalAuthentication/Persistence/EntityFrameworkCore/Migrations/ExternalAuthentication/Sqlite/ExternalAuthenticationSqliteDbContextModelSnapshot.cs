@@ -74,6 +74,61 @@ namespace Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFram
                     b.ToTable("identity_authentication_artifacts", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.AuthenticationSessionEntity", b =>
+                {
+                    b.Property<string>("TenantKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAtMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RevokedAtMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TenantKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantKey", "ExpiresAtMilliseconds")
+                        .HasDatabaseName("ix_identity_auth_sessions_expiry");
+
+                    b.HasIndex("TenantKey", "UserKey", "CreatedAtMilliseconds", "Id")
+                        .HasDatabaseName("ix_identity_auth_sessions_user");
+
+                    b.ToTable("identity_authentication_sessions", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")

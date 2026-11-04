@@ -1,15 +1,16 @@
-# External authentication flow persistence
+# External authentication flow and session persistence
 
 Optional `FoundationIdentityExternalAuthenticationEntityFrameworkCore` stores one-time authentication and
-preview artifacts. It is separate from Identity IAM and provider-configuration contexts. Canonical contracts
+preview artifacts plus durable canonical session records. It is separate from Identity IAM and provider-configuration contexts. Canonical contracts
 and flow behavior: [managed authentication](../../Elsa.Foundation.Identity.ExternalAuthentication/README.md).
 
 Programmatic registration is `AddExternalAuthenticationEntityFrameworkCore(new() { Provider = "Sqlite",
 ConnectionString = ... })`. The host supplies the selected provider engine. The shell feature additionally
 registers module migrations; programmatic hosts must run their ordinary EF module migration lifecycle before
 handling authentication requests. The module name is `Identity.ExternalAuthentication`, with its own migration
-history and `IdentityExternalAuthentication` schema family at `1.0.0`. New Initial migrations/snapshots exist for
-SQLite, PostgreSQL, SQL Server and MySQL. This does not establish native runtime qualification for every engine.
+history and `IdentityExternalAuthentication` schema family at `1.1.0`. The additive `DurableSessions` migration
+preserves Initial history and prior one-time flows through the content-preserving 1.0.0→1.1.0 chain for SQLite,
+PostgreSQL, SQL Server and MySQL. This does not establish native runtime qualification for every engine.
 
 Each immutable row holds hashed ID/tenant/browser/admin bindings, purpose, creation/expiry milliseconds,
 protected payload, a random version and a schema stamp. Consumption reads only a matching unexpired row,
@@ -24,7 +25,28 @@ future-schema rows survive cleanup. Data Protection keys are host-owned; use the
 key ring on every node and the host's normal at-rest key protection. Artifacts are encrypted independently of
 the database; this module neither generates a private node-local authority nor stores upstream credentials.
 
+`IAuthenticationSessionStore` owns independently committed tenant/user-scoped records in
+`identity_authentication_sessions`. Each has a random 256-bit ID, creation/absolute expiry, immutable protected
+account-version/provider/link provenance, a random revision and explicit revocation time. No upstream token,
+password, client secret or raw framework security stamp is stored. Purpose protection binds the payload to its
+tenant/ID/user/time indexes. Paging is deterministic and limited to 100 records. Revocation conditionally updates
+one expected revision; an already revoked session is idempotent, a race conflicts and a provider failure remains
+a failure. Create/revoke reject caller-owned transactions. Cleanup removes at most 64 expired current-schema rows
+of the current tenant per creation, preserving foreign tenants and unknown future schemas.
+
+The canonical ASP.NET authority binds normal local/external cookies to these records. First-party exchange and
+refresh retain that ID; every bearer validates it through the authority's independent tenant scope and live
+account/qualified-link checks. Cookies reject absent/revoked/expired/wrong-version sessions. The default absolute
+lifetime is eight hours (`AspNetCoreIdentityOptions.SessionLifetime` and the corresponding shell setting,
+one minute–thirty days); cookie renewal and refresh cannot extend it. User status transitions rotate the account
+security stamp atomically, including whole-record saves, so disable→enable cannot resurrect prior credentials.
+Session administration API/events/UI and cross-IAM recovery coordination remain the following spec stage.
+
 Native SQLite tests prove migrations, reopen, deliberately synchronized concurrent consumption, all bindings,
 expiry, schema skew, scope checks, transaction rejection and bounded cleanup. Flow component tests also prove
 real HTTP code exchange and preview across independent service providers sharing SQLite and owned key files.
-Separate-process browser/session and server-database qualification remain required by spec 1205.
+Native session tests additionally prove protected reopen/shared keys, bounded exact-owner paging, revisioned
+selected revocation, forced two-node races, write-failure retry, wrong-key/tamper/schema refusal, transaction
+rejection and content-preserving incremental schema upgrade. Actual HTTP tests prove cookie/access/refresh
+invalidation and unrelated-session survival. Separate-process and server-database qualification remain required
+by spec 1205.

@@ -57,8 +57,12 @@ The normal Foundation token exchange now returns its existing refresh token alon
 credential exchange/refresh responses are explicitly no-store/no-cache.
 Logout uses the signed interactive subject, including after its managed connection is retired; a first-party
 bearer can clear a matching canonical cookie but cannot select another user's cookie. Shared-scheme invalidators
-rotate the ordinary security stamp. Durable selected-session records and access/refresh status enforcement for
-user disable/delete remain T023/T024 work; cookie rejection alone is not that proof.
+rotate the ordinary security stamp. The [durable session authority](../Persistence/EntityFrameworkCore/README.md)
+binds canonical cookies/access/refresh to one random session ID and live account/link state. Selected revocation
+rejects that session's credentials without rotating the user's other sessions. Normal managed flow start/callback
+requires the authority's durable-session capability. User disable/delete and account-version changes reject
+already issued access/refresh as well as cookies; disable→enable cannot resurrect earlier sessions.
+Administration endpoints/events and cross-IAM mutation/recovery coordination remain T024 work.
 
 `ExternalAuthenticationHttpTests` drive actual owned Kestrel HTTP hosts and two actual HTTP OIDC fixtures with
 native SQLite IAM/artifact/vendor-token stores and owned key files. They cover normal cookie/access/refresh/
@@ -72,7 +76,8 @@ The same optional feature maps JSON operations below `/_elsa/identity/external-c
 path base). They use ordinary endpoint ownership/permission metadata. API endpoints [disable cookie redirects](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.metadata.idisablecookieredirectmetadata?view=aspnetcore-10.0),
 so denied API calls return 401/403. Handlers also recheck current canonical-user eligibility and saved permissions
 before entering global catalog persistence; a stale cookie grant is insufficient. Custom session authorities
-implement read-only `CanSignInAsync` and current-subject authorization explicitly.
+implement read-only `CanSignInAsync`, `SupportsDurableSessions`, live `ReadSessionAsync`/`ValidateSessionAsync`
+and current-subject authorization explicitly; the defaults refuse unsupported capabilities.
 
 | Method and suffix | Permission / result |
 |---|---|

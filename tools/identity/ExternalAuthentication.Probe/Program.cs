@@ -89,8 +89,14 @@ app.MapGet("/__probe/state", async (HttpContext context) =>
     scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
     var iam = scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>();
     var tokens = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
+    var sessions = scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>();
+    await sessions.Database.OpenConnectionAsync(context.RequestAborted);
+    await using var count = sessions.Database.GetDbConnection().CreateCommand();
+    count.CommandText = "SELECT COUNT(*) FROM identity_authentication_sessions";
+    var sessionCount = Convert.ToInt64(await count.ExecuteScalarAsync(context.RequestAborted));
     return Results.Json(new { Users = await iam.Users.CountAsync(context.RequestAborted), Links = await iam.ExternalIdentities.CountAsync(context.RequestAborted),
-        Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted), company.TokenRequests });
+        Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted),
+        Sessions = sessionCount, company.TokenRequests });
 }).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
 if (ui is not null)
 {

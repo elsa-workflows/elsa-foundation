@@ -30,7 +30,7 @@ internal sealed class ConnectionRuntimeServices(IServiceScopeFactory scopes, IOp
         var services = scope.ServiceProvider;
         var session = services.GetService<ICanonicalUserSignInService>();
         var schemes = services.GetService<IAuthenticationSchemeProvider>();
-        if (session is null || schemes is null || await schemes.GetSchemeAsync(session.AuthenticationScheme) is null)
+        if (session is null || !session.SupportsDurableSessions || schemes is null || await schemes.GetSchemeAsync(session.AuthenticationScheme) is null)
             return new(ConnectionReadinessFailure.SessionUnavailable);
         var artifact = services.GetService<IAuthenticationArtifactStore>();
         if (artifact is null || !artifact.IsDurable && environment?.IsDevelopment() != true) return new(ConnectionReadinessFailure.ArtifactStoreUnavailable);

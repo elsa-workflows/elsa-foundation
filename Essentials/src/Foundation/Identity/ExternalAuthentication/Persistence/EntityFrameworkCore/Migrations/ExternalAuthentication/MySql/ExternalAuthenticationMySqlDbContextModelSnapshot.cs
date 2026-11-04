@@ -88,6 +88,69 @@ namespace Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFram
                     b.ToTable("identity_authentication_artifacts", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.AuthenticationSessionEntity", b =>
+                {
+                    b.Property<string>("TenantKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<long>("CreatedAtMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ExpiresAtMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<long?>("RevokedAtMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("UserKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("TenantKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantKey", "ExpiresAtMilliseconds")
+                        .HasDatabaseName("ix_identity_auth_sessions_expiry");
+
+                    b.HasIndex("TenantKey", "UserKey", "CreatedAtMilliseconds", "Id")
+                        .HasDatabaseName("ix_identity_auth_sessions_user");
+
+                    b.ToTable("identity_authentication_sessions", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")

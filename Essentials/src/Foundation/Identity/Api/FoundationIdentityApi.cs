@@ -165,8 +165,10 @@ public static class FoundationIdentityApi
         var permissions = normalizedPrincipal.FindAll(IdentityClaimTypes.Permission)
             .Select(x => x.Value)
             .ToArray();
+        var sessionIds = normalizedPrincipal.FindAll(IdentityClaimTypes.SessionId).ToArray();
+        if (sessionIds.Length > 1) { await Results.Unauthorized().ExecuteAsync(context); return; }
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest(subject, permissions), context.RequestAborted);
+            .IssueAsync(new TokenIssueRequest(subject, permissions) { SessionId = sessionIds.SingleOrDefault()?.Value }, context.RequestAborted);
 
         await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt, result.RefreshToken), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
     }

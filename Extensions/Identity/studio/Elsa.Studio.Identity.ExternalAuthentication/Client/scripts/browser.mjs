@@ -67,6 +67,7 @@ try {
   await expect(page.getByText("Would be created", { exact: true })).toBeVisible();
   const afterPreview = await (await admin.request.get(backend + "/__probe/state")).json();
   expect(afterPreview.users).toBe(beforePreview.users); expect(afterPreview.links).toBe(beforePreview.links); expect(afterPreview.tokens).toBe(beforePreview.tokens);
+  expect(beforePreview.sessions).toBe(1); expect(afterPreview.sessions).toBe(beforePreview.sessions);
   expect((await (await admin.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(adminSession.subject);
   expect(new URL(page.url()).searchParams.has("externalPreviewHandle")).toBe(false);
   await expect(page.getByLabel("Reader", { exact: true })).toBeVisible();

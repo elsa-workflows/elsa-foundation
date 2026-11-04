@@ -6,8 +6,8 @@ managed OIDC belongs to the optional ExternalAuthentication/Oidc adapter; existi
 and persistence scope contracts without adding them to every base Identity.Core consumer.
 
 Current implementation: live deployment/catalog selection, explicit complete overrides, catalog persistence/CAS,
-role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. The optional API also implements source/revision/permission-protected management and bounded lookups/testing. Durable session administration, Studio and deployment
-integration are still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
+role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. The optional API also implements source/revision/permission-protected management and bounded lookups/testing. Link/session administration and the remaining Studio/deployment
+qualification are still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
 This module alone is not a qualified external sign-in deployment.
 
 ## Configuration and composition
@@ -59,7 +59,10 @@ name. Database-disabled hosts do not record these observations.
 
 Local recovery checks the enabled password method, an actual password, current framework eligibility, user and
 membership status and current provider-management permission. Custom canonical session authorities must implement
-read-only eligibility; the default `CanSignInAsync` returns false.
+read-only eligibility and durable-session support; the default `CanSignInAsync` returns false and the
+default durable-session capability is unavailable. The ASP.NET implementation binds sessions through the
+[optional durable store](../Persistence/EntityFrameworkCore/README.md). Session administration and cross-IAM
+recovery coordination remain separate from ordinary live credential validation.
 
 Before disabling/replacing an enabled effective provider, the writer proves a remaining external recovery path
 or actual local recovery, then saves the complete catalog with CAS. External checks share a thirty-second bound;

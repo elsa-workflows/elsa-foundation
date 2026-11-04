@@ -21,7 +21,7 @@ public sealed class OidcBearerNormalizationEvents(
     public const string NormalizedAuthenticationType = "Elsa.Foundation.Identity.Oidc.Bearer.Normalized";
 
     private static readonly string[] InternalClaimTypes =
-    [IdentityClaimTypes.Normalized, IdentityClaimTypes.TenantId, IdentityClaimTypes.Provider, IdentityClaimTypes.Role, IdentityClaimTypes.Permission, IdentityClaimTypes.UserId, IdentityClaimTypes.SubjectProvider, IdentityClaimTypes.SubjectIssuer, IdentityClaimTypes.ExternalSubject, IdentityClaimTypes.TokenSubjectKey];
+    [IdentityClaimTypes.Normalized, IdentityClaimTypes.TenantId, IdentityClaimTypes.Provider, IdentityClaimTypes.Role, IdentityClaimTypes.Permission, IdentityClaimTypes.UserId, IdentityClaimTypes.SubjectProvider, IdentityClaimTypes.SubjectIssuer, IdentityClaimTypes.ExternalSubject, IdentityClaimTypes.TokenSubjectKey, IdentityClaimTypes.SessionId];
 
     public override async Task MessageReceived(MessageReceivedContext context)
     {
@@ -156,7 +156,8 @@ public sealed class OidcBearerNormalizationEvents(
                      string.Equals(claim.Type, IdentityClaimTypes.SubjectProvider, StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(claim.Type, IdentityClaimTypes.SubjectIssuer, StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(claim.Type, IdentityClaimTypes.ExternalSubject, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(claim.Type, IdentityClaimTypes.TokenSubjectKey, StringComparison.OrdinalIgnoreCase)).ToArray())
+                     string.Equals(claim.Type, IdentityClaimTypes.TokenSubjectKey, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(claim.Type, IdentityClaimTypes.SessionId, StringComparison.OrdinalIgnoreCase)).ToArray())
             normalizedIdentity.RemoveClaim(claim);
         normalizedIdentity.AddClaim(new System.Security.Claims.Claim(IdentityClaimTypes.SubjectProvider, configured.ProviderId));
         normalizedIdentity.AddClaim(new System.Security.Claims.Claim(IdentityClaimTypes.SubjectIssuer, context.SecurityToken.Issuer));

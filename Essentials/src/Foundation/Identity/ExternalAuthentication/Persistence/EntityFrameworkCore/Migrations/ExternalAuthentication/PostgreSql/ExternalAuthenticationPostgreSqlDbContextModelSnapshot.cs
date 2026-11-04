@@ -81,6 +81,65 @@ namespace Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFram
                     b.ToTable("identity_authentication_artifacts", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.AuthenticationSessionEntity", b =>
+                {
+                    b.Property<string>("TenantKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<long>("CreatedAtMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ExpiresAtMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("RevokedAtMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("UserKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.HasKey("TenantKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantKey", "ExpiresAtMilliseconds")
+                        .HasDatabaseName("ix_identity_auth_sessions_expiry");
+
+                    b.HasIndex("TenantKey", "UserKey", "CreatedAtMilliseconds", "Id")
+                        .HasDatabaseName("ix_identity_auth_sessions_user");
+
+                    b.ToTable("identity_authentication_sessions", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")

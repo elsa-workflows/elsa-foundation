@@ -34,19 +34,22 @@ public sealed class OpenIddictTokenService(
     IOpenIddictTokenManager tokenManager,
     OpenIddictValidationService validationService,
     IOptionsMonitor<OpenIddictServerOptions> serverOptions,
-    IOptions<OpenIddictIdentityOptions> options) : ITokenService
+    IOptions<OpenIddictIdentityOptions> options, IAuthenticationSessionStore? sessions = null, ICanonicalUserSignInService? canonical = null) : ITokenService
 {
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
+        var session = await TokenSessionGuard.ValidateAsync(request.Subject, request.SessionId, sessions, canonical, cancellationToken);
+        if (!session.Allowed) throw new InvalidOperationException("The authentication session is unavailable.");
         var accessExpiresAt = now.Add(options.Value.AccessTokenLifetime);
+        if (session.ExpiresAt is { } absolute && absolute < accessExpiresAt) accessExpiresAt = absolute;
 
         var entryId = await CreateTokenEntryAsync(
             TokenSubjectKey.Create(request.Subject), OpenIddictConstants.TokenTypeHints.AccessToken, now, accessExpiresAt,
             referenceId: null, payload: null, cancellationToken);
 
         var accessToken = CreateAccessTokenJwt(request, entryId, now, accessExpiresAt);
-        var refreshToken = await CreateRefreshTokenAsync(request, now, cancellationToken);
+        var refreshToken = await CreateRefreshTokenAsync(request, now, session.ExpiresAt, cancellationToken);
 
         return new TokenIssueResult(accessToken, accessExpiresAt, refreshToken);
     }
@@ -82,7 +85,7 @@ public sealed class OpenIddictTokenService(
             !string.Equals(subjectKey, TokenSubjectKey.Create(payload.Subject), StringComparison.Ordinal))
             throw InvalidRefreshToken();
 
-        var issued = await IssueAsync(new TokenIssueRequest(payload.Subject, payload.Scopes), cancellationToken);
+        var issued = await IssueAsync(new TokenIssueRequest(payload.Subject, payload.Scopes) { SessionId = payload.SessionId }, cancellationToken);
         return new TokenRefreshResult(issued.AccessToken, issued.ExpiresAt, issued.RefreshToken);
     }
 
@@ -182,6 +185,7 @@ public sealed class OpenIddictTokenService(
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, publicSubject));
         identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, request.Subject.TenantId));
         identity.AddClaim(new Claim(IdentityClaimTypes.TokenSubjectKey, TokenSubjectKey.Create(request.Subject)));
+        if (request.SessionId is { } sessionId) identity.AddClaim(new(IdentityClaimTypes.SessionId, sessionId));
         if (request.Subject.CanonicalUserId is { } userId)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(userId);
@@ -205,13 +209,15 @@ public sealed class OpenIddictTokenService(
         return identity;
     }
 
-    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, CancellationToken cancellationToken)
+    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, DateTimeOffset? sessionExpiresAt, CancellationToken cancellationToken)
     {
         var referenceId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.Subject, request.Scopes.ToArray()));
+        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.Subject, request.Scopes.ToArray(), request.SessionId));
+        var expiresAt = now.Add(options.Value.RefreshTokenLifetime);
+        if (sessionExpiresAt is { } absolute && absolute < expiresAt) expiresAt = absolute;
 
         await CreateTokenEntryAsync(
-            TokenSubjectKey.Create(request.Subject), OpenIddictConstants.TokenTypeHints.RefreshToken, now, now.Add(options.Value.RefreshTokenLifetime),
+            TokenSubjectKey.Create(request.Subject), OpenIddictConstants.TokenTypeHints.RefreshToken, now, expiresAt,
             referenceId, payload, cancellationToken);
 
         return referenceId;
@@ -258,5 +264,5 @@ public sealed class OpenIddictTokenService(
 
     private static InvalidOperationException InvalidRefreshToken() => new("Refresh token is invalid or expired.");
 
-    private sealed record RefreshTokenPayload(TokenSubject? Subject, string[]? Scopes);
+    private sealed record RefreshTokenPayload(TokenSubject? Subject, string[]? Scopes, string? SessionId = null);
 }

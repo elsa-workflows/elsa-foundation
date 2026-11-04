@@ -8,5 +8,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
     PostgreSql = typeof(ExternalAuthenticationPostgreSqlDbContext), MySql = typeof(ExternalAuthenticationMySqlDbContext),
     DisplayName = "External authentication state")]
 [assembly: ManifestExtension("efModules", ExternalAuthenticationEfModule.Name)]
-[assembly: EfSchemaFamily(ExternalAuthenticationEfModule.SchemaFamily, ExternalAuthenticationEfModule.Name, ExternalAuthenticationEfModule.SchemaVersion)]
+[assembly: EfSchemaFamily(ExternalAuthenticationEfModule.SchemaFamily, ExternalAuthenticationEfModule.Name, ExternalAuthenticationEfModule.SchemaVersion,
+    Upcasters = [typeof(AuthenticationStateV1Upcaster)])]
 [assembly: EfSchemaContent(ExternalAuthenticationEfModule.SchemaFamily, typeof(AuthenticationArtifactEntity), nameof(AuthenticationArtifactEntity.ProtectedPayload))]
+[assembly: EfSchemaContent(ExternalAuthenticationEfModule.SchemaFamily, typeof(AuthenticationSessionEntity), nameof(AuthenticationSessionEntity.ProtectedPayload))]

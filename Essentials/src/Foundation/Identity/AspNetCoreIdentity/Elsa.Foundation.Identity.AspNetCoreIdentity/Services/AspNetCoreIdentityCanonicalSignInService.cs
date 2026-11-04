@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 
@@ -17,29 +20,85 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
     SignInManager<AspNetCoreIdentityUser> signInManager, IUserClaimsPrincipalFactory<AspNetCoreIdentityUser> principalFactory,
     IUserStore users, ITenantMembershipStore memberships, ITokenSubjectResolver subjects, IAuthSessionService sessions,
     IHttpContextAccessor http, IPersistenceAccessContextAccessor access, IPersistenceAccessContextBinder binder,
-    IOptions<AspNetCoreIdentityOptions> options) : ICanonicalUserSignInService
+    IOptions<AspNetCoreIdentityOptions> options, IAuthenticationSessionStore? sessionStore = null, IServiceScopeFactory? scopes = null,
+    IExternalIdentityStore? links = null, TimeProvider? clock = null) : ICanonicalUserSignInService
 {
     public string AuthenticationScheme => AspNetCoreIdentityDefaults.CookieScheme;
+    public bool SupportsDurableSessions => sessionStore?.IsDurable == true && userManager.SupportsUserSecurityStamp &&
+        options.Value.SessionLifetime >= TimeSpan.FromMinutes(1) && options.Value.SessionLifetime <= TimeSpan.FromDays(30);
 
     public async ValueTask<bool> CanSignInAsync(PrincipalFactoryContext context, bool requiresPassword = false, CancellationToken cancellationToken = default) =>
-        await EligibleUser(context, requiresPassword, cancellationToken) is not null;
+        (sessionStore is null || SupportsDurableSessions) && await EligibleUser(context, requiresPassword, cancellationToken) is not null;
 
     public async ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default)
     {
         if (http.HttpContext is null) return null;
         var user = await EligibleUser(context, false, cancellationToken);
         if (user is null) return null;
+        // Older/programmatically seeded IAM accounts may have no framework epoch yet. Initialize it
+        // only after verified admission, never from readiness/preview or a read-only eligibility probe.
+        if (sessionStore is not null && string.IsNullOrWhiteSpace(user.SecurityStamp) &&
+            !(await userManager.UpdateSecurityStampAsync(user)).Succeeded) return null;
         var principal = await principalFactory.CreateAsync(user);
         if (principal.Identities.Count() != 1 || principal.Identity is not ClaimsIdentity identity ||
             identity.AuthenticationType != AuthenticationScheme || !subjects.TryResolve(principal, out var subject) ||
             subject.TenantId != context.TenantId || subject.CanonicalUserId != context.UserId) return null;
         foreach (var existing in identity.FindAll(IdentityClaimTypes.Provider).ToArray()) identity.RemoveClaim(existing);
         identity.AddClaim(new(IdentityClaimTypes.Provider, context.Provider ?? options.Value.ProviderId));
+        var properties = new AuthenticationProperties { IsPersistent = false };
+        if (sessionStore is not null)
+        {
+            if (!sessionStore.IsDurable || string.IsNullOrWhiteSpace(user.SecurityStamp) || options.Value.SessionLifetime < TimeSpan.FromMinutes(1) ||
+                options.Value.SessionLifetime > TimeSpan.FromDays(30)) return null;
+            if (context.ExternalIdentity is { } origin && origin.TenantId != context.TenantId) return null;
+            var now = DateTimeOffset.FromUnixTimeMilliseconds((clock ?? TimeProvider.System).GetUtcNow().ToUnixTimeMilliseconds());
+            var id = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+            var record = new AuthenticationSessionRecord(id, context.TenantId, context.UserId, context.Provider ?? options.Value.ProviderId,
+                SecurityVersion(user.SecurityStamp), now, now + options.Value.SessionLifetime)
+            {
+                ConnectionKey = context.ExternalIdentity?.Provider, ConnectionRecordId = context.ConnectionRecordId,
+                Issuer = context.ExternalIdentity?.Issuer, ExternalSubject = context.ExternalIdentity?.Subject
+            };
+            if (!await sessionStore.TryCreateAsync(record, cancellationToken)) return null;
+            foreach (var previous in identity.FindAll(IdentityClaimTypes.SessionId).ToArray()) identity.RemoveClaim(previous);
+            identity.AddClaim(new(IdentityClaimTypes.SessionId, id));
+            properties.ExpiresUtc = record.ExpiresAt; properties.AllowRefresh = false;
+        }
+        else if (context.ExternalIdentity is not null) return null;
         var session = await sessions.GetAsync(principal, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        await http.HttpContext.SignInAsync(AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = false });
+        await http.HttpContext.SignInAsync(AuthenticationScheme, principal, properties);
         return session;
     }
+
+    public async ValueTask<bool> ValidateSessionAsync(AuthenticationSessionRecord session, CancellationToken cancellationToken = default)
+    {
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
+        if (session.RevokedAt is not null || session.CreatedAt > now || session.ExpiresAt <= now) return false;
+        var user = await EligibleUser(new(session.TenantId, session.UserId, session.Provider), false, cancellationToken);
+        if (user is null || string.IsNullOrWhiteSpace(user.SecurityStamp) ||
+            !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(SecurityVersion(user.SecurityStamp)), Encoding.UTF8.GetBytes(session.SecurityVersion))) return false;
+        if (session.ConnectionKey is null) return true;
+        if (links?.SupportsQualifiedKeys != true || session.Issuer is null || session.ExternalSubject is null) return false;
+        var link = await links.FindByKeyAsync(new(session.TenantId, session.ConnectionKey, session.Issuer, session.ExternalSubject), cancellationToken);
+        return link?.UserId == session.UserId;
+    }
+
+    public async ValueTask<AuthenticationSessionRecord?> ReadSessionAsync(TokenSubject subject, string id, CancellationToken cancellationToken = default)
+    {
+        if (!SupportsDurableSessions || scopes is null || subject.CanonicalUserId is null || id.Length != 64 ||
+            !id.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f')) return null;
+        await using var scope = scopes.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope(subject.TenantId)));
+        var record = await scope.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>().FindAsync(subject.TenantId, id, cancellationToken);
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
+        if (record is null || record.TenantId != subject.TenantId || record.UserId != subject.CanonicalUserId || record.RevokedAt is not null ||
+            record.CreatedAt > now || record.ExpiresAt <= now ||
+            !await scope.ServiceProvider.GetRequiredService<ICanonicalUserSignInService>().ValidateSessionAsync(record, cancellationToken)) return null;
+        return record;
+    }
+
+    private static string SecurityVersion(string stamp) => Convert.ToHexStringLower(SHA256.HashData(Encoding.Unicode.GetBytes(stamp)));
 
     private async Task<AspNetCoreIdentityUser?> EligibleUser(PrincipalFactoryContext context, bool requiresPassword, CancellationToken cancellationToken)
     {

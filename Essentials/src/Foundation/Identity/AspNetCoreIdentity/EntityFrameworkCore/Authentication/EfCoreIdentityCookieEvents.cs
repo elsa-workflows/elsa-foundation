@@ -20,7 +20,8 @@ public sealed class EfCoreIdentityCookieEvents(
     ITokenSubjectResolver subjects,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPersistenceAccessContextBinder accessContextBinder,
-    IOptions<IdentityOptions> identityOptions) : CookieAuthenticationEvents
+    IOptions<IdentityOptions> identityOptions, IAuthenticationSessionStore? sessions = null,
+    ICanonicalUserSignInService? canonical = null) : CookieAuthenticationEvents
 {
     public override async Task ValidatePrincipal(CookieValidatePrincipalContext context)
     {
@@ -50,7 +51,23 @@ public sealed class EfCoreIdentityCookieEvents(
             (await users.FindAsync(user.TenantId, user.Id, context.HttpContext.RequestAborted))?.Status != UserStatus.Active)
         { await RejectAsync(context); return; }
         var membership = await memberships.FindAsync(tenantId, subject, context.HttpContext.RequestAborted);
-        if (membership is not null && membership.Status != TenantMembershipStatus.Active) await RejectAsync(context);
+        if (membership is not null && membership.Status != TenantMembershipStatus.Active) { await RejectAsync(context); return; }
+        var ids = context.Principal.FindAll(IdentityClaimTypes.SessionId).ToArray();
+        if (sessions is not null || ids.Length != 0)
+        {
+            try
+            {
+                if (sessions is null || canonical is null || ids.Length != 1 || ids[0].Value.Length != 64 || !sessions.IsDurable)
+                { await RejectAsync(context); return; }
+                var session = await sessions.FindAsync(tenantId, ids[0].Value, context.HttpContext.RequestAborted);
+                var now = DateTimeOffset.UtcNow;
+                if (session is null || session.TenantId != tenantId || session.UserId != subject || session.RevokedAt is not null ||
+                    session.CreatedAt > now || session.ExpiresAt <= now || !await canonical.ValidateSessionAsync(session, context.HttpContext.RequestAborted))
+                    await RejectAsync(context);
+            }
+            catch (Exception exception) when (!(exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested))
+            { await RejectAsync(context); }
+        }
     }
 
     private static async Task RejectAsync(CookieValidatePrincipalContext context)

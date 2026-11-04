@@ -190,6 +190,7 @@ public static class IdentityClaimTypes
 
     /// <summary>Versioned full-scope storage identity, validated on every first-party bearer request.</summary>
     public const string TokenSubjectKey = "elsa.identity.token_subject";
+    public const string SessionId = "elsa.identity.session_id";
 
     public const string Role = "elsa.identity.role";
 

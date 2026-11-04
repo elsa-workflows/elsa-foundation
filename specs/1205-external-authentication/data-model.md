@@ -22,6 +22,18 @@ Managed links extend the existing `ExternalIdentityRecord` with a validated issu
 for qualified lookup. Null issuer is a separate legacy namespace, never a fallback. The additive IAM migrations
 preserve old rows and histories; the 1.0.0-to-1.1.0 chain preserves existing content while new writes stamp 1.1.0.
 
+The optional authentication EF module also advances to schema `1.1.0` with an additive `DurableSessions` table,
+preserving its Initial history and prior flow payloads through a content-preserving upcaster. The table uses exact
+hashed tenant/user indexes, random 256-bit session IDs/revisions, protected immutable account/provider/link/time
+bindings, UTC millisecond creation/absolute expiry and explicit revisioned revocation. Native reads are tenant-local;
+token validation asks the canonical authority to open its own signed-identity tenant scope before resource selection.
+No raw framework security stamp is retained: the authority checks an opaque SHA-256 binding against current IAM.
+Status transitions update that epoch in the IAM transaction, preventing disable→enable resurrection. Missing older
+epochs initialize only during verified sign-in, never eligibility/preview. Session creation/selected revocation reject
+caller-owned transactions. Session paging is capped at 100; per-creation expiry cleanup is capped at 64 current-schema
+rows of the current tenant. Cookie/access/refresh reference the same session and absolute lifetime; refresh never
+extends it. Direct non-user bearer compositions retain their separate typed external subject boundary.
+
 ## Private recovery observations
 
 Separate host-tenant/logical-key rows in the existing revision-aware global provider configuration store hold a versioned, Data Protection-protected bounded envelope of successful normal administrative sign-ins. Each proof carries source record, material revision, trusted callback, exact issuer/subject/user, opaque credential binding and observed UTC. No upstream tokens or secret values are retained. Up to sixteen recent observations per key; default eligibility window 24 hours, maximum thirty days. Expired entries never count and are pruned on the next record write. Preview never writes proofs. Configuration changes and live IAM/link/permission/credential/callback checks can invalidate proof earlier. These observations do not change material revision and are never a public management projection. Existing catalog CAS still coordinates concurrent connection retirement; cross-IAM/link/session mutation integration remains T024.

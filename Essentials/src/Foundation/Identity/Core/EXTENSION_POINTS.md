@@ -172,3 +172,17 @@ row. Existing-user admission includes its expected tenant membership; null expec
 `IPrincipalFactory` now projects an admitted `(tenant, Elsa user ID, optional provider metadata)` only. It does not
 accept an external principal, map raw claims or create an unknown user. Interactive policies belong to the
 [managed authentication contracts](../ExternalAuthentication/Core/EXTENSION_POINTS.md).
+
+`IAuthenticationSessionStore` is an optional committed tenant-local replacement authority for canonical
+interactive sessions. It supports immutable protected creation, lookup, bounded owner paging and expected-revision
+revocation with explicit revoked/already-revoked/missing/conflict results. The managed authentication EF module
+implements it; base token-only compositions acquire no persistence/Secrets dependency. See its
+[persistence contract](../ExternalAuthentication/Persistence/EntityFrameworkCore/README.md).
+
+Canonical cookie authorities declare `ICanonicalUserSignInService.SupportsDurableSessions` and implement
+`ReadSessionAsync`/`ValidateSessionAsync`; defaults refuse the capability. The ASP.NET authority reads a session
+inside a fresh tenant scope selected by the signed `TokenSubject`, rechecks current user/framework/membership/
+qualified-link/account version, and never rebinds a caller's resource scope globally. `TokenIssueRequest.SessionId`
+is a trusted first-party binding retained through refresh and checked on every bearer. Upstream claims cannot
+supply it; a missing authority rejects an already session-bound credential. The underlying opaque account-version
+binding must not be included in administration projections.

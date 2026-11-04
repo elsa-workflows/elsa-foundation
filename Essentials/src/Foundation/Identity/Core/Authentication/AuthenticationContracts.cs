@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Ownership;
+using Elsa.Foundation.Identity.Core.Iam;
 
 namespace Elsa.Foundation.Identity.Core.Authentication;
 
@@ -38,9 +39,14 @@ public interface IAuthenticationProviderSource
 public interface ICanonicalUserSignInService
 {
     string AuthenticationScheme { get; }
+    bool SupportsDurableSessions => false;
     /// <summary>Read-only account/session eligibility. Missing support never counts as a recovery path.</summary>
     ValueTask<bool> CanSignInAsync(PrincipalFactoryContext context, bool requiresPassword = false, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default);
+    /// <summary>Rechecks live account eligibility and the opaque account-version binding of an issued session.</summary>
+    ValueTask<bool> ValidateSessionAsync(AuthenticationSessionRecord session, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    /// <summary>Reads and validates in a tenant scope owned by the signed identity, before resource-scope selection.</summary>
+    ValueTask<AuthenticationSessionRecord?> ReadSessionAsync(TokenSubject subject, string id, CancellationToken cancellationToken = default) => ValueTask.FromResult<AuthenticationSessionRecord?>(null);
 }
 
 public interface IPrincipalFactory
@@ -113,9 +119,17 @@ public sealed record AuthSession(
 public sealed record AuthenticationSessionInvalidationContext(ClaimsPrincipal Principal);
 
 /// <summary>Projects an already admitted canonical Elsa user; this factory never provisions or imports claims.</summary>
-public sealed record PrincipalFactoryContext(string TenantId, string UserId, string? Provider = null);
+public sealed record PrincipalFactoryContext(string TenantId, string UserId, string? Provider = null)
+{
+    public ExternalIdentityKey? ExternalIdentity { get; init; }
+    public string? ConnectionRecordId { get; init; }
+}
 
-public sealed record TokenIssueRequest(TokenSubject Subject, IReadOnlyCollection<string> Scopes);
+public sealed record TokenIssueRequest(TokenSubject Subject, IReadOnlyCollection<string> Scopes)
+{
+    /// <summary>Trusted canonical interactive session; never accepted from an upstream identity claim.</summary>
+    public string? SessionId { get; init; }
+}
 
 public sealed record TokenIssueResult(string AccessToken, DateTimeOffset ExpiresAt, string? RefreshToken = null);
 
