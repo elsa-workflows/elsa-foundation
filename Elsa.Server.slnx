@@ -16,6 +16,7 @@
     <Project Path="Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
@@ -370,6 +371,7 @@
     <Project Path="Essentials/src/Modularity/Planning/Elsa.Modularity.Planning.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Persistence/">
+    <Project Path="Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj" />
     <Project Path="Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
     <Project Path="Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj" />
   </Folder>

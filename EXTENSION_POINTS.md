@@ -96,6 +96,7 @@ not automatic constitution violations.
 | Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Anthropic specialist connections | [`Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md) |
 | Azure OpenAI specialist connections | [`Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md) |
+| OpenAI specialist connections | [`Extensions/Agent/src/Specialists/OpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/OpenAI/EXTENSION_POINTS.md) |
 | Specialist authoring and immutable compilation | [`Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md) |
 | Specialist native execution | [`Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md) |
 | Specialist human review of agent output | [`Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md) |

@@ -404,7 +404,10 @@ public sealed record ActivityExecutionLayout(
     string TemplateHash,
     IReadOnlyList<ExecutableActivityLayoutRecord> Nodes,
     IReadOnlyList<ActivityExecutionLayoutConnection> Connections,
-    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries);
+    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries)
+{
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public enum ActivityExecutionLayoutSelection
 {

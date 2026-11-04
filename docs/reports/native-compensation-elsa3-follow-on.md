@@ -37,8 +37,6 @@ The semantic contract is [spec 250's semantics](../../specs/250-native-compensat
 - the outcome vocabulary: completed, uncertain, compensated, compensated while uncertain, resolved as effect absent or effect kept, confirmed, abandoned;
 - the operator decisions: retry, resolve absent, resolve kept, abandon, each with a reason, refused when stale.
 
-The [compensation sample](../../samples/Elsa.Samples.Compensation/README.md)'s participant is an engine-neutral reference for the contract; only its two activity classes are Elsa 4 code.
-
 **Elsa 4-specific, not reusable:** structural private state and its upcasters; the runtime seams R-1 to R-4 ([spec 258](../../specs/258-compensation-nesting/contracts/runtime-seams.md)), R-5 ([spec 260 operator actions](../../specs/260-compensation-operator-actions/contracts/operator-actions.md)), R-6 ([the activity state view](../../specs/260-compensation-operator-actions/contracts/journal-and-permissions.md)) and R-7 ([the delayed child schedule](../../specs/261-compensation-qualification/contracts/runtime-seam.md)); checkpoints, persistence modes and the post-commit outbox; the side-effect profile that commits an external activity before it runs; the Studio paired-step list; the journal endpoint.
 
 Elsa 3 would need its own mechanism for each of the second group. What each mechanism must guarantee:
@@ -80,8 +78,6 @@ Each scenario is an acceptance test an Elsa 3 implementation can reuse with its 
 | E19 | Backoff between undo attempts, with a restart during the wait | Each attempt once, not before its due time | Spec 261 BK1–BK6; sample S3 |
 | E20 | Stale or duplicate operator actions | Refused or replayed; nothing applied twice | Spec 260 O5, O5r |
 
-The sample's three workflows (S1 to S3) are also usable as an end-to-end smoke for an Elsa 3 implementation: S1 is E1 with a participant, S2 is E13 with E15, and S3 is E8, E19 and E10 in one run.
-
 ## 4. Gaps an Elsa 3 implementation would face
 
 Questions for that effort, not answers:
@@ -95,7 +91,7 @@ Questions for that effort, not answers:
 
 ## 5. Recommendation
 
-- **Reuse** the scenarios above and the participant contract as the Elsa 3 acceptance suite, with the sample participant as a reference.
+- **Reuse** the scenarios above and the participant contract as the Elsa 3 acceptance suite.
 - **Do not port** the Elsa 4 runtime seams, private state or Studio components; they rest on Elsa 4's checkpoint and outbox model.
 - **Decide** the Elsa 3 mechanism for each guarantee in section 2 in that effort, under its own program.
 

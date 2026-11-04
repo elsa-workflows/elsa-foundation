@@ -100,5 +100,4 @@ The consequence for an activity author: a release must stay input-compatible wit
 to. Adding an optional input is safe. Renaming or removing an input, or changing its type or meaning, breaks every
 workflow pinned to an earlier version, and nothing warns of that before such a workflow runs: a renamed or removed input
 then faults the node, since the class has no input property for a key its pinned version declares, and a changed type
-or meaning may not fault at all. The Add note sample (`samples/Elsa.Samples.Nuplane.Notes.Activities`) is built to that
-rule.
+or meaning may not fault at all.

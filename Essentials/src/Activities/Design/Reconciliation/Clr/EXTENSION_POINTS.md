@@ -30,7 +30,8 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
   sequence is global, so the winner may be another node publishing a different activity. The EF commit runs
   again with fresh reads, up to three attempts, and reports the version published only if a read finds it.
   A commit that loses every attempt fails the pass with the lost race, an `InvalidOperationException`, as
-  does any other commit failure.
+  does any other commit failure. CLR content has no provider compiler, so it keeps the single-node source-owned
+  root; provider-backed content is compiled and refused per version instead (see the reconciliation catalog).
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
 ---
