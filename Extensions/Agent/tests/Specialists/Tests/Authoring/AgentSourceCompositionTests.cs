@@ -3,6 +3,7 @@ using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
@@ -32,11 +33,27 @@ public sealed class AgentSourceCompositionTests
             await using var provider = services.BuildServiceProvider();
             await using var scope = provider.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<SpecialistsDbContext>();
-            await db.Database.MigrateAsync();
+            // Ordinary hosts admit this module before source writes; Database.Migrate alone skips its gate.
+            var migrator = provider.GetRequiredService<EfModuleMigrator<SpecialistsDbContext>>();
+            await migrator.StartAsync(default);
+            Assert.NotNull(migrator.Gate);
             var writer = scope.ServiceProvider.GetRequiredService<IAgentSourceWriter>();
             var content = new AgentSourceContent("Write", new("fixture", "connection", "model"), [], [], System.Text.Json.JsonSerializer.SerializeToElement(new { }), new());
             await writer.CreateAsync("writer", "draft", "Writer", content);
             Assert.Single((await scope.ServiceProvider.GetRequiredService<IAgentSourceReader>().ListAsync(null, 0, 10)).Items);
+            var snapshot = await writer.CaptureAsync("writer", "draft", 0, "review");
+            var retention = new EfSourceRevisions(db, new("authoring", "tenant", "agent", "agent-design"), singleCopyPerSource: true);
+            await retention.PinAsync("writer", "draft", snapshot.Id, "publication");
+            await retention.UnpinAsync("writer", "draft", snapshot.Id, "publication");
+            await writer.ForkAsync("writer", "draft", snapshot.Id, "fork", "draft", "Fork");
+            await writer.SaveAsync("fork", "draft", 0, "Edited fork", content with { Instructions = "Edit" });
+            await writer.DiscardAsync("writer", "draft", 0);
+            var reader = scope.ServiceProvider.GetRequiredService<IAgentSourceReader>();
+            Assert.Single((await reader.ListAsync(null, 0, 10)).Items);
+            var retained = Assert.Single(await reader.HistoryAsync("writer", "draft"));
+            Assert.Equal(snapshot.Id, retained.Id);
+            Assert.Equal(snapshot.Fingerprint, retained.Fingerprint);
+            Assert.Equal(content.Instructions, retained.Content.Instructions);
             Assert.Null(scope.ServiceProvider.GetService<ISpecialistTurnStore>());
         }
         finally { Directory.Delete(directory, true); }
