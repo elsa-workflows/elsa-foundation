@@ -29,7 +29,14 @@
     "tools/ci/workflow_scope.py",
     "tools/ci/workflow-paths.json",
     "tools/ci/test_workflow_scope.py",
-    ".github/actions/setup-studio/**"
+    ".github/actions/setup-studio/**",
+    "tools/ux-acceptance/**",
+    "tools/ci/studio_gate.py",
+    "tools/ci/test_studio_gate.py",
+    "Essentials/apps/Elsa.Workbench/**",
+    "Extensions/Agent/**",
+    "Extensions/Connections/**",
+    "Extensions/Secrets/**"
   ],
   "backend-source": [
     "global.json",
