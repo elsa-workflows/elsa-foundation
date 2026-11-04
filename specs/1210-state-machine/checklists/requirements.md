@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD24 are separated from proposals and open choices.
+- [x] Accepted OD1–OD25 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD24 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD25 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -41,5 +41,7 @@ Accepted extensions include authored same-state order, automatic progress before
 OD23 requires normal failed-activity recovery with completed earlier phases preserved. Source integration, propagation, blocked inputs and supported recovery paths still require Q2 agreement and proof.
 
 OD24 chooses a focused chart with activity summaries and normal activity-editor drill-in, breadcrumbs and preserved chart context. The remaining detailed Studio journeys stay open in Q3.
+
+OD25 chooses a structured transition inspector with the normal activity and expression editors. Detailed valid choices, diagnostics and keyboard/read-only/responsive journeys remain Q3.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.

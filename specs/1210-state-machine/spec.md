@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD24 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD25 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -123,6 +123,7 @@ Authors and operators understand the definition and execution they actually use,
 3. **Given** a read-only or narrow-width view, **when** the user navigates states, regions and activities, **then** the agreed inspection and non-canvas operations remain usable and mutation availability is clear.
 4. **Given** an existing instance pinned to a published version, **when** a later version is edited/published, **then** that instance follows the existing platform version/pin contract rather than silently adopting the edited machine.
 5. **Given** a state/transition/region chart with summaries of its entry, exit, trigger and action work, **when** the author opens ordinary activity work and returns, **then** the normal activity editor and breadcrumbs support the round trip and the chart context is preserved.
+6. **Given** a selected transition, **when** the author configures it, **then** a structured inspector presents Trigger (or Automatic), Condition, Action and Destination together with explicit transition order and state-visit behavior. Activity work opens in the normal editor and conditions use Elsa's expression editor.
 
 ### User Story 7 — Use machine-wide and state-visit data (Priority: P1)
 
@@ -185,6 +186,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-033**: After selection, applicable authored phases MUST run in the order source Exit → transition Action → target Entry. A later applicable phase MUST NOT start until the previous one completes, including across durable waits. Complete hierarchical boundaries and fault/recovery behavior remain to be agreed.
 - **FR-034**: Recovery of failed transition work MUST use the normal Elsa activity recovery boundary and preserve completed earlier phases. StateMachine MUST NOT automatically rewind the whole transition. Retry retains existing platform/external-effect guarantees and MUST NOT be represented as exactly-once external execution or implicit compensation.
 - **FR-035**: Studio MUST present a focused state/transition/region chart with summaries of entry, exit, trigger and action work. Authors MUST be able to drill into that ordinary work using the normal activity editor, with breadcrumbs back to the chart and chart context preserved on return. Detailed navigation and accessibility/responsive journeys remain Q3.
+- **FR-036**: Selecting a transition MUST expose a structured inspector for Trigger (or Automatic), Condition, Action and Destination, explicit transition order, and whether the reaction preserves the state visit or exits/re-enters. Ordinary activity work MUST use the normal activity editor and conditions MUST use Elsa's expression editor. The inspector MUST represent the supported transition semantics; detailed valid choices and diagnostics remain Q3.
 
 ### Platform constraints and design obligations
 
@@ -261,8 +263,10 @@ OD23 requires recovery at the normal failed-activity boundary with completed ear
 
 [NEEDS CLARIFICATION: Agree the concrete graph/outline/navigation, slots/conditions, diagnostics/inspection and accessibility/responsive journeys; classify remaining advanced capabilities and data/outcome/reuse details without silently expanding first-release scope.]
 
-Proposed authoring baseline: dedicated state/transition/region graph with a non-canvas navigation path; ordinary activity pickers/editors; a suitable condition workspace; clear current configuration, pending phases and causal outcomes; exact-version inspection. History destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
+Remaining proposed authoring/inspection baseline: a non-canvas navigation path; clear current configuration, pending phases and causal outcomes; exact-version inspection. These details still need agreement alongside the accepted chart/editor choices below. History destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
 
-OD24 settles the focused chart, activity summaries and drill-in normal activity editing with breadcrumbs and preserved chart context (FR-035). Detailed hierarchy/region navigation, transition configuration, conditions, accessibility and responsive journeys remain open.
+OD24 settles the focused chart, activity summaries and drill-in normal activity editing with breadcrumbs and preserved chart context (FR-035). Detailed hierarchy/region navigation, accessibility and responsive journeys remain open.
+
+OD25 settles structured transition configuration and the normal activity/expression editors (FR-036). Exact valid combinations, diagnostics and the keyboard/read-only/responsive journeys remain open; the inspector choice does not expand transition semantics.
 
 OD21 chooses machine-wide and state-visit-local value scopes (FR-032). Their concrete authoring/visibility/binding integration and outcome details remain to be specified against the existing platform contracts.
