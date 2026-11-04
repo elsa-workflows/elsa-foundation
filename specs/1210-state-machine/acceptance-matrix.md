@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A30 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A31 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -38,6 +38,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD28 — concurrent regional work within phase barriers | FR-039 | A28 |
 | OD29 — preserve siblings during regional Action recovery | FR-040 | A29 |
 | OD30 — completion-triggered transitions and scoped completion | FR-041 | A30 |
+| OD31 — final entry succeeds before completion | FR-042 | A31 |
 
 ## Witness definitions
 
@@ -62,7 +63,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A17 | Same input, several eligible transitions on one state | First eligible in explicit authored order wins; visual graph rearrangement does not change priority; child/ancestor and compatible-region rules remain intact | Definition round-trip, semantic selection and Studio ordering witnesses; implementation pending |
 | A18 | Automatic transition after entry | An eligible condition-based path can proceed without a trigger/artificial event after entry work completes, including after durable entry work resumes | Entry/automatic selection and actual-host witness; complete automatic-candidate arbitration, reevaluation and loop rules remain Q1 |
 | A19 | Automatic chain and queued event | Eligible automatic transitions run until none remain before the queued business event is evaluated against the resulting configuration; cycles cannot run indefinitely | Ordered semantic/actual-host witnesses and protection boundary cases; the concrete loop/protection/recovery mechanism remains Q1 |
-| A20 | Explicit finality versus non-final waiting | A state with no local outgoing edge is not implicitly complete; parent-level behavior and accidental-dead-end diagnostics are respected | Definition validation and actual hierarchy/region completion witnesses; complete final-entry/scoped propagation remains Q1 |
+| A20 | Explicit finality versus non-final waiting | A state with no local outgoing edge is not implicitly complete; parent-level behavior and accidental-dead-end diagnostics are respected | Definition validation and actual hierarchy/region completion witnesses; completion arbitration and exact completion lifetime/representation remain Q1 |
 | A21 | Machine-wide and state-visit values | Machine-wide scope spans state changes; state-local values start fresh on re-entry; a continuing parent visit retains its local scope; normal platform policies remain authoritative | Ordinary activity/binding and Studio declaration witnesses; exact visibility/binding/outcome integration remains Q3 |
 | A22 | Ordered applicable transition phases | Source Exit finishes before transition Action, which finishes before target Entry; a durably suspended phase does not permit a later phase to start early | Ordered semantic and actual-host/persistence witnesses; complete hierarchical boundaries and recovery remain Q1/Q2 |
 | A23 | Recovery after a completed phase | A completed Exit is preserved when later Action work fails; supported recovery resumes/retries failed work at its ordinary boundary without whole-transition rewind or false exactly-once/compensation claims | Actual incident/recovery/restart witness with completed-phase history and controlled participant evidence; complete propagation/input/recovery integration remains Q2 |
@@ -72,7 +73,8 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A27 | Nested phase ordering across durable waits | Exited children finish Exit before exited parents; entered parents finish Entry before entered children; all applicable exits precede Action and Action precedes entries despite suspension/restart | Ordered semantic and actual host/persistence witnesses with deliberately suspended child Exit and parent Entry; complete boundary calculation remains Q1 |
 | A28 | Independent regional progress and phase barriers | A durably waiting region does not prevent independent same-phase work in another; hierarchy dependencies and selected-set Exit/Action/Entry barriers hold; later business events wait for selected work; no independent completion order is promised | Controlled multi-region activity work, ordered phase history and actual host/persistence/restart witness; regional Action recovery is A29, other failure paths remain Q2 and runtime integration is unproved |
 | A29 | Recover one failed regional Action | Completed sibling work survives failure/recovery/restart without being rerun; StateMachine adds no sibling cancellation; normal incident policy controls pending work and required-success barriers block phase advancement/later chart events | Controlled completed, faulted and durably pending regional participants plus actual incident/retry/restart history and cancellation control; exact recovery integration and other fault paths remain Q2 |
-| A30 | Local nested completion and machine finality | Completed compound/parallel lifecycles enable authored completion-triggered transitions without implicitly finishing the whole machine; its own top-level final state completes the activity and permits normal enclosing workflow continuation | Semantic and actual Studio/host witnesses for compound, all-region parallel and root/nested-machine completion; final-entry timing, completion arbitration and exact representation remain Q1 |
+| A30 | Local nested completion and machine finality | Completed compound/parallel lifecycles enable authored completion-triggered transitions without implicitly finishing the whole machine; its own top-level final state completes the activity and permits normal enclosing workflow continuation | Semantic and actual Studio/host witnesses for compound, all-region parallel and root/nested-machine completion; final-entry timing is A31; completion arbitration and exact representation remain Q1 |
+| A31 | Final entry waits, fails and recovers | Ordinary final-state entry work may wait durably or fail; no region/container/machine completion occurs before entry succeeds, including after restart and normal recovery | Actual Studio/host/persistence witness with controlled pending and faulted final entry, normal recovery and ordered completion evidence; exact completion integration remains unproved |
 
 ## Qualification rules
 
