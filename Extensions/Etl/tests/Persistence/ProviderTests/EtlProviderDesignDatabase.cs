@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Persistence.ProviderTests;
 
-/// <summary>A fresh ETL design database on a server engine, migrated as a host would migrate it (spec 1202).</summary>
+/// <summary>A fresh ETL design database on a server engine, migrated as a host would migrate it.</summary>
 internal sealed class EtlProviderDesignDatabase(EtlProviderDatabase database) : IEtlDesignTestDatabase
 {
     internal string Provider => database.Provider;

@@ -2,7 +2,7 @@ using Elsa.Etl.Tests;
 
 namespace Elsa.Etl.Persistence.ProviderTests;
 
-// The design-store contracts Elsa.Etl.Tests runs on SQLite, on each server engine (spec 1202).
+// The design-store contracts Elsa.Etl.Tests runs on SQLite, on each server engine.
 
 [Collection(EtlPostgreSqlProviderCollection.Name)]
 public sealed class EtlDefinitionStorePostgreSqlTests(EtlPostgreSqlProviderFixture fixture) : EtlDefinitionStoreContract

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
-/// <summary>A migrated ETL design database on one engine, for the design-store contracts (spec 1202).</summary>
+/// <summary>A migrated ETL design database on one engine, for the design-store contracts.</summary>
 public interface IEtlDesignTestDatabase : IAsyncDisposable
 {
     /// <summary>A new context over the database, with optional command interceptors for staging races.</summary>

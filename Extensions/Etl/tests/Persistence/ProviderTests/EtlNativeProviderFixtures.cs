@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Etl.Persistence.ProviderTests;
 
 /// <summary>
-/// A real database server for the ETL EF provider suite (spec 1202): a supplied connection string wins, otherwise a container
+/// A real database server for the ETL EF provider suite: a supplied connection string wins, otherwise a container
 /// starts. Each test gets its own database. Without Docker the suite skips, unless <see cref="RequireNativeProvidersVariable"/>
 /// makes it fail, as CI does.
 /// </summary>

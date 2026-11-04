@@ -193,9 +193,95 @@
     "summarySha256": "de10211011570249df7357af806af33599e8dc572f71879170a4c606bb997028"
   },
   "pending": [
-    "Complete-PR independent review round8",
+    "Full independent review round10",
     "Fresh required checks on final reviewed head",
     "Existing GitGuardian incident triage",
     "Base-first protected merge and resulting-main verification"
-  ]
+  ],
+  "postMainIntegration": {
+    "main": "c0b61d8731de3266d14928e8b1624a31c386184d",
+    "mergedAt": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+    "providerAndArchitectureInvocationBase": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+    "workingTreeDirtyDuringQualification": true,
+    "executingFiles": {
+      "Extensions/Etl/tests/Persistence/ProviderTests/EtlProviderDesignDatabase.cs": "51c55676d0f1844a62bedfcd711e7223a921c778b364cc88fa93cf7f1e4e383d",
+      "Extensions/Etl/tests/Persistence/ProviderTests/EtlDesignDatabaseInitializationTests.cs": "cee3b3af5e87a95ccb7cb9b7be5fae7cbd3a01caca19f40f18b9c81f6c9e9cc2",
+      "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "daef0e97f3f6b4698b108e711f98c5e634c7964b10154ec39262e08380deda34",
+      "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "cd47e6fb2a9c866d57682d93ec405d8f0b5ad5665f09a613909be420fbf07178"
+    },
+    "committedEquivalentSource": "7462b02e26606117b4e228c98b6fecbd5e0e8d83",
+    "results": [
+      {
+        "name": "provider",
+        "exitCode": 0,
+        "logSha256": "ddeaa6ca44f3fb7f1eedc6dbd6290a659f7dd570993ea66b88ff01a9536a7352"
+      },
+      {
+        "name": "graph",
+        "exitCode": 0,
+        "logSha256": "a3098abeffd7fc09e0bace3100906ca187c89c4fc62eefcecfb063385c4d7c02"
+      },
+      {
+        "name": "architecture",
+        "exitCode": 0,
+        "logSha256": "c54732b6a617628746ecf88e69ea1f766cc311f54bfec19f80effe8e6c0f5ce2"
+      },
+      {
+        "name": "filters",
+        "exitCode": 0,
+        "logSha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+      },
+      {
+        "name": "tiers",
+        "exitCode": 0,
+        "logSha256": "b7e312ef443f508c72a46576534db3b96919f26b8567d3c32a384b2864c300ae"
+      }
+    ],
+    "counters": {
+      "provider": {
+        "total": "108",
+        "executed": "108",
+        "passed": "108",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "architecture": {
+        "total": "616",
+        "executed": "616",
+        "passed": "616",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    "correctedControllerHost": {
+      "source": "7462b02e26606117b4e228c98b6fecbd5e0e8d83",
+      "productSource": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+      "checks": 18,
+      "passed": true,
+      "summarySha256": "89f87eeab21d0e0dac366dc8ae536bb2d2b8d5f2bce46e6eafef2f095dcf0fe6"
+    },
+    "reusedEtl": "1323/1323 at original3ba54f source; no ETL production change in later fixture/controller/comment-only corrections."
+  }
 }

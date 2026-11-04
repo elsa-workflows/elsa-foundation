@@ -5,7 +5,7 @@
 ## Model
 
 - [x] T001 Check constraints as per-engine templates; SQLite text byte-identical; drop `HasColumnType("INTEGER")`.
-- [x] T002 Provider contexts with collation, utf8mb4, 64-character `RunKey` and short AK names on the server engines; `[EfModule]` unchanged until spec 1204.
+- [x] T002 Provider contexts with collation, utf8mb4, 64-character `RunKey` and short AK names on the server engines; `[EfModule]` unchanged until spec 1206.
 - [x] T003 `RunKeyOf` seam; stores and codec derive and check run keys through it.
 - [x] T004 Exact totals and counts: not needed; the existing aggregates pass on all three server engines.
 - [x] T005 SQLite snapshot unchanged (pending-model-changes check).

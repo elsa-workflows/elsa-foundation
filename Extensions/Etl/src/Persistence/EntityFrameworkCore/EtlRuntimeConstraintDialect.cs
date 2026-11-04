@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace Elsa.Etl.Persistence.EntityFrameworkCore;
 
 /// <summary>
-/// One engine's spelling of the runtime model's check constraints (spec 1203): identifier quoting, the character-length
+/// One engine's spelling of the runtime model's check constraints: identifier quoting, the character-length
 /// function and boolean literals. SQLite's rendering is the text the retained SQLite migrations created, byte for byte.
 /// </summary>
 internal sealed partial class EtlRuntimeConstraintDialect(Func<string, string> quote, string length, string @true, string @false)

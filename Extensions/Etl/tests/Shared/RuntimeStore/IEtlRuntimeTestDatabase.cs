@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
-/// <summary>A migrated ETL runtime database on one engine, for the runtime-store contracts (spec 1203).</summary>
+/// <summary>A migrated ETL runtime database on one engine, for the runtime-store contracts.</summary>
 public interface IEtlRuntimeTestDatabase : IAsyncDisposable
 {
     /// <summary>A new context over the database, with optional interceptors for staging interleavings.</summary>
