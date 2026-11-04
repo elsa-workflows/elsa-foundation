@@ -330,6 +330,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Connections.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Connections.Workflows",
           "path": "Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj"
         },
@@ -717,6 +722,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Specialists.Inspection.Api",
           "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.OpenAI",
+          "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj"
         },
         {
           "type": "internal",
@@ -13999,6 +14009,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.OpenAI",
+          "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
           "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
         },
@@ -23141,6 +23156,11 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "OpenAI",
+          "version": "2.14.0"
         }
       ]
     },
@@ -23549,6 +23569,90 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj",
+      "name": "Elsa.Agent.Specialists.OpenAI",
+      "kind": "source",
+      "domain": "Elsa.Agent",
+      "sub_domain": "Specialists.OpenAI",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Agent.Specialists.OpenAI",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Connections",
+          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.AI.OpenAI",
+          "version": "10.10.1"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "OpenAI",
+          "version": "2.14.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.1"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
         }
       ]
@@ -24391,6 +24495,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Specialists.JsonSchema",
           "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.OpenAI",
+          "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj"
         },
         {
           "type": "internal",
