@@ -21,5 +21,5 @@
 
 ## Evidence and docs
 
-- [x] T009 Bite-proofs for the seam, constraint rendering, collation and totals; list what is not bite-proven.
+- [x] T009 Bite-proofs for the seam, constraint rendering and collation; list what is not bite-proven (existing aggregate queries unchanged).
 - [x] T010 Persistence README, ETL README, evidence README.

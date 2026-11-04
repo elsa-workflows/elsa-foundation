@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: Draft
+**Status**: Implemented — delivered by this implementation PR when merged
 
 **Input**: The [store qualification obligation](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6323246976) of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908) (ADR 0073 D1). [Spec 1202](../1202-etl-design-store-providers/spec.md) qualified the design store; this slice gives the **runtime** store a correct schema and model on SQL Server, PostgreSQL and MySQL. Making its transitions safe under concurrent writers on those engines is the next slice (spec 1204); until then the runtime registration keeps refusing them. Part of [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 

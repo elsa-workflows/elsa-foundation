@@ -3,6 +3,20 @@
 Written by a Claude session that ran out of credits. Everything below is source-bound to branch
 `agent/claude/2908-etl-runtime-providers`; verify against the code before acting.
 
+## Codex continuation (2026-11-04)
+
+The owner transferred this continuation to Codex. Claim: https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6625913689. Continue the same runtime-provider branch; all writes and commits in this continuation use the Codex App identity.
+
+- The six-PR stack has merged through main `73040cd7b`. Parent #3737 is reconciled by ordinary merges with #3734's final pre-squash head `6860f6b80`, then that main; pushed parent head `e4dde3cdf` now has only spec 1202 in its diff against main. Never push to #3705–#3734.
+- Runtime branch adopts that parent. Its compaction constraints are rendered per engine; additive generated `ContinuousCompaction` migrations preserve the existing server Initial migrations and all SQLite migrations. All 33 SQLite expressions match the reconciled base.
+- Code candidate `b56db13f51d2609c1cf57b54cddc5db13184fd66`: per-run container passwords, shared skippable runtime contracts, corrected aggregate specification, and four incoming fixture caller adaptations.
+- Required-provider whole suite passed **801/801, zero failed/skipped**, executing inputs at `6e74eb3ca`. The later four fixture caller edits are only in SQLite-suite files excluded from ProviderTests. The fresh collation mutation at `6e74eb3ca` failed three model-agreement cases; restoring passed all three. Final ETL **1325/1325**, architecture **616/616**, locked graph restores and both generator checks pass at `b56db13f5`; see `evidence/qualification.json` and the evidence README. Final PR-head required CI remains separate.
+- Preparation review round 1 found the optional-provider skip defect and aggregate-spec mismatch; corrected in `6e74eb3ca`. Round 2 found incoming helper callers after main reconciliation; corrected in `cdb654ea7` and `b56db13f5`. The final exact-head review and PR-ready/review-request steps follow these receipts; use the PR round comments for their final outcome.
+- Parent #3737's GitGuardian check holds historical test-container incidents 39471203 / 39471729. Source was inspected: disposable-container fixture use and cleanup; current credentials generated per run. Local browser use is disabled in Work settings, so Codex cannot triage the dashboard. No scan or merge gate was bypassed. The owner has the first action card; handle the second individually.
+- Project #62 items #2908 and #2892 remain **In Progress / Partial**. No parent acceptance checkbox changes.
+
+The original handoff below is historical; use this continuation and the final PR receipts for newer source-bound results.
+
 ## Standing goal
 
 Deliver #2908 (Distributed ETL) end to end, slice by slice. Each slice gets:
