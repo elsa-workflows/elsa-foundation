@@ -36,6 +36,16 @@ describe("ActivityDefinitionDiagnosticsPanel", () => {
     ]);
   });
 
+  it("does not repeat headings or invent errors for a rejected informational result", () => {
+    const rendered = renderPanel([diagnostic("specialist.manifest.invalid", "Info", "/instructions")]);
+    expect(rendered.querySelectorAll("h2")).toHaveLength(1);
+    expect(rendered.querySelector('[aria-label="Diagnostic severity counts"]')?.textContent).toBe("1 info");
+    expect(rendered.textContent).not.toContain("0 errors");
+    expect(rendered.textContent).not.toContain("Correct the errors");
+    expect(rendered.textContent).toContain("did not pass validation");
+    expect(rendered.querySelector(".ad-diagnostic-help")?.hasAttribute("open")).toBe(false);
+  });
+
   it("starts valid informational results collapsed and forwards focus requests", () => {
     const onFocus = vi.fn().mockResolvedValue({
       kind: "focused",

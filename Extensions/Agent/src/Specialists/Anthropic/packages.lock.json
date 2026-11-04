@@ -68,6 +68,7 @@
       "elsa.agent.specialists.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }

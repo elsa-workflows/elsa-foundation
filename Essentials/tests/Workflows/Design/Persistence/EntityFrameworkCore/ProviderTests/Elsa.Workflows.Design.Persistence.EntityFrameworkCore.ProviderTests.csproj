@@ -22,6 +22,9 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../../../../Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Pauses a reconciliation pass between its read and its write, shared with the SQLite convergence tests. -->
     <Compile Include="..\..\..\Tests\Infrastructure\ReconciliationRaceSupport.cs" Link="ReconciliationRaceSupport.cs" />
     <!-- Updates and deletes rows whose LastModifiedAt is the concurrency token, shared with the SQLite tests. -->

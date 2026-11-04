@@ -543,12 +543,15 @@ public sealed class EfActivityUpgradePlanStore(
             .Where(x => x.LastModifiedAt == observed)
             .ExecuteUpdateAsync(
                 updates => updates
-                    .SetProperty(x => x.StateSource, stateSource)
                     .SetProperty(x => EF.Property<string>(x, EfSchemaVersionMaterializationInterceptor.PropertyName), WorkflowsDesignEfModule.Chain.CurrentVersion)
                     .SetProperty(x => x.LastModifiedAt, stamped),
                 cancellationToken);
         if (affected != 1)
             throw Stale("The workflow draft revision or definition head changed.");
+        var source = draft.Source ?? throw Stale("The workflow draft source is unavailable.");
+        EfSourceRevisions.StageSave(lane.Workflows, source, new("authoring", draft.TenantId, "workflow", "workflow-design"),
+            draft.WorkflowDefinitionId, draft.Id, source.Revision, source.Name, "elsa.workflow-source/1", stateSource);
+        await lane.Workflows.SaveChangesAsync(cancellationToken);
         applied.Add(new("WorkflowDraft", draft.Id, draft.WorkflowDefinitionId, EfWorkflowDraftRevision.Of(stamped), false, draft.SourceVersionId));
     }
 
