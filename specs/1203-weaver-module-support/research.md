@@ -1,7 +1,7 @@
 # Research: generic effects and owner prerequisites
 
 **Date**: 2026-11-04
-**Source inspected**: `c0b61d8731de3266d14928e8b1624a31c386184d` (`origin/main`)
+**Source inspected**: `9daaa3206cdd98dfb5978468ea354d711415352d` (`origin/main`)
 **Status**: Plan research; decisions below are proposed Preview contracts, not runtime evidence.
 
 The approved [specification](spec.md) supplies scope and owner decisions. This research resolves PD1–PD3 for leaf 0 and the first three module leaves. Later leaves still require FR025's scoped specifications. Historical evidence in specs 1186/1189/1193 remains historical; it does not qualify these additions.

@@ -4,7 +4,7 @@
 **Date**: 2026-11-04
 **Status**: Approved for task generation after independent plan review on 2026-11-04; proposed contracts remain Preview until demonstrated freeze
 **Spec**: [spec.md](spec.md), approved by [PR #3757](https://github.com/elsa-workflows/elsa-foundation/pull/3757)
-**Implementation base**: c0b61d8731de3266d14928e8b1624a31c386184d
+**Implementation base**: 9daaa3206cdd98dfb5978468ea354d711415352d
 
 ## Summary
 
