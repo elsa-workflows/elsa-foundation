@@ -2,6 +2,9 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests")]
 
 // The single, discoverable declaration of this assembly's two modules: [EfModule] is
 // AllowMultiple for exactly the two assemblies that carry two contexts, this one and Runtime.Distributed's.

@@ -133,6 +133,7 @@ public static class IdentityIamEntityFrameworkCoreRegistration
         services.AddScoped<EfRoleStore>();
         services.AddScoped<EfClaimMappingStore>();
         services.AddScoped<EfExternalIdentityStore>();
+        services.EnsureReplacementContract<IExternalIdentityAdministrationStore, EfExternalIdentityAdministrationStore>();
         services.AddScoped<EfTenantMembershipStore>();
         services.Add(ServiceDescriptor.Scoped<IUserStore>(provider => provider.GetRequiredService<EfUserStore>()));
         services.Add(ServiceDescriptor.Scoped<IRevisionAwareUserStore>(provider => provider.GetRequiredService<EfUserStore>()));

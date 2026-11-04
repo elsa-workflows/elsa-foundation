@@ -25,6 +25,7 @@ public static class ExternalAuthenticationRegistration
         services.EnsureReplacementContract<IConnectionRegistry, DefaultConnectionRegistry>();
         services.EnsureReplacementContract<IConnectionWriter, ConnectionWriter>();
         services.EnsureReplacementContract<IConnectionWriteAuthorizer, PermissionConnectionAuthorizer>();
+        services.EnsureReplacementContract<IExternalLinkAuthorizer, ExternalLinkAuthorizer>();
         services.TryAddScoped<ConnectionProofStore>();
         services.EnsureReplacementContract<IConnectionReadiness, ConnectionRuntimeServices>();
         services.EnsureReplacementContract<ILocalLoginRecovery, ConnectionRuntimeServices>();

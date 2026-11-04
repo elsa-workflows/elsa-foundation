@@ -51,20 +51,26 @@ internal sealed class ProviderConnectionCatalog(IServiceScopeFactory scopes) : I
 
     public async ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default)
     {
+        var write = PrepareProviderWrite(catalog);
+        await using var scope = scopes.CreateAsyncScope();
+        Bind(scope.ServiceProvider, write: true);
+        var store = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
+        var result = catalog.IdentityRevisionGuards is { } guards
+            ? await store.SaveWithIdentityRevisionGuardsAsync(write.Configuration, write.ExpectedRevision, guards, cancellationToken)
+            : await store.SaveWithRevisionAsync(write.Configuration, write.ExpectedRevision, cancellationToken);
+        return new CatalogSaveResult(result.Status == IamRevisionSaveStatus.Saved, result.Revision);
+    }
+
+    public ProviderConfigurationWrite PrepareProviderWrite(ConnectionCatalog catalog)
+    {
         ArgumentNullException.ThrowIfNull(catalog);
         ConnectionSelection.Validate(catalog.Records);
         var json = JsonSerializer.Serialize(catalog.Records);
         if (json.Length > MaximumCharacters)
             throw new InvalidOperationException("The external connection catalog exceeds its storage bound.");
-        await using var scope = scopes.CreateAsyncScope();
-        Bind(scope.ServiceProvider, write: true);
-        var store = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
         var configuration = new ProviderConfigurationRecord(Provider, null, Kind,
             true, false, ProviderCapabilities.ExternalOidcDefault, new Dictionary<string, string> { [CatalogSetting] = json });
-        var result = catalog.IdentityRevisionGuards is { } guards
-            ? await store.SaveWithIdentityRevisionGuardsAsync(configuration, catalog.Revision, guards, cancellationToken)
-            : await store.SaveWithRevisionAsync(configuration, catalog.Revision, cancellationToken);
-        return new CatalogSaveResult(result.Status == IamRevisionSaveStatus.Saved, result.Revision);
+        return new(configuration, catalog.Revision);
     }
 
     private static void Bind(IServiceProvider provider, bool write) => provider.GetRequiredService<IPersistenceAccessContextBinder>()

@@ -43,9 +43,9 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         typeof(IRevisionAwareTenantMembershipStore)
     ];
 
-    // Kept beside the composition test: replacement contract, exactly the eighteen IAM contracts, scoped, by factory.
+    // The base eighteen contracts remain scoped forwarders; the optional guarded coordinator belongs to the same authority.
     [Fact]
-    public void Registration_replaces_exactly_the_eighteen_IAM_contracts()
+    public void Registration_replaces_the_base_eighteen_IAM_contracts_and_adds_one_guarded_link_coordinator()
     {
         var services = new ServiceCollection();
 
@@ -54,6 +54,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         var replacementContracts = ApplicationCredentialContracts.Concat(AuthorityContracts).ToArray();
 
         Assert.Equal(18, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityAdministrationStore)).Lifetime);
         Assert.All(replacementContracts, contract =>
         {
             Assert.True(contract.IsDefined(typeof(ReplacementContractAttribute), inherit: false));
@@ -148,6 +149,19 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         var rejected = validator.Validate(null, new FoundationIdentityOptions());
         Assert.False(rejected.Succeeded);
         Assert.Contains(typeof(IUserStore).FullName!, rejected.FailureMessage!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Authority_registration_rejects_a_replaced_guarded_link_coordinator()
+    {
+        var services = new ServiceCollection();
+        services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
+        var backend = Assert.Single(services.Where(descriptor => descriptor.ServiceType == typeof(IdentityAuthorityStoreBackend))
+            .Select(descriptor => Assert.IsType<IdentityAuthorityStoreBackend>(descriptor.ImplementationInstance)));
+        ((IServiceCollection)services).Add(ServiceDescriptor.Scoped<IExternalIdentityAdministrationStore>(_ => throw new InvalidOperationException("not resolved")));
+        var rejected = new IdentityAuthorityStoreRegistrationValidator(services, backend).Validate(null, new FoundationIdentityOptions());
+        Assert.False(rejected.Succeeded);
+        Assert.Contains(typeof(IExternalIdentityAdministrationStore).FullName!, rejected.FailureMessage!, StringComparison.Ordinal);
     }
 
     // Kept beside the composition test: replacement contract, accepts the known in-memory authority shape.

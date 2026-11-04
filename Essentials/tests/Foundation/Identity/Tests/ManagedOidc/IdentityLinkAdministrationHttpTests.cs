@@ -14,6 +14,23 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 public sealed partial class ExternalAuthenticationHttpTests
 {
     [Fact]
+    public async Task Deployment_only_link_attachment_does_not_require_provider_configuration_persistence()
+    {
+        await using var host = await HttpHost.Start(databaseManagement: false);
+        using var administrator = host.Browser(); using var external = host.Browser();
+        await host.LoginAdministrator(administrator); await AddLinkTarget(host, "target");
+        await using (var scope = host.Scope()) Assert.Null(scope.ServiceProvider.GetService<IProviderConfigurationStore>());
+        var state = await AccessDocument(administrator, "/users/target/links");
+        Assert.True(state.GetProperty("canAttach").GetBoolean());
+        using (var linked = await ManagementPost(host, administrator, "/users/target/links/attach", AttachRequest(state)))
+            Assert.Equal(HttpStatusCode.OK, linked.StatusCode);
+        var callback = await host.StartAndAuthorize(external);
+        using (var returned = await external.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
+        Assert.Equal("target", (await Session(external)).Subject);
+        await using var current = host.Scope(); Assert.Null(current.ServiceProvider.GetService<IProviderConfigurationStore>());
+    }
+
+    [Fact]
     public async Task Manual_linking_uses_an_existing_user_and_server_validated_issuer_refuses_rebinding_and_preserves_saved_roles()
     {
         var events = new CapturedSecurityEvents();

@@ -751,3 +751,45 @@ resolved by rebuilding after the source freeze; no architecture rule or permissi
 Final ASP.NET Identity EF suite: **59/59 passed**, zero skips.
 Generated solution-filter check and staged/worktree whitespace checks pass. No project references or dependency
 versions changed in this increment.
+
+
+### Guarded link attachment and native link/catalog mutation boundary
+
+The existing attachment endpoint now captures editor/target account and saved-role roots around live canonical
+eligibility, current permissions, membership, ownership and delegation. It passes that snapshot to the selected IAM
+backend's optional `IExternalIdentityAdministrationStore`. Existing-user attachment, all guarded root advances and
+(in database-managed mode) the unchanged full provider-catalog CAS commit in one owned serializable transaction.
+The same native coordinator supports conditional qualified removal while preserving its original target guard until
+the relationship writer advances the counter. Sibling links and account epochs remain unchanged. Shared IAM guard
+comparison/advancement is reused by catalog and link coordination. The selected backend owns the optional coordinator;
+a later unowned replacement is refused by startup validation. No base host is required to install the optional store.
+
+Four actual HTTP races change editor role/status/membership or target role after the final delegation snapshot.
+Every attachment returns conflict without storing a link or advancing catalog revision. Bypassing native guard
+comparison makes **4/4** fail; source was restored before the full run. The deployment-only HTTP fixture now omits
+provider-configuration persistence entirely, and attachment followed by provider sign-in succeeds as the saved target
+user without that service. Existing source/user/issuer/delegation/ownership/rebind refusal cases still pass.
+
+Native commit/rollback cases cover both modes, stale user/role/catalog snapshots, preservation of sibling credentials,
+provider save failure after link mutation, and acknowledgement loss after the physical commit. The latter remains a
+typed unknown outcome and all participating rows commit together; it is not converted to a false conflict. The API
+returns a redacted unavailable envelope on storage exceptions rather than claiming `attached:false` for an uncertain
+commit. Caller transaction/pending-change, split-target, unprivileged-global and cross-tenant refusals are also checked.
+
+Full Identity **853/853 passed**, Debug, zero skips. Final native/architecture/ASP gates are recorded below. An initial
+native fixture supplied positional login fields in the wrong order; that fixture was corrected before the passing
+full native run. No production guard was weakened. Only the owning Identity EF test assembly receives friend access
+for the internal coordinator; production types remain internal by default.
+
+**T024 remains open** for prospective per-user and global recovery and the administrative removal endpoint. T025
+Studio links/sessions, complete actual provider/product/deployment/server-engine/restart/process/node acceptance,
+current consumers/hosted CI, independent review/merge and resulting-main qualification remain outstanding.
+
+Final native IAM suite: **250/250 passed**, Release, zero skips. This includes all original provider coordination
+regressions after extracting the common IAM guard comparison/advancement implementation, the two unknown-commit
+cases, and the five new caller/scope boundary refusals.
+Final frozen-source architecture suite: **616/616 passed**, Debug, zero skips. The friend grant remains within the
+owning Identity domain; no public implementation type or architecture exception was introduced.
+Final ASP.NET Identity EF suite: **59/59 passed**, Debug, zero skips. Generated solution-filter and staged/worktree
+whitespace checks pass. No project references or dependency versions changed, and no frontend code changed in this
+increment. New-head hosted/consumer evidence remains pending.

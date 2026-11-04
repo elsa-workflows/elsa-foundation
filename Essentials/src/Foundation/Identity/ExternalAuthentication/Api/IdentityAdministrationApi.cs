@@ -108,8 +108,10 @@ public static partial class ExternalAuthenticationApi
             items.Add(new(link.Provider, link.Issuer, link.ProviderSubject, link.LinkedAt, link.LastSeenAt,
                 matching ? revision!.Revision : null, link.Issuer is not null, connection is not null, connection?.Record.DisplayName));
         }
-        var membership = await services.GetRequiredService<ITenantMembershipStore>().FindAsync(Tenant(context), userId, context.RequestAborted);
-        var canAttach = user is not null && await LinkAttachmentPermitted(context, services, user.Record, membership);
+        var canAttach = user is not null && await LinkAttachmentPermitted(context, services, userId);
+        if (canAttach && registry.DatabaseManagement)
+            canAttach = context.RequestServices.GetRequiredService<IConnectionCatalogStore>().PrepareProviderWrite(
+                new(registry.Connections.Where(view => view.Source == ConnectionSource.Database).Select(view => view.Record).ToArray(), registry.Revision)) is not null;
         var choices = canAttach ? registry.Connections.Where(view => view.Record.ArchivedAt is null)
             .Select(view => new ManagedLinkConnectionChoice(view.Record.Id, view.Record.Key, view.Record.DisplayName, view.Effective, view.Record.Enabled)).ToArray() : [];
         await ManagementJson(context, new ManagedIdentityLinkPage(userId, items, links.TotalCount, user?.Revision, registry.Revision, canAttach, choices), ExternalAuthenticationApiJsonContext.Default.ManagedIdentityLinkPage);
@@ -125,13 +127,12 @@ public static partial class ExternalAuthenticationApi
         { await ManagementFailure(context, "invalid-request", 400); return; }
         await using var scope = ManagementScope(context); var services = scope.ServiceProvider;
         var revisions = services.GetService<IRevisionAwareUserStore>(); var links = services.GetService<IExternalIdentityStore>();
-        if (revisions is null || links?.SupportsAtomicAdmission != true || !links.SupportsQualifiedKeys)
+        if (revisions is null || links?.SupportsQualifiedKeys != true || !LinkAdministrationAvailable(context, services))
         { await ManagementFailure(context, "link-administration-unavailable", 503); return; }
         var user = await revisions.FindWithRevisionAsync(Tenant(context), userId, context.RequestAborted);
         if (user is null) { await ManagementFailure(context, "user-not-found", 404); return; }
         if (user.Revision != request.ExpectedUserRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
-        var membership = await services.GetRequiredService<ITenantMembershipStore>().FindAsync(Tenant(context), userId, context.RequestAborted);
-        if (!await LinkAttachmentPermitted(context, services, user.Record, membership)) { await ManagementFailure(context, "link-delegation-forbidden", 403); return; }
+        if (!await LinkAttachmentPermitted(context, services, userId)) { await ManagementFailure(context, "link-delegation-forbidden", 403); return; }
         var registry = context.RequestServices.GetRequiredService<IConnectionRegistry>();
         var catalog = await registry.ReadAsync(context.RequestAborted);
         if (catalog.Revision != request.ExpectedCatalogRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
@@ -153,38 +154,56 @@ public static partial class ExternalAuthenticationApi
         if (latest.Revision != request.ExpectedCatalogRevision || latest.Connections.SingleOrDefault(view => view.Record.Id == request.ConnectionRecordId)?.MaterialRevision != connection.MaterialRevision)
         { await ManagementFailure(context, "revision-conflict", 409); return; }
         var current = await revisions.FindWithRevisionAsync(Tenant(context), userId, context.RequestAborted);
-        var currentMembership = await services.GetRequiredService<ITenantMembershipStore>().FindAsync(Tenant(context), userId, context.RequestAborted);
         if (current is null || current.Revision != request.ExpectedUserRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
-        if (!await LinkAttachmentPermitted(context, services, current.Record, currentMembership)) { await ManagementFailure(context, "link-delegation-forbidden", 403); return; }
-        var result = await links.AdmitAsync(new(new(Tenant(context), connection.Record.Key, tested.Issuer, request.Subject), current.Record,
-            false, ExternalIdentityLinkPolicy.Admin) { ExpectedMembership = currentMembership }, context.RequestAborted);
+        if (!await LinkAttachmentPermitted(context, services, userId)) { await ManagementFailure(context, "link-delegation-forbidden", 403); return; }
+        var authorization = await services.GetRequiredService<IExternalLinkAuthorizer>().CaptureAsync(context.User, userId, request.ExpectedUserRevision, context.RequestAborted);
+        if (authorization is null) { await ManagementFailure(context, "identity-authority-changed", 409); return; }
+        ProviderConfigurationWrite? providerWrite = null;
+        if (latest.DatabaseManagement)
+        {
+            var catalogs = context.RequestServices.GetRequiredService<IConnectionCatalogStore>();
+            var snapshot = await catalogs.ReadAsync(context.RequestAborted);
+            if (snapshot.Revision != request.ExpectedCatalogRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
+            providerWrite = catalogs.PrepareProviderWrite(snapshot);
+            if (providerWrite is null) { await ManagementFailure(context, "link-administration-unavailable", 503); return; }
+        }
+        await using var commit = context.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+        commit.ServiceProvider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextBinder>().Bind(providerWrite is null
+            ? Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext.Scoped(new(Tenant(context)))
+            : Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext.PrivilegedGlobal(new("external-identity-administration")));
+        var administration = commit.ServiceProvider.GetService<IExternalIdentityAdministrationStore>();
+        if (administration?.SupportsIdentityRevisionGuards != true || providerWrite is not null && !administration.SupportsProviderRevisionGuards)
+        { await ManagementFailure(context, "link-administration-unavailable", 503); return; }
+        ExternalUserAdmissionResult result;
+        try
+        {
+            result = await administration.AttachAsync(new(new(Tenant(context), connection.Record.Key, tested.Issuer, request.Subject), authorization.User,
+                false, ExternalIdentityLinkPolicy.Admin) { ExpectedMembership = authorization.Membership }, authorization.Owner, authorization.Guards,
+                providerWrite, context.RequestAborted);
+        }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        {
+            await SecurityNotification(context, "link.attach", AuthEventOutcome.Failure, userId, "storage-outcome-unavailable", category: AuthEventCategory.IdentityChange);
+            await ManagementFailure(context, "link-attachment-unavailable", 503); return;
+        }
         var attached = result.Admitted && result.UserId == userId;
         await SecurityNotification(context, "link.attach", attached ? AuthEventOutcome.Success : AuthEventOutcome.Denied, userId,
-            attached ? "attached" : "link-conflict", category: AuthEventCategory.IdentityChange);
-        await ManagementJson(context, new ManagedLinkAttachResponse(attached, attached ? null : "link-conflict"),
+            attached ? "attached" : result.Failure ?? "link-conflict", category: AuthEventCategory.IdentityChange);
+        await ManagementJson(context, new ManagedLinkAttachResponse(attached, attached ? null : result.Failure ?? "link-conflict"),
             ExternalAuthenticationApiJsonContext.Default.ManagedLinkAttachResponse, attached ? 200 : 409);
     }
 
-    private static async ValueTask<bool> LinkAttachmentPermitted(HttpContext context, IServiceProvider services, UserRecord user, TenantMembershipRecord? membership)
+    private static bool LinkAdministrationAvailable(HttpContext context, IServiceProvider services)
     {
-        if (user.Status != UserStatus.Active || membership is { Status: not TenantMembershipStatus.Active }) return false;
-        var ownership = await services.GetRequiredService<IOwnershipModeProvider>().GetAsync(Tenant(context), context.RequestAborted);
-        if (!services.GetRequiredService<IEffectiveCapabilitiesResolver>().Resolve(ownership,
-            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FoundationIdentityOptions>>().Value.ProviderCapabilities).CanManageUsers ||
-            !services.GetRequiredService<ITokenSubjectResolver>().TryResolve(context.User, out var actor) || actor.CanonicalUserId is null) return false;
-        var permissions = services.GetRequiredService<ICurrentSubjectPermissionAuthorizer>();
-        foreach (var permission in new[] { DefaultIdentityPermissionKeys.IdentityLinksManage, DefaultIdentityPermissionKeys.IdentityUsersRead })
-            if ((await permissions.AuthorizeAsync(new(Tenant(context), actor.CanonicalUserId, permission), context.RequestAborted)).Status != CurrentSubjectPermissionStatus.Granted) return false;
-        var roles = services.GetRequiredService<IRoleStore>();
-        foreach (var id in user.RoleIds.Concat(membership?.RoleIds ?? new HashSet<string>()).Distinct(StringComparer.Ordinal))
-        {
-            var role = await roles.FindAsync(Tenant(context), id, context.RequestAborted);
-            if (role is null || !await RolePermitted(context, services, role)) return false;
-        }
-        foreach (var permission in user.DirectPermissions.Concat(membership?.DirectPermissions ?? new HashSet<string>()).Distinct(StringComparer.Ordinal))
-            if ((await permissions.AuthorizeAsync(new(Tenant(context), actor.CanonicalUserId, permission), context.RequestAborted)).Status != CurrentSubjectPermissionStatus.Granted) return false;
-        return services.GetService<IExternalIdentityStore>() is { SupportsAtomicAdmission: true, SupportsQualifiedKeys: true };
+        var administration = services.GetService<IExternalIdentityAdministrationStore>();
+        return administration?.SupportsIdentityRevisionGuards == true &&
+            (!context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalAuthenticationOptions>>().Value.AllowDatabaseManagement ||
+                administration.SupportsProviderRevisionGuards);
     }
+
+    private static async ValueTask<bool> LinkAttachmentPermitted(HttpContext context, IServiceProvider services, string userId) =>
+        LinkAdministrationAvailable(context, services) &&
+        await services.GetRequiredService<IExternalLinkAuthorizer>().CaptureAsync(context.User, userId, cancellationToken: context.RequestAborted) is not null;
 
     private static async Task RevokeSession(HttpContext context)
     {

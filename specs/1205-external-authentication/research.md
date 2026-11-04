@@ -162,5 +162,39 @@ Bypassing coordinated storage makes all seven race cases fail; restored source u
 Qualified link/session revision binding and monotonic remove/recreate counters are also implemented, with semantic
 1.2.0 schema markers preventing an older host from silently ignoring these semantics. Item 5 (prospective guarded
 unlink, including the unchanged catalog in database-managed mode and preserving deployment-only operation) remains
-required before exposing removal or checking T024. Manual attachment must also carry the delegation snapshot into
-its atomic commit. T025 and the deployment/acceptance matrix remain unchanged.
+required before exposing removal or checking T024. Manual attachment now carries the delegation snapshot and optional unchanged catalog CAS into its atomic commit. T025 and the deployment/acceptance matrix remain unchanged.
+
+
+### Guarded attachment and native link coordination integrated
+
+The selected IAM backend owns optional `IExternalIdentityAdministrationStore`. It captures no policy itself:
+trusted callers provide an opaque target owner and every checked tenant-local IAM root. The coordinator owns a
+serializable IAM transaction and, when selected, the co-located global provider transaction. It advances guards,
+performs existing-user attachment or exact qualified removal, and CAS-saves the unchanged provider document as one
+unit. Qualified removal leaves its target root untouched until the relationship mutation compares the original
+owner guard and advances the monotonic counter. Both operations preserve account epochs and sibling links.
+
+`IExternalLinkAuthorizer` captures target/editor guards around live canonical editor eligibility, current grants,
+roles, membership, ownership and delegation checks. The managed attachment API uses that snapshot after remote
+metadata testing and source rechecks. Its default catalog bridge prepares the unchanged full-catalog document;
+missing coordination fails closed. In deployment-only mode, no provider context/store is required or resolved.
+The IAM backend marker owns the optional coordinator; replacing it after selection is a composition error.
+
+Native tests cover both modes, stale IAM/catalog guards, rollback after provider save failure, and acknowledgement
+loss after physical commit. Four actual HTTP races change editor role/status/membership or target role after the
+final capture; all refuse. Bypassing native guard comparison makes all four fail. A deployment-only HTTP host omits
+provider persistence entirely and proves attachment followed by actual provider sign-in as that existing user.
+
+Remaining T024: prospective per-user alternative sign-in and global administrative recovery for unlink, using the
+already implemented guarded native removal/catalog transaction. Keep the removal endpoint unavailable until those
+checks and forced races pass. T025 and all full product/deployment/consumer/review/merge/main gates remain required.
+
+For prospective unlink, retain actual normal-sign-in material revision, opaque credential binding and trusted callback
+in the existing protected durable session provenance. This gives deployment-only hosts a bounded history of actual
+credential use without adding provider persistence or treating a merely configured link as proof. Recheck current
+material/secret/callback/account/exact-link bindings, and exclude the removed key. Per-user recovery may use that
+user's eligible local password or a proved remaining provider; global recovery additionally requires current provider
+management permission. Capture those identities/roles with the editor/owner snapshot and commit through the existing
+guarded removal, including the unchanged catalog CAS when database management is enabled. Ended individual sessions
+may supply bounded historical credential evidence, consistently with existing private recovery observations; they
+must never become live sessions again. Missing old provenance fails closed and requires a fresh normal sign-in.

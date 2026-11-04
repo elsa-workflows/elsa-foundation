@@ -53,6 +53,8 @@ public sealed record ConnectionRegistryView(IReadOnlyList<ConnectionView> Connec
 public interface IConnectionCatalogStore
 {
     bool SupportsIdentityRevisionGuards => false;
+    /// <summary>Prepares the unchanged global provider CAS for an atomic qualified-link administration operation.</summary>
+    ProviderConfigurationWrite? PrepareProviderWrite(ConnectionCatalog catalog) => null;
     ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default);
     /// <summary>Atomically saves the complete proposed catalog, only at its expected revision.</summary>
     ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default);

@@ -176,6 +176,26 @@ Attachment obtains the issuer from bounded server-side protocol validation, neve
 rechecks source material, current permissions, user revision, membership and delegation after metadata work,
 then uses atomic IAM admission without creating a user or rebinding another owner. All existing user/membership
 roles and direct permissions must remain within the editor's authority and configured delegation boundary.
+
+Attachment captures the editor/target user and every referenced saved role definition around those checks through
+`IExternalLinkAuthorizer`. `IExternalIdentityAdministrationStore` compares and advances the guarded IAM roots and
+attaches the unchanged existing user in one owned serializable transaction. In database-managed mode,
+`IConnectionCatalogStore.PrepareProviderWrite` contributes the unchanged full-catalog CAS to that same commit,
+so a source edit cannot pass between checking the connection and storing the link. A stale snapshot/catalog
+returns 409. No roles or direct permissions are assigned by administrative attachment.
+
+Deployment-only hosts use the tenant IAM transaction and do not require provider-configuration persistence.
+Database-managed hosts require a coordinated provider write from their catalog and the same owned database target.
+Missing capabilities are read-only in inspection and return 503 on commands; there is no unguarded fallback.
+The optional coordinator is owned by the selected IAM backend, so a later unowned replacement fails startup
+validation. Custom authorities can supply the Core coordinator and a matching catalog bridge. Borrowed transactions,
+pending caller changes, split targets and cross-tenant guards are refused.
+
+A storage exception returns a redacted 503 `link-attachment-unavailable` envelope and a failure notification with
+`storage-outcome-unavailable`; it does not return `attached:false` for an uncertain commit. Refresh current state
+before retrying. Native commit-acknowledgement loss retains the typed unknown outcome and commits all participating
+rows together. The guarded native removal operation has the same boundary, but its HTTP endpoint remains unavailable
+until prospective per-user and global administrative recovery checks protect it.
 Existing saved roles are preserved. The operation does not authenticate the linked user or issue a session.
 There is no link-removal endpoint yet; cross-authority final-login protection remains required before that action.
 

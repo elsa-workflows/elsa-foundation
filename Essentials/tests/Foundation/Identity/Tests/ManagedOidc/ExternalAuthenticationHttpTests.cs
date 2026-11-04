@@ -486,7 +486,7 @@ public sealed partial class ExternalAuthenticationHttpTests
         public IServiceProvider Services => application.Services;
         public ExternalAuthenticationOptions Options => Services.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value;
 
-        public static async Task<HttpHost> Start(Action<IServiceCollection>? configure = null)
+        public static async Task<HttpHost> Start(Action<IServiceCollection>? configure = null, bool databaseManagement = true)
         {
             var host = new HttpHost { Company = await ControlledOidcServer.Start(), Partner = await ControlledOidcServer.Start() };
             Directory.CreateDirectory(host.directory);
@@ -499,13 +499,13 @@ public sealed partial class ExternalAuthenticationHttpTests
             services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(host.directory, "keys"))).SetApplicationName("owned-http-fixture");
             var iam = $"Data Source={Path.Combine(host.directory, "iam.db")};Pooling=False";
             services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
-            services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
+            if (databaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
             services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
             services.AddSingleton<ISecretValueResolver>(host.Secrets);
             services.AddFoundationExternalOidc(options => options.AllowLoopbackHttpForDevelopment = true);
             services.AddFoundationExternalAuthentication(options =>
             {
-                options.AllowDatabaseManagement = true;
+                options.AllowDatabaseManagement = databaseManagement;
                 options.Connections = [Connection("company", host.Company, true), Connection("partner", host.Partner, false)];
             });
             services.AddFoundationExternalAuthenticationApi();
@@ -533,7 +533,7 @@ public sealed partial class ExternalAuthenticationHttpTests
             await using (var scope = host.Scope())
             {
                 await scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.MigrateAsync();
-                await scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>().Database.MigrateAsync();
+                if (databaseManagement) await scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>().Database.MigrateAsync();
                 await scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>().Database.MigrateAsync();
                 await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
             }
@@ -566,7 +566,7 @@ public sealed partial class ExternalAuthenticationHttpTests
             var iam = $"Data Source={Path.Combine(directory, "iam.db")};Pooling=False";
             services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam }, isDevelopmentOrDemo: true);
             services.Configure<AspNetCoreIdentityOptions>(configured => configured.Enabled = Services.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value.Enabled);
-            services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
+            if (Options.AllowDatabaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
             services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
             services.AddSingleton<ISecretValueResolver>(Secrets);
             services.AddFoundationExternalOidc(configured => configured.AllowLoopbackHttpForDevelopment = true);
