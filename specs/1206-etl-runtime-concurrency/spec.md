@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: In progress — reviewed planning complete; runtime operation boundary implemented, remaining proof gates open
+**Status**: Implemented — delivery and resulting-main verification remain pending
 
 **Input**: The owner-requested next slice from [spec 1203's handoff](../1203-etl-runtime-store-schema/HANDOFF.md), called “spec 1204” there. Numbers 1204 and 1205 were already allocated when continuation refreshed the repository and open PR heads, so this same slice is numbered 1206. Part of #2908 and Program #2892.
 

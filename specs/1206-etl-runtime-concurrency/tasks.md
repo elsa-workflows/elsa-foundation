@@ -32,9 +32,9 @@ Independent test: one owned Workbench per server engine uses both ETL stores, pu
 
 ## Qualification and delivery
 
-- [ ] T014 Run complete `Elsa.Etl.Tests` and required `Elsa.Etl.Persistence.ProviderTests` projects; reconcile discovery/execution and record sources/counts plus deliberate failures/skips separately in `specs/1206-etl-runtime-concurrency/evidence/README.md`.
-- [ ] T015 Run locked graph restore, `Elsa.Architecture.Tests`, generator solution-filter/test-tier checks and new public API/binary/computed-version checks; record receipts under `evidence/`. Commit filters only if changed; no literal package versions.
-- [ ] T016 Update `Extensions/Etl/README.md`, persistence README and `Core/EXTENSION_POINTS.md` with actual support, failure behavior, compatibility and remaining proof boundaries; set this spec's terminal status in its implementation PR.
+- [x] T014 Run complete `Elsa.Etl.Tests` and required `Elsa.Etl.Persistence.ProviderTests` projects; reconcile discovery/execution and record sources/counts plus deliberate failures/skips separately in `specs/1206-etl-runtime-concurrency/evidence/README.md`.
+- [x] T015 Run locked graph restore, `Elsa.Architecture.Tests`, generator solution-filter/test-tier checks and new public API/binary/computed-version checks; record receipts under `evidence/`. Commit filters only if changed; no literal package versions.
+- [x] T016 Update `Extensions/Etl/README.md`, persistence README and `Core/EXTENSION_POINTS.md` with actual support, failure behavior, compatibility and remaining proof boundaries; set this spec's terminal status in its implementation PR.
 - [ ] T017 Run independent complete-diff correctness/standards/acceptance review on the draft to convergence, post round and gate comments, mark ready/request review, and retain all exact-head required checks, unmerged-base and human-hold gates.
 - [ ] T018 After base-first protected delivery, verify the resulting main with affected source-bound checks and update #2908, #2892 and Project #62. Keep the feature/program In Progress until remaining acceptance exists; continue #3789 off main next.
 

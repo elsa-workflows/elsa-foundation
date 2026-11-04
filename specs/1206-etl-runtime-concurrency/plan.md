@@ -23,7 +23,7 @@ Framework 6.1.0 and Elsa 6.3.0, both gate indexes and the contributor review che
 - §2.21/2.23.2: preserve existing tests, add behavioral retry/cleanup/ownership proofs, real overlapping server races and actual host evidence. No documentation/source-text assertion.
 - §E2.2/E2.6: runtime-only composition remains independent of design tables. The host executes its pinned artifact. No workflow/actor per record and no workflow authoring/state change.
 - §E5: public API addition gets API/binary and computed-version magnitude review on the stable candidate; never author literal versions. §E7: existing integration project remains in its tier.
-- No rule relies on draft §2.24 or provisional workflow model sections. Recheck gates after implementation; no declared architectural exception.
+- No rule relies on draft §2.24 or provisional workflow model sections. Recheck gates after implementation; no architectural exception. The scoped pre-GA version-magnitude decision is recorded in [version review](evidence/version-review.json); it does not claim ordinary Minor compliance for a patch increment.
 
 ## Changes by boundary
 
