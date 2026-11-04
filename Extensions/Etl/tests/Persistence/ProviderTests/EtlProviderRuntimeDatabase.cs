@@ -14,12 +14,24 @@ internal sealed class EtlProviderRuntimeDatabase(EtlProviderDatabase database) :
 
     public static async Task<IEtlRuntimeTestDatabase> CreateAsync(EtlNativeProviderFixture fixture) => await CreateTypedAsync(fixture);
 
-    internal static async Task<EtlProviderRuntimeDatabase> CreateTypedAsync(EtlNativeProviderFixture fixture)
+    internal static async Task<EtlProviderRuntimeDatabase> CreateTypedAsync(EtlNativeProviderFixture fixture) =>
+        await CreateTypedAsync(await fixture.CreateDatabaseAsync());
+
+    internal static async Task<EtlProviderRuntimeDatabase> CreateTypedAsync(EtlProviderDatabase allocated, params IInterceptor[] interceptors)
     {
-        var runtime = new EtlProviderRuntimeDatabase(await fixture.CreateDatabaseAsync());
-        await using var context = runtime.CreateContext();
-        await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(runtime.Provider));
-        return runtime;
+        var runtime = new EtlProviderRuntimeDatabase(allocated);
+        try
+        {
+            await using var context = runtime.CreateContext(interceptors);
+            await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(runtime.Provider));
+            return runtime;
+        }
+        catch (Exception failure)
+        {
+            try { await runtime.DisposeAsync(); }
+            catch (Exception cleanup) { failure.Data["EtlDatabaseCleanupFailure"] = cleanup.GetType().FullName; }
+            throw;
+        }
     }
 
     public EtlRuntimeDbContext CreateContext(params IInterceptor[] interceptors) => database.Provider switch
