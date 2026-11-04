@@ -1,6 +1,6 @@
 # Proposed contract: outcomes, module codes and durable representation
 
-**Status**: Proposed Preview for leaf0, not frozen.  
+**Status**: Proposed Preview for leaf0, not frozen.
 **Authority**: spec1203 FR014/016/018/023 and story1. Prior recovery meanings: [1189](../../1189-weaver-recovery/contracts/recovery.md).
 
 ## Additive members
@@ -81,4 +81,3 @@ Existing audit sequence counter1.0 remains readable forever and never restamps w
 The approved spec classifies performed semantics and the default administrative veto as Major. Optional declarations/error support/receipt member and Agent1.1 expansion are Minor; later exact3779 native cleanup is Patch. Keep the existing computed pre-GA4.0 preview line under ADR0080D4/E5; no project version or new magnitude engine.
 
 Record the manual public API/behavior/binary compatibility assessment and migration guidance. An unbuilt magnitude gate is not evidence of compatibility. No release, release tag, feed publish or line change is part of this plan. Freeze only after current composed/backend and independent immutable-package journeys demonstrate these surfaces.
-

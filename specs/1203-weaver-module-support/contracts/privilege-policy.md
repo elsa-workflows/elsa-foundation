@@ -1,6 +1,6 @@
 # Proposed contract: privilege policy, principal and feature admission
 
-**Status**: Proposed Preview contract for leaf0; freeze only after qualification.  
+**Status**: Proposed Preview contract for leaf0; freeze only after qualification.
 **Authority**: spec1203 FR005/015/017/018 and story1. Historical contract: [1186 session policy](../../1186-weaver-effects/contracts/session-policy.md).
 
 ## Exact public additions
@@ -87,4 +87,3 @@ New behavior enters this one selected-feature check at tool collection/preparati
 Catalog, Attention and capabilities use actual feature metadata and the shared checker. Host-owned readability/fleet composition remains the only observer. Direct service consumers have the same admission and store-selection checks.
 
 Qualification includes base/API ordering, explicit custom before API and Replace afterward, copied-root and repeated registration, zero/duplicate/wrong-lifetime sources, missing/both/wrong/specialized feature selections; normal memory; EF absent/held/unobserved/finalized and no-restart availability; direct consumer contexts; null/empty legacy bytes; current principal/tenant/authority failures; no replay and real composed/package journeys.
-

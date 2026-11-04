@@ -1,9 +1,9 @@
 # Implementation Plan: Weaver generic effects and module-owned operations
 
-**Branch**: agent/codex/3443-weaver-effects-plan  
-**Date**: 2026-11-04  
-**Status**: Draft — implementation planning; no contract freeze  
-**Spec**: [spec.md](spec.md), approved by [PR #3757](https://github.com/elsa-workflows/elsa-foundation/pull/3757)  
+**Branch**: agent/codex/3443-weaver-effects-plan
+**Date**: 2026-11-04
+**Status**: Draft — implementation planning; no contract freeze
+**Spec**: [spec.md](spec.md), approved by [PR #3757](https://github.com/elsa-workflows/elsa-foundation/pull/3757)
 **Implementation base**: c0b61d8731de3266d14928e8b1624a31c386184d
 
 ## Summary
@@ -156,4 +156,3 @@ Implementation stays in existing Agent Core/implementation/API/EF and Studio Hos
 Documentation here: plan.md, research.md, data-model.md, quickstart.md and contracts/privilege-policy.md, outcomes.md, owner-operations.md. Tasks are generated only after this plan is reviewed. Glossary changes belong to leaf0 implementation under FR021.
 
 No new production project, session owner, schema observer, persistence engine, domain registry, provider specialization or constitutional exception.
-

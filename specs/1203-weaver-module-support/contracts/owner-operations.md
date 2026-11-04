@@ -1,6 +1,6 @@
 # Proposed contract: owner operations for leaves 1–3
 
-**Status**: Proposed Preview; PD2/PD3 prerequisites, implemented in their owning leaves, not leaf 0.  
+**Status**: Proposed Preview; PD2/PD3 prerequisites, implemented in their owning leaves, not leaf 0.
 **Authority**: spec1203 FR006/007/014 and stories 2–4. No generic Weaver type contains these domain meanings.
 
 ## Boundary and identity
