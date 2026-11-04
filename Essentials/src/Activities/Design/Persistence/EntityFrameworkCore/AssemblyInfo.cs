@@ -35,11 +35,13 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionAuthoringState),
     nameof(ActivityDefinitionAuthoringState.ContentAuthority), nameof(ActivityDefinitionAuthoringState.ForkedFrom))]
 [assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionDraft), nameof(ActivityDefinitionDraft.State))]
-[assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionDraftLayout), nameof(ActivityDefinitionDraftLayout.Records))]
+[assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionDraftLayout),
+    nameof(ActivityDefinitionDraftLayout.Records), nameof(ActivityDefinitionDraftLayout.ActivityPresentation))]
 [assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionVersion),
     nameof(ActivityDefinitionVersion.DescriptorPayloadSource), nameof(ActivityDefinitionVersion.InputsSource),
     nameof(ActivityDefinitionVersion.OutputsSource), nameof(ActivityDefinitionVersion.DesignFacetsSource))]
-[assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionVersionLayout), nameof(ActivityDefinitionVersionLayout.Records))]
+[assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionVersionLayout),
+    nameof(ActivityDefinitionVersionLayout.Records), nameof(ActivityDefinitionVersionLayout.ActivityPresentation))]
 [assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionVersionPublication),
     nameof(ActivityDefinitionVersionPublication.Contract), nameof(ActivityDefinitionVersionPublication.Provider),
     nameof(ActivityDefinitionVersionPublication.ResourceMeasurements), nameof(ActivityDefinitionVersionPublication.RuntimeRequirements))]
