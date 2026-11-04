@@ -386,6 +386,11 @@ answers.
 
 ## Assumptions
 
+- S-3's convert-publish-run evidence (US2, US5, FR-030) needs converted RunJavaScript to run at all. Today it does
+  not: [#3195](https://github.com/elsa-workflows/elsa-foundation/issues/3195) (no arguments: faults at run time) and
+  [#3287](https://github.com/elsa-workflows/elsa-foundation/issues/3287) (reads a variable or input: refused at
+  publication) must be fixed first, #3287 for the fixtures that read variables (research R-7). The requirements do
+  not depend on them.
 - Elsa 4 has no released runtime store, so the completion record's shape can change with a version bump and a read of
   older records, without a data migration (as S-9 Q7).
 - The Flowchart engine already accepts several outcome names and routes untaken connections dead (research R-3), so

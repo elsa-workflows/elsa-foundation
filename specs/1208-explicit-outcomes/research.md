@@ -44,7 +44,8 @@ Single string today:
 - `Workflows/Runtime/Core/Models/RuntimeStructuralContinuation.cs` L30, L41–47.
 - `ActivityCompletion.OutcomeKey` (`Workflows/Runtime/Core/Models/ActivityExecutionValueFlowRecords.cs` L207–242, non-blank
   at L220).
-- `ActivityCompletionProjector.cs` L56–57 (the `VF-ACT-006` check, one name), L129, L166.
+- `ActivityCompletionProjector.cs` L56–57 (the `VF-ACT-006` check, one name), L129, L166. On `main` after #3801
+  (`4a81500f8`) the outcome check is at L55; the behaviour is unchanged.
 - Background: `BackgroundActivityCompletionCodec.cs` L54–57 (`BG-ACT-005`), L67; `Workflows/Runtime/Core/Models/BackgroundActivityWork.cs`
   L149, L177.
 - Handlers that build a one-name list: `WorkflowInvokeActivitySchedulerWorkHandler.cs` L442–447, L462–466;
@@ -126,7 +127,7 @@ Already a list: `RuntimeCompleteActivityCommandPayload.OutcomeNames` (L22, L47, 
   set; `EmittedOutcomes` (L278–295) adds the items and `Unmatched`.
 - Inferred (#3295): with no possible outcomes, the converted node pins only `Done` (R-4) and the connection is on
   `Unmatched`, so it is never followed. Fixture `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/reusable-reads-result.json`
-  has this shape but no test uses it.
+  has this shape; it is converted but not run (see the dependency below).
 - `setOutcome` / `setOutcomes` are refused with `VF-IMP-005` (`Elsa3ExpressionRewriter.cs` L510–522; spec 247 FR-019).
   Tests: `Elsa3JavaScriptHostFunctionTests.cs` L183–184, `Elsa3JavaScriptConversionTests.cs` L118. The corpus has none
   (spec 247 `spec.md` L46).
@@ -143,6 +144,14 @@ Already a list: `RuntimeCompleteActivityCommandPayload.OutcomeNames` (L22, L47, 
   elsa-core source is not in this repository; T001 checks it before FR-029a's mapping is fixed.
 - Diagnostic `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` (`Elsa3ActivityDiagnosticCodes.cs` L128–129; text
   `Elsa3ActivityNormalizer.cs` L1049) describes routing by return value and goes with it.
+
+- **Converted RunJavaScript cannot run yet (dependency).** `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/ImportedReusableRunsTests.cs`
+  (L190–194 on `main`) records that any converted RunJavaScript faults on its default arguments, which is why
+  `reusable-reads-result.json` is converted but not run. Two open issues are behind it: #3195 (a converted
+  RunJavaScript without arguments faults at run time; board S-0) and #3287 (one that reads a variable or input is
+  refused at publication; board S-4 and S-8). S-3's convert-publish-run evidence (US2, FR-030, and #3389's required
+  execution evidence) needs #3195 fixed, and #3287 for scripts that read variables. They are dependencies of S-3's
+  delivery, not of its requirements.
 
 ## R-8 Publication does not check connection ports (general defect)
 

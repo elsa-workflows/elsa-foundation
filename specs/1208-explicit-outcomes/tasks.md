@@ -24,7 +24,8 @@ draft. If the call adds an explicitly recognized returned completion value, only
 - [ ] T001 Confirm that #3389 is agreed and row 14 is decided. Diff the agreed ADR 0045 §6 and spec 095 text against
   spec.md, and amend spec, plan, contract and these tasks for any change (including the answers to Q1–Q11) before
   starting. Also read Elsa 3's SendHttpRequest (elsa-core) and record whether `Done` fires on "Failed to
-  connect" and "Timeout" (research R-7, FR-029a)
+  connect" and "Timeout" (research R-7, FR-029a). Confirm that #3195 is fixed, and #3287 for the fixtures that read
+  variables: without them no converted RunJavaScript runs, so T013, T015 and T030 cannot pass (research R-7)
 - [ ] T002 Check whether the general port defect issue (spec *Out of scope*, research R-8) is still open. If it is
   fixed, drop the port check in T031 and build US6 on the existing one
 
@@ -85,7 +86,7 @@ draft. If the call adds an explicitly recognized returned completion value, only
 
 ## Phase 5: User Story 3 - An unknown outcome name is caught (P1)
 
-- [ ] T017 [US3] In `Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityCompletionProjector.cs` L56–57: check
+- [ ] T017 [US3] In `Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityCompletionProjector.cs` L55 (on `main` after #3801): check
   every selected name against the node's pinned set and the multi-outcome flag, apply an activity-declared fallback
   (Q6), and fault with the `VF-ACT-006` code on the fault record instead of a message prefix; same in
   `BackgroundActivityCompletionCodec.ValidateOutcome`. Update `ActivityCompletionContractTests.cs` L46 and
