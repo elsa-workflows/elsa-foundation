@@ -51,7 +51,15 @@ Before freezing placement, propose and qualify a bounded witness:
 
 The witness has not been implemented or executed. Its technical plan and any architecture-affecting changes require the applicable agreement first.
 
-## Other authority boundaries
+## Additional integration constraints
+
+### Automatic-cycle protection is not proved by drain limits
+
+OD19 requires automatic progress before queued business-event evaluation and protection against an indefinitely running automatic cycle. The existing [drain options](../../Essentials/src/Workflows/Runtime/Core/Models/WorkflowDrainOrchestratorOptions.cs) and [drain orchestrator](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs) bound generic execution for their own purposes: the no-progress count is reset by newly dispatched work IDs, the total-cycle limit is optional, and each drain creates its own cycle budget.
+
+Consequently, those source counters alone do not prove a semantic bound for a StateMachine automatic cycle that keeps producing work or spans durable continuations/restarts. The M0 plan must identify the protection boundary, lifetime, diagnostic and recovery contract, reuse suitable runtime controls and prove the accepted bound. This is an unproved integration requirement, not a reported defect in the generic drain contract.
+
+### Existing owners remain authoritative
 
 The existing [Native Compensation and Saga Recovery program](../../docs/program-goals/native-compensation.md) retains its semantics and work. Cancellation/rearming does not undo participant effects. Assess composition through its actual contracts rather than implementing another saga authority.
 

@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD18 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD22 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -49,6 +49,7 @@ An author places substates inside a containing state and defines shared behavior
 3. **Given** a state-owned deadline, **when** that state is exited and entered again, **then** the new visit gets a fresh deadline and a completion belonging to the old visit cannot affect it.
 4. **Given** a parent remains active while only its child changes, **when** that child transition occurs, **then** parent-owned waits remain intact unless the agreed exit boundary actually includes the parent.
 5. **Given** an authored transition exits a containing state, **when** that transition is selected, **then** waits and pending activity work in the exited scope are cancelled according to the agreed lifecycle contract.
+6. **Given** a non-final state with no local outgoing edge, **when** it relies on ancestor behavior or remains waiting, **then** it is not inferred to be complete. Explicit final-state intent and accidental-dead-end diagnostics remain distinct; complete scoped completion propagation is Q1.
 
 ### User Story 3 — Model independent parallel regions (Priority: P1)
 
@@ -83,6 +84,7 @@ An author uses an ordinary activity or composite in entry, exit or transition ac
 4. **Given** admitted events are pending, **when** selected transition work finishes, **then** subsequent event evaluation follows the agreed ordering contract.
 5. **Given** an event has no eligible transition against the configuration in which it is evaluated, **when** its evaluation finishes, **then** an observable unhandled outcome is recorded and later state changes do not revive that event.
 6. **Given** a cancelled timer/task from an earlier activation completes late, **when** it is delivered, **then** it cannot be redirected to a later visit. A new machine-addressed business event is a distinct input category.
+7. **Given** a selected transition with exit, action and entry work, **when** any applicable phase durably suspends, **then** the observed order remains source Exit → transition Action → target Entry and a later phase does not start before the previous one completes.
 
 ### User Story 5 — Compose triggers and choose deliberate re-entry (Priority: P1)
 
@@ -102,7 +104,8 @@ An author uses ordinary activities/composites as transition triggers and disting
 6. **Given** deliberate self-re-entry, **when** it runs, **then** exit/entry work occurs and a fresh state visit is created.
 7. **Given** trigger work already performed an external effect, **when** another transition cancels it or rejection restarts it, **then** cancellation is not reported as undoing that effect. Restarting a composite can execute its work again.
 8. **Given** one input makes several transitions on the same state eligible, **when** selection occurs, **then** the first eligible transition in the explicit authored order is selected; moving graph elements alone does not alter that order.
-9. **Given** an authored automatic transition with no trigger, **when** its source state's entry work finishes, **then** its condition can be evaluated and an eligible automatic path can proceed without an artificial event. It is not evaluated before pending entry work finishes; complete precedence/loop rules remain Q1.
+9. **Given** an authored automatic transition with no trigger, **when** its source state's entry work finishes, **then** its condition can be evaluated and an eligible automatic path can proceed without an artificial event. It is not evaluated before pending entry work finishes; complete automatic-candidate arbitration, reevaluation and protection remain Q1.
+10. **Given** eligible automatic transitions and an already queued business event, **when** the machine progresses, **then** it runs eligible automatic transitions until none remain before evaluating that queued event against the resulting configuration. Automatic cycles cannot run indefinitely; the protection contract remains Q1.
 
 ### User Story 6 — Inspect, diagnose and operate the actual machine (Priority: P1)
 
@@ -118,6 +121,20 @@ Authors and operators understand the definition and execution they actually use,
 2. **Given** a malformed condition, unavailable activity or execution failure, **when** the author/operator encounters it, **then** the interface distinguishes it from a false condition or an unhandled event and supplies actionable context.
 3. **Given** a read-only or narrow-width view, **when** the user navigates states, regions and activities, **then** the agreed inspection and non-canvas operations remain usable and mutation availability is clear.
 4. **Given** an existing instance pinned to a published version, **when** a later version is edited/published, **then** that instance follows the existing platform version/pin contract rather than silently adopting the edited machine.
+
+### User Story 7 — Use machine-wide and state-visit data (Priority: P1)
+
+An author declares values that span the machine's state changes and values local to one state visit, using the existing Elsa value/binding mechanisms.
+
+**Why this priority**: Re-entry must have predictable data lifetime without creating a separate variable authority.
+
+**Independent Test**: Declare values at both scopes, change states and deliberately re-enter a state; inspect the values through supported ordinary activities/bindings.
+
+**Acceptance Scenarios**:
+
+1. **Given** a machine-wide value and a state-local value, **when** the state exits and is entered again, **then** the machine-wide value remains in its machine lifetime and the state-local value starts fresh for the new visit under normal initialization/binding rules.
+2. **Given** a parent state remains active while its child changes, **when** that child transition occurs, **then** the parent-state local scope follows the continuing parent visit rather than being reset as a new parent visit.
+3. **Given** any scoped value, **when** persistence, visibility, secrets or parallel writes are involved, **then** existing platform contracts continue to govern; this capability does not silently add competing policies.
 
 ### Edge Cases
 
@@ -159,7 +176,11 @@ Authors and operators understand the definition and execution they actually use,
 - **FR-020**: Cancellation/rearming MUST NOT be represented as compensating already-performed external effects. Composite trigger rearming can repeat its work.
 - **FR-021**: Actual Studio authoring-to-runtime execution, durable wait/resume, restart/race/failure qualification and resulting-main evidence MUST establish first-release completion; planning artifacts or in-memory tests alone are insufficient.
 - **FR-028**: When one input makes several transitions on the same state eligible, the machine MUST select the first eligible transition in an explicit author-visible order. Graph geometry or visual rearrangement MUST NOT silently determine or alter that priority. This does not change child/ancestor precedence or compatible regional selection.
-- **FR-029**: Authors MUST be able to define automatic, condition-based transitions without a trigger. The machine MUST evaluate them after their source state's entry work completes. Their precedence, reevaluation and loop protection MUST be explicit in the agreed execution contract; support alone does not select those remaining rules.
+- **FR-029**: Authors MUST be able to define automatic, condition-based transitions without a trigger. The machine MUST evaluate them after their source state's entry work completes. Complete automatic-candidate arbitration, reevaluation and loop protection MUST be explicit in the agreed execution contract.
+- **FR-030**: The machine MUST run eligible automatic transitions until none remain before evaluating queued business events. Automatic cycles MUST be bounded by explicit loop protection so they cannot run indefinitely; this requirement does not choose an unagreed protection or recovery mechanism.
+- **FR-031**: Completion MUST use explicit authored final-state intent. A non-final state MUST NOT be inferred complete merely because it lacks a local outgoing edge or currently eligible transition. The capability MUST distinguish waiting from completion and provide diagnostics for accidental dead ends; complete scoped completion propagation remains Q1.
+- **FR-032**: Authors MUST be able to use machine-wide values spanning state changes and state-local values whose lifetime is one state visit and which start fresh on re-entry. Existing Elsa value, binding, durability, secret and parallel-write contracts MUST remain authoritative; this scope choice MUST NOT silently replace those policies.
+- **FR-033**: After selection, applicable authored phases MUST run in the order source Exit → transition Action → target Entry. A later applicable phase MUST NOT start until the previous one completes, including across durable waits. Complete hierarchical boundaries and fault/recovery behavior remain to be agreed.
 
 ### Platform constraints and design obligations
 
@@ -212,13 +233,17 @@ The following are review prompts, not accepted semantics. Interview the owner on
 
 ### Q1 — Complete statechart execution contract
 
-[NEEDS CLARIFICATION: Confirm or amend the remaining initial/final, complete entry/exit/action, cross-state/region conflict, automatic-transition precedence/reevaluation and rearming/loop rules before declaring the behavior contract approved.]
+[NEEDS CLARIFICATION: Confirm or amend the remaining initial configuration/scoped completion, complete entry/exit/action, cross-state/region and automatic-candidate conflict, reevaluation and rearming/loop rules before declaring the behavior contract approved.]
 
 OD17 settles same-state selection order for one input (FR-028). Complete conflict arbitration across different states/regions remains open.
 
-OD18 adds automatic transitions after entry work completes (FR-029); precedence relative to queued inputs, reevaluation and cycle handling still need agreement.
+OD18 adds automatic transitions after entry work completes (FR-029). OD19 gives eligible automatic progress precedence over queued business events (FR-030). Complete automatic-candidate arbitration, reevaluation and cycle/protection/recovery rules still need agreement.
 
-Proposed reference baseline: explicit initial/final intent; source Exit → transition Action → target Entry where those phases apply; a persistent authored reaction remains usable after an action-without-exit completes. These proposals have not been accepted merely because a reference engine uses them.
+OD20 requires explicit final-state intent (FR-031). Initial configuration, final entry work and complete scoped completion propagation remain open.
+
+OD22 settles source Exit → transition Action → target Entry for applicable authored phases (FR-033), with durable completion before the next phase starts. Complete hierarchical exit/entry boundaries and fault/recovery details remain open.
+
+Proposed reference baseline: explicit initial configuration; a persistent authored reaction remains usable after an action-without-exit completes. These proposals have not been accepted merely because a reference engine uses them.
 
 ### Q2 — Durable admission, event outcomes and recovery
 
@@ -231,3 +256,5 @@ Specify configured bounds and overflow/unavailable behavior; deduplication/confl
 [NEEDS CLARIFICATION: Agree the concrete graph/outline/navigation, slots/conditions, diagnostics/inspection and accessibility/responsive journeys; classify remaining advanced capabilities and data/outcome/reuse details without silently expanding first-release scope.]
 
 Proposed authoring baseline: dedicated state/transition/region graph with a non-canvas navigation path; ordinary activity pickers/editors; a suitable condition workspace; clear current configuration, pending phases and causal outcomes; exact-version inspection. History destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
+
+OD21 chooses machine-wide and state-visit-local value scopes (FR-032). Their concrete authoring/visibility/binding integration and outcome details remain to be specified against the existing platform contracts.

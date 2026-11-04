@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A18 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A22 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -26,6 +26,10 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD16 — normal definition/version/publication/reuse | FR-002, FR-022 | A01, A02, A15 |
 | OD17 — explicit same-state transition order | FR-028 | A17 |
 | OD18 — automatic transitions after entry work | FR-029 | A18 |
+| OD19 — automatic progress before queued events | FR-030 | A19 |
+| OD20 — explicit final-state intent | FR-031 | A20 |
+| OD21 — machine and state-visit value scopes | FR-032 | A21 |
+| OD22 — exit/action/entry phase ordering | FR-033 | A22 |
 
 ## Witness definitions
 
@@ -48,7 +52,11 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A15 | Existing instance and new publication | Waiting instance resumes against its exact pinned version while a newer edited definition exists | Studio publish/edit plus actual retained/pinned runtime evidence; data/reuse detail depends on Q3 |
 | A16 | Understandable authoring/inspection | Graph and non-canvas paths, conditions/slots, current configuration/phases/causality, error/read-only and narrow-width behavior work together | Real representative Studio hosts; accessibility and responsive journeys depend on Q3 |
 | A17 | Same input, several eligible transitions on one state | First eligible in explicit authored order wins; visual graph rearrangement does not change priority; child/ancestor and compatible-region rules remain intact | Definition round-trip, semantic selection and Studio ordering witnesses; implementation pending |
-| A18 | Automatic transition after entry | An eligible condition-based path can proceed without a trigger/artificial event after entry work completes, including after durable entry work resumes | Entry/automatic selection and actual-host witness; complete precedence, reevaluation and loop rules remain Q1 |
+| A18 | Automatic transition after entry | An eligible condition-based path can proceed without a trigger/artificial event after entry work completes, including after durable entry work resumes | Entry/automatic selection and actual-host witness; complete automatic-candidate arbitration, reevaluation and loop rules remain Q1 |
+| A19 | Automatic chain and queued event | Eligible automatic transitions run until none remain before the queued business event is evaluated against the resulting configuration; cycles cannot run indefinitely | Ordered semantic/actual-host witnesses and protection boundary cases; the concrete loop/protection/recovery mechanism remains Q1 |
+| A20 | Explicit finality versus non-final waiting | A state with no local outgoing edge is not implicitly complete; parent-level behavior and accidental-dead-end diagnostics are respected | Definition validation and actual hierarchy/region completion witnesses; complete initial/final-entry/scoped propagation remains Q1 |
+| A21 | Machine-wide and state-visit values | Machine-wide scope spans state changes; state-local values start fresh on re-entry; a continuing parent visit retains its local scope; normal platform policies remain authoritative | Ordinary activity/binding and Studio declaration witnesses; exact visibility/binding/outcome integration remains Q3 |
+| A22 | Ordered applicable transition phases | Source Exit finishes before transition Action, which finishes before target Entry; a durably suspended phase does not permit a later phase to start early | Ordered semantic and actual-host/persistence witnesses; complete hierarchical boundaries and recovery remain Q1/Q2 |
 
 ## Qualification rules
 

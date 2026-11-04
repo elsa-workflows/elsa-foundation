@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD18 are separated from proposals and open choices.
+- [x] Accepted OD1–OD22 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,12 +32,10 @@
 
 ## Validation notes
 
-Draft validation iteration 1: accepted product direction is captured and traceable. The unresolved complete statechart, delivery/recovery and Studio contracts intentionally keep this checklist incomplete. They must be settled through the continuing owner design session and source-grounded analysis; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD22 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
-Draft validation iteration 2: independent review identified that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and the durable-work scenario now explicitly require selected work to finish before later event evaluation, matching OD10. Q1–Q3 remain open.
+Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
-OD17 update: the owner selected explicit same-state transition order. FR-028, the trigger scenario and A17 now record it; Q1 retains only the unresolved broader conflict rules.
-
-OD18 update: automatic transitions after entry are accepted in FR-029 and A18. Their precedence, reevaluation and cycle/loop handling remain open in Q1.
+Accepted extensions include authored same-state order, automatic progress before queued business events, explicit finality, machine/state-visit value scopes and exit/action/entry ordering. Their remaining detailed integration/protection/recovery boundaries stay visible in Q1–Q3.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.
