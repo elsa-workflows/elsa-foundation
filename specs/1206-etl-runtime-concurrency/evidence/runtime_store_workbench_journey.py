@@ -81,12 +81,16 @@ def database_scalars(database) -> dict:
             command = ["docker", "exec", database.name, "mysql", "-h", "127.0.0.1", "-uroot", f"-p{database.secret}", "--raw", "-N", "-e", sql, "elsa_etl"]
         else:
             command = ["docker", "exec", database.name, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa",
-                       "-P", database.secret, "-d", "elsa_etl", "-h", "-1", "-y", "0", "-w", "65535", "-Q", "SET NOCOUNT ON; " + sql]
+                       "-P", database.secret, "-d", "elsa_etl", "-b", "-y", "0", "-w", "65535", "-Q",
+                       "SET NOCOUNT ON; SELECT (" + sql + ") AS Value"]
         completed = subprocess.run(command, capture_output=True, text=True)
         if completed.returncode:
             # Command arguments can contain the generated password; do not expose them in an exception.
             raise RuntimeError(f"Owned {provider} readback failed for {key}.")
         values = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+        if provider == "SqlServer":
+            # Unlimited variable-width output cannot be combined with header suppression.
+            values = [line for line in values if line != "Value" and set(line) != {"-"}]
         if len(values) != 1:
             raise ValueError(f"Expected one owned-database scalar for {key}.")
         result[key] = values[0] if key.endswith(("Hash", "Json", "Id")) else int(values[0])
