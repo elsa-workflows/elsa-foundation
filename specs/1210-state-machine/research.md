@@ -61,6 +61,8 @@ Consequently, those source counters alone do not prove a semantic bound for a St
 
 ### Existing owners remain authoritative
 
+OD23 requires recovery at the failed activity boundary while preserving earlier completed phases. The [structural recovery opt-in](../../Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeStructuralActivity.cs), `IRuntimeAcceptsRescheduledFaultedChild`, applies only when a running parent still tracks a faulted child and has not absorbed its fault. The [operator retry handler](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/Handlers/RetryFaultedActivityAlterationHandler.cs) retains scheduling provenance and operation keys for the successor and rejects unsupported source/incident states. These are candidate integration contracts, not evidence that StateMachine recovery already works. The witness must cover nested ordinary activity work, the selected phase, preserved completed phases and restart without weakening existing recovery eligibility or external-effect guarantees.
+
 The existing [Native Compensation and Saga Recovery program](../../docs/program-goals/native-compensation.md) retains its semantics and work. Cancellation/rearming does not undo participant effects. Assess composition through its actual contracts rather than implementing another saga authority.
 
 Initiative #3052 governs conversion and related core value/expression decisions. This StateMachine program is not its child or a board topic. Any proposed change to a contract it governs must go through that initiative's actual agreement process. Current implementation text or a bot review cannot approve an unagreed ADR.

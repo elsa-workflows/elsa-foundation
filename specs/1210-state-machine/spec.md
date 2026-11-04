@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD22 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD23 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -85,6 +85,7 @@ An author uses an ordinary activity or composite in entry, exit or transition ac
 5. **Given** an event has no eligible transition against the configuration in which it is evaluated, **when** its evaluation finishes, **then** an observable unhandled outcome is recorded and later state changes do not revive that event.
 6. **Given** a cancelled timer/task from an earlier activation completes late, **when** it is delivered, **then** it cannot be redirected to a later visit. A new machine-addressed business event is a distinct input category.
 7. **Given** a selected transition with exit, action and entry work, **when** any applicable phase durably suspends, **then** the observed order remains source Exit → transition Action → target Entry and a later phase does not start before the previous one completes.
+8. **Given** source Exit completed and later transition Action work failed, **when** supported normal Elsa recovery is requested, **then** the failed work is resumed/retried at its normal activity recovery boundary and completed earlier phases are preserved rather than restarting the entire transition.
 
 ### User Story 5 — Compose triggers and choose deliberate re-entry (Priority: P1)
 
@@ -181,6 +182,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-031**: Completion MUST use explicit authored final-state intent. A non-final state MUST NOT be inferred complete merely because it lacks a local outgoing edge or currently eligible transition. The capability MUST distinguish waiting from completion and provide diagnostics for accidental dead ends; complete scoped completion propagation remains Q1.
 - **FR-032**: Authors MUST be able to use machine-wide values spanning state changes and state-local values whose lifetime is one state visit and which start fresh on re-entry. Existing Elsa value, binding, durability, secret and parallel-write contracts MUST remain authoritative; this scope choice MUST NOT silently replace those policies.
 - **FR-033**: After selection, applicable authored phases MUST run in the order source Exit → transition Action → target Entry. A later applicable phase MUST NOT start until the previous one completes, including across durable waits. Complete hierarchical boundaries and fault/recovery behavior remain to be agreed.
+- **FR-034**: Recovery of failed transition work MUST use the normal Elsa activity recovery boundary and preserve completed earlier phases. StateMachine MUST NOT automatically rewind the whole transition. Retry retains existing platform/external-effect guarantees and MUST NOT be represented as exactly-once external execution or implicit compensation.
 
 ### Platform constraints and design obligations
 
@@ -250,6 +252,8 @@ Proposed reference baseline: explicit initial configuration; a persistent author
 [NEEDS CLARIFICATION: Agree the implementable bounded event identity/order/admission/outcome and fault/retry/recovery contract, with a source-grounded witness of the existing runtime integration.]
 
 Specify configured bounds and overflow/unavailable behavior; deduplication/conflicting identity; receipts and retention; terminal/retired execution behavior; input disposition around faults and restart; and recovery of partial transition work with honest external-effect uncertainty. Do not equate accepted admission with exactly-once external effects. Demonstrate current sufficient seams or propose a reviewed bounded extension before freezing placement.
+
+OD23 requires recovery at the normal failed-activity boundary with completed earlier phases preserved (FR-034). Complete propagation, blocked-input handling, exact supported recovery paths and source-grounded integration proof remain open.
 
 ### Q3 — Studio contract and remaining capability boundaries
 
