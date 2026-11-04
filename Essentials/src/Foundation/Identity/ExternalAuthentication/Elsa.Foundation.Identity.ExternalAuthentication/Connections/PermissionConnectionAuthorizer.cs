@@ -24,8 +24,7 @@ internal sealed class PermissionConnectionAuthorizer(
     {
         var tenant = options.Value.TenantId;
         if (!await AuthorizeAsync(actor, cancellationToken)) return false;
-        var roleIds = proposed.Admission.DefaultRoleIds.Concat(proposed.RoleMappings.Select(mapping => mapping.RoleId))
-            .Distinct(StringComparer.Ordinal).ToArray();
+        var roleIds = proposed.Admission.DefaultRoleIds.Distinct(StringComparer.Ordinal).ToArray();
         if (roleIds.Length == 0) return true;
         // A catalog with no role assignments does not require a local IAM store. External-owned hosts may
         // supply their own role read adapter and authorization service through the existing contracts.

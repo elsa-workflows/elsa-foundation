@@ -14,7 +14,6 @@ public sealed record ConnectionRecord
     public IReadOnlyDictionary<string, string> Settings { get; init; } = new Dictionary<string, string>();
     public IReadOnlyDictionary<string, SecretReference> Secrets { get; init; } = new Dictionary<string, SecretReference>();
     public AdmissionPolicy Admission { get; init; } = new();
-    public IReadOnlyList<RoleMapping> RoleMappings { get; init; } = [];
     public bool Enabled { get; init; }
     public bool Preferred { get; init; }
     public int DisplayOrder { get; init; }
@@ -30,7 +29,6 @@ public sealed record AdmissionPolicy
     public string? Matcher { get; init; }
 }
 
-public sealed record RoleMapping(string ClaimType, string ClaimValue, string RoleId);
 public enum ConnectionSource { Deployment, Database }
 
 public sealed record ConnectionView(
@@ -80,6 +78,27 @@ public interface IConnectionWriteAuthorizer
 public interface IConnectionReadiness
 {
     ValueTask<bool> IsReadyAsync(ConnectionRecord connection, CancellationToken cancellationToken = default);
+    async ValueTask<ConnectionReadinessResult> AssessAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) =>
+        new(await IsReadyAsync(connection, cancellationToken) ? ConnectionReadinessFailure.None : ConnectionReadinessFailure.Unavailable);
+}
+
+public enum ConnectionReadinessFailure
+{
+    None, Unavailable, InvalidConfiguration, ProtocolUnavailable, ProtocolConfiguration, SecretUnavailable,
+    CallbackUnavailable, SessionUnavailable, ArtifactStoreUnavailable, IdentityUnavailable, PolicyUnavailable,
+    PolicyInvalid, RoleUnavailable, RoleForbidden
+}
+public sealed record ConnectionReadinessResult(ConnectionReadinessFailure Failure = ConnectionReadinessFailure.None,
+    ExternalProtocolFailure ProtocolFailure = ExternalProtocolFailure.None)
+{
+    public bool Ready => Failure == ConnectionReadinessFailure.None;
+}
+
+/// <summary>Server-only successful normal sign-in evidence; preview never calls this contract.</summary>
+[ReplacementContract]
+public interface IConnectionSignInEvidence
+{
+    ValueTask RecordAsync(string userId, ExternalAuthenticationProvenance provenance, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Reports an external path with an eligible recovery identity, separate from valid protocol configuration.</summary>
@@ -87,6 +106,7 @@ public interface IConnectionReadiness
 public interface IConnectionRecovery
 {
     ValueTask<bool> IsUsableAsync(ConnectionRecord connection, CancellationToken cancellationToken = default);
+    ValueTask<bool> IsUsableForAsync(ConnectionRecord connection, ClaimsPrincipal actor, CancellationToken cancellationToken = default) => IsUsableAsync(connection, cancellationToken);
 }
 
 /// <summary>Reports a genuinely usable local recovery path, not merely an enabled login option.</summary>
@@ -94,6 +114,7 @@ public interface IConnectionRecovery
 public interface ILocalLoginRecovery
 {
     ValueTask<bool> IsUsableAsync(CancellationToken cancellationToken = default);
+    ValueTask<bool> IsUsableForAsync(ClaimsPrincipal actor, CancellationToken cancellationToken = default) => IsUsableAsync(cancellationToken);
 }
 
 [ReplacementContract]

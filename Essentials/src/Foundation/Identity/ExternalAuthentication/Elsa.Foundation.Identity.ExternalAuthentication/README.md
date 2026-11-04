@@ -19,7 +19,9 @@ host. `AddFoundationExternalAuthentication` is the programmatic registration ent
 - `Connections` is the read-only deployment baseline. A record's deployment ID derives from its logical key.
 - `AllowDatabaseManagement` defaults to false; disabled management never reads optional persisted catalog rows.
 - `AllowDeploymentOverrides` defaults to false; `AllowedOverrideKeys` may constrain the permitted keys.
-- `AllowedRoleIds` may further constrain default/mapped Elsa roles for database policy editing. The editor must also be authorized to delegate every role permission.
+- `AllowedRoleIds` may further constrain default Elsa roles for database policy editing. The editor must also be authorized to delegate every role permission.
+- `RecoveryEvidenceLifetime` defaults to 24 hours (one minute to thirty days). Successful normal administrator sign-ins provide recovery evidence for that interval.
+- `RecoveryScanLimit` defaults to 1,000 local accounts (maximum 10,000). Recovery checks consider the canonical actor first, then bounded pages; unexamined accounts never count optimistically.
 - `PublicBaseUrl` is the trusted public backend URL, including its path base. Callback construction never uses an incoming Host header. `CallbackPath` defaults to `/identity/external` below that base.
 - `AllowedReturnUrlOrigins` explicitly permits additional HTTPS frontend origins; local return paths and the configured backend origin are accepted. The callback rechecks the policy. Loopback HTTP requires Development.
 - `FlowLifetime` defaults to ten minutes (maximum fifteen); `PreviewResultLifetime` defaults to five minutes (maximum ten). Both must be at least one second.
@@ -37,10 +39,32 @@ shadow. Archive/removal reveals the baseline; restore reinstates the saved full 
 be edited. Source settings with duplicate keys fail closed. Create is always disabled; activation and lifecycle
 commands are explicit. Test observations belong outside authentication material and do not alter material revisions.
 
-Configuration readiness and recovery eligibility are separate Core contracts. A structurally valid provider
-with no eligible identity is not a recovery path. Before disabling/replacing an enabled effective provider, the
-writer proves that a remaining external recovery path or actual local recovery exists, then saves the complete
-catalog with CAS. Concurrent workers cannot both apply stale decisions against the same catalog revision.
+Configuration readiness and recovery eligibility are separate Core contracts. Readiness validates the installed
+protocol, current secret resolution, callbacks, artifact/session authorities, IAM, policy and role references.
+It does not exchange a code or provision a user. Recovery additionally requires an eligible administrator.
+
+External recovery uses a recent successful **normal** administrator sign-in bound to the actual source record,
+material revision, callback, exact issuer/subject/user and current secret generation. Preview and reader sign-ins
+never count. The checker revalidates current framework/user/membership status, provider-management permission,
+qualified link and live bounded discovery/JWKS. A successful metadata read alone cannot prove the registered
+client credentials or account. This is a recent observation, not a guarantee of upstream account availability.
+Normal sign-in stays successful if optional observation recording fails; absent evidence cannot authorize retirement.
+
+Observations reuse provider-configuration persistence in separate host-tenant/logical-key rows with CAS, a distinct
+versioned kind and purpose-bound Data Protection envelope. Up to sixteen recent proofs are retained per key;
+expired proofs are ignored and pruned on the next successful recording. They never affect authentication material
+or expose credential bindings in management responses. Removed-key observation rows remain protected in that
+store; there is no additional audit store or scheduled history cleanup. Nodes need the same key ring/application
+name. Database-disabled hosts do not record these observations.
+
+Local recovery checks the enabled password method, an actual password, current framework eligibility, user and
+membership status and current provider-management permission. Custom canonical session authorities must implement
+read-only eligibility; the default `CanSignInAsync` returns false.
+
+Before disabling/replacing an enabled effective provider, the writer proves a remaining external recovery path
+or actual local recovery, then saves the complete catalog with CAS. External checks share a thirty-second bound;
+caller cancellation propagates. Concurrent workers cannot both save stale decisions against one catalog revision.
+Concurrent IAM/link/session mutation guards and full deployment qualification remain required in spec 1205.
 
 ## Extension points and tests
 
@@ -76,7 +100,7 @@ An integrator can register `IExternalProvisioningPolicy` with `services.AddScope
 CompanyPolicy>()`, and select its unique `Name` in `Admission.Type`. `AssessAsync` returns
 `ExternalProvisioningDecision` and must perform no writes or external side effects. For new users, it may select a
 subset of the connection's declared `DefaultRoleIds`; host `AllowedRoleIds` also applies. This API assigns saved
-Elsa roles at initial provisioning. It does not settle the separate pending choice about recurring group mappings.
+Elsa roles at initial provisioning. Later sign-ins use saved Elsa memberships and preserve manual assignments. Recurring external group-to-role mappings are excluded for now.
 For example, a policy can choose the declared `operator` role for a trusted department claim and `reader` otherwise:
 
 ```csharp

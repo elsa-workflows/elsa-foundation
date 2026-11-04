@@ -48,7 +48,7 @@ non-effective stored draft.
 The live discovery contribution uses stable IDs `external:{logical-key}`. Effective/enable/source changes are
 visible without restart, while missing protocol/store/session support is not advertised as a usable method.
 Capabilities reflect Elsa's configured IAM authority and effective ownership mode; upstream authentication does
-not turn off Elsa-owned role management. Recurring group mapping remains undecided and is not advertised.
+not turn off Elsa-owned role management. Recurring external group-to-role mapping is excluded; provisioning policies assign saved existing Elsa roles and later sign-ins use saved memberships.
 The existing login renderer includes local credentials and provider forms/links in its host theme/custom renderer,
 escapes display names, and keeps local recovery available during an optional catalog outage. Disabling the
 local password method hides/refuses that method while the same cookie substrate can still issue external sessions.

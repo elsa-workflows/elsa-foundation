@@ -30,13 +30,11 @@ Decision: a typed token subject distinguishes canonical Elsa users `(tenant, use
 
 `FoundationIdentityApi` chooses first NameIdentifier; `IdentityClaimsProjector.AddIfMissing` appends identifiers; OpenIddict stores/revokes on bare subject. Fix managed sign-in and existing normalized direct bearer exchange. Tests must prove provider/issuer/tenant B's refresh token survives A's HTTP sign-out. Pre-GA public token APIs may change; update tracking, consumers and docs together.
 
-## R6 — Role authority (owner decision pending)
+## R6 — Provisioning policy only (owner decision, 4 November)
 
-The initial card was withdrawn by Sipke after a misclick. After explaining the distinction between role definitions and membership, the re-presented card offers session grants, saved provider-managed memberships, or provisioning policy only with group mappings omitted for now. No considered response has arrived. Do not use the withdrawn selection. Independent work, including R5, may proceed. Confirm and encode the response before mapped-role persistence/projection implementation.
+The owner selected: “Provisioning policy only: assign saved Elsa roles through the integrator’s policy; omit external group-to-role mappings for now.” This considered answer replaces the withdrawn misclick. Elsa owns users, saved role memberships, role definitions and their permissions. An integrator's named provisioning policy may assign existing Elsa roles when creating a user, within the connection's declared role boundary. Later sign-ins use saved Elsa memberships and preserve manual assignments.
 
-In either design: raw provider permission/role claims confer no Elsa grants; mapping resolves existing Elsa roles; deployment role allow-lists and the editor's own grant boundary constrain policy changes; preview calculates prospective grants without provisioning.
-
-Owner clarification, 4 November: users and roles are Elsa records; role permissions are defined in Elsa, and an external provider's own role names have no inherent Elsa meaning. Preserve the integrator-programmable admission/provisioning policy that can assign configured Elsa roles to newly created users. The pending card concerns only how an optional explicit mapping assigns existing Elsa roles on later external sign-ins; it does not propose importing role definitions or upstream permissions. This clarification does not settle session-only versus persisted mapped membership.
+There is no recurring external group-to-role mapping, session-only mapped grant or provider-managed saved membership in this feature. External role/group names do not grant authority by name; upstream permission claims never pass through implicitly. Deployment role allow-lists and the editor's own delegation boundary still constrain provisioning policy changes. Preview computes prospective saved grants without provisioning. The separate existing direct-bearer normalization bridge retains its own explicit configuration and scope.
 
 ## R7 — Sessions and revocation
 
@@ -68,7 +66,7 @@ Owner authorization on 4 November covers #3579 end to end and necessary #2848 in
 
 Managed connection contracts and implementation use the optional `Identity/ExternalAuthentication` submodule. The Core references Identity.Core and Secrets.Core, and the implementation consumes Runtime.Core scope contracts, keeping those dependencies out of the base Identity.Core. Catalog persistence still reuses the existing provider-configuration authority and its schema.
 
-Configuration readiness is distinct from recovery eligibility. A valid enabled provider with default rejection and no eligible link cannot count as a recovery path. Removing/replacing an enabled effective path needs a proved remaining external path or actual local recovery, then whole-catalog CAS. A source transition may be safe even if the retired record itself is disabled; the effective baseline/override result is what matters. Protocol/session adapters must supply these checks before runtime qualification; their unavailable defaults make no readiness/recovery claim.
+Configuration readiness is distinct from recovery eligibility. A valid enabled provider with default rejection and no eligible link cannot count as a recovery path. Removing/replacing an enabled effective path needs a proved remaining external path or actual local recovery, then whole-catalog CAS. A source transition may be safe even if the retired record itself is disabled; the effective baseline/override result is what matters. Managed defaults now compose actual installed protocol/session/IAM dependencies. External recovery needs recent protected normal administrator sign-in evidence plus current permission/eligibility/exact-link and bounded discovery/JWKS checks; local recovery requires an actual eligible administrative password account. Configuration and preview alone never count. Default evidence window is 24 hours and local search considers the actor first, then at most 1,000 accounts. Source/material/callback/secret generation invalidate observations; catalog CAS prevents two connection writers from both removing their proved fallback. Cross-IAM/link/session mutation integration and full deployment proof remain required.
 
 
 ## Admission implementation refinement
@@ -78,7 +76,7 @@ contribution named `reject`. Built-in `jit` uses explicit default Elsa roles; `m
 one boolean verification claim and a unique active Foundation-managed target. It does not auto-link an earlier
 unverified imported profile. A custom named policy may choose a subset of the connection's declared role boundary;
 matching also checks the candidate's complete effective role/direct-permission boundary. These are routine safe
-implementation choices within explicit provisioning/matching acceptance, independent of the open mapping card.
+implementation choices within explicit provisioning/matching acceptance, under the provisioning-policy-only owner decision.
 
 Host ownership/capability settings govern whether new user/link state may be written; existing qualified links
 remain readable. Matching passes a frozen membership snapshot to the atomic authority because membership changes

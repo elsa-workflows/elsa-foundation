@@ -38,6 +38,8 @@ public interface IAuthenticationProviderSource
 public interface ICanonicalUserSignInService
 {
     string AuthenticationScheme { get; }
+    /// <summary>Read-only account/session eligibility. Missing support never counts as a recovery path.</summary>
+    ValueTask<bool> CanSignInAsync(PrincipalFactoryContext context, bool requiresPassword = false, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default);
 }
 

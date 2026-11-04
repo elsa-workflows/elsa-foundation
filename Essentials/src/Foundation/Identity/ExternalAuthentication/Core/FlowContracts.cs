@@ -37,7 +37,13 @@ public sealed record ExternalFlowStarted(string? AuthorizationUrl, ExternalFlowF
 
 public sealed record ExternalFlowCallback(string ConnectionKey, AuthenticationArtifactPurpose Purpose, string State,
     string BrowserBinding, string? Code, string? ResponseIssuer = null, bool ProviderError = false);
-public sealed record ExternalAuthenticationProvenance(string ConnectionKey, string ConnectionRecordId, string Issuer, string Subject);
+/// <summary>Verified server-only origin. Internal credential binding is never a public session or administration field.</summary>
+public sealed record ExternalAuthenticationProvenance(string ConnectionKey, string ConnectionRecordId, string Issuer, string Subject)
+{
+    public string? MaterialRevision { get; init; }
+    public string? CredentialBinding { get; init; }
+    public string? RedirectUri { get; init; }
+}
 public sealed record ExternalFlowCompleted(string? UserId = null, string? ReturnUrl = null, string? PreviewResultHandle = null,
     ExternalAuthenticationProvenance? Provenance = null, ExternalFlowFailure Failure = ExternalFlowFailure.None,
     ExternalProtocolFailure ProtocolFailure = ExternalProtocolFailure.None, ExternalAdmissionFailure AdmissionFailure = ExternalAdmissionFailure.None);

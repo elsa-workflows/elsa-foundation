@@ -25,9 +25,11 @@ public static class ExternalAuthenticationRegistration
         services.EnsureReplacementContract<IConnectionRegistry, DefaultConnectionRegistry>();
         services.EnsureReplacementContract<IConnectionWriter, ConnectionWriter>();
         services.EnsureReplacementContract<IConnectionWriteAuthorizer, PermissionConnectionAuthorizer>();
-        services.EnsureReplacementContract<IConnectionReadiness, UnavailableConnectionReadiness>();
-        services.EnsureReplacementContract<ILocalLoginRecovery, UnavailableLocalRecovery>();
-        services.EnsureReplacementContract<IConnectionRecovery, UnavailableConnectionRecovery>();
+        services.TryAddScoped<ConnectionProofStore>();
+        services.EnsureReplacementContract<IConnectionReadiness, ConnectionRuntimeServices>();
+        services.EnsureReplacementContract<ILocalLoginRecovery, ConnectionRuntimeServices>();
+        services.EnsureReplacementContract<IConnectionRecovery, ConnectionRuntimeServices>();
+        services.EnsureReplacementContract<IConnectionSignInEvidence, ConnectionRuntimeServices>();
         services.EnsureReplacementContract<IExternalAdmissionService, ExternalAdmissionService>();
         services.EnsureReplacementContract<IExternalAuthenticationFlowService, ExternalAuthenticationFlowService>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExternalProvisioningPolicy, JitProvisioningPolicy>());

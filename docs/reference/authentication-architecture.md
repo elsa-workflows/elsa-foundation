@@ -473,8 +473,8 @@ The optional managed feature rejects unknown identities by default. Explicit per
 a new user with existing Elsa roles or match an eligible existing user under configured evidence and delegation
 bounds. Integrators supply named `IExternalProvisioningPolicy` implementations through the managed Core contract.
 Policy assessment is read-only and also supplies preview; only actual admission invokes the authority's atomic
-user/link mutation. Saved manual assignments are preserved. The optional recurring group-mapping membership choice
-in spec 1205 is still open and has not been inferred from the withdrawn card response.
+user/link mutation. Saved manual assignments are preserved. Under the owner decision in spec 1205, provisioning policies assign
+saved existing Elsa roles at user creation; recurring external group-to-role mappings are excluded for now.
 
 `PrincipalFactoryContext` now takes `(TenantId, UserId, Provider?)`, after admission. Its old external-principal,
 claim-rule and automatic-provisioning contract is retired as a pre-GA source-breaking change. The factory refuses

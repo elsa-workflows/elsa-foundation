@@ -21,10 +21,31 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
 {
     public string AuthenticationScheme => AspNetCoreIdentityDefaults.CookieScheme;
 
+    public async ValueTask<bool> CanSignInAsync(PrincipalFactoryContext context, bool requiresPassword = false, CancellationToken cancellationToken = default) =>
+        await EligibleUser(context, requiresPassword, cancellationToken) is not null;
+
     public async ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default)
     {
+        if (http.HttpContext is null) return null;
+        var user = await EligibleUser(context, false, cancellationToken);
+        if (user is null) return null;
+        var principal = await principalFactory.CreateAsync(user);
+        if (principal.Identities.Count() != 1 || principal.Identity is not ClaimsIdentity identity ||
+            identity.AuthenticationType != AuthenticationScheme || !subjects.TryResolve(principal, out var subject) ||
+            subject.TenantId != context.TenantId || subject.CanonicalUserId != context.UserId) return null;
+        foreach (var existing in identity.FindAll(IdentityClaimTypes.Provider).ToArray()) identity.RemoveClaim(existing);
+        identity.AddClaim(new(IdentityClaimTypes.Provider, context.Provider ?? options.Value.ProviderId));
+        var session = await sessions.GetAsync(principal, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        await http.HttpContext.SignInAsync(AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = false });
+        return session;
+    }
+
+    private async Task<AspNetCoreIdentityUser?> EligibleUser(PrincipalFactoryContext context, bool requiresPassword, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(context);
-        if (http.HttpContext is null || string.IsNullOrWhiteSpace(context.TenantId) || string.IsNullOrWhiteSpace(context.UserId)) return null;
+        if (string.IsNullOrWhiteSpace(context.TenantId) || string.IsNullOrWhiteSpace(context.UserId) ||
+            requiresPassword && (!options.Value.Enabled || options.Value.DefaultTenantId != context.TenantId)) return null;
         var scope = new PersistenceScope(context.TenantId);
         if (access.Current.Scope != scope) binder.Bind(PersistenceAccessContext.Scoped(scope));
         var record = await users.FindAsync(context.TenantId, context.UserId, cancellationToken);
@@ -37,15 +58,8 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
         // This adapter has no local second-factor completion protocol. Do not turn an externally
         // authenticated identity into a bypass of an existing account's required local second factor.
         if (userManager.SupportsUserTwoFactor && await userManager.GetTwoFactorEnabledAsync(user)) return null;
-        var principal = await principalFactory.CreateAsync(user);
-        if (principal.Identities.Count() != 1 || principal.Identity is not ClaimsIdentity identity ||
-            identity.AuthenticationType != AuthenticationScheme || !subjects.TryResolve(principal, out var subject) ||
-            subject.TenantId != context.TenantId || subject.CanonicalUserId != context.UserId) return null;
-        foreach (var existing in identity.FindAll(IdentityClaimTypes.Provider).ToArray()) identity.RemoveClaim(existing);
-        identity.AddClaim(new(IdentityClaimTypes.Provider, context.Provider ?? options.Value.ProviderId));
-        var session = await sessions.GetAsync(principal, cancellationToken);
+        if (requiresPassword && (!userManager.SupportsUserPassword || !await userManager.HasPasswordAsync(user))) return null;
         cancellationToken.ThrowIfCancellationRequested();
-        await http.HttpContext.SignInAsync(AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = false });
-        return session;
+        return user;
     }
 }

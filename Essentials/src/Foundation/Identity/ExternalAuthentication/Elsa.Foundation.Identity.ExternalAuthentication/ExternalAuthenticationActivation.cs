@@ -16,6 +16,9 @@ internal sealed class ExternalAuthenticationActivation(IOptions<ExternalAuthenti
     {
         cancellationToken.ThrowIfCancellationRequested();
         var configured = options.Value;
+        if (configured.RecoveryEvidenceLifetime < TimeSpan.FromMinutes(1) || configured.RecoveryEvidenceLifetime > TimeSpan.FromDays(30) ||
+            configured.RecoveryScanLimit is < 1 or > 10000)
+            throw new InvalidOperationException("External recovery evidence lifetime must be one minute to thirty days and the local scan bound must be one to ten thousand accounts.");
         _ = ConnectionSelection.Select(configured, new ConnectionCatalog([]));
         if (configured.AllowDatabaseManagement)
         {

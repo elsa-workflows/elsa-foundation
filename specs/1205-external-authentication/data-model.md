@@ -8,11 +8,11 @@ Issued first-party tokens retain canonical user ID separately and external-origi
 
 ## Connection catalog
 
-One bounded global provider-configuration aggregate holds database connection documents under a versioned kind and catalog revision/ETag. Each document has immutable record ID/logical key, adapter type/settings, secret references, admission/default-role/mapping policy, display/preferred order, enabled intent, archive timestamp and explicit override intent. Material revision excludes observation timestamps. Deployment options hold baseline documents and the allowed override/role boundary. No field merging. Catalog CAS checks source lifecycle and final usable path atomically.
+One bounded global provider-configuration aggregate holds database connection documents under a versioned kind and catalog revision/ETag. Each document has immutable record ID/logical key, adapter type/settings, secret references, admission/default-role policy, display/preferred order, enabled intent, archive timestamp and explicit override intent. Material revision excludes observation timestamps. Deployment options hold baseline documents and the allowed override/role boundary. No field merging. Catalog CAS checks source lifecycle and final usable path atomically.
 
 ## External identity and admission
 
-Exact tuple `(tenant, logical key, issuer, subject)` maps to one Elsa user. No issuer/subject case folding. Atomic link-or-create prevents orphan JIT users and conflicting ownership; default role IDs reference existing Elsa roles. Existing-user matching returns one eligible tenant user with explicit evidence. Pure assessment returns reject/existing/create/match and prospective Elsa grants without performing writes. Optional mapped-role persistence remains pending owner clarification.
+Exact tuple `(tenant, logical key, issuer, subject)` maps to one Elsa user. No issuer/subject case folding. Atomic link-or-create prevents orphan JIT users and conflicting ownership; default role IDs reference existing Elsa roles. Existing-user matching returns one eligible tenant user with explicit evidence. Pure assessment returns reject/existing/create/match and prospective Elsa grants without performing writes. The integrator policy may select declared existing Elsa roles at initial provisioning. No recurring mapped-role membership or session grant is modeled; subsequent sign-ins use saved memberships.
 
 ## Flow, preview and session
 
@@ -21,3 +21,7 @@ Separate Identity-owned persistence: purpose, hashed handle, expiry, protected s
 Managed links extend the existing `ExternalIdentityRecord` with a validated issuer and use `ExternalIdentityKey`
 for qualified lookup. Null issuer is a separate legacy namespace, never a fallback. The additive IAM migrations
 preserve old rows and histories; the 1.0.0-to-1.1.0 chain preserves existing content while new writes stamp 1.1.0.
+
+## Private recovery observations
+
+Separate host-tenant/logical-key rows in the existing revision-aware global provider configuration store hold a versioned, Data Protection-protected bounded envelope of successful normal administrative sign-ins. Each proof carries source record, material revision, trusted callback, exact issuer/subject/user, opaque credential binding and observed UTC. No upstream tokens or secret values are retained. Up to sixteen recent observations per key; default eligibility window 24 hours, maximum thirty days. Expired entries never count and are pruned on the next record write. Preview never writes proofs. Configuration changes and live IAM/link/permission/credential/callback checks can invalidate proof earlier. These observations do not change material revision and are never a public management projection. Existing catalog CAS still coordinates concurrent connection retirement; cross-IAM/link/session mutation integration remains T024.

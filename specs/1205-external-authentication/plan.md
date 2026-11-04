@@ -2,7 +2,7 @@
 
 **Branch**: `agent/codex/3579-external-auth` | **Date**: 2026-11-04 | **Spec**: [spec.md](spec.md)
 
-**Status**: design in progress; role-mapping persistence choice pending. Independent identity-isolation prerequisite R5 is ready to implement.
+**Status**: implementation in progress. Owner selected provisioning policies assigning saved existing Elsa roles; recurring external group-to-role mappings are excluded for now.
 
 ## Summary
 
@@ -44,7 +44,7 @@ Read framework v6.1.0, Elsa v6.3.0 and the contribution review checklist. No con
 
 ## Stages and dependencies
 
-1. Foundation/security: typed subject across issue/refresh/logout, canonical projection, #2848 isolation proof; then exact links, atomic admission and durable flow/session contracts. R5 is independent of the pending mapped-role decision.
+1. Foundation/security: typed subject across issue/refresh/logout, canonical projection, #2848 isolation proof; then exact links, atomic admission and durable flow/session contracts. R5 preserves subject isolation; managed sessions project saved Elsa grants only.
 2. Connections/ownership: baseline/catalog CAS, explicit override lifecycle, validation/Secrets, role delegation and final-login guard. Confirm role authority before implementing dependent behavior.
 3. Real login/preview: protocol validation, durable browser state, normal cookie/token completion and isolated preview. Preserve bearer/optional compositions.
 4. Operations/API/Studio: editor/test/preview/enable, links/sessions, notifications and recovery; source/ownership/permission/theme/responsive states.

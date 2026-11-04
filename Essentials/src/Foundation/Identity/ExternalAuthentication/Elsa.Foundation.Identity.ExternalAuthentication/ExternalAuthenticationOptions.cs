@@ -12,6 +12,9 @@ public sealed class ExternalAuthenticationOptions
     public List<string> AllowedReturnUrlOrigins { get; set; } = [];
     public TimeSpan FlowLifetime { get; set; } = TimeSpan.FromMinutes(10);
     public TimeSpan PreviewResultLifetime { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan RecoveryEvidenceLifetime { get; set; } = TimeSpan.FromDays(1);
+    /// <summary>Fallback local-account scan is bounded; the acting canonical administrator is checked first.</summary>
+    public int RecoveryScanLimit { get; set; } = 1000;
     public bool AllowDatabaseManagement { get; set; }
     public bool AllowDeploymentOverrides { get; set; }
     public List<string> AllowedOverrideKeys { get; set; } = [];

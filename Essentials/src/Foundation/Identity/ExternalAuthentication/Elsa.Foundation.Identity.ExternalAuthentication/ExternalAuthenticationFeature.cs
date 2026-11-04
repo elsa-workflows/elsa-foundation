@@ -24,6 +24,8 @@ public class ExternalAuthenticationFeature : IShellFeature
     public bool AllowDeploymentOverrides { get; set; }
     public List<string> AllowedOverrideKeys { get; set; } = [];
     public List<string> AllowedRoleIds { get; set; } = [];
+    public TimeSpan RecoveryEvidenceLifetime { get; set; } = TimeSpan.FromDays(1);
+    public int RecoveryScanLimit { get; set; } = 1000;
     public List<ConnectionRecord> Connections { get; set; } = [];
 
     public virtual void ConfigureServices(IServiceCollection services) => services.AddFoundationExternalAuthentication(options =>
@@ -36,6 +38,8 @@ public class ExternalAuthenticationFeature : IShellFeature
         options.AllowDeploymentOverrides = AllowDeploymentOverrides;
         options.AllowedOverrideKeys = AllowedOverrideKeys;
         options.AllowedRoleIds = AllowedRoleIds;
+        options.RecoveryEvidenceLifetime = RecoveryEvidenceLifetime;
+        options.RecoveryScanLimit = RecoveryScanLimit;
         options.Connections = Connections;
     });
 }

@@ -54,8 +54,8 @@ internal static partial class ConnectionSelection
                 record.Key is null || !LogicalKey().IsMatch(record.Key) ||
                 !ids.Add(record.Id) || !keys.Add(record.Key) ||
                 record.Settings is null || record.Secrets is null || record.Admission is null ||
-                record.RoleMappings is null || record.Admission.DefaultRoleIds is null ||
-                record.Settings.Count > 64 || record.Secrets.Count > 16 || record.RoleMappings.Count > 256 ||
+                record.Admission.DefaultRoleIds is null ||
+                record.Settings.Count > 64 || record.Secrets.Count > 16 ||
                 record.Admission.DefaultRoleIds.Count > 256 ||
                 string.IsNullOrWhiteSpace(record.Protocol) || record.Protocol.Length > 80 ||
                 string.IsNullOrWhiteSpace(record.Admission.Type) || record.Admission.Type.Length > 80 || record.Admission.Matcher?.Length > 80 ||
@@ -70,11 +70,8 @@ internal static partial class ConnectionSelection
                     string.IsNullOrWhiteSpace(binding.Value.Name) || binding.Value.Name.Length > 256 ||
                     binding.Value.TypeName?.Length > 128 || binding.Value.Scope?.Length > 256)
                     throw new InvalidOperationException("The connection has an invalid secret reference.");
-            if (record.Admission.DefaultRoleIds.Any(role => string.IsNullOrWhiteSpace(role) || role.Length > 400) ||
-                record.RoleMappings.Any(mapping => mapping is null || string.IsNullOrWhiteSpace(mapping.RoleId) || mapping.RoleId.Length > 400 ||
-                    string.IsNullOrWhiteSpace(mapping.ClaimType) || mapping.ClaimType.Length > 256 ||
-                    mapping.ClaimValue is null || mapping.ClaimValue.Length > 8192))
-                throw new InvalidOperationException("The connection has invalid role references or mappings.");
+            if (record.Admission.DefaultRoleIds.Any(role => string.IsNullOrWhiteSpace(role) || role.Length > 400))
+                throw new InvalidOperationException("The connection has invalid role references.");
         }
     }
 
@@ -82,15 +79,14 @@ internal static partial class ConnectionSelection
     {
         Settings = new SortedDictionary<string, string>(record.Settings.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal),
         Secrets = new SortedDictionary<string, Elsa.Secrets.Core.Models.SecretReference>(record.Secrets.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal),
-        Admission = record.Admission with { DefaultRoleIds = record.Admission.DefaultRoleIds.Order(StringComparer.Ordinal).ToArray() },
-        RoleMappings = record.RoleMappings.ToArray()
+        Admission = record.Admission with { DefaultRoleIds = record.Admission.DefaultRoleIds.Order(StringComparer.Ordinal).ToArray() }
     };
 
-    private static string MaterialRevision(ConnectionRecord record)
+    internal static string MaterialRevision(ConnectionRecord record)
     {
         // Presentation is not authentication material. Observations live outside the connection document.
         var material = new { record.Key, record.Protocol, record.Settings, record.Secrets, record.Admission,
-            record.RoleMappings, record.Enabled, record.OverridesDeployment, record.ArchivedAt };
+            record.Enabled, record.OverridesDeployment, record.ArchivedAt };
         return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(material)));
     }
 

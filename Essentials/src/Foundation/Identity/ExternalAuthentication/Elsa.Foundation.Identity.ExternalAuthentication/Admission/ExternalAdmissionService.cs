@@ -61,7 +61,6 @@ internal sealed class ExternalAdmissionService(IServiceScopeFactory scopes, ICon
         var roles = services.GetService<IRoleStore>();
         var memberships = services.GetService<ITenantMembershipStore>();
         if (users is null || links is null || !links.SupportsQualifiedKeys || roles is null || memberships is null) return Reject(ExternalAdmissionFailure.IdentityUnavailable);
-        if (context.Connection.Record.RoleMappings.Count != 0) return Reject(ExternalAdmissionFailure.RoleMappingUnavailable);
         var linked = await links.FindByKeyAsync(context.Identity, token);
         if (linked is not null)
         {
@@ -162,8 +161,7 @@ internal sealed class ExternalAdmissionService(IServiceScopeFactory scopes, ICon
         record = record with
         {
             Settings = record.Settings.ToFrozenDictionary(StringComparer.Ordinal), Secrets = record.Secrets.ToFrozenDictionary(StringComparer.Ordinal),
-            Admission = record.Admission with { DefaultRoleIds = Array.AsReadOnly(record.Admission.DefaultRoleIds.ToArray()) },
-            RoleMappings = Array.AsReadOnly(record.RoleMappings.ToArray())
+            Admission = record.Admission with { DefaultRoleIds = Array.AsReadOnly(record.Admission.DefaultRoleIds.ToArray()) }
         };
         return context with { Connection = context.Connection with { Record = record }, Claims = Array.AsReadOnly(claims) };
     }

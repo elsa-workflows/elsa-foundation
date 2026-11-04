@@ -9,7 +9,12 @@ public enum ExternalProtocolFailure
     UnsupportedClientAuthentication, ProviderChanged, SecretChanged, UpstreamRejected, InvalidToken, InvalidResponse
 }
 
-public sealed record ExternalProtocolCheck(ExternalProtocolFailure Failure = ExternalProtocolFailure.None);
+/// <summary>Server-only check. Credential binding is opaque internal evidence and must never enter management projections.</summary>
+public sealed record ExternalProtocolCheck(ExternalProtocolFailure Failure = ExternalProtocolFailure.None)
+{
+    public string? Issuer { get; init; }
+    public string? CredentialBinding { get; init; }
+}
 
 /// <summary>Server-generated parameters, retained only in protected flow state.</summary>
 public sealed record ExternalProtocolChallengeRequest(string RedirectUri, string State, string Nonce, string CodeVerifier);

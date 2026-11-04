@@ -51,6 +51,33 @@ public sealed class ExternalAdmissionPolicyTests
     }
 
     [Fact]
+    public async Task Integrator_provisioning_assigns_saved_roles_once_and_later_sign_ins_preserve_manual_memberships()
+    {
+        var policy = new CustomPolicy("integrator", ["reader"]);
+        await using var host = Create("integrator", ["reader"], custom: policy);
+        await host.Role("reader", "workflows:read");
+        await host.Role("operator", "workflows:execute");
+        var initial = await host.Service.AdmitAsync(await host.Context());
+        Assert.Equal(ExternalAdmissionFailure.None, initial.Failure);
+        var saved = (await host.Users.FindAsync("default", initial.UserId!))!;
+        Assert.Equal(["reader"], saved.RoleIds);
+        Assert.Equal(1, policy.Calls);
+        await host.Users.SaveAsync(saved with { RoleIds = new HashSet<string> { "operator" } });
+        host.Reset();
+        var context = await host.Context();
+        context = context with { Claims = context.Claims.Concat(new[] {
+            new Claim("groups", "admin"), new Claim(ClaimTypes.Role, "admin"), new Claim(IdentityClaimTypes.Permission, "*")
+        }).ToArray() };
+        var preview = await host.Service.AssessAsync(context);
+        Assert.Equal(["operator"], preview.RoleIds);
+        Assert.Equal(["workflows:execute"], preview.Permissions);
+        Assert.Equal(initial.UserId, (await host.Service.AdmitAsync(context)).UserId);
+        Assert.Equal(["operator"], (await host.Users.FindAsync("default", initial.UserId!))!.RoleIds);
+        Assert.Equal(1, policy.Calls);
+        Assert.Equal(0, host.Writes);
+    }
+
+    [Fact]
     public async Task Explicit_Jit_for_two_providers_creates_distinct_users_even_when_their_email_is_equal()
     {
         await using var host = Create("jit");
@@ -282,9 +309,13 @@ public sealed class ExternalAdmissionPolicyTests
 
     private sealed class CustomPolicy(string name, string[] roles) : IExternalProvisioningPolicy
     {
+        public int Calls { get; private set; }
         public string Name => name;
-        public ValueTask<ExternalProvisioningDecision> AssessAsync(ExternalAdmissionContext context, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ExternalProvisioningDecision { Kind = ExternalAdmissionKind.NewUser, RoleIds = roles });
+        public ValueTask<ExternalProvisioningDecision> AssessAsync(ExternalAdmissionContext context, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(new ExternalProvisioningDecision { Kind = ExternalAdmissionKind.NewUser, RoleIds = roles });
+        }
     }
 
     private sealed class Host(ServiceProvider provider, InMemoryIdentityStore store, TrackingStore tracker) : IAsyncDisposable

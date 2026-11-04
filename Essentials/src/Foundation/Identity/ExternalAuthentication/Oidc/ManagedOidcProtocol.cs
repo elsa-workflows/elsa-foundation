@@ -27,18 +27,19 @@ internal sealed class ManagedOidcProtocol(IHttpClientFactory clients, IServiceSc
     public string Name => "oidc";
 
     public ValueTask<ExternalProtocolCheck> CheckAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) =>
-        Run(async token => { var settings = Settings(connection); _ = await Credential(connection, settings, token); return new ExternalProtocolCheck(); },
+        Run(async token => { var settings = Settings(connection); var credential = await Credential(connection, settings, token);
+                return new ExternalProtocolCheck { Issuer = settings.Authority, CredentialBinding = credential.Binding }; },
             failure => new ExternalProtocolCheck(failure), cancellationToken);
 
     public ValueTask<ExternalProtocolCheck> TestAsync(ConnectionRecord connection, CancellationToken cancellationToken = default) =>
         Run(async token =>
         {
             var settings = Settings(connection);
-            _ = await Credential(connection, settings, token);
+            var credential = await Credential(connection, settings, token);
             using var client = clients.CreateClient(ManagedOidcRegistration.HttpClientName);
             var metadata = await OidcTransport.Metadata(client, settings, options.Value, environment, token);
             _ = await Keys(client, metadata, settings, token);
-            return new ExternalProtocolCheck();
+            return new ExternalProtocolCheck { Issuer = metadata.Issuer, CredentialBinding = credential.Binding };
         }, failure => new ExternalProtocolCheck(failure), cancellationToken);
 
     public ValueTask<ExternalProtocolChallenge> ChallengeAsync(ConnectionRecord connection, ExternalProtocolChallengeRequest request, CancellationToken cancellationToken = default) =>

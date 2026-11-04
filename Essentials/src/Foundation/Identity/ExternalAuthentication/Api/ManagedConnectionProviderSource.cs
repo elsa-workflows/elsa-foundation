@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 
-internal sealed class ManagedConnectionProviderSource(IConnectionRegistry registry, IExternalAuthenticationFlowService flows,
+internal sealed class ManagedConnectionProviderSource(IConnectionRegistry registry, IExternalAuthenticationFlowService flows, IConnectionReadiness readiness,
     IEnumerable<IExternalAuthenticationProtocol> protocols, IOptions<ExternalAuthenticationOptions> options, IOptions<FoundationIdentityOptions> identity,
     IAuthenticationSchemeProvider schemes,
     ICanonicalUserSignInService? signIn = null, IAuthenticationArtifactStore? artifacts = null, IHostEnvironment? environment = null)
@@ -24,7 +24,7 @@ internal sealed class ManagedConnectionProviderSource(IConnectionRegistry regist
         {
             var matching = protocols.Where(protocol => protocol.Name == view.Record.Protocol).Take(2).ToArray();
             var callback = flows.GetCallbackUri(view.Record.Key, AuthenticationArtifactPurpose.SignIn);
-            if (callback is null || matching.Length != 1 || (await matching[0].CheckAsync(view.Record, cancellationToken)).Failure != ExternalProtocolFailure.None) continue;
+            if (callback is null || matching.Length != 1 || !await readiness.IsReadyAsync(view.Record, cancellationToken)) continue;
             result.Add(new(ProviderId(view.Record.Key), string.IsNullOrWhiteSpace(view.Record.DisplayName) ? view.Record.Key : view.Record.DisplayName,
                 view.Record.Protocol, identity.Value.ProviderCapabilities with { SupportsGroupSync = false }, options.Value.TenantId, true, view.Record.Preferred,
                 new(callback[..^"/callback".Length], "POST", signIn.AuthenticationScheme)));

@@ -6,7 +6,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 - [x] T001 Claim/revalidate #3579/#2848, isolate the worktree and record baseline/owner authorization in `research.md` and issue comments.
 - [x] T002 Refresh Elsa 3/Elsa 4 inventory and define complete journeys in `spec.md`, `research.md`, `data-model.md`, `contracts/identity-and-management.md`, `quickstart.md` and `plan.md`.
-- [ ] T003 Resolve the repeated mapped-role card and update `research.md` R6 and `spec.md`; do not use the withdrawn selection.
+- [x] T003 Record the considered owner decision in `research.md` R6 and `spec.md`: provisioning policy only, assigning saved existing Elsa roles; omit external group-to-role mappings for now.
 - [x] T004 Amend explicit override/phase bookkeeping in `docs/adr/0085-elsa-3-parity-identity-administration-and-scope.md`, `docs/adr/0080-elsa-4-simplification-decisions.md`, `docs/program-goals/elsa3-parity.md` and the registry.
 
 ## Phase 2 — Foundational identity isolation (independent of T003)
@@ -21,14 +21,14 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 - [x] T010 [US1] Extend exact issuer/subject link and atomic admission contracts in `Identity/Core/Iam/` and implementation/store counterparts under `Identity/AspNetCoreIdentity/` and `Identity/Persistence/EntityFrameworkCore/`. Exact-link contracts/stores, additive migration, content-preserving schema upgrade and atomic admission are implemented. Policy/protocol composition and actual provider qualification remain in their following tasks.
 - [x] T011 [US1] Implement reject-default, explicit JIT/default Elsa roles and configured matcher policies with preview-safe assessment under `Identity/`; include disabled/ambiguous/conflicting-user behavior tests.
-- [ ] T012 [US1] After T003, implement explicit existing-Elsa-role mapping, deployment/editor delegation and permission projection under `Identity/`; cover claim injection and deleted roles.
+- [x] T012 [US1] Apply T003: remove unused external group-to-role mapping contracts; retain provisioning-policy role selection, deployment/editor delegation and saved-permission projection under `Identity/`; verify claim injection, preserved manual memberships and missing roles.
 - [x] T013 [US1] Compose external admission into ordinary cookie/OpenIddict sessions in `Identity/AspNetCoreIdentity/`; honor FoundationOwned/ExternalOwned/Hybrid capabilities. Actual owned HTTP tests prove normal cookie/access/refresh/logout and ownership behavior; durable selected-session/status enforcement remains T023.
 
 ## Phase 4 — US3: source ownership and lifecycle
 
 - [x] T014 [US3] Define typed connection/catalog and live discovery contracts in `Identity/ExternalAuthentication/Core/`; reuse provider-configuration CAS in its optional implementation with explicit authorized global boundary. Optional API contributes bounded live bootstrap/provider discovery with Elsa IAM capabilities and explicit source lifecycle.
 - [x] T015 [US3] Implement deployment baseline, no-auto-shadow collision, explicit full override, disabled shadow and archive/restore/remove semantics under `Identity/`; include material revisions/provenance.
-- [ ] T016 [US3] Implement atomic catalog mutation/final-login guard including unusable baseline and concurrent last-path races under `Identity/`; test provider-backed persistence. Coordinator/CAS/native writer race checks are implemented; actual protocol/IAM recovery adapters remain for runtime qualification.
+- [x] T016 [US3] Implement catalog mutation/final-login guard with installed-protocol/IAM/session readiness and evidence-backed administrative recovery. Actual HTTP sign-ins/native SQLite prove invalid-baseline refusal, safe baseline reveal, stale credential/callback/identity/permission rejection and forced two-node catalog CAS retirement. Cross-IAM/link/session mutations remain T024; separate-process/server-database/deployment proof remains T026–T028.
 
 ## Phase 5 — US2: configure, test, preview, enable
 
@@ -62,6 +62,6 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 ## Dependencies and execution
 
-T005–T009 may proceed while T003 is pending. Then T010/T011/T014 establish identity/catalog foundations; T012 waits for T003. Lifecycle validation precedes management mutation; protocol/state precede real login/preview; API precedes Studio integration. Session/flow/provider persistence is required before runtime qualification. No file-overlapping tasks run concurrently. Protocol tests and UI tests may run independently after their interfaces stabilize, respecting shared build slots. Current skill permits parallel tasks, but no implementation delegation is required.
+T003 selects provisioning policy only. T005–T009 establish identity isolation; T010/T011/T014 establish identity/catalog foundations; T012 applies the role-scope decision. Lifecycle validation precedes management mutation; protocol/state precede real login/preview; API precedes Studio integration. Session/flow/provider persistence is required before runtime qualification. No file-overlapping tasks run concurrently. Protocol tests and UI tests may run independently after their interfaces stabilize, respecting shared build slots. Current skill permits parallel tasks, but no implementation delegation is required.
 
 All journeys remain P1 delivery requirements; there is no reduced acceptance/MVP closeout. Tests follow risk-based repository cadence; no blanket TDD declaration is present. New regressions should demonstrate the prior failure where practical, and all valid prior behavior remains tested.

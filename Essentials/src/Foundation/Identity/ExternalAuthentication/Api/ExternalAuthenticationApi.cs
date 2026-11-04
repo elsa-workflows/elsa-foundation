@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using NativeEndpoints;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
@@ -144,6 +145,17 @@ public static class ExternalAuthenticationApi
             var tenant = context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.TenantId;
             if (await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key)), context.RequestAborted) is null)
             { await Failure(context, 401); return; }
+            try
+            {
+                await context.RequestServices.GetRequiredService<IConnectionSignInEvidence>().RecordAsync(flow.UserId, flow.Provenance, context.RequestAborted);
+            }
+            catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+            {
+                // Optional recovery observations must not turn a successful sign-in into an outage.
+                // Missing evidence can never permit a destructive management change.
+                context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(ExternalAuthenticationApi))
+                    .LogWarning("External recovery evidence was not recorded ({FailureType}).", exception.GetType().Name);
+            }
             await Results.Redirect(flow.ReturnUrl).ExecuteAsync(context);
             return;
         }

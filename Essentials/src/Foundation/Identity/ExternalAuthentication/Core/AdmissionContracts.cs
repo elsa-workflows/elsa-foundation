@@ -12,7 +12,7 @@ public enum ExternalAdmissionFailure
 {
     None, UnknownIdentity, IdentityMismatch, IdentityUnavailable, UserUnavailable, MembershipUnavailable,
     PolicyUnavailable, PolicyRejected, VerifiedEmailRequired, NoEligibleMatch, OwnershipDenied,
-    InvalidProfile, RoleUnavailable, RoleBoundary, ConnectionUnavailable, StaleConnection, Conflict, RoleMappingUnavailable
+    InvalidProfile, RoleUnavailable, RoleBoundary, ConnectionUnavailable, StaleConnection, Conflict
 }
 
 /// <summary>Pure policy output. New-user role IDs must be selected from the connection's authorized defaults.</summary>

@@ -81,18 +81,24 @@ internal sealed class ConnectionWriter(
         ConnectionSelection.Validate(records);
         var desired = new ConnectionCatalog(records, current.Revision);
         var after = ConnectionSelection.Select(options.Value, desired);
-        if (!await localRecovery.IsUsableAsync(cancellationToken) &&
-            RemovesEnabledPath(before, after) && !await HasExternalPath(after, cancellationToken))
+        if (RemovesEnabledPath(before, after) && !await localRecovery.IsUsableForAsync(actor, cancellationToken) &&
+            !await HasExternalPath(after, actor, cancellationToken))
             return Reject("final-login-path");
         cancellationToken.ThrowIfCancellationRequested();
         return new PreparedWrite(desired, after, proposed.Id);
     }
 
-    private async ValueTask<bool> HasExternalPath(ConnectionRegistryView registry, CancellationToken cancellationToken)
+    private async ValueTask<bool> HasExternalPath(ConnectionRegistryView registry, ClaimsPrincipal actor, CancellationToken cancellationToken)
     {
-        foreach (var view in registry.Connections.Where(view => view.Effective && view.Record.Enabled))
-            if (await readiness.IsReadyAsync(view.Record, cancellationToken) &&
-                await recovery.IsUsableAsync(view.Record, cancellationToken)) return true;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            foreach (var view in registry.Connections.Where(view => view.Effective && view.Record.Enabled))
+                if (await readiness.IsReadyAsync(view.Record, deadline.Token) &&
+                    await recovery.IsUsableForAsync(view.Record, actor, deadline.Token)) return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return false; }
         return false;
     }
 

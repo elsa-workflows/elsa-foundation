@@ -100,7 +100,8 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
             var result = await admission.AdmitAsync(context, cancellationToken);
             return result.UserId is null
                 ? new(Failure: ExternalFlowFailure.AdmissionRejected, AdmissionFailure: result.Failure)
-                : new(result.UserId, state.ReturnUrl, Provenance: new(state.ConnectionKey, state.ConnectionRecordId, state.Issuer, verified.Identity.Subject));
+                : new(result.UserId, state.ReturnUrl, Provenance: new(state.ConnectionKey, state.ConnectionRecordId, state.Issuer, verified.Identity.Subject)
+                    { MaterialRevision = state.MaterialRevision, CredentialBinding = state.CredentialBinding, RedirectUri = state.RedirectUri });
         }
         var prospective = await admission.AssessAsync(context, cancellationToken);
         if (prospective.RoleIds.Count > 128 || prospective.Permissions.Count > 1024 || options.Value.PreviewResultLifetime < TimeSpan.FromSeconds(1) ||

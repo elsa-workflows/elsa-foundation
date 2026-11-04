@@ -49,7 +49,7 @@ public sealed class ExpandOnlyMigrationScanTests
         var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, manifest);
 
         Assert.True(report.Passed, string.Join("\n", report.Failures));
-        Assert.Equal(18, report.Modules);
+        Assert.Equal(19, report.Modules);
         Assert.Equal(0, report.PostFreezeMigrations);
         Assert.Equal(0, report.OperationsClassified);
         Assert.True(report.BaselineMigrations > 0);

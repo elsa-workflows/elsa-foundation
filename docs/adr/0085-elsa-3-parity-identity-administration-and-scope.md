@@ -68,13 +68,19 @@ This supersedes D3's original automatic same-key shadowing rule. The other accep
 *Why:* this is Elsa 3.8's model, which operators already understand, and it keeps configuration-as-code deployments
 deterministic.
 
-### D4: IdP groups and roles map to Elsa roles
+### D4: Provisioning policies assign existing Elsa roles
 
-Admins map IdP groups or roles to Elsa roles per provider. Provider claims never become permissions directly unless a
-grant source is configured explicitly.
+Owner amendment, 4 November 2026 (#3579): an integrator's provisioning policy can assign saved existing Elsa roles
+when creating an external user. Later managed sign-ins use saved Elsa memberships and preserve manual assignments.
+Omit external group-to-role mappings for now, including session-only grants and recurring provider-managed saved
+memberships. Provider role/group names confer no automatic authority and never define Elsa permissions.
 
-*Why:* Elsa stays the only authority that turns roles into permissions, as in Elsa 3. Elsa 4's claim mapping rules
-already fit.
+This supersedes D4's planned recurring mapping for managed external connections. The existing explicitly configured
+direct-bearer normalization bridge is separate. Deployment role boundaries and the administrator's delegation
+permissions constrain provisioning choices.
+
+*Why:* Elsa owns users, role definitions and permissions; integrators can decide initial membership through the
+programmable policy without introducing a second source of ongoing membership authority.
 
 ### D5: Unknown external users are rejected by default
 
@@ -145,7 +151,7 @@ import and modules and needs its own queue, label and owner to be planned and ca
   queries (#2774), API keys (#2775), Studio sign-out (#2776), the users API (#2777), the roles and permissions API
   (#2778), escalation and last-admin guards (#2779), Studio Users (#2780) and Roles (#2781) pages, and Studio
   permission gating (#2782).
-- Phase 2 (external OIDC: provisioning on sign-in, provider registry, group-to-role mapping, Studio SSO pages) is
+- Phase 2 (external OIDC: provisioning on sign-in, provider registry, provisioning-policy roles, Studio SSO pages) is
   filed once Phase 1 is under way. Phases 3 (tenancy, Elsa 3 import), 4 (runtime operations) and 5 (Webhooks, User
   Tasks, secrets in expressions) follow.
 - The D2 rename touches every permission check and seeded role. It lands first in Phase 1 so later issues use the new

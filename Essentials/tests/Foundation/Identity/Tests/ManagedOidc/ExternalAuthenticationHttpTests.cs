@@ -43,7 +43,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
-public sealed class ExternalAuthenticationHttpTests
+public sealed partial class ExternalAuthenticationHttpTests
 {
     [Fact]
     public async Task Managed_protocol_endpoints_declare_their_owner_and_preview_management_permission()
@@ -423,6 +423,7 @@ public sealed class ExternalAuthenticationHttpTests
         public ControlledOidcServer Company { get; private set; } = null!;
         public ControlledOidcServer Partner { get; private set; } = null!;
         public SecretResolver Secrets { get; } = new();
+        public RecoveryClock Clock { get; } = new();
         public Uri BaseUri { get; private set; } = null!;
         public IServiceProvider Services => application.Services;
         public ExternalAuthenticationOptions Options => Services.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value;
@@ -435,6 +436,7 @@ public sealed class ExternalAuthenticationHttpTests
             builder.Logging.ClearProviders();
             builder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
             var services = builder.Services;
+            services.AddSingleton<TimeProvider>(host.Clock);
             services.AddAuthorization();
             services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(host.directory, "keys"))).SetApplicationName("owned-http-fixture");
             var iam = $"Data Source={Path.Combine(host.directory, "iam.db")};Pooling=False";
@@ -494,6 +496,32 @@ public sealed class ExternalAuthenticationHttpTests
         }
 
         public HttpBrowser Browser() => HttpBrowser.Create(BaseUri);
+        public ServiceProvider RuntimeNode(string applicationName = "owned-http-fixture", IConnectionCatalogStore? catalog = null)
+        {
+            var services = new ServiceCollection();
+            services.AddLogging(); services.AddSingleton(application.Environment);
+            services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(application.Environment);
+            services.AddSingleton<TimeProvider>(Clock);
+            if (catalog is not null) services.AddSingleton(catalog);
+            services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(directory, "keys"))).SetApplicationName(applicationName);
+            var iam = $"Data Source={Path.Combine(directory, "iam.db")};Pooling=False";
+            services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam }, isDevelopmentOrDemo: true);
+            services.Configure<AspNetCoreIdentityOptions>(configured => configured.Enabled = Services.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value.Enabled);
+            services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
+            services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = iam });
+            services.AddSingleton<ISecretValueResolver>(Secrets);
+            services.AddFoundationExternalOidc(configured => configured.AllowLoopbackHttpForDevelopment = true);
+            services.AddFoundationExternalAuthentication(configured =>
+            {
+                configured.PublicBaseUrl = Options.PublicBaseUrl;
+                configured.AllowDatabaseManagement = Options.AllowDatabaseManagement;
+                configured.AllowDeploymentOverrides = Options.AllowDeploymentOverrides;
+                configured.RecoveryEvidenceLifetime = Options.RecoveryEvidenceLifetime;
+                configured.Connections = Options.Connections.ToList();
+            });
+            services.AddFoundationExternalAuthenticationApi();
+            return services.BuildServiceProvider();
+        }
         public AsyncServiceScope Scope()
         {
             var scope = application.Services.CreateAsyncScope();
@@ -555,8 +583,15 @@ public sealed class ExternalAuthenticationHttpTests
     private sealed class SecretResolver : ISecretValueResolver
     {
         public int Version = 1;
+        public bool Available = true;
         public ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(ResolvedSecret.Success(ControlledOidcServer.ClientSecret, new()
-                { Id = reference.Name, TenantId = tenantId, Name = reference.Name, Scope = reference.Scope, Status = SecretStatus.Active, CurrentVersion = Version }));
+            ValueTask.FromResult(Available ? ResolvedSecret.Success(ControlledOidcServer.ClientSecret, new()
+                { Id = reference.Name, TenantId = tenantId, Name = reference.Name, Scope = reference.Scope, Status = SecretStatus.Active, CurrentVersion = Version })
+                : ResolvedSecret.Failure(SecretResolutionFailureCode.NotFound, "not available"));
+    }
+    private sealed class RecoveryClock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 }

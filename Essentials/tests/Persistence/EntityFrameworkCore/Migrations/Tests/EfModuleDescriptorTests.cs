@@ -12,6 +12,7 @@ using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
@@ -27,7 +28,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
 /// Guards the single <c>[EfModule]</c> declaration every module assembly now carries.
-/// <see cref="EfModuleCatalog.Discover"/> must find all 18 first-party modules with the
+/// <see cref="EfModuleCatalog.Discover"/> must find all 19 first-party modules with the
 /// names, base contexts and frozen history names the vocabulary table pins, and a descriptor's
 /// <c>HistoryModule</c> must never drift from the module's own frozen
 /// <c>&lt;Module&gt;EfModule.HistoryModuleName</c> constant — the exact mismatch already latent between
@@ -58,6 +59,7 @@ public sealed class EfModuleDescriptorTests
         ("Activities.Design", typeof(ActivitiesDesignDbContext), ActivitiesDesignEfModule.HistoryModuleName),
         ("Identity.Iam", typeof(IdentityIamDbContext), IdentityIamEfModule.HistoryModuleName),
         ("Identity.ProviderConfiguration", typeof(IdentityProviderConfigurationDbContext), IdentityProviderConfigurationEfModule.HistoryModuleName),
+        ("Identity.ExternalAuthentication", typeof(ExternalAuthenticationDbContext), ExternalAuthenticationEfModule.HistoryModuleName),
         ("Diagnostics.OpenTelemetry", typeof(EfOpenTelemetryDbContext), EfOpenTelemetryModule.HistoryModuleName),
         ("Diagnostics.StructuredLogs", typeof(StructuredLogsDbContext), StructuredLogsEfModule.HistoryModuleName),
         ("Studio.Preferences", typeof(StudioPreferencesDbContext), StudioPreferencesEfModule.HistoryModuleName),
@@ -69,10 +71,10 @@ public sealed class EfModuleDescriptorTests
     private static IReadOnlyList<EfModuleDescriptor> Discover() => EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
 
     [Fact]
-    public void Discover_returns_all_18_modules_with_correct_names_contexts_and_frozen_history()
+    public void Discover_returns_all_19_modules_with_correct_names_contexts_and_frozen_history()
     {
         var descriptors = Discover();
-        Assert.Equal(18, descriptors.Count);
+        Assert.Equal(19, descriptors.Count);
 
         foreach (var (name, context, historyModule) in Expected)
         {
@@ -175,6 +177,7 @@ public sealed class EfModuleDescriptorTests
         (typeof(EfOpenTelemetryDbContext).Assembly, "Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
         (typeof(StructuredLogsDbContext).Assembly, "Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),
         (typeof(IdentityIamDbContext).Assembly, "Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore"),
+        (typeof(ExternalAuthenticationDbContext).Assembly, "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore"),
         (typeof(SecretsDbContext).Assembly, "Essentials/src/Secrets/Persistence/EntityFrameworkCore"),
         (typeof(StudioPreferencesDbContext).Assembly, "Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore"),
         (typeof(WorkflowsDesignDbContext).Assembly, "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
@@ -333,7 +336,7 @@ public sealed class EfModuleDescriptorTests
 
         var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules.Append(dashboard).Append(aspNetCoreIdentity).Distinct());
 
-        Assert.Equal(18, descriptors.Count);
+        Assert.Equal(19, descriptors.Count);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == dashboard);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == aspNetCoreIdentity);
     }
