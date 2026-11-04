@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -91,7 +92,7 @@ internal static class EtlRuntimeRecordCodec
 
     public static bool IsSha256(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
 
-    public static EtlInvocation ValidateInvocation(EtlInvocation invocation)
+    public static EtlInvocation ValidateInvocation([NotNull] EtlInvocation? invocation)
     {
         ArgumentNullException.ThrowIfNull(invocation);
         ArgumentNullException.ThrowIfNull(invocation.Scope);

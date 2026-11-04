@@ -15,11 +15,14 @@ internal sealed partial class EfEtlRuntimeStore
             () => BeginConnectorHttpSourceOnceAsync(lease, requestId, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlConnectorHttpSourceFetchResult> BeginConnectorHttpSourceOnceAsync(EtlConnectorPartitionLease lease,
-        string requestId, CancellationToken cancellationToken = default) =>
-        MutateConnectorHttpSourceAsync(lease, (fetch, position, policy, now) =>
+    private ValueTask<EtlConnectorHttpSourceFetchResult> BeginConnectorHttpSourceOnceAsync(EtlConnectorPartitionLease? lease,
+        string requestId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return MutateConnectorHttpSourceAsync(lease, (fetch, position, policy, now) =>
             EtlHttpSourceFetchTransitions.Begin(fetch, EtlRuntimeIdentity.HttpRequestHash(position.Request),
                 position.PageSequence, requestId, lease.Fence, now, policy), cancellationToken);
+    }
 
     public ValueTask<EtlConnectorHttpSourceFetchResult> CompleteConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, EtlHttpSourceFetchOutcome outcome, CancellationToken cancellationToken = default)
@@ -29,11 +32,14 @@ internal sealed partial class EfEtlRuntimeStore
             () => CompleteConnectorHttpSourceOnceAsync(lease, attempt, outcome, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlConnectorHttpSourceFetchResult> CompleteConnectorHttpSourceOnceAsync(EtlConnectorPartitionLease lease,
-        EtlHttpSourceFetchAttempt attempt, EtlHttpSourceFetchOutcome outcome, CancellationToken cancellationToken = default) =>
-        MutateConnectorHttpSourceAsync(lease, (fetch, _, policy, now) => fetch is null
+    private ValueTask<EtlConnectorHttpSourceFetchResult> CompleteConnectorHttpSourceOnceAsync(EtlConnectorPartitionLease? lease,
+        EtlHttpSourceFetchAttempt attempt, EtlHttpSourceFetchOutcome outcome, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return MutateConnectorHttpSourceAsync(lease, (fetch, _, policy, now) => fetch is null
             ? new(EtlStoreStatus.Conflict, null, null)
             : EtlHttpSourceFetchTransitions.Complete(fetch, attempt, outcome, lease.Fence, now, policy), cancellationToken);
+    }
 
     public ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page, DateTimeOffset responseReceivedAtUtc,
@@ -44,12 +50,15 @@ internal sealed partial class EfEtlRuntimeStore
             () => CaptureConnectorHttpSourceOnceAsync(lease, attempt, page, responseReceivedAtUtc, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceOnceAsync(EtlConnectorPartitionLease lease,
+    private ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceOnceAsync(EtlConnectorPartitionLease? lease,
         EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page, DateTimeOffset responseReceivedAtUtc,
-        CancellationToken cancellationToken = default) =>
-        MutateConnectorHttpSourceAsync(lease, (fetch, _, policy, now) => fetch is null
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return MutateConnectorHttpSourceAsync(lease, (fetch, _, policy, now) => fetch is null
             ? new(EtlStoreStatus.Conflict, null, null)
             : EtlHttpSourceFetchTransitions.Capture(fetch, attempt, page, responseReceivedAtUtc, now, policy), cancellationToken);
+    }
 
     public async ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default)
@@ -59,7 +68,7 @@ internal sealed partial class EfEtlRuntimeStore
             () => RecordConnectorHttpCaughtUpOnceAsync(lease, attempt, responseReceivedAtUtc, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpOnceAsync(EtlConnectorPartitionLease lease,
+    private async ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpOnceAsync(EtlConnectorPartitionLease? lease,
         EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);

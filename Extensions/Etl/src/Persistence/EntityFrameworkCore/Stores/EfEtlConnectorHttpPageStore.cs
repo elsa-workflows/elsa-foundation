@@ -16,9 +16,12 @@ internal sealed partial class EfEtlRuntimeStore
             () => AttachHttpPageOnceAsync(lease, page, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlConnectorPositionResult> AttachHttpPageOnceAsync(EtlConnectorPartitionLease lease,
-        EtlRetainedHttpPage page, CancellationToken cancellationToken = default) =>
-        TransitionHttpPageAsync(lease, page, advance: false, cancellationToken);
+    private ValueTask<EtlConnectorPositionResult> AttachHttpPageOnceAsync(EtlConnectorPartitionLease? lease,
+        EtlRetainedHttpPage page, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return TransitionHttpPageAsync(lease, page, advance: false, cancellationToken);
+    }
 
     public ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease,
         CancellationToken cancellationToken = default)
@@ -28,8 +31,12 @@ internal sealed partial class EfEtlRuntimeStore
             () => AdvanceEmptyHttpPageOnceAsync(lease, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageOnceAsync(EtlConnectorPartitionLease lease,
-        CancellationToken cancellationToken = default) => TransitionHttpPageAsync(lease, null, advance: true, cancellationToken);
+    private ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageOnceAsync(EtlConnectorPartitionLease? lease,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return TransitionHttpPageAsync(lease, null, advance: true, cancellationToken);
+    }
 
     private async ValueTask<EtlConnectorPositionResult> TransitionHttpPageAsync(EtlConnectorPartitionLease lease,
         EtlRetainedHttpPage? page, bool advance, CancellationToken cancellationToken)

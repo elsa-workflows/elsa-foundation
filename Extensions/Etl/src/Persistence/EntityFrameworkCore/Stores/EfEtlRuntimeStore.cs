@@ -69,7 +69,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => RejectAdmissionOnceAsync(invocation, diagnostic, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlTerminalSettlementResult> RejectAdmissionOnceAsync(EtlInvocation invocation, EtlRunDiagnostic diagnostic, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlTerminalSettlementResult> RejectAdmissionOnceAsync(EtlInvocation? invocation, EtlRunDiagnostic diagnostic, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -137,7 +137,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => RenewPreparationOnceAsync(lease, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> RenewPreparationOnceAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlStoreStatus> RenewPreparationOnceAsync(EtlPreparationLease? lease, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -162,7 +162,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => CommitPreparationOnceAsync(lease, prepared, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> CommitPreparationOnceAsync(EtlPreparationLease lease, EtlPreparedRun prepared, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlStoreStatus> CommitPreparationOnceAsync(EtlPreparationLease? lease, EtlPreparedRun prepared, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         try { EtlRuntimeRecordCodec.ValidatePrepared(prepared); }
@@ -298,7 +298,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => ReleasePartitionOnceAsync(lease, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> ReleasePartitionOnceAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlStoreStatus> ReleasePartitionOnceAsync(EtlPartitionLease? lease, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -326,7 +326,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => RenewPartitionOnceAsync(lease, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> RenewPartitionOnceAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlStoreStatus> RenewPartitionOnceAsync(EtlPartitionLease? lease, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -353,7 +353,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => ReserveBatchOnceAsync(lease, batch, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlReservationResult> ReserveBatchOnceAsync(EtlPartitionLease lease, EtlBatchDescriptor batch, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlReservationResult> ReserveBatchOnceAsync(EtlPartitionLease? lease, EtlBatchDescriptor batch, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         ArgumentNullException.ThrowIfNull(batch);
@@ -435,7 +435,7 @@ internal sealed partial class EfEtlRuntimeStore(
         for (var index = 0; index < effectCount; index++)
             effects[index] = acceptance.Effects[index];
         acceptance = acceptance with { Effects = effects };
-        return await RunOperationAsync(nameof(AcceptBatchAsync), lease?.Scope, lease?.RunId, AcceptBatchOnceAsync, cancellationToken);
+        return await RunOperationAsync(nameof(AcceptBatchAsync), lease.Scope, lease.RunId, AcceptBatchOnceAsync, cancellationToken);
 
         async ValueTask<EtlAcceptanceResult> AcceptBatchOnceAsync()
         {
@@ -558,7 +558,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => SettleTerminalOnceAsync(proposal, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlTerminalSettlementResult> SettleTerminalOnceAsync(EtlTerminalProposal proposal, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlTerminalSettlementResult> SettleTerminalOnceAsync(EtlTerminalProposal? proposal, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -587,7 +587,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => CancelOnceAsync(invocation, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlTerminalSettlementResult> CancelOnceAsync(EtlInvocation invocation, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlTerminalSettlementResult> CancelOnceAsync(EtlInvocation? invocation, CancellationToken cancellationToken = default)
     {
         try { EtlRuntimeRecordCodec.ValidateInvocation(invocation); }
         catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException)
@@ -762,7 +762,7 @@ internal sealed partial class EfEtlRuntimeStore(
             () => AcknowledgeDeliveryOnceAsync(lease, disposition, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> AcknowledgeDeliveryOnceAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlStoreStatus> AcknowledgeDeliveryOnceAsync(EtlDeliveryLease? lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         if (!Enum.IsDefined(disposition)) return EtlStoreStatus.Invalid;

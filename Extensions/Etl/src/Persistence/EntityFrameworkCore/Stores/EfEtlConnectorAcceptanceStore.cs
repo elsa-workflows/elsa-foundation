@@ -16,7 +16,7 @@ internal sealed partial class EfEtlRuntimeStore
             () => RecordConnectorFilePublicationOnceAsync(lease, batchId, route, publication, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> RecordConnectorFilePublicationOnceAsync(EtlConnectorPartitionLease lease,
+    private async ValueTask<EtlStoreStatus> RecordConnectorFilePublicationOnceAsync(EtlConnectorPartitionLease? lease,
         string batchId, EtlOutputRoute route, EtlObjectReference publication, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
@@ -79,7 +79,7 @@ internal sealed partial class EfEtlRuntimeStore
             () => AcceptConnectorBatchOnceAsync(lease, batchId, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchOnceAsync(EtlConnectorPartitionLease lease,
+    private async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchOnceAsync(EtlConnectorPartitionLease? lease,
         string batchId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);

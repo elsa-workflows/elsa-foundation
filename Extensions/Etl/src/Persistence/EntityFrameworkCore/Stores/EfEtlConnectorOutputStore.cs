@@ -16,7 +16,7 @@ internal sealed partial class EfEtlRuntimeStore
             () => RetainConnectorBatchOutputOnceAsync(lease, batchId, output, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputOnceAsync(EtlConnectorPartitionLease lease,
+    private async ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputOnceAsync(EtlConnectorPartitionLease? lease,
         string batchId, EtlConnectorBatchOutput output, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);

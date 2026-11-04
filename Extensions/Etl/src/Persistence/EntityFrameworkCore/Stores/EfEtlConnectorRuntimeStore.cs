@@ -123,7 +123,7 @@ internal sealed partial class EfEtlRuntimeStore
             () => CommitConnectorPreparationOnceAsync(lease, prepared, cancellationToken), cancellationToken);
     }
 
-    private async ValueTask<EtlStoreStatus> CommitConnectorPreparationOnceAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default)
+    private async ValueTask<EtlStoreStatus> CommitConnectorPreparationOnceAsync(EtlPreparationLease? lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         var key = RunKey(lease.Scope, lease.RunId);
@@ -260,7 +260,7 @@ internal sealed partial class EfEtlRuntimeStore
             () => RenewConnectorPartitionOnceAsync(lease, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlStoreStatus> RenewConnectorPartitionOnceAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
+    private ValueTask<EtlStoreStatus> RenewConnectorPartitionOnceAsync(EtlConnectorPartitionLease? lease, CancellationToken cancellationToken = default) =>
         UpdateConnectorLeaseAsync(lease, release: false, cancellationToken);
 
     public ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default)
@@ -270,10 +270,10 @@ internal sealed partial class EfEtlRuntimeStore
             () => ReleaseConnectorPartitionOnceAsync(lease, cancellationToken), cancellationToken);
     }
 
-    private ValueTask<EtlStoreStatus> ReleaseConnectorPartitionOnceAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
+    private ValueTask<EtlStoreStatus> ReleaseConnectorPartitionOnceAsync(EtlConnectorPartitionLease? lease, CancellationToken cancellationToken = default) =>
         UpdateConnectorLeaseAsync(lease, release: true, cancellationToken);
 
-    private async ValueTask<EtlStoreStatus> UpdateConnectorLeaseAsync(EtlConnectorPartitionLease lease, bool release, CancellationToken cancellationToken)
+    private async ValueTask<EtlStoreStatus> UpdateConnectorLeaseAsync(EtlConnectorPartitionLease? lease, bool release, CancellationToken cancellationToken)
     {
         db.ChangeTracker.Clear();
         ArgumentNullException.ThrowIfNull(lease);
