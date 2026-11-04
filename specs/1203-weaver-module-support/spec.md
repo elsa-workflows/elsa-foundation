@@ -8,7 +8,7 @@
 
 **Input**: [Feature #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443), which is M4 ([#3433](https://github.com/elsa-workflows/elsa-foundation/issues/3433)) of [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428). The feature is [in progress](https://github.com/elsa-workflows/elsa-foundation/issues/3443#issuecomment-6612633571).
 
-Delivery is authorized by the Program owner's [standing authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669), within #3443's boundaries as the owner decisions under Assumptions amend them.
+Delivery is authorized by the Program owner's [standing authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669), within #3443's boundaries. This lane reads the owner decisions under Assumptions as amending those boundaries.
 - **#3443's Boundaries** exclude blanket administration permission, arbitrary workspace editing, and package promotion or activation.
 - **The authorization record** itself excludes releases, deployments, provider purchases, credential extraction and publisher activation.
 
@@ -20,7 +20,7 @@ The scope comprises:
 
 The prerequisites #3440, #3441 and #3442 are complete.
 
-**Review**: Twenty independent review rounds took place on 3 and 4 November 2026, each with a correctness lens and a standards lens. Every finding was verified against `origin/main`. The approval basis is the standing authorization and the owner decisions recorded under Assumptions.
+**Review**: Twenty-one independent review rounds took place on 3 and 4 November 2026, each with a correctness lens and a standards lens. Every finding was verified against `origin/main`. The approval basis is the standing authorization and the owner decisions recorded under Assumptions.
 
 This spec contains:
 - the M4 delivery matrix (FR-001);
@@ -33,6 +33,7 @@ Each later leaf gets its own spec (FR-025). The plan PR, which adds `plan.md`, a
 - **Where definitions live**:
   - Studio terms use the meanings in [Studio/CONTEXT.md](../../Studio/CONTEXT.md).
   - *Service connection* uses its meaning in the [Elsa glossary](../../docs/glossary/elsa.md).
+  - *Dormancy requirement* uses its meaning in [spec 182](../182-dormant-features-until-finalization/spec.md).
   - Leaf 0 adds the backend Agent terms below to the Elsa glossary, and the Studio terms to Studio/CONTEXT.md (FR-021).
 - **Outcome words**:
   - *Proposed*, *approved*, *persisted*, *refused* and *uncertain* are the states an effect passes through.
@@ -46,7 +47,7 @@ Each later leaf gets its own spec (FR-025). The plan PR, which adds `plan.md`, a
 - **Privilege class**: a class of effects, such as administrative, irrecoverable or activation, that the integrator enables in the privilege policy (FR-015).
 - **Module code**: a code that a tool or context provider reports from its declared set (FR-016).
 - **Secret consumer**: a resource that uses a secret, such as a Service connection that binds or owns it. Do not confuse it with a workflow's *Secret Reference*.
-- **Connection-owned secret**: a secret that the Connections-owned convention assigns to a connection: an owned inline secret field, the connection's OAuth grant secret, or a PKCE secret whose name matches the convention's pattern (FR-006).
+- **Connection-owned secret**: a secret whose name lies under `connection:<name>:`, the name space that the Connections-owned convention uses for a connection's inline secret fields, its OAuth grant secret and its PKCE secrets (FR-006).
 - **"Owner"** is always qualified:
   - the *owning module* owns a row's resource;
   - the *Program owner* is Sipke Schoorstra;
@@ -54,9 +55,9 @@ Each later leaf gets its own spec (FR-025). The plan PR, which adds `plan.md`, a
 - **Naming**: domain nouns keep their current names until their own [ADR 0080 D5](../../docs/adr/0080-elsa-4-simplification-decisions.md#d5--plain-language-renamed-now) batch, so that no type is renamed twice. New Attention packages and types therefore keep "Attention", and are renamed in Attention's batch. New contributor-style interfaces use the `I<X>Extension` suffix now.
 
 **Hosts**:
-- **Normal host**: the Workbench backend (`Elsa.Workbench`) with Studio (`Elsa.Studio.Web`), with Design and Runtime combined, in the Development configuration. Leaves 1 and 2 add their Agent packages to it (FR-002). It runs only shipped code, and does not compose OAuth2 (`IntegrationsOAuth2`).
+- **Normal host**: the Workbench backend (`Elsa.Workbench`) with Studio (`Elsa.Studio.Web`), with Design and Runtime combined, in the Development configuration, with the in-memory Agent store. Leaves 1 and 2 add their Agent packages to it (FR-002). It runs only shipped code, and does not compose OAuth2 (`IntegrationsOAuth2`).
 - **Durable host**: the normal host plus the Agent EF store, which the overlay of the Workbench's durable-store test adds. Secrets EF is already composed. From leaf 2, it also includes the Connections EF store.
-- **Probe host**: the conformance probe's packaged consumer. It carries each leaf's test fixtures, such as fault stores, a test connection type and the OAuth2 composition, so every scenario that needs test code runs there. Its restart configuration enables the Agent EF store. Leaves 1 and 2 change it (FR-002).
+- **Probe host**: the conformance probe's packaged consumer. It carries each leaf's test fixtures, such as fault stores, a test connection type and the OAuth2 composition, so every scenario that needs test code runs there. Its restart configuration enables the Agent EF store. Leaves 1, 2 and 3 change it (FR-002).
 
 ## User Scenarios & Testing
 
@@ -80,6 +81,8 @@ The user also sees:
 4. In the probe host, extend the fixture module with:
    - an administrative effect;
    - an administrative and irrecoverable effect;
+   - an `Admin` effect that declares only the irrecoverable class;
+   - an effect whose module raises its risk to `Admin` at preparation;
    - an effect that persists nothing;
    - a tool and a context provider that each declare a module-code set and emit a code outside it, one of them echoing a canary;
    - an authorization violation, a preparation error and an execution error that each carry such a code, one of them owner-unavailable, and one whose message echoes a canary.
@@ -92,8 +95,11 @@ The user also sees:
    - a class switched off before recovery.
 6. In the probe host, deselect the fixture module while a page nests its widget.
 7. In the probe host's restart configuration:
-   - leave an effect pending, restart, remove the fixture module, approve, and execute;
-   - place an operator hold on the Agent schema family, then simulate the leaf 0 upgrade with pre-upgrade rows of every kind (FR-018), one server effect pending approval, one server effect approved before dispatch, and one approved client invocation waiting. Check the store while the hold keeps 1.1.0 unfinalized, then release the hold, which finalizes 1.1.0, and check again.
+   1. Leave an effect pending, restart, remove the fixture module, approve, and execute.
+   2. Place an operator hold on the Agent schema family.
+   3. Simulate the leaf 0 upgrade, with pre-upgrade rows of every kind (FR-018), one server effect pending approval, one server effect approved before dispatch, and one approved client invocation waiting.
+   4. While the hold keeps 1.1.0 unfinalized, check the store and prepare the fixture's tools.
+   5. Release the hold, which finalizes 1.1.0, and check again.
 
 **Acceptance Scenarios**:
 
@@ -103,12 +109,20 @@ The user also sees:
 4. **Given** unconfigured classes, **When** any classed effect is proposed, **Then** it is refused before review.
 5. **Given** only the administrative class enabled, **When** an administrative and irrecoverable effect is proposed, **Then** it is refused before review. **When** an administrative-only effect is proposed, **Then** it is reviewed.
 6. **Given** all three classes enabled, **When** each effect is proposed, **Then** it is reviewed, and its review shows the classes it needs.
-7. **Given** a bootstrap request, which carries no session, **When** the host answers, **Then** the answer reports every class's state, and Studio shows the states read-only.
-8. **Given** an effect whose class is off at approval, execution or recovery, **When** that step is reached, **Then** the proposal is refused and ends there. Nothing is dispatched, and a new proposal is needed once the class is enabled.
-9. **Given** an approved effect whose owning module persisted nothing, **When** it is recorded, **Then** it is *performed*, with the no-persisted-effect scope, and the review shell shows it.
-10. **Given** a code outside the declared set, **When** it is recorded in a receipt, refusal, preparation or execution error, authorization violation or context diagnostic, **Then** it is replaced by a generic code. The generic code keeps the original classification, owner-unavailable included, and no canary is disclosed, in the code or in the message.
-11. **Given** a pending effect whose module is removed, before or after a restart, **When** it is approved, **Then** approval succeeds on Agent core's own checks. **When** it is then executed or recovered, **Then** it is unavailable, with zero effect.
-12. **Given** a server effect pending approval across the leaf 0 upgrade, **When** it is approved and executed, **Then** it runs as before, because its empty class set leaves its digest unchanged. **Given** a server effect approved before dispatch across the upgrade, **When** it is executed, **Then** it also runs as before. If the upgrade outlasts the prepared deadline, either is refused with `agent.proposal.expired` instead. A classed proposal cannot predate leaf 0. **Given** an approved client invocation waiting across the upgrade, **When** it is resumed, **Then** spec 1189's restart rules apply unchanged. **Given** pre-upgrade rows, **When** the upgraded store reads them, **Then** they read with default values. **Given** 1.1.0 is not yet finalized, **When** a write needs dormant data, **Then** it is refused with the pending-finalization code (FR-018).
+7. **Given** an `Admin` effect that declares classes without the administrative class, **When** it is prepared, **Then** Agent core adds the administrative class, and the review shows it.
+8. **Given** an effect whose module raises its risk to `Admin` at preparation, **When** it is prepared, **Then** its effective risk is the higher of the two, and it needs the administrative class.
+9. **Given** a bootstrap request, which carries no session, **When** the host answers, **Then** the answer reports every class's state, and Studio shows the states read-only.
+10. **Given** an effect whose class is off at approval, execution or recovery, **When** that step is reached, **Then** the proposal is refused and ends there. Nothing is dispatched, and a new proposal is needed once the class is enabled.
+11. **Given** an approved effect whose owning module persisted nothing, **When** it is recorded, **Then** it is *performed*, with the no-persisted-effect scope, and the review shell shows it.
+12. **Given** a code outside the declared set, **When** it is recorded in a receipt, refusal, preparation or execution error, authorization violation or context diagnostic, **Then** it is replaced by a generic code. The generic code keeps the original classification, owner-unavailable included, and no canary is disclosed, in the code or in the message.
+13. **Given** a pending effect whose module is removed, before or after a restart, **When** it is approved, **Then** approval succeeds on Agent core's own checks. **When** it is then executed or recovered, **Then** it is unavailable, with zero effect.
+14. **Given** a server effect pending approval across the leaf 0 upgrade, **When** it is approved and executed, **Then** it runs as before, because its empty class set leaves its digest unchanged. A classed proposal cannot predate leaf 0.
+15. **Given** a server effect approved before dispatch across the upgrade, **When** it is executed, **Then** it runs as before.
+16. **Given** either of those effects, where the upgrade outlasted its prepared deadline, **When** it is executed, **Then** it is refused with `agent.proposal.expired`.
+17. **Given** an approved client invocation waiting across the upgrade, **When** it is resumed, **Then** spec 1189's restart rules apply unchanged.
+18. **Given** pre-upgrade rows of every kind, **When** the upgraded store reads them, **Then** they read with default values.
+19. **Given** an Agent EF store whose 1.1.0 is not finalized, **When** a tool that declares classes, a module-code set or a *performed* outcome is prepared, **Then** it is refused before review with `schema-version-not-finalized`. The feature catalog, Attention and `/capabilities` report the features as dormant. **When** the hold is released, **Then** 1.1.0 finalizes, and the tool is available.
+20. **Given** a host with the in-memory Agent store, **When** such a tool is prepared, **Then** it is available, because that store carries no dormancy requirement.
 
 ---
 
@@ -127,14 +141,14 @@ It never discloses a value. Weaver can propose a metadata update, or the owning 
 **Why this priority**: Secrets is the smallest row with the highest exclusion risk, and it sets the pattern for the other rows.
 
 **Independent Test**:
-- **Normal host**, with shipped code: seed an active secret, one whose latest version has expired, and a revoked secret, each holding a canary value, and a secret in another tenant. Read the list on both routes, improve a description and test a secret. Compare each receipt with the owning module's readback.
+- **Normal host**, with shipped code: seed an active secret, one whose latest version has expired, and a revoked secret, each holding a canary value; a configuration-store secret whose entry is missing; and a secret in another tenant. Read the list on both routes, improve a description and test the secrets. Compare each receipt with the owning module's readback.
 - **Probe host**, with leaf 1's fixtures: a test secret store whose test message and test code both echo the value.
 
 Negative cases:
 - no `secrets:read`, no `secrets:write`, or no `secrets:test`;
 - a target in another tenant;
 - an edit or rotation in another tab after review;
-- a test of a missing or inactive secret;
+- a test of a missing or inactive secret, and of the configuration-store secret whose entry is missing;
 - the Secrets EF store deselected;
 - the administrative class off;
 - in the durable host, a restart with an approved effect pending;
@@ -144,14 +158,14 @@ Negative cases:
 
 1. **Given** the list with a filter and a selection, **When** Weaver reads context, **Then** it receives the filter, the selected identities and their metadata, bounded by `secrets:read` and the tenant. An expired secret shows as expired.
 2. **Given** an approved description update, **When** it is executed, **Then** it is saved at the reviewed revision, and the receipt carries the readback. **Given** a repository that is not revision-aware, **When** the update is proposed, **Then** it is unsupported.
-3. **Given** an approved test, **When** it runs at the reviewed version, **Then** it is *performed*. The receipt carries only success or failure and a declared module code. **When** the secret is missing or inactive, **Then** the test is refused, with its own declared code.
+3. **Given** an approved test, **When** it runs at the reviewed version, **Then** it is *performed*. The receipt carries only success or failure and a declared module code. **When** the secret is missing or inactive, or its configuration entry is missing, **Then** the test is refused, with a declared code for each case.
 4. **Given** a request to create, rename, reveal, rotate, import or export, **When** Weaver receives it, **Then** it refuses on the grounds in FR-001. **Given** a request to revoke or delete in leaf 1, **When** Weaver receives it, **Then** Weaver says the operation is not yet supported.
 
 ---
 
 ### User Story 3 - Understand, prepare, update, rebind, test, revoke and delete a Service connection (leaf 2) (Priority: P3)
 
-A user on the Connections page, in its creation form with its secret picker, or at a connection picker in a workflow asks what a connection is or why it fails. The user may also ask Weaver to prepare, update, rebind, test, revoke or delete one.
+A user on the Connections page, in its creation form with its secret picker, or at a connection picker in a workflow property form asks what a connection is or why it fails. The user may also ask Weaver to prepare, update, rebind, test, revoke or delete one.
 
 Through a new read in the owning module (FR-006), Weaver sees:
 - name, display name, type, authentication scheme and status;
@@ -164,8 +178,16 @@ Bound non-owned secret names and named-credential names are disclosed only under
 **Why this priority**: "Why does my integration fail" is the commonest Connections question.
 
 **Independent Test**:
-- **Normal host**, with shipped code: for a connection of a shipped type, explain it, prefill the creation form, update it, rebind it, revoke it and delete it. Seed active, expired and inactive text secrets, a non-text secret, another connection's owned inline secret, and a connection in another tenant.
-- **Probe host**, with leaf 2's fixtures, which compose OAuth2: use a test connection type that records invocations, carries canary token fields, and returns a test message that echoes a resolved value. Seed a connection with canary settings, secret and token values; a connection with an owned inline secret, an OAuth grant secret and a PKCE secret; another connection's grant and PKCE secrets; and a hand-made secret whose name matches the convention. Explain, test and delete.
+- **Normal host**, with shipped code: for a connection of a shipped type, explain it, prefill the creation form, update it, rebind it, revoke it and delete it. Open a workflow property form with a connection picker while an Operation Batch is pending. Seed active, expired and inactive text secrets, a non-text secret, another connection's owned inline secret, and a connection in another tenant.
+- **Probe host**, with leaf 2's fixtures, which compose OAuth2: use a test connection type that records invocations, carries canary token fields, and returns a test message that echoes a resolved value. Seed:
+  - a connection with canary settings, secret and token values;
+  - a connection with an owned inline secret, an OAuth grant secret and PKCE secrets;
+  - an OAuth2 connection with PKCE secrets but no grant;
+  - another connection's grant and PKCE secrets;
+  - a hand-made secret whose name lies under a connection's `connection:<name>:`;
+  - a connection with more owned secrets than the enumeration's safety bound.
+
+  Explain, test and delete.
 
 In both, compare each receipt with the owning module's readback.
 
@@ -177,13 +199,15 @@ Negative cases:
 - no `connections:bind-secret`;
 - no `connections:test`;
 - a target in another tenant;
-- a rebind to an expired, inactive or non-text secret, to another connection's inline, grant or PKCE secret, or to a hand-made secret whose name matches the convention;
+- a rebind to an expired, inactive or non-text secret, or to any connection-owned secret, hand-made ones included;
 - a rebind away from the owned inline secret, where cleanup fails after commit;
-- a test that cannot run, one that fails, and one whose write fails after the external call;
+- a test that cannot run, because the connection or its type is not found; one that fails; and one whose write fails after the external call;
 - a test message or code that echoes a resolved value;
 - a dropped test response;
 - a delete that removes owned secrets and then fails to remove the connection;
-- a delete of a connection with an OAuth grant where the grant cleanup is not available;
+- a delete of a connection with an OAuth grant or PKCE secrets where the cleanup is not available;
+- a delete whose enumeration page cannot be read, or whose owned secrets exceed the safety bound;
+- a connection selected in the nested picker while an Operation Batch is pending;
 - the creation form closed before the prefill completes;
 - the administrative or irrecoverable class off;
 - in the durable host, a restart with an approved effect pending;
@@ -192,19 +216,21 @@ Negative cases:
 **Acceptance Scenarios**:
 
 1. **Given** the creation form, **When** Weaver reads it, **Then** it sees the type, scheme, field names and validation errors, and no entered value. The form's secret picker is a Connections contribution that lists candidates under `secrets:read`.
-2. **Given** an approved prefill under `connections:manage`, **When** it is applied, **Then** only the form's name, type and scheme change, and the prefill is applied locally. Creating the connection stays the user's action.
-3. **Given** an approved update or rebind, **When** it is executed, **Then** it applies at the reviewed version, under `connections:manage`. A rebind also needs `connections:bind-secret`, `secrets:read`, and an active text secret in the tenant that is not connection-owned. A hand-made secret whose name happens to match the convention is treated as connection-owned and refused, which is the safe direction. Execution rechecks the permissions, the secret and its ownership. The candidates shown to the client grant nothing. The native rebind is unchanged.
-4. **Given** a rebind, **When** it is reviewed, **Then** the review states that the connection sends the new secret's value to the endpoint it is configured for, that Weaver does not disclose that endpoint, and that the user should check it on the connection page.
-5. **Given** a rebind away from an owned inline secret, **When** it is reviewed, **Then** it needs the administrative and irrecoverable classes. The review states that:
+2. **Given** a workflow property form with a connection picker and a pending Operation Batch, **When** Weaver reads context, **Then** Connections contributes the picker's own kind. Selecting a connection in the picker never retargets the batch (FR-010).
+3. **Given** an approved prefill under `connections:manage`, **When** it is applied, **Then** only the form's name, type and scheme change, and the prefill is applied locally. Creating the connection stays the user's action.
+4. **Given** an approved update or rebind, **When** it is executed, **Then** it applies at the reviewed version, under `connections:manage`. A rebind also needs `connections:bind-secret`, `secrets:read`, and an active text secret in the tenant that is not connection-owned. Ownership is decided by name, so no query of other connections is needed, and a hand-made secret whose name lies under `connection:<name>:` is refused, which is the safe direction. Execution rechecks the permissions and the secret. The candidates shown to the client grant nothing. The native rebind is unchanged.
+5. **Given** a rebind, **When** it is reviewed, **Then** the review states that the connection sends the new secret's value to the endpoint it is configured for, that Weaver does not disclose that endpoint, and that the user should check it on the connection page.
+6. **Given** a rebind away from an owned inline secret, **When** it is reviewed, **Then** it needs the administrative and irrecoverable classes. The review states that:
    - the secret is deleted after commit unless another connection still uses it;
-   - only other connections are checked;
+   - only other connections are checked, so workflow Secret References and Nuplane feed credentials are not detected;
    - the deletion cannot be undone.
 
    If cleanup fails after commit, the effect is persisted with a warning.
-6. **Given** an approved test, **When** it runs, **Then** the reviewed version is checked before the external call. When the type's test runs, the owning module records the test time and advances the version, and other pending proposals for that connection go stale. The receipt is persisted with the result and a declared module code, and the message is redacted. **When** the test cannot run, **Then** it is refused, with its declared code. **When** its write fails after the external call, **Then** it is *uncertain*.
-7. **Given** a revoke or delete, **When** it is reviewed, **Then** it needs the administrative and irrecoverable classes. The review states that the action cannot be undone, and that consumers which resolve the connection by name are not detected: workflows, ETL bindings and specialist model profiles. For a delete, the review also lists the secrets that will be deleted: owned inline secrets by field name, and OAuth grant and PKCE secrets by name pattern, from the Secrets exact-prefix enumeration (FR-006). It states that a hand-made secret whose name matches the pattern is deleted with them. A secret that another connection still uses is kept.
-8. **Given** a connection with an OAuth grant, **When** a delete is proposed and the composed Connections cannot delete its grant and PKCE secrets (FR-006), **Then** Weaver refuses it before review.
-9. **Given** an approved revoke or delete, **When** it is executed, **Then** the reviewed version is checked before any side effect. A delete's receipt reads back the connection's absence. A delete that removes owned secrets but then fails to remove the connection is *uncertain*.
+7. **Given** an approved test, **When** it runs, **Then** the reviewed version is checked before the external call. When the type's test runs, the owning module records the test time and advances the version, and other pending proposals for that connection go stale. The receipt is persisted with the result and a declared module code, and the message is redacted. **When** the test cannot run, **Then** it is refused, with its declared code. **When** its write fails after the external call, **Then** it is *uncertain*.
+8. **Given** a revoke or delete, **When** it is reviewed, **Then** it needs the administrative and irrecoverable classes. The review states that the action cannot be undone, and that consumers which resolve the connection by name are not detected: workflows, ETL bindings and specialist model profiles. For a delete, the review also lists the secrets that will be deleted: owned inline secrets by field name, and every other secret under the connection's `connection:<name>:` by name pattern, hand-made ones included. It states that only other connections are checked for those secrets, so workflow Secret References and Nuplane feed credentials are not detected. A secret that another connection still uses is kept.
+9. **Given** a connection with an OAuth grant or PKCE secrets, **When** a delete is proposed and the composed Connections cannot delete them (FR-006), **Then** Weaver refuses it before review.
+10. **Given** a delete whose enumeration of owned secrets cannot read a page, or finds more than the safety bound, **When** it is proposed or executed, **Then** it is refused before any side effect, and no secret is left behind.
+11. **Given** an approved revoke or delete, **When** it is executed, **Then** the reviewed version is checked before any side effect. A delete's receipt reads back the connection's absence. A delete that removes owned secrets but then fails to remove the connection throws, so it is *uncertain*.
 
 ---
 
@@ -216,7 +242,7 @@ On the Secrets page, a user asks Weaver to revoke or delete a secret. The review
 
 **Independent Test**:
 - **Normal host**, with shipped code: seed a secret bound by two connections, an unused secret and an owned inline secret. Revoke and delete through Weaver.
-- **Probe host**, with leaf 3's fixtures, which compose OAuth2 and use a test secret store that really removes values plus repository save and revision-conflict faults: seed an OAuth grant secret, a PKCE secret, a hand-made secret whose name matches the convention, and secrets whose delete removes the value and then fails to save the metadata or meets a revision conflict at save.
+- **Probe host**, with leaf 3's fixtures, which compose OAuth2 and use a test secret store that really removes values plus repository save and revision-conflict faults. Seed an OAuth grant secret, a PKCE secret, a hand-made secret under `connection:<name>:`, and secrets whose delete removes the value and then fails to save the metadata or meets a revision conflict at save.
 
 In both, compare each receipt with the owning module's readback.
 
@@ -235,22 +261,22 @@ Negative cases:
 
 1. **Given** a revoke, **When** it is reviewed, **Then** the review states that the revoked version's value cannot be restored, and that rotating reactivates the secret with a new value. **Given** a delete, **When** it is reviewed, **Then** the review states that it cannot be undone. Both need `secrets:delete` and the administrative and irrecoverable classes.
 2. **Given** a review, **When** consumers are listed, **Then** the list is advisory. It shows the binding connections by name when the actor meets the disclosure rule the source declares, and as a count otherwise. A truncated answer says so. The review states that workflow references and Nuplane feed credentials are not detected.
-3. **Given** a secret that the source reports as connection-owned, a hand-made secret whose name matches the convention included, **When** a revoke or delete is proposed or executed, **Then** Weaver refuses it. This is stricter than the native page, and the user can act there instead.
+3. **Given** a secret that the source reports as connection-owned, hand-made ones included, **When** a revoke or delete is proposed or executed, **Then** Weaver refuses it. This is stricter than the native page, and the user can act there instead.
 4. **Given** no consumer source answered, **When** a revoke or delete is proposed, **Then** it is refused before review. The refusal states that connection bindings could not be checked. This covers five cases: Connections is not composed, Connections is an older version without the source, Connections runs in another shell, the event pipeline is not composed, or the query is unsupported. This limitation is recorded: a host without Connections cannot revoke or delete secrets through Weaver.
 5. **Given** a repository that is not revision-aware, **When** a revoke or delete is proposed, **Then** it is unsupported.
 6. **Given** an approved revoke or delete, **When** it is executed, **Then** the consumer answer is recomputed and compared, by full identity, with the answer the review showed. A truncated answer is compared by its page and count. Any change makes the proposal stale. The reviewed revision is checked before any side effect. Approval itself checks only what Agent core holds (FR-014).
-7. **Given** a delete, **When** it runs, **Then** its receipt reads back the secret's absence. If the value is removed but the metadata save then fails or meets a revision conflict, the delete is *uncertain*.
+7. **Given** a delete, **When** it runs, **Then** its receipt reads back the secret's absence. If the value is removed but the metadata save then fails or meets a revision conflict, the owning module throws, and the delete is *uncertain*.
 
 ### Edge Cases
 
 - **A module unloads mid-review:** approval succeeds on Agent core's own checks. Execution finds the module gone, and the effect is unavailable, with zero effect. Context is re-admitted without the module (FR-009).
 - **A shell reloads during an effect:** an effect whose response is lost is *uncertain*, and is never replayed (FR-014).
 - **A secret is rotated after review:** execution finds the revision changed, so the effect is stale.
-- **A connection is renamed or deleted under a pending proposal:** execution's version or identity check makes the proposal stale.
+- **A connection's display name is changed, or the connection is deleted, under a pending proposal:** execution's version or identity check makes the proposal stale. Connections cannot be renamed.
 - **A dense page overflows the attachment budget:** the collection is refused as the budget defines, and FR-011's tests prevent this at default sizes.
 - **Connections is composed in another shell:** no consumer source answers, so secret revoke and delete fail closed (story 4).
-- **A hand-made secret matches the connection-owned convention:** it is treated as connection-owned (FR-006).
-- **The Agent store has not finalized 1.1.0:** a write that needs dormant data is refused with the pending-finalization code. An EF host without a schema fleet never finalizes, and the code says so (FR-018).
+- **A hand-made secret lies under `connection:<name>:`:** it is treated as connection-owned (FR-006).
+- **The Agent EF store has not finalized 1.1.0:** every M4 tool declares a module-code set, so every M4 tool is dormant in that host until finalization, and is refused at preparation. An EF host without a schema fleet never finalizes, and the dormancy reason says so (FR-018).
 - **An upgrade outlasts the prepared deadline:** an effect prepared before it is refused with `agent.proposal.expired`.
 
 ## Requirements
@@ -277,11 +303,11 @@ Negative cases:
   - **C**: a credential, file or value would pass through Weaver.
   - **D**: the owning module does not hold it durably or cluster-wide.
   - **H**: a human's decision.
+  - **L**: a lane decision: this spec's Program-authority choice, open to owner review.
   - **N**: no owner operation exists.
   - **O**: owned by another issue, spec or open decision.
-  - **P**: this spec's Program-authority choice, open to owner review.
   - **S**: the screen does not show it.
-  - **T**: outside a post-M0 row's target, which is a P choice.
+  - **T**: outside a post-M0 row's target, which is an L choice.
   - **V**: the write is reachable only from the browser, so the server cannot verify its result.
   - **W**: needs a module-owned working-state adapter.
   - **X**: needs its own exclusion design first.
@@ -290,31 +316,31 @@ Negative cases:
 
   | Row (owning module) | Target | Outcome; narrowings (grounds) |
   | --- | --- | --- |
-  | Secrets (Secrets) | "Reference/metadata/availability inspection; domain-authorized effects, with no secret values in context" | Read; Reviewed metadata update and value test (story 2), revoke and delete (story 4). The connection form's Secret picker is a Connections surface (story 3). Value-bearing create and rotate (B); reveal (C); configuration-key create and rotate (P); rename, import and export (N); the workflow property's Secret editor (O: #3711) |
-  | Connections (Connections) | "Metadata, bindings and diagnostics; supported changes/test actions without credentials in context" | Read, including the form's Secret picker; Local prefill; Reviewed update, rebind, test, revoke and delete (story 3). Settings values (X: no field declares its sensitivity); replacing an owned inline secret's value (B); create and OAuth authorize (C); redirect URI (N: a read-only public URL); named-credential binding (P) |
+  | Secrets (Secrets) | "Reference/metadata/availability inspection; domain-authorized effects, with no secret values in context" | Read; Reviewed metadata update and value test (story 2), revoke and delete (story 4). The connection form's Secret picker is a Connections surface (story 3). Value-bearing create and rotate (B); reveal (C); configuration-key create and rotate (L); rename, import and export (N); the workflow property's Secret editor (O: #3711) |
+  | Connections (Connections) | "Metadata, bindings and diagnostics; supported changes/test actions without credentials in context" | Read, including the form's Secret picker and the workflow property form's connection picker; Local prefill; Reviewed update, rebind, test, revoke and delete (story 3). Settings values (X: no field declares its sensitivity); replacing an owned inline secret's value (B); create and OAuth authorize (C); redirect URI (N: a read-only public URL); named-credential binding (L) |
   | Optional sample: Weather (Samples, Studio-only) | "Qualify only when installed; no current composed-support claim" | Read of a client-asserted page context when installed (its leaf spec); None in M4 when absent (A) |
   | Optional ExtensionBuilder (ExtensionBuilder) | "Optional inspection/guidance; no source-control push, package promotion or publisher activation" | Read: installed-module guidance when enabled (its leaf spec). Workspace source inspection (X); None in M4 while disabled (A) |
   | Structured logs (StructuredLogs) | "Current filters/time range/selected records; bounded redacted correlation" | Read (its leaf spec). Time range and retention (S) |
   | Traces (OpenTelemetry) | "Exact trace/span/resource/query with authorized detail and availability" | Read (its leaf spec). Metrics and OpenTelemetry logs (S) |
-  | Diagnostics (Studio Hosting and diagnostic modules) | "Accepted/rejected/disabled module state and bounded visible diagnostic results" | Read (its leaf spec). Module administration (P) |
+  | Diagnostics (Studio Hosting and diagnostic modules) | "Accepted/rejected/disabled module state and bounded visible diagnostic results" | Read (its leaf spec). Module administration (L) |
   | Console (`Elsa.Studio.ConsoleStream`, console log streaming) | "Current source/filter/record/truncation/freshness and authorized bounded inspection" | Read (its leaf spec). Filter (S: none exists); server reads of records (X); lines the user attaches are the user's own client-asserted disclosure (FR-009) |
-  | Home (Studio Dashboard, Studio Preferences, Attention, Workflows.Dashboard) | "Explain visible widget snapshots, filters, freshness and unavailable data; module-owned supported preferences" | Read; Reviewed personal layout change and Attention Item snooze (its leaf spec). Default layout (P); new widgets and saved queries (O: #3604) |
+  | Home (Studio Dashboard, Studio Preferences, Attention, Workflows.Dashboard) | "Explain visible widget snapshots, filters, freshness and unavailable data; module-owned supported preferences" | Read; Reviewed personal layout change and Attention Item snooze (its leaf spec). Default layout (L); new widgets and saved queries (O: #3604) |
   | Runtime evidence (Workflows Runtime) | "Explain capture policy and exact proposed configuration differences" | Read; Reviewed Workflow Runtime Diagnostics Setting change within today's capture rules (its leaf spec). Full payloads (O: Studio ADR 0009); a durable, cluster-wide setting (D) |
   | Activity availability (Activities Design) | "Effective availability/diagnostics and supported settings changes" | Read; Reviewed change (its leaf spec) |
   | Features (FeatureManagement client, Modularity server) | "Selected host, revision, filters, settings draft and reviewed differences through existing authorization" | Read; Local draft; Reviewed Server-host apply in the activation class (its leaf spec). Studio-host apply (V); configuration values and edits (C) |
   | Appearance/themes (Studio Hosting, Hosting.Themes) | "Supported preference/theme edits, exact persistence semantics and built-in/read-only constraints" | Read; Local appearance and builder edits (its leaf spec). Theme Store writes (V) |
-  | Modules/feeds (Hosting.Nuplane; client Studio Hosting) | "Explain exact host/package/feed/reconcile state; package promotion/activation remains outside authorization" | Read (its leaf spec). Package operations (B); feed operations (P); feed credentials never (#3735) |
+  | Modules/feeds (Hosting.Nuplane; client Studio Hosting) | "Explain exact host/package/feed/reconcile state; package promotion/activation remains outside authorization" | Read (its leaf spec). Package operations (B); feed operations (L); feed credentials never (#3735) |
   | Backends (Studio Backends) | post-M0: read the profiles | Read (its leaf spec). Profile edits (V) |
   | Settings sections (Studio Hosting) | post-M0: the resolved section and host (#3443, 31 October, item 4) | Read (its leaf spec) |
   | ETL definitions (ETL) | "Exact selected definition/draft, filters, validation and supported authoring" | Read; Reviewed draft update (its leaf spec). Create (W); delete (N); publish (H) |
   | ETL connectors (ETL) | "Exact connector definition, authorized bindings/metadata and validated proposals" | Read; Reviewed draft update (its leaf spec). Create (W); delete (N); publish (H) |
-  | ETL runs (ETL) | "Exact run/partition and bounded evidence; supported explicit cancellation" | Read; Reviewed cancellation (its leaf spec). Start (N); completing a run (P: the target names only cancellation) |
-  | Activity definitions (Activities Design; Workflows.Publishing; Elsa3) | "Exact catalog/version/dependency inspection and supported draft/import/upgrade proposals" | Read; Reviewed draft add, update and discard, and upgrade plans (its leaf spec). Import (C); publish (H); other definition and version operations, and test runs (P); contract proposals (W) |
+  | ETL runs (ETL) | "Exact run/partition and bounded evidence; supported explicit cancellation" | Read; Reviewed cancellation (its leaf spec). Start (N); completing a run (L: the target names only cancellation) |
+  | Activity definitions (Activities Design; Workflows.Publishing; Elsa3) | "Exact catalog/version/dependency inspection and supported draft/import/upgrade proposals" | Read; Reviewed draft add, update and discard, and upgrade plans (its leaf spec). Import (C); publish (H); other definition and version operations, and test runs (L); contract proposals (W) |
   | User tasks (`Elsa.Studio.UserTasks`, Workflows Runtime) | post-M0: read; claim, release, reassign | Read; Reviewed claim, release and reassign (its leaf spec; reassign may be escalated, FR-025). Decisions (H); prefill values and responses (C); form authoring (W) |
   | Agents (Agent Specialists) | post-M0: read | Read (its leaf spec). Review decisions (H); the decider's identity (C); authoring (O: #3519) |
   | BPMN (Activities BPMN) | post-M0: read | Read (its leaf spec). Run and work operations, artifact registration, interchange management (T); direct publish (H); process authoring (W) |
   | Expressions (Expression Modules) | "Language-owned guidance and exact expression edits without runtime evaluation or live-value capture" | Read; Local expression edits in the draft's working state, as spec 1193's Operation Batch (its leaf spec, with #3711) |
-  | Workflow rows (Workflows): definitions list, new workflow, workflow draft, Executables, Runs | "Preserve search/folder/status/page/selection; read exact resources and propose supported lifecycle changes"; "Carry caller attachment; return typed metadata suggestions or reviewed creation"; "Grounded explain/troubleshoot; atomic visible working-state edits, validation, dirty state and whole-batch undo"; "Inspect immutable compiled structure and selected source reference; dispatch remains a distinct authorized effect"; "Carry exact run/activity-execution/incident/scope; authorized evidence and supported wait/stop/recovery operations" | Delivered by #3442. Its refusals stand: run controls, library deletes, and edits to published or historical versions and Executables (O: spec 1193's own decisions) |
+  | Workflow rows (Workflows): definitions list, new workflow, workflow draft, Executables, Runs; Reusable Workflow Templates and library tags, favorites and views | "Preserve search/folder/status/page/selection; read exact resources and propose supported lifecycle changes"; "Carry caller attachment; return typed metadata suggestions or reviewed creation"; "Grounded explain/troubleshoot; atomic visible working-state edits, validation, dirty state and whole-batch undo"; "Inspect immutable compiled structure and selected source reference; dispatch remains a distinct authorized effect"; "Carry exact run/activity-execution/incident/scope; authorized evidence and supported wait/stop/recovery operations"; post-M0: templates and library tags, favorites and views (#3443, 31 October, items 1–2) | Delivered by #3442. Run controls, library deletes and Executables dispatch (L: inherits spec 1193's decisions, which hand broader journeys back to #3443; follow-up recorded on #3428); edits to published or historical versions and Executables (O: spec 1193) |
 
 #### Packaging and ownership
 
@@ -351,8 +377,8 @@ Negative cases:
   - *performed* (FR-016);
   - declared module-code sets and their validation (FR-016);
   - owner-unavailable from a module's preparation and execution errors. Today only tool-authorization violations and context diagnostics can carry that classification, while preparation and execution errors forward only the module's code, status and message. FR-023's canary search covers that message;
-  - a principal seam that hands a tool the caller's authenticated principal at preparation and at execution, including the explicit authenticated execute of a recovered approval. Today a tool receives only the actor, the tenant and the target. Approval calls no module, so there is no approval-time module seam (FR-014);
-  - the Agent store's schema family 1.1.0 and its dormancy answer (FR-018);
+  - a principal seam that hands a tool the caller's authenticated principal at preparation and at execution, including the explicit authenticated execute of a recovered approval. Today no principal reaches the tool. Approval calls no module, so there is no approval-time module seam (FR-014);
+  - the Agent store's schema family 1.1.0 and the Agent features' dormancy requirement (FR-018);
   - the registry-based answer of story 1;
   - the probe fixture's effects;
   - doc comments on the risk enum, matching FR-013;
@@ -363,24 +389,25 @@ Negative cases:
 
 #### Owner prerequisites
 
-- **FR-006**: Where a row needs a read, an authorization or an operation that today exists only behind the owning module's HTTP endpoints, or outside its `.Core`, the owning module MUST supply a `.Core` contract, implemented in its `.Api` package, that Weaver calls under the caller's principal.
+- **FR-006**: Where a row needs a read, an authorization or an operation that today exists only behind the owning module's HTTP endpoints, or outside its `.Core`, the owning module MUST supply a `.Core` contract that Weaver calls under the caller's principal.
+  - **Placement in `.Api`**: the contract is implemented in the owning module's `.Api` package, because that is where the module's authorization composition lives: its `Elsa.Foundation.Identity.Core` reference and its use of `IPermissionAuthorizationService`. Weaver support for a module therefore requires the module's API feature. This is a stated limitation.
   - **Principal**: the contract takes the principal from the principal seam (FR-005), checks that the actor matches it, and decides permissions through `IPermissionAuthorizationService`.
   - **When checks run**: every check the owning module makes runs at preparation and again at execution, including a recovered approval's execute. This covers its availability, permissions, revisions and versions, the secret-consumer answer and secret ownership.
   - **Failing closed**: the outcome is owner-unavailable when the contract has no implementation, because its `.Api` feature is absent, which the Agent package classifies as owner-unavailable; or when `IPermissionAuthorizationService` is missing or duplicated, which the implementation detects itself. This holds on the tool path, where preparation runs before the host's tool authorizer, and on the context-provider path, which never passes that authorizer. It is tested once per tool and context provider (FR-014).
   - **Exceptions**: infrastructure exceptions are wrapped (framework §2.23.5).
   - **Writes**: a write to an existing resource checks an expected revision before any side effect. A composition that cannot honor the revision reports it as unsupported, so the write never runs unconditionally. A create uses the owning module's create-if-absent.
   - **Native behaviour**: native pages keep working, each with a regression test. Apart from the #3779 defect fix, no native Secrets or Connections behaviour changes.
-  - **Secret ownership**: Weaver's ownership refusals come from Connections only, through the connection-owned convention: one definition in Connections `.Core`, which Integrations' OAuth2 grant and PKCE names also use. A secret is connection-owned when it fills an owned inline secret field, is the connection's grant secret, or has a PKCE name matching the convention's pattern. A hand-made secret whose name happens to match is treated as connection-owned and refused, which is the safe direction.
+  - **Secret ownership**: ownership is decided by name. A secret is connection-owned when its name lies under `connection:<name>:`, the name space that the Connections-owned convention uses for inline secret fields, the OAuth grant secret and PKCE secrets. The convention has one definition in Connections `.Core`, which Integrations' OAuth2 names also use. A hand-made secret whose name lies in that space is treated as connection-owned and refused, which is the safe direction.
 
   The prerequisites below are contract-level. The plan names signatures, internal types and mechanisms.
 
   | Owning module and leaf | Prerequisite |
   | --- | --- |
   | Secrets, leaf 1 | A metadata read with the revision, the effective condition and the latest version's expiry. A revisioned metadata update. A value test at an expected version that reports whether it ran. |
-  | Secrets, leaf 2 | A generic, bounded, exact-prefix enumeration of secret names in a tenant, with a truncation flag, in every shipped secret repository. It is a Secrets query, not a Connections concept. Today's list search matches substrings, so it cannot serve. |
-  | Connections, leaf 2 | A read that adds the version and bindings, omits settings values, and shows bound non-owned and named-credential names only under `secrets:read`. Updates (display name, tags) and rebinds at an expected version, through the Weaver-facing contract. That rebind checks `secrets:read`, refuses as if the secret were unknown when that check fails, and refuses a connection-owned secret. The convention is consolidated into one Connections `.Core` definition. A test at an expected version, checked before the external call, which reports a module code. Revoke at an expected version. A delete that checks the version before any side effect, and also deletes the connection's OAuth grant and PKCE secrets, found through the Secrets enumeration. This fixes [#3779](https://github.com/elsa-workflows/elsa-foundation/issues/3779), [triaged under the Program delegation](https://github.com/elsa-workflows/elsa-foundation/issues/3779#issuecomment-6617907490), for native and Weaver deletes alike; that PR says "Fixes #3779". |
+  | Secrets, leaf 2 | A generic, bounded, exact-prefix enumeration of secret names in a tenant, paged, with a truncation flag, in every shipped secret repository. It is a Secrets query, not a Connections concept. Today's list search matches substrings, so it cannot serve. |
+  | Connections, leaf 2 | A read that adds the version and bindings, omits settings values, and shows bound non-owned and named-credential names only under `secrets:read`. Updates (display name, tags) and rebinds at an expected version, through the Weaver-facing contract. That rebind checks `secrets:read`, refuses as if the secret were unknown when that check fails, and refuses a connection-owned secret by name. The convention is consolidated into one Connections `.Core` definition. A test at an expected version, checked before the external call, which reports whether it ran and a module code; today a missing connection or an unknown type looks like a failed test. Revoke at an expected version. A delete that checks the version before any side effect, and then deletes every secret under the connection's `connection:<name>:`, the grant, PKCE and hand-made ones included. The delete pages through the Secrets enumeration until it is exhausted. If a page cannot be read, or the count exceeds a fixed safety bound, the delete is refused before any side effect: the native page gets a clear error, and Weaver refuses. It never leaves owned secrets behind. This fixes [#3779](https://github.com/elsa-workflows/elsa-foundation/issues/3779), [triaged under the Program delegation](https://github.com/elsa-workflows/elsa-foundation/issues/3779#issuecomment-6617907490), for native and Weaver deletes alike; that PR says "Fixes #3779". The fix includes hand-made secrets in that name space, because the convention reserves it by use and the native page has no review. |
   | Secrets, leaf 3 | Revoke and delete at the revision, unsupported without a revision-aware repository. A fan-in (framework §2.6.1): the source contract `ISecretConsumerSource` and the Sequential event `SecretConsumersCollecting` in Secrets `.Core`, with their single aggregating handler in `Elsa.Secrets`. Secrets `.Core` gains a reference to `Elsa.Events.Core`. The Secrets features take no hard dependency on the `Events` feature, so hosts that compose Secrets without it keep working (framework §4.2). The fan-in runs when the event pipeline is composed. When it is not, or no source answers, the result is "not checked", never "no consumers". |
-  | Connections, leaf 3 | An `ISecretConsumerSource` implementation in `Elsa.Connections`. Per secret, it returns the binding connections, whether the secret is connection-owned, and the disclosure rule for connection names (`workflows/design:read` or `connections:manage`). It is backed by a bounded consumer query that every shipped Connections repository implements, with a truncation flag. A repository that does not implement the query reports it as unsupported. |
+  | Connections, leaf 3 | An `ISecretConsumerSource` implementation in `Elsa.Connections`. Per secret, it returns the binding connections, whether the secret is connection-owned by name, and the disclosure rule for connection names (`workflows/design:read` or `connections:manage`). It is backed by a bounded consumer query that every shipped Connections repository implements, with a truncation flag. A repository that does not implement the query reports it as unsupported. |
 
 - **FR-007**: **Read authority.** A rule that is exactly one permission MAY be checked through the tool's declared permission. Any other rule MUST be decided by the module that owns it. A declared rule is evaluated, never reimplemented: where a review shows another module's names, the Agent package evaluates the disclosure rule the source declares, and shows a count when the actor does not meet it.
 - **FR-008**: Deployment shapes MUST keep working (constitution §E2.2.3). Design-side contributions register only where Design is composed, and Runtime-side ones only where Runtime is. An absent side is explicitly unavailable.
@@ -409,6 +436,7 @@ Negative cases:
 
 - **FR-013**: Every effect MUST declare its risk, privilege classes, stale check and receipt.
   - **Risk order**: ReadOnly < ReviewRequired < Destructive < Admin. *Destructive* removes or replaces existing state. *Admin* touches sensitive or administrative state.
+  - **Effective risk**: the higher of the descriptor's risk and the risk the module reports at preparation.
   - **Gating**: [ADR 0003](../../docs/adr/0003-weaver-direct-apply-risk-classification-is-elsa-owned.md) keeps classification Elsa-owned. Gating comes from the classes.
   - **Unaffected**: spec 1193's client working-state Destructive batches are unaffected.
 
@@ -423,7 +451,7 @@ Negative cases:
   | Rebind away from an owned inline secret | 2 | `Admin` | administrative, irrecoverable | version | readback; persisted, with a warning if cleanup failed |
   | Connection test | 2 | `Admin` | administrative | version, before the external call | persisted, with the result and a module code; refused when it could not run; *uncertain* when the write fails after the external call |
   | Connection revoke | 2 | `Admin` | administrative, irrecoverable | version | readback; persisted |
-  | Connection delete | 2 | `Admin` | administrative, irrecoverable | version | absence readback; persisted; *uncertain* when partial |
+  | Connection delete | 2 | `Admin` | administrative, irrecoverable | version; owned-secret enumeration complete | absence readback; persisted; *uncertain* when partial |
   | Secret revoke | 3 | `Admin` | administrative, irrecoverable | revision; consumer answer recomputed | readback; persisted |
   | Secret delete | 3 | `Admin` | administrative, irrecoverable | revision; consumer answer recomputed | absence readback; persisted; *uncertain* when partial |
 
@@ -437,54 +465,60 @@ Negative cases:
   - **Uncertain**: an effect whose response is lost after dispatch, or that may have run before a restart, is *uncertain*, and is never replayed. For a server effect, the receipt says what to check on the owning page. M4 has no Weaver resolution path for this; it is a recorded limitation (FR-020). For a client effect, the session owner resolves it, as spec 1189 defines.
   - **Local edits**: these carry correlated acknowledgements, and are unavailable, with zero effect, if their page is gone.
 - **FR-015**: **Privilege policy** (owner decisions 1, 2, 4 and 5). The Agent module MUST gain an integrator-configured privilege policy. It is a backend host option, never a session setting. It has three classes:
-  - **administrative**: required by every `Admin` effect. A module may add other classes to an effect, but never remove this one.
+  - **administrative**: required by every effect whose effective risk is `Admin`. Agent core adds it when a module's declared set omits it.
   - **irrecoverable**: a module MUST declare this class for its own irrecoverable effects. A third-party irrecoverable effect that is not `Admin` and declares no class is not caught, which is a recorded limitation.
   - **activation**: feature selection apply on the Server host.
 
-  Each effect declares a set of classes and needs all of them. The owning module declares the set at preparation, and a non-empty set is frozen into the approval digest. An empty set is left out of the digest, so unclassed proposals keep the digest an older build computes. Every class is off by default, so an unconfigured host refuses every classed effect. The Workbench's base configuration enables all three classes, and every other host keeps all three off unless its integrator enables them (owner decision 5). Studio shows the policy read-only, from the bootstrap response.
+  Each effect declares a set of classes and needs all of them. The owning module declares the set at preparation, and a non-empty set is frozen into the approval digest. An empty set is left out of the digest, so unclassed proposals keep the digest an older build computes. Every class is off by default, so an unconfigured host refuses every classed effect.
+
+  The Workbench enables all three classes in its base `appsettings.json` (owner decision 5). Every Workbench environment loads that file, including the compose images, which run as Production, so `appsettings.Production.json` MUST NOT override the classes. Every other host keeps all three off unless its integrator enables them. Studio shows the policy read-only, from the bootstrap response.
 - **FR-016**: **Outcomes.**
   - ***Performed***: leaf 0 MUST add *performed* (owner decision 3).
     - It is a new proposal status that reports the action as executed.
     - It has a new no-persisted-effect receipt scope.
     - The executor's and the integrity check's validation accept that scope only for *performed*.
+    - A tool descriptor declares whether the tool can end *performed* (FR-018).
     - The plan names every server and Studio mapping site.
+  - **Partial failure**: a module reports a partial failure, where a side effect happened before the failure, by throwing. Agent core records the outcome as *uncertain*.
   - **Module codes**: a tool descriptor and a context-provider descriptor MAY declare a closed set of module codes. Every M4 tool and context provider declares one.
     - **Validation**: Agent core validates each code from a declaring source, in receipts, refusals, preparation and execution errors, authorization violations and context diagnostics.
     - **Replacement**: a code outside the set is classified first, and then replaced by a generic code with that classification. A generic code that replaces an owner-unavailable code is itself outside `agent.`, so it stays owner-unavailable and never becomes forbidden.
     - **Mapping**: each `Elsa.Agent.<Domain>` package maps its owning module's native codes into its set. This includes splitting a code with two meanings, such as the Secrets `not-found` code used for both a missing secret and a missing configuration entry, into two declared codes.
     - **Format**: mapped codes are dotted ASCII identifiers outside `agent.`. A receipt carries its code in a new member, which the plan names.
     - **Undeclared sources**: sources that declare no set pass their codes through unchanged.
-  - **Everything else**: every other outcome reuses the existing outcomes and codes. A new code is added only where none fits, such as the privilege-policy refusal and the pending-finalization refusal. A status alone is never evidence of an effect.
+  - **Everything else**: every other outcome reuses the existing outcomes and codes. A new code is added only where none fits, such as the privilege-policy refusal. A status alone is never evidence of an effect.
 
 #### Contracts, catalogs and records
 
 - **FR-017**: Replacement contracts MUST detect a second registration (framework §2.6.2). The Agent-wide gap remains #3633. Visibility follows framework §2.23.3 and ADR 0080 D3.
 - **FR-018**: **Durable records and SemVer.**
-  - **Placement**: the frozen class set, the receipt's module code and the *performed* receipt scope live in the Agent EF store's protected payloads. *Performed* is also a new value appended to `AgentActionProposalStatus`, which the proposal row stores both in its existing integer `Status` column and in its protected payload; reads cross-check the two. No column is added.
-  - **Schema version gate**: the Agent family follows [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md)'s schema version gate, which is built.
+  - **Placement**: the frozen class set, the receipt's module code, and the *performed* status and receipt scope are held in the existing Agent EF records, without a relational schema change. Where each is stored is plan decision PD2.
+  - **Schema family**: the Agent family follows [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md)'s schema version gate, which is built.
     - Leaf 0 adds 1.1.0 to the Agent family. The payloads are protected, so the upcaster from 1.0.0 is the identity, and default values (no module code, an empty class set) are supplied when a payload is deserialized. Readers accept 1.0.0 and 1.1.0 rows of every kind.
     - The audit sequence counter is never re-stamped, so 1.0.0 stays in the Agent family's readable range for as long as it exists. Leaf 0 records this on #3428.
-    - 1.1.0 finalizes automatically: at activation on a cluster of one, and otherwise once every counted schema-fleet member can read it. An operator hold blocks finalization. An EF host without a schema fleet (`IEfSchemaFleet`) never finalizes.
-    - Until finalization, writers write 1.0.0, and the new fields are dormant. The composed Agent store answers whether they are available: the in-memory store reports them available at once, and the EF store reports its gate's write version.
-    - A write that needs dormant data is refused with the pending-finalization code, never written without it. This covers classed effects, receipts that carry a module code, and *performed* outcomes. The code names the schema-fleet requirement.
-    - Once 1.1.0 is finalized, a host that cannot read it refuses activation (`EfSchemaActivationRefusedException`).
+    - 1.1.0 finalizes automatically: at activation on a cluster of one, and otherwise once every counted schema-fleet member can read it. An operator hold blocks finalization. An EF host without a schema fleet never finalizes.
+    - Once 1.1.0 is finalized, a host that cannot read it refuses activation.
+  - **Dormancy**: the Agent features use the shared mechanism of [spec 182](../182-dormant-features-until-finalization/spec.md).
+    - The Agent EF store package contributes the Agent features' dormancy requirement on 1.1.0, so the feature catalog, Attention and `/capabilities` report the features as dormant until finalization. A host with the in-memory Agent store has no EF family to observe, carries no requirement, and has the features available at once.
+    - The check runs at preparation, before review, through `ISchemaDormancyCheck`, from the tool's descriptor: a tool that declares classes, a module-code set, or a *performed* outcome is refused with `SchemaDormancyRefusedException` (`schema-version-not-finalized`). Nothing is refused after the module ran. Until finalization, writers write 1.0.0.
+    - ADR 0078's completeness condition, proved by a backfill, does not apply. These features write new data, and none of them reads data that older writers did not produce.
   - **SemVer** follows framework §4.2, with pre-GA Majors under ADR 0080 D4 and Elsa constitution §E5.
     - **Major**:
       - *performed*: the new status, the receipt scope and the validation. These change model semantics, as owner decision 3 amends them.
       - the privilege policy: with its classes off by default, it refuses `Admin` tools, third-party ones included, that ran before.
     - **Minor**:
       - the Agent schema family 1.1.0: an additive version behind the gate, dormant until finalization;
-      - opt-in module-code sets and the receipt member;
+      - opt-in module-code sets, the *performed* declaration and the receipt member;
       - owner-unavailable from preparation and execution errors;
       - the Secrets exact-prefix enumeration;
+      - the native connection delete also deleting every secret under the connection's `connection:<name>:`, and refusing when the enumeration is incomplete. It fixes the defect #3779, but it is Minor rather than a Patch: the delete now removes more than before, hand-made secrets in that name space included, and can refuse where it succeeded before, so callers can observe new behaviour. No public contract changes, and the cleanup is additive;
       - the secret-consumer fan-in, with Secrets `.Core`'s reference to `Elsa.Events.Core` and no hard dependency on `Events`;
       - new members on existing stores and contracts, added so that existing implementations keep compiling;
       - new contracts, events, packages, Context Kinds, tools, renderers, codes and permissions.
-    - **Patch**: the native connection delete also removing the connection's OAuth grant and PKCE secrets, which fixes the defect #3779.
 - **FR-019**: **Catalogs** MUST change with the code (framework §2.22.1).
   - **Leaf 0**:
-    - `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md` gains the privilege policy, class sets, module-code sets, owner-unavailable errors, the principal seam and *performed*;
-    - `Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md` gains the schema family 1.1.0 and its dormant fields.
+    - `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md` gains the privilege policy, class sets, module-code sets, the *performed* declaration, owner-unavailable errors, the principal seam and *performed*;
+    - `Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md` gains the schema family 1.1.0 and the dormancy requirement it contributes.
   - **Leaf 1**:
     - updates the Secrets Core, `Elsa.Secrets` and Secrets EF catalogs;
     - creates `Essentials/src/Secrets/Api/EXTENSION_POINTS.md`.
@@ -504,8 +538,8 @@ Negative cases:
     - gives each new package that exposes extension points its own catalog;
     - updates the root index (framework §2.22.2);
     - lists each package's cross-domain contributions in its README.
-- **FR-020**: **Records.** Evidence goes on each PR, on the leaf's sub-issue, on #3443 and on #3428, which records M4's rows from FR-001 ([program goal](../../docs/program-goals/weaver-across-studio.md)).
-  - **Issue and Project reconciliation**: at each state transition, each leaf comments on its sub-issue, #3443 and #3428, and sets the sub-issue's and #3443's status in Project #65 to match.
+- **FR-020**: **Records.** Evidence goes on each PR and on the leaf's sub-issue, as [AGENTS.md](../../AGENTS.md) requires. #3443 and #3428 get summary comments at each state transition, and #3428 records M4's rows from FR-001 ([program goal](../../docs/program-goals/weaver-across-studio.md)).
+  - **Issue and Project reconciliation**: at each state transition, each leaf also sets its sub-issue's and #3443's status in Project #65 to match.
   - **Claims refresh**: leaf 0 refreshes the current claims on #3443 and on the overlap issues under Assumptions, and records the result on #3443.
 
   Leaf 0 MUST file these `needs-triage` follow-ups:
@@ -516,6 +550,7 @@ Negative cases:
   - a durable, cluster-wide Workflow Runtime Diagnostics Setting (D);
   - views for log time range and retention, and for OpenTelemetry metrics and logs (S);
   - working-state adapters for ETL creation, task forms, BPMN processes and activity contract proposals (W);
+  - the broader workflow journeys spec 1193 handed back to #3443: run controls, library deletes and Executables dispatch (L);
   - coverage of the irrecoverable class for third-party effects that declare no class;
   - detection of secret consumers in workflows and Nuplane feed credentials, and of consumers that resolve connections by name;
   - a Weaver resolution path for uncertain server effects.
@@ -540,7 +575,7 @@ Negative cases:
     - *Secret consumer*;
     - *Connection-owned secret*.
   - **Studio/CONTEXT.md**, for Studio concepts:
-    - *Module Load Status* names the diagnostics module status, `StudioModuleStatus`, whose values are available, loaded, disabled, incompatible and failed. The entry notes that the registry's status, `StudioModuleRegistryStatus`, adds pending and unknown. It replaces "discovered, accepted, activated, disabled, or rejected", and its _Avoid_ line stays.
+    - *Module Load Status* is redefined as the diagnostics status values: available, loaded, disabled, incompatible and failed. The entry notes that the registry's own status adds pending and unknown. It replaces "discovered, accepted, activated, disabled, or rejected", and its _Avoid_ line stays.
     - *Host Policy* gains a link to *Privilege policy*.
     - *Privileged Tool* is widened to a Weaver Tool whose effect needs a privilege class.
     - *Built-in Studio Screen* is added: a screen that the `Elsa.Studio.Hosting` client renders itself.
@@ -592,15 +627,15 @@ Negative cases:
 
 - **Privilege policy and class set**: the integrator's enabled classes, and the set of classes each effect declares and needs (FR-015).
 - **Module-code set**: the closed codes a tool or context provider declares, and the mapping from native codes (FR-016).
-- ***Performed* and its receipt scope**: the outcome of an approved action that persisted no change (FR-016). Its status value is held both in the proposal row's integer `Status` column and in the protected payload, and reads cross-check the two. Its receipt scope lives in the payload.
+- ***Performed* and its receipt scope**: the outcome of an approved action that persisted no change (FR-016). Both are durable (FR-018).
 - **Secret-consumer answer**: the binding connections, whether the secret is connection-owned, the disclosure rule and the truncation flag, or "not checked" (FR-006, story 4).
-- **Durable payload fields**: the frozen class set, the receipt's module code and the *performed* receipt scope, held in the Agent store's schema family 1.1.0 and dormant until it is finalized (FR-018).
+- **Durable Agent fields**: the frozen class set, the receipt's module code, and the *performed* status and receipt scope, held in the Agent store's schema family 1.1.0 and dormant until it is finalized (FR-018).
 
 ## Success Criteria
 
 ### Measurable Outcomes
 
-- **SC-001**: The FR-001 rows this spec owns, those of leaves 0–3, have linked evidence on #3428, and every narrowing in the table states its grounds. The whole matrix is recorded on #3428, and no row is left unassigned. The evidence for the rows of leaves 4 and later belongs to their leaf specs (FR-025).
+- **SC-001**: Every FR-001 row has linked evidence, all linked from #3428. The evidence for the rows of leaves 0–3 comes from this spec, and the evidence for later rows from their leaf specs (FR-025). Every narrowing states its grounds, and no row is left unassigned.
 - **SC-002**: Stories 1–4 pass their acceptance scenarios, each in the host its Independent Test assigns (FR-022). An unconfigured host refuses every classed effect.
 - **SC-003**: Seeded canaries appear in none of the channels FR-023 lists. Content the user explicitly attaches is excluded.
 - **SC-004**: For each contributing package, a composition test that deselects the package removes exactly its contributions, and leaves every other row unchanged.
@@ -616,32 +651,35 @@ Negative cases:
 ## Assumptions and Boundaries
 
 - **Delivery**:
-  - **Sub-issues**: leaves 0–3 get sub-issues of #3443 when this spec merges. Each leaf PR says "Fixes #<leaf issue>, Refs #3443". The last leaf of #3443 to merge, which may belong to a later leaf spec, also fixes #3443. Each PR maps the #3443 acceptance items it advances.
+  - **Sub-issues**: leaves 0–3 get sub-issues of #3443 when this spec merges. Each leaf PR says "Fixes #<leaf issue>, Refs #3443". The last M4 leaf to merge, which may belong to a later leaf spec, also fixes #3443. Each PR maps the #3443 acceptance items it advances.
   - **Order**: leaves 1–3 depend on leaf 0, and each depends on the leaf before it.
-  - **Status**: this spec's PR sets it to *Approved* in its own diff. Leaf 0's PR sets *In progress*. This spec's own work is leaves 0–3, so leaf 3's PR sets *Implemented*. The FR-001 rows for leaves 4 and later are then carried by their leaf specs and by #3428's matrix.
-  - **Bookkeeping**: every leaf reconciles its issues and Project #65 at each state transition (FR-020).
-- **Program owner decisions** (Sipke Schoorstra):
+  - **Status**: this spec's PR sets it to *Approved* in its own diff. Leaf 0's PR sets *In progress*. The spec stays *In progress* until the last M4 leaf merges, because FR-002 to FR-024 bind every later leaf spec. That leaf's PR sets *Implemented*.
+  - **Bookkeeping**: every leaf posts its summary comments and reconciles Project #65 at each state transition (FR-020).
+- **Program owner decisions** (Sipke Schoorstra), quoted verbatim:
   - **3 November 2026** ([receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6612627295)). The receipt's "spec 1202" is this spec, before it was renumbered ([note](https://github.com/elsa-workflows/elsa-foundation/issues/3443#issuecomment-6614698826)):
-    1. **Irrecoverable deletes and revokes** of secrets and Service connections: "Let the integrator decide what privileges weaver has via configuration."
-    2. **Feature selection apply**: "Let the integrator decide via configuration." This widens #3443's activation boundary only for hosts that enable the activation class.
-    3. **A generic outcome for an approved action that persists nothing**: "Add it in leaf 0."
-    4. **The privilege default**: "Off; Workbench always on."
+    1. **Irrecoverable deletes and revokes** of secrets and Service connections: "Let the integrator decide what privileges weaver has via configuration"
+    2. **Feature selection apply**: "Let the integrator decide via configuration"
+
+       This lane reads it as widening #3443's activation boundary only for hosts that enable the activation class.
+    3. **A generic outcome for an approved action that persists nothing**: "Add it in leaf 0"
+    4. **The privilege default**: "Off; Workbench always on"
   - **4 November 2026** ([receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6617907022)):
-    5. **The Workbench's classes**: "Enable all three". The Workbench's base configuration enables the administrative, irrecoverable and activation classes, and every other host keeps all three off.
+    5. **The Workbench's classes**: "Enable all three"
+
+       The receipt states that the Workbench's base configuration enables the administrative, irrecoverable and activation classes, and every other host keeps all three off.
 - **Decisions taken under Program authority, open to owner review**:
   - **Packaging**: one Agent package per owning module.
-  - **Class sets**: declared by consequence, satisfied in full, and frozen into the approval digest when non-empty. Every `Admin` effect requires the administrative class.
+  - **Class sets**: declared by consequence, satisfied in full, and frozen into the approval digest when non-empty. Every effect whose effective risk is `Admin` requires the administrative class.
   - **Secret revoke and delete**:
     - consumers and ownership come from Connections;
-    - connection-owned secrets are refused, which is stricter than the native page, and a hand-made secret that matches the convention is treated as owned;
+    - connection-owned secrets are refused by name, which is stricter than the native page, and hand-made secrets in that name space are treated as owned;
     - an effect fails closed when no source answers, so hosts without Connections cannot do this through Weaver;
     - the answer is recomputed at execution.
-  - **Connection delete**: it also deletes the OAuth grant and PKCE secrets (#3779). Consumers that resolve a connection by name are not detected.
+  - **Connection delete**: it also deletes every secret under the connection's `connection:<name>:`, hand-made ones included (#3779), and refuses when the enumeration is incomplete. Consumers that resolve a connection by name are not detected.
   - **Module codes**: declared closed sets, mapped by each Agent package.
-  - **Ground P choices**: the FR-001 narrowings marked P.
+  - **Ground L choices**: the FR-001 narrowings marked L, including the workflow row's run controls, library deletes and Executables dispatch.
   - **Console**: server reads of records are narrowed (X).
   - **Uncertain server effects**: these have no M4 resolution path.
-  - **Spec 1193's refusals**: they stand (O).
   - **Expressions**: delivered as Local edits with #3711.
   - **Post-M0 targets**: user tasks get read, claim, release and reassign, with reassign subject to escalation (FR-025). Agents, BPMN and backends are read-only.
   - **Runtime capture**: its semantics are untouched. Full payloads wait for Studio ADR 0009.
@@ -649,9 +687,9 @@ Negative cases:
   - **Personal layout**: changes to it are delivered.
   - **Cancellation**: ETL cancellation is reviewed. BPMN run operations are outside the target (T).
 - **Plan decisions**:
-  - **P1**: each package's shell feature.
-  - **P2**: the contract signatures, internal names, the principal seam and the revision mechanisms; where permission constants live; payload placement; and the store mechanics behind FR-018, such as the counter's version check and the enumeration's limits.
-  - **P3**: every non-atomic compare-then-write window, and how it is bounded.
+  - **PD1**: each package's shell feature.
+  - **PD2**: the contract signatures, internal names and types, the principal seam and the revision mechanisms; where permission constants live; where the durable Agent fields are stored; and the store mechanics behind FR-018, such as the counter's version check, the schema-fleet and activation-refusal types, and the enumeration's limits.
+  - **PD3**: every non-atomic compare-then-write window, and how it is bounded.
 - **Overlap**, reconciled without reparenting:
   - ETL: #2894, #2906 and the ETL defects (#3709, #3719, #3721, #3724, #3562).
   - Home dashboards: #3604.
@@ -678,7 +716,7 @@ Negative cases:
 | --- | --- |
 | Home/dashboard, ETL, Connections, Secrets metadata, Diagnostics, runtime evidence, activity availability and installed settings/administration surfaces have module-owned support | FR-001 to FR-004, FR-025; stories 2–4 |
 | Each supported action has context, tool, renderer/effect and negative-case evidence; absent mutation support is explicit | FR-001, FR-004, FR-013, FR-014, FR-022 |
-| Secret values and unrelated data are not exposed; runtime/model semantics and existing domain ownership remain intact | FR-002, FR-006, FR-007, FR-009, FR-012; Assumptions; owner decision 3 for *performed* |
+| Secret values and unrelated data are not exposed; runtime/model semantics and existing domain ownership remain intact | FR-002, FR-006, FR-007, FR-009, FR-012; Assumptions; owner decisions 1, 3 and 4 |
 | Scope is derived from the installed/composed inventory, including nested surfaces and module removal | FR-001, FR-008, FR-010; story 1; SC-004 |
 
 | #3443 acceptance or task | Requirements and stories |
