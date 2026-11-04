@@ -74,6 +74,8 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
         ConfigureEntity<ActivityDraftValidationState>(modelBuilder, "elsa_activity_draft_validations");
         ConfigureEntity<ActivityDefinitionVersionPublication>(modelBuilder, "elsa_activity_version_publications");
         ConfigureEntity<ActivityDefinitionVersionLayout>(modelBuilder, "elsa_activity_version_layouts");
+        modelBuilder.Entity<ActivityDefinitionDraftLayout>().Property(x => x.ActivityPresentation).HasDefaultValueSql("('[]')");
+        modelBuilder.Entity<ActivityDefinitionVersionLayout>().Property(x => x.ActivityPresentation).HasDefaultValueSql("('[]')");
         ConfigureEntity<ActivityDependencyEdge>(modelBuilder, "elsa_activity_dependency_edges");
         ConfigureEntity<ActivityDependencyProjectionState>(modelBuilder, "elsa_activity_dependency_projection");
         ConfigureEntity<ActivityForkCandidate>(modelBuilder, "elsa_activity_fork_candidates");

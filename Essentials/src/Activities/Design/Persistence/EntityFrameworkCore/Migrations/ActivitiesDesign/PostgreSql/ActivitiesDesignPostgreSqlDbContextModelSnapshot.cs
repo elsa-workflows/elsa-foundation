@@ -285,6 +285,12 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
 
+                    b.Property<string>("ActivityPresentation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValueSql("('[]')");
+
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .HasColumnType("bytea");
@@ -799,6 +805,12 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
+
+                    b.Property<string>("ActivityPresentation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValueSql("('[]')");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
