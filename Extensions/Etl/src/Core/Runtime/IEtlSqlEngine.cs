@@ -79,8 +79,12 @@ public interface IEtlSqlEngine
     /// </summary>
     bool ExtremeDatesAreInfinite { get; }
 
-    /// <summary>Selects the columns of every row of the table, ordered by the key columns ascending.</summary>
-    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
+    /// <summary>
+    /// Selects the columns of every row of the table, ordered by the key columns ascending; with a watermark column, only rows
+    /// whose watermark is greater than the <c>@watermark</c> parameter or is NULL, so a NULL watermark is still read and
+    /// rejected as a record error (spec 1199).
+    /// </summary>
+    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, string? watermarkColumn);
 
     /// <summary>Classifies an exception the driver raised.</summary>
     EtlSqlErrorKind Classify(Exception exception);

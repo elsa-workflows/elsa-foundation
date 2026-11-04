@@ -159,8 +159,8 @@ public abstract partial class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
         public string? SnapshotLock(string table) => inner.SnapshotLock(table);
         public bool IsLockRefusal(Exception exception) => inner.IsLockRefusal(exception);
         public bool ExtremeDatesAreInfinite => inner.ExtremeDatesAreInfinite;
-        public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
-            inner.SelectSnapshot(table, columns, keyColumns);
+        public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, string? watermarkColumn) =>
+            inner.SelectSnapshot(table, columns, keyColumns, watermarkColumn);
     }
 }
 

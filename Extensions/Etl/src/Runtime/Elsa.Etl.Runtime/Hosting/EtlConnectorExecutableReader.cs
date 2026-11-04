@@ -70,7 +70,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
             limits.MaxBatchRecords > options.Capacity.Records || limits.MaxBatchBytes > options.Capacity.InputBytes ||
             limits.MaxOutputBatchBytes > options.Capacity.OutputBytes || limits.MaxSnapshotBytes > options.MaxSnapshotBytes)
             throw Refused("etl.executable.limits-exceeded");
-        var sourceFields = pipeline.Source switch { EtlCsvSource csv => csv.Schema.Count, EtlHttpJsonSource json => json.Fields.Count, EtlJsonlSource jsonl => jsonl.Fields.Count, EtlSqlSource sql => sql.Columns.Count, _ => 0 };
+        var sourceFields = pipeline.Source switch { EtlCsvSource csv => csv.Schema.Count, EtlHttpJsonSource json => json.Fields.Count, EtlJsonlSource jsonl => jsonl.Fields.Count, EtlSqlSource sql => sql.Columns.Count, EtlRabbitMqSource rabbitMq => rabbitMq.Fields.Count, _ => 0 };
         if (sourceFields <= 0 || sourceFields > limits.MaxFields || pipeline.Mapping.Count is <= 0 or > 2048 || pipeline.Filters.Count > 2048)
             throw Refused("etl.executable.limits-exceeded");
         if (pipeline.Lookup is { } lookup &&
@@ -129,16 +129,33 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                     !sql.Columns.All(column => SqlIdentifier(column.Name)) ||
                     sql.Columns.Select(column => column.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != sql.Columns.Count ||
                     sql.Key is not { Count: >= 1 and <= 8 } || sql.Key.Distinct(StringComparer.Ordinal).Count() != sql.Key.Count ||
-                    !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)))
+                    !sql.Key.All(key => sql.Columns.Any(column => column.Name == key && column.Required)) ||
+                    sql.Watermark is { } watermark &&
+                    !sql.Columns.Any(column => column.Name == watermark && column.Type == EtlColumnType.Int64 && column.Required))
+                    throw Refused("etl.executable.invalid-pipeline");
+                break;
+            case EtlRabbitMqSource rabbitMq:
+                RequireAlias(rabbitMq.Binding);
+                foreach (var field in rabbitMq.Fields) _ = new EtlJsonPointer(field.Pointer);
+                // The queue reaches the broker as a protocol short string and the maximum bounds a run (spec 1201).
+                if (rabbitMq.Queue is not { Length: >= 1 and <= 255 } queue ||
+                    !queue.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':') ||
+                    rabbitMq.MaxMessages is < 1 or > EtlRabbitMqSource.MaxMessagesLimit)
                     throw Refused("etl.executable.invalid-pipeline");
                 break;
             default: throw Refused("etl.executable.invalid-pipeline");
         }
         if (pipeline.Lookup is { } lookup) RequireAlias(lookup.Binding);
         foreach (var destination in new[] { pipeline.Routes.Main, pipeline.Routes.Errors })
-            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, EtlCsvDestination csv => csv.Binding, EtlSqlDestination sql => sql.Binding, _ => null });
-        // Only the main route can deliver to SQL (spec 1197).
-        if (pipeline.Routes.Errors is EtlSqlDestination) throw Refused("etl.executable.invalid-pipeline");
+            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, EtlCsvDestination csv => csv.Binding, EtlSqlDestination sql => sql.Binding, EtlRabbitMqDestination rabbitMq => rabbitMq.Binding, _ => null });
+        // Only the main route can deliver to SQL (spec 1197) or publish to RabbitMQ (spec 1200).
+        if (pipeline.Routes.Errors is EtlSqlDestination or EtlRabbitMqDestination) throw Refused("etl.executable.invalid-pipeline");
+        // The exchange and routing key go to the broker as protocol short strings, so a worker re-checks the compiler's rules.
+        if (pipeline.Routes.Main is EtlRabbitMqDestination main &&
+            (main.Exchange is not { Length: <= 255 } exchange ||
+             !exchange.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':') ||
+             main.RoutingKey is not { Length: <= 255 } routingKey || !routingKey.All(character => character is >= '!' and <= '~')))
+            throw Refused("etl.executable.invalid-pipeline");
     }
 
     private static bool SqlIdentifier(string? value) =>

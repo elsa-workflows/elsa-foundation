@@ -46,6 +46,7 @@ internal sealed partial class EtlArtifactCompiler
         var mapped = ValidateMapping(pipeline.Mapping, source, lookup, diagnostics);
         ValidateFilters(pipeline.Filters, mapped, diagnostics);
         ValidateSqlDestination(pipeline, mapped, diagnostics);
+        ValidateRabbitMqDestination(pipeline, diagnostics);
         if (pipeline.Source is not null && EtlContinuousRunPolicy.FindViolation(pipeline) is { } continuousViolation)
             diagnostics.Add(continuousViolation["etl.".Length..], "continuous", continuousViolation switch
             {
@@ -135,6 +136,16 @@ internal sealed partial class EtlArtifactCompiler
                 var columns = ValidateSchema(sql.Columns, "source.columns", maximumFields, diagnostics);
                 ValidateSqlSource(sql, columns, diagnostics);
                 return columns;
+            case EtlRabbitMqSource rabbitMq:
+                ValidateAlias(rabbitMq.Binding, "source.binding", diagnostics);
+                // The queue goes to the broker as a protocol short string, and the maximum bounds what one run holds (spec 1201).
+                if (!IsRabbitMqQueue(rabbitMq.Queue))
+                    diagnostics.Add("source.rabbitmq-name-invalid", "source.queue",
+                        "The queue must be 1 to 255 letters, digits, underscores, hyphens, periods or colons.");
+                if (rabbitMq.MaxMessages is < 1 or > EtlRabbitMqSource.MaxMessagesLimit)
+                    diagnostics.Add("source.rabbitmq-max-messages-invalid", "source.maxMessages",
+                        "The message maximum must be 1 to 100,000.");
+                return ValidateJsonFields(rabbitMq.Fields, maximumFields, diagnostics);
             default:
                 diagnostics.Add(source is null ? "source.required" : "source.unsupported", "source", "A supported input source is required.");
                 return new Dictionary<string, EtlColumn>(StringComparer.Ordinal);
@@ -170,6 +181,7 @@ internal sealed partial class EtlArtifactCompiler
             case EtlHttpDestination http: ValidateAlias(http.Binding, path + ".binding", diagnostics); break;
             case EtlCsvDestination csv: ValidateAlias(csv.Binding, path + ".binding", diagnostics); break;
             case EtlSqlDestination sql: ValidateAlias(sql.Binding, path + ".binding", diagnostics); break;
+            case EtlRabbitMqDestination rabbitMq: ValidateAlias(rabbitMq.Binding, path + ".binding", diagnostics); break;
             default:
                 diagnostics.Add(destination is null ? "destination.required" : "destination.unsupported", path, "A supported output destination is required.");
                 break;
@@ -201,6 +213,32 @@ internal sealed partial class EtlArtifactCompiler
                 "The key must be one to eight distinct output fields, each mapped from a required source field.");
     }
 
+    /// <summary>
+    /// A RabbitMQ destination's exchange is empty (the default exchange) or a broker-safe name, and its routing key is printable
+    /// ASCII; both fit the protocol's short strings. Only the main route may publish (spec 1200).
+    /// </summary>
+    private static void ValidateRabbitMqDestination(EtlPipelineV2 pipeline, DiagnosticCollector diagnostics)
+    {
+        if (pipeline.Routes?.Errors is EtlRabbitMqDestination)
+            diagnostics.Add("destination.rabbitmq-route-unsupported", "routes.errors", "Only the main route can publish to RabbitMQ.");
+        if (pipeline.Routes?.Main is not EtlRabbitMqDestination rabbitMq)
+            return;
+        if (!IsRabbitMqExchange(rabbitMq.Exchange))
+            diagnostics.Add("destination.rabbitmq-name-invalid", "routes.main.exchange",
+                "The exchange must be empty or up to 255 letters, digits, underscores, hyphens, periods or colons.");
+        if (!IsRabbitMqRoutingKey(rabbitMq.RoutingKey))
+            diagnostics.Add("destination.rabbitmq-name-invalid", "routes.main.routingKey",
+                "The routing key must be up to 255 printable ASCII characters without spaces.");
+    }
+
+    private static bool IsRabbitMqQueue(string? queue) => queue is { Length: >= 1 } && IsRabbitMqExchange(queue);
+
+    private static bool IsRabbitMqExchange(string? exchange) => exchange is { Length: <= 255 } &&
+        exchange.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':');
+
+    private static bool IsRabbitMqRoutingKey(string? routingKey) => routingKey is { Length: <= 255 } &&
+        routingKey.All(character => character is >= '!' and <= '~');
+
     /// <summary>The table and columns are identifiers the dialect quotes, and the key orders the snapshot (spec 1198).</summary>
     private static void ValidateSqlSource(EtlSqlSource sql, IReadOnlyDictionary<string, EtlColumn> columns,
         DiagnosticCollector diagnostics)
@@ -215,6 +253,10 @@ internal sealed partial class EtlArtifactCompiler
         if (sql.Key is not { Count: >= 1 and <= 8 } key || key.Distinct(StringComparer.Ordinal).Count() != key.Count ||
             !key.All(name => name is not null && columns.TryGetValue(name, out var column) && column.Required))
             diagnostics.Add("source.sql-key-invalid", "source.key", "The key must be one to eight distinct required columns.");
+        // The checkpoint compares 64-bit integers; a NULL watermark can never be compared, so the column is required (spec 1199).
+        if (sql.Watermark is { } watermark &&
+            !(columns.TryGetValue(watermark, out var column) && column.Type == EtlColumnType.Int64 && column.Required))
+            diagnostics.Add("source.sql-watermark-invalid", "source.watermark", "The watermark must be a declared, required Int64 column.");
     }
 
     private static bool IsSqlTable(string? table) => table?.Split('.') is { Length: 1 or 2 } parts && parts.All(IsSqlIdentifier);
@@ -259,7 +301,7 @@ internal sealed partial class EtlArtifactCompiler
 
     private static bool CheckConnectorStructureAndStrings(EtlPipelineV2 pipeline, string definitionId, int budget)
     {
-        var sourceCount = pipeline.Source switch { EtlCsvSource csv => csv.Schema?.Count ?? 0, EtlHttpJsonSource http => http.Fields?.Count ?? 0, EtlJsonlSource jsonl => jsonl.Fields?.Count ?? 0, EtlSqlSource sql => sql.Columns?.Count ?? 0, _ => 0 };
+        var sourceCount = pipeline.Source switch { EtlCsvSource csv => csv.Schema?.Count ?? 0, EtlHttpJsonSource http => http.Fields?.Count ?? 0, EtlJsonlSource jsonl => jsonl.Fields?.Count ?? 0, EtlSqlSource sql => sql.Columns?.Count ?? 0, EtlRabbitMqSource rabbitMq => rabbitMq.Fields?.Count ?? 0, _ => 0 };
         var itemCount = (long)sourceCount + (pipeline.Lookup?.Schema?.Count ?? 0) + (pipeline.Mapping?.Count ?? 0) + (pipeline.Filters?.Count ?? 0);
         if (itemCount > budget / 32 || !AddText(definitionId, ref budget))
             return false;
@@ -285,7 +327,13 @@ internal sealed partial class EtlArtifactCompiler
                 break;
             case EtlSqlSource sql:
                 if (!AddText(sql.Binding, ref budget) || !AddText(sql.Table, ref budget) || !AddSchemaText(sql.Columns, ref budget) ||
-                    !AddKeyText(sql.Key, ref budget)) return false;
+                    !AddKeyText(sql.Key, ref budget) || sql.Watermark is { } watermark && !AddText(watermark, ref budget)) return false;
+                break;
+            case EtlRabbitMqSource rabbitMq:
+                if (!AddText(rabbitMq.Binding, ref budget) || !AddText(rabbitMq.Queue, ref budget)) return false;
+                if (rabbitMq.Fields is not null)
+                    foreach (var field in rabbitMq.Fields)
+                        if (field is not null && (!AddText(field.Name, ref budget) || !AddText(field.Pointer, ref budget))) return false;
                 break;
         }
         if (pipeline.Lookup is { } lookup && (!AddText(lookup.Binding, ref budget) || !AddSchemaText(lookup.Schema, ref budget) ||
@@ -305,6 +353,8 @@ internal sealed partial class EtlArtifactCompiler
         EtlHttpDestination http => AddText(http.Binding, ref budget),
         EtlCsvDestination csv => AddText(csv.Binding, ref budget),
         EtlSqlDestination sql => AddText(sql.Binding, ref budget) && AddText(sql.Table, ref budget) && AddKeyText(sql.Key, ref budget),
+        EtlRabbitMqDestination rabbitMq => AddText(rabbitMq.Binding, ref budget) && AddText(rabbitMq.Exchange, ref budget) &&
+            AddText(rabbitMq.RoutingKey, ref budget),
         _ => true
     };
 

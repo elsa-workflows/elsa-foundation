@@ -492,7 +492,7 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       ) : null}
       {state === "ready" && instances.length === 0 ? (
-        <div role="status" aria-live="polite">
+        <div className="studio-table-container" role="status" aria-live="polite">
           <WfEmptyState headingLevel={3}
             icon={<Boxes size={22} />}
             title={activeFilterCount ? "No workflow runs match these filters" : "No workflow runs yet"}

@@ -27,6 +27,8 @@ Native sub-issues carry the hierarchy. The [task map](../../specs/1204-named-emb
 
 ## Current checkpoint
 
-Program, four Epics, six Features and nine leaf Tasks/Spikes exist with native parent relationships. Project 67 contains all 20 records, a Kanban WIP board hiding rollups, a full Roadmap table and the Backlog/Ready/In progress/In review/Blocked/Done status field. Source research is complete; no composed prototype or product runtime qualification is claimed. #3748 owns the establishment PR.
+Program, four Epics, six Features and nine leaf Tasks/Spikes exist with native parent relationships. Project 67 contains all 20 records, a Kanban WIP board hiding rollups, a full Roadmap table and the Backlog/Ready/In progress/In review/Blocked/Done status field. Establishment #3748 merged in PR #3760.
 
-Two proof obligations are explicit in [research](../../specs/1204-named-embedded-blocks/research.md): causal visibility of child results after composite completion, and native BPMN binding retention in XML. They remain unproved until prototype/implementation evidence resolves them.
+S001 #3749 is locally qualified in [PR #3767](https://github.com/elsa-workflows/elsa-foundation/pull/3767), with final review/CI/merge and resulting-main acceptance pending. The [prototype receipts](../../specs/1204-named-embedded-blocks/evidence/prototype/README.md) establish bounded native child-result visibility, parent variables/occurrences, strict restart/resume, cancellation, supported recovery, nearest control targets and a real Studio authoring/history/run journey. They exposed supporting completion-causality and accepted-save/history defects, corrected in that PR. The temporary extraction UI was removed after qualification.
+
+Production commands, equivalent Activity Definition authoring, promotion and integrated program acceptance remain unimplemented. Native BPMN binding retention in XML remains unproved and belongs to T004; native process execution alone does not satisfy that obligation. See [research](../../specs/1204-named-embedded-blocks/research.md) for the precise supporting decisions and remaining limits.

@@ -124,3 +124,17 @@ export function acceptedConversation(evidence: PlaygroundEvidence): Conversation
   if (turn?.status !== "Accepted" || !conversation || conversation.currentRevision == null) return null;
   return { conversationId: conversation.conversationId, revision: conversation.currentRevision };
 }
+
+const invocationEvidencePath = (workflowExecutionId: string, activityExecutionId: string) =>
+  `/agent/specialists/invocations/${encodeURIComponent(workflowExecutionId)}/${encodeURIComponent(activityExecutionId)}/evidence`;
+
+export interface InvocationEvidenceView {
+  invocation: InvocationEvidence;
+  /** False when the caller may not see captured values; the result's value is then left out. */
+  valuesPermitted: boolean;
+}
+
+/** One runtime occurrence's evidence; a run the caller may not see or inspect reads as not found (404). */
+export function getInvocationEvidence(context: StudioEndpointContext, workflowExecutionId: string, activityExecutionId: string, signal?: AbortSignal) {
+  return context.http.getJson<InvocationEvidenceView>(invocationEvidencePath(workflowExecutionId, activityExecutionId), { signal });
+}
