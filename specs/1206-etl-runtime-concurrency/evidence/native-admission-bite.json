@@ -1,0 +1,114 @@
+{
+  "mutation": "disable-runtime-retry-budget",
+  "sourceRevision": "0d47ad1a5e6e47bde91d00579cb8fe018507e26b",
+  "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlRuntimeOperation.cs",
+  "original": "private static readonly EfWriteRetry OperationRetry = new(EfWriteRetry.DefaultMaxAttempts,",
+  "mutated": "private static readonly EfWriteRetry OperationRetry = new(1,",
+  "testSourceSha256": "a52e9ea49d077317d2e1fdd861c73d3bd92a5e13758734009bb1626f2bd21546",
+  "native-admission-red": {
+    "counters": {
+      "total": "6",
+      "executed": "6",
+      "passed": "0",
+      "failed": "6",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "tests": [
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+        "outcome": "Failed",
+        "native": "Observed native conflict: MySqlException:1213"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+        "outcome": "Failed",
+        "native": "Observed native conflict: SqlException:1205"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+        "outcome": "Failed",
+        "native": "Observed native conflict: MySqlException:1213"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+        "outcome": "Failed",
+        "native": "Observed native conflict: PostgresException:23505"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+        "outcome": "Failed",
+        "native": "Observed native conflict: PostgresException:23505"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+        "outcome": "Failed",
+        "native": "Observed native conflict: SqlException:1205"
+      }
+    ],
+    "trxSha256": "a935652d0e9a565ca8a89f12321413be52bc2ba6d0e7c264026d06c58eaca88d"
+  },
+  "native-admission-green": {
+    "counters": {
+      "total": "6",
+      "executed": "6",
+      "passed": "6",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "tests": [
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+        "outcome": "Passed",
+        "native": "Observed native conflict: MySqlException:1213"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+        "outcome": "Passed",
+        "native": "Observed native conflict: MySqlException:1213"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+        "outcome": "Passed",
+        "native": "Observed native conflict: SqlException:1205"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+        "outcome": "Passed",
+        "native": "Observed native conflict: PostgresException:23505"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+        "outcome": "Passed",
+        "native": "Observed native conflict: PostgresException:23505"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+        "outcome": "Passed",
+        "native": "Observed native conflict: SqlException:1205"
+      }
+    ],
+    "trxSha256": "4e03f613c3acc5e7de8a26aea8bcb0a2b5d7082948337dd227005a6e45617761"
+  }
+}
