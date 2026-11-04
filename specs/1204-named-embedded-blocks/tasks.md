@@ -2,7 +2,7 @@
 
 **Program:** [#3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610).
 **Board:** [Project 67](https://github.com/orgs/elsa-workflows/projects/67).
-**Status:** establishment and S001 delivered. PR #3767 merged as main `40a2cd585`; [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/3767#issuecomment-6623300307) passed the 22 native cases and actual Studio graph/history checks. T001 is in progress; production extraction and promotion remain unimplemented.
+**Status:** establishment, S001 and T001 delivered. PR #3798 merged as main `9daaa3206`; [T001 resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/3798#issuecomment-6641358323) verifies presentation persistence, editor history and frozen historical names. T002 is in progress; production extraction and promotion remain unimplemented.
 
 Native sub-issues are durable work units; these checklists are the canonical task/acceptance map. One implementation leaf is active at a time. Evidence belongs to that leaf/PR, not new checkpoint issues. A checked task requires its actual acceptance; source preparation is insufficient.
 
@@ -19,7 +19,7 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 **Goal:** equivalent named native block authoring on both resources.
 **Independent test:** contiguous Sequence and linear Flowchart extraction, nested editing, persistence and atomic Undo/Redo/Ungroup preserve expected execution and visible data.
 
-- [ ] T001 [#3750](https://github.com/elsa-workflows/elsa-foundation/issues/3750) Extend typed node-presentation contracts/persistence/source freezing in existing Activities Design/Graph ownership and Hosting SDK; include complete lifecycle, default-empty compatibility, historical/hash and editor-history regressions. Depends on S001.
+- [x] T001 [#3750](https://github.com/elsa-workflows/elsa-foundation/issues/3750) Extend typed node-presentation contracts/persistence/source freezing in existing Activities Design/Graph ownership and Hosting SDK; include complete lifecycle, default-empty compatibility, historical/hash and editor-history regressions. Depends on S001. Delivered by PR #3798 / main `9daaa3206`, with [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/3798#issuecomment-6641358323). Task #3750 and Feature #3743 are complete; T002–T007 remain open.
 - [ ] T002 [#3751](https://github.com/elsa-workflows/elsa-foundation/issues/3751) Add pure native creation/extraction/Ungroup plans in Studio Workflows graph-authoring with identity/layout/reference preservation and pre-mutation refusal diagnostics. Cover order, entry/exit/outcomes, control targets, child results and no-loss inverse cases. Depends on S001; executed after T001 under the serial WIP policy.
 - [ ] T003 [#3752](https://github.com/elsa-workflows/elsa-foundation/issues/3752) Integrate shared block actions and preview into Workflow and Activity Definition graph hosts; add Sequence range selection, summary/name, breadcrumbs, keyboard/focus, dirty state and atomic history; honor source/read-only/module/permission restrictions. Depends on T001 and T002.
 
