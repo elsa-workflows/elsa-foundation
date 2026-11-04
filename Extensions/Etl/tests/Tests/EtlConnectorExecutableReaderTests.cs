@@ -53,6 +53,30 @@ public sealed class EtlConnectorExecutableReaderTests
         })));
     }
 
+    [Theory]
+    [InlineData("", "orders", true, false)]
+    [InlineData("bad exchange", "orders", false, false)]
+    [InlineData("events", "two words", false, false)]
+    [InlineData("events", "orders", false, true)]
+    [InlineData("e234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456", "orders", false, false)]
+    [InlineData("events", "k234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456", false, false)]
+    public void Reader_refuses_a_rabbitmq_destination_the_compiler_would_refuse(string exchange, string routingKey, bool valid, bool onErrorRoute)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var destination = new EtlRabbitMqDestination("events", exchange, routingKey);
+        var pipeline = defaults with
+        {
+            Routes = onErrorRoute ? new(new EtlJsonlDestination("output"), destination) : new(destination, new EtlJsonlDestination("errors"))
+        };
+
+        // The exchange and routing key reach the broker as protocol strings, and only the main route publishes (spec 1200).
+        if (valid)
+            Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline)));
+        else
+            Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+    }
+
     [Fact]
     public void Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key()
     {

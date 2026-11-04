@@ -158,6 +158,29 @@ describe("connector pipeline editor", () => {
     expect(editor.host.textContent).toContain("Choose HTTP, JSONL or CSV independently");
   });
 
+  it("publishes accepted records to a RabbitMQ exchange selected from RabbitMQ approvals, never the rejected route", () => {
+    const editor = renderEditor(undefined, { bindings: [...bindings, { alias: "events", role: "MainOutput", kind: "rabbitMq" }] });
+    expect(Array.from(control<HTMLSelectElement>(editor.host, "Rejected records destination kind").options).map(option => option.value))
+      .not.toContain("rabbitmq");
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Accepted records destination kind"), "rabbitmq");
+    editor.render();
+    expect(editor.pipeline.routes.main).toEqual({ kind: "rabbitmq", binding: "output", exchange: "", routingKey: "" });
+    const accepted = control<HTMLSelectElement>(editor.host, "Accepted records binding");
+    expect(Array.from(accepted.options).map(option => option.value)).toEqual(["", "output", "events"]);
+    setSelect(accepted, "events");
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Accepted records exchange"), "etl.people");
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Accepted records routing key"), "people.loaded");
+    editor.render();
+
+    expect(editor.pipeline.routes.main).toEqual({ kind: "rabbitmq", binding: "events", exchange: "etl.people", routingKey: "people.loaded" });
+    setSelect(control<HTMLSelectElement>(editor.host, "Accepted records destination kind"), "jsonl");
+    editor.render();
+    expect(editor.pipeline.routes.main).toEqual({ kind: "jsonl", binding: "events" });
+  });
+
   it("routes accepted records to a keyed SQL table selected from SQL approvals, never the rejected route", () => {
     const editor = renderEditor(undefined, { bindings: [...bindings, { alias: "warehouse", role: "MainOutput", kind: "sql" }] });
     expect(Array.from(control<HTMLSelectElement>(editor.host, "Rejected records destination kind").options).map(option => option.value))
