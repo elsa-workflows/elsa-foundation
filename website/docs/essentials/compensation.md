@@ -2,7 +2,7 @@
 
 A compensation scope runs a list of named steps in order. Each step is a forward activity and, optionally, a compensation: the activity that undoes it. When a step fails, the scope undoes the steps that already completed, newest first, and finishes with the outcome `Compensated`. Use it when a workflow makes changes in other systems that cannot share a transaction: reserve inventory, reserve a delivery slot, then confirm the order; if the confirmation is rejected, cancel the delivery and release the inventory.
 
-The scope is part of the `ActivitiesCompensation` feature, which the Workbench enables by default. The [compensation sample](#samples) is a package you can load into the Workbench to try everything on this page.
+The scope is part of the `ActivitiesCompensation` feature, which the Workbench enables by default.
 
 ## Undo, stop, settle or keep
 
@@ -80,7 +80,7 @@ A system that a compensation scope calls is safe when it:
 4. treats a repeated undo for the same compensation key as done;
 5. reports an uncertain outcome only when it really cannot tell what happened.
 
-Elsa does not provide exactly-once delivery or a reconciliation framework; these rules are what make repeats harmless. The [compensation sample](#samples)'s participant is a small reference implementation of all five, with tests for each.
+Elsa does not provide exactly-once delivery or a reconciliation framework; these rules are what make repeats harmless.
 
 ## Pass data from a step to its compensation
 
@@ -221,18 +221,6 @@ Nesting, confirmation and cancellation add these states:
 - `Cancelled — nothing undone` on a cancelled scope that undid no step.
 
 A scope that ran more than once, in a loop or because its parent ran again, has an **Occurrence** list to choose which run to show.
-
-## Samples
-
-The [compensation sample](https://github.com/elsa-workflows/elsa-foundation/tree/main/samples/Elsa.Samples.Compensation) (`samples/Elsa.Samples.Compensation`) is a package for the Workbench's package feed. It adds a **Reserve** and a **Release** activity backed by a file-based participant that follows [the participant contract](#what-a-participant-must-do), and three workflows to import:
-
-| Workflow | What it shows |
-|---|---|
-| Reservation saga | The order is rejected; the delivery and then the inventory are released, each with the reservation its step returned. |
-| Nested scope with Confirm | A confirmed charge is kept; an inner scope's two reservations are handed over and undone by the outer scope, newest first. |
-| Operator recovery | A release that always fails is retried after 5 and then 10 seconds, then waits for an operator to retry, resolve or abandon it. |
-
-Its README walks through building and loading the package, importing and running the workflows, and what to expect in Studio and in the participant's files. A Workbench test runs the three workflows on every change, so they keep matching this page.
 
 ## Supported configurations
 

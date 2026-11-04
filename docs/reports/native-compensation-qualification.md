@@ -87,7 +87,7 @@ Each limit is stated in the [compensation guide](../../website/docs/essentials/c
 | A completed scope keeps no journal; Studio derives its view from run data. | Spec 258 R1, R22; [spec 260](../../specs/260-compensation-operator-actions/spec.md) FR-417 | By design |
 | An expression `scope` input on Confirm or Compensate is not resolved in the Studio run view. | Spec 258 R22 | None filed |
 | Only leaf handlers are key-stable across retries; activities inside a composite handler get their own default keys. | [Spec 251](../../specs/251-compensation-uncertainty/spec.md) edge cases | By design |
-| No exactly-once effects and no reconciliation framework; participants must follow the participant contract. | Spec 251 FR-220, program non-goals | By design; the [compensation sample](../../samples/Elsa.Samples.Compensation/README.md) is a reference participant |
+| No exactly-once effects and no reconciliation framework; participants must follow the participant contract. | Spec 251 FR-220, program non-goals | By design |
 | Operator reasons are visible to every reader of the run. | Spec 260 R17 | By design; the guide says to put no secret in a reason |
 | Bulk retry, cancel-run and variable edits from Studio stay parked. | Spec 260 OD12, ADR 0080 D0 | Parked by owner decision |
 | Retrying a terminal (faulted) run is out of scope. | Spec 251 FR-211 | By design |

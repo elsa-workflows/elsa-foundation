@@ -37,8 +37,6 @@ The semantic contract is [spec 250's semantics](../../specs/250-native-compensat
 - the outcome vocabulary: completed, uncertain, compensated, compensated while uncertain, resolved as effect absent or effect kept, confirmed, abandoned;
 - the operator decisions: retry, resolve absent, resolve kept, abandon, each with a reason, refused when stale.
 
-The [compensation sample](../../samples/Elsa.Samples.Compensation/README.md)'s participant is an engine-neutral reference for the contract; only its two activity classes are Elsa 4 code.
-
 **Elsa 4-specific, not reusable:** structural private state and its upcasters; the runtime seams R-1 to R-4 ([spec 258](../../specs/258-compensation-nesting/contracts/runtime-seams.md)), R-5 ([spec 260 operator actions](../../specs/260-compensation-operator-actions/contracts/operator-actions.md)), R-6 ([the activity state view](../../specs/260-compensation-operator-actions/contracts/journal-and-permissions.md)) and R-7 ([the delayed child schedule](../../specs/261-compensation-qualification/contracts/runtime-seam.md)); checkpoints, persistence modes and the post-commit outbox; the side-effect profile that commits an external activity before it runs; the Studio paired-step list; the journal endpoint.
 
 Elsa 3 would need its own mechanism for each of the second group. What each mechanism must guarantee:
