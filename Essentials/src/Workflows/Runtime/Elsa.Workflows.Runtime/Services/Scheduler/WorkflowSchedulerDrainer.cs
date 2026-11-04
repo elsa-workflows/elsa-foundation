@@ -271,9 +271,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             ? _consumedWorkClaimAccessor.Begin(ConsumedSchedulerWorkItem.FromClaim(claim))
             : null;
 
-        // #3275: the positive evidence a RetryAfter release needs, that this dispatch sent no non-retaining checkpoint to
-        // the store. Open only where such a release is possible: a claimed item on a host that composes a re-driver.
-        using var dispatchFrame = claim is not null && HasResumptionRedriver
+        // #3275, #3683: the positive evidence a delayed release needs, that this dispatch sent no non-retaining checkpoint
+        // to the store, for a RetryAfter and for temporarily unavailable work alike. Open only where such a release is
+        // possible: a claimed item of a kind that supports it.
+        using var dispatchFrame = claim is not null && RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind)
             ? RuntimeSchedulerDispatchFrame.Open(workItem.WorkflowExecutionId)
             : null;
         var handlerReturned = false;
@@ -341,8 +342,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // node neither acknowledges it nor records it as poison, which would leave the new owner nothing to run.
             throw;
         }
-        catch (RuntimeSchedulerWorkUnavailableException exception)
+        catch (RuntimeSchedulerWorkUnavailableException exception) when (
+            dispatchFrame is not { NonRetainingCheckpointAttempted: true } || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
         {
+            // #3683: only work that sent no non-retaining checkpoint to the store is deferred here. One that did has an
+            // effect that is durable, or will be at the coalescing segment's flush, without its commit having consumed the
+            // item (an active segment consumes nothing, and a commit through a scope of its own holds no claim), so a
+            // release would run it again over that effect. It falls through to the handler-fault arm below instead. A
+            // commit the store refused with this same exception, rolled back, is no attempt (the committer withdraws it),
+            // so a refused native worker admission is still deferred and retried here.
+
             // Supported work preserves its retry delay through a durable claim or a visibility-aware overlay
             // whose drain flush persists the release. Unsupported work/provider pairs retain their source.
             if (!CanReleaseWithDelay(workItem, renewal))
@@ -414,9 +423,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // acknowledgement too, so the drain throws claim-lost and records nothing. A delay that ends past the last
             // representable time is poisoned as well: no queue can persist it, and releasing it anyway would park the
             // step for good.
+            //
+            // Temporary unavailability lands here too once the dispatch has sent a non-retaining checkpoint to the store
+            // that the store did not refuse as unavailable (#3683). It cannot be deferred without repeating that
+            // checkpoint, and acknowledging it with no record would silently drop a step that did not finish. In an
+            // active coalescing segment the acknowledgement goes through the overlay, so the drain's flush still commits
+            // the effect and removes the durable copy.
             var retry = await DecideRetryAsync(workItem, faultInfo, cancellationToken);
             DateTimeOffset? releasedUntil = null;
-            if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && !handlerReturned &&
+            if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && !handlerReturned && HasResumptionRedriver &&
                 dispatchFrame is { NonRetainingCheckpointAttempted: false } && delay <= DateTimeOffset.MaxValue - retry.Now &&
                 !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal))
             {
