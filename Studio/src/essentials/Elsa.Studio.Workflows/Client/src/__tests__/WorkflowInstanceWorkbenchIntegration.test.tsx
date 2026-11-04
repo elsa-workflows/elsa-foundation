@@ -246,7 +246,8 @@ describe("workflow run workbench incident navigation", () => {
     }], connections: [], nestedBoundaries: [] });
     renderWorkbench("activity", "internal");
     await vi.waitFor(() => expect(container.querySelector(".wf-boundary-layout-list")).toBeTruthy());
-    await vi.waitFor(() => expect(container.querySelector(".wf-execution-browser")?.textContent).toContain("Execution 1 of 1"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+    expect(container.querySelector(".wf-execution-browser")).toBeNull();
     expect(api.getActivityExecutionLayout).toHaveBeenCalledWith(expect.anything(), "run-1", "boundary", expect.any(AbortSignal));
     expect(container.querySelector(".wf-boundary-layout-list button")?.textContent).toContain("Write Line");
   });
@@ -288,15 +289,15 @@ describe("workflow run workbench incident navigation", () => {
       return result(request);
     });
     renderWorkbench("activity", "write4");
-    await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label='Next activity execution']")?.disabled).toBe(false));
+    await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
     if (selected === "scope") {
       click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-execution-scope > button")).at(-1));
       await vi.waitFor(() => expect(window.location.search).toContain("scope4"));
       await new Promise(resolve => setTimeout(resolve, 0));
-      await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label='Next activity execution']")?.disabled).toBe(false));
+      await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
     }
     deferStep = true;
-    click(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label='Next activity execution']"));
+    click(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']"));
     await vi.waitFor(() => expect(deferredOnce).toBe(true));
     const node = selected === "leaf" ? "other-node" : "nested-sequence";
     await vi.waitFor(() => expect(container.querySelector(`.wf-sequence-step[data-id="${node}"]`)).toBeTruthy());

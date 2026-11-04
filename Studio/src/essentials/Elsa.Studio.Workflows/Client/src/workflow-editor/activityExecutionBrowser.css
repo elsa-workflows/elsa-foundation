@@ -2,6 +2,9 @@
 .wf-execution-navigator { display: flex; gap: 0.25rem; align-items: center; }
 .wf-execution-navigator > button { display: inline-flex; gap: 0.5rem; align-items: center; justify-content: center; min-height: 2rem; padding: 0.4rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); color: var(--studio-text); }
 .wf-execution-navigator > button:nth-child(2) { flex: 1; min-width: 0; }
+.wf-execution-choice-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; text-align: left; }
+.wf-execution-context { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.wf-execution-position { flex-shrink: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-variant-numeric: tabular-nums; }
 .wf-execution-browser button:focus-visible, .wf-execution-children button:focus-visible, .wf-execution-scope button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .wf-execution-browser button:disabled { opacity: 0.45; }
 .wf-execution-list { padding: 0; margin: 0; list-style: none; max-height: 19rem; overflow: auto; }
