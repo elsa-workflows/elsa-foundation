@@ -32,7 +32,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 ## Phase 5 — US2: configure, test, preview, enable
 
-- [ ] T017 [US2] Implement OIDC adapter/discovery/exchange/token validation and point-of-use Secrets resolution under `Identity/ExternalAuthentication/Oidc/` through managed Core; preserve direct bearer mode.
+- [x] T017 [US2] Implement OIDC adapter/discovery/exchange/token validation and point-of-use Secrets resolution under `Identity/ExternalAuthentication/Oidc/` through managed Core; preserve direct bearer mode. Protocol component implementation is complete; broker/durable-state/session composition and actual deployment qualification remain in following tasks.
 - [ ] T018 [US2] Implement durable purpose/browser/revision/secret-bound atomic flow and preview stores under `Identity/Persistence/EntityFrameworkCore/`, including provider migrations and expiry/replay tests.
 - [ ] T019 [US2] Implement bounded non-interactive tests, pure prospective admission/permissions and administrator-bound non-provisioning preview under `Identity/`; prove no normal session/identity mutation.
 - [ ] T020 [US1] Integrate real backend chooser/challenge/callback with local login under `Identity/Api/` and `Identity/AspNetCoreIdentity/`; preserve return-path/CSRF and theme behavior.

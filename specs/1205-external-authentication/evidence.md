@@ -172,3 +172,40 @@ Logs: `/tmp/elsa-3579-policy-capabilities-final.log`, `/tmp/elsa-3579-policy-int
 `/tmp/elsa-3579-policy-mutant-default-jit.log`, `/tmp/elsa-3579-policy-mutant-role-boundary.log`,
 `/tmp/elsa-3579-policy-mutant-membership.log`. The affected IAM EF suite passed **206/206**, no failures/skips
 (`/tmp/elsa-3579-policy-iam.log`). The solution-filter check passed (`/tmp/elsa-3579-policy-maps.log`).
+
+
+## Managed OIDC protocol checkpoint
+
+Added optional `FoundationIdentityExternalOidc` and named protocol contracts without adding managed dependencies
+to the direct-bearer module. Local settings/secret checks, bounded discovery/JWKS tests, code/S256 challenge,
+client-secret basic/post or public client redemption, and signature/issuer/audience/lifetime/nonce validation are
+implemented. Secret references resolve at point of use in an owned tenant scope; a protected-flow fingerprint
+pins both metadata generation and actual value. Upstream tokens/error descriptions are not retained/returned.
+Endpoint origin, HTTPS, redirects, JSON size/depth and total deadlines are constrained; Development-only loopback
+has activation and point-of-use guards. Unknown-kid rotation retries trusted keys once without re-redeeming a code.
+
+The owned controlled Kestrel provider fixture uses actual HTTP, registered client authentication, single-use
+PKCE codes and RSA-signed ID tokens. **32** new protocol cases pass. They cover basic/post/public modes, replay,
+wrong verifier, signing-key rotation (including rotation between JWKS and token response), issuer/audience/nonce/
+signature/expiry/authorized-party/type/duplicate/malformed evidence, secret rotation and unversioned value changes,
+response issuer, unsupported metadata, remote origin/redirect constraints, body/deadline limits and environment guards.
+Restored complete Identity suite passed **668/668**, zero failures/skips (9 seconds reported test duration).
+
+Nonce-binding mutation accepts the wrong-nonce response and fails its regression; the same deliberate mutant's
+invalid lookup also fails the missing-nonce error-path assertion. Ignoring exact issuer validation and ignoring
+secret-generation binding each fail their focused regression. Source restoration preceded the final passing run.
+The initial protocol run failed because the fixture's token method selected RequestDelegate and discarded its
+IResult; an explicit route-handler cast fixed the fixture. Those failed fixture runs are not counted as passes.
+
+Logs: `/tmp/elsa-3579-managed-oidc-focused-fixed.log`, `/tmp/elsa-3579-managed-oidc-expanded.log`,
+`/tmp/elsa-3579-oidc-mutant-nonce.log`, `/tmp/elsa-3579-oidc-mutant-issuer.log`,
+`/tmp/elsa-3579-oidc-mutant-secret.log`, `/tmp/elsa-3579-managed-oidc-rotation-final.log`.
+Architecture restore passed after adding the optional module reference; the solution-filter graph check passed.
+Restore reported existing NU1903 for `System.Security.Cryptography.Pkcs` 9.0.13 (GHSA-846f-f764-76mx) in the broad
+architecture graph. The pre-change lock already contains that exact version and the new managed-OIDC module's
+lock does not contain Pkcs; no unrelated dependency was upgraded here. Logs:
+`/tmp/elsa-3579-managed-oidc-architecture-restore.log`, `/tmp/elsa-3579-managed-oidc-maps.log`.
+
+Limitations: protocol contribution only. Global connection readiness/recovery still needs the session/broker/IAM
+adapters, and no actual Elsa callback/browser, interactive preview, cookie/access/refresh session, durable restart,
+two-node, external-product, Studio, required review/merge or resulting-main acceptance is claimed here.

@@ -85,3 +85,18 @@ remain readable. Matching passes a frozen membership snapshot to the atomic auth
 can add privilege without changing UserRecord fields. The old IPrincipalFactory auto-create/import behavior is
 retired; its pre-GA context is canonical `(tenant, user ID, optional provider metadata)` only. Neither managed
 assessment nor canonical projection imports upstream grants. Direct bearer normalization remains separate.
+
+
+## Managed OIDC implementation refinement
+
+The optional adapter uses fixed broker inputs, the installed IdentityModel signature/OIDC validators, and fresh
+bounded discovery/JWKS HTTP reads. It does not mutate dynamic ASP.NET authentication schemes or the direct bearer
+feature. Strict exact issuer/client audience, public-key algorithms, S256/nonce, endpoint-origin policy and
+point-of-use referenced-secret generation/value binding are implemented. Unknown-kid rotation refreshes the
+trusted JWKS once without reusing the code. The callback broker still owns distinct callback/purpose, browser
+binding, durable atomic state and secret/material pins; the protocol contribution alone cannot issue an Elsa session.
+
+Primary protocol constraints were checked against OIDC Core §3.1.3.7, RFC 9700 §4.4.2 and RFC 7636 §4 (linked in
+the adapter README). A controlled Kestrel provider fixture exercises actual HTTP client authentication, PKCE,
+single-use codes, signed tokens, malformed evidence and bounded failures. It is not an external-product or
+composed Elsa browser/deployment witness, and T026-T029 remain open.

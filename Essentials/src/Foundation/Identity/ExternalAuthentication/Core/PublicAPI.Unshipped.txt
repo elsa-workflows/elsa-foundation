@@ -315,3 +315,110 @@ static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProvisioning
 static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProvisioningDecision.operator ==(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProvisioningDecision? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProvisioningDecision? right) -> bool
 Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAdmissionAssessment.Membership.get -> Elsa.Foundation.Identity.Core.Iam.TenantMembershipRecord?
 Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAdmissionAssessment.Membership.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.<Clone>$() -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.AuthorizationUrl.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.AuthorizationUrl.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.CredentialBinding.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.CredentialBinding.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Deconstruct(out string? AuthorizationUrl, out string? Issuer, out string? CredentialBinding, out Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure Failure) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Equals(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge? other) -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.ExternalProtocolChallenge(string? AuthorizationUrl = null, string? Issuer = null, string? CredentialBinding = null, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure Failure = Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.None) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Failure.get -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Failure.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Issuer.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Issuer.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.<Clone>$() -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.CodeVerifier.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.CodeVerifier.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.Deconstruct(out string! RedirectUri, out string! State, out string! Nonce, out string! CodeVerifier) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.Equals(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest? other) -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.ExternalProtocolChallengeRequest(string! RedirectUri, string! State, string! Nonce, string! CodeVerifier) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.Nonce.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.Nonce.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.RedirectUri.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.RedirectUri.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.State.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.State.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.<Clone>$() -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.Deconstruct(out Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure Failure) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.Equals(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck? other) -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.ExternalProtocolCheck(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure Failure = Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.None) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.Failure.get -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.Failure.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.<Clone>$() -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Code.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Code.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.CodeVerifier.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.CodeVerifier.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.CredentialBinding.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.CredentialBinding.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Deconstruct(out string! RedirectUri, out string! Code, out string! Nonce, out string! CodeVerifier, out string! ExpectedIssuer, out string! CredentialBinding, out string? ResponseIssuer) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Equals(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest? other) -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.ExpectedIssuer.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.ExpectedIssuer.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.ExternalProtocolCodeRequest(string! RedirectUri, string! Code, string! Nonce, string! CodeVerifier, string! ExpectedIssuer, string! CredentialBinding, string? ResponseIssuer = null) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Nonce.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Nonce.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.RedirectUri.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.RedirectUri.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.ResponseIssuer.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.ResponseIssuer.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.InvalidConfiguration = 1 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.InvalidDiscovery = 4 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.InvalidResponse = 11 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.InvalidToken = 10 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.None = 0 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.ProviderChanged = 7 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.RemoteUnavailable = 3 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.SecretChanged = 8 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.SecretUnavailable = 2 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.UnsupportedClientAuthentication = 6 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.UntrustedEndpoint = 5 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.UpstreamRejected = 9 -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.<Clone>$() -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Claims.get -> System.Collections.Generic.IReadOnlyList<System.Security.Claims.Claim!>!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Claims.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Deconstruct(out Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? Identity, out System.Collections.Generic.IReadOnlyList<System.Security.Claims.Claim!>! Claims, out Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure Failure) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Equals(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity? other) -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.ExternalProtocolIdentity(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? Identity, System.Collections.Generic.IReadOnlyList<System.Security.Claims.Claim!>! Claims, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure Failure = Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure.None) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Failure.get -> Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Failure.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Identity.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Identity.init -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Core.IExternalAuthenticationProtocol
+Elsa.Foundation.Identity.ExternalAuthentication.Core.IExternalAuthenticationProtocol.ChallengeAsync(Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord! connection, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge!>
+Elsa.Foundation.Identity.ExternalAuthentication.Core.IExternalAuthenticationProtocol.CheckAsync(Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck!>
+Elsa.Foundation.Identity.ExternalAuthentication.Core.IExternalAuthenticationProtocol.Name.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Core.IExternalAuthenticationProtocol.RedeemAsync(Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord! connection, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity!>
+Elsa.Foundation.Identity.ExternalAuthentication.Core.IExternalAuthenticationProtocol.TestAsync(Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck!>
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.GetHashCode() -> int
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.ToString() -> string!
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.GetHashCode() -> int
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.ToString() -> string!
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.GetHashCode() -> int
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.ToString() -> string!
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.GetHashCode() -> int
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.ToString() -> string!
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.GetHashCode() -> int
+override Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.ToString() -> string!
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.operator !=(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge.operator ==(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallenge? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.operator !=(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest.operator ==(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolChallengeRequest? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.operator !=(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck.operator ==(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCheck? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.operator !=(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest.operator ==(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolCodeRequest? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.operator !=(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity? right) -> bool
+static Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity.operator ==(Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity? left, Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolIdentity? right) -> bool

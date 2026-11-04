@@ -8,6 +8,7 @@ terms: [authentication architecture](../../../../../../docs/reference/authentica
 |---|---|---|
 | `IExternalAdmissionService` | Replacement | Assesses without writes; normal admission rechecks the effective connection and delegates to atomic IAM admission. Inputs come only from a validating server protocol adapter. |
 | `IExternalProvisioningPolicy` | Named contribution | Integrator supplies a read-only policy under an explicit unique name. It selects existing users or declared Elsa default roles; it cannot import provider permissions or expand the approved role boundary. |
+| `IExternalAuthenticationProtocol` | Named contribution | Installed protocol validates metadata and identity evidence for both normal admission and preview. Inputs/results stay server-side; no raw upstream credentials are retained. Broker owns browser/purpose/revision-bound one-time state. |
 | `IConnectionRegistry` | Replacement | Backend authentication/admin reads a live effective view with provenance. Deployment is baseline; same-key data overrides only with explicit intent and deployment permission. |
 | `IConnectionCatalogStore` | Replacement | Complete bounded catalog read/CAS. A null revision is create-only. Never split the final-path mutation into independent per-record writes. |
 | `IConnectionWriter` | Replacement | Management authorizes before global access, validates policy/lifecycle and performs one revision-checked catalog save. |
