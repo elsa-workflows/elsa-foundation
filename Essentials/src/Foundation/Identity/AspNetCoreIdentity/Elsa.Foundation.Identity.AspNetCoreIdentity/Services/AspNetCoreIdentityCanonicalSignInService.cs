@@ -66,7 +66,10 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
             {
                 ConnectionKey = context.ExternalIdentity?.Provider, ConnectionRecordId = context.ConnectionRecordId,
                 Issuer = context.ExternalIdentity?.Issuer, ExternalSubject = context.ExternalIdentity?.Subject,
-                ExternalLinkRevision = linked?.Revision
+                ExternalLinkRevision = linked?.Revision,
+                ConnectionMaterialRevision = context.ConnectionMaterialRevision,
+                ConnectionCredentialBinding = context.ConnectionCredentialBinding,
+                ConnectionRedirectUri = context.ConnectionRedirectUri
             };
             if (!await sessionStore.TryCreateAsync(record, cancellationToken)) return null;
             foreach (var previous in identity.FindAll(IdentityClaimTypes.SessionId).ToArray()) identity.RemoveClaim(previous);

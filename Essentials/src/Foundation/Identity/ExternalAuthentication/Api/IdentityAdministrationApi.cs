@@ -29,6 +29,8 @@ public static partial class ExternalAuthenticationApi
             DefaultIdentityPermissionKeys.IdentitySessionsManage, DefaultIdentityPermissionKeys.IdentityUsersRead, typeof(ManagedSessionRevokeRequest));
         Map("POST", "/users/{userId}/links/attach", "AttachLink", typeof(ManagedLinkAttachResponse), AttachLink,
             DefaultIdentityPermissionKeys.IdentityLinksManage, DefaultIdentityPermissionKeys.IdentityUsersRead, typeof(ManagedLinkAttachRequest));
+        Map("POST", "/users/{userId}/links/remove", "RemoveLink", typeof(ManagedLinkRemoveResponse), RemoveLink,
+            DefaultIdentityPermissionKeys.IdentityLinksManage, DefaultIdentityPermissionKeys.IdentityUsersRead, typeof(ManagedLinkRemoveRequest));
 
         void Map(string method, string suffix, string name, Type response, Func<HttpContext, Task> handler,
             string permission, string otherPermission, Type? request = null)
@@ -114,6 +116,7 @@ public static partial class ExternalAuthenticationApi
                 new(registry.Connections.Where(view => view.Source == ConnectionSource.Database).Select(view => view.Record).ToArray(), registry.Revision)) is not null;
         var choices = canAttach ? registry.Connections.Where(view => view.Record.ArchivedAt is null)
             .Select(view => new ManagedLinkConnectionChoice(view.Record.Id, view.Record.Key, view.Record.DisplayName, view.Effective, view.Record.Enabled)).ToArray() : [];
+        items = items.Select(item => item with { CanRemove = canAttach && item.Qualified && item.Revision is not null }).ToList();
         await ManagementJson(context, new ManagedIdentityLinkPage(userId, items, links.TotalCount, user?.Revision, registry.Revision, canAttach, choices), ExternalAuthenticationApiJsonContext.Default.ManagedIdentityLinkPage);
     }
 
@@ -186,11 +189,73 @@ public static partial class ExternalAuthenticationApi
             await SecurityNotification(context, "link.attach", AuthEventOutcome.Failure, userId, "storage-outcome-unavailable", category: AuthEventCategory.IdentityChange);
             await ManagementFailure(context, "link-attachment-unavailable", 503); return;
         }
-        var attached = result.Admitted && result.UserId == userId;
+        var attached = result.Admitted && result.UserId == authorization.User.Id;
         await SecurityNotification(context, "link.attach", attached ? AuthEventOutcome.Success : AuthEventOutcome.Denied, userId,
             attached ? "attached" : result.Failure ?? "link-conflict", category: AuthEventCategory.IdentityChange);
         await ManagementJson(context, new ManagedLinkAttachResponse(attached, attached ? null : result.Failure ?? "link-conflict"),
             ExternalAuthenticationApiJsonContext.Default.ManagedLinkAttachResponse, attached ? 200 : 409);
+    }
+
+    private static async Task RemoveLink(HttpContext context)
+    {
+        if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityLinksManage) ||
+            !await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityUsersRead) || !await ManagementPost(context)) return;
+        var userId = Route(context, "userId");
+        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.Default.ManagedLinkRemoveRequest, context.RequestAborted);
+        if (!IdentityText(userId) || request is null || !IdentityText(request.Provider) || !IdentityText(request.Issuer) || !IdentityText(request.Subject) ||
+            !IdentityText(request.ExpectedUserRevision) || !IdentityText(request.ExpectedLinkRevision))
+        { await ManagementFailure(context, "invalid-request", 400); return; }
+        await using var scope = ManagementScope(context); var services = scope.ServiceProvider;
+        if (!LinkAdministrationAvailable(context, services) || services.GetService<IRevisionAwareExternalIdentityStore>() is not { SupportsQualifiedKeys: true } links ||
+            services.GetService<IRevisionAwareUserStore>() is not { } users)
+        { await ManagementFailure(context, "link-administration-unavailable", 503); return; }
+        var user = await users.FindWithRevisionAsync(Tenant(context), userId, context.RequestAborted);
+        if (user is null) { await ManagementFailure(context, "user-not-found", 404); return; }
+        if (user.Revision != request.ExpectedUserRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
+        var key = new ExternalIdentityKey(Tenant(context), request.Provider, request.Issuer, request.Subject);
+        var link = await links.FindByKeyWithRevisionAsync(key, context.RequestAborted);
+        if (link?.Record.UserId != user.Record.Id) { await ManagementFailure(context, "link-not-found", 404); return; }
+        if (link.Revision != request.ExpectedLinkRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
+        var registry = context.RequestServices.GetRequiredService<IConnectionRegistry>();
+        var before = await registry.ReadAsync(context.RequestAborted);
+        if (before.Revision != request.ExpectedCatalogRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
+        var authorization = await services.GetRequiredService<IExternalLinkAuthorizer>().CaptureAsync(context.User, userId, request.ExpectedUserRevision, context.RequestAborted);
+        if (authorization is null) { await ManagementFailure(context, "link-delegation-forbidden", 403); return; }
+        IReadOnlyList<IamRevisionGuard>? guards;
+        try { guards = await services.GetRequiredService<IExternalLinkRecovery>().CaptureAsync(context.User, authorization, key, context.RequestAborted); }
+        catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        { await ManagementFailure(context, "provider-test-timeout", 504); return; }
+        if (guards is null) { await ManagementFailure(context, "final-login-path", 409); return; }
+        var latest = await registry.ReadAsync(context.RequestAborted);
+        if (latest.Revision != request.ExpectedCatalogRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
+        ProviderConfigurationWrite? providerWrite = null;
+        if (latest.DatabaseManagement)
+        {
+            var catalogs = context.RequestServices.GetRequiredService<IConnectionCatalogStore>();
+            var snapshot = await catalogs.ReadAsync(context.RequestAborted);
+            if (snapshot.Revision != request.ExpectedCatalogRevision) { await ManagementFailure(context, "revision-conflict", 409); return; }
+            providerWrite = catalogs.PrepareProviderWrite(snapshot);
+            if (providerWrite is null) { await ManagementFailure(context, "link-administration-unavailable", 503); return; }
+        }
+        await using var commit = context.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+        commit.ServiceProvider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextBinder>().Bind(providerWrite is null
+            ? Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext.Scoped(new(Tenant(context)))
+            : Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext.PrivilegedGlobal(new("external-identity-administration")));
+        var administration = commit.ServiceProvider.GetService<IExternalIdentityAdministrationStore>();
+        if (administration?.SupportsIdentityRevisionGuards != true || providerWrite is not null && !administration.SupportsProviderRevisionGuards)
+        { await ManagementFailure(context, "link-administration-unavailable", 503); return; }
+        ExternalIdentityRemovalResult result;
+        try { result = await administration.RemoveAsync(key, authorization.Owner, request.ExpectedLinkRevision, guards, providerWrite, context.RequestAborted); }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        {
+            await SecurityNotification(context, "link.remove", AuthEventOutcome.Failure, authorization.User.Id, "storage-outcome-unavailable", category: AuthEventCategory.IdentityChange);
+            await ManagementFailure(context, "link-removal-unavailable", 503); return;
+        }
+        var removed = result.Status == ExternalIdentityRemovalStatus.Removed;
+        await SecurityNotification(context, "link.remove", removed ? AuthEventOutcome.Success : AuthEventOutcome.Denied, authorization.User.Id,
+            removed ? "removed" : result.Status.ToString(), category: AuthEventCategory.IdentityChange);
+        await ManagementJson(context, new ManagedLinkRemoveResponse(removed, removed ? null : result.Status == ExternalIdentityRemovalStatus.Missing ? "link-not-found" : "revision-conflict"),
+            ExternalAuthenticationApiJsonContext.Default.ManagedLinkRemoveResponse, removed ? 200 : result.Status == ExternalIdentityRemovalStatus.Missing ? 404 : 409);
     }
 
     private static bool LinkAdministrationAvailable(HttpContext context, IServiceProvider services)

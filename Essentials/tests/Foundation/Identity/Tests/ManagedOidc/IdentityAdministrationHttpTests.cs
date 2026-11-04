@@ -176,14 +176,14 @@ public sealed partial class ExternalAuthenticationHttpTests
         await using var host = await HttpHost.Start();
         var endpoints = host.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.StartsWith("ExternalIdentity", StringComparison.Ordinal) == true).ToArray();
-        Assert.Equal(4, endpoints.Length);
+        Assert.Equal(5, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             Assert.NotNull(endpoint.Metadata.GetMetadata<IDisableCookieRedirectMetadata>());
             Assert.Equal(typeof(Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature).Assembly.GetName().Name,
                 endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()!.OwnerId);
             var permission = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()!.EndpointName switch
-            { "ExternalIdentityLinks" => DefaultIdentityPermissionKeys.IdentityLinksRead, "ExternalIdentityAttachLink" => DefaultIdentityPermissionKeys.IdentityLinksManage,
+            { "ExternalIdentityLinks" => DefaultIdentityPermissionKeys.IdentityLinksRead, "ExternalIdentityAttachLink" or "ExternalIdentityRemoveLink" => DefaultIdentityPermissionKeys.IdentityLinksManage,
                 "ExternalIdentitySessions" => DefaultIdentityPermissionKeys.IdentitySessionsRead, _ => DefaultIdentityPermissionKeys.IdentitySessionsManage };
             var parsed = new PermissionPolicyCodec().Parse(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>()!.Value!);
             Assert.Equal(PermissionRequirementMode.All, parsed.Descriptor!.Mode);

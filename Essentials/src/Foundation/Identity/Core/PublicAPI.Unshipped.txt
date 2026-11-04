@@ -1253,3 +1253,15 @@ Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite
 Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite.Configuration.get -> Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationRecord!
 Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite.ExpectedRevision.get -> string?
 Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite.ProviderConfigurationWrite(Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationRecord! configuration, string? expectedRevision) -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionCredentialBinding.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionCredentialBinding.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionMaterialRevision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionMaterialRevision.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionRedirectUri.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionRedirectUri.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionCredentialBinding.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionCredentialBinding.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionMaterialRevision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionMaterialRevision.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRedirectUri.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRedirectUri.init -> void

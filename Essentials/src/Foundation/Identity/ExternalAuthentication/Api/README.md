@@ -164,8 +164,9 @@ the handler. Provider management and non-interactive credential management do no
 |---|---|
 | GET `/users/{userId}/sessions?skip=0&take=50` | `identity/sessions:read`; bounded tenant/user metadata, active/inactive/expired/revoked state, current-session flag, revision and current revocation availability |
 | POST `/users/{userId}/sessions/{sessionId}/revoke` | `identity/sessions:manage`; `expectedRevision`, durable CAS revocation of that session only, current ownership capability required |
-| GET `/users/{userId}/links?skip=0&take=50` | `identity/links:read`; provider, exact issuer and subject, timestamps, current link/user/catalog revisions and permitted attachment choices |
+| GET `/users/{userId}/links?skip=0&take=50` | `identity/links:read`; provider, exact issuer/subject, timestamps, revisions, `canRemove` and permitted attachment choices |
 | POST `/users/{userId}/links/attach` | `identity/links:manage`; existing user only, explicit connection record and opaque subject with expected catalog/user revisions |
+| POST `/users/{userId}/links/remove` | `identity/links:manage`; exact qualified provider/issuer/subject with expected link/user/catalog revisions; preserves a proved remaining user path and administrative recovery |
 
 Session responses omit account security versions and upstream subjects/tokens. Revocation reports 409 for a stale
 revision, 404 for another user or a missing session, and 503 with `revoked:false` for a storage failure. A confirmed
@@ -194,12 +195,31 @@ pending caller changes, split targets and cross-tenant guards are refused.
 A storage exception returns a redacted 503 `link-attachment-unavailable` envelope and a failure notification with
 `storage-outcome-unavailable`; it does not return `attached:false` for an uncertain commit. Refresh current state
 before retrying. Native commit-acknowledgement loss retains the typed unknown outcome and commits all participating
-rows together. The guarded native removal operation has the same boundary, but its HTTP endpoint remains unavailable
-until prospective per-user and global administrative recovery checks protect it.
-Existing saved roles are preserved. The operation does not authenticate the linked user or issue a session.
-There is no link-removal endpoint yet; cross-authority final-login protection remains required before that action.
+rows together. Existing saved roles are preserved; attachment does not authenticate the linked user or issue a session.
 
-Provider changes, admission/sign-in/preview outcomes, attachment and session revocation emit `IAuthEventSink`
+Unlink accepts `provider`, `issuer`, `subject`, `expectedLinkRevision`, `expectedUserRevision` and nullable
+`expectedCatalogRevision`. Issuer and subject remain exact; issuer-less legacy links are not a fallback. It requires
+the same current permission/ownership/delegation boundary and an unchanged guarded target. `canRemove` describes
+that action availability, not a promise that the prospective recovery check will pass.
+
+`IExternalLinkRecovery` proves a remaining path for the target and a global administrative path, excluding the removed
+qualified key. Eligible local passwords count. External paths require retained, protected normal-session evidence
+for the selected source/material, opaque credential binding, callback, account and exact link instance, plus current
+protocol/readiness/admission checks. Global recovery additionally requires current `identity/providers:manage`.
+A configured link or preview alone cannot count. The scan is bounded by `RecoveryScanLimit` users and at most
+`min(100, RecoveryScanLimit)` recent retained sessions per user, under a thirty-second deadline. Evidence cannot be
+older than `RecoveryEvidenceLifetime`; expired rows may already have been cleaned up, so fresh normal sign-in may
+be required. Old records without provenance never acquire invented evidence through an upcaster.
+
+An ended individual session may supply bounded historical credential evidence, while its actual cookie/access/refresh
+remain ended. Removal preserves saved roles, account epochs, other links and unrelated sessions. The user, editor,
+role and selected recovery guards commit with removal and, in database-managed mode, the unchanged catalog CAS.
+Deployment-only mode uses IAM without provider persistence. Competing independent nodes cannot both remove the
+remaining links. Unusable recovery returns 409 `final-login-path`; stale state returns 409; wrong owner/key returns 404.
+A storage exception returns a redacted 503 `link-removal-unavailable` envelope without a false `removed:false` claim.
+Refresh current links before retrying an uncertain operation.
+
+Provider changes, admission/sign-in/preview outcomes, attachment/removal and session revocation emit `IAuthEventSink`
 notifications when sinks are installed. Notifications use closed action/result categories, canonical actor/target
 identifiers and an optional opaque Elsa session ID. They omit upstream subjects, display/profile fields, secrets,
 tokens, protocol payloads and raw exceptions. A sink failure is logged by exception type and cannot undo a

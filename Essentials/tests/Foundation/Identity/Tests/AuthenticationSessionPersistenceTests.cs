@@ -23,7 +23,8 @@ public sealed class AuthenticationSessionPersistenceTests
     public async Task Restart_and_paging_preserve_exact_session_owners_and_protected_provenance()
     {
         using var data = new OwnedData();
-        var item = Session() with { ConnectionKey = "company", ConnectionRecordId = "deployment:company", Issuer = "https://company.example/issuer", ExternalSubject = "Opaque-Subject", ExternalLinkRevision = "link-revision" };
+        var item = Session() with { ConnectionKey = "company", ConnectionRecordId = "deployment:company", Issuer = "https://company.example/issuer", ExternalSubject = "Opaque-Subject", ExternalLinkRevision = "link-revision",
+            ConnectionMaterialRevision = "opaque-material-revision", ConnectionCredentialBinding = "opaque-credential-binding", ConnectionRedirectUri = "https://backend.example/signin/company" };
         await using (var node = await Node(data))
         {
             await using var scope = Scope(node);
@@ -58,6 +59,8 @@ public sealed class AuthenticationSessionPersistenceTests
         var payload = Assert.IsType<string>(await command.ExecuteScalarAsync());
         Assert.DoesNotContain(item.SecurityVersion, payload, StringComparison.Ordinal);
         Assert.DoesNotContain("Opaque-Subject", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain(item.ConnectionCredentialBinding!, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain(item.ConnectionRedirectUri!, payload, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -143,6 +146,7 @@ public sealed class AuthenticationSessionPersistenceTests
         await Assert.ThrowsAsync<ArgumentException>(() => store.TryCreateAsync(Session() with { RevokedAt = Now }).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.TryCreateAsync(Session() with { ExpiresAt = Now.AddDays(31) }).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.TryCreateAsync(Session() with { ConnectionKey = "unbound" }).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryCreateAsync(Session() with { ConnectionMaterialRevision = "unbound" }).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.ListAsync("default", "user", new(0, 101)).AsTask());
         Assert.True(await store.TryCreateAsync(Session()));
         var current = (await store.FindAsync("default", new('a', 64)))!;

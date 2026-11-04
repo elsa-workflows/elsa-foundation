@@ -129,6 +129,9 @@ public sealed record PrincipalFactoryContext(string TenantId, string UserId, str
 {
     public ExternalIdentityKey? ExternalIdentity { get; init; }
     public string? ConnectionRecordId { get; init; }
+    public string? ConnectionMaterialRevision { get; init; }
+    public string? ConnectionCredentialBinding { get; init; }
+    public string? ConnectionRedirectUri { get; init; }
 }
 
 public sealed record TokenIssueRequest(TokenSubject Subject, IReadOnlyCollection<string> Scopes)

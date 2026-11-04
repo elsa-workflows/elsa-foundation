@@ -20,3 +20,11 @@ public interface IExternalLinkAuthorizer
     ValueTask<ExternalLinkAuthorization?> CaptureAsync(ClaimsPrincipal actor, string userId, string? expectedUserRevision = null,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>Captures a proved remaining user path and administrative recovery, excluding the link being removed.</summary>
+[ReplacementContract]
+public interface IExternalLinkRecovery
+{
+    ValueTask<IReadOnlyList<IamRevisionGuard>?> CaptureAsync(ClaimsPrincipal actor, ExternalLinkAuthorization authorization,
+        ExternalIdentityKey excluded, CancellationToken cancellationToken = default);
+}

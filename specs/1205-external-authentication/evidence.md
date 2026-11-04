@@ -793,3 +793,50 @@ owning Identity domain; no public implementation type or architecture exception 
 Final ASP.NET Identity EF suite: **59/59 passed**, Debug, zero skips. Generated solution-filter and staged/worktree
 whitespace checks pass. No project references or dependency versions changed, and no frontend code changed in this
 increment. New-head hosted/consumer evidence remains pending.
+
+
+### Prospective unlink and protected normal-session evidence
+
+Normal sign-in now stores source material revision, opaque credential binding and trusted callback in the existing
+protected session payload. The fields survive native restart/paging and do not appear in session/link projections,
+tokens or notifications. Creation refuses partial/unbound provenance; older records missing it require fresh normal
+sign-in before they can prove a remaining external credential. No new table or provider dependency is introduced.
+
+`IExternalLinkRecovery` proves both the target's remaining local password or real normal-sign-in credential and a
+current administrative recovery identity. It excludes the removed exact key, including provider casing aliases,
+checks current material/secret/callback/account/link/admission eligibility, and captures all selected IAM roots. Its
+bounds are `RecoveryScanLimit` users, at most `min(100, RecoveryScanLimit)` retained sessions per user and thirty seconds.
+The observation window is an upper age bound; physically cleaned-up records cannot supply evidence. Ended sessions
+can supply historical credential evidence but their actual cookie/access/refresh remain ended. Private configuration
+or preview alone never supplies that evidence.
+
+The new declared POST `/users/{userId}/links/remove` enforces the same dedicated current grants, ownership/delegation,
+closed JSON, antiforgery and 64-KiB body boundary. Exact owner/issuer/subject and expected user/link/catalog revisions
+are checked. Recovery guards commit with the native removal and unchanged catalog CAS in database-managed mode;
+deployment-only mode uses IAM without provider persistence. Inspection exposes `canRemove` as action availability;
+the prospective check may still refuse. Confirmed removal preserves saved roles, epochs, sibling links and unrelated
+credentials. Storage exceptions return redacted unavailable envelopes, with no false `removed:false` claim when the
+physical commit's acknowledgement is lost. Current state must be refreshed before retry.
+
+**47/47** focused unlink/session cases pass: both modes and ended evidence, final user/global path refusal,
+configured-only links, stale secret/source/callback/window/account/link bindings, revisions/exact owner/issuer/subject,
+legacy/unknown fields, CSRF/current grants and affordances, old provenance/fresh sign-in, post-check IAM/catalog races,
+rollback, acknowledgement loss and retry, plus protected native session persistence. Two independently constructed
+runtime nodes share the owned SQLite stores/keys and cannot both remove their remaining links; retry refuses the
+last link. This is same-process native-node proof, not the pending full host/process/server-engine matrix.
+
+Recovery bypass makes **7/7** last-user/global-path cases fail. Native IAM guard bypass makes **3/5** post-check races
+fail; the other two retain independent exact-owner/catalog protection. Both production files were restored before
+full qualification. Initial fixture assertions used the generic error envelope's wrong property, and an expiry case
+also expired the acting administrator; the corrected case expires only the evidence window. No production guard or
+assertion was weakened to accept an unsafe removal.
+
+Full Identity **890/890 passed**, Debug; native IAM **250/250 passed**, Release; ASP.NET Identity EF **59/59 passed**,
+Debug. Zero skips in these suites. Final architecture/maps/whitespace results follow below. T025 Studio links/sessions
+and complete actual Studio/external-product/deployment/server-engine/restart/process/node/consumer/review/merge/main
+qualification remain outstanding.
+
+Final frozen-source architecture: **616/616 passed**, Debug, zero skips. Generated solution-filter and staged/worktree
+whitespace checks pass. No project references, package versions or frontend source changed in this increment.
+T024 is now checked for its backend/API/native coordination scope. Full host/process/server-engine/Studio and
+consumer/review/merge/main qualification remain explicitly required by the unchecked following tasks.

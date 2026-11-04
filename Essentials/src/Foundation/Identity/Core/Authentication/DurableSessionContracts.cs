@@ -13,6 +13,9 @@ public sealed record AuthenticationSessionRecord(
     public string? Issuer { get; init; }
     public string? ExternalSubject { get; init; }
     public string? ExternalLinkRevision { get; init; }
+    public string? ConnectionMaterialRevision { get; init; }
+    public string? ConnectionCredentialBinding { get; init; }
+    public string? ConnectionRedirectUri { get; init; }
     public DateTimeOffset? RevokedAt { get; init; }
     public string? Revision { get; init; }
 }

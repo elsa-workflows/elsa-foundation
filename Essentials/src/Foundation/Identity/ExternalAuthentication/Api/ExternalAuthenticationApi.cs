@@ -102,6 +102,7 @@ public static partial class ExternalAuthenticationApi
                     "ExternalAuthenticationPreviewCallback" => "preview.complete",
                     "ExternalConnectionsChange" => "connection.change",
                     "ExternalIdentityAttachLink" => "link.attach",
+                    "ExternalIdentityRemoveLink" => "link.remove",
                     "ExternalIdentityRevokeSession" => "session.revoke",
                     _ => null
                 };
@@ -203,7 +204,10 @@ public static partial class ExternalAuthenticationApi
             var signedIn = await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key))
                 {
                     ExternalIdentity = new(tenant, key, flow.Provenance.Issuer, flow.Provenance.Subject),
-                    ConnectionRecordId = flow.Provenance.ConnectionRecordId
+                    ConnectionRecordId = flow.Provenance.ConnectionRecordId,
+                    ConnectionMaterialRevision = flow.Provenance.MaterialRevision,
+                    ConnectionCredentialBinding = flow.Provenance.CredentialBinding,
+                    ConnectionRedirectUri = flow.Provenance.RedirectUri
                 }, context.RequestAborted);
             if (signedIn is null)
             {

@@ -185,9 +185,7 @@ loss after physical commit. Four actual HTTP races change editor role/status/mem
 final capture; all refuse. Bypassing native guard comparison makes all four fail. A deployment-only HTTP host omits
 provider persistence entirely and proves attachment followed by actual provider sign-in as that existing user.
 
-Remaining T024: prospective per-user alternative sign-in and global administrative recovery for unlink, using the
-already implemented guarded native removal/catalog transaction. Keep the removal endpoint unavailable until those
-checks and forced races pass. T025 and all full product/deployment/consumer/review/merge/main gates remain required.
+The prospective unlink integration described below is now implemented and qualified. T025 and all full product/deployment/consumer/review/merge/main gates remain required.
 
 For prospective unlink, retain actual normal-sign-in material revision, opaque credential binding and trusted callback
 in the existing protected durable session provenance. This gives deployment-only hosts a bounded history of actual
@@ -198,3 +196,27 @@ management permission. Capture those identities/roles with the editor/owner snap
 guarded removal, including the unchanged catalog CAS when database management is enabled. Ended individual sessions
 may supply bounded historical credential evidence, consistently with existing private recovery observations; they
 must never become live sessions again. Missing old provenance fails closed and requires a fresh normal sign-in.
+
+
+### Prospective unlink integrated
+
+Normal sessions now retain the material/credential/callback provenance above in their existing protected payload.
+`IExternalLinkRecovery` checks the target's remaining local password or actual normal-session credential history,
+and a current administrative recovery identity, excluding the removed qualified key (including provider casing
+aliases). External evidence rechecks material, secret binding, callback, account epoch, exact link revision, current
+eligibility and admission. Historical observation does not restore the ended session. Scans use existing bounds,
+retain at most the newest hundred sessions per examined user and stop after thirty seconds; missing/cleaned-up old
+evidence requires fresh normal sign-in. Current grants, not upstream roles, determine administrative eligibility.
+
+The removal endpoint compares exact owner/link/user/catalog revisions, captures editor/delegation and both recovery
+snapshots, and invokes the guarded native removal/catalog transaction. Inspection exposes `canRemove`; legacy
+issuer-less entries and denied capabilities are read-only. Requests share the declared user/link grants, closed JSON,
+antiforgery and body bounds. Storage failure/unknown acknowledgement returns an unavailable envelope, requiring
+state refresh, and emits a redacted failure notice without claiming no mutation occurred.
+
+Actual controlled-provider HTTP tests cover both modes, ended evidence, last-user/global path refusal, configured-only
+links, stale secret/source/callback/window/account/link evidence, exact owner/issuer/subject/revisions, request/security
+boundaries, missing old provenance/fresh sign-in, post-check IAM/catalog races, rollback, acknowledgement loss and
+retry. Two independently constructed runtime nodes share native stores/keys and cannot remove both remaining links.
+This is native SQLite/in-process node qualification; complete full-host/separate-process/server-engine/Studio
+acceptance remains in T026–T031.
