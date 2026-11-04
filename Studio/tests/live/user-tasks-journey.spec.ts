@@ -9,11 +9,12 @@ test.skip(!process.env.ELSA_STUDIO_URL || !receiptPath, "Set ELSA_STUDIO_URL and
 test.setTimeout(120_000);
 type Receipt = { taskId: string; title: string; executionId: string; definitionId: string; baseUrl: string; artifactId: string; sourceReferenceId: string };
 
-for (const width of [1440, 390]) test(`real Studio inbox validates and completes the selected action once (${width}px)`, async ({ page }, testInfo) => {
+for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`real Studio inbox validates and completes the selected action once (${width}px ${theme})`, async ({ page }, testInfo) => {
+  await page.addInitScript(mode => { localStorage.setItem("elsa-studio-theme-mode", mode); localStorage.setItem("elsa-studio-workspace-style", "linen"); }, theme);
   const receipt = JSON.parse(readFileSync(receiptPath!, "utf8")) as Receipt;
   await page.setViewportSize({ width, height: 1000 }); await signIn(page);
   let taskId = receipt.taskId; let executionId = receipt.executionId;
-  if (width === 390) {
+  if (width === 390 || theme === "dark") {
     const start = await page.request.post(`${receipt.baseUrl}/runtime/workflows/executables/${receipt.artifactId}/execute`, { data: { sourceReferenceId: receipt.sourceReferenceId } });
     expect(start.ok()).toBe(true); executionId = (await start.json()).workflowExecutionId;
     await expect.poll(async () => {
@@ -24,6 +25,14 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   }
   await page.goto("/user-tasks?backend=legacy");
   const row = page.locator(`a[href*="/user-tasks/${taskId}"]`); await expect(row).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
+  const search = page.getByRole("searchbox", { name: "Search tasks", exact: true });
+  await search.fill("no matching task for this acceptance run");
+  await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("no-matches.png") });
+  await page.getByRole("button", { name: "Clear search", exact: true }).last().click();
+  await expect(row).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("task-list.png") });
   await row.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: receipt.title, exact: true })).toBeVisible();
   await expect.poll(() => page.getByRole("heading", { name: receipt.title, exact: true })
@@ -33,6 +42,7 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   await expect(page.getByText("This field is required.", { exact: true }).first()).toBeVisible();
   await page.getByLabel(/^Amount/).fill("42"); await page.getByLabel(/^Confirmed/).selectOption("false"); await page.getByLabel(/^Note/).fill("Studio case preserved");
   await expectAccessible(page, ".user-tasks");
+  await page.screenshot({ path: testInfo.outputPath("task-response.png") });
   const sent = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(`/runtime/user-tasks/${taskId}/complete`));
   await page.getByRole("button", { name: "Approve", exact: true }).press("Enter");
   const request = (await sent).postDataJSON(); expect(request.data).toEqual({ AccountID: "A-107", AmountUSD: 42, Confirmed: false, Note: "Studio case preserved" });
@@ -58,6 +68,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   const who = await (await page.request.get(`${base}/runtime/user-task-identity`)).json();
   const suffix = String(Date.now()); const formId = `studio-form-${suffix}`; const title = `Studio authored approval ${suffix}`;
   await page.goto("/user-tasks/forms?backend=legacy");
+  await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await page.getByLabel("Form ID", { exact: true }).fill(formId); await page.getByLabel("Name", { exact: true }).fill(title);
   await page.getByRole("button", { name: "Add field", exact: true }).click();
   await page.getByLabel("Key", { exact: true }).fill("Reason"); await page.getByLabel("Label", { exact: true }).fill("Reason");
