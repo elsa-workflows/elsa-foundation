@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "productionSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+  "diagnostics": [
+    {
+      "harness": "09ab6ffc",
+      "result": "Native Done reached, but verifier timed out after excluding valid ProvenParentTerminal disposition2. Owned diagnostic observed acknowledged ticks639294170540093460/attempt1; no passing-host claim from this run."
+    },
+    {
+      "harness": "df133f21",
+      "result": "Product preflight refused new .nuplane/store-state files created by first host beside the assembly. No host executed. Each engine now gets a byte-verified owned execution copy; published products remain immutable."
+    },
+    {
+      "harness": "918376c94",
+      "engine": "SqlServer",
+      "result": "Native Done reached, then readback CLI rejected mutually exclusive -h/-y0 options. No passing SQLServer claim from this run. A separate no-server command reproduced the CLI diagnostic; corrected reader omits -h, parses the Value header and uses -b."
+    }
+  ],
+  "logSha256": {
+    "postgresql.log": "3ef29db8cdd3fa6bff0bb9214c27c3a699699de2d683c59d78600de90adb1abc",
+    "postgresql-corrected.log": "bb87a831f24565632862f921bf9a09cdeb63564ff0688632c58a2f3467d95c9f",
+    "sqlserver-mysql.log": "4559156b6199a01020b8698e51fd270d92e5204b12a79321857fa8b44c14c0a4",
+    "postgresql-isolated.log": "25d8128b0f268cafec01880a0a8509e7536ef1b17d562047f82f2190437b833f",
+    "sqlserver-mysql-client-corrected.log": "838eb164ee852c31d00188feec684de050b8fdd6c2f93cb79a587f0a46764dee"
+  },
+  "passedRuns": {
+    "PostgreSql": "918376c9423f8fefade58e68d6754c3abb3531a3",
+    "SqlServer": "cff70a7a26359479669b35c3a9fb346f0d74b097",
+    "MySql": "cff70a7a26359479669b35c3a9fb346f0d74b097"
+  },
+  "proofLimits": [
+    "Completed-state readback only, not mid-work or old-writer upgrade recovery.",
+    "Both ETL stores server-backed; native workflow persistence remains SQLite.",
+    "JSONL physical connector journey, not native SQL/RabbitMQ connector failure proof.",
+    "No Studio acceptance."
+  ]
+}

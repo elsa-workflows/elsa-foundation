@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "harnessSource": "cff70a7a26359479669b35c3a9fb346f0d74b097",
+  "harnessSha256": "1e5dd3011725ac7a95998a1a3cc54901011709f8bf800c787d3cfa2a83a3cae0",
+  "actualHostChecks": 36,
+  "actualHostPassed": true,
+  "controls": {
+    "zeroBasedFileCoverage": {
+      "expectedGate": "twoCompletedPartitions",
+      "rejected": true
+    },
+    "unfinishedCursor": {
+      "expectedGate": "twoCompletedPartitions",
+      "rejected": true
+    },
+    "duplicateNativeCompletion": {
+      "expectedGate": "nativeCompletedOnce",
+      "rejected": true
+    },
+    "alteredTerminalBytes": {
+      "expectedGate": "oneAcknowledgedResultOnServer",
+      "rejected": true
+    },
+    "alteredEnvelopeHash": {
+      "expectedGate": "oneAcknowledgedResultOnServer",
+      "rejected": true
+    },
+    "wrongDeliveryIdentity": {
+      "expectedGate": "oneAcknowledgedResultOnServer",
+      "rejected": true
+    },
+    "lostOutputRecord": {
+      "expectedGate": "exactPhysicalOutput",
+      "rejected": true
+    },
+    "sameHostProcess": {
+      "expectedGate": "newProcessSameRetainedRun",
+      "rejected": true
+    },
+    "changedExecutionProduct": {
+      "expectedGate": "intendedExecutionProductsUnchanged",
+      "rejected": true
+    },
+    "publishedProductByteChange": {
+      "acceptedOriginal": true,
+      "rejectedAlteration": true
+    }
+  },
+  "scope": "Mutations of observed receipt copies and an owned fake product file; not production mutations or recovery tests."
+}

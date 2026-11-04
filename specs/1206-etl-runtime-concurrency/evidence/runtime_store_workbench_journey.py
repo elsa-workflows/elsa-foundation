@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Actual native Flowchart → ETL → Done with both ETL stores on each server engine.
 
-Uses the spec 1202 owned-container/host helpers. Only completed-state restart is
+Uses the existing owned-container/host helpers. Only completed-state restart is
 proved here; no mid-work crash, old-writer upgrade or Studio claim follows.
 """
 from __future__ import annotations

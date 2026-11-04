@@ -27,8 +27,8 @@ Independent test: separate contexts on one real engine contend and preserve scop
 Independent test: one owned Workbench per server engine uses both ETL stores, publishes/runs a two-partition pipeline from native Flowchart, produces expected physical records, completes once and reads the same identities after host restart.
 
 - [x] T011 [US1] After concurrent transition controls pass, replace the runtime refusal with `Binding.Select` in `DependencyInjection/EtlRuntimeEntityFrameworkCoreRegistration.cs`, add server entries to `AssemblyInfo.cs`, update feature/project manifest descriptions and prove four-engine/default/runtime-only/optional-capability composition in `EtlRuntimeProviderTests.cs` and `Extensions/Etl/tests/Tests/`.
-- [ ] T012 [US1] Add `specs/1206-etl-runtime-concurrency/evidence/runtime_store_workbench_journey.py` from the 1202 controller, using generated credentials, owned resource cleanup, safe ephemeral ports and verified product-source/hash receipts.
-- [ ] T013 [US1] Build intended Workbench products and run both-store journeys on all three engines; capture pins, partition/run views, exact output, one native completion and retained post-restart state in `specs/1206-etl-runtime-concurrency/evidence/`. Do not classify completed-state readback as an old-writer or mid-work crash proof.
+- [x] T012 [US1] Add `specs/1206-etl-runtime-concurrency/evidence/runtime_store_workbench_journey.py` from the 1202 controller, using generated credentials, owned resource cleanup, safe ephemeral ports and verified product-source/hash receipts.
+- [x] T013 [US1] Build intended Workbench products and run both-store journeys on all three engines; capture pins, partition/run views, exact output, one native completion and retained post-restart state in `specs/1206-etl-runtime-concurrency/evidence/`. Do not classify completed-state readback as an old-writer or mid-work crash proof.
 
 ## Qualification and delivery
 
