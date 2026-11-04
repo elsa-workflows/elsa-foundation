@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Transactions;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Tests;
@@ -13,6 +14,36 @@ namespace Elsa.Etl.Persistence.ProviderTests;
 /// <summary>Overlapping runtime transactions on actual servers; injected failures are tested separately.</summary>
 public abstract class EtlRuntimeConcurrencyTests(EtlNativeProviderFixture fixture, ITestOutputHelper output)
 {
+    [SkippableFact]
+    public async Task Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation()
+    {
+        await using var database = await EtlProviderRuntimeDatabase.CreateTypedAsync(fixture);
+        var commands = new NativeCommandCounter();
+        await using var context = database.CreateContext(commands);
+        var store = ((IEtlRuntimeTestDatabase)database).CreateStore(context);
+        var admission = EtlRuntimeFixtures.Admission("enlisted-owner", new EtlScope("tenant-race", "partition-race"));
+        Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitAsync(admission)).Status);
+        var row = await context.Runs.SingleAsync();
+        row.Revision++;
+        Assert.True(context.ChangeTracker.HasChanges());
+        await context.Database.OpenConnectionAsync();
+        using var transaction = new CommittableTransaction();
+        context.Database.EnlistTransaction(transaction);
+        Assert.Null(Transaction.Current);
+        Assert.Null(context.Database.CurrentTransaction);
+        Assert.Same(transaction, context.Database.GetEnlistedTransaction());
+        var before = commands.Commands;
+
+        var failure = await Assert.ThrowsAsync<EtlStoreException>(async () => await store.AdmitAsync(admission));
+
+        Assert.Equal(nameof(store.AdmitAsync), failure.Operation);
+        Assert.Same(transaction, context.Database.GetEnlistedTransaction());
+        Assert.Equal(before, commands.Commands);
+        Assert.Equal(EntityState.Modified, context.Entry(row).State);
+        transaction.Rollback();
+        context.Database.EnlistTransaction(null);
+    }
+
     [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
@@ -61,6 +92,32 @@ public abstract class EtlRuntimeConcurrencyTests(EtlNativeProviderFixture fixtur
             if (Interlocked.Increment(ref arrivals) == 2)
                 released.TrySetResult();
             await released.Task.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken);
+        }
+    }
+
+    private sealed class NativeCommandCounter : DbCommandInterceptor
+    {
+        public int Commands { get; private set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            Commands++;
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            Commands++;
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default)
+        {
+            Commands++;
+            return ValueTask.FromResult(result);
         }
     }
 

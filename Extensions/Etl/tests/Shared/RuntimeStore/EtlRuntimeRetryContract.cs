@@ -141,6 +141,73 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(context.ChangeTracker.Entries());
     }
 
+    [SkippableFact]
+    public async Task Cancellation_between_attempts_abandons_the_operation_without_another_save()
+    {
+        await using var database = await CreateDatabaseAsync();
+        using var cancellation = new CancellationTokenSource();
+        var fault = new RuntimeSaveFault(int.MaxValue, onFailure: cancellation.Cancel);
+        await using var context = database.CreateContext(fault);
+        var store = database.CreateStore(context);
+        var admission = EtlRuntimeFixtures.Admission("retry-cancellation", new EtlScope("tenant-retry", "partition-retry"));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await store.AdmitAsync(admission, cancellation.Token));
+
+        Assert.Equal(1, fault.Attempts);
+        Assert.Empty(context.ChangeTracker.Entries());
+        await using var observer = database.CreateContext();
+        Assert.Empty(await observer.Runs.AsNoTracking().ToListAsync());
+    }
+
+    [SkippableTheory]
+    [InlineData("runtime", false)]
+    [InlineData("runtime", true)]
+    [InlineData("connector", false)]
+    [InlineData("connector", true)]
+    [InlineData("inspection", false)]
+    [InlineData("inspection", true)]
+    public async Task All_runtime_ports_exhaust_one_budget_then_read_the_retained_run(string port, bool wrapped)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var conflict = new DbUpdateConcurrencyException("Controlled query-boundary conflict.");
+        Exception injected = wrapped ? new InvalidOperationException("Controlled query wrapper.", conflict) : conflict;
+        var fault = new RuntimeReadFault(injected) { Armed = false };
+        await using var context = database.CreateContext(fault);
+        var store = database.CreateStore(context);
+        var admission = ConnectorAdmission("read-retry-budget", new EtlScope("tenant-read", "partition-read"));
+        Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);
+        fault.Armed = true;
+        var operation = port switch
+        {
+            "runtime" => nameof(IEtlRuntimeStore.FindRunAsync),
+            "connector" => nameof(IEtlConnectorRuntimeStore.FindConnectorRunAsync),
+            _ => nameof(IEtlConnectorRuntimeInspector.FindConnectorInspectionAsync)
+        };
+
+        async Task<EtlInvocation?> ReadAsync()
+        {
+            var scope = admission.Invocation.Scope;
+            var runId = admission.Invocation.RunId;
+            if (port == "runtime") return (await ((IEtlRuntimeStore)store).FindRunAsync(scope, runId))?.Invocation;
+            if (port == "connector") return (await ((IEtlConnectorRuntimeStore)store).FindConnectorRunAsync(scope, runId))?.Run.Invocation;
+            return (await ((IEtlConnectorRuntimeInspector)store).FindConnectorInspectionAsync(scope, runId))?.Run.Run.Invocation;
+        }
+
+        var failure = await Assert.ThrowsAsync<EtlStoreException>(async () => await ReadAsync());
+
+        Assert.Equal(operation, failure.Operation);
+        Assert.Equal(admission.Invocation.Scope, failure.Scope);
+        Assert.Equal(admission.Invocation.RunId, failure.RunId);
+        Assert.Same(injected, failure.InnerException);
+        Assert.Equal(EfWriteRetry.DefaultMaxAttempts, fault.Failures);
+        Assert.Empty(context.ChangeTracker.Entries());
+        fault.Armed = false;
+        var retained = Assert.IsType<EtlInvocation>(await ReadAsync());
+        Assert.Equal(admission.Invocation.Scope, retained.Scope);
+        Assert.Equal(admission.Invocation.RunId, retained.RunId);
+        Assert.Equal(EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation), EtlRuntimeIdentity.InvocationFingerprint(retained));
+    }
+
     [SkippableTheory]
     [InlineData("runtime", false)]
     [InlineData("runtime", true)]
