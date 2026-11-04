@@ -117,3 +117,16 @@ internal sealed class EtlConnectorHttpPageRecord
     public int AcceptedItemCount { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
+
+/// <summary>The high watermark of the last completed run for one SQL source checkpoint (spec 1199).</summary>
+internal sealed class EtlConnectorSourceWatermarkRecord
+{
+    public string ScopeKey { get; set; } = null!;
+    /// <summary>The hash of the definition, source alias, pinned source handle, table and watermark column.</summary>
+    public string CheckpointKey { get; set; } = null!;
+    public long Watermark { get; set; }
+    /// <summary>The run whose completion last raised the checkpoint.</summary>
+    public string RunKey { get; set; } = null!;
+    public long UpdatedAtUtcTicks { get; set; }
+    public string SchemaVersion { get; set; } = null!;
+}

@@ -305,6 +305,8 @@ internal static class EfDesignSupport
 
     public static WorkflowDefinitionDraft MapDraft(IPayloadSerializer serializer, WorkflowDefinitionDraft row)
     {
+        if (row.Source is null) throw new InvalidOperationException("Workflow source storage is unavailable.");
+        EfSourceRevisions.ValidateCopy(row.Source, WorkflowSourceRevisions.Scope(row.TenantId), row.WorkflowDefinitionId, row.Id);
         row.State = ReadState(serializer, row.StateSource);
         return row;
     }

@@ -146,6 +146,40 @@ describe("ETL run inspection", () => {
     expect(container.textContent).toContain("published");
   });
 
+  it("labels a SQL source as a table snapshot whose digest comes from preparation, not admission", () => {
+    const base = fixture();
+    const run = {
+      ...base,
+      sourceInput: { ...base.sourceInput!, expectedSha256: null },
+      connector: { sourceKind: "sql", mainKind: "sql", errorKind: "jsonl", acceptedMainEffects: 1, acceptedErrorEffects: 0 }
+    };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Source typeSQL table snapshot");
+    expect(container.textContent).toContain("Main output typeSQL table");
+    const source = container.querySelector('[aria-label="Source input"]')?.textContent ?? "";
+    expect(source).toContain("None; the table is read at preparation");
+    expect(source).not.toContain("Not available");
+  });
+
+  it("labels a RabbitMQ source as a queue read at preparation", () => {
+    const base = fixture();
+    const run = {
+      ...base,
+      sourceInput: { ...base.sourceInput!, expectedSha256: null },
+      connector: { sourceKind: "rabbitMq", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 1, acceptedErrorEffects: 0 }
+    };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Source typeRabbitMQ queue");
+    expect(container.querySelector('[aria-label="Source input"]')?.textContent ?? "").toContain("None; the queue is read at preparation");
+  });
+
+  it("labels a RabbitMQ main route as an exchange", () => {
+    const base = fixture();
+    const run = { ...base, connector: { sourceKind: "csv", mainKind: "rabbitMq", errorKind: "jsonl", acceptedMainEffects: 2, acceptedErrorEffects: 0 } };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Main output typeRabbitMQ exchange");
+  });
+
   it("renders file and HTTP connector positions and keeps acknowledged output visibly pending", () => {
     const retry = {
       phase: "waiting", attemptCount: 3, deadline: "2026-10-20T12:00:00Z",

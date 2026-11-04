@@ -1155,7 +1155,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             ActivityPresentation:
                 WorkflowExecutableActivityPresentationSidecar.CopyFrom(
                     activityPresentation,
-                    executable));
+                    executable,
+                    placementSidecars?.GetPresentation(identity.DefinitionVersionId)));
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

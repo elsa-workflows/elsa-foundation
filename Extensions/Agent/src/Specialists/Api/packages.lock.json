@@ -63,6 +63,7 @@
       "elsa.agent.specialists.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
@@ -117,6 +118,9 @@
         }
       },
       "elsa.foundation.identity.core": {
+        "type": "Project"
+      },
+      "elsa.persistence.core": {
         "type": "Project"
       },
       "elsa.pipelines.core": {

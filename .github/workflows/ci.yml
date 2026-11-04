@@ -263,13 +263,24 @@ jobs:
   # core-only leg. !cancelled() rather than always(): a superseded run must not turn into a red aggregate.
   build-and-test:
     name: "${{ github.event.action == 'ready_for_review' && 'Build & test (already requested)' || github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Build & test (not requested)' || 'Build & test' }}"
-    needs: [plan-tiers, pr-shard, architecture-guards, core-only]
+    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]
     if: ${{ !cancelled() && github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       docs_only: ${{ needs.plan-tiers.outputs.docs_only }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify selected Studio proofs before the docs-only fast path
+        env:
+          STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}
+          STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}
+          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
+          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
+          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}
+        run: python3 tools/ci/studio_gate.py
       - name: Verify the PR tier passed
         env:
           PLAN: ${{ needs.plan-tiers.result }}
@@ -1064,6 +1075,40 @@ jobs:
       - name: Run browser tests
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
+
+  studio-ux-acceptance:
+    name: UX acceptance (composed Studio)
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+      - name: Verify acceptance tooling and gate failure controls
+        run: |
+          python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+          python3 -m unittest discover -s tools/ci -p 'test_studio_gate.py'
+      - name: Exercise real composed hosts with disposable stores
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
+      - name: Retain reviewable success and failure evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ux-acceptance
+          if-no-files-found: error
+          retention-days: 14
 
   studio-dotnet-build-and-test:
     needs: plan-scope

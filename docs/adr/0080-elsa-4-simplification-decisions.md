@@ -42,6 +42,18 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 4 November 2026:** [Elsa 4 StateMachine #3815](../program-goals/state-machine.md)
+is authorized for interactive design, program establishment and delivery once the applicable design/spec
+agreement gates allow it. The owner explicitly selected both hierarchical states and parallel regions for
+the first release, delivered hierarchy first, with root/nested composition and integrated Studio authoring
+and inspection. [The program's owner decision register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026)
+records the accepted direction separately from unresolved semantics and architectural placement.
+Sequencing: run beside the active programs, preserve Foundation/Studio consolidation's priority one,
+coordinate shared runtime/Studio paths and keep one active implementation leaf. M0 design agreement precedes
+production implementation; establishment is not specification approval or product acceptance. This scoped
+revisit supersedes ADR 0085 D10's StateMachine deferral only; it reactivates no other parity or parked work.
+Saga/compensation semantics remain with their existing program; releases and deployments are not included.
+
 **Owner continuation, 1 November 2026:** the already active [Runtime Efficiency #2531](../program-goals/runtime-efficiency.md)
 collects the remaining improvements from the native performance assessment and PR #3545, and is authorized for
 end-to-end delivery by the [owner instruction recorded on the program](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6554699791).

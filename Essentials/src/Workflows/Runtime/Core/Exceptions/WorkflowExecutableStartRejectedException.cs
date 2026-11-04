@@ -27,5 +27,6 @@ public sealed class WorkflowExecutableStartRejectedException : Exception
 public enum WorkflowExecutableStartRejectionCategory
 {
     Authority = 0,
-    Policy = 1
+    Policy = 1,
+    Input = 2
 }

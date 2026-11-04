@@ -26,6 +26,114 @@ public sealed class EtlConnectorExecutableReaderTests
         Assert.Equal(artifact.Pipeline.GetRawText(), EtlArtifactV2Json.Write(reader.Read(artifact)).GetRawText());
     }
 
+    [Theory]
+    [InlineData("people;drop", "id", "id")]
+    [InlineData("people", "full name", "full name")]
+    [InlineData("people", "id", "missing")]
+    [InlineData("p234567890123456789012345678901234567890123456789012345678901234", "id", "id")]
+    [InlineData("people", "c234567890123456789012345678901234567890123456789012345678901234", "c234567890123456789012345678901234567890123456789012345678901234")]
+    public void Reader_refuses_a_sql_source_whose_identifiers_or_key_the_compiler_would_refuse(string table, string column, string key)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with
+        {
+            Source = new EtlSqlSource("people-db", table, [new EtlColumn(column, EtlColumnType.Int64, true)], [key]),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, column)],
+            Filters = []
+        };
+
+        // A worker re-checks what the compiler enforced, because the dialect quotes these identifiers (spec 1198).
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+        Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline with
+        {
+            Source = new EtlSqlSource("people-db", "dbo.people", [new EtlColumn("id", EtlColumnType.Int64, true)], ["id"]),
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")]
+        })));
+    }
+
+    [Theory]
+    [InlineData("", "orders", true, false)]
+    [InlineData("bad exchange", "orders", false, false)]
+    [InlineData("events", "two words", false, false)]
+    [InlineData("events", "orders", false, true)]
+    [InlineData("e234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456", "orders", false, false)]
+    [InlineData("events", "k234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456", false, false)]
+    public void Reader_refuses_a_rabbitmq_destination_the_compiler_would_refuse(string exchange, string routingKey, bool valid, bool onErrorRoute)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var destination = new EtlRabbitMqDestination("events", exchange, routingKey);
+        var pipeline = defaults with
+        {
+            Routes = onErrorRoute ? new(new EtlJsonlDestination("output"), destination) : new(destination, new EtlJsonlDestination("errors"))
+        };
+
+        // The exchange and routing key reach the broker as protocol strings, and only the main route publishes (spec 1200).
+        if (valid)
+            Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline)));
+        else
+            Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+    }
+
+    [Theory]
+    [InlineData("people", 10, true)]
+    [InlineData("bad queue", 10, false)]
+    [InlineData("", 10, false)]
+    [InlineData("people", 0, false)]
+    [InlineData("people", 100_001, false)]
+    public void Reader_refuses_a_rabbitmq_source_the_compiler_would_refuse(string queue, int maxMessages, bool valid)
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with
+        {
+            Source = new EtlRabbitMqSource("events-in", queue, [new EtlJsonField("id", "/id", EtlColumnType.Int64, true)], maxMessages),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")],
+            Filters = []
+        };
+
+        // The queue reaches the broker as a protocol short string and the maximum bounds a run (spec 1201).
+        if (valid)
+            Assert.NotNull(runtime.Reader.Read(CreateArtifact(pipeline)));
+        else
+            Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(pipeline))).Code);
+    }
+
+    [Fact]
+    public void Reader_refuses_a_sql_source_with_columns_equal_ignoring_case_or_a_repeated_key()
+    {
+        using var runtime = CreateRuntime(_ => { });
+        var defaults = EtlV2TestPipelines.Create();
+        EtlPipelineV2 With(EtlColumn[] columns, string[] key) => defaults with
+        {
+            Source = new EtlSqlSource("people-db", "people", columns, key),
+            Lookup = null,
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")],
+            Filters = []
+        };
+
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("ID", EtlColumnType.Int64, true)], ["id"])))).Code);
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true)], ["id", "id"])))).Code);
+        // A watermark is a declared, required Int64 column (spec 1199).
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("name", EtlColumnType.String, true)], ["id"]) is var named
+                ? named with { Source = ((EtlSqlSource)named.Source) with { Watermark = "name" } } : named))).Code);
+        // The key columns are required, so a key value is never null.
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, false)], ["id"])))).Code);
+        // The key is one to eight columns.
+        var nine = Enumerable.Range(0, 9).Select(index => new EtlColumn(index == 0 ? "id" : $"k{index}", EtlColumnType.Int64, true)).ToArray();
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With(nine, nine.Select(column => column.Name).ToArray())))).Code);
+        Assert.Equal("etl.executable.invalid-pipeline", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(
+            With([new EtlColumn("id", EtlColumnType.Int64, true)], [])))).Code);
+    }
+
     [Fact]
     public void Reader_refuses_http_policy_above_independent_host_ceiling()
     {
