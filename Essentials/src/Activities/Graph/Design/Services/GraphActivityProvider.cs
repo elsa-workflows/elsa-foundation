@@ -124,7 +124,7 @@ public sealed class GraphActivityProvider(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var subject = new ActivityDiagnosticSubject(
-            "ActivityDraft",
+            request.SubjectKind,
             request.DraftId,
             request.DefinitionId,
             Revision: request.Revision);
@@ -216,7 +216,7 @@ public sealed class GraphActivityProvider(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var subject = new ActivityDiagnosticSubject("ActivityDraft", request.DraftId, request.DefinitionId, Revision: request.Revision);
+        var subject = new ActivityDiagnosticSubject(request.SubjectKind, request.DraftId, request.DefinitionId, Revision: request.Revision);
         var diagnostics = ReadManifest(request.Provider, subject, out var graph).ToList();
         if (graph is null)
             return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery([], ActivityDiagnosticOrderer.Order(diagnostics)));

@@ -62,15 +62,11 @@ internal sealed class ActivityPublicationReviewPolicy(
             })
             .ToArray() ?? [];
 
+    /// <summary>The storage and runtime readiness of a compiled template, reported against the candidate's own subject.</summary>
     public IEnumerable<ActivityDiagnostic> ReadinessDiagnostics(
-        ActivityDefinitionDraft draft,
+        ActivityDiagnosticSubject subject,
         ExecutableActivityTemplate? template)
     {
-        var subject = new ActivityDiagnosticSubject(
-            "ActivityDraft",
-            draft.Id,
-            draft.DefinitionId,
-            Revision: draft.Revision);
         foreach (var item in StorageReadiness(template).Where(x => x.Status != "Available"))
             yield return new(
                 "activity.runtime.storage-driver-missing",

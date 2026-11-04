@@ -104,6 +104,8 @@ public sealed class ActivityDefinitionPublisher(
         receiptStore ?? new InMemoryActivityPublicationReceiptStore();
     private readonly ActivityPublicationReviewPolicy _reviewPolicy =
         new(activityActivationStrategies, storageDrivers);
+    private ActivityPublicationCandidateEvaluator Evaluator => _evaluator ??= new(compiler, _reviewPolicy);
+    private ActivityPublicationCandidateEvaluator? _evaluator;
 
     public async Task<ActivityPublicationPreflightView> PreflightAsync(
         PreflightActivityDefinitionPublicationRequest request,
@@ -520,14 +522,16 @@ public sealed class ActivityDefinitionPublisher(
         CancellationToken cancellationToken)
     {
         var (definition, draft, layout, head) = (context.Definition, context.Draft, context.Layout, context.Head);
-        var compilation = await compiler.CompileAsync(
+        var evaluated = await Evaluator.EvaluateAsync(
             new(
                 definition,
                 draft,
                 versionId,
                 version,
                 ComputeLayoutBytes(layout.Records) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation).LongLength),
+            context.Validation,
             cancellationToken);
+        var compilation = evaluated.Compilation;
         var diff = compilation.Template is null
             ? null
             : await ComputeDiffAsync(head, versionId, version, draft, layout, compilation, cancellationToken);
@@ -537,9 +541,7 @@ public sealed class ActivityDefinitionPublisher(
             requiredBump,
             context.ExistingVersions);
         var minimumVersion = ActivityPublicationReviewPolicy.MinimumVersion(head?.Version, requiredBump);
-        var diagnostics = ActivityDiagnosticOrderer.Order(context.Validation.Diagnostics
-            .Concat(compilation.Diagnostics)
-            .Concat(_reviewPolicy.ReadinessDiagnostics(draft, compilation.Template)));
+        var diagnostics = evaluated.Diagnostics;
         var provider = new ActivityPublicationCapabilityReadinessView(
             "Provider",
             draft.State.Provider.ProviderKey,
@@ -557,12 +559,7 @@ public sealed class ActivityDefinitionPublisher(
                 x.TemplateHash,
                 x.OccurrenceId))
             .ToArray();
-        // The validator's own verdict counts even without an error-severity diagnostic, so preflight can never call
-        // publishable a draft that validation refused.
-        var isPublishable =
-            compilation.IsSuccessful &&
-            context.Validation.IsValid &&
-            diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error);
+        var isPublishable = evaluated.IsPublishable;
         var reviewToken = ActivityPublicationReviewPolicy.ReviewToken(
             draft,
             context.Authoring.HeadVersionId,

@@ -740,7 +740,14 @@ public sealed record ActivityDraftValidationRequest(
     string DefinitionId,
     string DraftId,
     long Revision,
-    ActivityDefinitionDraftState State);
+    ActivityDefinitionDraftState State)
+{
+    /// <summary>
+    /// What <see cref="DraftId"/> names, for the diagnostic subject: <c>ActivityDraft</c> for a Studio draft revision, or the
+    /// kind of other saved content validated by the same rules (such as <c>ActivitySourceVersion</c>).
+    /// </summary>
+    public string SubjectKind { get; init; } = "ActivityDraft";
+}
 
 public sealed record ActivityVersionDiffRequest(
     ActivityVersionIdentity From,
