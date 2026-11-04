@@ -84,6 +84,21 @@ public sealed class SourceVersionRefusalTests
     }
 
     [Fact]
+    public async Task A_refusal_without_diagnostics_is_still_recorded_and_logged()
+    {
+        var versionId = ActivityCatalogStableIds.VersionId(TypeKey, "1.0.0")!;
+        var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
+        var logger = new RecordingLogger();
+        var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.0"));
+
+        await InMemoryReconcilerHarness.BuildReconciler(new(), source, sourceVersionPublisher: new SilentRefusingPublisher(), diagnosticStore: diagnostics, logger: logger)
+            .Reconcile(CancellationToken.None);
+
+        Assert.Equal("activity.source.publication-refused", Assert.Single(diagnostics.Find(versionId)).Code);
+        Assert.Contains("activity.source.publication-refused", Assert.Single(logger.Entries).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_feature_registers_a_replaceable_in_memory_diagnostic_store()
     {
         var defaults = new ServiceCollection();
@@ -129,6 +144,12 @@ public sealed class SourceVersionRefusalTests
                 ? ActivitySourceVersionPublicationResult.Refused([Diagnostic(version.Id)])
                 : ActivitySourceVersionPublicationResult.Published);
         }
+    }
+
+    private sealed class SilentRefusingPublisher : IActivitySourceVersionPublisher
+    {
+        public Task<ActivitySourceVersionPublicationResult> PublishAsync(IActivityDefinition definition, IActivityDefinitionVersion version, CancellationToken cancellationToken = default) =>
+            Task.FromResult(ActivitySourceVersionPublicationResult.Refused([]));
     }
 
     private sealed class ReplacementStore : IActivityReconciliationDiagnosticStore

@@ -275,10 +275,19 @@ public sealed class ActivityVersionReconciler(
             return true;
         }
 
+        // A bridge may refuse without saying why; the refusal still names itself, so it is logged and recorded.
+        IReadOnlyList<ActivityDiagnostic> diagnostics = result.Diagnostics.Count > 0
+            ? result.Diagnostics
+            : [new(
+                "activity.source.publication-refused",
+                ActivityDiagnosticSeverity.Error,
+                "The publishing bridge refused the source-owned version without a stated reason.",
+                new("ActivitySourceVersion", version.Id, definition.Id, Revision: 0),
+                Remediation: "Check the node log for the publishing bridge, correct the source content and reconcile again.")];
         refused.Add(version.Id);
-        diagnosticStore?.Record(version.Id, result.Diagnostics);
+        diagnosticStore?.Record(version.Id, diagnostics);
         if (logger.IsEnabled(LogLevel.Warning))
-            foreach (var diagnostic in result.Diagnostics)
+            foreach (var diagnostic in diagnostics)
                 logger.LogWarning(
                     "Source-owned activity version '{DefinitionVersionId}' ({ActivityTypeKey} {Version}) was not published: {DiagnosticCode}: {DiagnosticMessage}",
                     version.Id,
