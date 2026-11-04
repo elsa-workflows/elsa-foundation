@@ -66,12 +66,14 @@ contract still rejects v2 admissions. An optional `IEtlConnectorRuntimeStore` su
 the shared worker discovers it and uses the same physical attempt pool, heartbeat and terminal delivery. A selected
 file-only replacement/decorator remains usable and receives a durable v2-unavailable refusal. See the
 [worker checkpoint](../../../../specs/996-http-etl/evidence/http-worker-checkpoint.md). A connector provider's
-`CommitConnectorPreparationAsync` must settle a zero-record file run (CSV or JSON Lines) as success in the same
-transaction, because no partition exists to complete it; an identical replay returns `Replay`
+`CommitConnectorPreparationAsync` must settle a zero-record file run (CSV, JSON Lines, or a SQL source's snapshot) as
+success in the same transaction, because no partition exists to complete it; an identical replay returns `Replay`
 ([spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md) FR-011). A provider must also accept `EtlConnectorKind.Csv` route
 outputs as file routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)): `RecordConnectorFilePublicationAsync`
 matches a CSV publication against `EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, kind)` (a `.csv` key, refusing the
 `.jsonl` one), and a CSV route counts as a file publication for delivery, acceptance and inspection state.
+A provider must accept a SQL source's `EtlConnectorKind.Sql` source pin, which carries no expected digest, and a prepared
+snapshot whose hash it cannot compare to a pin: that hash is the snapshot's anchor ([spec 1198](../../../../specs/1198-etl-sql-source/spec.md)).
 A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)):
 the runtime records an applied SQL route through `RecordConnectorFilePublicationAsync` under
 `EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`, and it counts as a recorded publication (effect mechanism 2).
@@ -114,7 +116,7 @@ partition's releasable reservation for permanent exhaustion.
 ## SQL engines
 
 **`IEtlSqlEngine`** — adapter keyed by provider name (§2.7), layer: Core contract, no default implementation
-([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)).
+([specs 1197](../../../../specs/1197-etl-sql-destination/spec.md) and [1198](../../../../specs/1198-etl-sql-source/spec.md)).
 
 ```csharp
 public interface IEtlSqlEngine
@@ -131,11 +133,17 @@ public interface IEtlSqlEngine
     string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row);
     string Parameter(string column, int row);
     EtlSqlErrorKind Classify(Exception exception);
+    IsolationLevel SnapshotIsolation { get; }
+    string? SnapshotSetup { get; }
+    string? SnapshotLock(string table);
+    bool IsLockRefusal(Exception exception);
+    bool ExtremeDatesAreInfinite { get; }
+    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 }
 ```
 
-- **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction); an engine never commits or retries.
+- **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction), and its snapshot reader owns the read (one transaction at `SnapshotIsolation`, ordered by the key, retained as JSON Lines); an engine never commits or retries.
 - **Registration:** `services.AddSingleton<IEtlSqlEngine, …>()` from an engine feature.
-- **When to implement:** to deliver to another engine. Supply connections, a target without secrets for the pinned handle, dialect text, and exception classification.
-- **What depends on it:** `HostSqlBindings` and `EtlSqlRouteWriter` in `Elsa.Etl.Runtime`.
+- **When to implement:** to deliver to or read from another engine. Supply connections, a target without secrets for the pinned handle, dialect text, the isolation level at which one statement reads one point in time without blocking writers, an optional table lock taken before the snapshot (the reader falls back to an unlocked read when the engine refuses it), whether the driver maps infinite dates to the extreme `DateTime`/`DateOnly`/`DateTimeOffset` values (so the reader refuses them), and exception classification.
+- **What depends on it:** `HostSqlBindings`, `EtlSqlRouteWriter` and `EtlSqlSnapshotReader` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).

@@ -1,10 +1,11 @@
+using System.Data;
 using System.Data.Common;
 using Elsa.Etl.Core.Runtime;
 using Microsoft.Data.SqlClient;
 
 namespace Elsa.Etl.Sql.SqlServer;
 
-/// <summary>The SQL Server engine for keyed ETL SQL delivery (spec 1197), over Microsoft.Data.SqlClient.</summary>
+/// <summary>The SQL Server engine for keyed ETL SQL delivery and snapshot reads (specs 1197 and 1198), over Microsoft.Data.SqlClient.</summary>
 /// <remarks>
 /// Every connection runs under <c>SET XACT_ABORT ON</c>, so a failing statement aborts the whole transaction. The upsert is
 /// <c>MERGE … WITH (HOLDLOCK)</c>, which needs a unique index on the key to stay single-row; the writer checks for one.
@@ -13,7 +14,7 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
 {
     // Errors a retry can outlive: deadlock, timeouts, connection establishment and transport, and availability failures.
     private static readonly HashSet<int> TransientNumbers =
-        [-2, 0, 2, 20, 40, 53, 64, 121, 233, 1205, 1222, 4060, 4221, 10053, 10054, 10060, 10061, 10928, 10929, 40143, 40197, 40501,
+        [-2, 0, 2, 20, 40, 53, 64, 121, 233, 1205, 1222, 3961, 4060, 4221, 10053, 10054, 10060, 10061, 10928, 10929, 40143, 40197, 40501,
          40613, 49918, 49919, 49920];
 
     public string Provider => "sqlserver";
@@ -22,6 +23,22 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
     public int MaxParameters => 2_000;
 
     public string? SessionSetup => "SET XACT_ABORT ON";
+
+    // SNAPSHOT reads one point in time without blocking writers. It needs ALLOW_SNAPSHOT_ISOLATION ON; without it SQL
+    // Server raises 3952, which is a rejection.
+    public IsolationLevel SnapshotIsolation => IsolationLevel.Snapshot;
+
+    public string? SnapshotSetup => null;
+
+    public string? SnapshotLock(string table) => null;
+
+    public bool IsLockRefusal(Exception exception) => false;
+
+    // SQL Server has no infinity: 9999-12-31 is a real value, such as a temporal table's open period end.
+    public bool ExtremeDatesAreInfinite => false;
+
+    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
+        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new SqlConnection(connectionString);
 

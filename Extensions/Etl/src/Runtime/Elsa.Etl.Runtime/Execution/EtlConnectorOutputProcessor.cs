@@ -313,6 +313,7 @@ internal sealed class EtlConnectorOutputProcessor
             EtlCsvSource csv => csv.Schema.ToDictionary(column => column.Name, column => column.Type, StringComparer.Ordinal),
             EtlHttpJsonSource http => http.Fields.ToDictionary(field => field.Name, field => field.Type, StringComparer.Ordinal),
             EtlJsonlSource jsonl => jsonl.Fields.ToDictionary(field => field.Name, field => field.Type, StringComparer.Ordinal),
+            EtlSqlSource sql => sql.Columns.ToDictionary(column => column.Name, column => column.Type, StringComparer.Ordinal),
             _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector source is unsupported.")
         };
         var lookup = pipeline.Lookup?.Schema.ToDictionary(column => column.Name, column => column.Type, StringComparer.Ordinal)
