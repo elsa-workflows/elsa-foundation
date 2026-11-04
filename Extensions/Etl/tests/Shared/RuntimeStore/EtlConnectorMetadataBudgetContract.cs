@@ -6,7 +6,6 @@ using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -391,8 +390,10 @@ public abstract partial class EtlRuntimeStoreContract
             priorPosition = await context.ConnectorPartitions.AsNoTracking().Select(partition => partition.PositionJson).SingleAsync();
             priorMetadataBytes = (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes;
             priorInputBytes = (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedInputBytes;
-            priorRequests = await context.ConnectorHttpRequests.AsNoTracking().OrderBy(request => request.PageSequence)
-                .Select(request => request.RequestHash + ":" + request.RequestJson).ToArrayAsync();
+            // Concatenated in memory: on SQL Server the binary-collated hash and the default-collated JSON cannot meet in SQL.
+            priorRequests = (await context.ConnectorHttpRequests.AsNoTracking().OrderBy(request => request.PageSequence)
+                .Select(request => new { request.RequestHash, request.RequestJson }).ToArrayAsync())
+                .Select(request => request.RequestHash + ":" + request.RequestJson).ToArray();
 
             expire.Armed = true;
             expired = await store.AdvanceEmptyHttpPageAsync(attachedLease);
@@ -407,8 +408,9 @@ public abstract partial class EtlRuntimeStoreContract
             (await verificationContext.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes);
         Assert.Equal(priorInputBytes,
             (await verificationContext.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedInputBytes);
-        Assert.Equal(priorRequests, await verificationContext.ConnectorHttpRequests.AsNoTracking().OrderBy(request => request.PageSequence)
-            .Select(request => request.RequestHash + ":" + request.RequestJson).ToArrayAsync());
+        Assert.Equal(priorRequests, (await verificationContext.ConnectorHttpRequests.AsNoTracking().OrderBy(request => request.PageSequence)
+            .Select(request => new { request.RequestHash, request.RequestJson }).ToArrayAsync())
+            .Select(request => request.RequestHash + ":" + request.RequestJson).ToArray());
         Assert.Single(await verificationContext.ConnectorHttpPages.AsNoTracking().ToListAsync());
         var partition = await verificationContext.ConnectorPartitions.AsNoTracking().SingleAsync();
         Assert.Equal(1L, partition.PageCount);

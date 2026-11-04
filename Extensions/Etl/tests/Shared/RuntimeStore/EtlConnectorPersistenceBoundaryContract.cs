@@ -11,16 +11,6 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
-    public async Task Connector_and_file_capabilities_share_the_same_scoped_provider()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddEtlRuntimeEntityFrameworkCore(new EtlRuntimeEntityFrameworkCoreOptions { ConnectionString = "Data Source=:memory:" });
-        await using var provider = services.BuildServiceProvider();
-        await using var scope = provider.CreateAsyncScope();
-        Assert.Same(scope.ServiceProvider.GetRequiredService<IEtlRuntimeStore>(), scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>());
-    }
 
     [Theory]
     [InlineData("prepare")]

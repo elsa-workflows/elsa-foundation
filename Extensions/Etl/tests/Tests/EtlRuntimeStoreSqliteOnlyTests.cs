@@ -218,4 +218,15 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(36, migratedBytes);
         Assert.Equal(EtlRuntimeEfModule.SchemaVersion, migratedSchema);
     }
+
+    [Fact]
+    public async Task Connector_and_file_capabilities_share_the_same_scoped_provider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddEtlRuntimeEntityFrameworkCore(new EtlRuntimeEntityFrameworkCoreOptions { ConnectionString = "Data Source=:memory:" });
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        Assert.Same(scope.ServiceProvider.GetRequiredService<IEtlRuntimeStore>(), scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>());
+    }
 }

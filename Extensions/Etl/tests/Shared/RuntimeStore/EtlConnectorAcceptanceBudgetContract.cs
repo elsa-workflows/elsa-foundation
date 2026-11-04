@@ -245,7 +245,7 @@ public abstract partial class EtlRuntimeStoreContract
         var pageMetadataBytes = Encoding.UTF8.GetByteCount(pageJson);
         var positionMetadataDelta = Encoding.UTF8.GetByteCount(positionJson) - Encoding.UTF8.GetByteCount(oldPositionJson);
         var scopeKey = EtlRuntimeRecordCodec.Scope(admission.Invocation.Scope).Key;
-        var runKey = EtlRuntimeRecordCodec.EncodeIdentity(admission.Invocation.RunId, "run id");
+        var runKey = context.RunKeyOf(admission.Invocation.RunId);
 
         // Seed a pre-source-fetch attached page in the migrated schema. These budget cases are
         // about the older acceptance/delivery reservation contract, so the current page must not
