@@ -108,6 +108,39 @@ exchanges, queues or bindings.
   with `etl.rabbitmq-unavailable`. The error route cannot be RabbitMQ.
 - **Ordering.** Messages of one batch keep their order; batches of different partitions or shards interleave.
 
+## RabbitMQ ingestion
+
+[Spec 1201](../../specs/1201-etl-rabbitmq-source/spec.md) adds a finite `rabbitmq` source: a host-approved queue drained up to
+`maxMessages` (1 to 100,000) when a run prepares, its JSON message bodies read with declared JSON fields as for a JSON Lines
+source. Add an `EtlRuntimeFeature.RabbitMqBindings` entry with role `Source` and `AllowedQueues`; `Elsa.Etl.RabbitMq`
+provides the consumer. The runtime never declares queues.
+
+- **Manual acknowledgements.** Preparation receives the messages without acknowledging them, writes their bodies as a JSON
+  Lines snapshot, and acknowledges them only once the store has recorded that snapshot as the run's prepared input. A
+  preparation that fails, is refused or whose worker dies before the record leaves them unacknowledged; the broker
+  requeues them, and the next attempt reads them again into a snapshot of its own.
+- **At least once.** A worker that dies, or a connection that is lost, after the messages were received and before the
+  acknowledgement reaches the broker can leave the run with messages the broker also requeues, so a later run reads them
+  again. Records carry no message id, so destinations should be idempotent (a keyed SQL destination is) or tolerate
+  duplicates.
+- **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
+  `MaxSnapshotBytes`, or the run's retained input (the snapshot, its index of one 24-byte entry per record plus a
+  sentinel entry, and the lookup) past `http.maxRetainedInputBytes`; the rest stay queued. A single message larger than that fails preparation with
+  `etl.snapshot-too-large` and stays queued. Each message is one record: a body that is not JSON, or not a JSON object, is
+  routed to errors as `etl.jsonl.record-invalid` or `etl.jsonl.record-not-object` and still acknowledged.
+- **Failures.** An unreachable broker or a closed connection leaves preparation to run again after its lease lapses; access
+  refused, a missing queue, a stream queue (which `basic.get` cannot read) or failed authentication fails the run with
+  `etl.rabbitmq-read-rejected`. Two runs reading one queue at once take different messages.
+- **Requeue limits.** Every preparation that does not record its snapshot returns the messages to the queue. A quorum queue
+  counts those returns: by default RabbitMQ 4 drops a message after 20 of them, so a pipeline that keeps failing (a broken
+  lookup, a refused record) loses the messages. Give such queues a dead-letter exchange, or a higher `x-delivery-limit`.
+- **Acknowledgement timeout.** RabbitMQ closes a channel whose deliveries stay unacknowledged past its `consumer_timeout`
+  (30 minutes by default). A run stops taking messages after five minutes (always taking at least one) and leaves the rest
+  for the next run, so a slow or distant broker drains a backlog over several runs; a channel closed for that timeout is
+  retried. Keep `consumer_timeout` well above the time a preparation takes to record its snapshot.
+- **Snapshots of failed attempts.** Each preparation attempt writes its own snapshot, under a random key, so an attempt that
+  does not record it leaves a snapshot behind that no later attempt reuses; retention must account for these.
+
 ## SQL snapshot reads
 
 [Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
@@ -275,6 +308,6 @@ Native invocation/result delivery and native cancellation now have real durable 
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 
-Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot; process loss can leave attempt staging. Retention must account for these deterministic candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
+Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot (for a RabbitMQ source, under a random per-attempt key rather than a deterministic one); process loss can leave attempt staging. Retention must account for these candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
 
 Physical effects remain at least once. Lease expiry cannot terminate a worker or release its live buffers. Only the fenced manifest/cursor transaction makes output authoritative. Logical payload allowances are not a heap/RSS limit, and retained chunks are not automatically removed or compensated.

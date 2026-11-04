@@ -59,6 +59,13 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
                 var resolved = sql.ResolveCurrent(scope, table.Binding, "Source", table.Table);
                 source = new(EtlConnectorKind.Sql, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
             }
+            else if (pipeline.Source is EtlRabbitMqSource queue)
+            {
+                // A queue's messages are unknown until preparation receives them, so its pin carries no digest (spec 1201).
+                CheckUnambiguous(scope, queue.Binding, "Source");
+                var resolved = rabbitMq.ResolveCurrent(scope, queue.Binding, "Source", queue.Queue);
+                source = new(EtlConnectorKind.RabbitMq, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
+            }
             else
                 throw Unavailable();
             var lookup = pipeline.Lookup is { } lookupDefinition ? File(scope, lookupDefinition.Binding, EtlFileRole.Lookup) : null;

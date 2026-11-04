@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import type { EtlColumn, EtlConnectorBindingSummary, EtlSourceV2, EtlSqlSource } from "../etlTypes";
+import type { EtlColumn, EtlConnectorBindingSummary, EtlRabbitMqSource, EtlSourceV2, EtlSqlSource } from "../etlTypes";
 import { EtlJsonFieldsEditor } from "./EtlJsonFieldsEditor";
 import { PipelineBindingSelect } from "./PipelineBindingSelect";
 import { SchemaEditor } from "./SchemaEditor";
@@ -34,11 +34,15 @@ export function EtlConnectorSourceEditor({
       return;
     }
 
-    const fields = source.kind === "jsonl" || source.kind === "httpJson"
+    const fields = source.kind === "jsonl" || source.kind === "httpJson" || source.kind === "rabbitmq"
       ? source.fields
       : declared.map(({ name, type, required }) => ({ name, pointer: `/${escapePointer(name)}`, type, required }));
     if (kind === "jsonl") {
       onChange({ kind, binding: source.binding, fields });
+      return;
+    }
+    if (kind === "rabbitmq") {
+      onChange({ kind, binding: source.binding, queue: "", fields, maxMessages: 1000 });
       return;
     }
     onChange({
@@ -55,7 +59,7 @@ export function EtlConnectorSourceEditor({
       <div className="etl-editor-section-heading">
         <div>
           <h3 id={headingId}>Source connector</h3>
-          <p>Choose a host-approved CSV, JSON Lines, HTTP or SQL source. File paths, endpoint URLs, connection strings and credentials are configured by the host.</p>
+          <p>Choose a host-approved CSV, JSON Lines, HTTP, SQL or RabbitMQ source. File paths, endpoint URLs, connection strings and credentials are configured by the host.</p>
         </div>
       </div>
       <div className="etl-editor-binding-grid">
@@ -66,14 +70,15 @@ export function EtlConnectorSourceEditor({
             <option value="csv">CSV file</option>
             <option value="jsonl">JSON Lines file</option>
             <option value="sql">SQL table</option>
+            <option value="rabbitmq">RabbitMQ queue</option>
           </select>
           <small>The source kind determines which approved connector aliases and field declaration are available.</small>
         </div>
         <PipelineBindingSelect
-          label={source.kind === "csv" ? "Source CSV binding" : source.kind === "jsonl" ? "Source file binding" : source.kind === "sql" ? "Source SQL binding" : "Source HTTP binding"}
+          label={source.kind === "csv" ? "Source CSV binding" : source.kind === "jsonl" ? "Source file binding" : source.kind === "sql" ? "Source SQL binding" : source.kind === "rabbitmq" ? "Source RabbitMQ binding" : "Source HTTP binding"}
           role="Source"
           // Hosts list source file approvals under the csv kind; a JSON Lines source selects from the same files.
-          kind={source.kind === "httpJson" ? "http" : source.kind === "sql" ? "sql" : "csv"}
+          kind={source.kind === "httpJson" ? "http" : source.kind === "sql" ? "sql" : source.kind === "rabbitmq" ? "rabbitMq" : "csv"}
           subjectLabel={source.kind === "jsonl" ? "Source file" : undefined}
           value={source.binding}
           bindings={bindings}
@@ -86,6 +91,11 @@ export function EtlConnectorSourceEditor({
 
       {source.kind === "sql" ? (
         <SqlSourceFields source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
+      ) : source.kind === "rabbitmq" ? (
+        <>
+          <RabbitMqQueueFields source={source} disabled={disabled} onChange={onChange} />
+          <EtlJsonFieldsEditor source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
+        </>
       ) : source.kind === "csv" ? (
         <SchemaEditor
           title="Source CSV schema"
@@ -99,6 +109,33 @@ export function EtlConnectorSourceEditor({
         <EtlJsonFieldsEditor source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
       )}
     </section>
+  );
+}
+
+/** The queue and the most messages one run takes. */
+function RabbitMqQueueFields({ source, disabled, onChange }: {
+  source: EtlRabbitMqSource;
+  disabled: boolean;
+  onChange(source: EtlSourceV2): void;
+}) {
+  const id = useId();
+  return (
+    <div className="etl-editor-binding-grid">
+      <div className="etl-editor-field">
+        <label htmlFor={`${id}-queue`}>Source queue</label>
+        <input id={`${id}-queue`} value={source.queue} disabled={disabled} aria-describedby={`${id}-queue-help`}
+          onChange={event => onChange({ ...source, queue: event.currentTarget.value })} />
+        <small id={`${id}-queue-help`}>The host binding must allow this queue. Messages are acknowledged only once the run has recorded them.</small>
+      </div>
+      <div className="etl-editor-field">
+        <label htmlFor={`${id}-max`}>Messages per run</label>
+        <input id={`${id}-max`} type="number" min={1} max={100000} value={source.maxMessages} disabled={disabled}
+          aria-describedby={`${id}-max-help`}
+          // A cleared or fractional value becomes a whole number, so the compiler judges it instead of the request failing.
+          onChange={event => onChange({ ...source, maxMessages: Math.trunc(Number(event.currentTarget.value)) || 0 })} />
+        <small id={`${id}-max-help`}>A run takes at most this many messages, 1 to 100,000; the rest stay queued for the next run.</small>
+      </div>
+    </div>
   );
 }
 

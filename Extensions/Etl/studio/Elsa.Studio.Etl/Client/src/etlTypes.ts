@@ -93,7 +93,20 @@ export interface EtlContinuousRunPolicy {
   pollIntervalSeconds: number;
 }
 
-export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource | EtlSqlSource;
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource | EtlSqlSource | EtlRabbitMqSource;
+
+/**
+ * A host-approved RabbitMQ queue drained up to `maxMessages` when a run prepares; its messages are acknowledged once the
+ * snapshot of their JSON bodies is recorded, and each body is read with the declared JSON fields.
+ */
+export interface EtlRabbitMqSource {
+  kind: "rabbitmq";
+  binding: string;
+  queue: string;
+  fields: EtlJsonField[];
+  /** 1 to 100,000. */
+  maxMessages: number;
+}
 
 export interface EtlCsvSource {
   kind: "csv";
