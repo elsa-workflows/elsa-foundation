@@ -7,6 +7,8 @@
 - **Project:** [Elsa Agents #66 — Kanban](https://github.com/orgs/elsa-workflows/projects/66/views/1), [complete hierarchy](https://github.com/orgs/elsa-workflows/projects/66/views/3).
 - **Activation and sequencing:** [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus), 31 October Elsa Agents amendment.
 
+**Shared revision delivery**: Owner-agreed [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) / merged [#3783](https://github.com/elsa-workflows/elsa-foundation/pull/3783) governs Agent-owned source and shared revision mechanics. The owner authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026 as the one active source-storage implementation leaf (T065 and storage T069), alongside the existing independent review lane. [Spec 1179's plan](../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition) records package placement, the temporary publication boundary and the clean-store break. No live database reset is part of that leaf. T066–T071 and full W1–W8 acceptance remain open; historical M0–M5 receipts do not qualify the amendment. No new Program or competing runtime/ETL lane is introduced.
+
 ## Purpose
 
 Users define reusable specialists such as Copywriter and Proofreader, test them, publish immutable

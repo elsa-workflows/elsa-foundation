@@ -5,19 +5,16 @@ for (const theme of ["light", "dark"]) {
     test(`keeps interface editing and connections compact at ${width}px in ${theme}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 1100 });
       await page.goto(`/?mode=activity-authoring&theme=${theme}&contract=outcome-only`);
-      await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
-      const members = page.getByRole("navigation", { name: "Public interface members" });
+      await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
+      const members = page.getByRole("navigation", { name: "Outcomes members" });
       const outputs = page.getByRole("region", { name: "Output values", exact: true });
       const paths = page.getByRole("region", { name: "Completion paths", exact: true });
       await expect(page.getByRole("region", { name: "Done", exact: true })).toBeVisible();
-      await expect(outputs).toBeVisible();
+      await expect(outputs).toHaveCount(0);
+      await expect(paths).toBeVisible();
       if (width > 1100) {
         expect((await members.boundingBox())!.width).toBeLessThanOrEqual(320);
-        // Read both rectangles in one frame while the tab's entrance animation is running.
-        const [outputBox, pathBox] = await page.locator(".ad-graph-output-mappings, .ad-graph-outcome-mappings").evaluateAll(elements =>
-          elements.map(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width }; }));
-        expect(pathBox.x).toBeGreaterThan(outputBox.x + outputBox.width);
-        expect(Math.abs(pathBox.y - outputBox.y)).toBeLessThan(2);
+
       }
       const connections = page.getByRole("region", { name: "Provider boundary mappings" });
       const suggestions = page.locator("details.ad-interface-suggestions");
@@ -38,7 +35,7 @@ for (const theme of ["light", "dark"]) {
       await expect(paths.getByText("Done → Done", { exact: true })).toBeVisible();
       await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
       await page.reload();
-      await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+      await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
       await expect(paths.getByText("Done → Done", { exact: true })).toBeVisible();
       await paths.scrollIntoViewIfNeeded();
       for (const control of await paths.getByRole("combobox").all()) {
@@ -52,7 +49,7 @@ for (const theme of ["light", "dark"]) {
 
   test(`keeps immutable interface controls read-only in ${theme}`, async ({ page }) => {
     await page.goto(`/?mode=activity-authoring&theme=${theme}&contract=outcome-only&read-only`);
-    await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+    await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
     await expect(page.getByRole("button", { name: "Add outcome", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Remove outcome", exact: true })).toBeDisabled();
     const paths = page.getByRole("region", { name: "Completion paths", exact: true });

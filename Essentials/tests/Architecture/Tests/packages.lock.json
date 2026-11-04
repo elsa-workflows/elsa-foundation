@@ -1264,6 +1264,7 @@
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Connections.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -1287,6 +1288,7 @@
       "elsa.agent.specialists.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
@@ -1299,6 +1301,21 @@
           "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
           "Elsa.Agent.Specialists.JsonSchema": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.agent.specialists.inspection.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Api": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.agent.specialists.jsonschema": {
@@ -1324,6 +1341,7 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
@@ -1649,6 +1667,14 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "elsa.etl.rabbitmq": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "RabbitMQ.Client": "[7.2.0, )"
+        }
+      },
       "elsa.etl.runtime": {
         "type": "Project",
         "dependencies": {
@@ -1671,6 +1697,22 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
+      "elsa.etl.sql.postgresql": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Npgsql": "[10.0.3, )"
+        }
+      },
+      "elsa.etl.sql.sqlserver": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Microsoft.Data.SqlClient": "[7.0.2, )"
         }
       },
       "elsa.etl.workflows.design": {
@@ -2055,11 +2097,15 @@
       "elsa.modularity.planning": {
         "type": "Project"
       },
+      "elsa.persistence.core": {
+        "type": "Project"
+      },
       "elsa.persistence.entityframework": {
         "type": "Project",
         "dependencies": {
           "CShells": "[0.0.31, )",
           "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
@@ -2337,6 +2383,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
@@ -3061,6 +3108,12 @@
           "OpenIddict.Validation.AspNetCore": "7.5.0",
           "OpenIddict.Validation.DataProtection": "7.5.0"
         }
+      },
+      "RabbitMQ.Client": {
+        "type": "CentralTransitive",
+        "requested": "[7.2.0, )",
+        "resolved": "7.2.0",
+        "contentHash": "PPQ7cF7lwbhqC4up6en1bTUZlz06YqQwJecOJzsguTtyhNA7oL5uNDZIx/h6ZfcyPZV4V3DYKSCxfm4RUFLcbA=="
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "CentralTransitive",
