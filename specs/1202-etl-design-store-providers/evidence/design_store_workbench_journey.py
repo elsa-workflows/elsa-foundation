@@ -289,6 +289,10 @@ def run_engine(provider: str, assembly: Path, output: Path, port: int) -> dict:
         tables = database.tables()
         return {
             "definition": definition, "twin": twin, "selection": selection,
+            "nativeVersionId": native["version"]["id"],
+            "nativePublicationArtifactId": publication["artifactId"],
+            "nativeSourceReferenceId": publication["sourceReferenceId"],
+            "workflowExecutionId": started["workflowExecutionId"],
             "workflowStatus": view["instance"]["status"], "incidents": len(view.get("incidents") or []),
             "executedNodes": sorted(activity["executableNodeId"] for activity in view["activities"]),
             "delivered": delivered, "catalogBefore": catalog_before, "catalogAfter": catalog_after,
@@ -326,7 +330,7 @@ def main() -> int:
         both = sorted([case["definition"], case["twin"]])
         summary["checks"].update({
             f"{provider}:publishedRunCompletedThroughDone": case["workflowStatus"] in ("Completed", "Finished")
-                and case["incidents"] == 0 and "after-done" in case["executedNodes"],
+                and case["incidents"] == 0 and case["executedNodes"].count("after-done") == 1,
             f"{provider}:recordsDelivered": case["delivered"] == ["Ada", "Bram", "Cleo"],
             f"{provider}:catalogListsBothCaseTwins": case["catalogBefore"] == both and case["catalogAfter"] == both,
             f"{provider}:reopenedHostReadsTheDraftAndPublication": case["reopenedLastPublishedVersion"] == 1 and case["versionsAfter"] == [1],

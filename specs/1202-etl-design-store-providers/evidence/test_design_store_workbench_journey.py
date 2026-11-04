@@ -110,9 +110,9 @@ class ControllerTests(unittest.TestCase):
     def test_host_login_failure_reaps_process_and_closes_log(self):
         self.check_host_cleanup("login")
 
-    def catalog_result(self, entries):
+    def catalog_result(self, entries, executed_nodes=None):
         case = {"definition": "people", "twin": "People", "workflowStatus": "Completed", "incidents": 0,
-                "executedNodes": ["etl", "after-done"], "delivered": ["Ada", "Bram", "Cleo"],
+                "executedNodes": executed_nodes if executed_nodes is not None else ["etl", "after-done"], "delivered": ["Ada", "Bram", "Cleo"],
                 "catalogBefore": entries, "catalogAfter": entries, "reopenedLastPublishedVersion": 1,
                 "versionsAfter": [1], "designTables": ["elsa_etl_definition_drafts", "elsa_etl_published_artifacts"],
                 "secretInOutput": False}
@@ -133,6 +133,9 @@ class ControllerTests(unittest.TestCase):
 
     def test_catalog_accepts_exact_case_twins(self):
         self.assertEqual(0, self.catalog_result(["People", "people"]))
+
+    def test_native_completion_requires_one_downstream_activity(self):
+        self.assertEqual(1, self.catalog_result(["People", "people"], ["etl", "after-done", "after-done"]))
 
     def test_content_root_failure_removes_owned_database(self):
         database = Mock()

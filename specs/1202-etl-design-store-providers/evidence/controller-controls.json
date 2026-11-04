@@ -57,5 +57,24 @@
       }
     },
     "change": "Unsuccessful SQL setup raises a safe error rather than exposing generated credential arguments through CalledProcessError; controlled placeholder is checked, no real credential is included in receipts."
+  },
+  "nativeCompletionControl": {
+    "before": {
+      "executed": 13,
+      "passed": 12,
+      "failed": 1,
+      "logSha256": "77d9b8149d18e9863eafc28fad3561d8a54001b5b98a74f36ecae1653e834567"
+    },
+    "after": {
+      "executed": 13,
+      "passed": 13,
+      "failed": 0,
+      "logSha256": "efbb8956ab708762706b73115389ded4c72525d106e5fe1f433e3224e440abfc"
+    },
+    "sources": {
+      "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "bb012be257b817c7d0fc2f47d2df909dc025222a4bf62ddf5a0b8cf3a1bc57c5",
+      "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "da17553eaf653dc3abb7bc97ccd86d9b32c6079250482bfcea3c85536183046d"
+    },
+    "change": "Require one downstream activity, retain native version/publication/source/workflow identifiers; actual engine refresh follows."
   }
 }
