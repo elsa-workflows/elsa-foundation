@@ -148,6 +148,23 @@ visual recipe while retaining their column geometry and interaction code.
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.
 
+Collection layouts should follow Connections and Workflow Definitions: keep the header,
+filter toolbar, bordered results and footer separated by the shared page gap. Size the
+results to their content rather than stretching a short table to the viewport height.
+Use `--studio-control-height` for toolbar disclosures so their summaries align with
+buttons, search and selects. Empty collections use `StudioResultState` inside the
+results surface, with the create action repeated when permitted; filtered emptiness
+instead offers a way to clear the filters. Keep creation in a dialog or a separate
+view so the collection and creation form do not compete on the same screen. After
+creating a connection, close creation and refresh the collection; open details only
+when the user requests them.
+
+Settings should explain policy differences when they affect the user's selection.
+Avoid duplicate summaries of an already visible selection, reserve warning colors
+for actionable problems, and let effective-value labels wrap instead of truncating
+them while space is available. Add help only where the label and nearby explanation
+leave a meaningful question unanswered.
+
 Decide per feedback surface whether it becomes a notification:
 
 | Existing feedback | Becomes |

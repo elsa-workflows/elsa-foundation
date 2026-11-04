@@ -31,7 +31,6 @@
   margin-top: var(--studio-space-3, 12px);
 }
 
-.agent-create-form,
 .agent-specialist-editor fieldset {
   display: grid;
   gap: var(--studio-space-3, 12px);
@@ -41,13 +40,6 @@
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md, 6px);
   min-width: 0;
-}
-.agent-create-form h2 {
-  margin: 0;
-  font-size: 1rem;
-}
-.agent-create-form p {
-  margin: 0;
 }
 .agent-create-actions {
   display: flex;
@@ -103,9 +95,19 @@
   align-items: center;
 }
 .agent-collection-count {
-  margin: var(--studio-space-2, 8px) 0;
+  margin: 0;
   color: var(--studio-text-muted);
 }
+
+.agent-create-form {
+  display: grid;
+  gap: var(--studio-space-4);
+  width: 100%;
+  max-width: 48rem;
+  min-width: 0;
+  margin: 0;
+}
+
 .agent-specialist-editor__playground {
   margin: 0 0 var(--studio-space-3, 12px);
 }
