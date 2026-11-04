@@ -1,7 +1,7 @@
 import { getIntrinsicActivityDisplay } from "./runtimeActivityDisplay";
 import { readIntrinsicDescriptor } from "./intrinsicActivities";
 import { compensationScopeStructureKind, compensationStepsFromExecutableSlots } from "./compensationScope";
-import { bpmnStructureKind, flowchartStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
+import { bpmnStructureKind, flowchartStructureKind, sequenceStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -119,7 +119,13 @@ export function buildExecutableActivityGraph(
       // A catalog miss gets a synthetic version id no catalog can resolve, so downstream lookups
       // treat the node as unknown; the canvas layer relabels it and marks it as a ghost.
       activityVersionId: catalogItem?.activityVersionId ?? ghostActivityVersionId(node),
-      inputs: [],
+      // Only the authorized pinned sidecar supplies previews. Never fall back to today's draft
+      // or expose a sensitive/redacted source through the shared designer's summary or tooltip.
+      inputs: authoredInputsByNodeId.get(node.executableNodeId)?.filter(input =>
+        sourceCanBePreviewed(authoredInputsAccess) &&
+        sourceCanBePreviewed(input.accessState ?? input.access) && !input.isSensitive &&
+        !factsByNodeId.get(nodeId)?.inputBindings.some(binding => (binding.inputKey ?? binding.inputName) === input.inputKey && binding.isSensitive)
+      ).map(input => ({ referenceKey: input.inputKey, value: { expressionType: input.expressionType ?? "Literal", value: input.value } })) ?? [],
       outputs: [],
       structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
     };
@@ -229,7 +235,7 @@ function synthesizeStructure(
   nodeIdsByExecutableId: Map<string, string>
 ): ActivityNodeStructure | null {
   const slots = node.childSlots ?? [];
-  if (slots.length === 0 && !(node.structureKind === bpmnStructureKind && node.bpmnStructure)) return null;
+  if (slots.length === 0 && !node.structureKind) return null;
 
   if (node.structureKind === compensationScopeStructureKind) {
     return {
@@ -260,6 +266,7 @@ function synthesizeStructure(
   }
 
   const kind = node.structureKind ?? `executable:${node.activityType}`;
+  if ((kind === sequenceStructureKind || kind === flowchartStructureKind) && !payload.activities) payload.activities = [];
   copyExecutableTopology(kind, node, payload, nodeIdsByExecutableId);
 
   return {
@@ -363,4 +370,8 @@ function uniqueSlotProperty(payload: Record<string, unknown>, property: string) 
   let index = 2;
   while (`${property}${index}` in payload) index += 1;
   return `${property}${index}`;
+}
+
+function sourceCanBePreviewed(access: string | null | undefined) {
+  return !access || ["visible", "allowed"].includes(access.toLowerCase());
 }
