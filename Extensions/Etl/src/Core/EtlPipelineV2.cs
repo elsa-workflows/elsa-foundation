@@ -61,6 +61,7 @@ public sealed record EtlContinuousRunPolicy([property: JsonRequired] int PollInt
 [JsonDerivedType(typeof(EtlHttpJsonSource), "httpJson")]
 [JsonDerivedType(typeof(EtlJsonlSource), "jsonl")]
 [JsonDerivedType(typeof(EtlSqlSource), "sql")]
+[JsonDerivedType(typeof(EtlRabbitMqSource), "rabbitmq")]
 public abstract record EtlSource;
 
 /// <summary>A host-bound CSV input source with a declared CSV schema.</summary>
@@ -103,7 +104,37 @@ public sealed record EtlSqlSource(
     [property: JsonRequired] string Binding,
     [property: JsonRequired] string Table,
     [property: JsonRequired] IReadOnlyList<EtlColumn> Columns,
-    [property: JsonRequired] IReadOnlyList<string> Key) : EtlSource;
+    [property: JsonRequired] IReadOnlyList<string> Key) : EtlSource
+{
+    /// <summary>
+    /// The optional required <see cref="EtlColumnType.Int64"/> column whose high watermark a completed run records, so the
+    /// next run reads only rows above it, and rows whose watermark is NULL, which it rejects as record errors (spec 1199); null
+    /// reads every row.
+    /// </summary>
+    /// <remarks>A null watermark is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
+    public string? Watermark { get; init; }
+}
+
+/// <summary>A host-approved RabbitMQ queue drained up to a bound when a run prepares (spec 1201).</summary>
+/// <remarks>
+/// Preparation receives up to <see cref="MaxMessages"/> messages without acknowledging them, retains their JSON bodies as a
+/// JSON Lines input snapshot, and acknowledges them only once that snapshot is recorded as the run's prepared input; the run
+/// then processes the snapshot as a JSON Lines source with <see cref="Fields"/>. Ingestion is at least once. The AMQP URI is
+/// never authored here.
+/// </remarks>
+/// <param name="Binding">The host-approved RabbitMQ source alias.</param>
+/// <param name="Queue">The queue; the binding must allow it.</param>
+/// <param name="Fields">The JSON fields read from each message body.</param>
+/// <param name="MaxMessages">The most messages one run takes, 1 to 100,000; the rest stay queued.</param>
+public sealed record EtlRabbitMqSource(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] string Queue,
+    [property: JsonRequired] IReadOnlyList<EtlJsonField> Fields,
+    [property: JsonRequired] int MaxMessages) : EtlSource
+{
+    /// <summary>The largest <see cref="MaxMessages"/> a source may declare.</summary>
+    public const int MaxMessagesLimit = 100_000;
+}
 
 /// <summary>Selects one named scalar value by JSON Pointer within a source record.</summary>
 /// <param name="Name">The field name used by mappings and filters.</param>
@@ -140,6 +171,7 @@ public sealed record EtlRoutes(
 [JsonDerivedType(typeof(EtlHttpDestination), "http")]
 [JsonDerivedType(typeof(EtlCsvDestination), "csv")]
 [JsonDerivedType(typeof(EtlSqlDestination), "sql")]
+[JsonDerivedType(typeof(EtlRabbitMqDestination), "rabbitmq")]
 public abstract record EtlDestination;
 
 /// <summary>A host-bound JSON Lines file destination.</summary>
@@ -182,6 +214,20 @@ public sealed record EtlSqlDestination(
         return hash.ToHashCode();
     }
 }
+
+/// <summary>
+/// A host-bound RabbitMQ exchange to which each record of a batch is published as one persistent JSON message, recorded only
+/// once the broker has confirmed every message of the batch (spec 1200). Delivery is at least once: a replayed batch is
+/// published again with the same message ids. Main route only.
+/// </summary>
+/// <remarks>The binding is a host-approved alias; the AMQP URI and credentials are never authored here.</remarks>
+/// <param name="Binding">The host-approved destination alias.</param>
+/// <param name="Exchange">The exchange, or empty for the default exchange.</param>
+/// <param name="RoutingKey">The routing key of every message.</param>
+public sealed record EtlRabbitMqDestination(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] string Exchange,
+    [property: JsonRequired] string RoutingKey) : EtlDestination;
 
 /// <summary>A closed set of supported HTTP JSON pagination selectors.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]

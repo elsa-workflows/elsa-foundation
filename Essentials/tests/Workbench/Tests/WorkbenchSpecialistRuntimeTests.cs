@@ -168,6 +168,11 @@ public sealed class WorkbenchSpecialistRuntimeTests
         Assert.Equal((string?)turn["status"], (string?)read["invocation"]!["turn"]!["status"]);
         Assert.DoesNotContain("placeholder-not-a-key", read.ToJsonString(), StringComparison.Ordinal);
 
+        // Run inspection's state view names the occurrence as an agent invocation, which Studio links to its evidence page.
+        var stateView = (await client.GetFromJsonAsync<JsonNode>($"/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view"))!;
+        Assert.True((bool)stateView["available"]!, stateView.ToJsonString());
+        Assert.Equal(("elsa.specialist.invocation", 1, true), ((string?)stateView["viewKind"], (int?)stateView["viewVersion"], (bool?)stateView["view"]!["invocation"]));
+
         using var other = await client.GetAsync($"/agent/specialists/invocations/{workflowExecutionId}/not-an-activity/evidence");
         await AssertStatusAsync(HttpStatusCode.NotFound, other, "Reading a non-specialist occurrence");
         using var missing = await client.GetAsync($"/agent/specialists/invocations/not-a-run/{activityExecutionId}/evidence");

@@ -40,7 +40,7 @@ export function EtlConnectorPipelineEditor({
       </header>
 
       <ol className="etl-editor-order" aria-label="ETL operation order">
-        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : pipeline.source.kind === "sql" ? "Read one snapshot of the table" : "Read bounded HTTP JSON pages"}</small></div></li>
+        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : pipeline.source.kind === "sql" ? "Read one snapshot of the table" : pipeline.source.kind === "rabbitmq" ? "Drain queued messages" : "Read bounded HTTP JSON pages"}</small></div></li>
         <li><span>2</span><div><strong>Match optional lookup</strong><small>{pipeline.lookup ? "Join CSV rows by exact typed keys" : "No lookup is configured"}</small></div></li>
         <li><span>3</span><div><strong>Map output fields</strong><small>Use declared source or lookup values</small></div></li>
         <li><span>4</span><div><strong>Apply output filters</strong><small>Equality or inequality over typed fields</small></div></li>
@@ -111,20 +111,24 @@ function DestinationEditor({ label, role, destination, outputFields, bindings, b
         <label htmlFor={`${id}-kind`}>{label} destination kind</label>
         <select id={`${id}-kind`} value={destination.kind} disabled={disabled} onChange={event => {
           const kind = event.currentTarget.value as EtlPipelineV2["routes"]["main"]["kind"];
-          onChange(kind === "sql" ? { kind, binding: destination.binding, table: "", key: [] } : { kind, binding: destination.binding });
+          onChange(kind === "sql" ? { kind, binding: destination.binding, table: "", key: [] }
+            : kind === "rabbitmq" ? { kind, binding: destination.binding, exchange: "", routingKey: "" }
+            : { kind, binding: destination.binding });
         }}>
           <option value="http">HTTP</option>
           <option value="jsonl">JSONL file</option>
           <option value="csv">CSV file</option>
           {/* Only the main route can deliver to SQL: the error route's shape is the runtime's. */}
           {role === "MainOutput" && <option value="sql">SQL table</option>}
+          {/* Likewise only the main route publishes to RabbitMQ (spec 1200). */}
+          {role === "MainOutput" && <option value="rabbitmq">RabbitMQ exchange</option>}
         </select>
       </div>
       <PipelineBindingSelect
         label={`${label} binding`}
         role={role}
         // Hosts list output folder approvals under the jsonl kind; a CSV route publishes into the same folders.
-        kind={destination.kind === "http" ? "http" : destination.kind === "sql" ? "sql" : "jsonl"}
+        kind={destination.kind === "http" ? "http" : destination.kind === "sql" ? "sql" : destination.kind === "rabbitmq" ? "rabbitMq" : "jsonl"}
         subjectLabel={destination.kind === "csv" ? (role === "MainOutput" ? "Accepted file output" : "Rejected file output") : undefined}
         value={destination.binding}
         bindings={bindings}
@@ -158,6 +162,24 @@ function DestinationEditor({ label, role, destination, outputFields, bindings, b
               </label>
             ))}
           </fieldset>
+        </>
+      )}
+      {destination.kind === "rabbitmq" && (
+        <>
+          <div className="etl-editor-field">
+            <label htmlFor={`${id}-exchange`}>{label} exchange</label>
+            <input id={`${id}-exchange`} value={destination.exchange} disabled={disabled} placeholder="Default exchange"
+              aria-describedby={`${id}-exchange-help`}
+              onChange={event => onChange({ ...destination, exchange: event.currentTarget.value })} />
+            <small id={`${id}-exchange-help`}>The host binding must allow this exchange; leave it empty for the default exchange.</small>
+          </div>
+          <div className="etl-editor-field">
+            <label htmlFor={`${id}-routing-key`}>{label} routing key</label>
+            <input id={`${id}-routing-key`} value={destination.routingKey} disabled={disabled}
+              aria-describedby={`${id}-routing-key-help`}
+              onChange={event => onChange({ ...destination, routingKey: event.currentTarget.value })} />
+            <small id={`${id}-routing-key-help`}>Each record is one message with this routing key. A queue must match it, or the run fails.</small>
+          </div>
         </>
       )}
     </div>
