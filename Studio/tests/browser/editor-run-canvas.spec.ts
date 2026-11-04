@@ -9,13 +9,14 @@ for (const theme of ["light", "dark"]) {
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     await page.reload();
     await expect(node).toHaveAccessibleName(/State: authoring/);
-    await expect(page.getByRole("group", { name: "Attached Test Run", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     const previous = page.getByRole("group", { name: "Previous Test Run", exact: true });
     await expect(previous).toBeVisible();
     await previous.getByRole("button", { name: "Restore Test Run", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     await expect(previous).toHaveCount(0);
-    await expect(page.getByRole("group", { name: "Attached Test Run", exact: true })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toBeVisible();
     await node.click();
     await expect(page.getByLabel("Inspector panel", { exact: true }).getByText("Current: 1", { exact: true })).toBeVisible();
   });
@@ -41,6 +42,7 @@ for (const theme of ["light", "dark"]) {
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     expect(await viewport.getAttribute("style")).toBe(transform);
     const location = page.url();
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     await page.getByRole("button", { name: "Return to editing", exact: true }).click();
     await expect(node).toHaveAccessibleName(/State: authoring/);
     expect(await viewport.getAttribute("style")).toBe(transform);
@@ -53,6 +55,7 @@ for (const theme of ["light", "dark"]) {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 + 80, box.y + 90, { steps: 8 });
     await page.mouse.up();
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     await expect(page.getByText("The design changed. Run overlays are hidden.")).toBeVisible();
     await expect(node).toHaveAccessibleName(/State: authoring/);
     const editedPosition = await node.evaluate(element => (element as HTMLElement).style.transform);
@@ -77,6 +80,7 @@ for (const theme of ["light", "dark"]) {
     await expect(page.locator('.wf-code-view .studio-code-editor[data-readonly="true"]')).toHaveCount(1);
     await expect(inspector.locator('.studio-code-editor:not([data-readonly="true"])')).toHaveCount(0);
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     await page.getByRole("button", { name: "Return to editing", exact: true }).click();
     await expect(node).toHaveAccessibleName(/State: authoring/);
     await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(editedPosition);
@@ -165,7 +169,7 @@ for (const theme of ["light", "dark"]) {
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&theme=${theme}`);
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
-    const status = page.getByRole("group", { name: "Attached Test Run", exact: true });
+    const status = page.getByRole("group", { name: "Execution controls", exact: true });
     await expect(status.getByText(/Some activities ran more than once/)).toBeVisible();
     const box = (await status.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);

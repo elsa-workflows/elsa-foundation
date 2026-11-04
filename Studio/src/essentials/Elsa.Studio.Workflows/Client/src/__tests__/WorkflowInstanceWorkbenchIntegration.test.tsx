@@ -171,7 +171,7 @@ describe("workflow run workbench incident navigation", () => {
     api.getExecutable.mockImplementationOnce(() => pending.promise);
     renderWorkbench();
     await vi.waitFor(() => expect(api.getExecutable).toHaveBeenCalledTimes(1));
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     // Let the refreshed observation commit while the first metadata load still owns its slot.
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -187,7 +187,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.textContent).toContain("catalog unavailable"));
     expect(api.listActivities).toHaveBeenCalledTimes(1);
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.listActivities).toHaveBeenCalledTimes(2));
     pending.resolve({ activities: [sequenceActivity, writeLine] });
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
@@ -201,7 +201,7 @@ describe("workflow run workbench incident navigation", () => {
       : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
     renderWorkbench("activity", "execution-target");
     await vi.waitFor(() => expect(container.textContent).toContain("Resolving execution scope"));
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(container.textContent).toContain("interrupted by refresh"));
     expect(buttonByText(container, "Retry execution scope")).toBeTruthy();
     pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
@@ -528,7 +528,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeTruthy();
 
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).not.toContain("You do not have permission to inspect this activity execution"));
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-incident-summary")).toBeTruthy());
@@ -537,7 +537,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(api.supportsActivityExecutionInspection).toHaveBeenCalledTimes(4));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(2));
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(3));
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-incident-summary")).toBeTruthy());
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeNull();
@@ -722,7 +722,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
 
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("RefreshedFailure"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
@@ -791,7 +791,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "Load more affected activities (1)"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(lastIndex + 1));
 
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("ResolvedFailure-50"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));

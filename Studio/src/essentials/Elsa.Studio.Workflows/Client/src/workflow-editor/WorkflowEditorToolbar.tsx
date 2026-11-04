@@ -37,7 +37,6 @@ interface WorkflowEditorToolbarProps {
   publicationUnavailableReason?: string;
   directBpmnPublication?: ReactNode;
   runTitle: string;
-  runStatus?: ReactNode;
   moreActions: WorkflowToolbarActionGroup[];
 }
 
@@ -131,7 +130,6 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           }}
         ><MoreHorizontal size={18} /></button>
       </div>
-      {props.runStatus ? <div className="wf-editor-actions wf-editor-run-status">{props.runStatus}</div> : null}
       <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)}>
         <div ref={menuRef} id={menuId} role="menu" aria-label="More workflow actions" onKeyDown={handleMenuKeyDown}>
           <div role="group" aria-label="Saving">

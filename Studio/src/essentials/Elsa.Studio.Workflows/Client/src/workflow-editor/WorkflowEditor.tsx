@@ -65,7 +65,7 @@ import { ConnectMenu } from "./graph";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, WorkflowRuntimePanel } from "./editorPanels";
-import { AttachedTestRunStatus } from "./AttachedTestRunStatus";
+import { AttachedTestRunControls } from "./AttachedTestRunControls";
 import { useTestRunObservation } from "./useTestRunObservation";
 import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
@@ -468,7 +468,7 @@ export function WorkflowEditor({
   } = canvas;
   const runSelection = useAttachedExecutionSelection({ context, attachmentId: JSON.stringify([testRun?.view.testRunId, testRun?.view.artifactId, testRun?.draftSignature]),
     workflowExecutionId: testRun?.view.workflowExecutionId ?? "", nodeId: inspectedNode?.nodeId ?? null,
-    canvasOwnerId: scopeOwner?.nodeId, visibleNodeIds: authoringNodes.map(node => node.data.runtimeNodeId ?? node.id), activityCatalog: catalog,
+    observationRevision: observation.revision, canvasOwnerId: scopeOwner?.nodeId, visibleNodeIds: authoringNodes.map(node => node.data.runtimeNodeId ?? node.id), activityCatalog: catalog,
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
@@ -1264,7 +1264,7 @@ export function WorkflowEditor({
           tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
         {inspectorView === "run-data" && runCanvas.eligible ? <div className="wf-inspector-tab-panel">
           <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
-            <AttachedRunActivityInspector backendSession={backendSession} runRelatedLinks={runRelatedLinks} context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
+            <AttachedRunActivityInspector observationRevision={observation.revision} backendSession={backendSession} runRelatedLinks={runRelatedLinks} context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
               ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
                 const root = draft.state.rootActivity;
                 const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;
@@ -1339,7 +1339,15 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} executionControls={renderedTestRun ? <AttachedTestRunControls canvas={{ ...runCanvas,
+          attach: () => { if (!runCanvas.stale || editorDoc.showSnapshot()) { runCanvas.attach(); setInspectorView("run-data"); } },
+          detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }} /> : restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
+          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
+          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
+          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
+          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
+          {restoration.message ? <span role="status">{restoration.message}</span> : null}
+        </div> : null} />
     },
     {
       id: "test-drive",
@@ -1417,25 +1425,7 @@ export function WorkflowEditor({
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
         runTitle={operations?.testRuns.state === "unavailable" ? operations.testRuns.reason ?? "Test runs are unavailable on this backend." : draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
-        runStatus={renderedTestRun ? (
-          <AttachedTestRunStatus
-            view={renderedTestRun}
-            canvas={{ ...runCanvas,
-              attach: () => { if (!runCanvas.stale || editorDoc.showSnapshot()) { runCanvas.attach(); setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); } },
-              detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }}
-            onOpenRun={() => { if (renderedTestRun.workflowExecutionId) openWorkflowRun(renderedTestRun.workflowExecutionId); }}
-            onOpenDetails={() => {
-              setActiveRightPanelId("runtime");
-              setInspectorCollapsed(false);
-            }}
-          />
-        ) : restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
-          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
-          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
-          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
-          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
-          {restoration.message ? <span role="status">{restoration.message}</span> : null}
-        </div> : null}
+
         moreActions={documentAdapter ? [{ label: "Document", actions: [{ label: "Save a copy", icon: <Boxes size={15} />, onSelect: () => setSaveTemplateOpen(true) }, { label: "Export JSON", icon: <Download size={15} />, onSelect: exportJson }] }] : [
           ...(templatesAvailable ? [{ label: "Templates", actions: [{ label: "Save as template", icon: <Boxes size={15} />, disabled: busy, onSelect: () => setSaveTemplateOpen(true) }] }] : []),
           {

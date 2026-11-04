@@ -96,29 +96,6 @@
   white-space: nowrap;
 }
 
-/* Result details occupy their own row without resizing or recentering primary commands. */
-.wf-editor-toolbar .wf-editor-actions.wf-editor-run-status {
-  flex: 1 1 100%;
-  min-width: 0;
-  margin-left: 0;
-  justify-content: flex-start;
-}
-
-.wf-editor-run-status .wf-test-run-status {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.wf-editor-run-status .wf-test-run-trigger {
-  max-width: 100%;
-  white-space: normal;
-  text-align: left;
-}
-
-.wf-editor-run-status .wf-test-run-trigger > svg {
-  flex-shrink: 0;
-}
-
 .wf-editor-toolbar .wf-publish-actions > button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);
