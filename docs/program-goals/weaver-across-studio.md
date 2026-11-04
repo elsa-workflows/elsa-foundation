@@ -63,7 +63,7 @@ authorizes resuming #3440's native baseline after its three failed runs (`1495b5
 in the probe driver, a regression check for it and at most two fresh native attempts. It is not a waiver
 of the three-failure stop or any other gate. The same record hands the Program to Claude. On the owner's
 instruction, Claude [posts through the owner account with the `[Claude]` tag](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6563355491)
-while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge,
+while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge.
 The 3 November standing authorization is recorded below.
 
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),

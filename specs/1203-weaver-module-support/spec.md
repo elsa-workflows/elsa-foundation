@@ -477,9 +477,10 @@ Negative cases:
     - The audit sequence counter is never re-stamped, so 1.0.0 stays in the Agent family's readable range for as long as it exists. Leaf 0 records this on #3428.
     - 1.1.0 finalizes automatically: at activation on a cluster of one, and otherwise once every counted schema-fleet member can read it. An operator hold blocks finalization.
     - Once 1.1.0 is finalized, a host that cannot read it refuses activation.
-  - **Dormancy**: a new leaf 0 feature owns the privilege-class, *performed* and module-code behaviour. It declares its schema requirement statically on the feature class, using [spec 182](../182-dormant-features-until-finalization/spec.md)'s shared mechanism. Existing Agent features gain no requirement and remain unaffected.
-    - With the Agent EF family observed below 1.1.0, preparation of the new feature's operations refuses before review with `schema-version-not-finalized`; the catalog, Attention and `/capabilities` expose its dormancy. There is no per-tool descriptor-based dormancy dispatch.
-    - An in-memory Agent store has no EF family requirement. The plan specifies composition and observation through the shared mechanism, and the metadata declaration and check sites.
+  - **Dormancy**: leaf 0 supplies store-specific features for its privilege-class, *performed* and module-code behaviour, through framework §2.5 feature inheritance. Only the selected store's feature is enabled; existing Agent features gain no requirement and remain unaffected.
+    - The in-memory feature supplies the shared behaviour without an EF-family requirement. The EF-specific feature inherits that behaviour and statically declares Agent family 1.1.0 on its feature class, using [spec 182](../182-dormant-features-until-finalization/spec.md)'s shared mechanism. The EF-store composition selects that feature; it cannot expose an ungated sibling path to the same operations.
+    - The EF feature's operations check shared availability at preparation, before review. Missing observation or unfinalized 1.1.0 refuses with `schema-version-not-finalized`; the catalog, Attention and `/capabilities` expose its dormancy. Absence of a family is never interpreted as a satisfied requirement. There is no per-tool descriptor-based dormancy dispatch.
+    - Composition tests cover in-memory availability, EF held/unobserved refusal and finalized availability, including the absence of an ungated path. The plan names the features, metadata declaration and check sites.
     - Completeness/backfill is not required: the feature writes new data and needs no projection over old rows.
   - **SemVer** follows framework §4.2, with pre-GA Majors under ADR 0080 D4 and Elsa constitution §E5.
     - **Major**:
