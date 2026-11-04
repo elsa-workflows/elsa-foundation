@@ -14,12 +14,24 @@ internal sealed class EtlProviderDesignDatabase(EtlProviderDatabase database) : 
 
     public static async Task<IEtlDesignTestDatabase> CreateAsync(EtlNativeProviderFixture fixture) => await CreateTypedAsync(fixture);
 
-    internal static async Task<EtlProviderDesignDatabase> CreateTypedAsync(EtlNativeProviderFixture fixture)
+    internal static async Task<EtlProviderDesignDatabase> CreateTypedAsync(EtlNativeProviderFixture fixture) =>
+        await CreateTypedAsync(await fixture.CreateDatabaseAsync());
+
+    internal static async Task<EtlProviderDesignDatabase> CreateTypedAsync(EtlProviderDatabase allocated, params IInterceptor[] interceptors)
     {
-        var design = new EtlProviderDesignDatabase(await fixture.CreateDatabaseAsync());
-        await using var context = design.CreateContext();
-        await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(design.Provider));
-        return design;
+        var design = new EtlProviderDesignDatabase(allocated);
+        try
+        {
+            await using var context = design.CreateContext(interceptors);
+            await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(design.Provider));
+            return design;
+        }
+        catch (Exception failure)
+        {
+            try { await design.DisposeAsync(); }
+            catch (Exception cleanup) { failure.Data["EtlDatabaseCleanupFailure"] = cleanup.GetType().FullName; }
+            throw;
+        }
     }
 
     public EtlDesignDbContext CreateContext(params IInterceptor[] interceptors) => database.Provider switch

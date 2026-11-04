@@ -19,6 +19,58 @@ class InitializationFailure(RuntimeError):
 
 
 class ControllerTests(unittest.TestCase):
+    def test_failed_container_launch_keeps_command_arguments_out_of_error(self):
+        sentinel = "private-command-placeholder"
+        def command(args, **kwargs):
+            if kwargs.get("check"):
+                raise subprocess.CalledProcessError(1, [sentinel])
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
+        with patch.object(journey.subprocess, "run", side_effect=command):
+            with self.assertRaises(RuntimeError) as failure:
+                journey.Database("PostgreSql")
+        self.assertNotIn(sentinel, str(failure.exception))
+
+    def test_failed_mysql_catalog_keeps_command_arguments_out_of_error(self):
+        database = object.__new__(journey.Database)
+        database.provider, database.name, database.secret = "MySql", "owned", "private-command-placeholder"
+        with patch.object(journey.subprocess, "check_output", side_effect=subprocess.CalledProcessError(1, [database.secret])), \
+                patch.object(journey.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="")):
+            with self.assertRaises(RuntimeError) as failure:
+                database.tables()
+        self.assertNotIn(database.secret, str(failure.exception))
+
+    def test_unsuccessful_container_removal_is_reported(self):
+        database = object.__new__(journey.Database)
+        database.name = "owned"
+        with patch.object(journey.subprocess, "run", return_value=subprocess.CompletedProcess([], 1)):
+            with self.assertRaisesRegex(RuntimeError, "cleanup"):
+                database.stop()
+
+    def test_database_cleanup_failure_preserves_initialization_error(self):
+        original = InitializationFailure("initialization failed")
+        with patch.object(journey.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)), \
+                patch.object(journey.subprocess, "check_output", return_value="127.0.0.1:12345\n"), \
+                patch.object(journey, "wait_for", side_effect=original), \
+                patch.object(journey.Database, "stop", side_effect=RuntimeError("cleanup failed")):
+            with self.assertRaises(InitializationFailure) as failure:
+                journey.Database("PostgreSql")
+        self.assertIs(original, failure.exception)
+
+    def test_host_cleanup_failure_preserves_initialization_error(self):
+        original = InitializationFailure("initialization failed")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            host = object.__new__(journey.Host)
+            try:
+                with patch.object(journey.subprocess, "Popen", return_value=Mock()), \
+                        patch.object(journey, "wait_for", side_effect=original), \
+                        patch.object(journey.Host, "stop", side_effect=RuntimeError("cleanup failed")):
+                    with self.assertRaises(InitializationFailure) as failure:
+                        journey.Host.__init__(host, root / "host.dll", root, root / "host.log", 0)
+                self.assertIs(original, failure.exception)
+            finally:
+                host.log.close()
+
     def check_database_cleanup(self, stage):
         owned = {"alive": False, "name": None}
 
