@@ -13,7 +13,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Http_request_ledger_and_metadata_counters_match_persisted_utf8_documents_and_replays()
     {
         await using var database = await CreateDatabaseAsync();
@@ -98,7 +98,7 @@ public abstract partial class EtlRuntimeStoreContract
         await AssertMetadataAccountingAsync(recoveryContext);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Tiny_metadata_limit_refuses_preparation_without_persisting_partition_or_request_rows()
     {
         await using var database = await CreateDatabaseAsync();
@@ -127,7 +127,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0L, await AssertMetadataAccountingAsync(context));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Begin_refuses_source_reservation_when_only_prepared_metadata_fits()
     {
         const string runId = "metadata-begin-limit";
@@ -173,7 +173,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(beforeBegin, await AssertMetadataAccountingAsync(context));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_metadata_budget_is_shared_across_shards()
     {
         const string firstRun = "metadata-cross-shard-limit";
@@ -215,7 +215,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.All(partitions, partition => Assert.True(partition.MetadataBytes < limits.AfterFirstBegin));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Historical_http_fetch_journal_is_not_released_for_a_later_page_reservation()
     {
         const string runId = "metadata-source-history-limit";
@@ -262,7 +262,7 @@ public abstract partial class EtlRuntimeStoreContract
             .Where(request => request.PageSequence == 1).Select(request => request.FetchJson).SingleAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("renew")]
     [InlineData("release")]
     [InlineData("attach")]
@@ -313,7 +313,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.All(historyQueries, AssertBoundedHistoryLookup);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Expired_http_page_attachment_rolls_back_metadata_and_ledger_accounting()
     {
         await using var database = await CreateDatabaseAsync();
@@ -366,7 +366,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(priorMetadataBytes, await AssertMetadataAccountingAsync(verificationContext));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Expired_http_page_advance_rolls_back_new_request_and_metadata_accounting()
     {
         await using var database = await CreateDatabaseAsync();

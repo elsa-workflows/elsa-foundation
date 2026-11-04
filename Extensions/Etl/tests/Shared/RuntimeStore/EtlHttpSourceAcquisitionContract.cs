@@ -15,7 +15,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_fetches_real_pages_and_retains_empty_page_continuation()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((request, _) =>
@@ -45,7 +45,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0, (await fixture.Context.ConnectorRuns.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_normalizes_relative_next_link_and_reopens_original_page_bytes()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((request, _) =>
@@ -72,7 +72,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal("/a?page=2", server.Requests[1].RawTarget);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_recovers_manifest_published_before_SQL_capture_without_another_GET()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
@@ -111,7 +111,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await replacementContext.ConnectorHttpPages.AsNoTracking().ToListAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Source_recovery_uses_changed_response_only_when_original_manifest_was_never_published(bool published)
@@ -191,7 +191,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(published ? 1 : 2, server.Requests.Count);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("missing-body")]
     [InlineData("corrupt-body")]
     [InlineData("missing-manifest")]
@@ -222,7 +222,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await fixture.Context.ConnectorHttpPages.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_cannot_dispatch_again_after_durable_empty_page_exhaustion()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
@@ -248,7 +248,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await fixture.Context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_persists_delay_and_another_shard_can_progress()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((request, _) =>
@@ -273,7 +273,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(2, server.Requests.Count);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_records_invalid_JSON_as_a_deterministic_failure()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
@@ -296,7 +296,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(server.Requests);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_records_disallowed_next_link_without_sending_to_it()
     {
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
@@ -317,7 +317,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(server.Requests);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_acquisition_late_owner_leaves_published_page_for_current_owner_without_refetch()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -18,7 +18,7 @@ public abstract partial class EtlRuntimeStoreContract
 {
     private protected static readonly string[] CsvOutputFields = ["id", "name"];
 
-    [Fact]
+    [SkippableFact]
     public async Task Csv_routes_retain_header_and_rows_then_publish_verified_csv_files()
     {
         await using var fixture = await CsvOutputFixture.StartAsync(this, long.MaxValue / 4,
@@ -48,7 +48,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Applied, (await fixture.AcceptAsync()).Status);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(0, 2, 0)]
     [InlineData(1, 1, 1)]
     public async Task Csv_row_bound_counts_the_header_and_rejects_the_row_that_does_not_fit(int overBy, long accepted, long rejected)
@@ -71,7 +71,7 @@ public abstract partial class EtlRuntimeStoreContract
             Assert.Equal("recordOrdinal,code,field\r\n2,etl.output-too-large,\r\n", await fixture.RetainedAsync(prepared.Output.Errors!));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task A_rejected_first_row_writes_no_header_and_the_next_fitting_row_carries_it()
     {
         var wide = new string('w', 200);
@@ -86,7 +86,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(1, prepared.Output.RejectedRecords);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task A_size_rejection_whose_error_row_cannot_fit_fails_the_batch()
     {
         await using var fixture = await CsvOutputFixture.StartAsync(this, 8, Accepted(1, 1, "Ada Lovelace"));
@@ -97,7 +97,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal("etl.output-too-large", prepared.FailureCode);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task A_row_whose_json_exceeds_the_allowance_is_accepted_when_its_csv_fits()
     {
         var accented = new string('é', 60); // 120 UTF-8 bytes in CSV; the JSON writer escapes each é as \u00e9 (6 bytes, 360 in all).
@@ -111,7 +111,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal((1L, 0L), (prepared.Output!.AcceptedRecords, prepared.Output.RejectedRecords));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task An_http_error_array_reserves_its_closing_bracket_when_a_file_route_fills_the_limit(bool jsonlMain)
@@ -130,7 +130,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(jsonlMain ? jsonlRow : "id,name\r\n2,Ada\r\n", await fixture.RetainedAsync(prepared.Output.Main!));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task A_file_row_that_would_take_the_http_error_arrays_closing_bracket_is_rejected_to_that_array(bool jsonlMain)
@@ -156,7 +156,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True(Encoding.UTF8.GetByteCount(errors) <= limit);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task An_http_main_first_row_that_fills_the_allowance_is_rejected_not_the_batch()
     {
         // The first JSON array element carries its reserved closing bracket, so a row whose JSON exactly fills the
@@ -176,7 +176,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Contains("etl.output-too-large", await fixture.RetainedAsync(prepared.Output.Errors!));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("tampered-body", "etl.output-read-conflict")]
     [InlineData("conflicting-file", "etl.effect-conflict")]
     public async Task Csv_publication_refuses_a_changed_body_or_a_different_existing_file(string variant, string code)

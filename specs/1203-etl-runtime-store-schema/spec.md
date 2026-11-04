@@ -15,7 +15,7 @@ The runtime store (`EtlRuntimeDbContext`, `EfEtlRuntimeStore`, the connector sto
 - Its check constraints are written in SQLite's dialect: unquoted PascalCase identifiers (PostgreSQL folds them), `length()` (SQL Server has `LEN`; MySQL's counts bytes) and booleans compared with 0 and 1 (an error on PostgreSQL).
 - Two alternate-key names are longer than MySQL's 64-character limit and PostgreSQL's 63.
 - Key columns carry no binary collation, so keyset paging and grouping on run keys would follow a linguistic order.
-- Aggregate sums of `long` columns return `DECIMAL` on MySQL.
+- MySQL aggregates `long` columns as `DECIMAL`; the provider must materialize the exact `long` totals the store contracts require.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -46,8 +46,8 @@ A host's operator migrates the ETL runtime module into a SQL Server, PostgreSQL 
 - **FR-001** The runtime store has SQL Server, PostgreSQL and MySQL contexts beside SQLite, each applying the binary collation and, on MySQL, the utf8mb4 character set; they join `[EfModule]` when spec 1204 lifts the registration guard.
 - **FR-002** A context-level run-key seam derives `RunKey` from the run id: the encoded id on SQLite, a 64-character hash on the server engines, where every `RunKey` column is 64 characters; identity checks compare the stored key with the id's key.
 - **FR-003** Check constraints are rendered per engine from one declaration (identifier quoting, length function, boolean literals); the SQLite text is byte-identical to today's. The two long alternate-key names are shortened on the server engines.
-- **FR-004** Run-partition totals and the inspector's counts are exact on every engine without SQL `SUM` of `long` columns.
-- **FR-005** Each server engine has a generated, internal initial runtime migration made by the ETL migration tooling; the SQLite chain is untouched.
+- **FR-004** Run-partition totals and the inspector's counts are exact `long` values on every engine; retain the existing aggregate queries where the provider contracts qualify their materialization.
+- **FR-005** Each server engine has generated, internal runtime migrations made by the ETL migration tooling, including the compaction model adopted from current main; the SQLite chain is untouched.
 - **FR-006** The runtime-store contracts that do not race run on SQLite in `Elsa.Etl.Tests` and on the three server engines in the `etl-ef` suite, with migrate/validate/model-agreement, recorded key collation, maximum-length identity and check-constraint checks.
 - **FR-007** The runtime registration keeps refusing non-SQLite providers until spec 1204; docs say so.
 

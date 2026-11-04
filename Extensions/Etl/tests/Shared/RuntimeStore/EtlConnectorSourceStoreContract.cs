@@ -7,7 +7,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Captured_source_progress_capacity_transfers_to_acceptance_without_a_second_charge()
     {
         await using var database = await CreateDatabaseAsync();
@@ -38,7 +38,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(1, Assert.IsType<EtlConnectorHttpPosition>(recovered!.Position).PageSequence);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("ascii")]
     [InlineData("escaped-base64")]
     [InlineData("surrogate-pairs")]
@@ -72,7 +72,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True((await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes <= reserved);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
@@ -133,7 +133,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True((await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes <= limit);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_permit_reserves_capacity_before_dispatch_and_capture_is_required_for_attachment()
     {
         await using var database = await CreateDatabaseAsync();
@@ -162,7 +162,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Applied, complete.Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Timely_invalid_200_receipt_survives_late_store_reconciliation_and_journal_round_trip()
     {
         await using var database = await CreateDatabaseAsync();
@@ -193,7 +193,7 @@ public abstract partial class EtlRuntimeStoreContract
         EtlHttpSourceFetchTransitions.Validate(replay.Fetch, pipeline.Http);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Source_waiting_survives_store_recreation_and_does_not_block_another_partition()
     {
         await using var database = await CreateDatabaseAsync();

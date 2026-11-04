@@ -11,7 +11,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Connector_output_plan_is_stable_across_replay_and_partition_recovery()
     {
         await using var database = await CreateDatabaseAsync();
@@ -74,7 +74,7 @@ public abstract partial class EtlRuntimeStoreContract
             await RetainedMetadataBytesAsync(recoveryContext));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_connector_output_recovers_with_its_retained_page_and_batch()
     {
         await using var database = await CreateDatabaseAsync();
@@ -106,7 +106,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(output, recovered.OwedBatch.Output);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Fully_filtered_connector_output_retains_a_bodyless_plan()
     {
         await using var database = await CreateDatabaseAsync();
@@ -132,7 +132,7 @@ public abstract partial class EtlRuntimeStoreContract
             partition.PartitionOrdinal == lease.PartitionOrdinal)).RetainedOutputBytes);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("algebra")]
     [InlineData("missing-main")]
     [InlineData("kind")]
@@ -192,7 +192,7 @@ public abstract partial class EtlRuntimeStoreContract
             partition.PartitionOrdinal == lease.PartitionOrdinal)).RetainedOutputBytes);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("stale")]
     [InlineData("cancelled")]
     public async Task Connector_output_store_refuses_a_stale_or_terminal_lease(string state)
@@ -233,7 +233,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(metadataBefore, await RetainedMetadataBytesAsync(context));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_output_store_rolls_back_when_lease_expires_after_save()
     {
         await using var database = await CreateDatabaseAsync();
@@ -264,7 +264,7 @@ public abstract partial class EtlRuntimeStoreContract
             partition.PartitionOrdinal == lease.PartitionOrdinal)).RetainedOutputBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_output_body_budget_is_run_wide_and_replay_does_not_charge_it_twice()
     {
         await using var database = await CreateDatabaseAsync();
@@ -303,7 +303,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Null((await context.ConnectorBatches.AsNoTracking().SingleAsync(batch => batch.BatchId == secondBatch.BatchId)).OutputJson);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_batch_output_budget_counts_both_route_bodies_together()
     {
         await using var database = await CreateDatabaseAsync();
@@ -328,7 +328,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedOutputBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_output_plan_metadata_is_charged_to_the_retained_metadata_quota()
     {
         var measurement = await MeasureOutputMetadataBoundaryAsync();
@@ -363,7 +363,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedOutputBytes);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("plan")]
     [InlineData("digest")]
     [InlineData("accounting")]

@@ -4,7 +4,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public void Connector_effect_identity_binds_batch_route_destination_and_exact_payload()
     {
         var admission = ConnectorAdmission("output-identity", new("tenant-a", "output-identity"), httpShardIds: ["shard"]);

@@ -9,7 +9,7 @@ namespace Elsa.Etl.Tests;
 // Run identities and check constraints on every engine (spec 1203): the server engines key runs by a hash of the id.
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Run_ids_of_maximum_length_or_differing_only_by_case_are_distinct_runs()
     {
         await using var database = await CreateDatabaseAsync();
@@ -28,7 +28,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(runIds.Order(StringComparer.Ordinal), first.Concat(rest).Select(run => run.Invocation.RunId).Order(StringComparer.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Check_constraints_refuse_impossible_connector_run_counters()
     {
         await using var database = await CreateDatabaseAsync();

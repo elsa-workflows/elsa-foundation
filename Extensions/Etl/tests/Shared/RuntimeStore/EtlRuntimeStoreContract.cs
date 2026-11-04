@@ -20,7 +20,7 @@ namespace Elsa.Etl.Tests;
 public abstract partial class EtlRuntimeStoreContract
 {
 
-    [Fact]
+    [SkippableFact]
     public async Task Admission_is_idempotent_scoped_and_cancellation_tombstone_binds_the_result_address()
     {
         await using var database = await CreateDatabaseAsync();
@@ -61,7 +61,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.NotNull(await store.ClaimDeliveryAsync(scope, "delivery-worker"));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task Final_batch_acceptance_and_cancellation_settle_once_in_either_store_order(bool acceptanceWins)
@@ -164,7 +164,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Reopened_runtime_refuses_a_saved_artifact_with_an_unknown_format()
     {
         await using var database = await CreateDatabaseAsync();
@@ -198,7 +198,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await persistedContext.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Reopened_runtime_refuses_a_prepared_descriptor_with_an_unknown_format()
     {
         await using var database = await CreateDatabaseAsync();
@@ -236,7 +236,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await persistedContext.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Partition_claims_reserve_before_dispatch_reuse_owed_work_and_fence_released_attempts()
     {
         await using var database = await CreateDatabaseAsync();
@@ -298,7 +298,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Null(await store.ClaimDeliveryAsync(admission.Invocation.Scope, "delivery-worker-2"));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Outstanding_byte_budget_blocks_before_dispatch_without_charging_or_moving_cursor_and_recovers_after_acceptance()
     {
         await using var database = await CreateDatabaseAsync();
@@ -396,7 +396,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.Outbox.AsNoTracking().ToArrayAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Expired_delivery_claim_is_fenced_until_consumer_proof_settles_once()
     {
         await using var database = await CreateDatabaseAsync();
@@ -474,7 +474,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(terminalBefore.OutstandingBytes, terminalAfterSettlement.OutstandingBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Last_acceptance_atomically_completes_with_business_error_and_manifest_pages_are_ordered()
     {
         await using var database = await CreateDatabaseAsync();
@@ -513,7 +513,7 @@ public abstract partial class EtlRuntimeStoreContract
             entry => entry.Effect.Route == EtlOutputRoute.Error);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Empty_source_is_terminalized_with_outbox_during_preparation()
     {
         await using var database = await CreateDatabaseAsync();
@@ -530,7 +530,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.NotNull(await store.ClaimDeliveryAsync(admission.Invocation.Scope, "delivery-worker"));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Unscoped_partition_claim_selects_only_a_runnable_run_in_the_exact_scope()
     {
         await using var database = await CreateDatabaseAsync();
@@ -547,7 +547,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.NotEqual(otherTenant.Invocation.RunId, claimed.RunId);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Preparation_refuses_snapshots_that_do_not_match_the_pinned_source_hash()
     {
         await using var database = await CreateDatabaseAsync();
@@ -565,7 +565,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Applied, await store.CommitPreparationAsync(preparation, EtlRuntimeFixtures.Prepared(4)));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Preparation_persists_the_real_one_based_nonempty_partition_plan()
     {
         await using var database = await CreateDatabaseAsync();
@@ -633,7 +633,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Preparation_lease_expiry_requires_a_new_fence_and_reject_admission_is_durable()
     {
         await using var database = await CreateDatabaseAsync();
@@ -659,7 +659,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.NotNull(await store.ClaimDeliveryAsync(refused.Invocation.Scope, "delivery-worker"));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Admission_refusal_cannot_terminalize_an_already_pinned_invocation_and_persisted_json_is_bounded()
     {
         await using var database = await CreateDatabaseAsync();
@@ -682,7 +682,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Throws<InvalidDataException>(() => EtlRuntimeRecordCodec.Read<EtlTerminalResult>(new string(' ', 16 * 1024 + 1)));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Composite_run_views_never_mix_run_and_terminal_states(bool listRuns)
@@ -725,7 +725,7 @@ public abstract partial class EtlRuntimeStoreContract
             "A composite read returned a succeeded run without its terminal result.");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task New_admission_builds_its_composite_view_before_committing_the_admission()
     {
         await using var database = await CreateDatabaseAsync();
@@ -750,7 +750,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True(commitObserver.CommitStarted);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Acceptance_snapshots_bounded_effects_before_database_queries()
     {
         await using var database = await CreateDatabaseAsync();
@@ -797,7 +797,7 @@ public abstract partial class EtlRuntimeStoreContract
         return Assert.Single(await store.ListRunsAsync(scope, null, 10), run => run.Invocation.RunId == runId);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Reused_context_refuses_old_acceptance_after_another_context_takes_over(bool probeOtherOperations)
@@ -838,7 +838,7 @@ public abstract partial class EtlRuntimeStoreContract
             view => view.PartitionOrdinal == current.PartitionOrdinal).NextOrdinal);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Renewal_and_release_follow_ownership_while_reservation_still_requires_the_current_cursor()
     {
         await using var database = await CreateDatabaseAsync();
@@ -861,7 +861,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True(successor.Fence > lease.Fence);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task Settled_replay_refuses_changed_counters_or_duplicate_route_substitution(bool duplicateRoute)
@@ -888,7 +888,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(1, run.FilteredRecords);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task Nonempty_work_cannot_claim_zero_input_or_output_bytes(bool zeroInput)
@@ -916,7 +916,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await store.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, null, 10));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Persisted_invocation_preserves_opaque_scope_code_units_without_JSON_replacement()
     {
         await using var database = await CreateDatabaseAsync();
@@ -933,7 +933,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Persisted_invocation_preserves_opaque_run_and_address_code_units(bool addressIdentity)

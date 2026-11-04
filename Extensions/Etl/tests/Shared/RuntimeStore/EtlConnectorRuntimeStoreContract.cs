@@ -6,7 +6,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Connector_admission_snapshots_pins_and_replays_only_the_same_revision()
     {
         await using var database = await CreateDatabaseAsync();
@@ -47,7 +47,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal("source-revision-1", persisted.Bindings.Source.Revision.Revision);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Legacy_preparation_skips_connector_runs_and_legacy_commit_cannot_consume_connector_lease()
     {
         await using var database = await CreateDatabaseAsync();
@@ -75,7 +75,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.Partitions.ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Preadmission_refusal_cannot_terminalize_an_admitted_connector_run()
     {
         await using var database = await CreateDatabaseAsync();
@@ -96,7 +96,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.Outbox.ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_partitions_keep_distinct_shards_and_expired_replacement_invalidates_failure_authority()
     {
         await using var database = await CreateDatabaseAsync();
@@ -151,7 +151,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.Outbox.ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Csv_preparation_without_lookup_creates_typed_file_ranges_for_mixed_destinations()
     {
         await using var database = await CreateDatabaseAsync();
@@ -183,7 +183,7 @@ public abstract partial class EtlRuntimeStoreContract
     }
 
     // Previously this test settled the empty run by hand, which hid that no production caller ever did (spec 1190 FR-011).
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Empty_file_preparation_settles_terminal_success_with_the_commit(bool jsonl)
@@ -215,7 +215,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.ConnectorPartitions.ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Jsonl_preparation_creates_file_ranges_and_bounds_its_sentinel_index()
     {
         await using var database = await CreateDatabaseAsync();
@@ -237,7 +237,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlRunStatus.Running, (await connector.FindConnectorRunAsync(scope, admission.Invocation.RunId))!.Run.Status);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("index-bound")]
     [InlineData("digest")]
     [InlineData("shards")]
@@ -270,7 +270,7 @@ public abstract partial class EtlRuntimeStoreContract
             ConnectorPreparedFile(recordCount: 2, sourceByteLength: 1, jsonl: true)));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("hash")]
     [InlineData("reference")]
     [InlineData("limit")]

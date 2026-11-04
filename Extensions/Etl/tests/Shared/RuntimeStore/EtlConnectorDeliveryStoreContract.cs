@@ -12,7 +12,7 @@ public abstract partial class EtlRuntimeStoreContract
     private protected const long HttpInFlightReceiptReservationBytes = 512;
     private protected const long HttpWaitingReceiptReservationBytes = 256;
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_delivery_begin_persists_a_permit_before_transport_and_replays_a_lost_reply()
     {
         await using var database = await CreateDatabaseAsync();
@@ -46,7 +46,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(output, EtlConnectorRecordCodec.Read<EtlConnectorBatchOutput>(retained.OutputJson!));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Expired_http_attempt_is_recorded_as_unknown_before_retrying_with_the_same_effect()
     {
         await using var database = await CreateDatabaseAsync();
@@ -85,7 +85,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True(second.Permit.Fence > firstPermit.Fence);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_delivery_begin_rolls_back_if_lease_expires_after_save()
     {
         await using var database = await CreateDatabaseAsync();
@@ -110,7 +110,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(before, after);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("stale")]
     [InlineData("cancelled")]
     public async Task Http_delivery_begin_refuses_stale_or_cancelled_ownership_without_retaining_an_attempt(string state)
@@ -147,7 +147,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(before, after);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_delivery_recovers_partial_route_ack_and_retry_after_across_reopened_stores()
     {
         await using var database = await CreateDatabaseAsync();
@@ -239,7 +239,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.False(await recoveredContext.ConnectorBatches.AsNoTracking().Select(row => row.Settled).SingleAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_delivery_rejects_a_receipt_for_another_effect_without_changing_retained_work()
     {
         await using var database = await CreateDatabaseAsync();
@@ -260,7 +260,7 @@ public abstract partial class EtlRuntimeStoreContract
             batch.BatchId, EtlOutputRoute.Main, permit, new(200, null))).Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_delivery_completion_replays_identical_receipt_and_refuses_conflicting_receipt_after_store_reopen()
     {
         await using var database = await CreateDatabaseAsync();
@@ -318,7 +318,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(batchBefore.OutputDigest, batchAfterConflict.OutputDigest);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_delivery_metadata_budget_refusal_is_atomic()
     {
         var baseline = await MeasureHttpDeliveryMetadataBaselineAsync();
@@ -346,7 +346,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(before, after);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Http_delivery_receipt_fits_reserved_metadata_at_the_run_budget(bool retryableResponse)
@@ -402,7 +402,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.False(finalBatch.Settled);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("json")]
     [InlineData("digest")]
     public async Task Corrupt_http_delivery_metadata_cannot_be_recovered(string defect)

@@ -6,7 +6,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Published_file_route_allows_remaining_http_retry_to_defer_its_partition()
     {
         await using var database = await CreateDatabaseAsync();
@@ -40,7 +40,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlHttpDeliveryPhase.Waiting, replacement.OwedBatch.HttpDeliveries!.Main!.Phase);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("ordinal")]
     [InlineData("page-sequence")]
     [InlineData("counts")]

@@ -9,7 +9,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Mixed_route_acceptance_requires_exact_file_publication_and_http_ack_and_settles_once()
     {
         await using var database = await CreateDatabaseAsync();
@@ -88,7 +88,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(afterAcceptance, await ReadAcceptanceStateAsync(context, lease.PartitionOrdinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_partial_and_full_page_batches_recover_and_final_fully_filtered_acceptance_terminalizes()
     {
         await using var database = await CreateDatabaseAsync();
@@ -225,7 +225,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await recoveryContext.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Expiry_after_acceptance_save_rolls_back_progress_and_automatic_terminal()
     {
         await using var database = await CreateDatabaseAsync();
@@ -279,7 +279,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Final_rejected_http_page_acceptance_publishes_business_error_terminal()
     {
         await using var database = await CreateDatabaseAsync();

@@ -7,7 +7,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Http_page_attachment_is_immutable_idempotent_and_position_guarded()
     {
         await using var database = await CreateDatabaseAsync();
@@ -39,7 +39,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("bytes")]
     [InlineData("records")]
     [InlineData("request-hash")]
@@ -77,7 +77,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("continuation-loop")]
     [InlineData("page-bound")]
     [InlineData("single-page")]
@@ -118,7 +118,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(defect == "continuation-loop" ? 1 : 0, await context.ConnectorHttpPages.CountAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Empty_http_pages_advance_without_accepting_records_and_success_waits_for_exhaustion()
     {
         await using var database = await CreateDatabaseAsync();
@@ -168,7 +168,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.Manifest.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Advancing_nonempty_http_page_conflicts()
     {
         await using var database = await CreateDatabaseAsync();
@@ -188,7 +188,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.ConnectorHttpPages.ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_page_retention_budget_counts_prior_empty_pages()
     {
         var pipeline = EtlV2TestPipelines.Create() with
@@ -212,7 +212,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.ConnectorHttpPages.ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_page_retention_aggregates_shards_and_remains_isolated_by_scope()
     {
         await using var database = await CreateDatabaseAsync();
@@ -239,7 +239,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(3, await context.ConnectorHttpPages.CountAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task New_http_partition_lease_recovers_the_retained_page()
     {
         await using var database = await CreateDatabaseAsync();
@@ -260,7 +260,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(17, run.RetainedInputBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_page_attachment_rejects_stale_owner_and_expiry_during_save_rolls_back()
     {
         await using (var database = await CreateDatabaseAsync())
@@ -304,7 +304,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Empty_http_page_advance_expiring_during_save_rolls_back()
     {
         await using var database = await CreateDatabaseAsync();
@@ -329,7 +329,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(12, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedInputBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Cancelled_connector_rejects_http_page_attachment_and_advance_as_terminal()
     {
         await using var database = await CreateDatabaseAsync();

@@ -8,7 +8,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Timely_http_success_receipt_reconciles_after_deadline_and_survives_store_reopen()
     {
         await using var database = await CreateDatabaseAsync();
@@ -90,7 +90,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Conflict, conflict.Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_that_commits_before_a_timely_http_receipt_is_reconciled_preserves_terminal_state()
     {
         await using var database = await CreateDatabaseAsync();

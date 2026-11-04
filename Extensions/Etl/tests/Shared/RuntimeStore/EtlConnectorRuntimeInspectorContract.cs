@@ -13,7 +13,7 @@ public abstract partial class EtlRuntimeStoreContract
     private protected const int HttpEffectMechanism = 1;
     private protected const int FileEffectMechanism = 2;
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_inspection_is_scoped_and_pages_partitions_in_ascending_bounded_order()
     {
         await using var database = await CreateDatabaseAsync();
@@ -84,7 +84,7 @@ public abstract partial class EtlRuntimeStoreContract
             admission.Invocation.Scope, admission.Invocation.RunId, -2, 1).AsTask());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_inspection_tracks_retry_publication_acknowledgement_and_settled_effect_counts_once()
     {
         await using var database = await CreateDatabaseAsync();
@@ -175,7 +175,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_inspection_reads_the_existing_request_for_an_exhausted_final_http_page()
     {
         await using var database = await CreateDatabaseAsync();
@@ -210,7 +210,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0, partition.AcceptedErrorEffects);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_inspection_does_not_count_retained_effects_when_cancellation_preserves_owed_work()
     {
         await using var database = await CreateDatabaseAsync();

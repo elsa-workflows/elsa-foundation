@@ -6,7 +6,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Connector_store_rejects_continuation_policy_above_supported_ceiling()
     {
         await using var database = await CreateDatabaseAsync();
@@ -29,7 +29,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.ConnectorPartitions.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_store_accepts_continuation_policy_at_supported_ceiling()
     {
         await using var database = await CreateDatabaseAsync();

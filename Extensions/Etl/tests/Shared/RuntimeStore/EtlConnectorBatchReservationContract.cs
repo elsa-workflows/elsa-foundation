@@ -9,7 +9,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Http_batch_reservation_is_stable_replayable_and_owned_after_reacquisition()
     {
         await using var database = await CreateDatabaseAsync();
@@ -71,7 +71,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await recoveryContext.ConnectorBatches.AsNoTracking().ToListAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("no-page")]
     [InlineData("wrong-type")]
     [InlineData("wrong-sequence")]
@@ -133,7 +133,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0, partition.BatchMetadataBytes);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("records")]
     [InlineData("bytes")]
     public async Task Http_batch_reservation_enforces_run_wide_outstanding_quotas(string quota)
@@ -178,7 +178,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.ConnectorBatches.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_batch_metadata_budget_refusal_does_not_persist_the_reservation()
     {
         var (metadataLimit, expectedBaseline, expectedDescriptorBytes) = await MeasureHttpBatchMetadataLimitAsync();
@@ -211,7 +211,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Null(partition.OwedBatchId);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_batch_reservation_expiry_after_save_rolls_back_the_reservation()
     {
         await using var database = await CreateDatabaseAsync();
@@ -244,7 +244,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlConnectorRecordCodec.Write(lease.Position), partition.PositionJson);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_preserves_an_owed_http_batch_and_refuses_further_reservations()
     {
         await using var database = await CreateDatabaseAsync();
@@ -279,7 +279,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(metadataBeforeTerminal, await RetainedMetadataBytesAsync(context));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Csv_v2_file_range_can_be_reserved_and_recovered_as_the_same_owed_batch()
     {
         await using var database = await CreateDatabaseAsync();

@@ -6,7 +6,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public void Connector_batch_identity_binds_source_range_scope_and_destination_revision()
     {
         var admission = ConnectorAdmission("batch-identity", new("tenant-a", "partition-a"), httpShardIds: ["shard"]);
@@ -40,7 +40,7 @@ public abstract partial class EtlRuntimeStoreContract
         finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("descriptor")]
     [InlineData("count")]
     [InlineData("metadata")]
@@ -93,7 +93,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Null(partitionAfter.ExpiresAtUtcTicks);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_batch_replay_requires_unexpired_authority_without_refunding_owed_work()
     {
         await using var database = await CreateDatabaseAsync();
@@ -122,7 +122,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Replay, (await store.ReserveConnectorBatchAsync(recovered, batch)).Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_claim_prioritizes_recovering_owed_work_over_new_partitions()
     {
         await using var database = await CreateDatabaseAsync();

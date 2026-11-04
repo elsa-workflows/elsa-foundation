@@ -7,7 +7,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Http_page_history_prevents_return_to_an_earlier_request()
     {
         await using var database = await CreateDatabaseAsync();
@@ -29,7 +29,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(20, (await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId))!.RetainedInputBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Corrupt_older_page_json_cannot_remove_request_membership_and_fresh_claim_refuses_run()
     {
         await using var database = await CreateDatabaseAsync();
@@ -61,7 +61,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(4, await recoveryContext.ConnectorHttpPages.CountAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Two_maximum_continuations_fit_the_retained_position_and_recover(bool escapedBase64)
@@ -94,7 +94,7 @@ public abstract partial class EtlRuntimeStoreContract
             Assert.True(System.Text.Encoding.UTF8.GetByteCount(EtlConnectorRecordCodec.Write<EtlConnectorPosition>(position)) > 512 * 1024);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("missing")]
     [InlineData("page-json")]
     [InlineData("byte-length")]

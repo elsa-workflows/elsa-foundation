@@ -12,7 +12,7 @@ namespace Elsa.Etl.Tests;
 public abstract partial class EtlRuntimeStoreContract
 {
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("prepare")]
     [InlineData("claim")]
     [InlineData("renew")]
@@ -59,7 +59,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.NotNull(row.Owner);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("unknown")]
     [InlineData("completed")]
     [InlineData("missing")]
@@ -95,7 +95,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_retained_input_overcount_is_rejected()
     {
         await using var database = await CreateDatabaseAsync();
@@ -111,7 +111,7 @@ public abstract partial class EtlRuntimeStoreContract
         await Assert.ThrowsAsync<InvalidDataException>(() => store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId).AsTask());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connector_cancel_retains_work_and_disallows_new_claims_and_renewals()
     {
         await using var database = await CreateDatabaseAsync();
@@ -131,7 +131,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.Outbox.ToListAsync());
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("kind")]
     [InlineData("shards")]
     [InlineData("pages")]

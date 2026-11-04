@@ -17,7 +17,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Theory]
+    [SkippableTheory]
     [InlineData(204, false)]
     [InlineData(202, false)]
     [InlineData(204, true)]
@@ -166,7 +166,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task A_recorded_rabbitmq_route_is_not_published_again_when_its_batch_is_dispatched_again()
     {
         var root = Path.Combine(Path.GetTempPath(), "elsa-etl-output-rabbitmq-" + Guid.NewGuid().ToString("N"));

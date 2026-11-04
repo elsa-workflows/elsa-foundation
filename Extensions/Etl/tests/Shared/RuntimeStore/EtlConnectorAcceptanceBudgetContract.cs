@@ -13,7 +13,7 @@ public abstract partial class EtlRuntimeStoreContract
 {
     private protected const int AcceptanceBudgetContinuationLength = 4096;
 
-    [Fact]
+    [SkippableFact]
     public async Task Http_acceptance_uses_reserved_metadata_when_dispatch_fills_the_run_budget()
     {
         const string runId = "acceptance-reserve-full-budget";
@@ -70,7 +70,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.True(connector.RetainedMetadataBytes <= metadataLimit);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Http_batch_reservation_respects_independent_acceptance_metadata_budget(bool exactFit)
@@ -117,7 +117,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(0, run.OutstandingBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Legacy_zero_acceptance_reserve_is_topped_up_on_output_replay()
     {
         const string runId = "acceptance-reserve-legacy-replay";
@@ -153,7 +153,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(before.OutputJson, toppedUp.OutputJson);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Legacy_output_replay_refuses_acceptance_reserve_top_up_without_headroom_atomically()
     {
         const string runId = "acceptance-reserve-legacy-replay-full";
@@ -183,7 +183,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(metadataLimit, afterRows.ConnectorMetadataBytes);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Legacy_http_begin_refuses_when_acceptance_reserve_and_attempt_metadata_do_not_fit()
     {
         const string runId = "acceptance-reserve-legacy-http-begin";

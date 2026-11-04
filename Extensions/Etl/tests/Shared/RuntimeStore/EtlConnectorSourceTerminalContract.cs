@@ -8,7 +8,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Theory]
+    [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Terminal_run_rejects_source_operations_without_changing_journal_or_accounting(bool succeeded)

@@ -9,7 +9,7 @@ namespace Elsa.Etl.Tests;
 
 public abstract partial class EtlRuntimeStoreContract
 {
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_that_commits_first_refuses_late_http_ack_acceptance_and_source_progress()
     {
         await using var database = await CreateDatabaseAsync();
@@ -120,7 +120,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Final_http_acceptance_that_commits_first_cannot_be_overwritten_by_cancellation()
     {
         await using var database = await CreateDatabaseAsync();
@@ -162,7 +162,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_that_commits_before_final_http_acceptance_preserves_ready_owed_batch_and_journal()
     {
         await using var database = await CreateDatabaseAsync();
