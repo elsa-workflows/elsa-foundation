@@ -452,9 +452,11 @@ provider-managed conversations and stream resume are separate capabilities. See 
 **Decision**: M6 production work (T042–T048, T050) consumes #2912's approved production carry-forward. It does not
 build a second decision, approval or effect engine inside the Agent extension. #2912 is not forked, reparented or
 completed here. The specialist runtime keeps tools refused until those contracts exist. The prerequisites below are the
-exact ones M6 waits for. T049 (team editor/publication) is also re-planned under the ADR 0094 hold.
+exact ones M6 waits for, task by task. T049 (team editor/publication) falls under the ADR 0094 hold and is to be
+re-planned against T064–T071 after agreement.
 
-**#2912 state**: open, `status:todo`, under epic #2893 and Program #2892. It has no production leaf, PR or claim. Its only
+**#2912 state**: open, `status:todo`, under epic #2893 and Program #2892. It has no production leaf, PR or claim for its
+carry-forward obligations; the earlier #3056 / PR #3087 native-hosting slice is delivered. Its only
 child, #2913, closed on 17 October 2026 as bounded research evidence. The issue body lists five unchecked production
 obligations:
 
@@ -462,7 +464,7 @@ obligations:
 2. durably accepted decisions with no silent re-evaluation, and exact authorized tool requests, arguments and effect
    identities that survive approval suspension and replay;
 3. resource and usage budgets applied before dispatch, with proofs for cancellation, recovery,
-   duplicate/conflicting/late results and approval/effect races (effects remain at-least-once);
+   duplicate/conflicting/late messages and results, and approval/effect races (effects remain at-least-once);
 4. provider adapters, native parent/composite lifecycle, and integrated Studio authoring and inspection;
 5. tests, failure controls and exact-head/resulting-main verification.
 
@@ -486,16 +488,16 @@ invokes a workflow.
 |---|---|---|
 | T042 knowledge/tool bindings | Scoped, versioned knowledge and memory references with observation identities; tool capability bindings with authority | #2912 obligation 1 |
 | T043 proposal/approval/wait/effect | A workflow-runtime record of the exact proposal: canonical arguments, authorization revision and effect identity, accepted once and replayed without re-evaluation. The model leaf cannot suspend (R4), so this sits outside the leaf. | #2912 obligation 2 |
-| T044 workflow tool and MCP | A generic effect receipt and reconciliation store (obligation 3). The workflow tool can reuse the keyed workflow start identity. | #2912 obligation 3. **MCP has no owner in #2912**; only #3526 names it. Decide its owner before T044. |
+| T044 workflow tool and MCP | Effect identity that survives approval and replay, plus effect-race and recovery evidence. This reconciliation finds no generic external-effect receipt or reconciliation store to carry them. The workflow tool can reuse the keyed workflow start identity. | #2912 obligations 2 (effect identity) and 3 (race and recovery evidence). **MCP has no owner in #2912**; only #3526 names it. Decide its owner before T044. |
 | T045 Studio policy/proposal/receipt views | Authoring and inspection of the above. Reuse candidates: Weaver `AgentProposalReview`, `HumanReviewPage`, incident components | #2912 obligation 4 (in part) |
-| T046 proofs | Everything above | #2912 obligations 3 and 5 |
+| T046 proofs | Everything above | #2912 obligations 1–3 and 5 |
 | T047 team budgets | Team, cohort and round reservations before dispatch. Today reservations are per turn and cover model calls only. | #2912 obligation 3 |
 | T048 team routes, rounds and aggregation | Typed routes, round barriers and memory visibility over the native structural contracts | #2912 obligation 1 |
 | T049 team editor/publication | Team source through the shared revision and publication capability (#3526; ADR 0094) | ADR 0094 hold (T064–T071) |
 | T050 team proofs | T047–T049 | #2912 obligations 3 and 5 |
 
-**Consequences**: M6 starts only after #2912's owning hierarchy delivers obligations 1–3, or after a work unit that the
-owner authorizes for those obligations. Specialist work may add only typed adapters over those contracts. An MCP owner
+**Consequences**: M6 implementation can begin only after #2912's owning hierarchy delivers obligations 1–3, or after a
+work unit that the owner authorizes for them. T045 also needs obligation 4, and T046 and T050 need obligation 5. Specialist work may add only typed adapters over those contracts. An MCP owner
 must be chosen before T044. Knowledge and memory bindings follow obligation 1's scope/version/observation model and must
 not be invented in the specialist extension. Until then, tool-capable specialists are refused at capability preflight,
 as they are today.
