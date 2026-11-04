@@ -3,6 +3,7 @@ export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 import "./activityInspection.css";
+import "./activityExecutionBrowser.css";
 import { latestActivityExecution } from "../runtimeActivityOrder";
 import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
@@ -2600,10 +2601,8 @@ function readIncidentActivityExecutionId(incident: IncidentStateSummary) {
 export function getIncidentRootCause(incident: IncidentStateSummary) {
   const rootCause = incident.metadata?.["runtime.faultInnerMessage"]?.trim();
   const message = rootCause || incident.message;
-  if (incident.failureType === "flowchart.child.faulted") {
-    const child = message.match(/child node '([^']+)' faulted/);
-    return child ? `Activity '${child[1]}' failed. Review its incident to correct the cause.` : "A child activity failed. Review its incident to correct the cause.";
-  }
+  const child = message.match(/^Flowchart faulted because child node '([^']+)' faulted:/);
+  if (child) return `Activity '${child[1]}' failed. Review its incident to correct the cause.`;
   return message;
 }
 

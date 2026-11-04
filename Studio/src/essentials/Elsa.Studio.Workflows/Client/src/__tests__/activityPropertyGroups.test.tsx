@@ -150,7 +150,7 @@ it("commits related literal inputs atomically and refreshes contributed editors 
   const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true,
     supports: descriptor => descriptor.name === "FormId", component: props => <button type="button" aria-label="Pin form" onClick={() => props.context.setLiteralInputs?.({ FormId: "purchase", FormVersion: "2" })}>{String(props.context.inputValues?.FormVersion ?? "unset")}</button>
   }];
-  const container = renderPanel([input("FormId", { isWrapped: true }), input("FormVersion", { isWrapped: true })], { activity: activity(), editors, onChange });
+  const container = renderPanel([input("FormId", { referenceKey: "FormId", isWrapped: true }), input("FormVersion", { referenceKey: "FormVersion", isWrapped: true })], { activity: activity(), editors, onChange });
   const button = container.querySelector<HTMLButtonElement>('button[aria-label="Pin form"]')!;
   flushSync(() => button.click());
   expect(onChange).toHaveBeenCalledTimes(1);

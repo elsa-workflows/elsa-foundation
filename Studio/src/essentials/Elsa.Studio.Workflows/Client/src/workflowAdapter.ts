@@ -913,7 +913,7 @@ export function createActivityNode(activity: ActivityCatalogItem, nodeId: string
   }
 
   const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
-  return template
+  const node: ActivityNode = template
     ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
     : {
         nodeId,
@@ -922,6 +922,14 @@ export function createActivityNode(activity: ActivityCatalogItem, nodeId: string
         outputs: [],
         structure: createStructureForActivity(activity)
       };
+  // Required defaults shown by the inspector must also be bound in the saved draft.
+  for (const input of activity.inputs) {
+    if (!isRecord(input) || !input.isRequired || input.defaultValue == null || input.isCredential || typeof input.referenceKey !== "string") continue;
+    const key = input.referenceKey;
+    if (Object.hasOwn(node, key) || node.inputs.some(value => isRecord(value) && value.referenceKey === key)) continue;
+    node.inputs.push({ referenceKey: key, value: { value: structuredClone(input.defaultValue), expressionType: input.defaultSyntax || "Literal" } });
+  }
+  return node;
 }
 
 export function normalizeActivityStructures(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup): ActivityNode | null {

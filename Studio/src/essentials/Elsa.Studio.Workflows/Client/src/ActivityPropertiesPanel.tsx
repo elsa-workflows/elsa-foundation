@@ -573,12 +573,12 @@ function PropertyRow({
     inputValues: Object.fromEntries(activityDescriptor.inputs.filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
       .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)])),
     setLiteralInputs: values => {
-      if (editorDisabled) return;
       const current = latestProperty.current;
+      if (current.editorDisabled || current.activity.nodeId !== activity.nodeId) return;
       let next = current.activity;
       const changed: StudioActivityInputDescriptor[] = [];
       for (const [key, value] of Object.entries(values)) {
-        const target = activityDescriptor.inputs.find(item => (item.referenceKey || item.name) === key);
+        const target = current.activityDescriptor.inputs.find(item => (item.referenceKey || item.name) === key);
         if (!target || target.isReadOnly || isMaskedInput(target) || acceptsOnlySecretReference(target)) continue;
         changed.push(target);
         next = writeInputValue(next, target, target.isWrapped === false ? value : withExpression(readWrappedInput(next, target), "Literal", value));
@@ -758,8 +758,8 @@ function PropertyRow({
   const conversionCaption = wrapped
     ? `${describeInferredSource(wrapped.expression.type, wrapped.expression.value, conversionMode)} → ${formatTypeName(input.typeName)}`
     : "";
-  const latestProperty = useRef({ activity, input, onChange });
-  latestProperty.current = { activity, input, onChange };
+  const latestProperty = useRef({ activity, input, onChange, activityDescriptor, editorDisabled });
+  latestProperty.current = { activity, input, onChange, activityDescriptor, editorDisabled };
 
   // A change that leaves the row unexpandable has already closed the expanded editor (`expanded`). Drop the request
   // so it does not reopen by itself, and bring focus back to the row only when focus went with the editor: focus
@@ -1225,9 +1225,8 @@ function PropertyRow({
 const MemoizedPropertyRow = memo(PropertyRow, arePropertyRowPropsEqual);
 
 /**
- * Input values are immutable bindings on the activity. Editing one must not make every unrelated
- * property editor rebuild (and, for code editors, reconfigure its language surface). Activity
- * metadata still participates in the comparison so a real activity-level change reaches every row.
+ * Contributions observe the current activity, including related inputs. Reuse a row only while
+ * that activity and the rest of its authoring context are unchanged.
  */
 function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowProps) {
   if (

@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { argumentNameKeys, readStringField } from "./workflowProperties";
+import { argumentNameKeys, isPlainRecord, readArgumentType, readStringField } from "./workflowProperties";
 import { getLiteralEditorValue, readWrappedInput, withExpression, writeInputValue } from "./activityProperties";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityAuthoringIntrinsic, VisibleVariableView } from "./workflowTypes";
@@ -18,8 +18,8 @@ export type IntrinsicInspectorProps = ActivityPropertiesPanelProps & {
  *
  * A Set Variable intrinsic authors its write target as a {@link ActivityAuthoringIntrinsic} variable
  * reference (not a runtime input binding), so that key is rendered as a dedicated variable-target picker
- * writing `intrinsic.variable`. Every remaining input (the `value`, and for Set Output the literal output
- * `name`) is delegated to the standard {@link ActivityPropertiesPanel} so authors get the full
+ * writing `intrinsic.variable`. Set Output selects a declaration from the current draft. The `value`
+ * editor follows the selected variable/output type and is delegated to the standard {@link ActivityPropertiesPanel} so authors get the full
  * expression-syntax control, conversion controls, and editors unchanged.
  */
 export function IntrinsicInspector({ intrinsic, ...panelProps }: IntrinsicInspectorProps) {
@@ -27,18 +27,21 @@ export function IntrinsicInspector({ intrinsic, ...panelProps }: IntrinsicInspec
   const outputInput = intrinsic.outputNameInputKey ? descriptor?.inputs.find(input => input.referenceKey === intrinsic.outputNameInputKey) : undefined;
   const variableInputKey = intrinsic.variableInputKey?.trim() || null;
   const selectedTarget = selectedOptionKey(readIntrinsicVariable(activity));
+  const outputName = outputInput ? getLiteralEditorValue(activity, outputInput) : null;
+  const selectedOutput = Array.isArray(workflowState?.outputs) ? workflowState.outputs.find(item => isPlainRecord(item) && readStringField(item, argumentNameKeys) === outputName) : null;
+  const outputType = isPlainRecord(selectedOutput) ? readArgumentType(selectedOutput) : null;
   const targetType = variableInputKey && scopeStatus === "ready"
     ? visibleVariables.find(variable => selectedOptionKey(makeVariableReference(variable.referenceKey, variable.scopeId)) === selectedTarget)?.type
-    : null;
+    : outputType;
 
   // The variable target is authored separately from the runtime inputs, so drop its pseudo-input from the
   // descriptor the standard panel renders. Derive the value editor from the current declaration on
   // every render, so a target or declaration change cannot leave an old type on the editor.
-  const panelDescriptor = variableInputKey && descriptor
+  const panelDescriptor = descriptor
     ? {
         ...descriptor,
         inputs: descriptor.inputs
-          .filter(input => input.referenceKey !== variableInputKey)
+          .filter(input => !variableInputKey || input.referenceKey !== variableInputKey)
           .map(input => input.referenceKey === intrinsic.valueInputKey && targetType
             ? { ...input, typeName: targetType.alias, collectionKind: targetType.collectionKind, uiHint: undefined }
             : input)

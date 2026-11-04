@@ -78,8 +78,8 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
       <p>This published form is immutable. Create a new version to change its fields. Open tasks keep this version.</p>
       {opened.form.fields.length ? <dl className="user-task-form-fields">{opened.form.fields.map(item => <div key={item.key}><dt>{item.label}</dt><dd>{item.kind}{item.required ? " · Required" : ""}{item.readOnly ? " · Read only" : ""}</dd><dd><code>{item.key}</code>{item.help && <p>{item.help}</p>}
           {item.choices && <p>Choices: {item.choices.join(", ")}</p>}
-          {item.minimum !== undefined && <p>Minimum: {item.minimum}</p>}{item.maximum !== undefined && <p>Maximum: {item.maximum}</p>}
-          {item.maxLength !== undefined && <p>Maximum characters: {item.maxLength}</p>}
+          {item.minimum != null && <p>Minimum: {item.minimum}</p>}{item.maximum != null && <p>Maximum: {item.maximum}</p>}
+          {item.maxLength != null && <p>Maximum characters: {item.maxLength}</p>}
         </dd></div>)}</dl> : <p>This form has no fields.</p>}
     </section>}
     {editing && identity?.canManageForms ? <fieldset ref={editor} disabled={busy} className="user-task-form-editor"><legend>Publish a basic form version</legend><div className="user-task-fields">

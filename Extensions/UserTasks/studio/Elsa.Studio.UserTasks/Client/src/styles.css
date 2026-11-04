@@ -60,3 +60,5 @@
 .user-task-form-fields > div { padding-block: var(--studio-space-3); border-bottom: 1px solid var(--studio-border); }
 .user-task-form-fields dt { font-weight: 600; }
 .user-task-form-fields dd { margin: .35rem 0 0; color: var(--studio-text-muted); }
+
+.user-task-form-editor { --studio-field-border-width: 0; --studio-field-padding: 0; }

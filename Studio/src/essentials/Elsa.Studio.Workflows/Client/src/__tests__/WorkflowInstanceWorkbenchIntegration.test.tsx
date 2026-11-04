@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
+import { getIncidentRootCause, WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
 import type {
   ActivityExecutionInspection,
   ActivityExecutionStateSummary,
@@ -1357,3 +1357,12 @@ function bookmarkSummary(bookmarkId: string): ActivityExecutionInspection["bookm
     metadata: {}
   };
 }
+
+
+it("shows the short flowchart cause while retaining the original technical message", () => {
+  const message = "Flowchart faulted because child node 'review-purchase' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it — can no longer proceed.";
+  const row = incident({ failureType: "ActivityFaulted", message });
+  expect(getIncidentRootCause(row)).toBe("Activity 'review-purchase' failed. Review its incident to correct the cause.");
+  expect(row.message).toBe(message);
+  expect(getIncidentRootCause(incident({ message: "Other failure", metadata: { "runtime.faultInnerMessage": "Select a task assignee or a group." } }))).toBe("Select a task assignee or a group.");
+});

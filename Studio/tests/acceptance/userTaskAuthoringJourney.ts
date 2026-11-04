@@ -1,0 +1,202 @@
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+
+type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
+const jsonAlias = "System.Text.Json.JsonElement";
+
+// Real Studio authoring and autosave, followed by real publication, response and result reads.
+// Forms/task interactions use the project's viewport. The multi-pane graph is authored at desktop
+// size; its affected inspector is additionally captured in each project's viewport.
+export async function userTaskAuthoringJourney(page: Page, info: TestInfo, capture: Capture) {
+  const base = process.env.UX_BACKEND_URL;
+  if (!base || process.env.UX_ACCEPTANCE_OWNED !== "1") throw new Error("Owned backend URL is required");
+  const get = async (path: string) => { const response = await page.request.get(`${base}${path}`); expect(response.ok(), await response.text()).toBe(true); return response.json(); };
+  const post = async (path: string, data: unknown) => { const response = await page.request.post(`${base}${path}`, { data }); expect(response.ok(), await response.text()).toBe(true); return response.json(); };
+  const projectViewport = page.viewportSize()!;
+  const suffix = `${info.project.name}-${Date.now()}`;
+  const formId = `approval-${suffix}`;
+  const title = `Approval ${suffix}`;
+  const who = await get("/runtime/user-task-identity");
+  let definitionId: string | null = null;
+  let runId: string | null = null;
+  const faultDefinitions: string[] = [];
+  const save = async () => {
+    const response = page.waitForResponse(item => item.request().method() === "PUT" && item.url().includes("/design/workflows/drafts/"));
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    expect((await response).ok()).toBe(true);
+  };
+  const selectVariable = async (select: Locator) => {
+    await expect(select).toBeEnabled();
+    await expect.poll(() => select.locator("option").evaluateAll(options => options.find(item => item.textContent?.startsWith("Review data"))?.getAttribute("value") ?? "")).not.toBe("");
+    const choice = await select.locator("option").evaluateAll(options => options.find(item => item.textContent?.startsWith("Review data"))!.getAttribute("value")!);
+    await select.selectOption(choice);
+    await expect(select.locator("option:checked")).not.toContainText("incompatible");
+  };
+  const captureInspector = async (name: string, target: Locator) => {
+    if (projectViewport.width < 800) await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
+    await page.setViewportSize(projectViewport); await target.scrollIntoViewIfNeeded(); await capture(page, info, name);
+    await page.setViewportSize({ width: 1600, height: 1100 });
+    if (projectViewport.width < 800) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
+  };
+  try {
+    await page.goto("/user-tasks/forms");
+    await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
+    await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
+    await page.getByLabel("Form ID", { exact: true }).fill(formId);
+    await page.getByLabel("Name", { exact: true }).fill(title);
+    await page.getByRole("button", { name: "Add field", exact: true }).click();
+    await page.getByLabel("Key", { exact: true }).fill("Note"); await page.getByLabel("Label", { exact: true }).fill("Note");
+    await page.getByLabel("Required", { exact: true }).check();
+    await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded();
+    await capture(page, info, "form-authoring");
+    await page.getByRole("button", { name: "Publish form version", exact: true }).click();
+    const formRow = page.getByRole("row").filter({ hasText: formId });
+    const formLink = formRow.getByRole("button", { name: title, exact: true });
+    await expect(formLink).toBeVisible(); await formLink.press("Enter");
+    await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeFocused();
+    await capture(page, info, "published-form");
+    await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
+    await expect(formLink).toBeFocused();
+
+    await page.setViewportSize({ width: 1600, height: 1100 });
+    await page.goto("/workflows/definitions");
+    await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+    await dialog.getByLabel("Display name").fill(title); await dialog.getByRole("radio", { name: "Flowchart", exact: true }).check();
+    const created = page.waitForResponse(response => response.request().method() === "POST" && /\/design\/workflows\/definitions$/.test(response.url()));
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    definitionId = (await (await created).json()).definition.id;
+    const palette = page.getByRole("searchbox", { name: "Search activity palette" });
+    await palette.fill("Create User Task"); await page.getByRole("treeitem", { name: /^Create User Task,/ }).click();
+    const taskNode = page.locator(".react-flow__node").filter({ hasText: "Create User Task" });
+    const taskNodeId = await taskNode.getAttribute("data-id");
+    await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
+    await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
+    await page.getByLabel("Task form", { exact: true }).selectOption(formId);
+    await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
+    await expect(page.getByRole("button", { name: "Remove action 1", exact: true })).toHaveText("");
+    await page.getByLabel("Action 1", { exact: true }).scrollIntoViewIfNeeded();
+    await captureInspector("task-authoring", page.getByLabel("Action 1", { exact: true }));
+    await page.getByLabel("Task form", { exact: true }).scrollIntoViewIfNeeded(); await captureInspector("form-selection", page.getByLabel("Task form", { exact: true }));
+
+    await palette.fill("Set Output"); await page.getByRole("treeitem", { name: /^Set Output,/ }).click();
+    const outputNode = page.locator(".react-flow__node").filter({ hasText: "Set Output" });
+    const outputNodeId = await outputNode.getAttribute("data-id");
+    await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
+    await expect(page.getByText("Add a workflow output in Properties → Outputs, then select it here.", { exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const outputSave = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/design/workflows/drafts/") && (response.request().postDataJSON().state?.outputs?.length ?? 0) > 0);
+    await page.getByRole("button", { name: "Add output", exact: true }).click();
+    const added = await outputSave; expect(added.status()).toBe(200);
+    expect(added.request().postDataJSON().state.outputs[0].isNullable).toBe(false);
+    await page.getByLabel("Output name", { exact: true }).fill("ReviewData");
+    await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
+    await page.getByRole("button", { name: "Add variable", exact: true }).click();
+    await page.getByLabel("Variable name", { exact: true }).fill("Review data");
+    await page.getByLabel("Variable type", { exact: true }).selectOption(jsonAlias);
+    await page.getByLabel("Variable storage driver", { exact: true }).selectOption("elsa.json");
+    await page.getByLabel("Variable default value", { exact: true }).fill("{}");
+    await expect(page.getByLabel("Variable type", { exact: true })).toHaveValue(jsonAlias);
+    await expect(page.getByLabel("Variable storage driver", { exact: true })).toHaveValue("elsa.json");
+    await capture(page, info, "json-output-definitions");
+    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("ReviewData");
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await page.getByLabel("Output name", { exact: true }).fill("RenamedData");
+    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
+    await captureInspector("renamed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
+    await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("RenamedData");
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await page.getByRole("button", { name: "Remove output RenamedData", exact: true }).click();
+    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
+    await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
+    await captureInspector("removed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await page.getByRole("button", { name: "Add output", exact: true }).click();
+    await page.getByLabel("Output name", { exact: true }).fill("RenamedData");
+    await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
+    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
+    const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header label", { hasText: /^Value$/ }) });
+    await valueRow.locator("button.wf-syntax-picker-trigger").click(); await page.getByRole("option", { name: /^Variable/ }).click();
+    await selectVariable(page.getByRole("combobox", { name: "Variable reference", exact: true }));
+    await captureInspector("output-picker", page.getByRole("combobox", { name: "Output Name", exact: true }));
+    await taskNode.click(); await page.getByRole("tab", { name: "Outputs", exact: true }).click();
+    await selectVariable(page.locator('select[aria-label="Capture Data into a variable"]'));
+    await page.getByRole("tab", { name: "Inputs", exact: true }).click();
+    await page.getByRole("button", { name: "Auto-layout", exact: true }).click(); await page.getByRole("button", { name: "Fit View", exact: true }).click();
+    await taskNode.locator('.source[data-handleid="Approve"]').dragTo(page.locator(`.react-flow__node[data-id="${outputNodeId}"] .target`));
+    await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+    await save(); await page.reload();
+    const savedTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
+    await savedTask.click(); await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
+    const publication = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publish"));
+    await page.getByRole("button", { name: "Review & publish", exact: true }).click();
+    const review = page.getByRole("dialog", { name: "Publish workflow", exact: true });
+    await expect(review.getByRole("button", { name: "Publish", exact: true })).toBeEnabled({ timeout: 60_000 });
+    await review.getByRole("button", { name: "Publish", exact: true }).click();
+    const published = await (await publication).json();
+    await page.getByRole("dialog", { name: "Published", exact: true }).getByRole("button", { name: "Close", exact: true }).click();
+    runId = (await post(`/runtime/workflows/executables/${published.artifactId}/execute`, { sourceReferenceId: published.sourceReferenceId })).workflowExecutionId;
+    let taskId = "";
+    await expect.poll(async () => { taskId = (await get("/runtime/user-tasks?view=mine&limit=100")).items.find((item: { workflowExecutionId: string }) => item.workflowExecutionId === runId)?.id ?? ""; return taskId; }, { timeout: 30_000 }).not.toBe("");
+    // Publishing a later form leaves this open task's original snapshot intact.
+    await post("/runtime/user-task-forms", { id: formId, version: "2", name: `${title} revised`, provider: "elsa.basic-forms/1", fields: [{ key: "Changed", label: "Changed", kind: "text", required: true, readOnly: false }] });
+    const frozen = await get(`/runtime/user-tasks/${taskId}`); expect(frozen.form.version).toBe("1"); expect(frozen.form.fields[0].key).toBe("Note");
+    await page.setViewportSize(projectViewport); await page.goto(`/user-tasks/${taskId}`);
+    await page.getByLabel(/^Note/).fill("Approved with case preserved"); await capture(page, info, "frozen-task-form");
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect.poll(async () => (await get(`/runtime/workflows/instances/${runId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
+    const completed = await get(`/runtime/workflows/instances/${runId}`);
+    expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
+    await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${runId}`);
+    const runtimeTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
+    await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
+    await expect(runtimeTask.locator('.source[data-handleid="Reject"]')).toBeVisible();
+    await capture(page, info, "run-outcomes");
+    expect((await page.getByRole("button", { name: "All executions", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(32);
+    await info.attach("workflow-outputs.json", { body: JSON.stringify(completed.outputs, null, 2), contentType: "application/json" });
+    await page.getByRole("tab", { name: "Details", exact: true }).click();
+    const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
+    if (await maximize.isVisible()) await maximize.click();
+    await page.setViewportSize(projectViewport); await capture(page, info, "workflow-result");
+
+    const catalog = await get("/design/activities/definitions?search=CreateUserTask");
+    const taskVersion = catalog.items.find((item: { definition: { activityTypeKey: string } }) => item.definition.activityTypeKey.endsWith("CreateUserTask"))!.definition.headVersionId;
+    const flowcharts = await get("/design/activities/definitions?search=Flowchart");
+    const flowchartVersion = flowcharts.items.find((item: { definition: { activityTypeKey: string } }) => item.definition.activityTypeKey.endsWith("Flowchart"))!.definition.headVersionId;
+    for (const variant of ["assignment", "prefill"]) {
+      const values = { Title: "Invalid task configuration", Actions: ["Approve", "Reject"], Prefill: variant === "prefill" ? "{}" : {}, ...(variant === "assignment" ? {} : { AssigneeId: who.userId }) };
+      const child = { nodeId: "invalid-review", activityVersionId: taskVersion, inputs: Object.entries(values).map(([referenceKey, value]) => ({ referenceKey, value: { expressionType: "Literal", value } })), outputs: [] };
+      const root = variant === "assignment" ? { nodeId: "invalid-flow", activityVersionId: flowchartVersion, inputs: [], outputs: [], structure: { kind: "elsa.flowchart.structure", schemaVersion: "1.0.0", payload: { activities: [child], connections: [], startNodeId: child.nodeId } } } : child;
+      const definition = await post("/design/workflows/definitions/submit", { name: `Invalid ${variant} ${suffix}`, state: { variables: [], inputs: [], outputs: [], rootActivity: root } });
+      faultDefinitions.push(definition.definition.id);
+      const publication = await post(`/publishing/workflows/${definition.version.id}/publish`, {});
+      const execution = await post(`/runtime/workflows/executables/${publication.artifactId}/execute`, { sourceReferenceId: publication.sourceReferenceId });
+      await expect.poll(async () => (await get(`/runtime/workflows/instances/${execution.workflowExecutionId}`)).instance.status, { timeout: 30_000 }).toBe("Faulted");
+      const fault = await get(`/runtime/workflows/instances/${execution.workflowExecutionId}`);
+      const expected = variant === "assignment" ? "Select a task assignee or a group." : "Prefill must be a JSON object";
+      expect(fault.incidents.some((item: { message: string }) => item.message.includes(expected))).toBe(true);
+      await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${execution.workflowExecutionId}`);
+      await page.getByRole("tab", { name: /^Issues/ }).click();
+      await expect(page.locator(".wf-instance-incident-summary").filter({ hasText: expected })).toBeVisible();
+      if (variant === "assignment") {
+        await expect(page.locator(".wf-instance-incident-cause").filter({ hasText: "Review its incident to correct the cause." })).toBeVisible();
+        await capture(page, info, "task-fault-causes");
+        const parent = page.locator(".wf-instance-incident").filter({ hasText: "Review its incident to correct the cause." });
+        await parent.getByText("Technical details", { exact: true }).click();
+        await expect(parent.locator(".wf-incident-message")).toContainText("a faulted child cannot complete");
+        await capture(page, info, "task-fault-details");
+      } else {
+        const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
+        if (await maximize.isVisible()) await maximize.click();
+        await page.setViewportSize(projectViewport); await capture(page, info, "prefill-fault");
+      }
+    }
+  } finally {
+    // Definitions are test-owned. The source runner disposes the entire store after the suite.
+    for (const id of faultDefinitions) { const deleted = await page.request.delete(`${base}/design/workflows/definitions/${id}`); expect(deleted.ok()).toBe(true); }
+    if (definitionId) { const deleted = await page.request.delete(`${base}/design/workflows/definitions/${definitionId}`); expect(deleted.ok()).toBe(true); }
+  }
+}

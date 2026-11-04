@@ -159,6 +159,16 @@ describe("IntrinsicInspector", () => {
     expect(container.querySelector<HTMLSelectElement>(".wf-intrinsic-variable select")!.value).toBe("workflow::counter");
   });
 
+  it("uses the selected output's declared JSON type for compatible variable editing", () => {
+    const node = { ...createActivityNode(setOutputActivity, "json-output"), name: { typeName: "String", expression: { type: "Literal", value: "ReviewData" } } };
+    const container = render(<IntrinsicInspector intrinsic={readIntrinsicDescriptor(setOutputActivity)!} activity={node}
+      descriptor={descriptorFor(setOutputActivity)} editors={builtInPropertyEditors} expressionEditors={[]}
+      expressionDescriptors={[literalDescriptor]} expressionDescriptorStatus="ready" descriptorStatus="ready"
+      visibleVariables={[]} scopeStatus="ready" workflowState={{ outputs: [{ name: "ReviewData", type: { alias: "System.Text.Json.JsonElement", collectionKind: "Single" } }] }} onChange={vi.fn()} />);
+    const row = [...container.querySelectorAll(".wf-property-row")].find(item => item.querySelector("label")?.textContent === "Value")!;
+    expect(row.querySelector(".wf-property-row-header")?.textContent).toContain("JSON");
+  });
+
   it("reads unsaved draft output additions and flags renamed or removed selections without changing them", () => {
     const node = createActivityNode(setOutputActivity, "out-draft");
     const onChange = vi.fn();
@@ -176,7 +186,7 @@ describe("IntrinsicInspector", () => {
     flushSync(() => { picker.value = "ReviewData"; picker.dispatchEvent(new Event("change", { bubbles: true })); });
     const changed = onChange.mock.calls.at(-1)![0] as ActivityNode;
     expect(changed.name).toMatchObject({ expression: { type: "Literal", value: "ReviewData" } });
-    flushSync(() => active!.root.render(renderState([{ name: "Renamed" }], changed)));
+    flushSync(() => active!.root.render(renderState([{ name: "Renamed", type: { alias: "System.Text.Json.JsonElement", collectionKind: "Single" } }], changed)));
     picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
     expect(picker.value).toBe("ReviewData"); expect(picker.getAttribute("aria-invalid")).toBe("true");
     expect(container.textContent).toContain("renamed or removed");

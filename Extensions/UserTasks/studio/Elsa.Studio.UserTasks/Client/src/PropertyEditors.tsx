@@ -1,4 +1,5 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
+import { Trash2 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
@@ -44,7 +45,7 @@ export function AssignmentEditor({ api, group, value, disabled, onChange, contex
     {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
 }
 function RemoveIcon() {
-  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" /></svg>;
+  return <Trash2 size={18} aria-hidden="true" />;
 }
 export { RemoveIcon };
 
@@ -101,7 +102,7 @@ function readFormId(activity: unknown): { value: unknown; dynamic: boolean } {
   if (!activity || typeof activity !== "object") return { value: null, dynamic: false };
   const record = activity as Record<string, unknown>;
   const wire = Array.isArray(record.inputs) ? record.inputs.find(item => item?.referenceKey === "FormId") : undefined;
-  const raw = record.FormId ?? wire?.value;
+  const raw = record.FormId ?? record.formId ?? wire?.value;
   if (raw == null || typeof raw === "string") return { value: raw, dynamic: false };
   if (typeof raw !== "object") return { value: null, dynamic: true };
   const wrapped = raw as Record<string, unknown>;
