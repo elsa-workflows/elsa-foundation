@@ -56,6 +56,12 @@ public sealed class PostCommitOutboxClaimedListingContractTests : IAsyncDisposab
         await ExcludesObservedDeliveriesBeforeTheProviderPageLimitAsync(await EntityFrameworkAsync());
     }
 
+    [Fact]
+    public async Task The_entity_framework_store_excludes_delivered_ids_ordinally_under_a_case_insensitive_collation()
+    {
+        await ExcludesObservedDeliveriesWithOrdinalIdentityAsync(await EntityFrameworkAsync(caseInsensitiveIdentities: true));
+    }
+
     /// <summary>
     /// A row last written before the claim delivery time was projected has none, so it reads and is simply not listed. A
     /// projected time that differs from the row's content is corrupt and refused like every other outbox projection.
@@ -95,9 +101,11 @@ public sealed class PostCommitOutboxClaimedListingContractTests : IAsyncDisposab
         _context.ChangeTracker.Clear();
     }
 
-    private async Task<Backend> EntityFrameworkAsync()
+    private async Task<Backend> EntityFrameworkAsync(bool caseInsensitiveIdentities = false)
     {
         await _connection.OpenAsync();
+        if (caseInsensitiveIdentities)
+            _connection.CreateCollation("BINARY", (left, right) => StringComparer.OrdinalIgnoreCase.Compare(left, right));
         _context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection).Options);
         await _context.Database.EnsureCreatedAsync();
         return PostCommitOutboxClaimedListingContract.EntityFramework(_context, "tenant-a");

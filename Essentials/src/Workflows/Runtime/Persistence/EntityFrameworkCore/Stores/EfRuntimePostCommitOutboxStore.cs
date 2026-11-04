@@ -617,8 +617,9 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
                                      row.Status == delivered && row.ClaimDeliveredAtUtcTicks >= sinceTicks);
             if (query.ExcludedDeliveredOutboxItemIds.Count > 0)
             {
-                var excluded = query.ExcludedDeliveredOutboxItemIds.Select(EfRuntimeOperationalStoreSupport.Encode).ToArray();
-                rows = rows.Where(row => row.Status != delivered || !excluded.Contains(row.OutboxItemId));
+                // Base64 identity text can compare equal under a provider's collation; the full ordinal projection cannot.
+                var excluded = query.ExcludedDeliveredOutboxItemIds.Select(OutboxOrderKey).ToArray();
+                rows = rows.Where(row => row.Status != delivered || !excluded.Contains(row.OutboxItemIdOrderKey));
             }
         }
         else

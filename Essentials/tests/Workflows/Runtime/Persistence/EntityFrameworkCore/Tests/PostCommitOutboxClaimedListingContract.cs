@@ -114,6 +114,22 @@ internal static class PostCommitOutboxClaimedListingContract
         await CompleteAsync(backend, held, RuntimePostCommitOutboxStatus.FailedFinal, since);
         Assert.Equal([$"delivered-{RuntimeStorePageRequest.MaximumLimit:D4}"],
             (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+        await ExcludesObservedDeliveriesWithOrdinalIdentityAsync(backend);
+    }
+
+    public static async Task ExcludesObservedDeliveriesWithOrdinalIdentityAsync(Backend backend)
+    {
+        const string execution = Execution + "-casefold";
+        var since = ClaimedAt.AddMinutes(1);
+        // UTF-16 Base64 encodings YQA= and yQA= compare equal under a case-insensitive database collation.
+        foreach (var id in new[] { "a", "É" })
+        {
+            await backend.AddPendingAsync(Pending(id, execution, Continuation, ClaimedAt));
+            await CompleteAsync(backend, await ClaimAsync(backend, "sweep", TimeSpan.FromMinutes(15), execution, Continuation),
+                RuntimePostCommitOutboxStatus.Delivered, since);
+        }
+        var query = new RuntimePostCommitOutboxClaimedQuery(execution, Continuation, 1, since, ["a"]);
+        Assert.Equal(["É"], (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
     }
 
     private static async Task<RuntimePostCommitOutboxClaim> ClaimAsync(
