@@ -31,3 +31,10 @@
 T003 precedes implementation. T004/T007 form one sequential persistence lane, T005/T008 one API lane, T006/T009 one Studio lane. Lanes touch disjoint files and can run in parallel under the Spec Kit implementation workflow. T010–T014 follow integration; shared files are coordinated sequentially by the root. Risk-based tests may accompany implementation; red/green behavioral bite-proofs remain a delivery gate. Every story is required; folders alone do not complete the program.
 
 Delivery and resulting-main evidence: [Program #3499 receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3499#issuecomment-6543405642), following implementation [PR #3503](https://github.com/elsa-workflows/elsa-foundation/pull/3503).
+
+## Tag catalog navigation refinement (#3712)
+
+- [x] Replace catalog dialog entry with list/create/edit routes and retain permission/capability guards.
+- [x] Preserve tag/value identities, revisions, retirement and reload in the page editor.
+- [x] Update component/browser/live journeys; prove navigation, states, paging and wire behavior.
+- [x] Run affected suite, typecheck/build, architecture/maps checks, diff review and record PR evidence.

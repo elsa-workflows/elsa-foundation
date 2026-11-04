@@ -176,7 +176,7 @@ def backend_features(published):
         "ActivitiesFlowchart", "ActivitiesPrimitives", "ActivitiesRuntime",
         "WorkflowsPublishing", "WorkflowsPublishingApi", "WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers",
         "WorkflowsRuntimeResumption", "FoundationAgentAbstractions", "FoundationAgentApi",
-        "FoundationWorkflowsAgent", "ModularityApi",
+        "FoundationWorkflowsAgent", "FoundationWorkflowsRuntimeAgent", "ModularityApi",
     )}
     for feature, database in (
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "iam.db"),

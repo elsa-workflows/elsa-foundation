@@ -1,7 +1,9 @@
 # Runtime Efficiency integrated evidence
 
 This directory holds the completed diagnostics qualification cohort for program #2531 / #2613. It is an intermediate
-receipt; final program integration and independent-host failure qualification remain open.
+receipt; final program integration and independent-host failure qualification remain open (point-in-time; #3601
+merged as `ea5c4de47`, the [program report](../../native-runtime-performance-program-2026-11-01.md) records the
+independent-host failure qualification, and program #2531 stays open).
 
 Production libraries: `63e4c1fc48be2b99505f0c26eb2aae46ff2c5d26`; native/Workbench Release Linux x64,
 .NET 10.0.8 / SDK 10.0.300. The private eight-vCPU/32-GB Azure D8ds_v5 host ran PostgreSQL 16 Alpine and the

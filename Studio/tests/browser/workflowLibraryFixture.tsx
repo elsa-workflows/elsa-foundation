@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { WorkflowTagsRoute } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTagsPage";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
@@ -24,7 +26,7 @@ if (parameters.get("palette") === "classic") {
   for (const token of themeTokenNames) document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
 }
 const readonly = parameters.get("permissions") === "read";
-const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly, canShareViews: !readonly };
+const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly && parameters.get("permissions") !== "assign", canShareViews: !readonly };
 const date = "2026-10-31T12:00:00Z";
 const folderLayout = parameters.get("folder-layout") === "1";
 const folderName = folderLayout ? "Customer operations and international support" : "Finance";
@@ -178,7 +180,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
   postJson: async (url: string, body: unknown) => {
     record("POST", url, structuredClone(body));
     if (readonly) throw new Error("Permission denied");
-    if (url.endsWith("/tags")) { const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
+    if (url.endsWith("/tags")) { if (parameters.get("tag-create") === "reject") throw new Error("A tag with this name already exists (409)"); const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
     if (url.endsWith("/views")) { const created: WorkflowLibraryView = { ...(body as WorkflowLibraryView), id: `view-${nextIdentity++}`, ownerId: "current-user", revision: "1", schemaVersion: 1, canEdit: true, canDelete: true }; views.push(created); return created; }
     if (url.endsWith("/bulk")) {
       const input = body as { targets: { definitionId: string; revision: string }[]; add: WorkflowTagAssignment[]; remove: WorkflowTagAssignment[] };
@@ -212,6 +214,19 @@ const ai = { promptActions: { list: () => [] }, dispatchPrompt: () => undefined 
 
 function Library() {
   const session = useWorkflowDefinitionBrowseSession(context);
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const sync = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+  if (path.includes("/workflows/tags")) {
+    const view = path.endsWith("/new") ? "create" : path.endsWith("/tags") ? "list" : "edit";
+    return <main style={{ height: "100vh", overflow: "auto", padding: 24 }}><WorkflowTagsRoute key={view} context={context} view={view} navigate={next => {
+      window.history.pushState({}, "", `${next}${window.location.search}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }} /></main>;
+  }
   if (parameters.get("organization-surface") === "properties") return <main className="wf-canvas-shell wf-tokens" style={{ height: "100vh" }}><WorkflowOrganizationButton context={context} definitionId="welcome" name="Welcome new customer" onSaved={() => undefined} /><div className="wf-properties-view"><section className="wf-properties-section"><h3>Information</h3><p>Welcome new customer</p></section></div></main>;
   return <main className="wf-page wf-page--definitions"><WorkflowDefinitions context={context} ai={ai} session={session} onOpen={() => undefined} /></main>;
 }

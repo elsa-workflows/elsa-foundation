@@ -3,6 +3,7 @@ using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using LibInterchange = global::Bpmn.Interchange;
 using LibModel = global::Bpmn.Model;
@@ -21,8 +22,15 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// waits. The synthesized <c>Delay</c>/<c>Event</c>/<c>PublishEvent</c>/<c>DispatchWorkflow</c> children are Elsa
 /// detail the importer re-establishes, so their nodes are never inlined.
 /// </para>
+/// <para>
+/// A task's own bound work (its exact activity version and literal inputs) travels in <c>elsa:taskBinding</c> only from
+/// <see cref="ExportAsync"/>, and only when the visible catalog resolves the version and declares every bound input as a
+/// portable literal: never a sensitive, credential, masked or connection input, an expression, or a binding with storage,
+/// conversion or output settings. Every binding left out is reported for its element. <see cref="Export"/> has no catalog,
+/// so it carries none.
+/// </para>
 /// </summary>
-public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
+public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = null) : IBpmnDocumentExporter
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -32,13 +40,107 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     public string Export(ActivityNode processNode, BpmnExportOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(processNode);
+        return Write(ReadStructure(processNode), processNode, options, new Dictionary<string, LibModel.BpmnForeignAttribute>(StringComparer.Ordinal));
+    }
 
+    public async Task<BpmnExportResult> ExportAsync(ActivityNode processNode, BpmnExportOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(processNode);
         var structure = ReadStructure(processNode);
+        var carried = new Dictionary<string, LibModel.BpmnForeignAttribute>(StringComparer.Ordinal);
+        var omissions = new List<BpmnExportOmission>();
+        var candidates = new List<(BpmnElement Element, ActivityNode Child)>();
+        var elementIds = new List<string>();
+        CollectTaskBindings(structure, candidates, elementIds);
+        // A binding is keyed by its element id in the document, so a task whose id any other element shares, in any
+        // scope, carries none: the attribute would land on every element with that id.
+        var shared = elementIds.GroupBy(id => id, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var ambiguous = candidates.Select(candidate => candidate.Element.ElementId).Where(shared.Contains).ToHashSet(StringComparer.Ordinal);
+        foreach (var elementId in ambiguous.Order(StringComparer.Ordinal))
+            omissions.Add(new(elementId, "ambiguous-element", "Another element in the document uses this element id; no binding travels for it."));
+        candidates.RemoveAll(candidate => ambiguous.Contains(candidate.Element.ElementId));
+        if (candidates.Count > 0)
+        {
+            // ListDefinitions is the visible picker inventory: a version of a removed or hidden definition never travels.
+            var visible = catalog is null
+                ? null
+                : (await catalog.ListDefinitions(cancellationToken: cancellationToken)).Select(definition => definition.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var (element, child) in candidates)
+            {
+                var omission = visible is null
+                    ? new BpmnExportOmission(element.ElementId, "catalog-unavailable", "No activity catalog is available to resolve this task's binding.")
+                    : await PlanAsync(element, child, visible, cancellationToken);
+                var attribute = omission is null
+                    ? BpmnTaskBindingMetadata.ToAttribute(child.ActivityVersionId, child.Inputs.Where(input => input.IsBound()).ToArray())
+                    : null;
+                // Never write what import refuses to read: the same size, depth and id limits decide here.
+                if (attribute is not null && !BpmnTaskBindingMetadata.TryRead(attribute.Value, out _, out _, out var problem))
+                    omission = new(element.ElementId, "oversized-binding", problem!);
+                if (omission is null)
+                    carried[element.ElementId] = attribute!;
+                else
+                    omissions.Add(omission);
+            }
+        }
+
+        return new(Write(structure, processNode, options, carried), omissions);
+    }
+
+    /// <summary>Every task (in this process and its nested subprocesses) bound to an author-chosen child, and every element id in all scopes.</summary>
+    private static void CollectTaskBindings(BpmnAuthoredStructure structure, List<(BpmnElement Element, ActivityNode Child)> candidates, List<string> elementIds)
+    {
+        var childrenByNodeId = structure.Activities.ToDictionary(activity => activity.NodeId, StringComparer.Ordinal);
+        foreach (var element in structure.Elements)
+        {
+            elementIds.Add(element.ElementId);
+            if (element.ChildNodeId is not { } childNodeId || !childrenByNodeId.TryGetValue(childNodeId, out var child))
+                continue;
+            if (StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind))
+                CollectTaskBindings(ReadStructure(child), candidates, elementIds);
+            else if (BpmnTaskBindingMetadata.TaskTypes.Contains(element.ElementType))
+                candidates.Add((element, child));
+        }
+    }
+
+    /// <summary>Why this task's binding cannot travel, or null when it can. The first input that disqualifies it is named.</summary>
+    private async Task<BpmnExportOmission?> PlanAsync(BpmnElement element, ActivityNode child, IReadOnlySet<string> visibleDefinitions, CancellationToken cancellationToken)
+    {
+        if (child.Structure is not null)
+            return new(element.ElementId, "structured-child", "A bound child with its own authored structure cannot travel as a task binding.");
+        if (child.Outputs.Any(output => output.IsBound()))
+            return new(element.ElementId, "unsupported-output", "A task binding with output captures cannot travel; outputs name this host's variables.");
+        var version = await catalog!.FindVersion(child.ActivityVersionId, cancellationToken);
+        if (version is null || !visibleDefinitions.Contains(version.DefinitionId))
+            return new(element.ElementId, "unresolvable-version", $"Activity version '{child.ActivityVersionId}' is not in the visible catalog.");
+        var declarations = version.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        if (child.Inputs.Where(input => input.IsBound()).GroupBy(input => input.ReferenceKey, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1) is { } repeated)
+            return new(element.ElementId, "duplicate-input", "The task binds the same input more than once.", repeated.Key);
+        foreach (var input in child.Inputs.Where(input => input.IsBound()))
+        {
+            if (!declarations.TryGetValue(input.ReferenceKey, out var declaration))
+                return new(element.ElementId, "unresolvable-input", "The bound input is not declared by the activity version.", input.ReferenceKey);
+            if (!BpmnTaskBindingMetadata.IsPortable(declaration) || input.IsSensitive == true)
+                return new(element.ElementId, "sensitive-input", "A sensitive, credential or connection input never travels in shared XML.", input.ReferenceKey);
+            if (!BpmnTaskBindingMetadata.IsLiteral(input.Value))
+                return new(element.ElementId, "non-literal-input", "Only literal input values travel; an expression refers to this host's process.", input.ReferenceKey);
+            if (!string.IsNullOrWhiteSpace(input.StorageDriverType) || !string.IsNullOrWhiteSpace(input.EvaluatorType) || input.AutoEvaluate is not null || input.Conversion is not null)
+                return new(element.ElementId, "unsupported-input-setting", "An input with storage, evaluation or conversion settings cannot travel.", input.ReferenceKey);
+        }
+        return null;
+    }
+
+    private static string Write(
+        BpmnAuthoredStructure structure,
+        ActivityNode processNode,
+        BpmnExportOptions? options,
+        IReadOnlyDictionary<string, LibModel.BpmnForeignAttribute> taskBindings)
+    {
         var processId = options?.ProcessId ?? SanitizeId(processNode.NodeId);
         var bindings = new List<LibInterchange.BpmnWorkBinding>();
 
         var definitions = new LibModel.BpmnDefinitions(
-            Processes: [BuildProcess(structure, processId, bindings)],
+            Processes: [BuildProcess(structure, processId, bindings, taskBindings)],
             Collaboration: BuildCollaboration(structure, processId),
             Diagrams: BuildDiagrams(structure, processId));
 
@@ -50,7 +152,11 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         return BpmnVendorNamespace.ToElsa(xml);
     }
 
-    private static LibModel.BpmnProcessDefinition BuildProcess(BpmnAuthoredStructure structure, string processId, List<LibInterchange.BpmnWorkBinding> bindings)
+    private static LibModel.BpmnProcessDefinition BuildProcess(
+        BpmnAuthoredStructure structure,
+        string processId,
+        List<LibInterchange.BpmnWorkBinding> bindings,
+        IReadOnlyDictionary<string, LibModel.BpmnForeignAttribute> taskBindings)
     {
         var childrenByNodeId = structure.Activities.ToDictionary(activity => activity.NodeId, StringComparer.Ordinal);
         var elements = new List<LibModel.BpmnElement>();
@@ -64,7 +170,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             {
                 bindings.Add(new LibInterchange.BpmnWorkBinding.NestedProcess(
                     processId, element.ElementId, child.NodeId, LibInterchange.BpmnBindingSlot.Primary,
-                    BuildProcess(ReadStructure(child), element.ElementId, bindings)));
+                    BuildProcess(ReadStructure(child), element.ElementId, bindings, taskBindings)));
             }
             else if (StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.CallActivity) && child is not null)
             {
@@ -82,6 +188,9 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                             workflowDefinitionId!)
                     ]);
             }
+
+            if (taskBindings.TryGetValue(element.ElementId, out var taskBinding))
+                extensions = extensions with { ForeignAttributes = extensions.ForeignAttributes.Append(taskBinding).ToArray() };
 
             if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var directBinding))
                 extensions = extensions with

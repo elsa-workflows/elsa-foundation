@@ -47,10 +47,17 @@ Known host-owned Slot IDs:
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
+- `studio.weaver.result-controls`
+
+A result renderer may present another module's results: set `resourceModuleIds` to the resource modules it presents,
+and the host matches the result's resource module against them instead of the renderer's own `moduleId` (unset keeps the
+previous match). A result control (`api.agent.resultControls`) is the resource-owning module's interactive control for
+a result type, such as a designer-history Undo of a change it applied; the host renders every matching control after
+the renderer, so a renderer from another package never needs the owning module's internals.
 
 ## Related run links
 
-Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. A provider-owned family of user-defined activities, whose type keys are not known in advance, sets `anyActivityType: true` instead; the host then reads the state view of every selected activity, and the view kind alone decides. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 
@@ -250,7 +257,10 @@ Register only declarative, scoped contributions:
 - `toolContracts` declare input, target, result, risk, permissions,
   availability, invocation modes, and renderer expectations.
 - `resultRenderers` render module-specific tool results inside the host-owned
-  Review Shell, with structured fallback when no renderer matches.
+  Review Shell, with structured fallback when no renderer matches. A renderer may present another module's
+  results through `resourceModuleIds`.
+- `resultControls` (optional; hosts that predate it omit it, so guard its use) add the resource-owning module's
+  interactive control for a result type, rendered after whichever renderer presents it.
 
 Use stable IDs, set `moduleId` when the contribution belongs to a module, scope
 `surfaces` narrowly, and include `requiredPermissions` for anything not available
@@ -259,8 +269,10 @@ to every authenticated user. Mutating capabilities should use `review-required`,
 
 ## Weaver module participation (candidate)
 
-Register context, prompt actions, capabilities, tool contracts and result renderers through
-`api.agent`. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
+Register context, prompt actions, capabilities, tool contracts, result renderers and, where the host offers them,
+result controls through `api.agent`. A renderer contributed by one package for another module's results declares that
+module in `resourceModuleIds`; a control that only the resource-owning module can perform, such as a designer-history
+Undo of a change it applied, is that module's result control, so neither package needs the other's internals. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
 registries and `studio.ai.*` Slots have been removed. The SDK package re-exports the canonical
 host barrel, so package consumers receive these same declarations. This candidate is still
 subject to the independent #3438 package witness before signature freeze.

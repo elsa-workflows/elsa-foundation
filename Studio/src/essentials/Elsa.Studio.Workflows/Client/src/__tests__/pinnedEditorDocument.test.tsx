@@ -95,7 +95,7 @@ it("rejects delayed authoring callbacks from an earlier authorization session", 
 
 it("rejects native compared batch replacement while inspecting", () => {
   flushSync(() => workspace.showSnapshot());
-  flushSync(() => workspace.compareAndReplaceDraftByBatch("reviewed", "definition", getDraftSignature(snapshot), null, changed, null));
+  flushSync(() => workspace.compareAndReplaceDraftByBatch("reviewed", "definition", getDraftSignature(snapshot), null, changed, null, [], []));
   expect(editable.state.draft).toBe(snapshot);
   expect(editable.state.batchTransaction).toBeUndefined();
 });
