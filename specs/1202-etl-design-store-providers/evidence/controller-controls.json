@@ -1,0 +1,38 @@
+{
+  "baselineSource": "e4dde3cdfeddb2ccf6b072f502b68a17b67dc00d",
+  "candidateSources": {
+    "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "0ec99b45e8e094019b6f75b602314346d681bfb88c051bbc8252117a7997f000",
+    "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "4eb1e66bca4d6d9a9c21e54c3229f242af4a7c8a175c00425ee08e5fdc55dcdd"
+  },
+  "controls": {
+    "before": {
+      "executed": 11,
+      "passed": 1,
+      "failed": 10,
+      "logSha256": "88210cceacf53405a9b8e4582fce6237aa0ba90dbea676b96a54ab27ebab1171"
+    },
+    "after": {
+      "executed": 11,
+      "passed": 11,
+      "failed": 0,
+      "logSha256": "107c5c58a93f234b4eedbc7bbb493a73524fe2a57bbb091eeefd5b5404a89d38"
+    }
+  },
+  "limits": [
+    "Failure-path resource controls, not a new Workbench/database-engine journey.",
+    "Docker calls are controlled doubles; host controls launch and reap real owned Python child processes.",
+    "Fresh main reconciliation, actual host qualification and complete-PR review remain pending."
+  ],
+  "findings": [
+    "Database constructor failure leaked a successfully started owned container.",
+    "Host spawn/listen/readiness/login failure leaked process or log.",
+    "Catalog membership accepted duplicate/unexpected rows.",
+    "Content-root allocation failure occurred before the resource cleanup block."
+  ],
+  "corrections": [
+    "Constructor rollback preserves the original failure, annotating cleanup failures safely.",
+    "Host log starts before spawning and closes in finally; process is optional during partial initialization.",
+    "Exact sorted catalog equality.",
+    "Acquire database/content root within the cleanup block; database cleanup runs even if host cleanup fails."
+  ]
+}

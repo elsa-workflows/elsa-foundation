@@ -111,10 +111,17 @@ class Database:
         for key, value in env.items():
             command += ["-e", f"{key}={value}"]
         subprocess.run(command + [image], capture_output=True, text=True, check=True)
-        self.port = int(subprocess.check_output(["docker", "port", self.name, f"{port}/tcp"], text=True).strip().splitlines()[0].rsplit(":", 1)[1])
-        wait_for(self._ready, bool, f"{provider} did not become ready.", 240)
-        if provider == "SqlServer":
-            self._sqlcmd("CREATE DATABASE elsa_etl")
+        try:
+            self.port = int(subprocess.check_output(["docker", "port", self.name, f"{port}/tcp"], text=True).strip().splitlines()[0].rsplit(":", 1)[1])
+            wait_for(self._ready, bool, f"{provider} did not become ready.", 240)
+            if provider == "SqlServer":
+                self._sqlcmd("CREATE DATABASE elsa_etl").check_returncode()
+        except BaseException as failure:
+            try:
+                self.stop()
+            except Exception as cleanup:
+                failure.add_note(f"Owned database cleanup failed ({type(cleanup).__name__}).")
+            raise
 
     def _sqlcmd(self, sql: str) -> subprocess.CompletedProcess:
         return subprocess.run(["docker", "exec", self.name, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa",
@@ -160,48 +167,59 @@ class Host:
         self.log_path = log_path
         self.log = log_path.open("a")
         environment = {**os.environ, "ASPNETCORE_ENVIRONMENT": "Development"}
-        self.process = subprocess.Popen(["dotnet", str(assembly), "--contentRoot", str(root), "--urls", f"http://127.0.0.1:{port}"],
-                                        cwd=root, env=environment, stdout=self.log, stderr=subprocess.STDOUT)
-        start = log_path.stat().st_size
+        self.process = None
+        try:
+            start = log_path.stat().st_size
+            self.process = subprocess.Popen(["dotnet", str(assembly), "--contentRoot", str(root), "--urls", f"http://127.0.0.1:{port}"],
+                                            cwd=root, env=environment, stdout=self.log, stderr=subprocess.STDOUT)
 
-        def address():
-            if self.process.poll() is not None:
-                raise RuntimeError(f"The owned Workbench exited; see {log_path}")
-            text = log_path.read_text()[start:]
-            lines = [line.split("Now listening on: ", 1)[1].strip() for line in text.splitlines() if "Now listening on: " in line]
-            return lines[0] if lines else None
-        self.url = wait_for(address, lambda value: value is not None, "The owned Workbench did not listen.", 240)
+            def address():
+                if self.process.poll() is not None:
+                    raise RuntimeError(f"The owned Workbench exited; see {log_path}")
+                text = log_path.read_text()[start:]
+                lines = [line.split("Now listening on: ", 1)[1].strip() for line in text.splitlines() if "Now listening on: " in line]
+                return lines[0] if lines else None
+            self.url = wait_for(address, lambda value: value is not None, "The owned Workbench did not listen.", 240)
 
-        def ready():
-            try:
-                with urllib.request.urlopen(self.url + "/health/ready", timeout=3) as response:
-                    return response.status == 200
-            except urllib.error.HTTPError as error:
-                if error.code == 503:
+            def ready():
+                try:
+                    with urllib.request.urlopen(self.url + "/health/ready", timeout=3) as response:
+                        return response.status == 200
+                except urllib.error.HTTPError as error:
+                    if error.code == 503:
+                        return False
+                    raise
+                except urllib.error.URLError:
                     return False
-                raise
-            except urllib.error.URLError:
-                return False
-        wait_for(ready, bool, "The owned Workbench is not ready.", 240)
-        self.api = Api(self.url)
-        self.api.request("/_elsa/identity/login", {"username": "admin", "password": "Password123!"})
+            wait_for(ready, bool, "The owned Workbench is not ready.", 240)
+            self.api = Api(self.url)
+            self.api.request("/_elsa/identity/login", {"username": "admin", "password": "Password123!"})
+        except BaseException as failure:
+            try:
+                self.stop()
+            except Exception as cleanup:
+                failure.add_note(f"Owned Workbench cleanup failed ({type(cleanup).__name__}).")
+            raise
 
     def stop(self) -> None:
-        if self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=10)
-        self.log.close()
+        try:
+            if self.process is not None and self.process.poll() is None:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=10)
+        finally:
+            self.log.close()
 
 
 def run_engine(provider: str, assembly: Path, output: Path, port: int) -> dict:
-    database = Database(provider)
-    root = Path(tempfile.mkdtemp(prefix=f"elsa-etl-design-{provider.lower()}-"))
+    database = None
     host = None
     try:
+        database = Database(provider)
+        root = Path(tempfile.mkdtemp(prefix=f"elsa-etl-design-{provider.lower()}-"))
         for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
             shutil.copyfile(REPO / "Essentials/apps/Elsa.Workbench" / name, root / name)
         (root / "etl-snapshots").mkdir()
@@ -278,9 +296,12 @@ def run_engine(provider: str, assembly: Path, output: Path, port: int) -> dict:
             "secretInOutput": database.secret in json.dumps([reopened, versions]),
         }
     finally:
-        if host is not None:
-            host.stop()
-        database.stop()
+        try:
+            if host is not None:
+                host.stop()
+        finally:
+            if database is not None:
+                database.stop()
 
 
 def main() -> int:
@@ -305,8 +326,7 @@ def main() -> int:
             f"{provider}:publishedRunCompletedThroughDone": case["workflowStatus"] in ("Completed", "Finished")
                 and case["incidents"] == 0 and "after-done" in case["executedNodes"],
             f"{provider}:recordsDelivered": case["delivered"] == ["Ada", "Bram", "Cleo"],
-            f"{provider}:catalogListsBothCaseTwins": all(item in case["catalogBefore"] for item in both)
-                and all(item in case["catalogAfter"] for item in both),
+            f"{provider}:catalogListsBothCaseTwins": case["catalogBefore"] == both and case["catalogAfter"] == both,
             f"{provider}:reopenedHostReadsTheDraftAndPublication": case["reopenedLastPublishedVersion"] == 1 and case["versionsAfter"] == [1],
             f"{provider}:designTablesOnTheEngine": case["designTables"] == ["elsa_etl_definition_drafts", "elsa_etl_published_artifacts"],
             f"{provider}:noSecretInApiOutput": not case["secretInOutput"],

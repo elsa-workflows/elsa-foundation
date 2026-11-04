@@ -48,3 +48,7 @@ All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.
 - The ETL **runtime** store remains SQLite-only; its registration still refuses other engines. It needs narrower keys, provider-specific check constraints, ordinal collation and retried transitions, and is the next slice.
 - Studio is unchanged by this slice.
 - An update's result carries this writer's revision and content but the draft's current `lastPublishedVersion`, which a later writer's publication may have advanced; when that writer also advanced the revision, any validate or publish against this one conflicts; when it only published this revision, the reported value is current. No decision depends on it.
+
+## Codex controller continuation (2026-11-04)
+
+The parent was reopened as draft after the owner transferred #2908. The earlier seven-round gate did not re-review its final documentation pass; the next complete review retains round number 8. Three current advisory findings and an adjacent content-root allocation leak are corrected in the controller. [Failure controls](controller-controls.json) run **11 cases: 10 failed / 1 passed before, then 11 passed / zero failed** with the unchanged test source. Real owned child processes are reaped; Docker startup calls are controlled doubles. Both Python files compile. These controls do not refresh the actual-engine/Workbench receipts below; fresh-main reconciliation, actual host qualification and full review remain pending. Existing GitGuardian holds and all required checks remain gates.
