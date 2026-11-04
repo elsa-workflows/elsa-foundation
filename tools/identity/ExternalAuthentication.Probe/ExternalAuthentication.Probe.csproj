@@ -3,6 +3,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
     <ProjectReference Include="../../../Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />

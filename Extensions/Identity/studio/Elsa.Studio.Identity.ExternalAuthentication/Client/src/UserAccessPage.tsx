@@ -159,7 +159,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
     }, session.current ? "Current session revoked. Sign in to the selected backend again before continuing." : "Session revoked. Other sessions are unchanged.", { currentSession: session.current });
   }
 
-  return <StudioPage className="external-auth-shell"><StudioPageHeader title="User access" description="Inspect linked identities and sessions. These actions preserve saved Elsa role assignments."
+  return <StudioPage className="external-auth-shell"><StudioPageHeader title="User access" headingLevel={2} description="Inspect linked identities and sessions. These actions preserve saved Elsa role assignments."
     actions={<StudioButton onClick={() => void refresh()} disabled={Boolean(busy || loadingUsers || reauthenticate)}>Refresh user access</StudioButton>} />
     {directoryError ? <p role="alert" className="external-auth-error">{directoryError}</p> : null}
     {error ? <p role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh user access before another change." : ""}</p> : null}

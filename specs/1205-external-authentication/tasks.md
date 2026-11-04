@@ -47,7 +47,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 ## Phase 7 — US5: actual provider and deployment qualification
 
-- [ ] T026 [US5] Build a controlled actual OIDC-provider/composed-host harness and reproducible runtime evidence in `specs/1205-external-authentication/`; use owned stores/keys/ports only.
+- [x] T026 [US5] Build a controlled actual OIDC-provider/composed-host harness and reproducible runtime evidence in `specs/1205-external-authentication/`; use owned stores/keys/ports only. The owned controlled-provider journey, pinned Keycloak interoperability, reference Studio and Workbench runners are executable under `tools/identity/ExternalAuthentication.Probe/`; their bounded results and remaining process/server-database matrix are recorded separately.
 - [ ] T027 [US5] Prove two-provider/local choice, admission/JIT/matching/roles, explicit override lifecycle, preview isolation, secrets, revocation and last-login protection with actual hosts/Studio; record results in `evidence.md`.
 - [ ] T028 [US5] Prove durable restart and shared two-node flow completion/replay/catalog races for each claimed mode; record exact store/key/provider configuration without credentials in `evidence.md`.
 - [ ] T029 [US5] Qualify representative permission/ownership/source/missing-module/theme/responsive/keyboard/retained-tab Studio journeys in `evidence.md`.

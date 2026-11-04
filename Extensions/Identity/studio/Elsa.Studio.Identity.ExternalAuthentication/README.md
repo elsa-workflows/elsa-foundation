@@ -31,3 +31,7 @@ pnpm --dir Studio --filter @elsa-workflows/studio-external-authentication test:b
 ```
 
 The browser command mounts the real connection and user-access components against an owned composed backend/controlled HTTP provider and native SQLite. See the [probe](../../../../tools/identity/ExternalAuthentication.Probe/README.md) and [evidence](../../../../specs/1205-external-authentication/evidence.md). It does not substitute for full Studio host, external IdP product, server-database or separate-node acceptance.
+
+The probe's separate Keycloak, full Studio and Workbench runners qualify provider interoperability and actual
+reference hosts. Their receipts identify the precise profile and remaining deployment limits. Full Studio uses its
+normal administrator token exchanges during API calls/reload; those are counted separately from preview effects.

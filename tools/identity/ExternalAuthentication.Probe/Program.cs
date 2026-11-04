@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Extensions;
 using NativeEndpoints;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
@@ -38,6 +40,21 @@ if (File.Exists(marker) && await File.ReadAllTextAsync(marker) != "elsa-external
     throw new InvalidOperationException("The supplied directory has an unsupported ownership marker.");
 Directory.CreateDirectory(ownedRoot);
 await File.WriteAllTextAsync(marker, "elsa-external-authentication-probe/v1");
+var settingsPath = Path.Combine(ownedRoot, "probe-settings.json");
+var settings = File.Exists(settingsPath)
+    ? JsonSerializer.Deserialize<ProbeSettings>(await File.ReadAllTextAsync(settingsPath), new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new InvalidOperationException("Invalid owned probe settings.")
+    : new ProbeSettings();
+if (settings.Listen is not null && (!Uri.TryCreate(settings.Listen, UriKind.Absolute, out var listen) || !listen.IsLoopback || listen.Scheme != "http" || listen.AbsolutePath != "/" || listen.UserInfo.Length != 0))
+    throw new InvalidOperationException("The owned probe listen address must be loopback HTTP.");
+string OwnedFile(string relative)
+{
+    var path = Path.GetFullPath(relative, ownedRoot);
+    if (!path.StartsWith(ownedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)) throw new InvalidOperationException("Probe input must remain inside its owned root.");
+    return path;
+}
+var clientSecret = settings.ClientSecretFile is null ? ControlledOidcServer.ClientSecret : await File.ReadAllTextAsync(OwnedFile(settings.ClientSecretFile));
+if (settings.StudioUrl is not null && (!Uri.TryCreate(settings.StudioUrl, UriKind.Absolute, out var studioOrigin) || !studioOrigin.IsLoopback || studioOrigin.Scheme != "http" || studioOrigin.AbsolutePath != "/" || studioOrigin.UserInfo.Length != 0))
+    throw new InvalidOperationException("The owned Studio origin must be loopback HTTP.");
 var uiValue = Option("--ui");
 Uri? ui = null;
 if (uiValue is not null && (!Uri.TryCreate(uiValue, UriKind.Absolute, out ui) || !ui.IsLoopback || ui.Scheme != "http" || ui.UserInfo.Length != 0))
@@ -46,20 +63,28 @@ await using var company = await ControlledOidcServer.Start();
 await using var partner = await ControlledOidcServer.Start();
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", Args = [] });
 builder.Logging.ClearProviders();
-builder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
+builder.WebHost.UseKestrel().UseUrls(settings.Listen ?? "http://127.0.0.1:0");
 var services = builder.Services;
 services.AddAuthorization();
+services.AddApiCapabilities();
+if (settings.StudioUrl is not null)
+{
+    services.AddCors(options => options.AddPolicy("owned-studio", policy => policy.WithOrigins(settings.StudioUrl).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+    services.Configure<AspNetCoreIdentityOptions>(options => options.AllowedReturnUrlOrigins.Add(settings.StudioUrl));
+}
 services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(ownedRoot, "keys"))).SetApplicationName("elsa-3579-owned-probe");
 var database = $"Data Source={Path.Combine(ownedRoot, "identity.db")};Pooling=False";
 services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
 services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database });
 services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database });
-services.AddSingleton<ISecretValueResolver, ProbeSecrets>();
+services.AddSingleton<ISecretValueResolver>(new ProbeSecrets(clientSecret));
 services.AddFoundationExternalOidc(options => options.AllowLoopbackHttpForDevelopment = true);
 services.AddFoundationExternalAuthentication(options =>
 {
     options.AllowDatabaseManagement = true; options.AllowDeploymentOverrides = true;
-    options.Connections = [Connection("company", "Company", company), Connection("partner", "Partner", partner)];
+    if (settings.StudioUrl is not null) options.AllowedReturnUrlOrigins.Add(settings.StudioUrl);
+    options.Connections = [Connection("company", "Company", settings.CompanyIssuer ?? company.Issuer, settings.ClientId),
+        Connection("partner", "Partner", settings.PartnerIssuer ?? partner.Issuer, settings.ClientId)];
 });
 services.AddFoundationExternalAuthenticationApi(); services.AddFoundationIdentityApi();
 services.AddOpenIddictVendorForTests(options => options.UseSqlite($"Data Source={Path.Combine(ownedRoot, "tokens.db")};Pooling=False"));
@@ -78,7 +103,10 @@ services.AddAuthentication(options =>
     options.DefaultChallengeScheme = OpenIddictIdentityDefaults.SelectorScheme;
 });
 await using var app = builder.Build();
-app.UsePathBase("/backend"); app.UseRouting(); app.UseAuthentication(); app.UseAuthorization();
+app.UsePathBase("/backend"); app.UseRouting();
+if (settings.StudioUrl is not null) app.UseCors("owned-studio");
+app.UseAuthentication(); app.UseAuthorization();
+ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
 FoundationIdentityApi.MapFoundationIdentityApi(app); AspNetCoreIdentityApi.MapAspNetCoreIdentityApi(app); ExternalAuthenticationApi.MapExternalAuthenticationApi(app);
 app.MapGet("/resource", () => Results.Ok()).RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
 object? metadata = null;
@@ -133,7 +161,9 @@ async Task Run()
     await using (var scope = app.Services.CreateAsyncScope())
     {
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
-        await scope.ServiceProvider.GetRequiredService<IRoleStore>().SaveAsync(new("reader", "default", "Reader", null, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }, false));
+        var readerPermissions = new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead };
+        if (settings.StudioUrl is not null) readerPermissions.Add("api-capabilities:read");
+        await scope.ServiceProvider.GetRequiredService<IRoleStore>().SaveAsync(new("reader", "default", "Reader", null, readerPermissions, false));
         var flow = scope.ServiceProvider.GetRequiredService<IExternalAuthenticationFlowService>();
         foreach (var (key, provider) in new[] { ("company", company), ("partner", partner) })
         {
@@ -144,7 +174,8 @@ async Task Run()
             }
         }
     }
-    metadata = new { Instance = Option("--instance"), Backend = backend, CompanyIssuer = company.Issuer, PartnerIssuer = partner.Issuer, ControlledOidcServer.ClientId,
+    metadata = new { Instance = Option("--instance"), Backend = backend, CompanyIssuer = settings.CompanyIssuer ?? company.Issuer,
+        PartnerIssuer = settings.PartnerIssuer ?? partner.Issuer, settings.ClientId,
         CompanySecret = "client-company", PartnerSecret = "client-partner", Ui = ui?.AbsoluteUri };
     var json = JsonSerializer.Serialize(metadata);
     await File.WriteAllTextAsync(Path.Combine(ownedRoot, "probe.json"), json);
@@ -152,15 +183,24 @@ async Task Run()
     await app.WaitForShutdownAsync();
 }
 string? Option(string name) { var index = Array.IndexOf(args, name); return index >= 0 && index + 1 < args.Length ? args[index + 1] : null; }
-static ConnectionRecord Connection(string key, string displayName, ControlledOidcServer provider) => new()
+static ConnectionRecord Connection(string key, string displayName, string issuer, string clientId) => new()
 {
-    Key = key, DisplayName = displayName, Enabled = true, Settings = new Dictionary<string, string> { ["authority"] = provider.Issuer, ["clientId"] = ControlledOidcServer.ClientId },
+    Key = key, DisplayName = displayName, Enabled = true, Settings = new Dictionary<string, string> { ["authority"] = issuer, ["clientId"] = clientId },
     Secrets = new Dictionary<string, SecretReference> { ["clientSecret"] = new("client-" + key, "text", "identity/external") }, Admission = new() { Type = "reject" }
 };
-internal sealed class ProbeSecrets : ISecretValueResolver
+internal sealed class ProbeSecrets(string clientSecret) : ISecretValueResolver
 {
     public ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(reference.Name is "client-company" or "client-partner" && reference.TypeName is null or "text" && reference.Scope is null or "identity/external"
-            ? ResolvedSecret.Success(ControlledOidcServer.ClientSecret, new() { Id = reference.Name, TenantId = tenantId, Name = reference.Name, Scope = reference.Scope, Status = SecretStatus.Active, CurrentVersion = 1 })
+            ? ResolvedSecret.Success(clientSecret, new() { Id = reference.Name, TenantId = tenantId, Name = reference.Name, Scope = reference.Scope, Status = SecretStatus.Active, CurrentVersion = 1 })
             : ResolvedSecret.Failure(SecretResolutionFailureCode.NotFound, "Unknown owned probe reference."));
+}
+internal sealed class ProbeSettings
+{
+    public string? Listen { get; init; }
+    public string? CompanyIssuer { get; init; }
+    public string? PartnerIssuer { get; init; }
+    public string ClientId { get; init; } = ControlledOidcServer.ClientId;
+    public string? ClientSecretFile { get; init; }
+    public string? StudioUrl { get; init; }
 }

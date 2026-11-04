@@ -383,6 +383,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(OidcAuthenticationFeature).Assembly,
             typeof(AspNetCoreIdentityFeature).Assembly,
 
+            // Optional managed sign-in modules remain explicitly enabled by shell configuration.
+            typeof(Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature).Assembly,
+            typeof(Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature).Assembly,
+            typeof(Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcFeature).Assembly,
+            typeof(Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEntityFrameworkCoreFeature).Assembly,
+
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,

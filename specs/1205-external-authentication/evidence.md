@@ -885,3 +885,68 @@ representative themes/keyboard/retained-host tabs, cross-site topology, server-d
 nodes, final packages/public consumers/current hosted CI, independent review/merge and resulting-main proof remain
 required. Preceding-head CI **41925468861** at `339cff968` was still queued when checked; this checkpoint does not
 claim a current hosted result. The full goal remains active and unachieved; #2848/#3579/#2771 stay open.
+
+## Actual provider and reference-host harness checkpoint (5 November)
+
+T026 now has executable owned runners for the controlled HTTP provider, pinned Keycloak 26.8.1, the actual Studio
+application and the actual Workbench application. Commands, ownership constraints and profile boundaries live in
+the [probe README](../../tools/identity/ExternalAuthentication.Probe/README.md). The Keycloak image is pinned to
+`sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332`; its two independent instances each use
+one CPU/1 GiB, disposable imported accounts/clients and exact callback allowlists. Their subject IDs are deliberately
+equal, and their users have an upstream administrator membership. All credentials, signing keys, databases and ports
+belong to these invocations. No existing host/store is opened. Teardown verifies container ownership and stops only
+owned children; redacted receipts and local screenshots remain available.
+
+The Keycloak mounted-component journey passes, and the combined **Keycloak + actual full Studio + native SQLite**
+journey also passes. It uses product capability/authentication discovery, the public SDK transport and real dialogs,
+without route mocks. Configure/test/preview/enable, ordinary Reader sign-in, exact attachment, final-user-path
+refusal, actual sign-in through the alternative provider, safe removal, denied Reader panels and selected
+cookie/access/refresh revocation all pass. Saved Elsa Reader membership remains authoritative; the upstream
+administrator membership grants no Elsa permissions. The full Studio Reader also has API-capability read permission
+for the ordinary host discovery protocol, independently of link/session permissions.
+
+The actual host's ordinary redirect adapter requests a normal administrator token pair on API calls/reload.
+Full Studio therefore changes token rows from **36 to 60** across preview, accounted for by exactly **12** observed
+ordinary token requests, all with the unchanged administrator subject. No extra credential rows appear. User/link/
+normal-session counts remain **1/0/1**, and the administrator cookie still identifies the same user. The preview
+protocol and mounted-component profile retain their strict zero token-row change. This distinguishes ordinary
+existing-administrator exchanges from preview-issued credentials instead of claiming zero full-application exchanges.
+
+The actual workspace preserves an unattached subject while switching away and back through retained tabs, then
+discards it explicitly. Keyboard theme switching and settled light/dark WCAG 2 A/AA and 2.1 AA axe scans pass with
+zero violations. The 390px layout has no horizontal overflow, and its final session action remains reachable by
+scrolling. Wide/dark/narrow top and narrow session screenshots were inspected. Artifact scrolling follows the real
+host's internal content panel rather than taking an oversized blank document screenshot.
+
+Full-host testing found and fixed the User access heading level and inappropriate use of the danger fill token for
+small action/error text. The failing action contrast was **4.33:1**; using the public danger foreground token passes
+in both modes. The initial dark scan sampled the host's intentional color transitions; the runner now waits for
+finite animations to finish before scanning. Locator corrections distinguish module headings/alerts from host chrome.
+The combined receipt is retained at
+`/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-keycloak-K5AX1T/keycloak-receipt.json`.
+This final repeat also separates the outer Keycloak-runner log from the nested Studio/browser logs.
+The controlled-provider full Studio receipt is at
+`/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-full-studio-SgWn5d/studio-receipt.json`.
+
+Reference Workbench had not registered the optional managed-authentication assemblies. Its explicit project and
+shell-assembly registrations now permit deployment configuration to activate them, without changing default feature
+enablement. Actual Workbench shell activation, capability advertisement, normal local login, managed catalog, bounded
+user metadata and durable session inspection pass against owned native SQLite IAM/token/artifact/Data Protection
+stores. Receipt:
+`/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-workbench-qhKP58/workbench-receipt.json`.
+Initial fixture failures used the wrong catalog collection name and a random password that did not always satisfy
+the normal password policy; both were fixed in the runner without weakening product checks.
+
+Studio host and probe builds pass with zero warnings/errors. Workbench builds with zero errors and existing broad
+audit/style warnings. SDK/component **42/42**, typecheck, ESLint and CSS checks pass after the heading fix; the unchanged
+Studio host suite previously passed **1055/1055**. The unchanged Identity libraries/API previously passed **895/895**;
+discovered and executed counts match. Architecture **616/616** passes with zero skips after graph restore and staged,
+frozen C# sources. Its list contains **601** definitions: two runtime-enumerated theories expand from one definition
+each to **6** and **11** results, accounting for all **616** executed cases. Server locked restore passes after updating
+the Workbench-dependent Modularity lock files. The Workbench solution filter was regenerated for its five additional
+projects; the subsequent generated-filter check passes.
+
+T027–T031 remain open for the complete admission/source/UI/deployment matrix, restart/separate-process/shared
+server-database nodes, remaining operator documentation and final packaged/public consumers/current required CI.
+Independent exact-head review, merge and resulting-main proof remain required. This is an implementation and
+qualification checkpoint, not completion of #3579/#2848/#2771 or the active goal.

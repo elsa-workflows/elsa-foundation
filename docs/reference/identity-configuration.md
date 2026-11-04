@@ -311,5 +311,13 @@ use the [managed Identity module](../../Essentials/src/Foundation/Identity/Exter
 Its optional [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) documents the
 feature composition, trusted public callback base, existing themed chooser, correlation/antiforgery protocol and
 administrator preview. Its artifact store and Data Protection keys must be shared for the corresponding deployment
-mode. Browser/Studio, durable selected-session enforcement and deployment qualification remain tracked in spec 1205;
-component/owned-HTTP test results do not establish production interoperability.
+mode. The reference Workbench registers the optional `FoundationIdentityExternalAuthentication`,
+`FoundationIdentityExternalAuthenticationApi`, `FoundationIdentityExternalOidc` and
+`FoundationIdentityExternalAuthenticationEntityFrameworkCore` assemblies. Enable the desired features explicitly
+in shell configuration and configure their IAM, Secrets, persistence and public callback settings as documented
+by the owning API; registration alone does not enable managed sign-in.
+
+Durable selected-session and exact-link validation applies across ordinary cookies, access and refresh tokens.
+The [qualification runners](../../tools/identity/ExternalAuthentication.Probe/README.md) distinguish controlled
+provider, Keycloak, full Studio and reference Workbench evidence. Deployment-specific qualification remains tracked
+in spec 1205; receipts for one configuration do not establish another deployment mode.

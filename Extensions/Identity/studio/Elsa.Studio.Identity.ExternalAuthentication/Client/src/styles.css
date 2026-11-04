@@ -28,7 +28,7 @@
 .external-auth-muted, .external-auth-editor small { color: var(--studio-text-muted); }
 .external-auth-callout, .external-auth-preview, .external-auth-empty { padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface-muted); overflow-wrap: anywhere; }
 .external-auth-callout p:last-child { margin-bottom: 0; }
-.external-auth-error { padding: 0.8rem; margin-block: 1rem; display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; border: 1px solid var(--studio-danger); border-radius: var(--studio-radius); color: var(--studio-danger); }
+.external-auth-error { padding: 0.8rem; margin-block: 1rem; display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; border: 1px solid var(--studio-danger); border-radius: var(--studio-radius); color: var(--studio-danger-fg); }
 .external-auth-notice { padding: 0.8rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface-muted); }
 .external-auth-secret { display: grid; gap: 0.5rem; }
 .external-auth-observations { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
@@ -48,4 +48,4 @@
   .external-auth-field-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-.external-auth-danger-action { color: var(--studio-danger); }
+.external-auth-danger-action { color: var(--studio-danger-fg); }
