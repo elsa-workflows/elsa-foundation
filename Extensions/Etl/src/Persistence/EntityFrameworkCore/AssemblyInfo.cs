@@ -37,6 +37,9 @@ using System.Runtime.CompilerServices;
     typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeDbContext),
     HistoryModule = Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.HistoryModuleName,
     Sqlite = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeSqliteDbContext),
+    SqlServer = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeSqlServerDbContext),
+    PostgreSql = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimePostgreSqlDbContext),
+    MySql = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeMySqlDbContext),
     DisplayName = "ETL runtime")]
 [assembly: ManifestExtension("efModules", "EtlRuntime")]
 [assembly: EfSchemaFamily(

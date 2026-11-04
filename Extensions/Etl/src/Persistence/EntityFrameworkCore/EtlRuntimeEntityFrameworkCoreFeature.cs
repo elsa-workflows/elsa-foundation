@@ -12,11 +12,11 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "EtlRuntimeEntityFrameworkCore",
     DisplayName = "ETL Runtime EF Core Persistence",
-    Description = "SQLite persistence for finite ETL runs, reservations, accepted output and terminal delivery.")]
+    Description = "Relational persistence for ETL runs, reservations, accepted output and terminal delivery.")]
 [UsesEfModule("EtlRuntime")]
 public class EtlRuntimeEntityFrameworkCoreFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Provider", Description = "Relational provider. This initial ETL runtime module supports SQLite.", Category = "Persistence")]
+    [ManifestSetting(DisplayName = "Provider", Description = "SQLite, SQL Server, PostgreSQL or MySQL. SQLite is the default.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
 
     [ManifestSetting(DisplayName = "Connection string", Description = "Optional ETL runtime persistence connection string. If omitted, the shared Elsa connection is used.", Category = "Persistence", Secret = true)]
