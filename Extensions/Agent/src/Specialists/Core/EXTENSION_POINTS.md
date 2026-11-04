@@ -47,6 +47,33 @@ The [connection-backed contributors](../Connections/README.md) add separate Anth
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.
 
+## Invocation evidence
+
+[`ISpecialistInvocationInspector`](Contracts/ISpecialistInvocationInspector.cs) is a replacement contract: one
+inspector per shell. `SpecialistsRuntime` registers its scoped default with `TryAdd`, so a host package replaces it by
+registering first; a registration after the runtime feature is a second one, which the runtime's startup check refuses.
+Callers authorize the read first. The [inspection API](../Inspection/Api/EXTENSION_POINTS.md) does this
+through the generic draft Test Run. The default resolves the exact invocation through the same native binding the turn
+was staged under, in the caller's ordinary persistence scope, and returns `null` for anything else.
+`SpecialistInvocationEvidence` carries:
+
+- the candidate or published version, the model reference, the limits and the native status;
+- the fault code, plus the message only for a `specialist.*` refusal;
+- the result as the host's `IRuntimePayloadCapturePolicy` admits it;
+- the journal turn's status, model requests, usage, conversation and application status.
+
+The result is returned only for a full payload capture, and never when the envelope, the contract result or a projected
+member is sensitive or encryption-required. A diagnostic snapshot stays with the runtime's own inspection.
+
+The application status counts only this invocation's own delivery. It separates a turn with no accepted result
+(`NotAccepted`), a recorded settlement (`Applied`), a native completion whose settlement is still pending
+(`SettlementPending`), a native fault, cancellation or supersession (`NotApplied`) and a boundary that has not settled
+(`Pending`).
+
+Protected request, result and session material, instructions, fences, leases, connection incarnations and capability
+fingerprints never enter it. The fingerprint and incarnation stay in the immutable artifact and turn record, which
+identify the exact admission. An implementation must not decrypt, infer or mutate.
+
 ## Turn journal replacement
 
 [`ISpecialistTurnStore`](Contracts/ISpecialistTurnStore.cs) is a replacement contract: select one backend
