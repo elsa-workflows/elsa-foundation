@@ -24,43 +24,32 @@
   overflow-wrap: anywhere;
 }
 
-.wf-organization-folder {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--studio-border);
-}
-
-.wf-organization-folder > div { min-width: 0; }
-.wf-organization-folder > button { flex: 0 0 auto; }
-.wf-organization-folder h4,
-.wf-tag-assignments > legend {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: inherit;
-  font-weight: 600;
-}
-
-.wf-organization-folder p { margin: 8px 0 0 24px; line-height: 1.5; overflow-wrap: anywhere; }
-.wf-tag-search { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.wf-tag-search > .studio-search { flex: 1; min-width: 0; }
-.wf-tag-search .studio-search-input { align-self: stretch; }
-.wf-tag-search > button { flex: 0 0 auto; align-self: stretch; }
-.wf-tag-assignments > .wf-library-check,
-.wf-tag-assignments > .wf-library-values { border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); padding: 10px 12px; }
-.wf-tag-assignments > .wf-library-values { display: grid; gap: 10px; }
-.wf-tag-assignments > .wf-library-values > label { justify-self: start; }
-.wf-tag-empty { display: grid; justify-items: center; gap: 6px; padding: 20px 12px; text-align: center; color: var(--studio-text-muted); }
-.wf-tag-empty p { margin: 4px 0 0; color: var(--studio-text); font-weight: 600; }
-.wf-tag-empty span { max-width: 38ch; line-height: 1.5; }
+/* The chip field is the only frame; suggestions are quiet rows instead of nested cards. */
+.wf-organization-entry-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.wf-tag-editor { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.wf-tag-editor > label { font-weight: 600; }
+.wf-tag-input { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); }
+.wf-tag-input:focus-within { border-color: var(--studio-focus); outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.wf-tag-input[data-disabled] { background: var(--studio-surface-muted); }
+.wf-organization-dialog .wf-tag-input > input { flex: 1 1 160px; width: 0; min-width: min(160px, 100%); min-height: 32px; border: 0; border-radius: 0; outline: 0; background: transparent; padding: 4px; box-shadow: none; }
+.wf-tag-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; border-radius: 999px; background: var(--studio-surface-muted); color: var(--studio-text); padding: 3px 4px 3px 10px; font-size: var(--studio-label-size); line-height: 1.5; }
+.wf-tag-chip > span { min-width: 0; overflow-wrap: anywhere; }
+.wf-organization-dialog .wf-tag-chip > button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 26px; min-height: 26px; border: 0; border-radius: 50%; background: transparent; padding: 0; }
+.wf-organization-dialog .wf-tag-chip > button:hover { background: var(--studio-row-hover); }
+.wf-tag-suggestions { display: grid; gap: 6px; min-width: 0; }
+.wf-tag-suggestions > [role="listbox"] { max-height: 240px; overflow-y: auto; scrollbar-gutter: stable; }
+.wf-tag-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; border-radius: var(--studio-radius-sm); padding: 8px 10px; cursor: pointer; }
+.wf-tag-option > span { min-width: 0; overflow-wrap: anywhere; }
+.wf-tag-option > svg { flex: 0 0 auto; color: var(--studio-text-muted); }
+.wf-tag-option[aria-selected="true"] { background: var(--studio-row-hover); }
+.wf-tag-create { justify-content: start; }
+.wf-tag-suggestions > p { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px; color: var(--studio-text-muted); line-height: 1.5; }
+.wf-tag-suggestions > button { justify-self: start; }
+html[data-workspace-style="minimal"] .wf-organization-dialog .wf-tag-input > input { border-radius: 0; }
 .wf-organization-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--studio-border); padding-top: 16px; }
 .wf-organization-actions { display: flex; justify-content: end; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 
 @media (max-width: 700px) {
   .wf-organization-entry { flex-wrap: wrap; margin: 12px 12px 0; padding: 12px; }
-  .wf-organization-folder { flex-wrap: wrap; gap: 12px; }
+  .wf-organization-entry-actions { width: 100%; }
 }

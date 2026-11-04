@@ -46,6 +46,8 @@ def summarize(output):
                       "expectedCases": witness_manifest()["expectedCaseCount"],
                       "originalCases": len(report.get("cases", [])),
                       "currentAuthorityCases": len(report.get("contextDisclosureQualification", {}).get("records", [])),
+                      "workflowAuthorizationCases": len((report.get("workflowAuthorizationQualification") or {}).get("records", [])),
+                      "workflowTruthSeamCases": len((report.get("workflowTruthSeamQualification") or {}).get("records", [])),
                       "autonomyCases": len(autonomy), "autonomyPassed": sum(row.get("status") == "passed" for row in autonomy),
                       "autonomyFailed": {row.get("id"): row.get("cause") for row in autonomy if row.get("status") != "passed"},
                       "restartCases": len(restart.get("cases", [])), "restartPassed": sum(row.get("status") == "passed" for row in restart.get("cases", [])),

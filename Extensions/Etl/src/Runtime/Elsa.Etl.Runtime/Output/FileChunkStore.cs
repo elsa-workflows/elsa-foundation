@@ -25,6 +25,15 @@ internal sealed class FileChunkStore : IFileChunkPublisher
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(effectIdentity))).ToLowerInvariant() + _extension;
     }
 
+    /// <summary>Removes one published chunk whose use has ended. An absent chunk or root is not an error.</summary>
+    internal void Delete(string outputRoot, string effectIdentity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputRoot);
+        var path = Path.Combine(outputRoot, KeyFor(effectIdentity));
+        try { File.Delete(path); }
+        catch (DirectoryNotFoundException) { }
+    }
+
     /// <summary>Reads one exact immutable chunk only after checking its finite physical bound.</summary>
     /// <remarks>Only a missing file under an existing root is reported as absent. An unavailable root is an I/O failure.</remarks>
     internal async ValueTask<byte[]?> ReadAsync(string outputRoot, string effectIdentity, long maxBytes,
@@ -80,6 +89,26 @@ internal sealed class FileChunkStore : IFileChunkPublisher
             {
                 throw new EtlEffectException("etl.output-read-failed", "The ETL object could not be read.", exception);
             }
+        }
+    }
+
+    public async ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputRoot);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        var key = KeyFor(effectIdentity);
+        try
+        {
+            return await ReadDescriptorAsync(Path.Combine(outputRoot, key), key, maxBytes, cancellationToken);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new EtlEffectException("etl.output-read-failed", "The ETL object could not be read.", exception);
         }
     }
 

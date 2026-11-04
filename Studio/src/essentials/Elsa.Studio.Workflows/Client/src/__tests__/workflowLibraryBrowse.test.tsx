@@ -13,6 +13,32 @@ function libraryCapabilities() {
 }
 
 describe("workflow library query boundaries", () => {
+  it("shows readable assigned tags beyond the first catalog page without scanning its continuation", async () => {
+    const capabilities = libraryCapabilities();
+    capabilities.capabilities[0].links.push({ rel: "workflow-tag", href: "design/workflows/tags/{tagId}", templated: true });
+    const requests: URL[] = [];
+    const marker = { id: "marker-outside-page", name: "ZZZ Customer-facing", mode: "marker", cardinality: "multiple", values: [], revision: "1" };
+    const controlled = { id: "classification-outside-page", name: "Owning team", mode: "controlled", cardinality: "single", values: [{ id: "operations-id", name: "Operations" }], revision: "1" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input)); requests.push(url);
+      if (url.pathname.endsWith("definition-pages")) return response({ items: [
+        definition({ name: "Tagged invoice", tags: [{ tagId: marker.id }, { tagId: controlled.id, valueId: "operations-id" }] }),
+        definition({ id: "another-definition", name: "Another tagged invoice", tags: [{ tagId: marker.id }] })
+      ] });
+      if (url.pathname.endsWith("/tags")) return response({ items: [{ ...marker, id: "first-page-tag", name: "A catalog label" }], nextContinuationToken: "catalog-page-two" });
+      if (url.pathname.endsWith(`/tags/${marker.id}`)) return response(marker);
+      if (url.pathname.endsWith(`/tags/${controlled.id}`)) return response(controlled);
+      return response({ items: [] });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions?columns=tags", fetchMock, capabilities);
+    await waitForText(container, "Tagged invoice");
+    await waitForCondition(() => expect(row(container, "Tagged invoice")?.querySelector(".wf-library-tag-summary")?.textContent).toBe("ZZZ Customer-facing, Owning team: Operations"));
+    expect(row(container, "Another tagged invoice")?.querySelector(".wf-library-tag-summary")?.textContent).toBe(marker.name);
+    expect(requests.filter(url => url.pathname.endsWith(`/tags/${marker.id}`))).toHaveLength(1);
+    expect(requests.filter(url => url.pathname.endsWith(`/tags/${controlled.id}`))).toHaveLength(1);
+    expect(requests.some(url => url.searchParams.get("continuationToken") === "catalog-page-two")).toBe(false);
+  });
+
   it("withholds newer query controls on an older paged host and clears only its unsupported options", async () => {
     const requests: URL[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -34,7 +60,10 @@ describe("workflow library query boundaries", () => {
     expect(requests.at(-1)?.searchParams.get("folderId")).toBe("finance");
     for (const key of ["includeDescendants", "sort", "publicationState"]) expect(requests.at(-1)?.searchParams.has(key)).toBe(false);
     await waitForCondition(() => expect(button(container, "Columns"), [...container.querySelectorAll("button")].map(button => button.textContent).join(" | ")).not.toBeNull());
-    await click(button(container, "Columns"));
+    const columnsButton = button(container, "Columns");
+    // Recovering the unsupported filter can leave its disclosure open.
+    if (columnsButton?.getAttribute("aria-expanded") !== "true") await click(columnsButton);
+    expect(columnsButton?.getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector('[aria-label="Publication filter"]')).toBeNull();
     expect(container.textContent).toContain("Optional columns");
   });

@@ -3,6 +3,29 @@
   opacity: 0.62;
 }
 
+.wf-folder-deletion-dialog .wf-folder-mutation-content {
+  overflow: auto;
+}
+
+.wf-folder-delete-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.wf-folder-delete-choice input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+
+.wf-folder-deletion-dialog button[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
 .wf-move-definitions-dialog,
 .wf-folder-mutation-dialog {
   width: min(620px, 100%);

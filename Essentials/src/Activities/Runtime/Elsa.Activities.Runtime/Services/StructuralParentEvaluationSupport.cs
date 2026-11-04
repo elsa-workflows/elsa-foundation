@@ -415,13 +415,19 @@ internal static class StructuralParentEvaluationSupport
         IActivityCommandPayload payload,
         ActivityExecutionState state,
         IReadOnlyCollection<string> outcomeNames,
-        DateTimeOffset completedAt)
+        DateTimeOffset completedAt,
+        string? completedChildActivityExecutionId = null)
     {
         var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
         metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
+        // Only the current successful direct-child completion may supply this causal edge. Notification and
+        // other callbacks must not retain a marker left by an earlier fault evaluation or attempt.
+        metadata.Remove(RuntimeMetadataKeys.CompletedChildActivityExecutionId);
+        if (completedChildActivityExecutionId is not null)
+            metadata[RuntimeMetadataKeys.CompletedChildActivityExecutionId] = completedChildActivityExecutionId;
 
         return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {

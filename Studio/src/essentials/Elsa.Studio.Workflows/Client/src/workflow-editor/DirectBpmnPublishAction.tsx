@@ -35,7 +35,7 @@ function readReceipt(key: string, scope: string, definitionId: string): Publicat
 }
 
 /** One ordinary save → promotion → direct publication. Retain identities before either durable command. */
-export function DirectBpmnPublishAction({ session, definitionId, draft, busy, readOnly, saveDraft, flushMetadata,
+export function DirectBpmnPublishAction({ session, definitionId, draft, busy, readOnly, saveDraft, lineage, flushMetadata,
   setPaused, setBusy, setStatus, setError, reload, onOpenProcesses }: {
   session: StudioBackendSession;
   onOpenProcesses?(): void;
@@ -43,7 +43,9 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
   draft: WorkflowDraft;
   busy: boolean;
   readOnly: boolean;
-  saveDraft(draft: WorkflowDraft, status: string): Promise<WorkflowDraft>;
+  saveDraft(draft: WorkflowDraft, status: string, options?: { lineage?: Iterable<string> }): Promise<WorkflowDraft>;
+  /** The live history line, captured together with the publication snapshot (spec 1193 FR-010). */
+  lineage?(): Iterable<string>;
   flushMetadata(): Promise<boolean>;
   setPaused(value: boolean): void;
   setBusy(value: boolean): void;
@@ -81,6 +83,8 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
     };
     let pending = receipt;
     const snapshot = live.current.draft;
+    // Captured synchronously with the snapshot: the author may Undo or Redo while the metadata flush below is awaited.
+    const snapshotLineage = lineage ? [...lineage()] : undefined;
     let reloadSnapshot = false;
     inFlight.current = true; setPublished(false); setBusy(true); setPaused(true); setError("");
     try {
@@ -88,7 +92,7 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
       if (!pending) {
         if (!await flushMetadata()) return;
         assertActive(); setStatus("Saving BPMN publication snapshot…");
-        const saved = await saveDraft(snapshot, "BPMN publication snapshot saved");
+        const saved = await saveDraft(snapshot, "BPMN publication snapshot saved", { lineage: snapshotLineage });
         assertActive();
         const hash = await draftHash(saved); assertActive();
         const prepared: PublicationReceipt = { formatVersion: 1, scope: client.scope, definitionId, draftId: saved.id, draftHash: hash,

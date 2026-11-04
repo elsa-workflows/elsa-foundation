@@ -21,6 +21,7 @@ public sealed class Endpoint(IBpmnDocumentImporter importer) : ApiEndpoint<Impor
         importer.ImportAsync(request.Xml, new BpmnImportOptions
         {
             ProcessId = request.ProcessId,
-            NodeIdPrefix = request.NodeIdPrefix
+            NodeIdPrefix = request.NodeIdPrefix,
+            ConfirmedBindings = request.ConfirmedBindings ?? []
         }, cancellationToken);
 }

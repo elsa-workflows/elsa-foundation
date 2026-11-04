@@ -122,6 +122,20 @@ merges once a review round leaves nothing actionable and CI is green, runtime an
 The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
 packet #3043 is reviewed.
 
+**Owner amendment, 3 November 2026:** [Named Embedded Blocks #3610](../program-goals/named-embedded-blocks.md)
+is authorized for end-to-end delivery. After approving the Block name, bounded native extraction,
+BPMN extraction, safe promotion analysis and review → publish → replace lifecycle, the owner instructed:
+“Update the plan to include that durable breakdown, then go ahead and deliver the program end to end
+as your stated goal.” The program uses a native Program/Epic/Feature/Task hierarchy and
+[Project 67](https://github.com/orgs/elsa-workflows/projects/67), with one implementation leaf at a time.
+Sequencing: establish the durable plan and prove a composed-host prototype, then deliver equivalent
+authoring, BPMN extraction, reusable promotion and integrated qualification. Run beside active programs,
+displace none, preserve consolidation's priority one, coordinate shared Studio/runtime paths and
+reactivate no parked backlog. Reuse existing activity-owned composite semantics; this is not a new
+execution-model program. The authorization includes scoped implementation, normal PR/review/merge
+delivery and resulting-main verification; releases and deployment are excluded. Establishment or
+prototype completion does not complete the product. Remaining decisions in this ADR still apply.
+
 **Owner amendment, 23 October 2026:** [Studio Expression Developer Experience #2310](../program-goals/studio-expression-developer-experience.md)
 is active again, by the owner's decision of 23 October to salvage its plan and start the program. Sequencing: the
 first two units are the program records (#2367) and the expression-tooling permission-hash fix ported from #2373,
@@ -210,6 +224,17 @@ Weaver #3428 retains Studio-assistant ownership and its provider defaults. One a
 for this Program; routine decisions, milestone transitions, tests, documentation, scoped PRs, authorized
 review/merge and resulting-main qualification proceed under this instruction. Releases, deployments,
 provider purchases and publisher activation are not included. The remaining decisions apply.
+
+**Owner amendment, 2 November 2026:** [User Tasks #3688](../program-goals/user-tasks.md)
+is authorized for establishment, design, planning and end-to-end delivery of feature #3577. The owner
+instructed: “Design and plan the delivery of https://github.com/elsa-workflows/elsa-foundation/issues/3577.
+Create a Program issue for a durable plan, then deliver the program end to end”. Sequence research and
+reviewed design before durable lifecycle/recovery, workflow/forms/API integration, Studio and integrated
+qualification, review/merge and resulting-main acceptance. Run beside active programs, displace none,
+preserve Foundation/Studio consolidation as priority one and coordinate shared runtime/Studio paths.
+This activates only the User Tasks scope linked from parity #2771, not its remaining phases or any parked
+backlog. Routine decisions, milestone transitions, tests, docs and scoped PRs proceed under this authority;
+release and production deployment remain separate.
 
 ### D1 — Risk-based testing
 

@@ -87,7 +87,10 @@ internal sealed class DefaultAgentContextCollector(
 
         var collecting = new AgentContextCollecting(request);
         await events.Publish(collecting, cancellationToken);
-        var diagnostics = collecting.Diagnostics.ToList();
+        // A marker counts only where CollectAgentContext recorded it for a source's own diagnostic; any other is cleared.
+        var diagnostics = collecting.Diagnostics
+            .Select(x => x.OwnerUnavailable && !AgentContextOwnerMarkers.IsRecorded(collecting, x) ? x with { OwnerUnavailable = false } : x)
+            .ToList();
         var sanitized = await sanitizer.SanitizeAsync(collecting.Attachments.ToList(), cancellationToken);
         foreach (var attachment in sanitized.Where(x => x.Sensitivity == AgentContextSensitivity.SecretRedacted))
             diagnostics.Add(new(attachment.ModuleId, "agent.context.redacted", "Secret context was redacted before provider use.", false));
@@ -119,9 +122,14 @@ internal sealed class DefaultAgentContextCollector(
             requiredFailures.Count == 0 ? "Context admitted through installed modules and host policy." : "Required context admission failed.",
             DateTimeOffset.UtcNow,
             new Dictionary<string, string> { ["attachmentCount"] = attachments.Count.ToString(), ["diagnosticCount"] = diagnostics.Count.ToString() }), cancellationToken);
-        return requiredFailures.Count == 0
-            ? AgentResult<AgentContextContribution>.Success(contribution)
-            : new(contribution, new("agent.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
+        if (requiredFailures.Count == 0)
+            return AgentResult<AgentContextContribution>.Success(contribution);
+        // An owner that could not decide stays a refusal, but reports as unavailable with its own stable code and the
+        // engine's fixed message, never its own text. Only when every required failure says so: any definite refusal,
+        // host diagnostic or reserved code keeps the ordinary incomplete-context failure exactly.
+        if (requiredFailures.All(x => x.OwnerUnavailable && AgentContextOwnerMarkers.IsRecorded(collecting, x)))
+            return new(contribution, AgentContextOwnerMarkers.Unavailable(requiredFailures[0].Code));
+        return new(contribution, new("agent.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
     }
 }
 

@@ -6,6 +6,8 @@ Moved from `AGENTS.md` (#2578). `AGENTS.md` keeps a short summary.
 
 Use a named program-goal bucket when work forms part of a mid-term coordination surface. Use `none/free-flow` when the user is exploring, developing, researching, or planning without a named bucket. Free-flow work can still produce reports, specs, docs, maps, or code; it just should not pretend to belong to a bucket.
 
+For work within the [initiative boundary and scope rules](initiatives.md#two-planning-systems-and-one-way-of-working), the initiative governs architecture and spec agreement. Keep its planning and coordination outside program-goal buckets and drift review. Delivery taken on by a linked program goal belongs in that goal's backlog and drift review, even when the same specs, issues or PRs also link to the initiative. Link the existing goal from the spec's board row; create a new goal only when the work needs a new mid-term bucket under the existing rules. Human or agent execution does not itself require a goal or a new one. The initiative tracks status and links without duplicating the delivery backlog.
+
 Reports such as `docs/reports/unfinished-work.md` are inventories of findings and concerns, not the active queue. When a report finding becomes planned durable work, add or move it to the relevant program-goal bucket before implementation, or explicitly mark the state as `none/free-flow` for work that should remain outside a bucket.
 
 Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
