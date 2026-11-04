@@ -1,6 +1,6 @@
 # Studio UX acceptance before delivery
 
-**Status**: In Progress
+**Status**: Implemented
 **Issue**: #3776
 **Program**: Elsa 4 Simplification #2559
 
@@ -18,3 +18,7 @@ Passing isolated tests has repeatedly left the owner to discover obvious layout 
 
 ## Boundaries
 No new model API/credential, schedule, public service, architecture or administrator ruleset change. Reuse the existing independent review loop and required aggregate; do not pretend a metadata validator can certify visual judgment. Initial qualification can name unmerged prerequisite heads explicitly. Any unavailable real-host/independent evidence is reported as incomplete, never passed.
+
+## Rollout evidence
+
+Prerequisites #3769 and #3774 landed at `d88e0cdd557` and `2e2203504a8`. The main-based clean source `016b70ef08f289f956b9fad1a2e705dd8dd1612e`, based on main `e6550a960`, passed all eight composed cases and independent inspection of desktop/narrow and light/dark captures. The implementation is complete; hosted exact-head artifact review and resulting-main activation remain delivery gates tracked on #3776 / PR #3782, not claims established by that local result.
