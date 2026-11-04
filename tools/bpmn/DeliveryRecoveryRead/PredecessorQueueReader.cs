@@ -27,7 +27,7 @@ internal static class PredecessorQueueReader
         await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = fixturePath }.ToString()))
         {
             await connection.OpenAsync();
-            await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             var store = new EfSchedulerWorkQueueStore(context, new Access(scope), new NoTokens());
             var now = DateTimeOffset.UtcNow;
