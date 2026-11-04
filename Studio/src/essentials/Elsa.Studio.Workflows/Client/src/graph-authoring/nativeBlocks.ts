@@ -103,11 +103,15 @@ function prepare(context: NativeBlockContext) {
   if (!context.canEdit) refuse("read-only", "source", "This resource cannot be edited.");
   if (!context.sourceKey) refuse("missing-source", "source", "A current resource identity is required.");
   const identities = new Set<string>();
+  const retainedMetadataIdentities = new Set<string>();
   const visit = (node: ActivityNode, path: string) => {
     if (!node.nodeId || !node.activityVersionId || !Array.isArray(node.inputs) || !Array.isArray(node.outputs))
       refuse("malformed-node", path, "The activity graph contains an incomplete node.");
     if (identities.has(node.nodeId)) refuse("duplicate-node", path, "Node identities must be unique before refactoring.");
     identities.add(node.nodeId);
+    if (node.structure?.kind === flowchartStructureKind) {
+      Object.keys(metadata(node.structure.payload.nodeMetadata, `${path}.structure.payload.nodeMetadata`)).forEach(id => retainedMetadataIdentities.add(id));
+    }
     for (const slot of getChildSlots(node, context.catalog)) {
       // Adapter reads are deliberately tolerant for rendering; edits must never silently drop bad entries.
       {
@@ -123,6 +127,7 @@ function prepare(context: NativeBlockContext) {
     }
   };
   visit(context.document.rootActivity, "rootActivity");
+  retainedMetadataIdentities.forEach(id => identities.add(id));
   for (const [name, records] of [["layout", context.document.layout], ["activityPresentation", context.document.activityPresentation]] as const) {
     const seen = new Set<string>();
     records.forEach((item, index) => {
@@ -154,8 +159,8 @@ function nativeCatalog(context: NativeBlockContext, kind: NativeBlockKind, versi
 }
 
 function newBlock(context: NativeBlockContext, kind: NativeBlockKind, request: BlockIdentity, identities: Set<string>) {
-  if (!request.nodeId.trim() || identities.has(request.nodeId) || context.document.layout.some(x => x.nodeId === request.nodeId) || context.document.activityPresentation.some(x => x.nodeId === request.nodeId))
-    refuse("occupied-identity", "nodeId", "Choose a new, nonempty node identity.");
+  if (!request.nodeId.trim() || request.nodeId !== request.nodeId.trim() || identities.has(request.nodeId) || context.document.layout.some(x => x.nodeId === request.nodeId) || context.document.activityPresentation.some(x => x.nodeId === request.nodeId))
+    refuse("occupied-identity", "nodeId", "Choose a new, nonempty node identity without surrounding whitespace or retained metadata.");
   const name = request.displayName.trim();
   const description = request.description?.trim();
   if (!name || name.length > 200 || (description?.length ?? 0) > 2000)
@@ -170,7 +175,7 @@ function withActivities(owner: ActivityNode, activities: ActivityNode[], extra: 
 }
 
 function edited(context: NativeBlockContext, owner: ActivityNode, layout = context.document.layout, activityPresentation = context.document.activityPresentation): NativeBlockDocument {
-  return { ...context.document, rootActivity: updateScopeOwner(context.document.rootActivity, context.scope, owner, context.catalog), layout, activityPresentation };
+  return { ...context.document, rootActivity: updateScopeOwner(context.document.rootActivity, context.scope, owner, context.catalog, { preserveAncestorStart: true }), layout, activityPresentation };
 }
 
 export function planCreateNativeBlock(context: NativeBlockContext, request: CreateNativeBlock): NativeBlockPlan {
@@ -184,7 +189,7 @@ export function planCreateNativeBlock(context: NativeBlockContext, request: Crea
     if (scope.kind === "flowchart") readConnections(scope.owner);
     const children = [...scope.slot.activities];
     children.splice(index, 0, block);
-    const extra = scope.kind === "flowchart" ? { startNodeId: scope.slot.activities.length ? effectiveStart(scope.owner) : block.nodeId } : {};
+    const extra = scope.kind === "flowchart" ? { startNodeId: scope.slot.activities.length ? pinnedStart(effectiveStart(scope.owner)) : block.nodeId } : {};
     const document = edited(context, withActivities(scope.owner, children, extra), [...context.document.layout, { nodeId: block.nodeId, ...request.position }], [...context.document.activityPresentation, presentation]);
     return ready(context, document, [block.nodeId]);
   });
@@ -228,14 +233,14 @@ export function planExtractNativeBlock(context: NativeBlockContext, request: Ext
       const nodes = metadata(payload.nodeMetadata, "scope.nodeMetadata");
       const connections = metadata(payload.connectionMetadata, "scope.connectionMetadata");
       composite = withActivities(block, ordered, {
-        startNodeId: ordered[0].nodeId,
+        startNodeId: pinnedStart(ordered[0].nodeId),
         connections: region.internal.map(x => translateVertices(x, { x: -position.x, y: -position.y })),
         nodeMetadata: pick(nodes, selected), connectionMetadata: pick(connections, internalIds)
       });
       const all = readConnections(scope.owner);
       owner = withActivities(scope.owner, scope.slot.activities, {
         connections: all.filter(x => !region.internal.includes(x)).map(x => redirect(x, selected, block.nodeId)),
-        startNodeId: selected.has(effectiveStart(scope.owner)) ? block.nodeId : effectiveStart(scope.owner),
+        startNodeId: selected.has(effectiveStart(scope.owner)) ? block.nodeId : pinnedStart(effectiveStart(scope.owner)),
         nodeMetadata: omit(nodes, selected), connectionMetadata: omit(connections, internalIds)
       });
     }
@@ -292,10 +297,19 @@ function assertPlainPolicy(value: unknown, path: string, connection = false) {
 function effectiveStart(owner: ActivityNode) {
   const payload = owner.structure!.payload;
   const children = payload.activities as ActivityNode[];
-  if (payload.startNodeId != null && (typeof payload.startNodeId !== "string" || !children.some(x => x.nodeId === payload.startNodeId)))
+  if (payload.startNodeId != null && typeof payload.startNodeId !== "string")
+    refuse("invalid-start", "scope.startNodeId", "Choose a current Flowchart start activity before refactoring.");
+  const explicit = typeof payload.startNodeId === "string" ? payload.startNodeId.trim() : "";
+  if (explicit && !children.some(x => x.nodeId === explicit))
     refuse("invalid-start", "scope.startNodeId", "Choose a current Flowchart start activity before refactoring.");
   const inbound = new Set(readConnections(owner).map(x => x.target.nodeId));
-  return typeof payload.startNodeId === "string" ? payload.startNodeId : (children.find(x => !inbound.has(x.nodeId)) ?? children[0])?.nodeId ?? "";
+  return explicit || (children.find(x => !inbound.has(x.nodeId)) ?? children[0])?.nodeId || "";
+}
+
+function pinnedStart(nodeId: string) {
+  if (nodeId !== nodeId.trim())
+    refuse("unsafe-start-identity", "scope.startNodeId", "This implicit start uses an identity that native start normalization would change. Keep it in its current scope.");
+  return nodeId;
 }
 
 function assertNormalCompletion(node: ActivityNode, catalog: ActivityCatalogItem[]) {
@@ -419,32 +433,39 @@ export function planUngroupNativeBlock(context: NativeBlockContext, blockId: str
     const blockPosition = context.document.layout.find(x => x.nodeId === blockId) ?? { x: 0, y: 0 };
     let owner = scope.owner;
     if (scope.kind === "flowchart") {
+      const bodyStart = effectiveStart(block);
       const boundary = linearRegion(scope.owner, new Set([blockId]), context.catalog);
       if (!children.length) {
-        if (scope.slot.activities.length !== 1 || boundary.incoming.length || boundary.outgoing.length)
+        if (!empty(block.structure.payload.nodeMetadata) || !empty(block.structure.payload.connectionMetadata))
+          refuse("boundary-metadata", `nodes.${blockId}.structure.payload`, "Ungroup would discard retained metadata in this empty block.");
+        if (boundary.incoming.length || boundary.outgoing.length || (scope.slot.activities.length !== 1 && effectiveStart(scope.owner) === blockId))
           refuse("empty-flowchart-boundary", `nodes.${blockId}`, "An empty connected Flowchart cannot be ungrouped without changing routing.");
-        owner = withActivities(scope.owner, [], { startNodeId: null });
+        owner = withActivities(scope.owner, scope.slot.activities, {
+          startNodeId: scope.slot.activities.length === 1 ? null : pinnedStart(effectiveStart(scope.owner)),
+          nodeMetadata: omit(metadata(scope.owner.structure!.payload.nodeMetadata, "scope.nodeMetadata"), new Set([blockId]))
+        });
       } else {
         const region = linearRegion(block, ids, context.catalog);
-        if (effectiveStart(block) !== region.ordered[0].nodeId)
+        if (bodyStart !== region.ordered[0].nodeId)
           refuse("different-entry", `nodes.${blockId}.startNodeId`, "The block start does not match its linear entry.");
         const payload = scope.owner.structure!.payload;
         const nodes = metadata(payload.nodeMetadata, "scope.nodeMetadata");
         const connections = metadata(payload.connectionMetadata, "scope.connectionMetadata");
         const innerConnections = metadata(block.structure.payload.connectionMetadata, `nodes.${blockId}.connectionMetadata`);
         const innerNodes = metadata(block.structure.payload.nodeMetadata, `nodes.${blockId}.nodeMetadata`);
+        const inner = readConnections(block);
+        const innerKeys = new Set(inner.map(connectionKey));
         for (const key of Object.keys(innerNodes)) {
           if (!ids.has(key) || key in nodes) refuse("metadata-collision", `nodes.${key}`, "Ungroup would overwrite or relocate unrelated node metadata.");
         }
         for (const key of Object.keys(innerConnections)) {
-          if (key in connections) refuse("metadata-collision", `connections.${key}`, "Ungroup would overwrite connection metadata.");
+          if (!innerKeys.has(key) || key in connections) refuse("metadata-collision", `connections.${key}`, "Ungroup would overwrite or activate unrelated connection metadata.");
         }
-        const inner = readConnections(block);
         const outer = readConnections(scope.owner);
         if (inner.some(x => outer.some(y => connectionKey(x) === connectionKey(y))))
           refuse("connection-collision", `nodes.${blockId}.connections`, "Ungroup would duplicate a connection identity.");
         owner = withActivities(scope.owner, scope.slot.activities, {
-          startNodeId: effectiveStart(scope.owner) === blockId ? region.ordered[0].nodeId : effectiveStart(scope.owner),
+          startNodeId: pinnedStart(effectiveStart(scope.owner) === blockId ? region.ordered[0].nodeId : effectiveStart(scope.owner)),
           connections: [...outer.map(x => ({ ...x, id: connectionKey(x),
             source: x.source.nodeId === blockId ? { ...x.source, nodeId: region.ordered.at(-1)!.nodeId } : x.source,
             target: x.target.nodeId === blockId ? { ...x.target, nodeId: region.ordered[0].nodeId } : x.target

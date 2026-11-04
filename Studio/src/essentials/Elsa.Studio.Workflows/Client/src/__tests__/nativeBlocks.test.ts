@@ -112,6 +112,23 @@ describe("pure native block planning", () => {
     refused(extract(ctx), "occupied-identity");
   });
 
+  it.each(["create", "extract"])("reserves orphan native policy identities during %s", operation => {
+    const ctx = flow();
+    payload(ctx).nodeMetadata = { "new-block": { policyKind: "missing-policy", configuration: {} } };
+    const plan = operation === "extract" ? extract(ctx) : planCreateNativeBlock(ctx, { ...request, kind: "sequence", position: { x: 0, y: 0 } });
+    refused(plan, "occupied-identity");
+  });
+
+  it("preserves an unrelated ancestor's implicit start through a nested edit", () => {
+    const body = container("sequence", [node("inside")]); body.nodeId = "first";
+    const ctx = context(container("flowchart", [node("later"), body], { startNodeId: null, connections: [edge("first", "later")] }));
+    ctx.scope = [{ ownerNodeId: "first", slotId: `${sequenceStructureKind}:activities`, label: "First" }];
+    const plan = accepted(planExtractNativeBlock(ctx, { ...request, selectedNodeIds: ["inside"] }));
+    expect(planPayload(plan).startNodeId).toBeNull();
+    const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+    expect(inverse.document.rootActivity).toEqual(ctx.document.rootActivity);
+  });
+
   it.each(["unavailable", "wrong-type", "duplicate-version", "unsupported-schema"]) ("requires an exact authorized native catalog version: %s", fault => {
     const ctx = context(); const native = ctx.catalog[1];
     if (fault === "unavailable") native.available = false;
@@ -197,6 +214,14 @@ describe("linear Flowchart transformation", () => {
     const plan = accepted(extract(ctx, ["b", "a"]));
     expect(planPayload(plan).startNodeId).toBe("new-block");
     expect((((planPayload(plan).activities as ActivityNode[]).find(x => x.nodeId === "new-block"))!.structure!.payload.activities as ActivityNode[]).map(x => x.nodeId)).toEqual(["a", "b"]);
+  });
+
+  it("refuses to pin an opaque identity that native start normalization would trim", () => {
+    const ctx = flow();
+    (payload(ctx).activities as ActivityNode[])[0].nodeId = " a ";
+    (payload(ctx).connections as ReturnType<typeof edge>[])[0].source.nodeId = " a ";
+    payload(ctx).startNodeId = null;
+    refused(extract(ctx), "unsafe-start-identity");
   });
 
   it.each(["conditional", "hidden-outcome", "dynamic", "missing-metadata", "policy", "join", "alternate-trigger", "middle-start", "cycle", "multiple-entry", "bad-endpoint", "bad-vertices"])("refuses unsafe Flowchart %s before any mutation", fault => {
@@ -292,6 +317,34 @@ describe("no-loss Ungroup", () => {
     const connected = flow(); const plan = accepted(extract(connected));
     ((planPayload(plan).activities as ActivityNode[])[1].structure!.payload.activities as ActivityNode[]).splice(0);
     (planPayload(plan).activities as ActivityNode[])[1].structure!.payload.connections = [];
+    (planPayload(plan).activities as ActivityNode[])[1].structure!.payload.startNodeId = null;
     refused(planUngroupNativeBlock({ ...connected, document: plan.document }, "new-block"), "empty-flowchart-boundary");
+  });
+
+  it.each(["nodeMetadata", "connectionMetadata"])("does not lose retained %s when ungrouping an empty Flowchart", property => {
+    const ctx = context(container("flowchart", []));
+    const plan = accepted(planCreateNativeBlock(ctx, { ...request, kind: "flowchart", activityVersionId: flowchartActivity.activityVersionId, position: { x: 0, y: 0 } }));
+    (planPayload(plan).activities as ActivityNode[])[0].structure!.payload[property] = { orphan: { configuration: { note: "keep" } } };
+    refused(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"), "boundary-metadata");
+  });
+
+  it("removes a disconnected empty Flowchart without changing the explicit parent entry", () => {
+    const ctx = context(container("flowchart", [node("a")], { connections: [], startNodeId: "a" }));
+    const plan = accepted(planCreateNativeBlock(ctx, { ...request, kind: "flowchart", activityVersionId: flowchartActivity.activityVersionId, beforeNodeId: "a", position: { x: 0, y: 0 } }));
+    const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+    expect(inverse.document).toEqual(ctx.document);
+  });
+
+  it("does not activate orphan inner connection metadata on an existing outer connection", () => {
+    const ctx = flow(); const plan = accepted(extract(ctx));
+    (planPayload(plan).activities as ActivityNode[])[1].structure!.payload.connectionMetadata = { "a-b": { policyKind: "missing-policy" } };
+    refused(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"), "metadata-collision");
+  });
+
+  it.each(["connections", "startNodeId"])("refuses malformed %s on an empty Flowchart boundary", property => {
+    const ctx = context(container("flowchart", []));
+    const plan = accepted(planCreateNativeBlock(ctx, { ...request, kind: "flowchart", activityVersionId: flowchartActivity.activityVersionId, position: { x: 0, y: 0 } }));
+    (planPayload(plan).activities as ActivityNode[])[0].structure!.payload[property] = property === "connections" ? [{ bad: true }] : "gone";
+    refused(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"), property === "connections" ? "malformed-connection" : "invalid-start");
   });
 });

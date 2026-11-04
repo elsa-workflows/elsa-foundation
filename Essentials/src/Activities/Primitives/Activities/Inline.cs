@@ -23,6 +23,7 @@ namespace Elsa.Activities.Primitives.Activities;
 // the same value. Secret bindings are refused above, so no value can change between runs.
 [RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.EchoedToOutput)]
 [Activity(Icon = "Braces")]
+[ActivityOutcome("Done")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Inline : Activity<object?>
 {
