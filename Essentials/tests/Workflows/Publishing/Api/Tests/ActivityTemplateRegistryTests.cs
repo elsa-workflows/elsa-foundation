@@ -35,6 +35,34 @@ public sealed class ActivityTemplateRegistryTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => discoverer.DiscoverDependenciesAsync(request, cancellation.Token).AsTask());
     }
 
+    [Theory]
+    [InlineData(null, "ActivityDraft")]
+    [InlineData("ActivitySourceVersion", "ActivitySourceVersion")]
+    public async Task A_provider_failure_names_the_subject_kind_the_request_names(string? subjectKind, string expected)
+    {
+        var manifest = new ActivityProviderManifest("provider", "1", System.Text.Json.JsonSerializer.SerializeToElement(new { }));
+        var discovery = new ActivityTemplateDependencyDiscoveryRequest("definition", "version-1", 0, manifest);
+        var compilation = new ActivityTemplateCompilationRequest("definition", "Acme.Send", "version-1", 0, "1.0.0",
+            new("1", [], [], []), manifest, [], "provider/compiler/1");
+        if (subjectKind is not null)
+        {
+            discovery = discovery with { SubjectKind = subjectKind };
+            compilation = compilation with { SubjectKind = subjectKind };
+        }
+
+        var discovered = await new ActivityTemplateDependencyDiscovererRegistry([new ThrowingDiscoverer()])
+            .Resolve("provider", "1").DiscoverDependenciesAsync(discovery);
+        var compiled = await new ActivityTemplateProviderCompilerRegistry([new ThrowingCompiler()])
+            .Resolve("provider", "1").CompileAsync(compilation);
+
+        foreach (var diagnostic in new[] { Assert.Single(discovered.Diagnostics), Assert.Single(compiled.Diagnostics) })
+        {
+            Assert.Equal("activity.provider.failure", diagnostic.Code);
+            Assert.Equal(expected, diagnostic.Subject.Kind);
+            Assert.Equal("version-1", diagnostic.Subject.Id);
+        }
+    }
+
     [Fact]
     public async Task Provider_diagnostics_cannot_disclose_messages_subjects_paths_remediation_or_metadata()
     {
@@ -54,6 +82,15 @@ public sealed class ActivityTemplateRegistryTests
         public string CompilerFingerprint => $"{providerKey}/compiler/1";
         public IReadOnlySet<string> SupportedManifestSchemas => schemas;
         public ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingCompiler : IActivityTemplateProviderCompiler
+    {
+        public string ProviderKey => "provider";
+        public string CompilerFingerprint => "provider/compiler/1";
+        public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+        public ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("secret provider detail");
     }
 
     private sealed class ThrowingDiscoverer : IActivityTemplateDependencyDiscoverer

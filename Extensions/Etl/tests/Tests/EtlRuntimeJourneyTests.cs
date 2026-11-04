@@ -366,7 +366,8 @@ public sealed partial class EtlRuntimeJourneyTests
             EtlWorkerStoreGate storeGate = EtlWorkerStoreGate.BeforeAcceptance,
             IReadOnlyList<EtlHostHttpBindingOptions>? httpBindings = null,
             EtlConnectorWorkerGate connectorGate = EtlConnectorWorkerGate.None,
-            IReadOnlyList<EtlHostSqlBindingOptions>? sqlBindings = null)
+            IReadOnlyList<EtlHostSqlBindingOptions>? sqlBindings = null,
+            IReadOnlyList<EtlHostRabbitMqBindingOptions>? rabbitMqBindings = null)
         {
             EtlWorkerProtocol.ValidateRole(role);
             if (!_workerRoles.Add(role))
@@ -376,7 +377,7 @@ public sealed partial class EtlRuntimeJourneyTests
             var configuration = new EtlWorkerConfiguration(_directory, Scope,
                 [Binding("source", "Source", _source, "v1"), Binding("lookup", "Lookup", _lookup, "v1"),
                     Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")],
-                writePause, storeGate, httpBindings?.ToList(), connectorGate, sqlBindings?.ToList());
+                writePause, storeGate, httpBindings?.ToList(), connectorGate, sqlBindings?.ToList(), rabbitMqBindings?.ToList());
             if (httpBindings is not null)
                 configuration.Bindings.RemoveAll(binding => httpBindings.Any(http => http.Role == binding.Role));
             await EtlWorkerProtocol.WriteConfigurationAsync(_directory, role, configuration, cancellationToken);

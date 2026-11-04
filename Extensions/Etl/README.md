@@ -82,6 +82,132 @@ host, port, database and user, never the password.
 - **Ledger retention.** The runtime never deletes ledger rows. Delete only the rows of terminal runs: deleting a running
   run's row can allow a second write.
 
+## RabbitMQ delivery
+
+[Spec 1200](../../specs/1200-etl-rabbitmq-delivery/spec.md) adds a `rabbitmq` destination for the main route: a
+host-approved exchange and routing key to which each accepted record is published as one persistent JSON message. Install
+`Elsa.Etl.RabbitMq` and add an `EtlRuntimeFeature.RabbitMqBindings` entry: alias, an AMQP URI as `ConnectionString` from
+host configuration, and `AllowedExchanges` (an empty name allows the default exchange). The pinned binding handle hashes
+the parsed host, port, virtual host and user, and the allowed exchanges, never the password. The runtime never declares
+exchanges, queues or bindings.
+
+- **Publisher confirms.** A batch's messages are published in order on one channel with confirmation tracking, mandatory
+  and persistent, with content type `application/json`. The route is recorded, and the batch may be accepted, only once the
+  broker has confirmed every message.
+- **At least once, with stable ids.** RabbitMQ has no ledger the runtime could consult, so a batch whose publication was
+  interrupted, or whose worker died after the confirms and before the record, is published again in full. Every message
+  carries the message id `{effectId}:{index}` and the headers `elsa-etl-run-id`, `elsa-etl-batch-id`,
+  `elsa-etl-effect-id` and `elsa-etl-record-index`, identical on every replay, so consumers deduplicate by message id. A
+  replayed batch can arrive after messages of later batches.
+- **Failures.** A message no queue matches is returned and fails the run with `etl.rabbitmq-unroutable`. A negative
+  acknowledgement (for example a queue at its length limit with `reject-publish`), an unreachable broker, a closed
+  connection, a connection or channel limit, a broker blocking publishers under a resource alarm, or a confirm that takes over 30 seconds
+  retries after two seconds (a blocked target keeps one connection open until the broker unblocks it), so an outage pauses the run. Access refused, a missing exchange or failed
+  authentication fails the run with `etl.rabbitmq-publish-rejected`; a store that refuses to record a confirmed route
+  fails it with `etl.rabbitmq-delivery-refused`. Without `Elsa.Etl.RabbitMq`, admission refuses the run
+  with `etl.rabbitmq-unavailable`. The error route cannot be RabbitMQ.
+- **Ordering.** Messages of one batch keep their order; batches of different partitions or shards interleave.
+
+## RabbitMQ ingestion
+
+[Spec 1201](../../specs/1201-etl-rabbitmq-source/spec.md) adds a finite `rabbitmq` source: a host-approved queue drained up to
+`maxMessages` (1 to 100,000) when a run prepares, its JSON message bodies read with declared JSON fields as for a JSON Lines
+source. Add an `EtlRuntimeFeature.RabbitMqBindings` entry with role `Source` and `AllowedQueues`; `Elsa.Etl.RabbitMq`
+provides the consumer. The runtime never declares queues.
+
+- **Manual acknowledgements.** Preparation receives the messages without acknowledging them, writes their bodies as a JSON
+  Lines snapshot, and acknowledges them only once the store has recorded that snapshot as the run's prepared input. A
+  preparation that fails, is refused or whose worker dies before the record leaves them unacknowledged; the broker
+  requeues them, and the next attempt reads them again into a snapshot of its own.
+- **At least once.** A worker that dies, or a connection that is lost, after the messages were received and before the
+  acknowledgement reaches the broker can leave the run with messages the broker also requeues, so a later run reads them
+  again. Records carry no message id, so destinations should be idempotent (a keyed SQL destination is) or tolerate
+  duplicates.
+- **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
+  `MaxSnapshotBytes`, or the run's retained input (the snapshot, its index of one 24-byte entry per record plus a
+  sentinel entry, and the lookup) past `http.maxRetainedInputBytes`; the rest stay queued. A single message larger than that fails preparation with
+  `etl.snapshot-too-large` and stays queued. Each message is one record: a body that is not JSON, or not a JSON object, is
+  routed to errors as `etl.jsonl.record-invalid` or `etl.jsonl.record-not-object` and still acknowledged.
+- **Failures.** An unreachable broker or a closed connection leaves preparation to run again after its lease lapses; access
+  refused, a missing queue, a stream queue (which `basic.get` cannot read) or failed authentication fails the run with
+  `etl.rabbitmq-read-rejected`. Two runs reading one queue at once take different messages.
+- **Requeue limits.** Every preparation that does not record its snapshot returns the messages to the queue. A quorum queue
+  counts those returns: by default RabbitMQ 4 drops a message after 20 of them, so a pipeline that keeps failing (a broken
+  lookup, a refused record) loses the messages. Give such queues a dead-letter exchange, or a higher `x-delivery-limit`.
+- **Acknowledgement timeout.** RabbitMQ closes a channel whose deliveries stay unacknowledged past its `consumer_timeout`
+  (30 minutes by default). A run stops taking messages after five minutes (always taking at least one) and leaves the rest
+  for the next run, so a slow or distant broker drains a backlog over several runs; a channel closed for that timeout is
+  retried. Keep `consumer_timeout` well above the time a preparation takes to record its snapshot.
+- **Snapshots of failed attempts.** Each preparation attempt writes its own snapshot, under a random key, so an attempt that
+  does not record it leaves a snapshot behind that no later attempt reuses; retention must account for these.
+
+## SQL snapshot reads
+
+[Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
+its declared columns and a key of one to eight required columns. Add an `EtlRuntimeFeature.SqlBindings` entry with role
+`Source`, as for destinations; `AllowedTables` must name the table.
+
+- **One point in time.** Preparation reads the declared columns once, ordered by the key, in a single transaction:
+  `REPEATABLE READ READ ONLY` on PostgreSQL, which first takes an `ACCESS SHARE` table lock so a read behind a
+  truncate-and-reload sees the reloaded rows rather than an empty table (where PostgreSQL refuses the lock, as for a role
+  with column-level grants only, a materialized view or a foreign table, the read runs without it; a lock that times out
+  or is cancelled never falls back to an unlocked read: the read fails, or retries when the engine classes the error as
+  transient), and `SNAPSHOT` on
+  SQL Server, which needs `ALLOW_SNAPSHOT_ISOLATION ON` for the
+  database (`etl.sql-read-rejected` otherwise). The rows are retained as a JSON Lines input snapshot, and from there the
+  run is a JSON Lines run: its partitions, positions and replay are unchanged, every partition sees the same rows, and no
+  connection is held while records are processed. A unique key keeps record numbers reproducible; rows with equal keys
+  keep the order the engine returns.
+- **Recovery.** A worker that dies after publishing the snapshot is replaced by one that reuses it, and a replacement that
+  started reading before a lapsed predecessor published adopts that snapshot, so a run never reads a second, different
+  point in time. A transient read failure (a connection loss or an unreachable database) records nothing and logs a
+  warning, and preparation runs again once its lease lapses, so an outage pauses the run. The read has no command
+  timeout and nothing else bounds it: a read blocked on a lock (for example behind `ALTER TABLE` or `TRUNCATE`) waits
+  until the lock is released or the worker stops. To detect a database host that vanishes mid-read, give a PostgreSQL
+  binding's connection string a `Keepalive` interval (Npgsql has none by default; SqlClient keeps connections alive).
+- **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and timestamps or times of day (ISO 8601 invariant
+  text); a `date` column is written as `yyyy-MM-dd`, and an interval or a zoned time of day (PostgreSQL `timetz`, with or without a precision) is refused.
+  On PostgreSQL, Npgsql maps `infinity` and `-infinity` to the extreme dates, so a `date`, `timestamp` or `timestamptz` at
+  those extremes (including a finite `9999-12-31`) is refused; SQL Server's extremes, such as a temporal table's open
+  period end, are real values and are kept; `Int64` accepts 8- to
+  64-bit integers; `Decimal` accepts exact decimals within .NET `decimal` range and integers; `Boolean` accepts booleans
+  (`bit` on SQL Server). Any other value, including a floating-point column, fails preparation with
+  `etl.sql-column-type-unsupported`, naming the column. A NULL in a required column is a record error on the error route.
+- **Limits.** The snapshot is bounded by `MaxSnapshotBytes` (`etl.snapshot-too-large`); a row longer than
+  `MaxRecordBytes` is a record error, `etl.record-too-large`. A SQL source is finite only. SQL Server's driver replaces
+  an unpaired surrogate in `nvarchar` text with U+FFFD before the run sees it. A driver materialises each value before
+  the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
+  run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
+  names the exception type, not the error number.
+  Authored queries and log CDC are not supported.
+- **Watermark reads.** [Spec 1199](../../specs/1199-etl-sql-watermark/spec.md) adds an optional `watermark`: a declared,
+  required `Int64` column. A row whose watermark is NULL is read on every run and rejected as a record error, so it
+  is never silently skipped. A run then reads only rows whose watermark is above the high watermark of the last completed
+  run of the same definition, source alias, source binding revision (the pinned handle, which covers the database, user
+  and allowed tables), table and column. The first run reads every row, and so does the first run after any of these
+  changes, including a new binding revision, so a non-idempotent route then receives the table again. The checkpoint
+  does not include the destination: a new definition version that routes to a new, empty target reads only rows above
+  the checkpoint, and loading that target from the start needs a new source identity, as there is no checkpoint reset
+  yet. The run's highest watermark
+  is raised into that checkpoint in the transaction that completes it, so a run settled by a failure (a fault, a
+  cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Runs of one
+  watermarked definition must not overlap: the checkpoint never moves backwards, but a run that read a row before a
+  newer run delivered it can finish last and write the older row over the newer one in a keyed destination, and the
+  checkpoint, already past the row's newer value, does not read it again until it changes. Nothing enforces this yet
+  ([#3721](https://github.com/elsa-workflows/elsa-foundation/issues/3721)); start the next run only once the previous
+  one has settled. **A row whose watermark is at or below a checkpoint
+  already passed is never read.** Values drawn when a row is inserted, such as a sequence or identity, can commit out of
+  order under concurrent writers: a run can read value 101 while the transaction holding 100 is still open, and row 100,
+  committed later, is then skipped. A per-row version counter is not a watermark either. Use a column whose values
+  become visible in increasing order, for example one written by a single writer or by a job that stamps rows after
+  their transactions commit; otherwise load the table with snapshot reads. Such a job should leave unstamped rows at a
+  value at or below every checkpoint, such as 0, not NULL: NULL rows are rejected as record errors on every run until
+  they are stamped, so the error route fills with rows a later run delivers. Running the definition repeatedly, for
+  example from a scheduled workflow, loads the table incrementally; rows deleted from the source are not propagated.
+- **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
+  retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope
+  before such a pipeline is admitted.
+
 ## Continuous HTTP runs
 
 [Spec 1192](../../specs/1192-etl-continuous-http/spec.md) lets an HTTP pipeline run continuously: set
@@ -182,6 +308,6 @@ Native invocation/result delivery and native cancellation now have real durable 
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 
-Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot; process loss can leave attempt staging. Retention must account for these deterministic candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
+Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot (for a RabbitMQ source, under a random per-attempt key rather than a deterministic one); process loss can leave attempt staging. Retention must account for these candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
 
 Physical effects remain at least once. Lease expiry cannot terminate a worker or release its live buffers. Only the fenced manifest/cursor transaction makes output authoritative. Logical payload allowances are not a heap/RSS limit, and retained chunks are not automatically removed or compensated.

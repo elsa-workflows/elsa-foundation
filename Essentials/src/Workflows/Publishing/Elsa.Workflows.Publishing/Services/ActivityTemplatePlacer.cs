@@ -41,7 +41,10 @@ public sealed record ActivityTemplatePlacement(
     ExecutableNode Root,
     IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets,
     ExecutableLayoutSidecar LayoutSidecar,
-    IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement> RuntimeRequirements);
+    IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement> RuntimeRequirements)
+{
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 /// <summary>
 /// Iteratively expands exact immutable templates under canonical invocation origins. Every placed
@@ -126,7 +129,7 @@ public sealed class ActivityTemplatePlacer(
             result.Root,
             result.ResumeTargets,
             new(result.LayoutSegments),
-            result.RuntimeRequirements);
+            result.RuntimeRequirements) { ActivityPresentation = result.ActivityPresentation };
     }
 
     private PlacementBuild BuildPlacement(
@@ -267,6 +270,20 @@ public sealed class ActivityTemplatePlacer(
             frame.Children.Select(x => x.Origin).ToArray()));
         layoutSegments.AddRange(frame.Children.SelectMany(x => x.LayoutSegments));
 
+        // Only this exact template's identities may be mapped. Unknown authored metadata must
+        // never fall through to an outer node or another invocation of the same template.
+        var presentationIdentities = new Dictionary<string, string>(nodeIds, StringComparer.Ordinal);
+        foreach (var child in frame.Children)
+            if (child.OccurrenceId is not null)
+                presentationIdentities[child.OccurrenceId] = child.Root.ExecutableNodeId;
+        var presentation = frame.Children.SelectMany(child => child.ActivityPresentation)
+            .Concat(frame.SourceReference.ActivityPresentation
+                .Where(record => presentationIdentities.ContainsKey(record.ExecutableNodeId))
+                .Select(record => record with { ExecutableNodeId = presentationIdentities[record.ExecutableNodeId] }))
+            .GroupBy(record => record.ExecutableNodeId, StringComparer.Ordinal)
+            .Select(group => group.Last())
+            .ToArray();
+
         var requirements = frame.Template.RuntimeRequirements
             .Concat(frame.Children.SelectMany(x => x.RuntimeRequirements))
             .Distinct()
@@ -283,7 +300,8 @@ public sealed class ActivityTemplatePlacer(
             frame.ParentOccurrenceId,
             frame.ChildSlotName,
             frame.ChildIndex,
-            frame.OccurrenceOverlay);
+            frame.OccurrenceOverlay,
+            presentation);
 
         static bool stackIsRoot(PlacementFrame candidate) => candidate.OccurrenceId is null;
     }
@@ -657,5 +675,9 @@ public sealed class ActivityTemplatePlacer(
         string? ParentOccurrenceId,
         string ChildSlotName,
         int ChildIndex,
-        ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay = null);
+        ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay = null,
+        IReadOnlyList<WorkflowExecutableActivityPresentationRecord>? Presentation = null)
+    {
+        public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation => Presentation ?? [];
+    }
 }

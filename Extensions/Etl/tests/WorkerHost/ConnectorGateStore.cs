@@ -27,6 +27,10 @@ internal sealed class ConnectorWorkerGate(string root, string role, EtlConnector
         CancellationToken cancellationToken) =>
         PauseAsync(EtlConnectorWorkerGate.BeforePublicationRecord, lease, batchId, CurrentPage(lease), cancellationToken);
 
+    public Task BeforePreparationCommitAsync(EtlPreparationLease lease, CancellationToken cancellationToken) =>
+        PauseAsync(EtlConnectorWorkerGate.BeforePreparationCommit, new EtlConnectorPartitionLease(lease.Scope, lease.RunId, -1,
+            lease.Owner, lease.Fence, lease.ExpiresAt, new EtlConnectorFilePosition(0, 0, 0)), null, null, cancellationToken);
+
     public Task BeforeAcceptanceAsync(EtlConnectorPartitionLease lease, string batchId,
         CancellationToken cancellationToken) =>
         PauseAsync(EtlConnectorWorkerGate.BeforeAcceptance, lease, batchId, CurrentPage(lease), cancellationToken);
@@ -78,6 +82,13 @@ internal sealed class ConnectorWorkerGateStore(IEtlRuntimeStore baseStore, IEtlC
         await _gate.BeforeCaptureAsync(lease, page, cancellationToken);
         return await Connector.CaptureConnectorHttpSourceAsync(lease, attempt, page, responseReceivedAtUtc,
             cancellationToken);
+    }
+
+    public override async ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease,
+        EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default)
+    {
+        await _gate.BeforePreparationCommitAsync(lease, cancellationToken);
+        return await Connector.CommitConnectorPreparationAsync(lease, prepared, cancellationToken);
     }
 
     public override async ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(

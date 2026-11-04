@@ -5,10 +5,12 @@ using Elsa.Etl.Runtime.Execution;
 namespace Elsa.Etl.Runtime.Bindings;
 
 /// <summary>Composes typed approvals without exposing HTTP aliases to the v1 file catalog.</summary>
-internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBindings http, int maxPartitions, HostSqlBindings? sqlBindings = null)
+internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBindings http, int maxPartitions, HostSqlBindings? sqlBindings = null,
+    HostRabbitMqBindings? rabbitMqBindings = null)
     : IEtlConnectorBindingCatalog, IEtlConnectorBindingResolver
 {
     private readonly HostSqlBindings sql = sqlBindings ?? new HostSqlBindings([], []);
+    private readonly HostRabbitMqBindings rabbitMq = rabbitMqBindings ?? new HostRabbitMqBindings([], []);
 
     public IReadOnlyList<EtlConnectorBindingSummary> ListBindings(EtlScope scope, string? afterAlias, string? afterRole, int take)
     {
@@ -18,7 +20,9 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
             .Select(x => new EtlConnectorBindingSummary(x.Alias, x.Role, EtlConnectorKind.Http));
         var sqlEntries = sql.ListBindings(scope, afterAlias, afterRole, take)
             .Select(x => new EtlConnectorBindingSummary(x.Alias, x.Role, EtlConnectorKind.Sql));
-        var entries = fileEntries.Concat(httpEntries).Concat(sqlEntries).ToArray();
+        var rabbitMqEntries = rabbitMq.ListBindings(scope, afterAlias, afterRole, take)
+            .Select(x => new EtlConnectorBindingSummary(x.Alias, x.Role, EtlConnectorKind.RabbitMq));
+        var entries = fileEntries.Concat(httpEntries).Concat(sqlEntries).Concat(rabbitMqEntries).ToArray();
         if (entries.GroupBy(x => (x.Alias, x.Role)).Any(group => group.Count() != 1))
             throw Ambiguous();
         return entries.OrderBy(x => x.Alias, StringComparer.Ordinal).ThenBy(x => x.Role, StringComparer.Ordinal).Take(take).ToArray();
@@ -47,6 +51,20 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
                 if (shards.Count > pipeline.Limits.MaxPartitions || shards.Count > maxPartitions)
                     throw new EtlBindingException("etl.http-shard-limit", "The HTTP source exceeds the permitted partition count.");
                 source = Http(binding);
+            }
+            else if (pipeline.Source is EtlSqlSource table)
+            {
+                // A SQL source's content is unknown until preparation reads it, so its pin carries no digest (spec 1198).
+                CheckUnambiguous(scope, table.Binding, "Source");
+                var resolved = sql.ResolveCurrent(scope, table.Binding, "Source", table.Table);
+                source = new(EtlConnectorKind.Sql, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
+            }
+            else if (pipeline.Source is EtlRabbitMqSource queue)
+            {
+                // A queue's messages are unknown until preparation receives them, so its pin carries no digest (spec 1201).
+                CheckUnambiguous(scope, queue.Binding, "Source");
+                var resolved = rabbitMq.ResolveCurrent(scope, queue.Binding, "Source", queue.Queue);
+                source = new(EtlConnectorKind.RabbitMq, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
             }
             else
                 throw Unavailable();
@@ -81,6 +99,12 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
             var resolved = sql.ResolveCurrent(scope, table.Binding, role.ToString(), table.Table);
             return new(EtlConnectorKind.Sql, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
         }
+        if (destination is EtlRabbitMqDestination exchange)
+        {
+            CheckUnambiguous(scope, exchange.Binding, role.ToString());
+            var resolved = rabbitMq.ResolveCurrent(scope, exchange.Binding, role.ToString(), exchange.Exchange);
+            return new(EtlConnectorKind.RabbitMq, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null));
+        }
         if (destination is not EtlHttpDestination endpoint)
             throw Unavailable();
         CheckUnambiguous(scope, endpoint.Binding, role.ToString());
@@ -91,7 +115,7 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
     private void CheckUnambiguous(EtlScope scope, string alias, string role)
     {
         var catalogs = (files.ContainsBinding(scope, alias, role) ? 1 : 0) + (http.ContainsBinding(scope, alias, role) ? 1 : 0) +
-            (sql.ContainsBinding(scope, alias, role) ? 1 : 0);
+            (sql.ContainsBinding(scope, alias, role) ? 1 : 0) + (rabbitMq.ContainsBinding(scope, alias, role) ? 1 : 0);
         if (catalogs > 1)
             throw Ambiguous();
     }

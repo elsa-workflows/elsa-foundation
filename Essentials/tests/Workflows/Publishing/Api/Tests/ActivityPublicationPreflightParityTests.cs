@@ -90,7 +90,7 @@ public sealed class ActivityPublicationPreflightParityTests
         private readonly string? _headVersionId;
         private readonly string _version;
 
-        public Scenario(Candidate candidate)
+        public Scenario(Candidate candidate, IReadOnlyList<ActivityNodePresentationRecord>? presentation = null)
         {
             var hasHead = candidate is Candidate.VersionTaken or Candidate.VersionBelowRequiredBump;
             _headVersionId = hasHead ? "version-head" : null;
@@ -123,8 +123,10 @@ public sealed class ActivityPublicationPreflightParityTests
                 Id = "layout-draft-1",
                 DraftId = DraftId,
                 Revision = candidate == Candidate.StaleLayout ? Revision - 1 : Revision,
-                Records = [new("boundary", JsonSerializer.SerializeToElement(new { x = 10, y = 20 }))]
+                Records = [new("boundary", JsonSerializer.SerializeToElement(new { x = 10, y = 20 }))],
+                ActivityPresentation = presentation?.ToArray() ?? []
             };
+            Layout = layout;
             IReadOnlyList<ActivityDefinitionVersionPublication> publications = hasHead
                 ? [Publication("version-head", "1.0.0"), Publication("version-later", "1.0.1")]
                 : [];
@@ -148,7 +150,7 @@ public sealed class ActivityPublicationPreflightParityTests
                 new FixedBumpDiffer(candidate == Candidate.VersionBelowRequiredBump ? ActivityVersionBump.Major : ActivityVersionBump.None),
                 new FixedCompiler(candidate == Candidate.CompilationFailed),
                 new TestActivityPublishingAuthorizationContext(),
-                new RecordingCommit(receipts, Commits),
+                new RecordingCommit(receipts, Commits, MaterialCommits),
                 new ImmediateLockProvider(),
                 new SequentialIdentityGenerator(),
                 TimeProvider.System,
@@ -157,6 +159,8 @@ public sealed class ActivityPublicationPreflightParityTests
         }
 
         public List<ActivityPublicationDesignMutation> Commits { get; } = [];
+        public List<ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>> MaterialCommits { get; } = [];
+        public ActivityDefinitionDraftLayout Layout { get; }
 
         public async Task<Outcome> PreflightAsync()
         {
@@ -354,7 +358,10 @@ public sealed class ActivityPublicationPreflightParityTests
                 throw new NotSupportedException("Publication only reads what the strategy supports.");
         }
 
-        private sealed class RecordingCommit(IActivityPublicationReceiptStore receipts, List<ActivityPublicationDesignMutation> commits) :
+        private sealed class RecordingCommit(
+            IActivityPublicationReceiptStore receipts,
+            List<ActivityPublicationDesignMutation> commits,
+            List<ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>> materialCommits) :
             ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
         {
             public async Task<ActivityPublicationResult> ExecuteAsync(
@@ -362,6 +369,7 @@ public sealed class ActivityPublicationPreflightParityTests
                 CancellationToken cancellationToken = default)
             {
                 commits.Add(commit.Design);
+                materialCommits.Add(commit);
                 Assert.True(await receipts.TryCreateAsync(commit.Receipt, cancellationToken));
                 return new(
                     commit.Design.DefinitionId,

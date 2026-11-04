@@ -103,6 +103,7 @@
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Api\Elsa.Agent.Specialists.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Anthropic\Elsa.Agent.Specialists.Anthropic.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\AzureOpenAI\Elsa.Agent.Specialists.AzureOpenAI.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\OpenAI\Elsa.Agent.Specialists.OpenAI.csproj" />
 		<!-- The specialist runtime, its durable turn journal and its evidence reads, so agents can be test-run, inspected and published here. -->
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Elsa.Agent.Specialists\Elsa.Agent.Specialists.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Persistence\EntityFrameworkCore\Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
@@ -114,6 +115,7 @@
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Persistence\EntityFrameworkCore\Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Sql\PostgreSql\Elsa.Etl.Sql.PostgreSql.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Sql\SqlServer\Elsa.Etl.Sql.SqlServer.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\RabbitMq\Elsa.Etl.RabbitMq.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Design\Elsa.Etl.Workflows.Design.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Runtime\Elsa.Etl.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
@@ -203,6 +205,7 @@
 		<ProjectReference Include="..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Persistence\EntityFrameworkCore\Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />

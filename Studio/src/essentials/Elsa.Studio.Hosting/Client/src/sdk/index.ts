@@ -454,6 +454,8 @@ export interface StudioFeatureAreaNavLeaf extends StudioBackendAwareContribution
   title: string;
   path: string;
   iconColor?: string;
+  /** Module-owned icon, forwarded to the navigation contribution. */
+  icon?: StudioNavigationContribution["icon"];
   placeholder?: boolean;
   placement?: StudioNavigationPlacement;
   order?: number;
@@ -467,6 +469,8 @@ export interface StudioFeatureAreaNavParent extends StudioBackendAwareContributi
   title: string;
   path: string;
   iconColor?: string;
+  /** Module-owned icon, forwarded to the navigation contribution. */
+  icon?: StudioNavigationContribution["icon"];
   items: StudioFeatureAreaNavLeaf[];
   placement?: StudioNavigationPlacement;
   order?: number;
@@ -1793,9 +1797,16 @@ export interface StudioActivityDefinitionLayoutRecord {
   data: unknown;
 }
 
+export interface StudioActivityNodePresentationRecord {
+  nodeId: string;
+  displayName?: string | null;
+  description?: string | null;
+}
+
 export interface StudioActivityDefinitionImplementationState {
   payload: unknown;
   layout: StudioActivityDefinitionLayoutRecord[];
+  activityPresentation?: StudioActivityNodePresentationRecord[];
 }
 
 export type StudioActivityDiagnosticSeverity = "Error" | "Warning" | "Info";
@@ -1884,6 +1895,8 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   providerSchemaVersion: string;
   manifestFingerprint: string;
   contract?: StudioActivityDefinitionContract;
+  /** Active public-contract tab; boundary editors show only its corresponding mappings. */
+  contractSection?: "inputs" | "outputs" | "outcomes";
   propertyEditors?: StudioActivityPropertyEditorContribution[];
   expressionEditors?: StudioExpressionEditorContribution[];
   graphAuthoringPanels?: StudioWorkflowDesignerPanelContribution[];
@@ -1927,6 +1940,11 @@ export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendA
   id: string;
   order?: number;
   activityTypes: readonly string[];
+  /**
+   * Applies to every activity type, so the projected view kind alone decides. For a provider-owned family of user-defined
+   * activities whose type keys are not known in advance; the host then reads the state view of every selected activity.
+   */
+  anyActivityType?: boolean;
   viewKind: string;
   viewVersion: number;
   /** Pure synchronous projection of public reference data; the target route reauthorizes its reads. */

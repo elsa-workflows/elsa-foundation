@@ -30,7 +30,7 @@ public interface IWorkflowStartDispatcher
     /// It carries the ambient request scope the in-process inline drain uses to build activity execution contexts.
     /// <c>null</c> ⇒ <see cref="WorkflowExecutionCommandDispatchOptions.Default"/> (identical to the pre-089 single-arg behavior).
     /// </param>
-    /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException">Start policy or saved authority/entry/context/wire fidelity refuses the request before enqueue.</exception>
+    /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException">Start policy, saved authority/entry/context/wire fidelity, or the executable's input contract (category <see cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Input"/>) refuses the request before enqueue. A new start enqueues its inputs with declared defaults applied.</exception>
     /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryBoundaryException">The saved source provider cannot validate its physical source, cohort or publisher. Its source ID and cause are preserved; unavailable dependencies are distinguished.</exception>
     /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitOutboxStaleClaimException">The saved source's current owner/fence/deadline no longer admits this delivery.</exception>
     /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableSourceReadException">Ordinary live-reference selection cannot read authoritative references; artifact/scope and cause are preserved.</exception>
