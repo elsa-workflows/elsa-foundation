@@ -167,7 +167,9 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   }, [neighbor, neighborState.page, neighborState.status, queryIdentity]);
   useEffect(() => {
     if (restoreChoiceFocus?.ready && restoreChoiceFocus.request.current && restoreChoiceFocus.request.current === selected?.execution.activityExecutionId && pageState.status === "ready" && triggerRef.current) {
-      triggerRef.current.focus(); restoreChoiceFocus.request.current = null;
+      // A later user focus choice takes precedence over this asynchronous restoration.
+      if (document.activeElement === document.body || document.activeElement === triggerRef.current) triggerRef.current.focus();
+      restoreChoiceFocus.request.current = null;
     }
   }, [pageState.status, restoreChoiceFocus, selected]);
   // Keep all reads and resolution effects active: a singleton can become unavailable or gain another occurrence.
@@ -293,11 +295,13 @@ export function ExecutionScopeNavigator({ context, execution, label, refreshKey,
   onSelect(execution: ActivityExecutionStateSummary): void; onUnavailable(): void;
   onIncident(execution: ActivityExecutionStateSummary): void;
 }) {
+  const choiceFocus = useRef<string | null>(null);
   return <div className="wf-execution-scope-occurrence">
     <ActivityExecutionNavigator context={context} workflowExecutionId={execution.workflowExecutionId}
       executableNodeId={execution.executableNodeId} parentActivityExecutionId={execution.parentActivityExecutionId ?? undefined}
       selectedActivityExecutionId={execution.activityExecutionId} refreshKey={refreshKey}
       collapseOnSelect hideSingleton contextLabel={label} initialPage={initialPage}
+      restoreChoiceFocus={{ request: choiceFocus, ready: true }}
       onResolve={value => { if (!value) onUnavailable(); }} onSelect={onSelect} onIncident={onIncident} />
   </div>;
 }

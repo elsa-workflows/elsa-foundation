@@ -272,3 +272,24 @@ it("labels recorded iterations with scope context and keeps attempts as executio
   expect(container.querySelector("ol")).toBeNull();
   expect(document.activeElement).toBe(button("Choose occurrence of Prepare one item: Iteration 3, recorded execution 3 of 4"));
 });
+
+it("does not steal focus after a delayed choice when user moved away", async () => {
+  const focusRequest = { current: null as string | null };
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4),entry(5)],totalCount:10,previousCursor:null,nextCursor:null });
+  const panel = (id: string) => flushSync(() => root.render(<ActivityExecutionInspectionPanel context={context}
+    workflowExecutionId="run" nodeId="ordinary-node" nodeLabel="Ordinary" exactId={id} seed={null}
+    refreshKey={0} choiceFocus={focusRequest} labelFor={()=>"Ordinary"} onSelect={onSelect} onEnter={vi.fn()} onIncident={vi.fn()}
+    renderDetails={(_value,navigation)=><section><span>evidence</span>{navigation}</section>}/>));
+  panel("execution-4");
+  await vi.waitFor(()=>expect(container.textContent).toContain("Execution 4 of 10"));
+  click("Execution 4 of 10"); click("Execution 5");
+  expect(focusRequest.current).toBe("execution-5");
+  const outside = document.createElement("button"); outside.textContent="Refresh"; document.body.append(outside); outside.focus();
+  expect(document.activeElement).toBe(outside);
+  panel("execution-5");
+  await vi.waitFor(()=>expect(container.textContent).toContain("Execution 5 of 10"));
+  await new Promise(resolve=>setTimeout(resolve,10));
+  const actual=document.activeElement;
+  outside.remove();
+  expect(actual).toBe(outside);
+});
