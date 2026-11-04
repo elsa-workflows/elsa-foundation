@@ -48,11 +48,17 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     await page.goto(`/workflows/definitions?backend=legacy&definition=${submitted.definition.id}&version=${submitted.version.id}`);
     await expect(page.locator(".wf-sequence-step")).toHaveCount(3);
     const narrow = (info.project.use.viewport?.width ?? 1440) < 800;
-    if (narrow) await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+    if (narrow) {
+      await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+      await page.getByRole("button", { name: "Collapse activities panel", exact: true }).click();
+    }
     await expect(page.locator('.wf-sequence-step[data-id="first"]')).toBeVisible();
-    expect((await page.locator('.wf-sequence-step[data-id="first"]').boundingBox())!.width).toBeGreaterThan(180);
+    await expect.poll(async () => (await page.locator('.wf-sequence-step[data-id="first"]').boundingBox())?.width ?? 0).toBeGreaterThan(180);
     await capture(page, info, "definition-sequence");
-    if (narrow) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+    if (narrow) {
+      await page.getByRole("button", { name: "Expand activities panel", exact: true }).click();
+      await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+    }
     // Change the current source after publication. Inspection must retain the pinned texts and topology.
     await inspect(published); // Unmount the editor before changing its draft outside the UI.
     await api(`/design/workflows/drafts/${submitted.draftId}`, "PUT", { state: state(seq("root", [line("changed", "CURRENT DRAFT ONLY")])), layout: [] });
