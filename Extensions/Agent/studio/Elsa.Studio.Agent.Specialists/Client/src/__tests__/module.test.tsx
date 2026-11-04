@@ -4,10 +4,12 @@ import { register } from "../module";
 
 function registered() {
   const routes = vi.fn();
+  const relatedLinks = vi.fn();
   const featureAreas = vi.fn();
   const activityEditors = vi.fn();
-  register({ routes: { add: routes }, featureAreas: { add: featureAreas }, activityEditors: { add: activityEditors }, backend: {} } as unknown as ElsaStudioModuleApi);
-  return { routes, featureAreas, activityEditors };
+  register({ routes: { add: routes }, featureAreas: { add: featureAreas }, activityEditors: { add: activityEditors }, workflowRunRelatedLinks: { add: relatedLinks },
+    backend: {} } as unknown as ElsaStudioModuleApi);
+  return { routes, featureAreas, activityEditors, relatedLinks };
 }
 
 describe("agent specialists module", () => {
@@ -37,6 +39,26 @@ describe("agent specialists module", () => {
     expect(routes).toHaveBeenCalledWith(expect.objectContaining({
       path: "/agents/reviews/:workflowExecutionId/:activityExecutionId",
       requiresBackend: [{ id: "elsa.api.agent-reviews", contractVersion: "1" }]
+    }));
+  });
+
+  it("links any agent occurrence in run inspection to its invocation page, decided by the state view", () => {
+    const { relatedLinks } = registered();
+    const contribution = relatedLinks.mock.calls[0][0];
+    expect(contribution).toMatchObject({ anyActivityType: true, viewKind: "elsa.specialist.invocation", viewVersion: 1,
+      requiresBackend: [{ id: "elsa.api.agent-specialist-inspection", contractVersion: "1", relations: ["agent-specialist-invocation-evidence"] }] });
+    const context = { workflowExecutionId: "run 1", activityExecutionId: "act-1", executableNodeId: "node-1", returnTo: "/workflows/instances/run%201" };
+    expect(contribution.getLinks({ ...context, stateView: { kind: "elsa.specialist.invocation", version: 1, data: { invocation: true } } }))
+      .toEqual([{ id: "invocation", label: "Agent invocation", path: "/agents/invocations/run%201/act-1" }]);
+    expect(contribution.getLinks({ ...context, stateView: { kind: "elsa.specialist.invocation", version: 1, data: { invocation: false } } })).toEqual([]);
+  });
+
+  it("keeps the invocation page behind the occurrence evidence capability", () => {
+    const { routes } = registered();
+
+    expect(routes).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/agents/invocations/:workflowExecutionId/:activityExecutionId",
+      requiresBackend: [{ id: "elsa.api.agent-specialist-inspection", contractVersion: "1", relations: ["agent-specialist-invocation-evidence"] }]
     }));
   });
 
