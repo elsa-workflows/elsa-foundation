@@ -462,6 +462,8 @@ export function buildExecutableInspectorCanvas(
         runtimeNodeId: activityNodeId,
         ...(ghost && fact ? {
           ghost: true,
+          activityTypeKey: fact.activityType,
+          category: "Unavailable activity",
           label: graph.activityPresentation.some(record => record.nodeId === activityNodeId)
             ? node.data.label
             : ghostNodeLabel(fact.activityType)

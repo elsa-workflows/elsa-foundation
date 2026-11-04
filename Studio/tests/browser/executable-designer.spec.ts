@@ -25,6 +25,7 @@ for (const theme of ["light", "dark"]) for (const width of [1440, 360]) {
     await expect(page.getByRole("img", { name: "Activity unavailable in this environment", exact: true })).toBeVisible();
     await expect(page.locator(".wf-sequence-insert, .wf-sequence-actions")).toHaveCount(0);
     await expect(step).toHaveAttribute("draggable", "false");
+    await expect(page.locator(".wf-sequence-type")).toHaveText("Unavailable activity");
     expect((await step.boundingBox())!.width).toBeGreaterThan(180);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("unavailable.png"), fullPage: true });

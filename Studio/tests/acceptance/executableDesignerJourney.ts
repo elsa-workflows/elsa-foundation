@@ -47,10 +47,19 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     const { submitted, published } = await publish(root, "Sequence parity");
     await page.goto(`/workflows/definitions?backend=legacy&definition=${submitted.definition.id}&version=${submitted.version.id}`);
     await expect(page.locator(".wf-sequence-step")).toHaveCount(3);
+    const narrow = (info.project.use.viewport?.width ?? 1440) < 800;
+    if (narrow) await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+    await expect(page.locator('.wf-sequence-step[data-id="first"]')).toBeVisible();
+    expect((await page.locator('.wf-sequence-step[data-id="first"]').boundingBox())!.width).toBeGreaterThan(180);
     await capture(page, info, "definition-sequence");
+    if (narrow) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
     // Change the current source after publication. Inspection must retain the pinned texts and topology.
+    await inspect(published); // Unmount the editor before changing its draft outside the UI.
     await api(`/design/workflows/drafts/${submitted.draftId}`, "PUT", { state: state(seq("root", [line("changed", "CURRENT DRAFT ONLY")])), layout: [] });
-    await inspect(published);
+    await page.reload();
+    const changed = await api<{ state: { rootActivity: Node } }>(`/design/workflows/drafts/${submitted.draftId}`);
+    expect(changed.state.rootActivity.structure?.payload.activities).toEqual([expect.objectContaining({ nodeId: "changed" })]);
+    expect(JSON.stringify(changed.state.rootActivity)).toContain("CURRENT DRAFT ONLY");
     const canvas = page.getByRole("region", { name: "Executable canvas", exact: true });
     await expect(canvas.locator(".wf-sequence-step")).toHaveCount(3);
     await expect(canvas).toContainText("Pinned hello");
@@ -91,7 +100,12 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     const compensation = await publish(structure("scope", compensationVersion, "elsa.compensation-scope.structure", { steps: [{ name: "Reserve", activity: line("reserve", "Reserve inventory"), compensation: line("release", "Release inventory") }] }), "Compensation parity");
     await inspect(compensation.published);
     await expect(canvas.locator(".wf-compensation-designer")).toBeVisible();
-    await expect(canvas).toContainText("Reserve inventory"); await expect(canvas).toContainText("Release inventory");
+    await expect(canvas.getByRole("listitem", { name: "Step 1, Reserve, compensated by Write Line", exact: true })).toBeVisible();
+    await expect(canvas.locator('[data-graph-node-id="reserve"]')).toBeVisible();
+    const handler = canvas.locator('[data-graph-node-id="release"]');
+    await handler.press("Enter"); await expect(handler).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("complementary", { name: "Executable details panel", exact: true })).toContainText("release");
+    await expect(canvas).toContainText("Undoes: Reserve");
     await expect(canvas.getByRole("textbox")).toHaveCount(0);
     await capture(page, info, "compensation");
 

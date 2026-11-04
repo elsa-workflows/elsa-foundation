@@ -128,6 +128,7 @@ describe("Executable designer parity", () => {
   it("keeps catalog-miss activities visibly unavailable in a Sequence", () => {
     const { element } = mount(sequence("root", [{ ...leaf("ghost"), activityType: "Missing.Activity" }]));
     expect(element.querySelector('[aria-label="Activity unavailable in this environment"]')).not.toBeNull();
+    expect(element.querySelector(".wf-sequence-type")?.textContent).toBe("Unavailable activity");
   });
 
   it("uses BPMN elements and exact binding identities rather than a generic child graph", () => {
