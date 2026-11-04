@@ -159,6 +159,32 @@ describe("IntrinsicInspector", () => {
     expect(container.querySelector<HTMLSelectElement>(".wf-intrinsic-variable select")!.value).toBe("workflow::counter");
   });
 
+  it("reads unsaved draft output additions and flags renamed or removed selections without changing them", () => {
+    const node = createActivityNode(setOutputActivity, "out-draft");
+    const onChange = vi.fn();
+    const renderState = (outputs: unknown[], current = node) => <IntrinsicInspector
+      intrinsic={readIntrinsicDescriptor(setOutputActivity)!} activity={current} descriptor={descriptorFor(setOutputActivity)}
+      editors={builtInPropertyEditors} expressionEditors={[]} expressionDescriptors={[literalDescriptor]}
+      expressionDescriptorStatus="ready" descriptorStatus="ready" visibleVariables={[]} scopeStatus="ready"
+      workflowState={{ outputs }} onChange={onChange} />;
+    const container = render(renderState([]));
+    expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
+    expect(container.textContent).toContain("Add a workflow output");
+    flushSync(() => active!.root.render(renderState([{ name: "ReviewData" }])));
+    let picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
+    expect(picker.disabled).toBe(false);
+    flushSync(() => { picker.value = "ReviewData"; picker.dispatchEvent(new Event("change", { bubbles: true })); });
+    const changed = onChange.mock.calls.at(-1)![0] as ActivityNode;
+    expect(changed.name).toMatchObject({ expression: { type: "Literal", value: "ReviewData" } });
+    flushSync(() => active!.root.render(renderState([{ name: "Renamed" }], changed)));
+    picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
+    expect(picker.value).toBe("ReviewData"); expect(picker.getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("renamed or removed");
+    flushSync(() => active!.root.render(renderState([], changed)));
+    expect(container.textContent).toContain("Select its current name");
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
   it("shows no variable picker for Set Output and renders its name + value inputs", () => {
     const node = createActivityNode(setOutputActivity, "out-1");
     const { container } = renderInspector(setOutputActivity, node);

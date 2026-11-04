@@ -2599,7 +2599,12 @@ function readIncidentActivityExecutionId(incident: IncidentStateSummary) {
 
 export function getIncidentRootCause(incident: IncidentStateSummary) {
   const rootCause = incident.metadata?.["runtime.faultInnerMessage"]?.trim();
-  return rootCause || incident.message;
+  const message = rootCause || incident.message;
+  if (incident.failureType === "flowchart.child.faulted") {
+    const child = message.match(/child node '([^']+)' faulted/);
+    return child ? `Activity '${child[1]}' failed. Review its incident to correct the cause.` : "A child activity failed. Review its incident to correct the cause.";
+  }
+  return message;
 }
 
 function findSelectedActivityExecution(

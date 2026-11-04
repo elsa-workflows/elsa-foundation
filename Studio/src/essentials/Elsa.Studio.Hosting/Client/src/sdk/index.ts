@@ -695,6 +695,10 @@ export interface StudioActivityPropertyEditorContext {
   activity: unknown;
   /** The node id of the activity being edited, so an editor can tell one activity from the next. Absent on older hosts. */
   activityId?: string | null;
+  /** Current literal input values keyed by descriptor reference key. Masked inputs are excluded. */
+  inputValues?: Record<string, unknown>;
+  /** Atomically update related literal inputs in one authoring change. Unavailable on older hosts. */
+  setLiteralInputs?: (values: Record<string, unknown>) => void;
   expressionDescriptors: StudioExpressionDescriptor[];
   readOnly?: boolean;
   scope?: StudioActivityPropertyEditorScope;

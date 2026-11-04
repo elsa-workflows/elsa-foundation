@@ -86,7 +86,8 @@ public sealed record WorkflowExecutableNodeView(
     IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots,
     IReadOnlyCollection<WorkflowExecutableConnectionView> Connections,
     IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null,
-    WorkflowExecutableBpmnStructureView? BpmnStructure = null);
+    WorkflowExecutableBpmnStructureView? BpmnStructure = null,
+    IReadOnlyCollection<string>? Outcomes = null);
 
 /// <summary>Allowlisted semantic projection for supported persisted BPMN executable structures.</summary>
 public sealed record WorkflowExecutableBpmnStructureView(

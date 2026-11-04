@@ -154,19 +154,18 @@ export function ActivityPropertiesPanel({
     latestActivity.current = activity;
     renderedActivity.current = activity;
   }
-  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor) => {
+  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]) => {
     if (latestReadOnly.current) return;
     const current = latestActivity.current;
     if (current.nodeId !== nextActivity.nodeId) {
       onChange(nextActivity);
       return;
     }
-    const propertyName = getInputPropertyName(input);
     const next = { ...current };
-    if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) {
-      next[propertyName] = nextActivity[propertyName];
-    } else {
-      delete next[propertyName];
+    for (const item of Array.isArray(input) ? input : [input]) {
+      const propertyName = getInputPropertyName(item);
+      if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) next[propertyName] = nextActivity[propertyName];
+      else delete next[propertyName];
     }
     latestActivity.current = next;
     onChange(next);
@@ -485,7 +484,7 @@ type PropertyRowProps = {
   onDisclosureErrorChange(key: string, hasError: boolean): void;
   onDisclosureFailureChange(key: string, hasFailure: boolean): void;
   onDisclosureFallbackChange(key: string, shouldForceOpen: boolean): void;
-  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor): void;
+  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]): void;
 };
 
 function PropertyRow({
@@ -569,7 +568,24 @@ function PropertyRow({
     uiSpecifications: { ...input.uiSpecifications, options: dynamicOptions.options }
   } : input;
   const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
-  const context: StudioActivityPropertyEditorContext = { activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled };
+  const context: StudioActivityPropertyEditorContext = {
+    activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled,
+    inputValues: Object.fromEntries(activityDescriptor.inputs.filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
+      .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)])),
+    setLiteralInputs: values => {
+      if (editorDisabled) return;
+      const current = latestProperty.current;
+      let next = current.activity;
+      const changed: StudioActivityInputDescriptor[] = [];
+      for (const [key, value] of Object.entries(values)) {
+        const target = activityDescriptor.inputs.find(item => (item.referenceKey || item.name) === key);
+        if (!target || target.isReadOnly || isMaskedInput(target) || acceptsOnlySecretReference(target)) continue;
+        changed.push(target);
+        next = writeInputValue(next, target, target.isWrapped === false ? value : withExpression(readWrappedInput(next, target), "Literal", value));
+      }
+      current.onChange(next, changed);
+    }
+  };
   const editor = resolveEditor(editors, effectiveInput, context);
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
@@ -1248,25 +1264,11 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
     return false;
   }
 
-  if (previous.activity === next.activity) return true;
-  const propertyName = getInputPropertyName(previous.input);
-  return Object.is(previous.activity[propertyName], next.activity[propertyName]) &&
-    hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs);
+  // Contributions receive the entire activity (including related literal inputs). A sibling
+  // edit must update that context even when this row's own value is unchanged.
+  return previous.activity === next.activity;
 }
 
-function hasSameActivityMetadata(
-  previous: ActivityNode,
-  next: ActivityNode,
-  inputs: StudioActivityInputDescriptor[]
-) {
-  const inputPropertyNames = new Set(inputs.map(getInputPropertyName));
-  const propertyNames = new Set([...Object.keys(previous), ...Object.keys(next)]);
-  for (const propertyName of propertyNames) {
-    if (inputPropertyNames.has(propertyName)) continue;
-    if (!Object.is(previous[propertyName], next[propertyName])) return false;
-  }
-  return true;
-}
 
 function ExpandedPropertyEditor({
   input,

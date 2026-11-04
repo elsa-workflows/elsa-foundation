@@ -73,7 +73,7 @@ function mapState(
   // result is asserted back to the declared variables type rather than validated per-field.
   if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument) as VariableDefinition[];
   if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, normalizeInputDefinition);
-  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentRecord(record, false));
+  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeOutputDefinition(record));
   return next;
 }
 
@@ -132,6 +132,14 @@ function mapArgumentRecords(
 // Variables and inputs share one normalizer (both keep a storage driver); outputs pass keepStorage=false.
 function normalizeStoredArgument(record: Record<string, unknown>): Record<string, unknown> {
   return normalizeArgumentRecord(record, true);
+}
+
+function normalizeOutputDefinition(record: Record<string, unknown>): Record<string, unknown> {
+  const next = normalizeArgumentRecord(record, false);
+  const isNullable = record.isNullable ?? record.IsNullable;
+  delete next.IsNullable;
+  next.isNullable = typeof isNullable === "boolean" ? isNullable : false;
+  return next;
 }
 
 function normalizeInputDefinition(record: Record<string, unknown>): Record<string, unknown> {

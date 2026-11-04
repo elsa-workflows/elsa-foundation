@@ -1129,6 +1129,9 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
 }
 
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
+  const pinned = readStringList(activity.executableOutcomes);
+  if (pinned.length) return pinned.map(name => ({ name, displayName: name }));
   const structured = switchOutcomePorts(activity);
   if (structured) return structured;
   const cases = readStringList((activity as { cases?: unknown }).cases);

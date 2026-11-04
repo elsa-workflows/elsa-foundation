@@ -504,6 +504,7 @@ export interface WorkflowOutput {
   description: string;
   category: string;
   [key: string]: unknown;
+  isNullable: boolean;
 }
 
 // A selectable argument element type from the Expressions domain's variable-types capability.
@@ -757,6 +758,8 @@ export interface WorkflowExecutableNode {
   childSlots: WorkflowExecutableChildSlot[];
   connections?: WorkflowExecutableConnection[];
   outputCaptures?: WorkflowExecutableOutputCapture[] | null;
+  /** Outcomes pinned in the executable, independent of the current authoring catalog. */
+  outcomes?: string[] | null;
   bpmnStructure?: WorkflowExecutableBpmnStructure | null;
 }
 

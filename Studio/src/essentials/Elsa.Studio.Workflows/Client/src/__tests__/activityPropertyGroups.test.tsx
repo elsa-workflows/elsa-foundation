@@ -145,6 +145,20 @@ function propertyLabels(container: HTMLElement) {
   return [...container.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent);
 }
 
+it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
+  const onChange = vi.fn();
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true,
+    supports: descriptor => descriptor.name === "FormId", component: props => <button type="button" aria-label="Pin form" onClick={() => props.context.setLiteralInputs?.({ FormId: "purchase", FormVersion: "2" })}>{String(props.context.inputValues?.FormVersion ?? "unset")}</button>
+  }];
+  const container = renderPanel([input("FormId", { isWrapped: true }), input("FormVersion", { isWrapped: true })], { activity: activity(), editors, onChange });
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label="Pin form"]')!;
+  flushSync(() => button.click());
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange.mock.calls[0][0].FormId.expression.value).toBe("purchase");
+  expect(onChange.mock.calls[0][0].FormVersion.expression.value).toBe("2");
+  expect([...container.querySelectorAll("button")].some(item => item.textContent === "2")).toBe(true);
+});
+
 describe("activity property organization", () => {
   it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
     const changes: ActivityNode[] = [];

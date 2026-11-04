@@ -121,6 +121,7 @@ export function buildExecutableActivityGraph(
       activityVersionId: catalogItem?.activityVersionId ?? ghostActivityVersionId(node),
       inputs: [],
       outputs: [],
+      executableOutcomes: node.outcomes,
       structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
     };
   };
