@@ -93,7 +93,7 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
                         ActivityErrorCodes.ProviderFailure,
                         ActivityDiagnosticSeverity.Error,
                         $"Activity provider '{ProviderKey}' failed during 'compile'.",
-                        new("ActivityDraft", request.DraftId, request.DefinitionId, Revision: request.Revision),
+                        new(request.SubjectKind, request.DraftId, request.DefinitionId, Revision: request.Revision),
                         new(ProviderKey),
                         "Retry the operation or inspect provider logs using the request trace identifier.",
                         new Dictionary<string, string>(StringComparer.Ordinal)

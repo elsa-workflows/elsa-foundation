@@ -35,7 +35,7 @@ for (const width of [320, 768, 1024, 1440]) {
     await expect(details).toHaveCount(0);
     await expect(opener).toBeFocused();
 
-    const createOpener = page.getByRole("button", { name: "Create connection", exact: true });
+    const createOpener = page.getByRole("button", { name: "Create connection", exact: true }).first();
     await createOpener.click();
     const create = page.getByRole("dialog", { name: "Create connection", exact: true });
     await expect(create.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
@@ -70,7 +70,7 @@ test("creating a Connection preserves the accepted search and leaves absent resu
   await expect(page.getByRole("button", { name: "Details for Customer API", exact: true })).toBeVisible();
 
   await search.fill("draft-only");
-  await page.getByRole("button", { name: "Create connection", exact: true }).click();
+  await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
   await dialog.getByLabel("Name", { exact: true }).fill(created.name);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -123,7 +123,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
         : route.fulfill({ json: { ...connection, name: draft.name, authScheme: "api-key", settings: draft.settings } });
     });
     await page.goto(`/?mode=connections&theme=${theme}`);
-    const opener = page.getByRole("button", { name: "Create connection", exact: true });
+    const opener = page.getByRole("button", { name: "Create connection", exact: true }).first();
     await opener.click();
     const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
     const more = dialog.getByRole("button", { name: /^More options/ });
@@ -249,7 +249,7 @@ test("API-key creation explains denied Secret metadata and recovers without read
     ? route.fulfill({ status: 403, json: { title: "Forbidden" } })
     : route.fulfill({ json: { items: [{ name: "customer-api", displayName: "Customer API key", typeName: "text", status: "active" }] } }));
   await page.goto("/?mode=connections&theme=light");
-  const opener = page.getByRole("button", { name: "Create connection", exact: true });
+  const opener = page.getByRole("button", { name: "Create connection", exact: true }).first();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
   await expect(dialog.getByRole("alert")).toContainText("Access to existing Secrets is denied.");
@@ -287,7 +287,7 @@ for (const width of [320, 1440]) {
       ? route.fulfill({ status: 400, json: { error: "This name is no longer accepted. Choose another name.", errors: { name: ["Choose another name."] } } })
       : route.fulfill({ status: 201, json: { ...connection, name: route.request().postDataJSON().name } }));
     await page.goto("/?mode=connections&theme=light");
-    await page.getByRole("button", { name: "Create connection", exact: true }).click();
+    await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
     const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
     const name = dialog.getByLabel("Name", { exact: true });
     const create = dialog.getByRole("button", { name: "Create", exact: true });

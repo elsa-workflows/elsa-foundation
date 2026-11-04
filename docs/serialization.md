@@ -220,6 +220,12 @@ fresh start (#2548). Each caller retries it instead of acknowledging it: the HTT
 resumed, the recurring-trigger pump releases the occurrence with backoff, and a `PublishEvent` delivery fails as
 transient so the outbox redelivers it.
 
+A start that its workflow's input contract refuses (#3728) also writes nothing, but a retry would be refused again, so
+the router reports it `Refused` with the reason code and every caller settles instead of retrying. The other starts
+and resumes of the same stimulus still run. The HTTP endpoint middleware and `POST runtime/workflows/stimuli` answer
+`400` when every matched start was refused and nothing resumed, the recurring-trigger pump settles the occurrence, and
+a `PublishEvent` delivery completes.
+
 The keyed start identity is a frozen, persisted format with two versions, side by side. Its ids are
 `wfexec:start:{version}:{digest}`, `command:start:{version}:{digest}` and `envelope:start:{version}:{digest}`; the
 digest is the lowercase hex SHA-256 of the values `"elsa.workflow-start"`, the version and the start key (each
