@@ -40,6 +40,8 @@ public static class SpecialistsEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
         if (services.Any(x => x.ServiceType == typeof(IAgentSourceReader) || x.ServiceType == typeof(IAgentSourceWriter)))
             throw new InvalidOperationException("Agent source persistence requires exactly one explicitly selected reader/writer backend per shell. Remove the previous selection explicitly before choosing another.");
+        // Re-entering this explicit selection boundary after both ports were removed retires its old guard.
+        foreach (var previous in services.Where(x => x.ImplementationInstance is AgentSourceRegistrationStartupTask).ToArray()) services.Remove(previous);
         services.AddScoped<EfAgentSources<TContext>>();
         var reader = ServiceDescriptor.Scoped<IAgentSourceReader>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
         var writer = ServiceDescriptor.Scoped<IAgentSourceWriter>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());

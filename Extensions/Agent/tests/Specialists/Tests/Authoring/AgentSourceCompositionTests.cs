@@ -74,4 +74,18 @@ public sealed class AgentSourceCompositionTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => check!.ExecuteAsync(default));
     }
 
+    private sealed class OtherApplicationSourceContext : DbContext;
+
+    [Fact]
+    public async Task Explicit_source_reselection_retires_the_previous_startup_guard()
+    {
+        var services = new ServiceCollection();
+        services.AddAgentSourceStore<ApplicationSourceContext>();
+        foreach (var descriptor in services.Where(x => x.ServiceType == typeof(IAgentSourceReader) || x.ServiceType == typeof(IAgentSourceWriter)).ToArray()) services.Remove(descriptor);
+        services.AddAgentSourceStore<OtherApplicationSourceContext>();
+        var guards = services.Select(x => x.ImplementationInstance).OfType<AgentSourceRegistrationStartupTask>().ToArray();
+        foreach (var guard in guards) await guard.ExecuteAsync(default);
+        Assert.Single(guards);
+    }
+
 }
