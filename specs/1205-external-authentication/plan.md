@@ -30,7 +30,8 @@ Read framework v6.1.0, Elsa v6.3.0 and the contribution review checklist. No con
 ## Project structure
 
 - `Essentials/src/Foundation/Identity/Core/`: scoped subjects and connection/admission/session/flow contracts.
-- `Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/`: compatible defaults and pure policy/registry logic.
+- `Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/`: shared identity defaults.
+- `Essentials/src/Foundation/Identity/ExternalAuthentication/Core/` and `ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/`: optional managed-connection contracts and policy/registry/catalog behavior. This dependency envelope consumes Secrets.Core and persistence scope contracts without adding them to every base Identity.Core consumer. Protocol-heavy code remains in Oidc.
 - `Essentials/src/Foundation/Identity/Oidc/`: retain direct bearer and add managed protocol adapter behind Core.
 - `Essentials/src/Foundation/Identity/AspNetCoreIdentity/`: admission/session bridge and canonical user projection.
 - `Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/`: catalog reuse, exact links, atomic admission/flow/session stores and migrations.

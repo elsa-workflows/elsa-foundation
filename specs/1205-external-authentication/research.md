@@ -63,3 +63,9 @@ Carry forward Elsa 3's tests, previews and secret protection. Improve provenance
 ## Authority and initiative boundary
 
 Owner authorization on 4 November covers #3579 end to end and necessary #2848 integration. Neither #3579 nor #2771 has a native parent/Part-of link. The open Initiative search found #3052: its board covers workflow conversion/expression/runtime semantics and lists parity only as related work, without external authentication/ADR 0085 as a board topic. The initiative agreement gate does not apply here. Amend ADR 0085 D3 under the explicit owner decision; change no constitution gate and ratify no provisional sections.
+
+## Implementation refinement — recovery and optional dependency envelope
+
+Managed connection contracts and implementation use the optional `Identity/ExternalAuthentication` submodule. The Core references Identity.Core and Secrets.Core, and the implementation consumes Runtime.Core scope contracts, keeping those dependencies out of the base Identity.Core. Catalog persistence still reuses the existing provider-configuration authority and its schema.
+
+Configuration readiness is distinct from recovery eligibility. A valid enabled provider with default rejection and no eligible link cannot count as a recovery path. Removing/replacing an enabled effective path needs a proved remaining external path or actual local recovery, then whole-catalog CAS. A source transition may be safe even if the retired record itself is disabled; the effective baseline/override result is what matters. Protocol/session adapters must supply these checks before runtime qualification; their unavailable defaults make no readiness/recovery claim.

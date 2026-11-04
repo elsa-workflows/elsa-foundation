@@ -26,9 +26,9 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 ## Phase 4 — US3: source ownership and lifecycle
 
-- [ ] T014 [US3] Define typed connection/catalog and live discovery contracts in `Identity/Core/`; reuse provider-configuration CAS under `Identity/` with explicit authorized global boundary.
-- [ ] T015 [US3] Implement deployment baseline, no-auto-shadow collision, explicit full override, disabled shadow and archive/restore/remove semantics under `Identity/`; include material revisions/provenance.
-- [ ] T016 [US3] Implement atomic catalog mutation/final-login guard including unusable baseline and concurrent last-path races under `Identity/`; test provider-backed persistence.
+- [ ] T014 [US3] Define typed connection/catalog and live discovery contracts in `Identity/ExternalAuthentication/Core/`; reuse provider-configuration CAS in its optional implementation with explicit authorized global boundary. Catalog/contracts are implemented; bootstrap/provider discovery integration remains.
+- [x] T015 [US3] Implement deployment baseline, no-auto-shadow collision, explicit full override, disabled shadow and archive/restore/remove semantics under `Identity/`; include material revisions/provenance.
+- [ ] T016 [US3] Implement atomic catalog mutation/final-login guard including unusable baseline and concurrent last-path races under `Identity/`; test provider-backed persistence. Coordinator/CAS/native writer race checks are implemented; actual protocol/IAM recovery adapters remain for runtime qualification.
 
 ## Phase 5 — US2: configure, test, preview, enable
 
@@ -56,7 +56,7 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 
 - [ ] T030 Update `Identity/**/README.md`, `EXTENSION_POINTS.md`, root catalog, `docs/reference/authentication-architecture.md` and `identity-configuration.md`; remove obsolete behavior/docs and account for public API changes.
 - [ ] T031 Run affected backend/EF/Studio gates, generated-map checks, packed module/assets and separate public consumer; preserve detailed result statuses in `evidence.md`.
-- [ ] T032 Revalidate claims/PRs, commit/push only alongside one draft PR for #3579 (also resolving #2848), map all acceptance criteria and post required gate evidence.
+- [x] T032 Revalidate claims/PRs, commit/push only alongside one draft PR for #3579 (also resolving #2848), map all acceptance criteria and post required gate evidence.
 - [ ] T033 Run independent correctness/standards/acceptance reviews on the exact draft head; fix findings, satisfy current required checks and merge under live org rules. Record rounds on the PR/issues.
 - [ ] T034 Qualify resulting main with affected actual journeys, CI/artifact/consumer boundaries in `resulting-main-qualification.md`; reconcile issues/program/spec/docs only after proof.
 

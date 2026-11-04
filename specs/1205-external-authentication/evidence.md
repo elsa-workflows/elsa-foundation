@@ -4,7 +4,7 @@ Date: 2026-11-04. Starting Foundation main: `73040cd7b1368818820d2a60902443a9f8a
 
 ## State
 
-Incomplete delivery. Design and independent identity-isolation implementation are in progress. No provider-management/broker/Studio implementation, real provider sign-in, restart/multi-node qualification, PR/merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
+Incomplete delivery. Design and independent identity-isolation implementation are in progress. Provider catalog/lifecycle components are implemented in draft PR #3806; broker, API, Studio and actual provider/deployment qualification remain incomplete. No merge or resulting-main acceptance is claimed. The mapped-role assignment choice remains open: the first card selection was withdrawn; the repeated card awaits a considered answer. Provisioning policies assign existing Elsa roles; upstream roles/permissions have no automatic authority.
 
 Claims: #3579 comment 6627512912; prerequisite #2848 comment 6627557183. No competing claim/assignment/open PR found before this checkpoint. Owner authorization is recorded on #3579 comment 6627537005 and linked on #2771; #2771's Phase 2 description now names this scoped advancement without activating other phases. Baseline main CI 41790684918 passed; no open main-red CI issue was found at startup.
 
@@ -37,4 +37,46 @@ The complete suite includes cookie/token exchange/logout behavior, real JWT-hand
 
 ## Outstanding acceptance
 
-All T010 onward identity/admission/catalog/protocol/preview/session/API/Studio work and actual qualification remain open, as do review/merge/current required CI/packed consumers/resulting-main proof. User disable/delete and durable selected-session enforcement must integrate the same typed identity; the existing low-level status write alone does not deliver that acceptance. #2848 and #3579 remain open.
+Identity/admission, catalog discovery and runtime recovery adapters, protocol/preview/session/API/Studio work and actual qualification remain open, as do review/merge/current required CI/packed consumers/resulting-main proof. User disable/delete and durable selected-session enforcement must integrate the same typed identity; the existing low-level status write alone does not deliver that acceptance. #2848 and #3579 remain open.
+
+
+## Connection ownership/catalog checkpoint
+
+Implemented in the optional `Identity/ExternalAuthentication` Core/feature pair: detached live selection,
+explicit full override lifecycle, whole-catalog provider-configuration CAS, host-tenant management and role
+boundaries, separate configuration readiness/recovery eligibility, conservative final-path protection,
+non-mutating change assessment and startup dependency checks. Base Identity.Core acquires no Secrets dependency.
+The catalog uses the existing provider-configuration schema; no new EF provider authority or schema is added.
+
+Fifteen focused tests passed without skips. The native SQLite tests reopen the store after provider disposal,
+read updates from another independent service provider, prove stale-write conflict, preserve caller tenant scope,
+and synchronize two independently composed writers in the same process after their reads. Only one disable wins; a fresh retry cannot remove
+the remaining path. Protocol/recovery eligibility is a controlled collaborator in these component tests, not a
+real provider/user/session proof. Readiness/eligible recovery adapters remain to be implemented and qualified.
+
+`dotnet run --project tools/maps/Elsa.Maps.Generator -- check` passed: committed filters still describe the graph.
+The complete Identity suite passed **596/596**, zero failed/skipped. Explicit-shadow mutation (allowing any
+same-key stored record to shadow) fails the lifecycle regression. Removing the final-path rejection makes
+**five** protection tests fail, including the shared-SQLite writer retry. Both exact sources were restored;
+the complete 596-test run is the restored result. Architecture-project restore also passed after adding the
+optional feature reference; its full architecture suite has not yet run on this checkpoint.
+
+Commands:
+
+```sh
+dotnet test Essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --verbosity minimal
+dotnet restore Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --verbosity minimal
+dotnet run --project tools/maps/Elsa.Maps.Generator -- check
+```
+
+Logs: `/tmp/elsa-3579-auto-shadow-final.log`, `/tmp/elsa-3579-recovery-final.log`,
+`/tmp/elsa-3579-catalog-final.log`, `/tmp/elsa-3579-architecture-restore.log`,
+`/tmp/elsa-3579-maps-updated-graph.log`. These are component results, not actual two-server qualification.
+
+The source assessment exposes complete proposed effective state without saving. A stale confirmation rejects
+at catalog revision checking. Source/presentation/settings/secret/policy transitions never merge fields.
+This assessment is distinct from the pending real interactive sign-in preview.
+
+Draft PR: https://github.com/elsa-workflows/elsa-foundation/pull/3806 (Codex app, retained as draft). Startup GitHub
+publication returned errors, including an HTTP 502 after creation; authoritative read confirmed PR #3806 rather
+than retrying into a duplicate. No merge/release/deployment action was taken.

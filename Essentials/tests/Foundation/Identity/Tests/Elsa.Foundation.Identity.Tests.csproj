@@ -26,6 +26,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+        <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
