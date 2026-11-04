@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A38 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A39 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -46,6 +46,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD36 — durable per-invocation business-event order | FR-047 | A36 |
 | OD37 — final outcomes for queued events when invocation ends | FR-048 | A37 |
 | OD38 — bounded acceptance while active and awaiting recovery | FR-049 | A38 |
+| OD39 — reject direct cross-region edges initially | FR-050 | A39 |
 
 ## Witness definitions
 
@@ -89,6 +90,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A36 | Ordered business-event evaluation across waits/restart | Queued events follow per-invocation durable admission order after internal progress settles; concurrent order is observable and duplicate retries preserve position; accepted timer/activity-trigger competition remains intact | Actual ingress/host/persistence witness with deliberately competing admissions, duplicate retries and a suspended phase/restart; atomic ordering and exact source integration remain unproved |
 | A37 | Complete/cancel with accepted unselected events | Queued unselected events receive final not-processed outcomes with completion/cancellation reasons; retained receipts remain queryable under policy, new admissions are rejected and events never automatically move to a new invocation | Actual complete/cancel/restart and terminal/admission race witnesses, retained receipt/duplicate-retry checks and a new-invocation negative control; exact atomicity/retention and selected-work cancellation remain Q2 |
 | A38 | Admit while recovery blocks evaluation | Active machines awaiting action/loop recovery still accept durably within bounds with visible blockage; queued events obey ordering/deduplication and never bypass recovery or automatically repeat the detected cycle | Actual incident/ingress/host/restart/recovery witness plus full/terminal rejection and concurrent recovery/admission controls; exact recovery-gate integration remains unproved |
+| A39 | Direct cross-region edge validation | Definition validation and Studio reject direct edges between independent regions with a clear diagnostic; valid local transitions, shared-event reactions and explicit container exits still work | Definition-validation and actual Studio author/save/reload/publish controls with valid parallel runtime witnesses; complete allowed boundaries/conflict arbitration remain Q1 and editor integration is unproved |
 
 ## Qualification rules
 

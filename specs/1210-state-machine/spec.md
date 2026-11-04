@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD38 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD39 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -74,6 +74,7 @@ An author models several concurrent lifecycle regions without enumerating every 
 8. **Given** one input selects compatible transitions in independent regions, **when** one region's phase work waits durably, **then** independent work in the same phase can progress in other regions without a guaranteed branch completion order. Hierarchy dependencies remain enforced; all selected exits finish before actions, and all actions finish before entries. Later business events wait until the selected work finishes.
 9. **Given** a regional Action fails and normal Elsa fault handling leaves the machine awaiting recovery, **when** supported recovery retries that failed work, **then** completed sibling work is preserved and successful regions are not restarted. StateMachine adds no automatic sibling cancellation; still-running work follows normal incident policy. The phase and later chart-event evaluation remain blocked until required work succeeds, unless normal workflow cancellation ends the work.
 10. **Given** every region of a parallel state is final, **when** an authored completion-triggered transition is eligible, **then** that transition can define what follows the completed parallel lifecycle without implicit whole-machine completion.
+11. **Given** an attempted direct transition between states in independent regions of the same parallel container, **when** the definition is authored or validated, **then** the initial release rejects that edge with a clear diagnostic rather than silently treating it as shared-container exit/re-entry. Region-local transitions, compatible shared-event reactions and explicit exits from the parallel container remain supported.
 
 ### User Story 4 — Wait durably during selected transition work (Priority: P1)
 
@@ -215,6 +216,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-047**: Queued machine-addressed business events MUST be evaluated in durable admission order within each machine invocation, preserving that order across waits and restarts. Concurrent admissions MUST receive an observable engine-assigned order; duplicate retries MUST retain the original event's position. Accepted automatic/completion precedence and timer/activity-trigger competition rules MUST remain in force. This requirement does not imply external wall-clock ordering or select a separate ordering authority; atomic source integration remains Q2.
 - **FR-048**: When a machine completes or is cancelled, accepted business events still queued and not yet selected MUST receive final not-processed outcomes with the explicit completion or cancellation reason. Receipts MUST be retained under the declared retention policy. New admissions to that invocation MUST be rejected and those events MUST NOT automatically move to another invocation. These outcomes MUST remain distinct from evaluated-unhandled and already-selected/partly executed work. Exact terminal/admission atomicity, retention details and in-flight cancellation outcomes remain Q2 design/proof work.
 - **FR-049**: An active machine blocked awaiting recovery MUST continue durably accepting business events under the same configured capacity rules and MUST expose the recovery blockage. Accepted events MUST remain queued and chart evaluation MUST NOT resume until recovery permits it. Full/terminal rejection, retained receipts/deduplication and durable admission order MUST remain as agreed. New admissions MUST NOT bypass recovery or automatically repeat a detected cycle; exact recovery-gate/admission integration and atomic races remain Q2 design/proof work.
+- **FR-050**: The initial release MUST disallow direct transition edges between states in independent regions of a shared parallel container. Definition validation and Studio MUST diagnose these edges clearly and MUST NOT silently reinterpret them as shared-container exit/re-entry. Region-local transitions, compatible shared-event regional reactions and explicit exits from the containing parallel state MUST remain supported. This restriction does not reduce the agreed hierarchy/parallel first-release scope or select unagreed exit/entry boundaries and conflict arbitration.
 
 ### Platform constraints and design obligations
 
@@ -270,6 +272,8 @@ The following are review prompts, not accepted semantics. Interview the owner on
 [NEEDS CLARIFICATION: Confirm or amend the remaining scoped completion, complete hierarchical entry/exit/action, cross-state/region and automatic-candidate conflict, reevaluation and rearming/loop rules before declaring the behavior contract approved.]
 
 OD17 settles same-state selection order for one input (FR-028). Complete conflict arbitration across different states/regions remains open.
+
+OD39 disallows direct cross-region transition edges in the initial release with clear definition/Studio validation, while retaining region-local transitions, compatible shared-event reactions and explicit parallel-container exits (FR-050). Allowed transition boundary calculation and conflicting cross-region candidate arbitration remain open.
 
 OD18 adds automatic transitions after entry work completes (FR-029). OD19 gives eligible automatic progress precedence over queued business events (FR-030). OD32 orders automatic progress before still-applicable completion reactions, rechecks automatic paths after each reaction and delays queued business events until this internal progress settles (FR-043). Complete automatic-candidate conflict arbitration, other reevaluation rules and cycle/protection/recovery rules still need agreement.
 
