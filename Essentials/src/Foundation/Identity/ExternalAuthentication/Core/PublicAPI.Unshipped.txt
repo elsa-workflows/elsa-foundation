@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAuthenticationProvenance.AuthenticationSessionId.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAuthenticationProvenance.AuthenticationSessionId.init -> void
 Elsa.Foundation.Identity.ExternalAuthentication.Core.AdmissionPolicy
 Elsa.Foundation.Identity.ExternalAuthentication.Core.AdmissionPolicy.<Clone>$() -> Elsa.Foundation.Identity.ExternalAuthentication.Core.AdmissionPolicy!
 Elsa.Foundation.Identity.ExternalAuthentication.Core.AdmissionPolicy.AdmissionPolicy() -> void

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Api.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
@@ -18,6 +19,61 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
 public sealed partial class ExternalAuthenticationHttpTests
 {
+    [Fact]
+    public void Canonical_sign_in_session_bindings_cannot_be_serialized_or_bound_from_client_JSON()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var session = new AuthSession("authenticated", "user", null, "default", new HashSet<string>(), new HashSet<string>(), "fresh", "external:company")
+        { AuthenticationSessionId = "server-binding-private-canary" };
+        var provenance = new ExternalAuthenticationProvenance("company", "source", "https://issuer.example", "subject")
+        { AuthenticationSessionId = "server-binding-private-canary" };
+        foreach (var json in new[] { JsonSerializer.Serialize(session, options), JsonSerializer.Serialize(provenance, options) })
+        {
+            Assert.DoesNotContain("authenticationSessionId", json, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("server-binding-private-canary", json, StringComparison.Ordinal);
+        }
+        const string forged = "{\"status\":\"authenticated\",\"authenticationSessionId\":\"client-binding-private-canary\"}";
+        Assert.Null(JsonSerializer.Deserialize<AuthSession>(forged, options)!.AuthenticationSessionId);
+        Assert.Null(JsonSerializer.Deserialize<ExternalAuthenticationProvenance>(forged, options)!.AuthenticationSessionId);
+    }
+
+    [Fact]
+    public async Task Rebinding_a_qualified_identity_away_and_back_cannot_resurrect_previous_cookies_access_or_refresh()
+    {
+        await using var host = await HttpHost.Start();
+        using var original = host.Browser(); using var unrelated = host.Browser(); using var fresh = host.Browser();
+        var callback = await host.StartAndAuthorize(original);
+        using (var completed = await original.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var unrelatedCallback = await host.StartAndAuthorize(unrelated, "partner");
+        using (var completed = await unrelated.GetAsync(unrelatedCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var user = (await Session(original)).Subject!; var pair = await Pair(original); var otherPair = await Pair(unrelated);
+        await AddLinkTarget(host, "temporary-owner");
+        await using (var scope = host.Scope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IRevisionAwareExternalIdentityStore>();
+            var key = new ExternalIdentityKey("default", "company", host.Company.Issuer, "opaque-Subject");
+            var initial = (await store.FindByKeyWithRevisionAsync(key))!;
+            Assert.Equal(user, initial.Record.UserId);
+            Assert.Equal(IamRevisionSaveStatus.Saved, (await store.SaveWithRevisionAsync(initial.Record with { UserId = "temporary-owner" }, initial.Revision)).Status);
+            var rebound = (await store.FindByKeyWithRevisionAsync(key))!;
+            Assert.Equal(IamRevisionSaveStatus.Saved, (await store.SaveWithRevisionAsync(rebound.Record with { UserId = user }, rebound.Revision)).Status);
+        }
+        // Keep the original cookie untouched through both ownership changes: rejection during the
+        // first change must not hide resurrection after the link returns to its former owner.
+        Assert.Equal("anonymous", (await Session(original)).Status);
+        using (var access = await Bearer(original, pair.AccessToken)) Assert.Equal(HttpStatusCode.Unauthorized, access.StatusCode);
+        using (var refresh = await original.PostAsJsonAsync("_elsa/identity/refresh", new { refreshToken = pair.RefreshToken }))
+            Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+        Assert.Equal("authenticated", (await Session(unrelated)).Status);
+        using (var access = await Bearer(unrelated, otherPair.AccessToken)) Assert.Equal(HttpStatusCode.OK, access.StatusCode);
+        using (var refresh = await unrelated.PostAsJsonAsync("_elsa/identity/refresh", new { refreshToken = otherPair.RefreshToken }))
+            Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+        var newCallback = await host.StartAndAuthorize(fresh);
+        using (var completed = await fresh.GetAsync(newCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        Assert.Equal(user, (await Session(fresh)).Subject);
+        Assert.Equal(["reader"], (await Session(fresh)).Roles);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

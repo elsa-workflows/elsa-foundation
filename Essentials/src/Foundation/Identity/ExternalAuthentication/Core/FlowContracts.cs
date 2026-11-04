@@ -40,6 +40,9 @@ public sealed record ExternalFlowCallback(string ConnectionKey, AuthenticationAr
 /// <summary>Verified server-only origin. Internal credential binding is never a public session or administration field.</summary>
 public sealed record ExternalAuthenticationProvenance(string ConnectionKey, string ConnectionRecordId, string Issuer, string Subject)
 {
+    /// <summary>Issued durable Elsa session, supplied only by canonical sign-in after protocol completion.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? AuthenticationSessionId { get; init; }
     public string? MaterialRevision { get; init; }
     public string? CredentialBinding { get; init; }
     public string? RedirectUri { get; init; }

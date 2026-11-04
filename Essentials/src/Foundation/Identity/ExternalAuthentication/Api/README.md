@@ -64,6 +64,9 @@ requires the authority's durable-session capability. User disable/delete and acc
 already issued access/refresh as well as cookies; disable→enable cannot resurrect earlier sessions.
 The administration operations below expose inspection, selected-session revocation and explicit link attachment.
 Link removal and cross-IAM mutation/recovery coordination remain T024 work.
+An explicit revision-authorized IAM login rebind rotates both affected account versions in the same transaction.
+Their earlier cookies/access/refresh remain invalid even if the login later returns to its original owner.
+Unrelated users retain their sessions; ordinary same-owner metadata updates preserve the account versions.
 
 `ExternalAuthenticationHttpTests` drive actual owned Kestrel HTTP hosts and two actual HTTP OIDC fixtures with
 native SQLite IAM/artifact/vendor-token stores and owned key files. They cover normal cookie/access/refresh/

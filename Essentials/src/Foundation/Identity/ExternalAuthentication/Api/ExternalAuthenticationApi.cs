@@ -200,18 +200,20 @@ public static partial class ExternalAuthenticationApi
             await SecurityNotification(context, "signin.admit", AuthEventOutcome.Success, flow.UserId, "admitted", category: AuthEventCategory.Authentication);
             var issuer = context.RequestServices.GetRequiredService<ICanonicalUserSignInService>();
             var tenant = context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.TenantId;
-            if (await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key))
+            var signedIn = await issuer.SignInAsync(new(tenant, flow.UserId, ManagedConnectionProviderSource.ProviderId(key))
                 {
                     ExternalIdentity = new(tenant, key, flow.Provenance.Issuer, flow.Provenance.Subject),
                     ConnectionRecordId = flow.Provenance.ConnectionRecordId
-                }, context.RequestAborted) is null)
+                }, context.RequestAborted);
+            if (signedIn is null)
             {
                 await SecurityNotification(context, "signin.complete", AuthEventOutcome.Denied, flow.UserId, "user-unavailable", category: AuthEventCategory.Authentication);
                 await Failure(context, 401); return;
             }
             try
             {
-                await context.RequestServices.GetRequiredService<IConnectionSignInEvidence>().RecordAsync(flow.UserId, flow.Provenance, context.RequestAborted);
+                await context.RequestServices.GetRequiredService<IConnectionSignInEvidence>().RecordAsync(flow.UserId,
+                    flow.Provenance with { AuthenticationSessionId = signedIn.AuthenticationSessionId }, context.RequestAborted);
             }
             catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
             {

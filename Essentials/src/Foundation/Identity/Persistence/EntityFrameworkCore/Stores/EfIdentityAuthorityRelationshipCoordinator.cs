@@ -375,6 +375,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             var existing = await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == id, token);
             if (existing is not null)
                 EfIdentityStoreSupport.EnsureExternalIdentity(existing, login.TenantId, login.Provider, login.ProviderSubject, issuer: login.Issuer);
+            var changesOwner = existing is not null && !Same(existing.UserId, login.UserId);
             if (existing is not null &&
                 policy == EfExternalLoginOwnershipPolicy.CreateOrSameOwner &&
                 !Same(existing.UserId, login.UserId))
@@ -431,6 +432,9 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                     ids.Remove(id);
                 SetRegistry(pair.Value, UserRegistry.Logins, ids);
                 EnsureUserRelationshipCapacity(pair.Value, beforeCount);
+                // A login returning to an earlier owner must not reactivate that owner's old
+                // cookie/access/refresh credentials. Fence both owners in this same IAM commit.
+                if (changesOwner) pair.Value.SecurityStamp = Guid.NewGuid().ToString("N");
                 pair.Value.Revision = checked(pair.Value.Revision + 1);
                 if (string.Equals(pair.Key, newOwnerKey, StringComparison.Ordinal))
                     ownerResult = Updated(pair.Value.Id, pair.Value.Revision);

@@ -578,3 +578,64 @@ Studio/external IdP product/cross-site/server-database/restart/separate-process/
 independent exact-head review/current required CI/merge and resulting-main proofs remain required. The PR stays
 draft, #3579/#2848 stay open and the complete delivery goal remains active and unachieved. This checkpoint does
 not close general identity-administration issues #2777/#2778/#2779.
+
+## Account-version and standalone image corrections (4 November)
+
+An actual HTTP regression reproduced credential resurrection: move a qualified login from user A to B and back
+before using A's original cookie; A's old cookie was still authenticated. The Identity relationship coordinator
+now rotates both affected root account versions in the same transaction as an actual ownership change. Earlier
+cookies/access/refresh stay invalid when the login returns. A fresh normal sign-in still resolves the intended
+existing user with its saved Reader role; an unrelated provider user's cookie/access/refresh remain live.
+Successful same-owner metadata updates and refused stale rebinds preserve the current account versions.
+Native SQLite tests cover both qualified and legacy login namespaces.
+
+A second actual HTTP regression proved that the older protected recovery observation also revived after that
+round trip. Recovery recording now requires the actual freshly issued committed session for the same canonical
+user, connection record, issuer and subject. Canonical sign-in returns a server-only session ID; both that result
+metadata and the provenance binding are excluded from JSON serialization/deserialization. The observation keeps
+the opaque account version and original session/provider identifiers only inside its existing protected envelope.
+Recovery revalidates the account/link binding within the proof's own window. Rebind-away/back, disable→enable
+and security-stamp changes cannot revive old evidence; fresh normal sign-in can produce current evidence.
+Missing/fabricated/another-user session IDs cannot record evidence, and a revoked session cannot renew it.
+Ending an individual session still leaves historical credential evidence bounded by its original proof window;
+it does not imply the credential can no longer complete a fresh sign-in. Older observations without bindings do
+not qualify and need fresh normal administrative sign-in. No new database table, migration or audit store.
+
+Before/after controls: `/tmp/elsa-3579-rebind-before.log` fails with authenticated instead of anonymous after
+the ownership round trip; `/tmp/elsa-3579-recovery-epoch-before.log` fails with old evidence still usable. The first
+after-run exposed a fixture assertion using `unauthenticated` instead of the API's existing `anonymous` status;
+corrected that expected wire value. An intermediate compile failed on a provider-ID helper owned by the API;
+the managed implementation now retains the actual issued provider ID instead of importing or duplicating that
+adapter helper. No test, guard, dependency boundary or failure was waived.
+
+Final Release checks: Identity **837/837**, discovery **837**; IAM EF **207/207**; ASP.NET Identity EF **59/59**;
+architecture **616/616**, zero skips. Generated filters and whitespace pass. Current logs:
+`/tmp/elsa-3579-epoch-final-identity.log`, `/tmp/elsa-3579-epoch-list-tests.log`,
+`/tmp/elsa-3579-epoch-full-iam.log`, `/tmp/elsa-3579-epoch-full-aspnet-ef.log`,
+`/tmp/elsa-3579-epoch-architecture.log`, `/tmp/elsa-3579-epoch-maps.log`.
+
+Hosted CI **41894199102** for preceding PR head `c99eac0bd` passed complete Studio archive and actual public
+consumer qualification, then failed the standalone Docker image: the Dockerfile did not copy `Extensions/Identity/studio`.
+Added that production source directory alongside the existing optional-module copy list. The actual local image
+now builds with the committed Dockerfile plus this correction, under one-CPU/four-GiB build limits, without
+publishing. Tag: `codex-elsa-studio:3579-c99-epoch-20261104`; log `/tmp/elsa-3579-epoch-studio-docker.log`.
+An owned non-root runtime container proves the feature assembly exists and serves host HTML, module JS and
+standalone SDK JS/declarations with HTTP 200. Container stopped after verification; receipt
+`/tmp/elsa-3579-epoch-studio-docker-http.json`. This is image/HTTP distribution proof, not a full SSO browser journey.
+
+Downloaded CI artifact **13357035547**, `studio-package-qualification-41894199102-1`, to
+`/tmp/elsa-3579-c99-studio-package-qualification/`. Its complete aggregate report is passed: 26 Studio packages plus
+9 support candidates, including the new module and its actual reference-distribution DLL. Actual normal/restored
+API, hosting, composition, reuse and pruning observations pass; expected omission/vendor/empty/runtime/pruning
+controls have their intended failed outcomes. Frontend invocations in consumers are zero. Package version is
+`4.0.0-studio-ci.41894199102.1`; source is CI's synthetic merge `cac677cdd14a475678f0e5f49447d079e6e32e99`,
+which includes PR head `c99eac0bd`. New module archive SHA-256 is
+`9eece937b05ee620eb34bc031180ae711a5fbbb95e19cba9c3515ed45e315dac`.
+These inspected reports strengthen the preceding-head Studio artifact evidence; final exact-head/all backend
+package/public-consumer gates remain required. That CI run remained active in a browser shard at the last poll;
+the completed Docker failure was inspected directly, not treated as a successful run or retried.
+
+T024 remains unchecked for qualified unlink and atomic cross-IAM final-login coordination. T025 Studio link/session
+surfaces, the full Studio/external IdP product/cross-site/server-DB/restart/separate-process/two-node matrix,
+independent exact-head review/current required CI/merge and resulting-main qualification remain required.
+The complete #3579/#2848 goal remains active and unachieved; PR #3806 remains draft.

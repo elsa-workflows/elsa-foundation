@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Core.Iam;
@@ -114,7 +115,12 @@ public sealed record AuthSession(
     IReadOnlySet<string> Roles,
     IReadOnlySet<string> Permissions,
     string TokenFreshness,
-    string? Provider);
+    string? Provider)
+{
+    /// <summary>Server-only binding returned by canonical sign-in; never part of a client session projection.</summary>
+    [JsonIgnore]
+    public string? AuthenticationSessionId { get; init; }
+}
 
 public sealed record AuthenticationSessionInvalidationContext(ClaimsPrincipal Principal);
 

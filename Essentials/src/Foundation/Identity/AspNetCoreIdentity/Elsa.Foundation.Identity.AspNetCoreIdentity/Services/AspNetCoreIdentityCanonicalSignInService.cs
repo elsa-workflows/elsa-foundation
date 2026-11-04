@@ -68,7 +68,7 @@ internal sealed class AspNetCoreIdentityCanonicalSignInService(UserManager<AspNe
         var session = await sessions.GetAsync(principal, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         await http.HttpContext.SignInAsync(AuthenticationScheme, principal, properties);
-        return session;
+        return session with { AuthenticationSessionId = identity.FindFirst(IdentityClaimTypes.SessionId)?.Value };
     }
 
     public async ValueTask<bool> ValidateSessionAsync(AuthenticationSessionRecord session, CancellationToken cancellationToken = default)

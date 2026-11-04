@@ -73,9 +73,13 @@ internal sealed class ConnectionRuntimeServices(IServiceScopeFactory scopes, IOp
     public async ValueTask RecordAsync(string userId, ExternalAuthenticationProvenance provenance, CancellationToken cancellationToken = default)
     {
         if (!options.Value.AllowDatabaseManagement || !WindowValid() || string.IsNullOrWhiteSpace(userId) ||
-            provenance.MaterialRevision is null || provenance.CredentialBinding is null || provenance.RedirectUri is null) return;
+            provenance.MaterialRevision is null || provenance.CredentialBinding is null || provenance.RedirectUri is null || provenance.AuthenticationSessionId is null) return;
         await using var scope = CreateScope();
         var services = scope.ServiceProvider;
+        var session = services.GetService<ICanonicalUserSignInService>() is { } authority
+            ? await authority.ReadSessionAsync(new(options.Value.TenantId, userId), provenance.AuthenticationSessionId, cancellationToken) : null;
+        if (session is null || session.ConnectionKey != provenance.ConnectionKey || session.ConnectionRecordId != provenance.ConnectionRecordId ||
+            session.Issuer != provenance.Issuer || session.ExternalSubject != provenance.Subject) return;
         var view = (await services.GetRequiredService<IConnectionRegistry>().ReadAsync(cancellationToken)).Connections
             .SingleOrDefault(view => view.Effective && view.Record.Enabled && view.Record.ArchivedAt is null && view.Record.Key == provenance.ConnectionKey);
         if (view is null || view.Record.Id != provenance.ConnectionRecordId || view.MaterialRevision != provenance.MaterialRevision ||
@@ -90,7 +94,9 @@ internal sealed class ConnectionRuntimeServices(IServiceScopeFactory scopes, IOp
         if (current.Failure != ExternalProtocolFailure.None || current.Issuer != provenance.Issuer || current.CredentialBinding != provenance.CredentialBinding) return;
         var now = clock.GetUtcNow();
         await proofs.RecordAsync(view.Record.Key, new(view.Record.Id, view.MaterialRevision, provenance.RedirectUri, provenance.Issuer, provenance.Subject,
-            userId, provenance.CredentialBinding, now), now - options.Value.RecoveryEvidenceLifetime, cancellationToken);
+            userId, provenance.CredentialBinding, now)
+            { AuthenticationSessionId = session.Id, SecurityVersion = session.SecurityVersion, SessionProvider = session.Provider },
+            now - options.Value.RecoveryEvidenceLifetime, cancellationToken);
     }
 
     private async ValueTask<bool> External(ConnectionRecord connection, CancellationToken token)
@@ -110,6 +116,14 @@ internal sealed class ConnectionRuntimeServices(IServiceScopeFactory scopes, IOp
         if (tested.Failure != ExternalProtocolFailure.None || tested.Issuer is null || tested.CredentialBinding is null) return false;
         foreach (var proof in candidates.Where(proof => proof.Issuer == tested.Issuer && proof.CredentialBinding == tested.CredentialBinding && proof.RedirectUri == callback))
         {
+            // Historical credential evidence has its own bounded window. Recheck its account/link
+            // binding; an ended individual session cannot create or renew this observation.
+            if (proof.AuthenticationSessionId is null || proof.SecurityVersion is null || proof.SessionProvider is null ||
+                services.GetService<ICanonicalUserSignInService>() is not { } authority ||
+                !await authority.ValidateSessionAsync(new(proof.AuthenticationSessionId, options.Value.TenantId, proof.UserId,
+                    proof.SessionProvider, proof.SecurityVersion, proof.ObservedAt,
+                    proof.ObservedAt + options.Value.RecoveryEvidenceLifetime)
+                    { ConnectionKey = connection.Key, ConnectionRecordId = connection.Id, Issuer = proof.Issuer, ExternalSubject = proof.Subject }, token)) continue;
             if (!await Eligible(services, proof.UserId, false, token)) continue;
             var assessment = await services.GetRequiredService<IExternalAdmissionService>().AssessAsync(new(
                 new(connection, ConnectionSource.Database, true, null, false, material),

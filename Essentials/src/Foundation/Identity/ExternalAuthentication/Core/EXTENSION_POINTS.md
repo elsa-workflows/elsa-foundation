@@ -16,7 +16,7 @@ terms: [authentication architecture](../../../../../../docs/reference/authentica
 | `IConnectionWriter` | Replacement | Management authorizes before global access, validates policy/lifecycle and performs one revision-checked catalog save. |
 | `IConnectionWriteAuthorizer` | Replacement | Host-tenant provider-management permission and existing-Elsa-role delegation. Destructive retirement needs management; activation/policy changes also need delegation. |
 | `IConnectionReadiness` | Replacement | Installed protocol, required settings, admission/role references and required secret resolution. This describes configuration readiness, not observed health or eligible recovery identities. |
-| `IConnectionRecovery` | Replacement | Recent protected normal administrator sign-in evidence, bound to record/material/issuer/callback/credential generation; rechecks current eligibility, permission, exact link and bounded metadata/JWKS. Configuration alone never counts. |
+| `IConnectionRecovery` | Replacement | Recent protected normal administrator sign-in evidence, bound to the issued session/account version and record/material/issuer/callback/credential generation; rechecks current eligibility, permission, exact link and bounded metadata/JWKS. Configuration alone never counts. |
 | `ILocalLoginRecovery` | Replacement | Current canonical actor first, then a bounded local user page scan; requires an enabled password method, password, active identity/membership, framework eligibility and current provider-management permission. |
 | `IConnectionSignInEvidence` | Replacement | Records successful normal external administrator sign-ins in a private protected observation envelope. Preview and ordinary reader sign-ins never establish recovery evidence. |
 

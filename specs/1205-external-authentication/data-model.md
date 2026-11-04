@@ -36,4 +36,11 @@ extends it. Direct non-user bearer compositions retain their separate typed exte
 
 ## Private recovery observations
 
+Every new observation also binds the actual issued durable Elsa session and its opaque account version. The
+canonical sign-in result carries a server-only session ID excluded from JSON; recovery recording re-reads that
+committed session for the exact user and connection. Recovery checks reuse the protected account/link binding
+within the observation's own lifetime. A login ownership rebind rotates both affected account versions atomically,
+so neither old credentials nor old observations revive after a link returns to its earlier owner. Older unbound
+observations require a fresh normal administrative sign-in. Individual session termination cannot renew evidence.
+
 Separate host-tenant/logical-key rows in the existing revision-aware global provider configuration store hold a versioned, Data Protection-protected bounded envelope of successful normal administrative sign-ins. Each proof carries source record, material revision, trusted callback, exact issuer/subject/user, opaque credential binding and observed UTC. No upstream tokens or secret values are retained. Up to sixteen recent observations per key; default eligibility window 24 hours, maximum thirty days. Expired entries never count and are pruned on the next record write. Preview never writes proofs. Configuration changes and live IAM/link/permission/credential/callback checks can invalidate proof earlier. These observations do not change material revision and are never a public management projection. Existing catalog CAS still coordinates concurrent connection retirement; cross-IAM/link/session mutation integration remains T024.

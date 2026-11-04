@@ -14,11 +14,105 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
 public sealed partial class ExternalAuthenticationHttpTests
 {
+    [Fact]
+    public async Task Recovery_observations_require_the_actual_issued_session_for_the_same_user_and_connection()
+    {
+        await using var host = await HttpHost.Start(); await MakeAdministrative(host, "company");
+        using var browser = host.Browser(); using var other = host.Browser();
+        var callback = await host.StartAndAuthorize(browser);
+        using (var completed = await browser.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var otherCallback = await host.StartAndAuthorize(other, "partner");
+        using (var completed = await other.GetAsync(otherCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var user = (await Session(browser)).Subject!;
+        var id = new JsonWebToken((await Pair(browser)).AccessToken).GetClaim(IdentityClaimTypes.SessionId).Value;
+        var otherId = new JsonWebToken((await Pair(other)).AccessToken).GetClaim(IdentityClaimTypes.SessionId).Value;
+        await using (var global = host.Services.CreateAsyncScope())
+        {
+            global.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("test-reset-recovery-observations")));
+            var database = global.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>();
+            database.GlobalProviderConfigurations.RemoveRange((await database.GlobalProviderConfigurations.ToArrayAsync())
+                .Where(row => row.Provider.StartsWith("external-recovery:", StringComparison.Ordinal)));
+            await database.SaveChangesAsync();
+        }
+        await using var scope = host.Scope(); var services = scope.ServiceProvider;
+        var view = await View(host, "company");
+        var protocol = Assert.Single(services.GetServices<IExternalAuthenticationProtocol>());
+        var checkedSource = await protocol.CheckAsync(view.Record);
+        var provenance = new ExternalAuthenticationProvenance("company", view.Record.Id, host.Company.Issuer, "opaque-Subject")
+        {
+            MaterialRevision = view.MaterialRevision, CredentialBinding = checkedSource.CredentialBinding,
+            RedirectUri = services.GetRequiredService<IExternalAuthenticationFlowService>().GetCallbackUri("company", AuthenticationArtifactPurpose.SignIn)
+        };
+        var evidence = services.GetRequiredService<IConnectionSignInEvidence>();
+        foreach (var invalid in new[] { null, new string('0', 64), otherId })
+        {
+            await evidence.RecordAsync(user, provenance with { AuthenticationSessionId = invalid });
+            Assert.Empty(await RecoveryDocuments(host));
+        }
+        await evidence.RecordAsync(user, provenance with { AuthenticationSessionId = id });
+        var saved = Assert.Single(await RecoveryDocuments(host));
+        Assert.True(await services.GetRequiredService<IConnectionRecovery>().IsUsableAsync(view.Record));
+        var sessions = services.GetRequiredService<IAuthenticationSessionStore>();
+        var issued = (await sessions.FindAsync("default", id))!;
+        Assert.Equal(AuthenticationSessionRevocationStatus.Revoked, await sessions.RevokeAsync("default", id, issued.Revision!, host.Clock.GetUtcNow()));
+        host.Clock.Now += TimeSpan.FromMinutes(1);
+        await evidence.RecordAsync(user, provenance with { AuthenticationSessionId = id });
+        Assert.Equal(saved, Assert.Single(await RecoveryDocuments(host)));
+        // Ending an individual session does not remove the credential's ability to sign in again.
+        // Its old protected observation remains bounded by the proof window and account version,
+        // while a revoked session cannot manufacture a fresh observation.
+        Assert.True(await services.GetRequiredService<IConnectionRecovery>().IsUsableAsync(view.Record));
+    }
+
+    [Theory]
+    [InlineData("rebind")]
+    [InlineData("status")]
+    [InlineData("security-stamp")]
+    public async Task Recovery_evidence_cannot_revive_after_an_account_version_change_without_a_new_normal_sign_in(string change)
+    {
+        await using var host = await HttpHost.Start(); await MakeAdministrative(host, "company");
+        using var browser = host.Browser(); using var fresh = host.Browser();
+        var callback = await host.StartAndAuthorize(browser);
+        using (var completed = await browser.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var user = (await Session(browser)).Subject!;
+        await using var scope = host.Scope();
+        var record = (await View(host, "company")).Record;
+        var recovery = scope.ServiceProvider.GetRequiredService<IConnectionRecovery>();
+        Assert.True(await recovery.IsUsableAsync(record));
+        if (change == "rebind")
+        {
+            await AddLinkTarget(host, "temporary-owner");
+            var links = scope.ServiceProvider.GetRequiredService<IRevisionAwareExternalIdentityStore>();
+            var key = new ExternalIdentityKey("default", "company", host.Company.Issuer, "opaque-Subject");
+            var initial = (await links.FindByKeyWithRevisionAsync(key))!;
+            Assert.Equal(IamRevisionSaveStatus.Saved, (await links.SaveWithRevisionAsync(initial.Record with { UserId = "temporary-owner" }, initial.Revision)).Status);
+            var moved = (await links.FindByKeyWithRevisionAsync(key))!;
+            Assert.Equal(IamRevisionSaveStatus.Saved, (await links.SaveWithRevisionAsync(moved.Record with { UserId = user }, moved.Revision)).Status);
+        }
+        else if (change == "status")
+        {
+            var users = scope.ServiceProvider.GetRequiredService<IUserStore>();
+            Assert.True(await users.SetStatusAsync("default", user, UserStatus.Disabled));
+            Assert.True(await users.SetStatusAsync("default", user, UserStatus.Active));
+        }
+        else
+        {
+            var manager = scope.ServiceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+            Assert.True((await manager.UpdateSecurityStampAsync((await manager.FindByIdAsync(user))!)).Succeeded);
+        }
+        Assert.False(await recovery.IsUsableAsync(record));
+        var freshCallback = await host.StartAndAuthorize(fresh);
+        using (var completed = await fresh.GetAsync(freshCallback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        Assert.Equal(user, (await Session(fresh)).Subject);
+        Assert.True(await recovery.IsUsableAsync(record));
+    }
+
     [Theory]
     [InlineData("role", ConnectionReadinessFailure.RoleUnavailable)]
     [InlineData("role-boundary", ConnectionReadinessFailure.RoleForbidden)]

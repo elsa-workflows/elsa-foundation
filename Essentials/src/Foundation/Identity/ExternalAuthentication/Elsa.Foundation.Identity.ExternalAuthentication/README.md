@@ -45,7 +45,9 @@ It does not exchange a code or provision a user. Recovery additionally requires 
 
 External recovery uses a recent successful **normal** administrator sign-in bound to the actual source record,
 material revision, callback, exact issuer/subject/user and current secret generation. Preview and reader sign-ins
-never count. The checker revalidates current framework/user/membership status, provider-management permission,
+never count. Recording also requires the actual freshly issued durable session for that user and connection;
+its account-version binding is retained only inside the protected proof. The checker revalidates that binding,
+current framework/user/membership status, provider-management permission,
 qualified link and live bounded discovery/JWKS. A successful metadata read alone cannot prove the registered
 client credentials or account. This is a recent observation, not a guarantee of upstream account availability.
 Normal sign-in stays successful if optional observation recording fails; absent evidence cannot authorize retirement.
@@ -56,6 +58,9 @@ expired proofs are ignored and pruned on the next successful recording. They nev
 or expose credential bindings in management responses. Removed-key observation rows remain protected in that
 store; there is no additional audit store or scheduled history cleanup. Nodes need the same key ring/application
 name. Database-disabled hosts do not record these observations.
+Older observations without an account-version binding do not count; a fresh normal administrative sign-in is
+required. Rebinding a login away and back cannot revive its earlier observation. Ending an individual session
+does not remove the credential's ability to sign in again, but that ended session cannot renew an observation.
 
 Local recovery checks the enabled password method, an actual password, current framework eligibility, user and
 membership status and current provider-management permission. Custom canonical session authorities must implement
@@ -63,6 +68,9 @@ read-only eligibility and durable-session support; the default `CanSignInAsync` 
 default durable-session capability is unavailable. The ASP.NET implementation binds sessions through the
 [optional durable store](../Persistence/EntityFrameworkCore/README.md). Session administration and cross-IAM
 recovery coordination remain separate from ordinary live credential validation.
+For recovery recording, a custom canonical authority returns its issued `AuthenticationSessionId` on the
+server-side `AuthSession` and supports reading/validating that committed session. This metadata is excluded from
+JSON. Missing or mismatched bindings never produce recovery evidence.
 
 Before disabling/replacing an enabled effective provider, the writer proves a remaining external recovery path
 or actual local recovery, then saves the complete catalog with CAS. External checks share a thirty-second bound;

@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Foundation.Identity.Core.Authentication.AuthSession.AuthenticationSessionId.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthSession.AuthenticationSessionId.init -> void
 Elsa.Foundation.Identity.Core.Authentication.AuthSession
 Elsa.Foundation.Identity.Core.Authentication.AuthSession.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.AuthSession!
 Elsa.Foundation.Identity.Core.Authentication.AuthSession.AuthSession(string! Status, string? Subject, string? DisplayName, string? TenantId, System.Collections.Generic.IReadOnlySet<string!>! Roles, System.Collections.Generic.IReadOnlySet<string!>! Permissions, string! TokenFreshness, string? Provider) -> void
