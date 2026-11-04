@@ -8,6 +8,7 @@ import "@elsa-workflows/studio-ui/styles.css";
 import "../../../../../../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../styles.css";
 import { ExternalAuthenticationPage } from "../ExternalAuthenticationPage";
+import { UserAccessPage } from "../UserAccessPage";
 
 // Actual HTTP qualification entry. It supplies the public SDK transport, never fake domain responses.
 const backend = window.location.origin + "/backend";
@@ -26,7 +27,8 @@ async function start() {
     getJson: <T,>(path: string, init?: StudioRequestInit) => raw.getJson<T>(resolveBackendPath(backend, path), init),
     postJson: <T,>(path: string, body: unknown, init?: StudioRequestInit) => raw.postJson<T>(resolveBackendPath(backend, path), body, init)
   } };
-  createRoot(document.getElementById("root")!).render(<ExternalAuthenticationPage context={context} dialogs={{
+  const Page = new URL(window.location.href).searchParams.get("view") === "access" ? UserAccessPage : ExternalAuthenticationPage;
+  createRoot(document.getElementById("root")!).render(<Page context={context} dialogs={{
     confirm: async options => window.confirm(`${options.title}\n\n${options.message}`),
     alert: async options => { window.alert(options.message); }, prompt: async options => window.prompt(options.message)
   }} />);

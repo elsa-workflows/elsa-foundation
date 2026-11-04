@@ -176,18 +176,19 @@ public sealed partial class ExternalAuthenticationHttpTests
         await using var host = await HttpHost.Start();
         var endpoints = host.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.StartsWith("ExternalIdentity", StringComparison.Ordinal) == true).ToArray();
-        Assert.Equal(5, endpoints.Length);
+        Assert.Equal(6, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             Assert.NotNull(endpoint.Metadata.GetMetadata<IDisableCookieRedirectMetadata>());
             Assert.Equal(typeof(Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature).Assembly.GetName().Name,
                 endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()!.OwnerId);
-            var permission = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()!.EndpointName switch
+            var name = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()!.EndpointName;
+            var permission = name switch
             { "ExternalIdentityLinks" => DefaultIdentityPermissionKeys.IdentityLinksRead, "ExternalIdentityAttachLink" or "ExternalIdentityRemoveLink" => DefaultIdentityPermissionKeys.IdentityLinksManage,
                 "ExternalIdentitySessions" => DefaultIdentityPermissionKeys.IdentitySessionsRead, _ => DefaultIdentityPermissionKeys.IdentitySessionsManage };
             var parsed = new PermissionPolicyCodec().Parse(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>()!.Value!);
-            Assert.Equal(PermissionRequirementMode.All, parsed.Descriptor!.Mode);
-            Assert.Equal(new[] { permission, DefaultIdentityPermissionKeys.IdentityUsersRead }.Select(PermissionKey.Normalize).Order(StringComparer.Ordinal), parsed.Descriptor.Permissions.Order(StringComparer.Ordinal));
+            Assert.Equal(name == "ExternalIdentityUsers" ? PermissionRequirementMode.Single : PermissionRequirementMode.All, parsed.Descriptor!.Mode);
+            Assert.Equal((name == "ExternalIdentityUsers" ? new[] { DefaultIdentityPermissionKeys.IdentityUsersRead } : new[] { permission, DefaultIdentityPermissionKeys.IdentityUsersRead }).Select(PermissionKey.Normalize).Order(StringComparer.Ordinal), parsed.Descriptor.Permissions.Order(StringComparer.Ordinal));
         }
     }
 

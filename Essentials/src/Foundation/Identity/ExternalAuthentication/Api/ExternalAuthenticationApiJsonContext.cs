@@ -23,6 +23,7 @@ internal sealed record ExternalAuthenticationStartRequest(string? ReturnUrl, str
 [JsonSerializable(typeof(ManagedRolePage))]
 [JsonSerializable(typeof(ManagedConnectionError))]
 [JsonSerializable(typeof(ManagedSessionPage))]
+[JsonSerializable(typeof(ManagedIdentityUsersResponse))]
 [JsonSerializable(typeof(ManagedSessionRevokeRequest))]
 [JsonSerializable(typeof(ManagedSessionRevokeResponse))]
 [JsonSerializable(typeof(ManagedIdentityLinkPage))]

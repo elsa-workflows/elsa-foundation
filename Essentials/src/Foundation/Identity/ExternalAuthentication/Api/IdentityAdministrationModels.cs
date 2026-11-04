@@ -1,5 +1,10 @@
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 
+internal sealed record ManagedIdentityUsersResponse(string TenantId, string ProtocolPath, string OwnershipMode,
+    bool CanManageUsers, bool CanRevokeTokens, bool CanReadLinks, bool CanReadSessions,
+    string? LinkManagementUnavailableReason, string? SessionAdministrationUnavailableReason,
+    IReadOnlyList<ManagedUserLookup> Items, long TotalCount);
+
 internal sealed record ManagedSessionResponse(string Id, string UserId, string Provider, string? ConnectionKey,
     string? ConnectionRecordId, string? Issuer, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
     DateTimeOffset? RevokedAt, string State, string Revision, bool Current, bool CanRevoke);

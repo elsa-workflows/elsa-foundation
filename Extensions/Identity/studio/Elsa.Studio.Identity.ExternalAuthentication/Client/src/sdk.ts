@@ -41,6 +41,28 @@ export interface ConnectionPreview {
 export interface RoleChoice { id: string; name: string; canDelegate: boolean }
 export interface SecretChoice { name: string; displayName: string | null; typeName: "text"; scope: string | null }
 export interface PreviewSubmission { action: string; fields: Record<string, string> }
+export interface IdentityUser { id: string; userName: string; displayName: string | null; status: number }
+export interface IdentityUsers {
+  tenantId: string; protocolPath: string; ownershipMode: string; canManageUsers: boolean; canRevokeTokens: boolean;
+  canReadLinks: boolean; canReadSessions: boolean; linkManagementUnavailableReason: string | null;
+  sessionAdministrationUnavailableReason: string | null; items: IdentityUser[]; totalCount: number;
+}
+export interface IdentityLink {
+  provider: string; issuer: string | null; subject: string; linkedAt: string; lastSeenAt: string | null; revision: string | null;
+  qualified: boolean; connectionConfigured: boolean; connectionDisplayName: string | null; canRemove: boolean;
+}
+export interface IdentityLinks {
+  userId: string; items: IdentityLink[]; totalCount: number; userRevision: string | null; catalogRevision: string | null; canAttach: boolean;
+  attachChoices: { id: string; key: string; displayName: string; effective: boolean; enabled: boolean }[];
+}
+export interface IdentitySession {
+  id: string; userId: string; provider: string; connectionKey: string | null; connectionRecordId: string | null; issuer: string | null;
+  createdAt: string; expiresAt: string; revokedAt: string | null; state: "active" | "inactive" | "expired" | "revoked";
+  revision: string; current: boolean; canRevoke: boolean;
+}
+export interface IdentitySessions { userId: string; items: IdentitySession[]; totalCount: number }
+export interface LinkAttachment { connectionRecordId: string; subject: string; expectedCatalogRevision: string | null; expectedUserRevision: string }
+export interface LinkRemoval { provider: string; issuer: string; subject: string; expectedLinkRevision: string; expectedUserRevision: string; expectedCatalogRevision: string | null }
 const management = "/_elsa/identity/external-connections";
 export class ExternalAuthenticationClientError extends Error { }
 
@@ -66,6 +88,39 @@ export class ExternalAuthenticationClient {
   }
   roles(skip = 0, signal?: AbortSignal) {
     return this.transport.getJson<{ items: RoleChoice[]; totalCount: number }>(`${management}/lookups/roles?skip=${skip}&take=100`, { signal });
+  }
+  async users(search = "", skip = 0, signal?: AbortSignal): Promise<IdentityUsers> {
+    const result = await this.transport.getJson<IdentityUsers>(`${management}/users?skip=${skip}&take=25&search=${encodeURIComponent(search.trim())}`, { signal });
+    boundedPage(result);
+    this.protocolPath = protocolPath(result.protocolPath);
+    return result;
+  }
+  async links(userId: string, skip = 0, signal?: AbortSignal) {
+    const result = await this.transport.getJson<IdentityLinks>(`${management}/users/${identitySegment(userId)}/links?skip=${skip}&take=25`, { signal });
+    boundedPage(result);
+    if (result.userId !== userId) throw new ExternalAuthenticationClientError("The backend returned access for a different user. Refresh user access.");
+    return result;
+  }
+  async sessions(userId: string, skip = 0, signal?: AbortSignal) {
+    const result = await this.transport.getJson<IdentitySessions>(`${management}/users/${identitySegment(userId)}/sessions?skip=${skip}&take=25`, { signal });
+    boundedPage(result);
+    if (result.userId !== userId || result.items.some(item => item.userId !== userId))
+      throw new ExternalAuthenticationClientError("The backend returned sessions for a different user. Refresh user access.");
+    return result;
+  }
+  attach(userId: string, request: LinkAttachment, signal?: AbortSignal) {
+    return this.postIdentity<{ attached: boolean; failure: string | null }>(`/users/${identitySegment(userId)}/links/attach`, request, signal);
+  }
+  removeLink(userId: string, request: LinkRemoval, signal?: AbortSignal) {
+    return this.postIdentity<{ removed: boolean; failure: string | null }>(`/users/${identitySegment(userId)}/links/remove`, request, signal);
+  }
+  revokeSession(userId: string, session: IdentitySession, signal?: AbortSignal) {
+    return this.postIdentity<{ revoked: boolean; alreadyRevoked: boolean; failure: string | null }>(
+      `/users/${identitySegment(userId)}/sessions/${identitySegment(session.id)}/revoke`, { expectedRevision: session.revision }, signal);
+  }
+  private async postIdentity<T>(suffix: string, value: unknown, signal?: AbortSignal): Promise<T> {
+    if (this.protocolPath === undefined) await this.users("", 0, signal);
+    return this.post<T>(suffix, value, signal);
   }
   async secrets(search: string, signal?: AbortSignal): Promise<{ items: SecretChoice[]; capped: boolean }> {
     const result = await this.transport.postJson<{ items?: unknown[] }>("/secrets/picker",
@@ -126,6 +181,40 @@ function protocolPath(value: unknown): string {
     if (decoded === "." || decoded === ".." || decoded.includes("/") || decoded.includes("\\")) throw new ExternalAuthenticationClientError("Invalid external sign-in route.");
   }
   return path;
+}
+
+function identitySegment(value: string): string {
+  if (!value || value.length > 400 || value === "." || value === ".." || [...value].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))
+    throw new ExternalAuthenticationClientError("Select a valid user or session before continuing.");
+  return encodeURIComponent(value);
+}
+
+function boundedPage(value: { items: unknown[]; totalCount: number }) {
+  if (!value || !Array.isArray(value.items) || value.items.length > 25 || !Number.isSafeInteger(value.totalCount) || value.totalCount < value.items.length)
+    throw new ExternalAuthenticationClientError("The backend returned an invalid user-access page. Refresh and retry.");
+}
+
+/** User access has a separate permission boundary from connection configuration. */
+export function identityAccessError(error: unknown): string {
+  const value = error && typeof error === "object" ? error as { status?: number; payload?: { failure?: string; error?: string } } : {};
+  const code = value.payload?.failure ?? value.payload?.error;
+  const messages: Record<string, string> = {
+    "final-login-path": "Keep a usable sign-in method for this user and an administrator. Sign in through the remaining method before trying removal again.",
+    "revision-conflict": "User access or connections changed. Refresh user access and review the latest state before retrying.",
+    "link-delegation-forbidden": "Your access or the identity authority does not permit changing this user's links.",
+    "link-administration-unavailable": "This host cannot safely change identity links. Ask the host administrator to finish configuring identity management.",
+    "session-administration-unavailable": "Session administration is unavailable on this host. Ask the host administrator to enable it.",
+    "link-removal-unavailable": "Removal could not be confirmed. Refresh user access to check the current links before retrying.",
+    "link-attachment-unavailable": "Attachment could not be confirmed. Refresh user access to check the current links before retrying.",
+    "session-revocation-failed": "Revocation could not be confirmed. Refresh user access before retrying.",
+    "link-conflict": "This external identity already belongs to a user or changed during attachment. Refresh and review the links.",
+    "link-not-found": "This identity link no longer belongs to the selected user. Refresh user access.",
+    "session-not-found": "This session no longer belongs to the selected user. Refresh user access."
+  };
+  if (typeof code === "string" && Object.hasOwn(messages, code)) return messages[code];
+  if (value.status === 403) return "You do not have permission to inspect or change this user access on the selected backend.";
+  if (value.status === 404) return "This user or the user-access module is unavailable on the selected backend.";
+  return externalAuthenticationError(error);
 }
 
 /** Only closed application codes/statuses are shown; upstream bodies are never rendered. */

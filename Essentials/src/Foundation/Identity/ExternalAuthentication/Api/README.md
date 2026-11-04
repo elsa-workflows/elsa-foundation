@@ -62,8 +62,8 @@ binds canonical cookies/access/refresh to one random session ID and live account
 rejects that session's credentials without rotating the user's other sessions. Normal managed flow start/callback
 requires the authority's durable-session capability. User disable/delete and account-version changes reject
 already issued access/refresh as well as cookies; disable→enable cannot resurrect earlier sessions.
-The administration operations below expose inspection, selected-session revocation and explicit link attachment.
-Link removal and cross-IAM mutation/recovery coordination remain T024 work.
+The administration operations below expose inspection, selected-session revocation and guarded link attachment/removal.
+Link mutations coordinate current IAM permissions and recovery checks with the connection catalog when database management is enabled.
 An explicit revision-authorized IAM login rebind rotates both affected account versions in the same transaction.
 Their earlier cookies/access/refresh remain invalid even if the login later returns to its original owner.
 Unrelated users retain their sessions; ordinary same-owner metadata updates preserve the account versions.
@@ -91,6 +91,7 @@ and current-subject authorization explicitly; the defaults refuse unsupported ca
 | POST `/commands` | Same manage permission; the same command with an expected catalog revision, ordinary writer/CAS/last-path guards |
 | POST `/test` | Same manage permission; saved connection record ID and expected revision, bounded discovery/JWKS only, observed time/material/staleness |
 | GET `/lookups/users?skip=0&take=50&search=...` | Both provider manage and `identity/users:read`; bounded tenant-local identity labels/status, no credentials |
+| GET `/users?skip=0&take=25&search=...` | `identity/users:read`; bounded tenant-local directory with ownership, independent current panel permissions, module availability and protocol-path metadata; provider access is not required |
 | GET `/lookups/roles?skip=0&take=50` | Both provider manage and `identity/roles:read`; existing role IDs/names and current deployment/editor delegation eligibility |
 
 All JSON posts require the paired antiforgery cookie and configured header (`RequestVerificationToken` by default), including technical

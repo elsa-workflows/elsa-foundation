@@ -36,8 +36,16 @@
 .external-auth-preview dl { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: 0.5rem 1rem; }
 .external-auth-preview dt { font-weight: 600; }
 .external-auth-preview dd { margin: 0; overflow-wrap: anywhere; }
+.external-auth-user-section { display: grid; gap: 0.8rem; margin-block: 1.5rem; }
+.external-auth-user-section h3, .external-auth-user-entry h4 { margin: 0; }
+.external-auth-user-entry { min-width: 0; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); }
+.external-auth-user-entry dl { display: grid; grid-template-columns: minmax(5rem, auto) minmax(0, 1fr); gap: 0.4rem 0.75rem; }
+.external-auth-user-entry dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.external-auth-user-entry dt { font-weight: 600; }
 @media (max-width: 850px) {
   .external-auth-workspace { grid-template-columns: minmax(0, 1fr); }
   .external-auth-list > ul { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
   .external-auth-field-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.external-auth-danger-action { color: var(--studio-danger); }

@@ -92,9 +92,85 @@ try {
   expect(session.status).toBe("authenticated"); expect(session.roles).toContain("reader"); expect(session.permissions).not.toContain("*");
   expect(session.subject).not.toBe(adminSession.subject);
   expect((await (await admin.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(adminSession.subject);
+  // The real user-access component uses only its public bounded API and protected commands.
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(backend + "/__tests__/live.html?backend=owned&view=access");
+  await expect(page.getByRole("heading", { name: "User access", exact: true })).toBeVisible();
+  const directory = await (await admin.request.get(backend + "/_elsa/identity/external-connections/users?take=25")).json();
+  const target = directory.items.find(item => item.id === session.subject); expect(target).toBeTruthy();
+  await page.getByLabel("Exact username or email").fill(target.userName);
+  await page.getByRole("button", { name: "Find users", exact: true }).click();
+  const row = page.locator(".external-auth-row").filter({ hasText: target.userName });
+  await expect(row).toHaveCount(1); await row.click();
+  await expect(page.getByRole("heading", { name: "Identity links", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove link", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Remove link", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Keep a usable sign-in method for this user and an administrator");
+  await expect(page.getByRole("button", { name: "Remove link", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Refresh user access", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remove link", exact: true })).toBeEnabled();
+  const currentLinks = await (await admin.request.get(backend + `/_elsa/identity/external-connections/users/${encodeURIComponent(session.subject)}/links`)).json();
+  const subject = currentLinks.items[0].subject;
+  await page.getByLabel("Connection", { exact: true }).selectOption("deployment:partner");
+  await page.getByLabel("External subject", { exact: true }).fill(subject);
+  await page.getByRole("button", { name: "Attach identity", exact: true }).click();
+  await expect(page.locator(".external-auth-notice")).toContainText("Identity attached. Saved Elsa roles are unchanged.");
+  // Establish an actual normal sign-in through the newly attached provider, without a synthetic witness.
+  const csrf = await (await user.request.get(backend + "/identity/external/antiforgery")).json();
+  await signIn.evaluate(({ action, field, token }) => {
+    const form = document.createElement("form"); form.method = "post"; form.action = action;
+    for (const [name, value] of Object.entries({ [field]: token, returnUrl: "/backend/resource" })) {
+      const input = document.createElement("input"); input.type = "hidden"; input.name = name; input.value = value; form.appendChild(input);
+    }
+    document.body.appendChild(form); form.submit();
+  }, { action: backend + "/identity/external/signin/partner", field: csrf.formFieldName, token: csrf.requestToken });
+  await expect.poll(async () => (await (await user.request.get(backend + "/_elsa/identity/session")).json()).provider).toBe("external:partner");
+  await expect(signIn).toHaveURL(backend + "/resource");
+  const partnerSession = await (await user.request.get(backend + "/_elsa/identity/session")).json(); expect(partnerSession.subject).toBe(session.subject);
+  await page.getByRole("button", { name: "Refresh user access", exact: true }).click();
+  const companyCard = page.getByRole("region", { name: "Identity links", exact: true }).locator("article").filter({ has: page.getByRole("heading", { name: "Studio company", exact: true }) });
+  await expect(companyCard.getByRole("button", { name: "Remove link", exact: true })).toBeEnabled();
+  await companyCard.getByRole("button", { name: "Remove link", exact: true }).click();
+  await expect(page.locator(".external-auth-notice")).toContainText("Identity link removed.");
+  expect((await (await user.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(session.subject);
+  // A reader can use the directory, while link/session inspection remains explicitly denied.
+  const readerPage = await user.newPage(); await readerPage.goto(backend + "/__tests__/live.html?backend=owned&view=access");
+  await expect(readerPage.getByRole("heading", { name: "User access", exact: true })).toBeVisible();
+  await readerPage.getByLabel("Exact username or email").fill(target.userName); await readerPage.getByRole("button", { name: "Find users", exact: true }).click();
+  await readerPage.locator(".external-auth-row").filter({ hasText: target.userName }).click();
+  await expect(readerPage.getByText("You do not have permission to read identity links.", { exact: true })).toBeVisible();
+  await expect(readerPage.getByText("You do not have permission to read sessions.", { exact: true })).toBeVisible();
+  await expect(readerPage.getByRole("button", { name: "Attach identity", exact: true })).toHaveCount(0);
+  const pair = await (await user.request.get(backend + "/_elsa/identity/token")).json();
+  expect((await user.request.get(backend + "/resource", { headers: { Authorization: `Bearer ${pair.accessToken}` } })).status()).toBe(200);
+  const partnerCard = page.getByRole("region", { name: "Sessions", exact: true }).locator("article").filter({ has: page.getByRole("heading", { name: "partner", exact: true }) });
+  await expect(partnerCard.getByRole("button", { name: "Revoke session", exact: true })).toBeEnabled();
+  await partnerCard.getByRole("button", { name: "Revoke session", exact: true }).click();
+  await expect(page.locator(".external-auth-notice")).toContainText("Session revoked. Other sessions are unchanged.");
+  await expect(partnerCard.getByText("revoked", { exact: true })).toBeVisible();
+  await expect(partnerCard.getByRole("button", { name: "Revoke session", exact: true })).toBeDisabled();
+  await expect(page.getByText("Loading user access…", { exact: true })).toHaveCount(0);
+  const cookieChallenge = await user.request.get(backend + "/resource", { maxRedirects: 0 });
+  expect(cookieChallenge.status()).toBe(302);
+  expect(new URL(cookieChallenge.headers().location).pathname).toBe("/backend/_elsa/identity/login");
+  expect((await (await user.request.get(backend + "/_elsa/identity/session")).json()).status).toBe("anonymous");
+  expect((await user.request.get(backend + "/resource", { headers: { Authorization: `Bearer ${pair.accessToken}` } })).status()).toBe(401);
+  expect((await user.request.post(backend + "/_elsa/identity/refresh", { data: { refreshToken: pair.refreshToken } })).status()).toBe(401);
+  await page.addScriptTag({ path: join(repo, "Studio/node_modules/axe-core/axe.min.js") });
+  const accessAccessibility = await page.evaluate(async () => {
+    const result = await globalThis.axe.run(globalThis.document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
+    return result.violations.map(item => ({ id: item.id, impact: item.impact, nodes: item.nodes.map(node => ({ target: node.target, explanation: node.failureSummary })) }));
+  });
+  expect(accessAccessibility).toEqual([]);
+  await page.screenshot({ path: join(ownedRoot, "user-access-light.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.window.innerWidth)).toBe(true);
+  await page.screenshot({ path: join(ownedRoot, "user-access-narrow.png"), fullPage: true });
+  const access = { targetRolesPreserved: partnerSession.roles.includes("reader"), finalPathRefused: true, attachedExistingUser: true,
+    provedSiblingThenRemoved: true, readerPanelsDenied: true, selectedRevocation: { cookie: true, access: true, refresh: true }, accessibility: accessAccessibility };
   expect(errors).toEqual([]);
   const result = { passed: true, ownedRoot, beforePreview, afterPreview, ordinaryUser: { roles: session.roles, permissions: session.permissions },
-    accessibility, provider: "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium", limitations: ["not an external IdP product", "not a full Studio host", "not server-database or separate-node qualification"] };
+    accessibility, access, provider: "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium", limitations: ["not an external IdP product", "not a full Studio host", "not server-database or separate-node qualification"] };
   writeFileSync(join(ownedRoot, "browser-receipt.json"), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } catch (error) {

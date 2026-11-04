@@ -1,6 +1,7 @@
 import React from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { ExternalAuthenticationPage } from "./ExternalAuthenticationPage";
+import { UserAccessPage } from "./UserAccessPage";
 import "./styles.css";
 
 export function register(api: ElsaStudioModuleApi) {
@@ -12,5 +13,12 @@ export function register(api: ElsaStudioModuleApi) {
     routes: [{ id: "external-authentication", path: "/security/external-sign-in", label: "External sign-in", requiresBackend: requirements,
       workspace: { resourceKey: () => "identity:external-sign-in" },
       component: () => <ExternalAuthenticationPage context={api.backend} dialogs={api.dialogs} /> }]
+  });
+  api.featureAreas.add({ id: "identity-user-access", title: "User access", description: "Inspect identity links and manage Elsa sessions.",
+    navGroup: "Security", ownedPaths: ["/security/user-access"], required: false, defaultEnabled: true, order: 48,
+    nav: { title: "User access", path: "/security/user-access", placement: "more", order: 33, requiresBackend: requirements,
+      requiresPermission: "identity/users:read" },
+    routes: [{ id: "identity-user-access", path: "/security/user-access", label: "User access", requiresBackend: requirements,
+      workspace: { resourceKey: () => "identity:user-access" }, component: () => <UserAccessPage context={api.backend} dialogs={api.dialogs} /> }]
   });
 }

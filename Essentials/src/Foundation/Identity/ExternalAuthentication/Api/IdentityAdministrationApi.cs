@@ -21,6 +21,9 @@ public static partial class ExternalAuthenticationApi
     private static void MapIdentityAdministration(IEndpointRouteBuilder endpoints)
     {
         var api = endpoints.MapEndpointGroup(typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!, ExternalAuthenticationApiJsonContext.Default, tag: "Identity");
+        api.MapUnboundOperation("GET", ManagementPath + "/users", "ExternalIdentityUsers", typeof(ManagedIdentityUsersResponse), 200, null,
+                context => Run(context, InspectUsers, 65536), name: "ExternalIdentityUsers", containFailures: false)
+            .DisableCookieRedirect().RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
         Map("GET", "/users/{userId}/sessions", "Sessions", typeof(ManagedSessionPage), InspectSessions,
             DefaultIdentityPermissionKeys.IdentitySessionsRead, DefaultIdentityPermissionKeys.IdentityUsersRead);
         Map("GET", "/users/{userId}/links", "Links", typeof(ManagedIdentityLinkPage), InspectLinks,
@@ -40,6 +43,36 @@ public static partial class ExternalAuthenticationApi
                 .DisableCookieRedirect().RequireAllPermissions(permission, otherPermission);
             if (request is not null) endpoint.WithMetadata(new AcceptsMetadata(["application/json"], request, false));
         }
+    }
+
+    private static async Task InspectUsers(HttpContext context)
+    {
+        if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityUsersRead)) return;
+        var page = Page(context); var search = context.Request.Query["search"];
+        if (page is null || search.Count > 1 || search.ToString().Length > 400) { await ManagementFailure(context, "invalid-page", 400); return; }
+        await using var scope = ManagementScope(context); var services = scope.ServiceProvider;
+        var store = services.GetService<IPagedUserStore>();
+        if (store is null) { await ManagementFailure(context, "lookup-unavailable", 503); return; }
+        var users = await store.ListPageAsync(Tenant(context), page, search.FirstOrDefault(), context.RequestAborted);
+        if (users.Items.Count > page.Take || users.Items.Any(item => item.TenantId != Tenant(context)))
+        { await ManagementFailure(context, "lookup-unavailable", 503); return; }
+        var ownership = await services.GetRequiredService<IOwnershipModeProvider>().GetAsync(Tenant(context), context.RequestAborted);
+        var capabilities = services.GetRequiredService<IEffectiveCapabilitiesResolver>().Resolve(ownership,
+            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FoundationIdentityOptions>>().Value.ProviderCapabilities);
+        var subject = services.GetRequiredService<ITokenSubjectResolver>().TryResolve(context.User, out var found) ? found.CanonicalUserId : null;
+        var permissions = services.GetRequiredService<ICurrentSubjectPermissionAuthorizer>();
+        async ValueTask<bool> Granted(string permission) => subject is not null &&
+            (await permissions.AuthorizeAsync(new(Tenant(context), subject, permission), context.RequestAborted)).Status == CurrentSubjectPermissionStatus.Granted;
+        var sessionsAvailable = services.GetService<IAuthenticationSessionStore>()?.IsDurable == true &&
+            services.GetService<ICanonicalUserSignInService>()?.SupportsDurableSessions == true;
+        await ManagementJson(context, new ManagedIdentityUsersResponse(Tenant(context),
+            context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalAuthenticationOptions>>().Value.CallbackPath.TrimEnd('/'),
+            ownership.ToString(), capabilities.CanManageUsers, capabilities.CanRevokeTokens,
+            await Granted(DefaultIdentityPermissionKeys.IdentityLinksRead), await Granted(DefaultIdentityPermissionKeys.IdentitySessionsRead),
+            LinkAdministrationAvailable(context, services) ? null : "link-administration-unavailable",
+            sessionsAvailable ? null : "session-administration-unavailable",
+            users.Items.Select(item => new ManagedUserLookup(item.Id, item.UserName, item.DisplayName, item.Status)).ToArray(), users.TotalCount),
+            ExternalAuthenticationApiJsonContext.Default.ManagedIdentityUsersResponse);
     }
 
     private static async Task InspectSessions(HttpContext context)

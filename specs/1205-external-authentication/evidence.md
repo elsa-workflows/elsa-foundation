@@ -840,3 +840,48 @@ Final frozen-source architecture: **616/616 passed**, Debug, zero skips. Generat
 whitespace checks pass. No project references, package versions or frontend source changed in this increment.
 T024 is now checked for its backend/API/native coordination scope. Full host/process/server-engine/Studio and
 consumer/review/merge/main qualification remain explicitly required by the unchecked following tasks.
+
+## Studio user-access checkpoint (4 November)
+
+The optional module adds Security → User access with its own user-read permission. A bounded tenant-local
+directory does not require provider permission; metadata reports independent current link/session read grants,
+ownership capabilities, installed administration services and the configured protocol path. Protected SDK
+identity commands discover their antiforgery route through that directory rather than reading the provider catalog.
+The separate connection editor retains its provider-management boundary.
+
+The page inspects exact/legacy identity links and retained sessions, attaches a configured provider's exact subject,
+removes a qualified link with prospective recovery checks, and revokes one selected session. Changes use confirmation
+and actual optimistic revisions; the UI follows server capabilities and per-item flags. Read-only ownership, legacy
+links, absent modules, denied panels, loading/empty/error states and current-session reauthentication have explicit
+surfaces. Uncertain/conflicting writes preserve the draft and require refresh. Backend changes reject late answers;
+current permission loss clears displayed identities. Navigation/close probes and real React Activity suspension
+preserve unattached drafts.
+
+**42/42** SDK/component tests pass. Module/standalone SDK build, typecheck, ESLint, repository CSS and module-layout
+checks pass. An independent Node consumer imports the emitted SDK without React and exercises user-read protocol
+discovery, exact subjects/revisions and the configured CSRF header. This is emitted-output proof, not final packed
+consumer acceptance. Studio host unit tests **1055/1055** pass. Full Identity **895/895** and frozen-source architecture **616/616** pass, Debug, zero skips.
+Generated solution-filter and whitespace checks pass. Existing broad architecture/style warnings remain visible;
+there are no project/dependency or persistence changes in this checkpoint.
+
+The actual Chromium journey mounts both real components against the composed Kestrel backend, native SQLite and
+two controlled HTTP OIDC providers. It creates/tests/previews/enables a connection with existing Reader provisioning,
+verifies preview leaves the administrator identity and user/link/token/session counts unchanged, and signs in the
+ordinary reader. Through User access it refuses removal of that reader's last path, attaches the second provider,
+completes an actual normal sign-in through it, removes the first link and preserves saved Reader membership.
+The ordinary reader can search users but cannot inspect links/sessions or attach identities. Administrator-selected
+revocation refreshes the displayed session to revoked, rejects its cookie with a login challenge and makes access
+and refresh credentials return 401. The first browser assertion incorrectly followed the cookie challenge to a 200
+login page; explicit redirect observation plus the anonymous session endpoint now checks the actual behavior.
+The final run also waits for refreshed session state before accessibility scans/screenshots.
+
+Both components have zero WCAG 2 A/AA and 2.1 AA axe violations under Classic light; 390px layout has no horizontal
+overflow. The refreshed wide/narrow screenshots were visually inspected. Owned artifacts/receipt:
+`/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-browser-Ks68Qf/`.
+Logs: `/tmp/elsa-3579-user-access-{tests,types,eslint,build,css,layout,browser,sdk-consumer,identity,architecture,maps}.log`.
+
+T025 is checked for its implementation/component scope. The actual external IdP product, full Studio host,
+representative themes/keyboard/retained-host tabs, cross-site topology, server-database, restart/separate-process/shared
+nodes, final packages/public consumers/current hosted CI, independent review/merge and resulting-main proof remain
+required. Preceding-head CI **41925468861** at `339cff968` was still queued when checked; this checkpoint does not
+claim a current hosted result. The full goal remains active and unachieved; #2848/#3579/#2771 stay open.
