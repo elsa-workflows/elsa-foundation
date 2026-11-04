@@ -14,17 +14,35 @@ public static class SpecialistsEntityFrameworkCoreRegistration
     private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(SpecialistsDbContext));
     public static IServiceCollection AddSpecialistsEntityFrameworkCore(this IServiceCollection services, SpecialistsEntityFrameworkCoreOptions options)
     {
+        services.AddAgentSourcesEntityFrameworkCore(options);
+        services.AddSpecialistTurnStore<SpecialistsDbContext>();
+        return services;
+    }
+
+    /// <summary>Source authoring persistence without installing the model-turn runtime.</summary>
+    public static IServiceCollection AddAgentSourcesEntityFrameworkCore(this IServiceCollection services, SpecialistsEntityFrameworkCoreOptions options)
+    {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         var add = Binding.Select<Action<IServiceCollection, SpecialistsEntityFrameworkCoreOptions>>(options.Provider,
             AddContext<SpecialistsSqliteDbContext>, AddContext<SpecialistsSqlServerDbContext>, AddContext<SpecialistsPostgreSqlDbContext>, AddContext<SpecialistsMySqlDbContext>);
-        services.AddSpecialistTurnStore<SpecialistsDbContext>();
+        services.AddAgentSourceStore<SpecialistsDbContext>();
         services.AddSingleton(options);
         add(services, options);
         services.AddEfModuleMigrations<SpecialistsDbContext>(options.Provider);
         return services;
     }
 
+    /// <summary>Installs typed source ports in an ordinary consumer-owned context mapping AddSourceRevisions.</summary>
+    public static IServiceCollection AddAgentSourceStore<TContext>(this IServiceCollection services) where TContext : DbContext
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddScoped<EfAgentSources<TContext>>();
+        services.AddScoped<IAgentSourceReader>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
+        services.AddScoped<IAgentSourceWriter>(provider => provider.GetRequiredService<EfAgentSources<TContext>>());
+        services.AddPersistenceCore();
+        return services;
+    }
     /// <summary>Uses fresh owned write contexts; the caller's tracked work and transaction are not enlisted.</summary>
     public static IServiceCollection AddSpecialistTurnStore<TContext>(this IServiceCollection services) where TContext : DbContext
     {
