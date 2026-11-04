@@ -26,7 +26,7 @@ AgentToolPreparation and AgentPreparedToolInvocation gain:
 
 Null and empty are one logical empty set. The engine converts empty to null; copies nonempty input; rejects unknown enum values; removes duplicates; sorts by enum value; exposes a read-only list. Callers cannot mutate the approval basis after preparation. Existing Core enum serialization conventions apply; Studio normalizes the three explicit values for display.
 
-Elsa.Agent gains public AgentPrivilegePolicyOptions, with SectionName Elsa:Agent:Privileges and three bool properties Administrative, Irrecoverable, Activation, all false. AgentBootstrapResponse gains a Privileges body member of AgentPrivilegePolicyResponse, a record of those three booleans, defaulting all false. It is read-only client information, never a policy-update command.
+Elsa.Agent gains public AgentPrivilegePolicyOptions, with SectionName Elsa:Agent:Privileges and three bool properties Administrative, Irrecoverable, Activation, all false. AgentBootstrapResponse gains a Privileges body member of AgentPrivilegePolicyView, a record of those three booleans, defaulting all false. It is read-only client information, never a policy-update command.
 
 Core owns the enum/model/principal contract. Options and internal policy/admission mechanisms belong to Agent implementation; HTTP principal/bootstrap mapping belongs to Agent API.
 
