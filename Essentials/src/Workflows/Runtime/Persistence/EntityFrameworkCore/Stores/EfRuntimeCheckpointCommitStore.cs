@@ -253,6 +253,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
             throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
+        // Native admission has two distinct failure boundaries: before submitting COMMIT, a refusal can be
+        // released; afterwards it can only complete from durable proof or surface an uncertain outcome. A lease
+        // coordinator cannot roll back a callback that already committed.
+        var nativeAdmissionCommitSubmitted = false;
+        RuntimeCheckpointCommitStoreResult? durableAdmissionResult = null;
         var pinned = commit.ModelState?.State.Executable ?? commit.StateChanges.WorkflowExecution?.State.PinnedExecutable;
         if (pinned is not null)
         {
@@ -287,11 +292,24 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
             // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
             // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
-            await rootWriteLeaseManager.ExecuteAsync(
-                pinned,
-                $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
-                ExecuteCheckpointAsync,
-                cancellationToken);
+            try
+            {
+                await rootWriteLeaseManager.ExecuteAsync(
+                    pinned,
+                    $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
+                    ExecuteCheckpointAsync,
+                    cancellationToken);
+            }
+            catch (Exception) when (commit.ExpectedModelExecution is not null && (result ?? durableAdmissionResult) is not null)
+            {
+                // Keep the exact committed result even if lease renewal or transaction/lease disposal failed later.
+                result ??= durableAdmissionResult;
+            }
+            catch (Exception exception) when (nativeAdmissionCommitSubmitted &&
+                !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
+            {
+                throw new NativeAdmissionCommitOutcomeUnknownException(commit.CommitId, exception);
+            }
             var completed = result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");
             EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
             return completed;
@@ -315,7 +333,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 {
                     return await CommitNewAsync(writeCancellationToken, requiredExistingRoot);
                 }
-                catch (DbUpdateConcurrencyException exception) when (retryable && attempt < MaxFenceRenewalAttempts &&
+                catch (DbUpdateConcurrencyException exception) when (retryable && !nativeAdmissionCommitSubmitted && attempt < MaxFenceRenewalAttempts &&
                     exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity))
                 {
                 }
@@ -450,8 +468,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 context.RuntimeCheckpointCommits.Add(marker);
                 await context.SaveChangesAsync(writeCancellationToken);
                 EnsureExactBookmarkDeadline(commit);
+                nativeAdmissionCommitSubmitted = commit.ExpectedModelExecution is not null;
                 await transaction.CommitAsync(writeCancellationToken);
-                return ResultFor(commit, marker);
+                return RememberDurableAdmission(ResultFor(commit, marker));
             }
             catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
             {
@@ -460,28 +479,30 @@ public sealed class EfRuntimeCheckpointCommitStore(
             }
             catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {
-                await RollbackAndRestoreAsync(transaction);
+                await RestoreFailedAttemptAsync(transaction, exception);
                 var winner = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (winner is not null)
-                    return ResolveReplay(commit, fingerprint, winner);
+                    return RememberDurableAdmission(ResolveReplay(commit, fingerprint, winner));
                 if (commit.ExpectedBookmarkResume is not null || commit.ExpectedModelParentWait is not null)
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission changed concurrently.", exception);
                 throw;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException exception) when (!nativeAdmissionCommitSubmitted || cancellationToken.IsCancellationRequested)
             {
-                await RollbackAndRestoreAsync(transaction);
+                await RestoreFailedAttemptAsync(transaction, exception);
                 throw;
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception)
             {
-                await RollbackAndRestoreAsync(transaction);
+                await RestoreFailedAttemptAsync(transaction, exception);
 
                 // A provider can acknowledge the commit ambiguously. The immutable marker is the only authoritative
                 // reconciliation signal: if it is visible, return the original result; otherwise preserve the failure.
-                var reconciled = await ReconcileMarkerAsync(exception, writeCancellationToken);
+                // Lease cancellation cannot undo a submitted commit. Reconcile it with the caller's token instead.
+                var reconciled = await ReconcileMarkerAsync(exception,
+                    nativeAdmissionCommitSubmitted ? cancellationToken : writeCancellationToken);
                 if (reconciled is not null)
-                    return ResolveReplay(commit, fingerprint, reconciled);
+                    return RememberDurableAdmission(ResolveReplay(commit, fingerprint, reconciled));
                 if (commit.ExpectedBookmarkResume is not null && (exception is DbUpdateConcurrencyException or IOException ||
                     EfRelationalExceptionClassifier.IsProviderFailure(exception)))
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission is unavailable.", exception);
@@ -489,9 +510,28 @@ public sealed class EfRuntimeCheckpointCommitStore(
             }
         }
 
+        RuntimeCheckpointCommitStoreResult RememberDurableAdmission(RuntimeCheckpointCommitStoreResult completed)
+        {
+            if (commit.ExpectedModelExecution is not null) durableAdmissionResult = completed;
+            return completed;
+        }
+
+        async ValueTask RestoreFailedAttemptAsync(IDbContextTransaction transaction, Exception original)
+        {
+            try { await RollbackAndRestoreAsync(transaction); }
+            catch (Exception cleanupFailure) when (nativeAdmissionCommitSubmitted)
+            {
+                throw new AggregateException("Native admission cleanup failed after commit was submitted.", original, cleanupFailure);
+            }
+        }
+
         async ValueTask<RuntimeCheckpointCommitEntity?> ReconcileMarkerAsync(Exception original, CancellationToken token)
         {
             try { return await FindMarkerAsync(scope, commit.CommitId, token); }
+            catch (Exception lookupFailure) when (nativeAdmissionCommitSubmitted)
+            {
+                throw new AggregateException("Native admission commit and marker reconciliation failed.", original, lookupFailure);
+            }
             catch (Exception lookupFailure) when (commit.ExpectedBookmarkResume is not null &&
                 (lookupFailure is IOException || lookupFailure is OperationCanceledException && !token.IsCancellationRequested ||
                     EfRelationalExceptionClassifier.IsProviderFailure(lookupFailure)))
@@ -666,6 +706,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
     private static bool IdsEqual(IReadOnlyCollection<string> content, string projectionJson, string label) =>
         content.SequenceEqual(DeserializeIds(projectionJson, label), StringComparer.Ordinal);
+
+    private sealed class NativeAdmissionCommitOutcomeUnknownException(string commitId, Exception cause)
+        : Exception($"The outcome of native admission checkpoint '{commitId}' could not be reconciled after commit was submitted.", cause)
+    {
+    }
 
     private static RuntimeCheckpointCommitStoreResult ResolveReplay(
         RuntimeCheckpointCommit commit,

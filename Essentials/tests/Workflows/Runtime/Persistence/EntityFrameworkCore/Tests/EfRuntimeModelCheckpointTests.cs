@@ -356,6 +356,162 @@ public sealed class EfRuntimeModelCheckpointTests
             await committer.CommitAsync(commit, cancellationToken);
     }
 
+    [Theory]
+    [InlineData("lease", false)]
+    [InlineData("lease", true)]
+    [InlineData("io", false)]
+    [InlineData("io", true)]
+    [InlineData("cancellation", false)]
+    [InlineData("cancellation", true)]
+    public async Task Native_admission_distinguishes_a_refused_write_from_a_landed_write(string failure, bool afterWrite)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var prepared = await PrepareAdmissionAsync(database);
+        var admission = prepared with { StateChanges = prepared.StateChanges.WithPostCommitOutbox([]) };
+        Exception cause = failure switch
+        {
+            "lease" => new WorkflowExecutableRootWriteLeaseLostException("native-artifact", "test-lease"),
+            "io" => new IOException("Lease I/O failed."),
+            _ => new OperationCanceledException("Lease cancelled without caller cancellation.")
+        };
+        await using (var context = database.Open())
+        {
+            var writer = new EfRuntimeCheckpointCommitStore(context, new Access("tenant-a"), new Clock(),
+                new FailingAdmissionLease(cause, afterWrite));
+            var observed = await DrainAdmissionAsync(writer, admission);
+            Assert.Empty(observed.Poison);
+            Assert.Equal(afterWrite ? RuntimeSchedulerWorkItemResultStatus.Completed : RuntimeSchedulerWorkItemResultStatus.Deferred,
+                Assert.Single(observed.Result.Items).Status);
+            Assert.Equal(afterWrite ? 0 : 1, observed.Remaining.Count);
+        }
+        await using var restarted = database.Open();
+        Assert.Equal(afterWrite ? 1 : 0, await restarted.WorkflowExecutionStates.CountAsync());
+        Assert.Equal(afterWrite ? 1 : 0, await restarted.RuntimePostCommitOutbox.CountAsync());
+        Assert.Equal(afterWrite ? 2 : 1, await restarted.RuntimeCheckpointCommits.CountAsync());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Native_admission_with_a_lost_commit_acknowledgement_reconciles_or_records_the_uncertain_outcome(
+        bool cancellation, bool lookupFails)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var prepared = await PrepareAdmissionAsync(database);
+        var admission = prepared with { StateChanges = prepared.StateChanges.WithPostCommitOutbox([]) };
+        var commitFailure = cancellation ? (Exception)new OperationCanceledException("Commit acknowledgement cancelled.")
+            : new IOException("Commit acknowledgement lost.");
+        var lostAck = new LoseAdmissionAcknowledgement(commitFailure);
+        var failedLookup = new FailAdmissionReconciliation(lostAck, lookupFails);
+        await using (var context = database.Open(lostAck, failedLookup))
+        {
+            var observed = await DrainAdmissionAsync(Store(context), admission);
+            Assert.True(lostAck.Committed);
+            Assert.Empty(observed.Remaining);
+            Assert.Equal(lookupFails ? RuntimeSchedulerWorkItemResultStatus.Faulted : RuntimeSchedulerWorkItemResultStatus.Completed,
+                Assert.Single(observed.Result.Items).Status);
+            if (lookupFails)
+            {
+                var poison = Assert.Single(observed.Poison);
+                Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, poison.Disposition);
+                Assert.EndsWith("NativeAdmissionCommitOutcomeUnknownException", poison.Fault.ExceptionType);
+                Assert.Contains("could not be reconciled", poison.Fault.Message);
+                Assert.Equal(typeof(AggregateException).FullName, poison.InnerFault!.ExceptionType);
+                Assert.Contains(commitFailure.Message, poison.InnerFault.Message);
+                Assert.Contains("Admission marker lookup failed.", poison.InnerFault.Message);
+            }
+            else Assert.Empty(observed.Poison);
+        }
+        // This is an actual committed SQLite transaction, inspected without either fault injector.
+        await using var restarted = database.Open();
+        Assert.Single(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
+    }
+
+    private static async Task<(RuntimeSchedulerDrainResult Result, IReadOnlyCollection<RuntimeSchedulerPoisonRecord> Poison,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> Remaining)> DrainAdmissionAsync(
+        IRuntimeCheckpointCommitStore writer, RuntimeCheckpointCommit admission)
+    {
+        var clock = new FakeTimeProvider(Now);
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poison = new InMemoryWorkflowSchedulerPoisonStore();
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), writer,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+        var drainer = new WorkflowSchedulerDrainer(queue, [new CommitHandler(committer, admission)],
+            new InMemoryWorkflowExecutionStateStore(), poison,
+            new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(new InMemoryWorkflowHoldStateStore()), clock), clock);
+        await queue.EnqueueAsync(new RuntimeSchedulerWorkItem("checkpoint:workflow-started", admission.WorkflowExecutionId,
+            "command-started", WorkflowExecutionCommandKind.Checkpoint, "envelope-started", "started", Now, Now, 1));
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(admission.WorkflowExecutionId));
+        return (result, await poison.ListAsync(admission.WorkflowExecutionId),
+            (await queue.ListAsync(new RuntimeSchedulerWorkQuery(admission.WorkflowExecutionId))).Items);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Native_admission_keeps_its_result_when_transaction_disposal_reports_a_failure(bool cancellation)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var prepared = await PrepareAdmissionAsync(database);
+        var admission = prepared with { StateChanges = prepared.StateChanges.WithPostCommitOutbox([]) };
+        var disposals = 0;
+        await using (var context = database.OpenWithTransactionLog(_ =>
+        {
+            // EF emits TransactionDisposed after the real SQLite transaction is disposed. Fail once so context
+            // cleanup can still run if the provider has not cleared CurrentTransaction when this observer throws.
+            if (Interlocked.Increment(ref disposals) != 1) return;
+            throw cancellation ? (Exception)new OperationCanceledException("Transaction disposal cancelled.")
+                : new IOException("Transaction disposal failed.");
+        }))
+        {
+            var observed = await DrainAdmissionAsync(Store(context), admission);
+            Assert.True(disposals > 0);
+            Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(observed.Result.Items).Status);
+            Assert.Empty(observed.Remaining);
+            Assert.Empty(observed.Poison);
+        }
+        await using var restarted = database.Open();
+        Assert.Single(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
+    }
+
+    private sealed class FailingAdmissionLease(Exception failure, bool afterWrite) : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public async ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default)
+        {
+            if (afterWrite) await write(cancellationToken);
+            throw failure;
+        }
+    }
+
+    private sealed class LoseAdmissionAcknowledgement(Exception failure) : DbTransactionInterceptor
+    {
+        public bool Committed { get; private set; }
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            Committed = true;
+            throw failure;
+        }
+    }
+
+    private sealed class FailAdmissionReconciliation(LoseAdmissionAcknowledgement acknowledgement, bool enabled) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (enabled && acknowledgement.Committed && command.CommandText.Contains("elsa_runtime_checkpoint_commit", StringComparison.Ordinal))
+                throw new IOException("Admission marker lookup failed.");
+            return ValueTask.FromResult(result);
+        }
+    }
+
     [Fact]
     public async Task Native_admission_still_compares_the_physical_model_revision_after_its_read()
     {
@@ -1143,6 +1299,9 @@ public sealed class EfRuntimeModelCheckpointTests
             if (interceptors.Length > 0) options.AddInterceptors(interceptors);
             return new(options.Options);
         }
+        public RuntimeSqliteDbContext OpenWithTransactionLog(Action<string> log) => new(
+            new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection)
+                .LogTo(log, [RelationalEventId.TransactionDisposed]).Options);
         public ValueTask DisposeAsync() => connection.DisposeAsync();
     }
 }
