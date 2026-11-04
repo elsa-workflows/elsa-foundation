@@ -63,7 +63,8 @@ def database_scalars(database) -> dict:
         "partitions": f"SELECT COUNT(*) FROM {p}",
         "terminals": f"SELECT COUNT(*) FROM {t}",
         "outbox": f"SELECT COUNT(*) FROM {o}",
-        "acknowledged": f"SELECT COUNT(*) FROM {o} WHERE {column('AcknowledgedAtUtcTicks')} IS NOT NULL AND {column('Disposition')} IN (0,1)",
+        "acknowledged": f"SELECT COUNT(*) FROM {o} WHERE {column('AcknowledgedAtUtcTicks')} IS NOT NULL AND {column('Disposition')} IN (0,1,2)",
+        "disposition": f"SELECT COALESCE({column('Disposition')},-1) FROM {o}",
         "correlated": f"SELECT COUNT(*) FROM {t} t JOIN {o} o ON t.{column('ScopeKey')}=o.{column('ScopeKey')} AND t.{column('RunKey')}=o.{column('RunKey')} JOIN {r} r ON t.{column('ScopeKey')}=r.{column('ScopeKey')} AND t.{column('RunKey')}=r.{column('RunKey')}",
         "resultHash": f"SELECT {column('ResultHash')} FROM {t}",
         "payloadHash": f"SELECT {column('PayloadHash')} FROM {o}",
@@ -155,7 +156,8 @@ def evaluate(case: dict) -> dict:
             {"runs": 1, "connectorRuns": 1, "partitions": 2, "terminals": 1, "outbox": 1, "acknowledged": 1, "correlated": 1}.items())
             and db["resultHash"] == legacy.sha256(db["resultJson"].encode())
             and db["payloadHash"] == legacy.sha256(("etl-result-envelope-v1|" + db["invocationJson"] + "|" + db["resultJson"]).encode())
-            and db["deliveryId"] == legacy.sha256(("etl-delivery-v1|" + db["resultId"]).encode()),
+            and db["deliveryId"] == legacy.sha256(("etl-delivery-v1|" + db["resultId"]).encode())
+            and db["disposition"] in (0, 1, 2),
         "exactPhysicalOutput": before["output"]["records"] == legacy.RECORDS and len(before["output"]["files"]) == expected_effects
             and not before["output"]["errorFiles"],
         "newProcessSameRetainedRun": case["firstPid"] != case["secondPid"] and run == after["run"]
