@@ -6,8 +6,8 @@ managed OIDC belongs to the optional ExternalAuthentication/Oidc adapter; existi
 and persistence scope contracts without adding them to every base Identity.Core consumer.
 
 Current implementation: live deployment/catalog selection, explicit complete overrides, catalog persistence/CAS,
-role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. Durable session administration, management API/Studio and deployment
-integration is still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
+role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. The optional API also implements source/revision/permission-protected management and bounded lookups/testing. Durable session administration, Studio and deployment
+integration are still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
 This module alone is not a qualified external sign-in deployment.
 
 ## Configuration and composition

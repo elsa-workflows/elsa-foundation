@@ -218,8 +218,8 @@ public sealed class ExternalConnectionTests
         using var services = Create(catalog);
         var writer = services.GetRequiredService<IConnectionWriter>();
         foreach (var key in new[] { "clientSecret", "client_secret", "Password", "refresh-token" })
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await writer.ApplyAsync(
-                new(ConnectionChange.Create, null, Record("a") with { Settings = new Dictionary<string, string> { [key] = "canary" } }), Actor()));
+            Assert.Equal("invalid-configuration", (await writer.ApplyAsync(
+                new(ConnectionChange.Create, null, Record("a") with { Settings = new Dictionary<string, string> { [key] = "canary" } }), Actor())).Failure);
         var created = await writer.ApplyAsync(new(ConnectionChange.Create, null, Record("a")), Actor());
         Assert.True(created.Saved);
         var before = Assert.Single((await services.GetRequiredService<IConnectionRegistry>().ReadAsync()).Connections);

@@ -8,9 +8,20 @@ internal sealed record ExternalAntiforgeryResponse(string RequestToken);
 internal sealed record ExternalAuthenticationFailureResponse(string Error);
 internal sealed record ExternalAuthenticationStartRequest(string? ReturnUrl, string? ConnectionRecordId = null);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(ExternalAntiforgeryResponse))]
 [JsonSerializable(typeof(ExternalAuthenticationFailureResponse))]
 [JsonSerializable(typeof(ExternalAuthenticationPreview))]
 [JsonSerializable(typeof(ExternalAuthenticationStartRequest))]
+[JsonSerializable(typeof(ManagedConnectionCatalogResponse))]
+[JsonSerializable(typeof(ManagedConnectionDetailResponse))]
+[JsonSerializable(typeof(ManagedConnectionAssessmentResponse))]
+[JsonSerializable(typeof(ManagedConnectionTestRequest))]
+[JsonSerializable(typeof(ManagedConnectionTestResponse))]
+[JsonSerializable(typeof(ManagedUserPage))]
+[JsonSerializable(typeof(ManagedRolePage))]
+[JsonSerializable(typeof(ManagedConnectionError))]
+[JsonSerializable(typeof(ConnectionWrite))]
+[JsonSerializable(typeof(ConnectionWriteResult))]
 internal partial class ExternalAuthenticationApiJsonContext : JsonSerializerContext;

@@ -23,7 +23,7 @@ using NativeEndpoints;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 
-public static class ExternalAuthenticationApi
+public static partial class ExternalAuthenticationApi
 {
     private const string PublicCategory = "identity-protocol";
     private const string PublicReason = "External authentication protocol validates one-time protected browser state and verified provider evidence.";
@@ -59,9 +59,10 @@ public static class ExternalAuthenticationApi
         api.MapUnboundOperation("GET", path + "/preview/{key}/results/{handle}", "ExternalAuthenticationPreviewResult", typeof(ExternalAuthenticationPreview), 200, null,
                 context => Run(context, Preview), name: "ExternalAuthenticationPreviewResult", containFailures: false)
             .RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
+        MapManagement(endpoints);
     }
 
-    private static async Task Run(HttpContext context, Func<HttpContext, Task> handler)
+    private static async Task Run(HttpContext context, Func<HttpContext, Task> handler, int maximumBody = 16384)
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
@@ -70,15 +71,16 @@ public static class ExternalAuthenticationApi
         {
             if (HttpMethods.IsPost(context.Request.Method))
             {
-                if (context.Request.ContentLength > 16384) { await Failure(context, StatusCodes.Status413PayloadTooLarge); return; }
+                if (context.Request.ContentLength > maximumBody) { await Failure(context, StatusCodes.Status413PayloadTooLarge); return; }
                 if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
-                    limit.MaxRequestBodySize = Math.Min(limit.MaxRequestBodySize ?? 16384, 16384);
+                    limit.MaxRequestBodySize = Math.Min(limit.MaxRequestBodySize ?? maximumBody, maximumBody);
             }
             await handler(context);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { throw; }
         catch (BadHttpRequestException exception) { await Failure(context, exception.StatusCode); }
         catch (InvalidDataException) { await Failure(context, StatusCodes.Status400BadRequest); }
+        catch (JsonException) { await Failure(context, StatusCodes.Status400BadRequest); }
         catch (Exception)
         {
             if (context.Response.HasStarted) { context.Abort(); return; }

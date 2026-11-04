@@ -51,7 +51,8 @@ public sealed partial class ExternalAuthenticationHttpTests
         await using var host = await HttpHost.Start();
         var owner = typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!;
         var endpoints = host.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
-            .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == owner).ToArray();
+            .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == owner &&
+                endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.StartsWith("ExternalAuthentication", StringComparison.Ordinal) == true).ToArray();
         Assert.Equal(7, endpoints.Length);
         var managed = endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>()?.Kind == EndpointSecurityDispositionKind.Permission).ToArray();
         Assert.Equal(2, managed.Length);

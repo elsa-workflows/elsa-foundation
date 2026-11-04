@@ -65,7 +65,8 @@ internal sealed class ConnectionWriter(
             return Reject("explicit-lifecycle-required");
         if (request.Change == ConnectionChange.PromoteOverride && (existing!.OverridesDeployment || proposed.ArchivedAt != existing.ArchivedAt))
             return Reject("explicit-lifecycle-required");
-        ConnectionSelection.Validate([proposed]);
+        try { ConnectionSelection.Validate([proposed]); }
+        catch (InvalidOperationException) { return Reject("invalid-configuration"); }
         if (request.Change is not (ConnectionChange.Disable or ConnectionChange.Archive or ConnectionChange.Remove) &&
             !await authorizer.AuthorizePolicyAsync(actor, proposed, cancellationToken)) return Reject("role-delegation-forbidden");
         var before = ConnectionSelection.Select(options.Value, current);

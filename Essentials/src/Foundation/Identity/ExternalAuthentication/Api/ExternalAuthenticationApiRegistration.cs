@@ -35,7 +35,7 @@ public static class ExternalAuthenticationApiRegistration
 [ManifestFeatureCategory("Identity")]
 [ManifestFeatureCategory("Security")]
 [ShellFeature(name: "FoundationIdentityExternalAuthenticationApi", DisplayName = "External authentication API",
-    Description = "Backend-owned managed authentication and administrator-only preview protocol.")]
+    Description = "Backend-owned authentication, connection administration and administrator-only preview.")]
 public class ExternalAuthenticationApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services) => services.AddFoundationExternalAuthenticationApi();
