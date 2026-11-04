@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "spec": "1199-etl-sql-watermark",
+  "engine": "sqlserver",
+  "sourceRevision": "827bff87774a15381fa663fc46ce10bf9130fa41",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "0d8c307fce2a36fbd20ac50b67499e2a076f27d3ed4f9c36e29bed3b0379dab2",
+  "hostProcessId": 42997,
+  "cases": {
+    "first": {
+      "runId": "etl-d42f22d11c5be762b68db23eb4699cb27a1149365e07c4f56ba841c4e082a8c6",
+      "definition": "sql-watermark-b644c9f5",
+      "selection": "etl1:sql-watermark-b644c9f5:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 4,
+        "acceptedRecords": 4,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "connector": {
+        "sourceKind": "sql",
+        "mainKind": "sql",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 4,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "sourceInput": {
+        "bindingRevision": "v1",
+        "expectedSha256": null,
+        "snapshotSha256": "a93ce1124b9beadcbe6aeab6fa5c44a6185cf7b68dd020c8d881fe8f78946472",
+        "snapshotByteLength": 138
+      },
+      "table": [
+        "1|Ada",
+        "2|Bram",
+        "3|Cleo",
+        "4|Dee"
+      ],
+      "hostPathOrSecretInInspection": false
+    },
+    "second": {
+      "runId": "etl-0c3a3ca8b971ea36e0ae2cb76ce7e255862a719b8cb09c0cd6c680f0f217bab0",
+      "definition": "sql-watermark-b644c9f5",
+      "selection": "etl1:sql-watermark-b644c9f5:1:3c3f92c34bb4a54f6aee3004c09ceee3c93a71edf10bf58058707e8dd91c9c80",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 2,
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "connector": {
+        "sourceKind": "sql",
+        "mainKind": "sql",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "sourceInput": {
+        "bindingRevision": "v1",
+        "expectedSha256": null,
+        "snapshotSha256": "3453030062ff305b916713489d69089b65b27cab5a7eb28985737a8ad5b4938a",
+        "snapshotByteLength": 72
+      },
+      "table": [
+        "1|Ada",
+        "2|Bram II",
+        "3|Cleo",
+        "4|Dee",
+        "5|Eve"
+      ],
+      "hostPathOrSecretInInspection": false
+    }
+  },
+  "baseUrl": "http://127.0.0.1:64414",
+  "catalogSqlBindings": [
+    [
+      "warehouse",
+      "MainOutput",
+      "sql"
+    ],
+    [
+      "warehouse-source",
+      "Source",
+      "sql"
+    ]
+  ],
+  "checks": {
+    "catalogListsBothSqlBindings": true,
+    "firstRunCopiedEveryRowThroughDone": true,
+    "secondRunCopiedOnlyTheChangedRowsThroughDone": true,
+    "inspectionShowsASqlSourceWithAPreparedSnapshot": true,
+    "noAccountingLeft": true,
+    "noHostPathOrSecretInInspection": true
+  },
+  "passed": true
+}

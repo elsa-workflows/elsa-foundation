@@ -213,6 +213,253 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
     private static Task<AgentSession> Session(IAgentSessionService sessions)
         => sessions.CreateAsync(new("tenant", "actor", "conversation", DeterministicAgentProvider.Id, "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
 
+    [Theory]
+    [InlineData("refused")]
+    [InlineData("denied")]
+    [InlineData("uncertain")]
+    public async Task An_owner_that_cannot_decide_keeps_the_paused_lifecycle_continuation_for_a_retry(string outcome)
+    {
+        var harness = Harness.Create(receipt: outcome != "uncertain");
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, outcome);
+        var callsBefore = harness.Provider.Inputs.Count;
+        var owner = Assert.IsType<InMemoryAgentSessionService>(harness.Sessions(scope));
+        var pauseBefore = Assert.IsType<AgentSessionClaim>(owner.FindPause(session.Id));
+        var sourceBefore = Assert.Single(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status;
+        harness.Source.Unavailable = true;
+
+        var stopped = await Collect(scope, session.Id);
+
+        Assert.Equal(callsBefore, harness.Provider.Inputs.Count);
+        Assert.Equal(new AgentError(GatedSource.UnavailableCode, "The owning module could not establish current authority for this operation.", 503),
+            Assert.Single(stopped, x => x.Kind == AgentStreamEventKind.Error).Error);
+        // The pause, its claim and its source prompt are kept: an outage is retryable, not a refusal of the continuation.
+        Assert.NotNull(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.Same(pauseBefore, owner.FindPause(session.Id));
+        var messages = await harness.Sessions(scope).ListMessagesAsync(session.Id);
+        Assert.Equal(sourceBefore, Assert.Single(messages, x => x.Role == AgentRole.User).Status);
+        Assert.DoesNotContain(messages, x => x.Status == AgentMessageStatus.Failed);
+
+        harness.Source.Unavailable = false;
+        var resumed = await Collect(scope, session.Id);
+
+        Assert.Equal(AgentStreamEventKind.Completed, resumed[^1].Kind);
+        AssertLifecycle(Assert.Single(harness.Provider.Inputs[^1].PendingToolResults), outcome, proposal);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+    }
+
+    [Fact]
+    public async Task A_denying_owner_still_releases_the_paused_lifecycle_continuation_as_refused()
+    {
+        var harness = Harness.Create();
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        harness.Authority.Read = false;
+
+        var denied = await Collect(scope, session.Id);
+
+        Assert.Equal(new AgentError("agent.result.disclosure_denied",
+                "Current authority or host policy withholds the retained outcome details. Its accepted effect remains recorded and will not be repeated.", 403),
+            Assert.Single(denied, x => x.Kind == AgentStreamEventKind.Error).Error);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.Equal(AgentMessageStatus.Failed, Assert.Single(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task History_admission_of_a_retained_lifecycle_outcome_reports_an_unavailable_owner_as_503(bool unavailable)
+    {
+        var harness = Harness.Create();
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        Assert.Equal(AgentStreamEventKind.Completed, (await Collect(scope, session.Id))[^1].Kind);
+        await harness.Sessions(scope).AddMessageAsync(session.Id, new(AgentRole.User, "and now?", AgentMessageStatus.Pending, null, [], []));
+        if (unavailable) harness.Source.Unavailable = true; else harness.Authority.Read = false;
+
+        var events = await Collect(scope, session.Id);
+
+        var error = Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error).Error;
+        Assert.Equal(unavailable ? (GatedSource.UnavailableCode, 503) : ("agent.result.disclosure_denied", 403), (error?.Code, error?.StatusCode));
+    }
+
+    [Fact]
+    public async Task A_host_policy_refusal_during_an_owner_outage_is_definite_and_releases_the_pause()
+    {
+        var policy = new PolicyGate();
+        var harness = Harness.Create(configure: services => services.Replace(ServiceDescriptor.Scoped<IAgentPolicyEvaluator>(_ => policy)));
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        harness.Source.Unavailable = true;
+        policy.Denied.Add(DeterministicAgentProvider.MutatingToolName);
+
+        var stopped = await Collect(scope, session.Id);
+
+        Assert.Equal(("agent.result.disclosure_denied", 403), Code(Assert.Single(stopped, x => x.Kind == AgentStreamEventKind.Error).Error));
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.Equal(AgentMessageStatus.Failed, Assert.Single(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status);
+    }
+
+    [Fact]
+    public async Task A_replacement_collector_that_rebuilds_the_unavailable_error_still_keeps_the_pause()
+    {
+        var harness = Harness.Create(configure: services => services.Replace(ServiceDescriptor.Scoped<IAgentContextCollector>(provider =>
+            new RebuildingCollector(ActivatorUtilities.CreateInstance<DefaultAgentContextCollector>(provider)))));
+        using var scope = harness.Root.CreateScope();
+        var (session, proposal) = await harness.ProposeAsync(scope);
+        await harness.SettleAsync(scope, session, proposal, "denied");
+        harness.Source.Unavailable = true;
+
+        var stopped = await Collect(scope, session.Id);
+
+        Assert.Equal((GatedSource.UnavailableCode, 503), Code(Assert.Single(stopped, x => x.Kind == AgentStreamEventKind.Error).Error));
+        Assert.NotNull(await scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
+        Assert.DoesNotContain(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Status == AgentMessageStatus.Failed);
+    }
+
+    /// <summary>
+    /// Across admissions the first error wins. In one full-auto turn an inline mutation retains an uncertain lifecycle
+    /// outcome, then a read runs; while it runs the lifecycle outcome's owner becomes unable to decide (for historical and
+    /// current admission alike) and current authority withdraws the read. The read result's admission first re-admits
+    /// the recorded history in order, which reaches the earlier lifecycle outcome's outage before the later read's
+    /// definite refusal, so the turn stops with the owner's 503, as the Agent catalog states.
+    /// </summary>
+    [Fact]
+    public async Task Across_admissions_an_earlier_owner_outage_in_history_is_reported_before_a_later_definite_refusal()
+    {
+        var authority = new NativeAuthority();
+        var source = new SplitSource();
+        var provider = new SequenceProvider();
+        var read = new SwitchingReadTool(() =>
+        {
+            source.Unavailable = true;
+            authority.Withdrawn.Add(SwitchingReadTool.Name);
+        });
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.AddSingleton<IAgentProvider>(provider);
+            services.AddScoped<IAgentContextProvider>(_ => source);
+            services.AddSingleton<IAgentTool>(new InlineMutationTool());
+            services.AddSingleton<IAgentTool>(read);
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
+        });
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var session = await sessions.CreateAsync(new("tenant", "actor", "conversation", provider.ProviderId, "build", null,
+            AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto }, new Dictionary<string, string>()));
+        await sessions.AddMessageAsync(session.Id, new(AgentRole.User, "change, then read", AgentMessageStatus.Pending, null, [], []));
+
+        var events = await Collect(scope, session.Id);
+
+        // The inline mutation really retained a lifecycle outcome, and the read really ran into both conditions.
+        var lifecycle = Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallCompleted
+            && x.Payload is AgentToolCallOutcome { ToolName: InlineMutationTool.Name }).Payload as AgentToolCallOutcome;
+        Assert.Equal("uncertain", Assert.IsType<AgentToolResult>(lifecycle!.Result).Payload!.Data.GetProperty("status").GetString());
+        Assert.Equal(1, read.Executions);
+        Assert.True(source.UnavailableAnswers > 0);
+        Assert.Equal((SplitSource.UnavailableCode, 503), Code(Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error).Error));
+    }
+
+    private static (string?, int?) Code(AgentError? error) => (error?.Code, error?.StatusCode);
+
+    /// <summary>A disclosure owner that, once switched, cannot decide any retained outcome, historical or current.</summary>
+    private sealed class SplitSource : IAgentContextProvider
+    {
+        public const string Id = "split.source";
+        public const string UnavailableCode = "split.authority.unavailable";
+        public bool Unavailable { get; set; }
+        public int UnavailableAnswers { get; private set; }
+        public AgentContextProviderDescriptor Descriptor { get; } = new(Id, SplitModule, Id, [], ["1"], ["split.resource"]);
+        public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(new AgentContextContribution([], []));
+        public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+        {
+            if (!Unavailable || request.Results.Count == 0) return ValueTask.FromResult(new AgentContextContribution(request.Context, []));
+            UnavailableAnswers++;
+            return ValueTask.FromResult(new AgentContextContribution([], [new(Id, UnavailableCode, "Owner outage.", true) { OwnerUnavailable = true }]));
+        }
+    }
+
+    private const string SplitModule = "split.module";
+    private static readonly AgentResourceTarget SplitTarget = new(SplitModule, "split.resource", "resource-1", "revision-1");
+
+    /// <summary>A mutation that runs inline under full-auto and returns no receipt, so the engine retains an uncertain outcome.</summary>
+    private sealed class InlineMutationTool : IAgentTool
+    {
+        public const string Name = "split_change";
+        public AgentToolDescriptor Descriptor { get; } = new(Name, "Change", "Changes the split resource.", AgentToolMutability.Mutating,
+            AgentRisk.ReviewRequired, "{}", [], []) { ModuleId = SplitModule, DisclosureSourceId = SplitSource.Id, ResultType = "split.change", ResultSchemaVersion = "1" };
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Target = SplitTarget }));
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Name, true, "applied",
+                new("split.change", "1", JsonSerializer.SerializeToElement(new { size = "medium" })))));
+    }
+
+    private sealed class SwitchingReadTool(Action onExecute) : IAgentTool
+    {
+        public const string Name = "split_read";
+        public int Executions { get; private set; }
+        public AgentToolDescriptor Descriptor { get; } = new(Name, "Read", "Reads the split resource.", AgentToolMutability.ReadOnly,
+            AgentRisk.ReadOnly, "{}", [], []) { ModuleId = SplitModule, DisclosureSourceId = SplitSource.Id, ResultType = "split.read", ResultSchemaVersion = "1" };
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Target = SplitTarget }));
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            Executions++;
+            onExecute();
+            return Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Name, true, "read",
+                new("split.read", "1", JsonSerializer.SerializeToElement(new { size = "medium" })))));
+        }
+    }
+
+    private sealed class SequenceProvider : IAgentProvider
+    {
+        private readonly DeterministicAgentProvider inner = new();
+        public string ProviderId => inner.ProviderId;
+        public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default) => inner.CreateSessionAsync(session, cancellationToken);
+        public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default) => inner.ApproveToolAsync(request, cancellationToken);
+        public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) => inner.GetDiagnosticsAsync(cancellationToken);
+        public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            if (context.StepIndex == 0) yield return Call("split-change", InlineMutationTool.Name, AgentRisk.ReviewRequired);
+            else if (context.StepIndex == 1) yield return Call("split-read", SwitchingReadTool.Name, AgentRisk.ReadOnly);
+            yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
+        }
+        private static AgentStreamEvent Call(string id, string name, AgentRisk risk)
+            => new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.ToolCallRequested, null, id, null, DateTimeOffset.UtcNow,
+                Payload: new AgentToolCallRequest(id, name, "{}", risk, false));
+    }
+
+    /// <summary>Host capability policy that can withdraw a tool's capability.</summary>
+    private sealed class PolicyGate : IAgentPolicyEvaluator
+    {
+        private readonly DefaultAgentPolicyEvaluator inner = new();
+        public HashSet<string> Denied { get; } = new(StringComparer.Ordinal);
+        public ValueTask<AgentPolicyDecision> EvaluateAvailabilityAsync(AgentPolicy policy, CancellationToken cancellationToken = default)
+            => inner.EvaluateAvailabilityAsync(policy, cancellationToken);
+        public ValueTask<AgentPolicyDecision> EvaluateContextAsync(AgentPolicy policy, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
+            => inner.EvaluateContextAsync(policy, attachments, cancellationToken);
+        public ValueTask<AgentPolicyDecision> EvaluateCapabilityAsync(AgentPolicy policy, string capabilityId, CancellationToken cancellationToken = default)
+            => Denied.Contains(capabilityId) ? ValueTask.FromResult(new AgentPolicyDecision(false, [new("test.policy_withdrawn", "Host policy withdrew this capability.")]))
+                : inner.EvaluateCapabilityAsync(policy, capabilityId, cancellationToken);
+    }
+
+    /// <summary>A supported replacement collector (a decorator here) that returns its own error instances.</summary>
+    private sealed class RebuildingCollector(IAgentContextCollector inner) : IAgentContextCollector
+    {
+        public async Task<AgentResult<AgentContextContribution>> CollectAsync(AgentPolicy policy, AgentContextRequest request, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CollectAsync(policy, request, cancellationToken);
+            return result.Error is { } error ? new(result.Value, new AgentError(error.Code, error.Message, error.StatusCode)) : result;
+        }
+    }
+
     private static async Task<List<AgentStreamEvent>> Collect(IServiceScope scope, string sessionId)
     {
         var events = new List<AgentStreamEvent>();
@@ -222,7 +469,7 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
 
     private sealed record Harness(ServiceProvider Root, NativeAuthority Authority, GatedSource Source, GatedTool Tool, CapturingProvider Provider)
     {
-        public static Harness Create(bool receipt = true)
+        public static Harness Create(bool receipt = true, Action<IServiceCollection>? configure = null)
         {
             var authority = new NativeAuthority();
             var source = new GatedSource(authority);
@@ -235,12 +482,27 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
                 services.AddSingleton<IAgentTool>(tool);
                 services.AddSingleton<IAgentTool>(new ForgingReadTool());
                 services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
+                configure?.Invoke(services);
             });
             return new(root, authority, source, tool, provider);
         }
 
         public IAgentSessionService Sessions(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
         public IAgentProposalService Proposals(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
+
+        /// <summary>Settles the proposal into the named engine lifecycle outcome, leaving the originating turn paused.</summary>
+        public async Task SettleAsync(IServiceScope scope, AgentSession session, AgentActionProposal proposal, string outcome)
+        {
+            var proposals = Proposals(scope);
+            if (outcome == "denied") Assert.True((await proposals.DenyAsync(proposal.Id, session.ActorId, "no")).Succeeded);
+            else
+            {
+                Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+                if (outcome == "refused") Authority.Withdrawn.Add(DeterministicAgentProvider.MutatingToolName);
+                await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+            }
+            AssertLifecycle(Assert.IsType<AgentToolResult>(await proposals.FindResultAsync(proposal.Id)), outcome, proposal);
+        }
 
         public async Task<(AgentSession Session, AgentActionProposal Proposal)> ProposeAsync(IServiceScope scope)
         {
@@ -267,13 +529,19 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
     private sealed class GatedSource(NativeAuthority authority) : IAgentContextProvider
     {
         public const string Id = "gated.source";
+        public const string UnavailableCode = "gated.authority.unavailable";
         public int ResultChecks { get; private set; }
+        /// <summary>The owner cannot currently decide (an outage), as distinct from refusing.</summary>
+        public bool Unavailable { get; set; }
         public AgentContextProviderDescriptor Descriptor { get; } = new(Id, GatedTool.Module, Id, [], ["1"], [GatedTool.Target.ResourceType]);
         public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(new AgentContextContribution([], []));
         public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
         {
             ResultChecks += request.Results.Count;
+            if (Unavailable)
+                return ValueTask.FromResult(new AgentContextContribution([],
+                    [new(Id, UnavailableCode, "Owner store is down: private detail.", true) { OwnerUnavailable = true }]));
             return ValueTask.FromResult(authority.Read
                 ? new AgentContextContribution(request.Context, [])
                 : new([], [new(Id, "gated.read_denied", "Current read authority is required.", true)]));

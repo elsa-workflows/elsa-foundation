@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>RabbitMQ publisher for ETL message delivery with publisher confirms.</Description>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="RabbitMQ.Client" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Etl.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Etl.RabbitMq.ProviderTests" />
+  </ItemGroup>
+</Project>

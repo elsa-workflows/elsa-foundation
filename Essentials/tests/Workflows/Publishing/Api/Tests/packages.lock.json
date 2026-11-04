@@ -211,6 +211,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
@@ -282,6 +283,7 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
@@ -304,6 +306,15 @@
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.scripting": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.sequence": {
@@ -358,16 +369,40 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.events": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Strategies": "[4.0.0-dev, )",
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.events.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.events.strategies": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.expressions.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.javascript.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.foundation.identity": {

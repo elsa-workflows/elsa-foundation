@@ -27,7 +27,10 @@ public sealed class RuntimeCoalescingSession
     private readonly HashSet<string> _knownOverlayWorkItemIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RuntimeSchedulerWorkItem> _activeFusedScheduleAnchors = new(StringComparer.Ordinal);
     private readonly List<string> _activeFusedScheduleAnchorOrder = [];
-    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, TimeSpan> _overlayClaims =
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
+        new(ReferenceEqualityComparer.Instance);
+    // Overlay claims whose durable copy this drain lost; every later transition through them is refused as stale.
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _lostOverlayClaims =
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, DateTimeOffset?> _durableVisibility = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingRelease> _pendingReleases = new(StringComparer.Ordinal);
@@ -119,8 +122,9 @@ public sealed class RuntimeCoalescingSession
 
     public string WorkflowExecutionId { get; }
 
+    // The overlay records a delay only when its flush can persist that delay on the same item, wherever it then sits.
     internal bool SupportsDeferredOverlayRelease =>
-        _innerQueue.SupportsClaimTransitions && _innerQueue is IWorkflowSchedulerWorkVisibilityReader;
+        _innerQueue.SupportsClaimTransitions && _innerQueue is IWorkflowSchedulerWorkVisibilityReader and IWorkflowSchedulerWorkDeferral;
 
     /// <summary>The run's mode.</summary>
     public PersistenceMode Mode { get; }
@@ -192,7 +196,7 @@ public sealed class RuntimeCoalescingSession
     public bool OwnsOverlayClaim(RuntimeSchedulerWorkClaim claim)
     {
         ArgumentNullException.ThrowIfNull(claim);
-        return _overlayClaims.ContainsKey(claim);
+        return _overlayClaims.ContainsKey(claim) || _lostOverlayClaims.ContainsKey(claim);
     }
 
     /// <summary>Requests a checkpoint flush before the next durable scheduler claim is acquired.</summary>
@@ -932,13 +936,12 @@ public sealed class RuntimeCoalescingSession
         // that seeded the overlay; a new drain must not turn a delayed durable resume into immediately runnable work.
         var heads = await _overlayQueue.ListNextWorkItemsAsync([WorkflowExecutionId], cancellationToken);
         var head = heads.GetValueOrDefault(WorkflowExecutionId);
-        if (head is not null && _durableVisibility.TryGetValue(head.WorkItemId, out var visibleAfter) &&
-            visibleAfter > request.Now)
+        if (head is not null && IsDurablyHidden(head.WorkItemId, request.Now))
             return null;
 
         var claim = await _overlayQueue.ClaimAsync(request, cancellationToken);
         if (claim is not null)
-            _overlayClaims.TryAdd(claim, request.VisibilityTimeout);
+            _overlayClaims.TryAdd(claim, 0);
         return claim;
     }
 
@@ -948,10 +951,12 @@ public sealed class RuntimeCoalescingSession
         TimeSpan visibilityTimeout,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var result = await _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         if (result.Claim is not null)
-            _overlayClaims.TryAdd(result.Claim, visibilityTimeout);
+            _overlayClaims.TryAdd(result.Claim, 0);
         return result;
     }
 
@@ -959,6 +964,8 @@ public sealed class RuntimeCoalescingSession
         RuntimeSchedulerWorkClaim claim,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         if (result.Succeeded && !IsActive && _durableWorkItemIds.Contains(claim.Item.WorkItemId))
@@ -978,27 +985,34 @@ public sealed class RuntimeCoalescingSession
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var deferred = SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind);
         if (deferred && _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
 
         // A handler can cross a durable boundary before its release. If that deactivated the overlay, its source must
         // still exist and no later flush persists the release, so persist it now, before the overlay drops the claim.
-        // A durable head that moved refuses the release while this claim still owns the item, so the caller can still
-        // complete it instead of losing both the overlay claim and the durable release.
-        if (deferred && !IsActive && _overlayClaims.TryGetValue(claim, out var inactiveTimeout))
+        // A durable copy that is gone, or that another owner holds under a live claim, means this drain lost the item:
+        // the claim is lost, as on a durable queue. Fence the overlay claim too, so a fallback acknowledgement through
+        // it is refused rather than deleting the durable copy out from under its holder, and nothing is recorded.
+        if (deferred && !IsActive && _overlayClaims.ContainsKey(claim))
         {
-            if (await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt, inactiveTimeout), cancellationToken) is not null)
+            if (await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt), cancellationToken) is not null)
+            {
+                _lostOverlayClaims.TryAdd(claim, 0);
+                _overlayClaims.TryRemove(claim, out _);
                 return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+            }
             var released = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
             _overlayClaims.TryRemove(claim, out _);
             return released;
         }
 
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
-        var owned = _overlayClaims.TryRemove(claim, out var visibilityTimeout);
+        var owned = _overlayClaims.TryRemove(claim, out _);
         if (result.Succeeded && owned && deferred)
-            _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt, visibilityTimeout);
+            _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt);
         return result;
     }
 
@@ -1046,7 +1060,8 @@ public sealed class RuntimeCoalescingSession
     /// completion pump reads past live claims in true insertion order — the exact order the drain loop would claim
     /// next. The item is not claimed: the session is single-writer and drain-confined, so the pump dispatches it inline
     /// and then removes it with <see cref="ConsumePumpedOverlayItemAsync"/>. An item still in dispatch at a mid-drain
-    /// flush remains a recovery backstop until its exact non-retaining outcome has committed.
+    /// flush remains a recovery backstop until its exact non-retaining outcome has committed. An item whose durable delay
+    /// has not ended stops the pump, as it would stop the drain loop's claim: nothing at or behind it runs inline early.
     /// </summary>
     public async ValueTask<RuntimeSchedulerWorkItem?> PeekNextPumpableOverlayItemAsync(CancellationToken cancellationToken)
     {
@@ -1054,8 +1069,14 @@ public sealed class RuntimeCoalescingSession
         var inFlight = _overlayClaims.Keys
             .Select(claim => claim.Item.WorkItemId)
             .ToHashSet(StringComparer.Ordinal);
-        return await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+        // A flush delays a released item by identity, so its delay can sit behind work another writer queued first (#3690).
+        var next = await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+        return next is not null && IsDurablyHidden(next.WorkItemId, _timeProvider.GetUtcNow()) ? null : next;
     }
+
+    // The visibility the seeding provider read reported; the overlay's item-only pages omit it.
+    private bool IsDurablyHidden(string workItemId, DateTimeOffset now) =>
+        _durableVisibility.TryGetValue(workItemId, out var visibleAfter) && visibleAfter > now;
 
     /// <summary>
     /// Removes an inline-pumped item from the overlay after its dispatch completed. Flush accounting
@@ -1235,6 +1256,9 @@ public sealed class RuntimeCoalescingSession
     {
         foreach (var (workItemId, pending) in _pendingReleases.ToArray())
         {
+            // A refusal means this drain lost the item: its durable copy is gone or held under another owner's live
+            // claim. The flush fails as it does when any other tracked work goes missing, although its commit may have
+            // landed; whoever holds the durable copy decides when the item runs (#3700).
             if (await TryPersistReleaseAsync(pending, cancellationToken) is { } failure)
                 throw new InvalidOperationException(failure);
             _pendingReleases.Remove(workItemId);
@@ -1244,26 +1268,25 @@ public sealed class RuntimeCoalescingSession
     // Returns null once the release is durable, else why it was refused.
     private async ValueTask<string?> TryPersistReleaseAsync(PendingRelease pending, CancellationToken cancellationToken)
     {
-        // The execution lease still owns this drain. Reconciliation has removed the consumed prefix, so the
-        // released item must now be the durable FIFO head. Never apply its delay to a different queued item.
-        var now = _timeProvider.GetUtcNow();
-        var claim = await _innerQueue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
-            WorkflowExecutionId, pending.Claim.OwnerId, now,
-            pending.VisibilityTimeout), cancellationToken);
-        if (claim is null)
-            return "The deferred scheduler work could not be claimed durably.";
-        if (!StringComparer.Ordinal.Equals(claim.Item.WorkItemId, pending.Claim.Item.WorkItemId))
+        // The execution lease still owns this drain, but not the durable head: another writer can enqueue durably while
+        // the overlay holds the segment, ahead of a continuation the flush persists only now (#3690). Delay the released
+        // item by its identity, never by position, so no other queued item receives its delay. FIFO still decides what
+        // runs: work ahead of it runs first, and once it is the head nothing behind it overtakes it before it is due.
+        // SupportsDeferredOverlayRelease keeps a queue without the capability from recording a release to persist.
+        if (_innerQueue is not IWorkflowSchedulerWorkDeferral deferral)
         {
-            await _innerQueue.ReleaseClaimAsync(claim, now, cancellationToken);
-            return "The durable scheduler head changed before its deferred release.";
+            throw new InvalidOperationException(
+                $"The durable scheduler queue does not implement {nameof(IWorkflowSchedulerWorkDeferral)}, so it cannot persist a deferred release.");
         }
-        var released = await _innerQueue.ReleaseClaimAsync(claim, pending.VisibleAt, cancellationToken);
-        return released.Status == RuntimeSchedulerWorkClaimTransitionStatus.Succeeded
+
+        var deferred = await deferral.DeferAsync(
+            WorkflowExecutionId, pending.Claim.Item.WorkItemId, _timeProvider.GetUtcNow(), pending.VisibleAt, cancellationToken);
+        return deferred
             ? null
-            : "The deferred scheduler work lost its durable claim before release.";
+            : "The deferred scheduler work is no longer queued durably, or another owner holds its durable claim.";
     }
 
-    private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt, TimeSpan VisibilityTimeout);
+    private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt);
 
     private HashSet<string> CreateDurableWorkItemIdSet()
     {

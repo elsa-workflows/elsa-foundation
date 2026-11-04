@@ -61,6 +61,8 @@ import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./read
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
+import type { WorkflowAgentController } from "../workflowAgent";
+import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -80,9 +82,11 @@ type SourceDefinitionState =
   | { status: "absent" }
   | { status: "failed"; error: string };
 
-export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
+export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
+  /** The Workflows module's agent state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
+  weaver?: WorkflowAgentController;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   artifactId: string;
   sourceReferenceId: string | null;
@@ -147,6 +151,12 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   }, [load]);
 
   const chosenReference = useMemo(() => findChosenReference(data?.detail ?? null), [data]);
+  // The exact Executable Weaver may read while it is shown: identity bound to its Artifact Hash, withdrawn while loading,
+  // after a failed load and on unmount. The server reads the content itself and refuses a hash that no longer matches.
+  const inspected = state === "ready" && data
+    ? { artifactId: data.detail.artifactId, artifactHash: data.detail.artifactHash, sourceReferenceId: data.detail.chosenReference?.sourceReferenceId ?? null }
+    : null;
+  useWorkflowInspectionContext({ controller: weaver, clientId: ai.clientId, kind: "executable", identity: inspected });
   const publishedRunReference = findPublishedRunReference(data?.detail.references);
   const publishedRunTarget = data && publishedRunReference
     ? {
@@ -198,17 +208,13 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
 
   const explain = () => {
     if (!data || !explainAction) return;
-    // The Weaver explain action consumes the executable summary shape; mirror it from the detail
-    // plus the inspected reference so Explain works identically to the table.
+    // The inspector contributes the exact Executable itself (workflows.executable-inspector), so the prompt attaches none;
+    // without the Workflows agent state the prompt attaches the same identity.
     if (dispatchAiAction(ai, explainAction, {
-      ...data.detail,
-      artifactVersion: chosenReference?.artifactVersion ?? "",
-      definitionId: chosenReference?.definitionId ?? "",
-      definitionVersionId: chosenReference?.definitionVersionId ?? "",
-      publishedAt: chosenReference?.publishedAt ?? null,
-      sourceKind: chosenReference?.sourceKind ?? null,
-      sourceId: chosenReference?.sourceId ?? null,
-      sourceVersion: chosenReference?.sourceVersion ?? null
+      artifactId: data.detail.artifactId,
+      artifactHash: data.detail.artifactHash,
+      sourceReferenceId: data.detail.chosenReference?.sourceReferenceId ?? null,
+      attached: Boolean(weaver?.inspection)
     })) {
       setRunError("");
       setLastRun(null);

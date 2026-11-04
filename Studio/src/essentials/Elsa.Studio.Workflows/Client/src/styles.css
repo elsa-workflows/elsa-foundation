@@ -4245,6 +4245,24 @@
   color: var(--wf-muted-text);
 }
 
+.wf-properties-version-select {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wf-properties-version-select[aria-pressed="true"] .wf-properties-version-tag {
+  color: var(--wf-accent);
+  text-decoration: underline;
+}
+
+.wf-properties-version-explain {
+  margin-top: 8px;
+}
+
 .wf-palette-version {
   color: var(--wf-accent);
   font-family: var(--studio-font-mono);

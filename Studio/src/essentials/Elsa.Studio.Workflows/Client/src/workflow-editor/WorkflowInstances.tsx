@@ -55,6 +55,8 @@ import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
 import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
+import type { WorkflowAgentController } from "../workflowAgent";
+import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
 import {
@@ -837,9 +839,11 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
 const maxIncidentActivityLookups = 50;
 const incidentActivityLookupBatchSize = 8;
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
+  /** The Workflows module's agent state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowAgentController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -931,6 +935,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
   }, [browserContext, initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
+  // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
+  // it, published only once the run has loaded and withdrawn while loading, after a failed load and on unmount. The server
+  // reads the Run itself, never "the latest run", and applies the run endpoints' own access and redaction.
+  const inspectedRun = state === "ready" && data
+    ? { workflowExecutionId: data.details.instance.workflowExecutionId, activityExecutionId: selectedActivity?.activityExecutionId ?? null }
+    : null;
+  useWorkflowInspectionContext({ controller: weaver, clientId: ai.clientId, kind: "run", identity: inspectedRun });
   const journals = useCompensationJournals(context, workflowExecutionId);
 
   // Spec 260: re-reads the run's details and incidents while an operator action is applied, without resetting the view.
@@ -1562,7 +1573,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
           : observation.status === "disconnected" ? "Execution observation disconnected · last confirmed evidence" : observation.status === "loading" ? "Connecting to execution…" : "Execution observation unavailable"}</span>
         {observation.error ? <span role="status">{observation.error}</span> : null}
         {data && instanceAction ? (
-          <button type="button" onClick={() => dispatchAiAction(ai, instanceAction, data.details)}>
+          // data-run-selection names the activity execution the page discloses with the Run, so a journey waits on that state.
+          <button type="button" data-run-selection={selectedActivity?.activityExecutionId ?? ""} onClick={() => dispatchAiAction(ai, instanceAction, {
+            // The page contributes the exact Run itself (workflows.run-inspector), so the prompt attaches none; without the
+            // Workflows agent state the prompt attaches the same identity.
+            workflowExecutionId: data.details.instance.workflowExecutionId,
+            activityExecutionId: selectedActivity?.activityExecutionId ?? null,
+            status: data.details.instance.status,
+            attached: Boolean(weaver?.inspection?.runs)
+          })}>
             <Sparkles size={13} /> Explain
           </button>
         ) : null}

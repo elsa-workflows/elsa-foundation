@@ -166,6 +166,83 @@ public sealed partial class EtlRuntimeStoreTests
         }
     }
 
+    [Fact]
+    public async Task A_recorded_rabbitmq_route_is_not_published_again_when_its_batch_is_dispatched_again()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "elsa-etl-output-rabbitmq-" + Guid.NewGuid().ToString("N"));
+        var snapshotRoot = Path.Combine(root, "snapshots");
+        var errorRoot = Path.Combine(root, "errors");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var scope = new EtlScope("tenant-output", "rabbitmq");
+            var publisher = new TestRabbitMqPublisher();
+            var rabbitMqBindings = new HostRabbitMqBindings([new EtlHostRabbitMqBindingOptions
+            {
+                TenantId = scope.TenantId, PersistencePartition = scope.PersistencePartition, Alias = "events", Revision = "v1",
+                ConnectionString = "amqp://etl:secret@broker/etl", AllowedExchanges = ["etl.people"]
+            }], [publisher]);
+            var fileBinding = new HostFileBinding(scope, "errors", EtlFileRole.ErrorOutput,
+                "destination-revision-1", errorRoot, IsCurrent: true, AtomicPublication: true);
+            var fileBindings = new HostFileBindings([fileBinding]);
+            var filePin = fileBindings.Resolve(scope, "errors", EtlFileRole.ErrorOutput);
+            var exchange = rabbitMqBindings.ResolveCurrent(scope, "events", "MainOutput", "etl.people");
+
+            var defaultPipeline = CsvMixedRoutePipeline();
+            var pipeline = defaultPipeline with
+            {
+                Routes = new(new EtlRabbitMqDestination("events", "etl.people", "people.loaded"), new EtlJsonlDestination("errors")),
+                Limits = defaultPipeline.Limits with { FilePartitionCount = 1, MaxPartitions = 1, MaxBatchRecords = 2 }
+            };
+            var admission = ConnectorAdmission("connector-output-rabbitmq", scope, pipeline);
+            admission = admission with
+            {
+                Bindings = admission.Bindings with
+                {
+                    Main = new(EtlConnectorKind.RabbitMq, new("events", exchange.Revision, exchange.Handle, null)),
+                    Errors = new(EtlConnectorKind.Jsonl, new("errors", filePin.Revision, filePin.Handle, filePin.ExpectedSha256))
+                }
+            };
+
+            await using var database = await TestDatabase.CreateAsync();
+            await using var context = database.CreateContext();
+            var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
+            var lease = Assert.Single(await StartOutputCsvRunAsync(store, admission, recordCount: 2));
+            var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(scope, admission.Invocation.RunId));
+            var batch = OutputTestBatch(admission, run.Prepared!, lease, recordCount: 2);
+            var reserved = await store.ReserveConnectorBatchAsync(lease, batch);
+            lease = lease with { OwedBatch = reserved.Reservation };
+            var input = new EtlConnectorInputBatch(lease.PartitionOrdinal, batch,
+            [
+                new(1, 5, new EtlTypedRow(1, new Dictionary<string, EtlTypedValue> { ["id"] = new(EtlColumnType.Int64, 1L) }), null),
+                new(2, 6, null, new EtlRowError(2, null, "etl.invalid-value"))
+            ]);
+            using var transport = new EtlHttpTransport(TimeProvider.System);
+            var processor = new EtlConnectorOutputProcessor(store, fileBindings, new HostHttpBindings([]),
+                new TestChunkPublisherFactory(), transport, snapshotRoot, rabbitMqBindings: rabbitMqBindings);
+            var output = Assert.IsType<EtlConnectorBatchOutput>((await processor.TransformAndRetainAsync(lease, admission, pipeline, input)).Output);
+            lease = lease with { OwedBatch = lease.OwedBatch! with { Output = output } };
+
+            var first = await processor.DispatchAsync(lease, admission, pipeline, output);
+            // The batch is dispatched again, as after an error route's retry, carrying the publications the store recorded.
+            var recorded = await context.ConnectorBatches.AsNoTracking().SingleAsync();
+            lease = lease with { OwedBatch = lease.OwedBatch! with { FilePublications = new(recorded.MainFilePublished, recorded.ErrorFilePublished) } };
+            var again = await processor.DispatchAsync(lease, admission, pipeline, output);
+
+            Assert.Equal((EtlStoreStatus.Applied, true), (first.Status, first.ReadyToAccept));
+            Assert.True(recorded.MainFilePublished);
+            // A RabbitMQ route is persisted as a recorded publication, effect mechanism 2, like a file or SQL route (FR-007).
+            Assert.Equal(2, recorded.MainEffectKind);
+            Assert.Equal((true, false, (string?)null), (again.ReadyToAccept, again.Yield, again.FailureCode));
+            Assert.Equal(1, publisher.Attempts);
+            Assert.Single(publisher.Deliveries);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     private sealed class TestChunkPublisherFactory : IFileChunkPublisherFactory
     {
         public IFileChunkPublisher Create(EtlFileChunkFormat format) => new FileChunkStore(format switch

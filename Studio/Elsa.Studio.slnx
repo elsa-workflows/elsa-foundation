@@ -41,4 +41,5 @@
   <Folder Name="/tests/">
     <Project Path="tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" />
   </Folder>
+  <Project Path="../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj" />
 </Solution>

@@ -43,6 +43,8 @@ var runtime = new EtlRuntimeFeature
     SnapshotRoot = Path.Combine(root, "snapshots"),
     FileBindings = configuration.Bindings,
     HttpBindings = httpBindings,
+    SqlBindings = configuration.SqlBindings ?? [],
+    RabbitMqBindings = configuration.RabbitMqBindings ?? [],
     // Keep each child process to one active attempt so journal gates can coordinate which
     // process owns each partition; the process still runs the real runtime worker loop.
     MaxConcurrentAttempts = 1
@@ -50,6 +52,12 @@ var runtime = new EtlRuntimeFeature
 // A held delivery must not be reclaimed by another attempt in the same fixture process.
 // The recovery case deliberately delegates that next claim to the replacement process.
 runtime.ConfigureServices(builder.Services);
+// SQL delivery in fixture processes writes through the SQLite test engine (spec 1197).
+if (configuration.SqlBindings is { Count: > 0 })
+    builder.Services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine());
+// RabbitMQ delivery in fixture processes publishes to a journal every process shares (spec 1200).
+if (configuration.RabbitMqBindings is { Count: > 0 })
+    builder.Services.AddSingleton<IEtlRabbitMqPublisher>(new TestRabbitMqPublisher(EtlWorkerProtocol.RabbitMqJournalPath(root)));
 if (configuration.WritePause != EtlWorkerWritePause.None)
     builder.Services.Replace(ServiceDescriptor.Singleton<IFileChunkPublisherFactory>(
         new StagingPausePublisherFactory(new FileChunkPublisherFactory(), configuration.Root, role, configuration.WritePause)));

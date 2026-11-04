@@ -220,12 +220,28 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     /// <summary>Waits until every shard idles (cleared journal, scheduled poll, no lease) with the given accepted count.</summary>
-    private static Task WaitForIdleAsync(IServiceProvider services, EtlScope scope, string runId, long accepted) =>
-        WaitUntilAsync(async () =>
+    private static async Task WaitForIdleAsync(IServiceProvider services, EtlScope scope, string runId, long accepted, TimeSpan? timeout = null)
+    {
+        try
         {
+            await WaitUntilAsync(async () =>
+            {
+                await using var operation = services.CreateAsyncScope();
+                return await IsIdleAsync(operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>(), scope, runId, accepted);
+            }, timeout ?? TimeSpan.FromSeconds(30));
+        }
+        catch (TaskCanceledException exception)
+        {
+            // Name the state the run stopped in, so a timeout is diagnosable without rerunning.
+            var run = await FindRunAsync(services, scope, runId);
             await using var operation = services.CreateAsyncScope();
-            return await IsIdleAsync(operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>(), scope, runId, accepted);
-        }, TimeSpan.FromSeconds(30));
+            var partitions = await operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().ConnectorPartitions.AsNoTracking()
+                .Select(row => new { row.PartitionOrdinal, Owned = row.Owner != null, row.NotBeforeUtcTicks, row.CurrentRequestSequence, row.OwedBatchId })
+                .ToListAsync();
+            throw new TimeoutException($"Run {runId} did not idle with {accepted} accepted: status {run?.Status}, accepted {run?.AcceptedRecords}, " +
+                $"diagnostic {run?.TerminalResult?.Diagnostic?.Code}, partitions {string.Join("; ", partitions)}.", exception);
+        }
+    }
 
     private static async ValueTask<bool> IsIdleAsync(EtlRuntimeDbContext db, EtlScope scope, string runId, long accepted)
     {
@@ -298,6 +314,8 @@ public sealed partial class EtlRuntimeJourneyTests
         private int _requests;
 
         public bool MoveEmptyCursor { get; init; }
+        /// <summary>At most this many records per page, so a backlog spans many pages (spec 1196).</summary>
+        public int PageSize { get; init; } = int.MaxValue;
         public int CaughtUpResponses => Volatile.Read(ref _caughtUp);
         public int Requests => Volatile.Read(ref _requests);
 
@@ -326,7 +344,7 @@ public sealed partial class EtlRuntimeJourneyTests
             var cursor = long.TryParse(query["cursor"], out var parsed) ? parsed : 0;
             var records = _shards.GetOrAdd(shard, _ => []);
             (long Id, string? Name)[] page;
-            lock (records) page = records.Skip((int)Math.Min(cursor, records.Count)).ToArray();
+            lock (records) page = records.Skip((int)Math.Min(cursor, records.Count)).Take(PageSize).ToArray();
             var response = Page(page, cursor);
             // The answer is fixed before a held poll waits, as a real request reads the feed before replying.
             if (_held.TryRemove(shard, out var held))
