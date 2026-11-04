@@ -749,7 +749,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await page.getByRole("button", { name: "Add input", exact: true }).click();
   await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Customer note");
   await page.getByRole("button", { name: "Add input", exact: true }).last().click();
@@ -775,7 +775,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await page.reload();
   await expectSavedRevision(page, 6);
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
@@ -807,7 +807,7 @@ test("Activity Definition provider contract proposals require review and apply a
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
   await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
   await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
@@ -849,7 +849,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
   await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
-  await expect(page.getByRole("tab", { name: "Inputs & outputs" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();
 
@@ -872,7 +872,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await expect(page.getByText(/Revision 1 passed validation/)).toBeVisible();
 
@@ -895,6 +895,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByText(/backend rejected validation/)).toBeVisible();
   await expect(page.getByText(/server draft advanced to revision 2/i)).toBeVisible();
+  await page.getByText("About validation and Test Run", { exact: true }).click();
   await expect(page.getByText(/Runtime rejection is reported by the Test Run experience/)).toBeVisible();
 });
 
@@ -1051,7 +1052,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await page.getByRole("button", { name: "Review & publish" }).click();
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
@@ -3146,3 +3147,19 @@ test("published state stays inside its column regardless of stylesheet order", a
   expect(noteBox.x + noteBox.width).toBeLessThan(updatedBox.x);
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(64);
 });
+
+for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
+  test(`Activity collection disclosure controls match adjacent controls at ${width}px ${theme}`, async ({ page }, testInfo) => {
+    await mockActivityDefinitions(page, route => route.fulfill({ json: pageOf([]) }));
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+    await expect(page.getByRole("heading", { name: "No designed activities yet", exact: true })).toBeVisible();
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const tools = page.locator(".ad-tools-disclosure > summary");
+    const advanced = page.locator(".ad-advanced-filters > summary");
+    expect((await tools.boundingBox())!.height).toBe((await refresh.boundingBox())!.height);
+    expect((await advanced.boundingBox())!.height).toBe((await page.getByRole("searchbox", { name: "Search", exact: true }).locator("..").boundingBox())!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("activity-collection.png"), fullPage: true });
+  });
+}

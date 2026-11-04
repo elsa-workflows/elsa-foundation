@@ -57,7 +57,10 @@ internal static class NativeEtlActivityBoundary
             var (sourceDefinition, version) = catalogByVersion[sourceVersionId];
             if (!StringComparer.Ordinal.Equals(sourceDefinition.Id, version.DefinitionId))
                 throw new ArgumentException($"Source catalog version '{sourceVersionId}' is not bound to its exact definition.", nameof(sourceCatalog));
-            await sourcePublisher.PublishAsync(sourceDefinition, version, cancellationToken);
+            var published = await sourcePublisher.PublishAsync(sourceDefinition, version, cancellationToken);
+            if (!published.IsPublished)
+                throw new InvalidOperationException(
+                    $"Source catalog version '{sourceVersionId}' was refused: {string.Join("; ", published.Diagnostics.Select(x => x.Code))}.");
         }
 
         var publications = services.GetRequiredService<IActivityDefinitionVersionPublicationStore>();

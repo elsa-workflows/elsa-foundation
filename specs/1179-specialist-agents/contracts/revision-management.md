@@ -1,6 +1,6 @@
 # Shared source revision management
 
-**Status**: Proposed under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); design-only. This is the canonical operation/model mapping for the amendment. [Agent ownership](agent-ownership.md) adds Agent rules. Names below are responsibilities, not approved APIs, packages or implemented tables. Meanings live in the [glossary](../../../docs/glossary/elsa.md).
+**Status**: Accepted direction under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), merged #3783; source delivery authorized in #3790. This is the canonical responsibility mapping. Concrete source placement and the partial-delivery boundary live in [plan.md](../plan.md#3790-source-slice-placement-and-transition). Publication coordination remains T066. [Agent ownership](agent-ownership.md) adds domain rules; meanings live in the [glossary](../../../docs/glossary/elsa.md).
 
 ## Selected editing model
 
@@ -76,4 +76,4 @@ Before freezing contracts, demonstrate Agent and Workflow adapters using one wor
 
 ## Pre-GA reset boundary
 
-No import/backfill, old-schema reader, compatibility alias, cross-break rolling upgrade or historical-ID preservation is required. Planned breaking delivery may recreate databases after declaring affected stores/configuration/packages, stopping affected hosts and preventing incompatible binaries from admission. Clean initialization and explicit source recreation/republish restore readiness. Artifact binding, retention pins, scope and accepted-result replay remain mandatory within a supported deployment. This draft performs no reset and introduces no automatic drop-on-start behavior. See [ADR D7](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#d7--pre-ga-clean-breaks-replace-compatibility-machinery).
+No import/backfill, old-schema reader, compatibility alias, cross-break rolling upgrade or historical-ID preservation is required. Planned breaking delivery may recreate databases after declaring affected stores/configuration/packages, stopping affected hosts and preventing incompatible binaries from admission. Clean initialization and explicit source recreation/republish restore readiness. Artifact binding, retention pins, scope and accepted-result replay remain mandatory within a supported deployment. This delivery performs no live reset and introduces no automatic drop-on-start behavior. See [ADR D7](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#d7--pre-ga-clean-breaks-replace-compatibility-machinery).

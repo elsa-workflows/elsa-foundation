@@ -46,7 +46,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
 
     await waitFor(() => {
       expect(container.textContent).toContain("Runtime evidence settings");
-      expect(container.textContent).toContain("New capture events use");
+      expect(container.textContent).not.toContain("New capture events use");
       expect(container.textContent).toContain("Diagnostic snapshots");
       expect(container.textContent).toContain("Choose the level Studio should request.");
       expect(container.textContent).toContain("Full payload capture is disabled by host policy.");
@@ -98,8 +98,8 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     const container = render(<RuntimeDiagnosticsSettingsPage context={stubContext(settings)} />);
 
     await waitFor(() => {
-      expect(container.querySelector(".runtime-diagnostics-effective strong")?.textContent).toBe("Metadata only");
-      expect(container.textContent).toContain("Saved request: Diagnostic snapshots. Host Policy applies a lower level.");
+      expect(container.querySelector(".runtime-diagnostics-effective-note")?.textContent).toContain("Host policy limits new capture events to Metadata only.");
+      expect(container.textContent).toContain("Saved request: Diagnostic snapshots.");
       expect(container.textContent).toContain("Host Policy limits the default to metadata.");
     });
   });
@@ -136,7 +136,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     const container = render(<RuntimeDiagnosticsSettingsPage context={context} />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("New capture events use");
+      expect(container.textContent).not.toContain("New capture events use");
       expect(container.textContent).toContain("Diagnostic snapshots");
       expect(container.querySelectorAll("input[name='runtime-diagnostics-default-level']")).toHaveLength(3);
       expect(findLevelInput(container, "DiagnosticSnapshot").checked).toBe(true);
@@ -152,7 +152,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     await waitFor(() => {
       expect(off.checked).toBe(true);
       expect(container.textContent).toContain("Unsaved request: Off");
-      expect(container.querySelector(".runtime-diagnostics-effective strong")?.textContent).toBe("Diagnostic snapshots");
+      expect(container.querySelector(".runtime-diagnostics-applied")?.textContent).toContain("Diagnostic snapshots");
     });
 
     clickLevelCard(metadata);

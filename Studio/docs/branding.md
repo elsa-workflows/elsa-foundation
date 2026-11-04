@@ -94,18 +94,25 @@ binds `Identity:Login` without a dependency on Studio:
 }
 ```
 
-Layout, palette and artwork are independent:
+An unconfigured identity host uses **Parcel Room**: a small Elsa mark and clear credential form on
+white, with a complete felt-tip illustration of routing envelopes and parcels. Its palette stays
+light under an OS dark preference. The illustration is decorative; the real form retains the
+provider's username/password fields and supported actions.
+
+To select the coordinated appearance explicitly, set `Layout`, `Palette` and `Artwork` to
+`parcel-room`. Existing explicit host choices continue to win. Layout, palette and artwork are independent:
 
 | Setting | Choices |
 |---|---|
-| Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
-| Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
-| Artwork | `unfolding-map` (default); see the choices below |
+| Layout | `parcel-room` (default; form left, full illustration right), `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
+| Palette | `parcel-room` (default; white and teal, light only), `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
+| Artwork | `parcel-room` (default); see the choices below |
 
-The ten artwork directions are available independently of the selected layout and palette:
+The bundled artwork directions are available independently of the selected layout and palette:
 
 | Artwork value | Direction |
 |---|---|
+| `parcel-room` | Warm marker illustration of sorting envelopes and parcels (default) |
 | `river-to-sea` | Aerial waterways opening into a sunlit coastline |
 | `open-architecture` | Terracotta archway and a continuing coastal path |
 | `flowing-ribbons` | Copper, cream and teal ribbons weaving through space |
@@ -115,10 +122,10 @@ The ten artwork directions are available independently of the selected layout an
 | `constellation` | Points of light connected across a midnight sky |
 | `miniature-world` | Handcrafted landscape with waterways, bridges and buildings |
 | `glass-and-light` | Translucent curved glass and warm refracted light |
-| `unfolding-map` | Illustrated landscape with connecting paths and settlements (default) |
+| `unfolding-map` | Illustrated landscape with connecting paths and settlements |
 
 The earlier `ember`, `tidal`, `daybreak` and `canopy` artwork values remain supported. Omitted,
-empty or unrecognized artwork values use `unfolding-map`. A valid `ImageUrl` takes precedence over
+empty or unrecognized artwork values use `parcel-room`. A valid `ImageUrl` takes precedence over
 `Artwork`; remove an existing `ImageUrl` override to activate bundled artwork.
 
 Configure the **identity backend host** using appsettings JSON as above, an environment variable such
@@ -140,6 +147,9 @@ CDN dependency. Set ImageUrl to your own asset to replace the image. FocalX/Foca
 clamped to 0–100. Use a portrait source for split/editorial and a larger landscape source for immersive;
 check the crop at desktop, tablet and 320px. Artwork is decorative (`alt=""`), so essential instructions
 belong in real text. A failed image leaves readable copy on a solid surface and a usable form.
+Parcel Room contains the complete illustration without cropping or story-copy overlays. On narrow
+screens it places the form before the artwork. Its small brand uses the standard Elsa logo unless
+`LogoUrl` overrides it; configured Help and Privacy links remain available beneath the form.
 
 Names/copy/URLs are encoded. Asset and resource URLs accept root-relative paths or HTTPS; HTTP loopback
 is available for local development. Executable/data/protocol-relative URLs are rejected. Rejected configured Studio resource links are hidden; an omitted setting keeps the default product resource link. Serve SVG only
