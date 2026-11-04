@@ -784,6 +784,8 @@ export function ActivityGraphImplementationEditor({
     sidePanelLayout.setInspectorCollapsed(false);
   };
   const inspectedNode = selected ?? owner;
+  // Keep raw editor text: normalizing here removes a space before the next word is typed.
+  const inspectedPresentation = value.activityPresentation?.find(record => record.nodeId === inspectedNode.nodeId);
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
   const inspectedSlots = inspectedNode ? getChildSlots(inspectedNode, catalogByVersion) : [];
@@ -881,7 +883,7 @@ export function ActivityGraphImplementationEditor({
             workflowState={workflowState}
             selectedNode={inspectedNode}
             selectedNodeLabel={resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(inspectedNode?.nodeId ?? ""), inspectedCatalogItem, inspectedNode?.nodeId ?? "Activity graph")}
-            selectedPresentation={indexActivityPresentation(value.activityPresentation).get(inspectedNode?.nodeId ?? "")}
+            selectedPresentation={inspectedPresentation}
             onSelectedPresentationChange={inspectedNode ? presentation => {
               if (readOnly) return;
               commitDocument({ ...value, activityPresentation: updateActivityPresentation(value.activityPresentation ?? [], inspectedNode.nodeId, presentation) });

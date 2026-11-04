@@ -49,6 +49,22 @@ afterEach(() => {
 });
 
 describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
+  it("retains spaces while typing a multiword display name", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner({
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Original name" }]
+    });
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    setInput(input, "Approve ");
+    expect(input.value).toBe("Approve ");
+    setInput(input, input.value + "order");
+    expect(input.value).toBe("Approve order");
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
+  });
+
   it("renames a selected activity with one undo/redo and prunes presentation on delete without losing history", () => {
     catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
     const value = {
