@@ -26650,6 +26650,11 @@
           "path": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Etl.Runtime",
+          "path": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
