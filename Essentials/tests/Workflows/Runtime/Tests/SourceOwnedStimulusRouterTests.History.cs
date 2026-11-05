@@ -201,6 +201,75 @@ public sealed partial class SourceOwnedStimulusRouterTests
         Assert.Equal(0, (await harness.Store.FindAsync(source.SourceOutboxItemId))!.DeliveryAttemptCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Saved_dispatch_exception_preserves_exact_target_attribution_without_asserting_business_failure(bool acceptedThenAckLost)
+    {
+        var recorder = new ObservationRecorder();
+        await using var harness = new Harness(observations: recorder);
+        await harness.SeedMaterial();
+        await harness.Wait("existing", "wait");
+        var owner = (await harness.Executions.FindAsync("existing"))! with
+            { HistoryCapturePolicy = new("runtime-history-v3", 3, true, RuntimeHistoryDeliveryFacts.Kinds) };
+        await harness.Executions.SaveAsync(owner);
+        var cause = new RuntimeHistoryCausation("publisher-event", "publisher", "source-commit:send");
+        var source = await harness.Source(historyCausation: cause);
+        var original = (await harness.Bookmarks.ObserveAsync("existing", "wait"))!;
+        var expected = StimulusResumeRecipient.From(original, owner, Scope);
+        var winner = await harness.Store.InstallAsync(source, new(1, source.SourceOutboxItemId, source.IntentFingerprint,
+            StimulusDeliveryScope.From((await harness.Executions.FindAsync("publisher"))!, Scope), Now, "event", "named", [], [expected]));
+        var activationFailure = new IOException("Constructed actor activation outage.");
+        if (acceptedThenAckLost) harness.Actors.LoseNextAck = true;
+        else harness.Actors.BeforeAgent = _ => Task.FromException(activationFailure);
+
+        var failure = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => harness.Resume.DispatchAsync(source, "existing", "wait").AsTask());
+
+        Assert.True(failure.IsUnavailable);
+        if (acceptedThenAckLost)
+        {
+            Assert.IsType<IOException>(failure.InnerException);
+            Assert.Equal("Constructed acknowledgment loss after recorded mailbox acceptance.", failure.InnerException!.Message);
+            Assert.Equal(Assert.Single(harness.Actors.Attempts), Assert.Single(harness.Actors.Accepted));
+        }
+        else
+        {
+            Assert.Same(activationFailure, failure.InnerException);
+            Assert.Empty(harness.Actors.Attempts);
+            Assert.Empty(harness.Actors.Accepted);
+        }
+        Assert.Collection(recorder.Observations,
+            received =>
+            {
+                Assert.Equal("DeliveryReceived", received.Event.Name);
+                Assert.Equal(cause, received.Event.Causation);
+            },
+            faulted =>
+            {
+                Assert.Equal("DeliveryFaulted", faulted.Event.Name);
+                Assert.Equal("dispatch-threw", faulted.Event.Metadata["history.reasonCode"]);
+                Assert.Equal(recorder.Observations[0].Event.HistoryEventId, faulted.Event.Causation!.HistoryEventId);
+                Assert.Equal("existing", faulted.Event.Causation.WorkflowExecutionId);
+                Assert.Equal(source.SourceOutboxItemId, faulted.Event.Causation.DeliveryId);
+            });
+        // This proves emitted attribution at the source boundary. The recording adapter is not a
+        // persistence/query acceptance fixture, and an acknowledgement loss says nothing about callback effects.
+        Assert.All(recorder.Observations, observation =>
+        {
+            Assert.Equal("existing", observation.Event.WorkflowExecutionId);
+            Assert.Equal(expected.BookmarkId, observation.Event.BookmarkId);
+            Assert.Equal(expected.ActivityExecutionId, observation.Event.ActivityExecutionId);
+            Assert.Equal(expected.ExecutableNodeId, observation.Event.ExecutableNodeId);
+            Assert.Equal(RuntimeHistoryAuthority.DeliveryObservation, observation.Event.Authority);
+            Assert.Equal(RuntimeHistoryEventCategory.DeliveryObservation, observation.Event.Category);
+        });
+        Assert.DoesNotContain(recorder.Observations, observation => observation.Event.Name is "ActivityFaulted" or "BookmarkConsumed" or "ActivityContinuationStarted");
+        Assert.Equal(original.Generation, (await harness.Bookmarks.ObserveAsync("existing", "wait"))!.Generation);
+        var retainedSource = (await harness.Store.FindAsync(source.SourceOutboxItemId))!;
+        Assert.Equal(0, retainedSource.DeliveryAttemptCount);
+        Assert.True(winner.IsEquivalentTo(retainedSource.RecipientSnapshot));
+    }
+
     private sealed class ObservationRecorder : IRuntimeHistoryObservationWriter, IRuntimeHistoryStore
     {
         public List<RuntimeHistoryObservation> Observations { get; } = [];

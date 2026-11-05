@@ -150,7 +150,8 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         {
             if (receiptId is not null)
                 await RecordHistoryAsync(RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, "DeliveryFaulted",
-                    _timeProvider.GetUtcNow(), request.StimulusType, cause: cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId },
+                    _timeProvider.GetUtcNow(), request.StimulusType, target?.BookmarkId, target?.ActivityExecutionId, target?.ExecutableNodeId,
+                    cause: cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId },
                     reasonCode: exception is RuntimeSchedulerWorkUnavailableException ? "runtime-unavailable" : "dispatch-threw"), cancellationToken);
             throw;
         }
