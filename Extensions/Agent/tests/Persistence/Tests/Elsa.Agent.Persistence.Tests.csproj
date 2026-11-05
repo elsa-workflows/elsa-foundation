@@ -42,6 +42,8 @@
 
   <ItemGroup>
     <Compile Include="../../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfSchemaFinalizationTestSupport.cs" Link="Schema/EfSchemaFinalizationTestSupport.cs" />
+    <Compile Include="../../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfSchemaUpcasterFixtureSupport.cs" Link="Schema/EfSchemaUpcasterFixtureSupport.cs" />
+    <None Update="Fixtures/SchemaUpcasters/**/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

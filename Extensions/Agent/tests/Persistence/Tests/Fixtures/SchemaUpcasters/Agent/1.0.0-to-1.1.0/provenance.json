@@ -1,0 +1,99 @@
+{
+  "family": "Agent",
+  "from": "1.0.0",
+  "to": "1.1.0",
+  "captureDateUtc": "2026-11-05T21:46:44.125332+00:00",
+  "transport": "test-only-agent-fixture: followed by the production AgentRecordCodec envelope; synthetic plaintext, no encryption or authentication claim",
+  "database": "Actual migrated SQLite stores, fresh database admitted at each writer current version. Disposable database files were not retained; these original complete content-column JSON rows were retained.",
+  "writers": [
+    {
+      "role": "source",
+      "head": "e4446f73c5ce907bcc07067ee4e3f54b2d0d2a1c",
+      "tree": "f1d8478800448570dde8daa57f88565d5738a943",
+      "schema": "1.0.0",
+      "productSource": "e4446f73c5ce907bcc07067ee4e3f54b2d0d2a1c",
+      "captureCasesPassed": 1,
+      "testDllSha256": "36dce5099d67960c8d2cdd89b3f296e2cc0dce5e1c1c2cfa6a5bcd7134c3486d",
+      "dependencyCount": 57,
+      "allDependencyBytesUnchangedAcrossCapture": true,
+      "oneToOneDefinitionAndCodebaseVerified": true
+    },
+    {
+      "role": "expected",
+      "head": "95d337f1ac7766246f5606dd8330a24700af3337",
+      "tree": "dc01c1a4655bd47aa5acb586f405e39d349b61d0",
+      "schema": "1.1.0",
+      "productSource": "95d337f1ac7766246f5606dd8330a24700af3337",
+      "captureCasesPassed": 1,
+      "testDllSha256": "8ddd9ce24234c8ca428ca53611c984555876061cd9d6602a036228cdfea6996f",
+      "dependencyCount": 58,
+      "allDependencyBytesUnchangedAcrossCapture": true,
+      "oneToOneDefinitionAndCodebaseVerified": true
+    }
+  ],
+  "auxiliarySourceSha256": {
+    "AgentSchemaFixtureSeed.cs": "7d9c65a8a5819ef49a1a472d66934cd168aad339918055852ca764a8f3830fb5",
+    "CaptureAgentSchemaFixtures.cs": "f435982de319439fb8e15ecc77f837c13a92b8c3111e4a6708b0485f63b8d12a"
+  },
+  "controllerSha256": "483bd73c4a6b01e29cd969fa1f6764b456fc055f4ca73c8803b6bb9f458e7211",
+  "captureReceiptSha256": "c7ba35cd31a8c2666ef1965a4948e966a323ad587ea9d4a4edfe5ea7bfca728b",
+  "independentCaptureAuditSha256": "99a88ee19fcafe9fbbe7f4652f8c84504ba5080cab99a493005388b55c2ddbd5",
+  "independentAuditScope": "Both actual writer TRXs/assemblies and 30 retained artifacts rehashed, five complete content-row pairs verified byte-identical, exact tracked sources restored, recorded processes/groups absent. Not a formal product-source review or application acceptance.",
+  "evidence": "https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6670446473",
+  "pairs": {
+    "AgentSessionRow": {
+      "columns": [
+        "Payload",
+        "PausedTurnPayload",
+        "PendingAuditsPayload"
+      ],
+      "sourceSha256": "e6d6658c283394f945bc925af23e0cfd238189bb05839c03efb5c35f9aa38e88",
+      "expectedSha256": "e6d6658c283394f945bc925af23e0cfd238189bb05839c03efb5c35f9aa38e88",
+      "contentStringsEqual": true
+    },
+    "AgentMessageRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "dc3ee065cdcbc9a712cbb9a9860b5cafb47e627e04f3683b231bbcfab249d394",
+      "expectedSha256": "dc3ee065cdcbc9a712cbb9a9860b5cafb47e627e04f3683b231bbcfab249d394",
+      "contentStringsEqual": true
+    },
+    "AgentContextRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "2972e8137c5915c7364b664c3b8cf95dfee22cbd83a6cbf5fdefffea3b00603c",
+      "expectedSha256": "2972e8137c5915c7364b664c3b8cf95dfee22cbd83a6cbf5fdefffea3b00603c",
+      "contentStringsEqual": true
+    },
+    "AgentProposalRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "e50d04e22fb164eac96aae5f7a91a609741810da4b2c10760591320c7fde1038",
+      "expectedSha256": "e50d04e22fb164eac96aae5f7a91a609741810da4b2c10760591320c7fde1038",
+      "contentStringsEqual": true
+    },
+    "AgentAuditRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "e38689ae554661590c0ce06741dfa6e569f117f8f8e7e6584fe29aaaeaea91d7",
+      "expectedSha256": "e38689ae554661590c0ce06741dfa6e569f117f8f8e7e6584fe29aaaeaea91d7",
+      "contentStringsEqual": true
+    }
+  },
+  "unchangedSqliteDdlAndMappingSha256": {
+    "Extensions/Agent/src/Persistence/EntityFrameworkCore/Migrations/Agent/Sqlite/20261102135641_Initial.cs": "131d8fb6544a7e17dd8d09e6542a0e1251f15b7172fedb5413a41772b591f519",
+    "Extensions/Agent/src/Persistence/EntityFrameworkCore/Migrations/Agent/Sqlite/AgentSqliteDbContextModelSnapshot.cs": "90a24b31bf07061ab96c8161adefa0aff2903328bd15d2af100a2c2652b0568a",
+    "Extensions/Agent/src/Persistence/EntityFrameworkCore/AgentModelBuilderExtensions.cs": "19a3640b4de2f11abbf3f04e09bbffeed8cbed14dcc78aca4d56c54dd933d5c3"
+  },
+  "allProviderMigrationFilesUnchangedBetweenWriters": true,
+  "limits": [
+    "No fixture regeneration in CI",
+    "No shared canonical read/round-trip execution claimed by capture",
+    "No cryptographic/fleet-finalization/old-process/binary-consumer/four-provider proof",
+    "No contract freeze or Program completion"
+  ]
+}
