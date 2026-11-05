@@ -245,12 +245,22 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = build[0]
         if not any(condition in block for condition in (
                 "if: ${{ !cancelled() }}",
-                "if: ${{ !cancelled() && github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}")):
+                "if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}")):
             problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() }}}}` so it always reports")
         needs = re.search(r"^    needs:\s*\[([^\]]*)\]", block, re.M)
-        for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only"):
+        for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only", "plan-scope",
+                    "studio-lint-and-test", "studio-browser-tests", "studio-dotnet-build-and-test", "studio-ux-acceptance"):
             if not needs or job not in [n.strip() for n in needs.group(1).split(",")]:
                 problems.append(f"{CI}: `Build & test` must need `{job}`")
+        if "run: python3 tools/ci/studio_gate.py" not in block:
+            problems.append(f"{CI}: Build & test must execute the selected Studio verdict")
+        elif block.find("run: python3 tools/ci/studio_gate.py") > block.find("DOCS_ONLY") >= 0:
+            problems.append(f"{CI}: Studio verdict must precede the docs-only fast path")
+        for key, source in {"STUDIO_SELECTED": "needs.plan-scope.outputs.studio", "STUDIO_FRONTEND": "needs.studio-lint-and-test.result",
+                            "STUDIO_BROWSER": "needs.studio-browser-tests.result", "STUDIO_DOTNET": "needs.studio-dotnet-build-and-test.result",
+                            "STUDIO_UX": "needs.studio-ux-acceptance.result"}.items():
+            if f"{key}: ${{{{ {source} }}}}" not in block:
+                problems.append(f"{CI}: Studio verdict must consume {key} from {source}")
     full = [block for block in _jobs(ci_full).values() if "'Full tier'" in _job_name(block) or _job_name(block) == FULL_TIER_CONTEXT]
     if len(full) != 1:
         problems.append(f"{CI_FULL}: expected exactly one job that reports `Full tier`, found {len(full)}")
@@ -262,6 +272,30 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
             problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}`")
         if "needs.plan-full.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
             problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
+    # #3708: the latest ready suite must execute all required contexts, not rename/skip
+    # the PR tier and maps while leaving their green results in an earlier draft suite.
+    for job in ("plan-tiers", "build-and-test", "generated-maps"):
+        block = _jobs(ci).get(job, "")
+        if not block:
+            problems.append(f"{CI}: missing `{job}` required for complete ready runs")
+        # A folded/quoted scalar may put the exclusion on a continuation line.
+        # Stop at the next job-level field; step-level conditions are unrelated.
+        for field in ("name", "if"):
+            match = re.search(rf"^    {field}:[ \t]*(.*)$", block, re.M)
+            if not match:
+                continue
+            value = [match.group(1)]
+            for line in block[match.end():].splitlines():
+                if line.strip() and len(line) - len(line.lstrip()) <= 4:
+                    break
+                if line.strip() and not line.lstrip().startswith("#"):
+                    value.append(line.strip())
+            if "ready_for_review" in " ".join(value):
+                problems.append(f"{CI}: `{job}` must run unchanged on the ready transition")
+                break
+    concurrency = ci.split("\njobs:\n", 1)[0]
+    if re.search(r"^.*ready_for_review.*(?:'ready'|'head').*$", concurrency, re.M):
+        problems.append(f"{CI}: ready and head events must share one PR concurrency group")
     for path, text in ((CI, ci), (CI_FULL, ci_full)):
         # Comments explain why there is no label trigger; only YAML outside them counts.
         trigger = "\n".join(line.split("#", 1)[0] for line in text.split("\njobs:\n", 1)[0].splitlines())
@@ -394,16 +428,52 @@ def self_test() -> int:
     check("job entry: keeps only test projects, with forward slashes",
           entry == {"shard": "core-only", "whole": ["t/A/A.Tests.csproj"], "split": []})
 
-    good_ci = ("on:\n  pull_request:\njobs:\n  build-and-test:\n    name: Build & test\n"
-               "    needs: [plan-tiers, pr-shard, architecture-guards, core-only]\n    if: ${{ !cancelled() }}\n")
+    good_ci = ("on:\n  pull_request:\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
+               "  generated-maps:\n    name: Generated maps fresh\n"
+               "  build-and-test:\n    name: Build & test\n"
+               "    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]\n    if: ${{ !cancelled() }}\n")
+    good_ci += ("    steps:\n      - name: Studio proofs\n        env:\n"
+                "          STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}\n"
+                "          STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}\n"
+                "          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}\n"
+                "          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}\n"
+                "          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}\n"
+                "        run: python3 tools/ci/studio_gate.py\n")
     good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\njobs:\n  full-tier:\n"
                  "    name: \"${{ (needs.plan-full.result != 'success' || x) && 'Full tier' || 'Full tier (not run: draft)' }}\"\n"
                  "    if: ${{ !cancelled() }}\n    steps:\n      - run: if [[ \"$PLAN\" != success ]]; then exit 1; fi\n")
     check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
     check("workflows: a skippable Build & test fails",
           bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}", "if: ${{ needs.x.outputs.y }}"), good_full)))
+    check("workflows: a ready-only skip of the required PR context fails",
+          bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}",
+               "if: ${{ !cancelled() && github.event.action != 'ready_for_review' }}"), good_full)))
+    check("workflows: ready cannot rename or skip maps",
+          bool(check_workflows(good_ci + "  generated-maps:\n    name: Generated maps fresh\n"
+               "    if: github.event.action != 'ready_for_review'\n", good_full)))
+    check("workflows: a folded ready-only maps skip fails",
+          bool(check_workflows(good_ci.replace("    name: Generated maps fresh\n",
+               "    name: Generated maps fresh\n    if: >-\n"
+               "      github.event.action != 'ready_for_review' && github.event_name == 'pull_request'\n"), good_full)))
+    check("workflows: a multiline ready-only maps name fails",
+          bool(check_workflows(good_ci.replace("    name: Generated maps fresh\n",
+               "    name: >-\n      ${{ github.event.action == 'ready_for_review'\n"
+               "        && 'Maps already requested' || 'Generated maps fresh' }}\n"), good_full)))
+    check("workflows: ready cannot skip the PR-tier plan",
+          bool(check_workflows(good_ci.replace("  plan-tiers:\n", "  plan-tiers:\n    if: github.event.action != 'ready_for_review'\n"), good_full)))
+    check("workflows: deleting maps cannot leave a required context missing",
+          bool(check_workflows(good_ci.replace("  generated-maps:\n    name: Generated maps fresh\n", ""), good_full)))
+    check("workflows: ready and pushes cannot leave superseded runs in separate groups",
+          bool(check_workflows("concurrency:\n  group: ${{ github.event.action == 'ready_for_review' && 'ready' || 'head' }}\n"
+               + good_ci, good_full)))
     check("workflows: Build & test without the shards fails",
           bool(check_workflows(good_ci.replace("pr-shard, ", ""), good_full)))
+    check("workflows: disconnected UX verdict fails",
+          bool(check_workflows(good_ci.replace("run: python3 tools/ci/studio_gate.py", "run: true"), good_full)))
+    check("workflows: skipped UX cannot be replaced by a constant green",
+          bool(check_workflows(good_ci.replace("${{ needs.studio-ux-acceptance.result }}", "success"), good_full)))
+    check("workflows: a docs-only return before Studio verdict fails",
+          bool(check_workflows(good_ci.replace("    steps:", "    # DOCS_ONLY premature return\n    steps:"), good_full)))
     check("workflows: a comment that mentions `labeled` is not a trigger",
           not check_workflows(good_ci, "# There is no `labeled` trigger here.\n" + good_full))
     check("workflows: a labeled trigger fails",

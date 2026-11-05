@@ -1229,6 +1229,14 @@ internal sealed partial class EfEtlRuntimeStore(
     private void ValidateRun(EtlRuntimeRunRecord row, EtlScope scope, string runId)
     {
         EtlRuntimeRecordCodec.EnsureScopeResidual(row, scope);
+        try
+        {
+            EtlRuntimeRecordCodec.ValidateIdentity(runId, "run id");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException("The ETL runtime row has an invalid run identity.", exception);
+        }
         // The key is the run id's key on this engine (its encoding, or its hash on a server engine), so a row whose key
         // and id disagree, a hash collision included, is refused rather than read as another run.
         if (!StringComparer.Ordinal.Equals(row.RunKey, db.RunKeyOf(runId)) ||

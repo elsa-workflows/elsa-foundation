@@ -1,5 +1,25 @@
 # Evidence: the ETL runtime store's schema on all four EF engines (spec 1203)
 
+## Post-demo whole ETL qualification — 5 November
+
+[Fresh source-bound receipt](qualification-resumed-etl.json) at tested head `154762f4714bc861d46289d30c055a51f6bb9d00`, tree `a300119e65e5ffd5d99fa3ff6bf4c2672c0686cf`, integrating delivered main `697e9a342`: **1328/1328**, zero failed/skipped/aborted/timed-out cases. Discovery lists1328 and matches every executed case name exactly. All three retained-ID corruption controls pass in that complete project. The earlier3 red→3 green bite remains at its recorded pre/post sources; it is not relabelled as a new mutation.
+
+One locked Release whole-project invocation ran with `-m:1 -p:BuildInParallel=false -p:RestoreLockedMode=true`, followed by no-build/no-restore discovery. Test362.56s; discovery0.68s; phase364.28s. Child `MSBUILDDISABLENODEREUSE=1` and `DOTNET_CLI_USE_MSBUILD_SERVER=0` were retained. This limits MSBuild workers; xUnit kept its existing defaults. No retry or other project/provider/browser/Studio matrix was launched. Existing compiler/package warnings remain in the hashed raw build log; zero test warnings is not a compiler-warning claim.
+
+The observer recorded69 owned processes, including62 ordinary ETL worker fixtures, across three observed groups. No owned live descendant remained after the leader, no cleanup signal was needed, and the heavy slot was returned. No new owned shared compiler was observed; baseline/user processes were preserved. Explicit launches and sampled ancestry are distinguished from a complete kernel trace.
+
+Native-provider whole execution, architecture/generator gates, fresh scoped R9, all three actual exact-head required checks, protected delivery and resulting-main verification remain pending. Server registration is still guarded. This pass does not prove upgraded-host recovery or Studio compatibility. The counts below retain their historical sources; this entry supersedes only their pending whole-ETL status. This documentation update contains no product/source correction and does not renew execution at a later evidence-only commit.
+
+## Earlier closeout — 5 November (before pause)
+
+Parent #3737 protected-merged at `db74c19a9`; schema #3803 now targets main. Ordinary merge `6ca230209` retains descendant main `5a3ad480a` and its shared Core publication-contract integration. No migration, frozen authoring/state or writer is removed.
+
+Full review7 at `d7105b668` found one P2: an invalid retained run ID could throw an argument error through the engine key seam and block a later valid delivery. Corrected at `cc4253459` by classifying that retained-data validation as `InvalidDataException` before key derivation. Client-input validation remains an argument error, and the global scanner's exception filter is not widened.
+
+[Source-bound controls and receipts](review-round7.json): the three whitespace/untrimmed/control-character cases fail **3/3 before** the correction and pass **3/3 after**, with zero skips. The whole shared SQLite runtime-store contract then passes **262/262**, zero failed/skipped; discovery also lists262 cases. These are a filtered contract run, **not** a new whole-project ETL pass. The first control attempt stopped at compilation because of a test-helper reference; it is separately recorded and is not a product bite. No test container or composed host was started for these controls.
+
+Fresh whole ETL/native-provider/architecture/generator qualification and all exact-head required checks remain pending. Historical whole-suite counts below retain their real sources. The new shared cases still need execution on all three servers; runtime registration remains guarded until spec1206. Full review8 follows on the completed candidate. Direct-parent mainCI41945105078 was cancelled; descendant CI41947341383 and fresh resulting-main host qualification remain separate pending gates. Broader recovery and Studio acceptance stay open.
+
 ## Requirements and tests
 
 | Requirement | Evidence |
