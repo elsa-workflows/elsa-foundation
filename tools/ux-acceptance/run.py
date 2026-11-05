@@ -18,6 +18,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'feature filtering empty-state alignment': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'invalid-name', 'completed'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }

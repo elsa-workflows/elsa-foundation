@@ -367,6 +367,10 @@
   gap: 0;
 }
 
+.feature-management-list > .feature-management-muted {
+  padding-inline: 13px;
+}
+
 .feature-management-card {
   display: grid;
   grid-template-columns: 20px 28px minmax(0, 1fr) 28px;

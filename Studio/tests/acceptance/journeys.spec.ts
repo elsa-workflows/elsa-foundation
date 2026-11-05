@@ -42,6 +42,35 @@ test.beforeEach(async ({ page }, info) => {
   await capture(page, info, "reference");
 });
 
+test("feature filtering empty-state alignment", async ({ page }, info) => {
+  await page.goto("/features");
+  const list = page.locator(".feature-management-list");
+  const filter = page.getByRole("searchbox", { name: "Filter features", exact: true });
+  for (const host of ["Server", "Studio"]) {
+    await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: new RegExp(`^${host}`) }).click();
+    await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await filter.fill("no-such-feature-acceptance");
+    const message = list.getByText("No features match this filter.", { exact: true });
+    await expect(message).toBeVisible();
+    const alignment = await message.evaluate(element => {
+      const heading = document.querySelector(".feature-management-list-heading strong");
+      if (!heading) throw new Error("Feature list heading is missing.");
+      const text = document.createRange();
+      text.selectNodeContents(element);
+      return {
+        messageLeft: text.getBoundingClientRect().left,
+        headingLeft: heading.getBoundingClientRect().left
+      };
+    });
+    expect(Math.abs(alignment.messageLeft - alignment.headingLeft)).toBeLessThanOrEqual(1);
+    await capture(page, info, `features-${host.toLowerCase()}-no-matches`);
+    await filter.fill("");
+    await expect(message).toBeHidden();
+    await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await capture(page, info, `features-${host.toLowerCase()}-populated`);
+  }
+});
+
 test("collections and connection creation", async ({ page }, info) => {
   const stamp = `${info.project.name}-${Date.now()}`;
   await page.goto("/security/connections");
