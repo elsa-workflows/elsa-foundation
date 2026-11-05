@@ -9,6 +9,7 @@ Moved from `AGENTS.md` (#2578). `AGENTS.md` keeps a task-to-entry-point table.
 3. Follow specification -> plan -> tasks -> implementation, reviewing each artifact before the next step. When using an AI integration, use `speckit-specify` -> `speckit-plan` -> `speckit-tasks` -> `speckit-implement`. Otherwise, create and review the same artifacts manually using [the contributor guide](../../CONTRIBUTING.md#plan-feature-work). The specification, constitution, testing, and review gates apply to both paths.
 4. Keep work on a feature/work-unit branch unless the user explicitly asks otherwise.
 5. Use the constitution as a gate during planning; use glossary/docs for learning context.
+6. For Studio UI/interaction work, define and verify [Studio UX acceptance](studio-ux-acceptance.md), including independent inspection of current-commit composed evidence.
 
 ## Architecture development
 

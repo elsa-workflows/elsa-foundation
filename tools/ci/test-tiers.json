@@ -714,6 +714,12 @@
       "medianMinutes": null
     },
     {
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
@@ -967,7 +973,8 @@
           "runtime",
           "secrets-sqlserver",
           "etl-sql",
-          "etl-rabbitmq"
+          "etl-rabbitmq",
+          "etl-ef"
         ]
       }
     ]
@@ -1107,6 +1114,11 @@
       "suite": "etl-rabbitmq",
       "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
       "require": "ELSA_ETL_RABBITMQ_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-ef",
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+      "require": "ELSA_ETL_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
       "suite": "connections",
