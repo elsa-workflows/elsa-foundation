@@ -428,7 +428,17 @@ test("runner success does not capture diagnostics, and cleanup failure prevents 
 });
 
 test("the journey keeps its strict selector, visibility wait, original click and 30-second timeout", async () => {
-  assert.match(runSource, /page\.setDefaultTimeout\(30_000\)/);
+  const journeyStart = runSource.indexOf("async function runBrowserJourney() {");
+  const preambleStart = runSource.indexOf("{", journeyStart) + 1;
+  const preambleEnd = runSource.indexOf('  stage = "browser-login";', preambleStart);
+  assert.ok(journeyStart > 0 && preambleEnd > preambleStart, "could not locate the journey preamble");
+  const observedTimeouts = [];
+  const timeoutPage = { setDefaultTimeout: milliseconds => observedTimeouts.push(milliseconds) };
+  const chromium = { launch: async () => ({
+    newContext: async () => ({ newPage: async () => timeoutPage })
+  }) };
+  await new AsyncFunction("chromium", `let browser; ${runSource.slice(preambleStart, preambleEnd)}`)(chromium);
+  assert.deepEqual(observedTimeouts, [30000], "the actual journey page must use the original timeout");
   const start = runSource.indexOf('  stage = "activity-picker-trigger-visible";');
   const end = runSource.indexOf('  stage = "activity-picker-open";', start);
   assert.ok(start > 0 && end > start);
