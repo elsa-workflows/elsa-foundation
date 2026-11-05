@@ -35,7 +35,7 @@ export const specialistEditorContributions: StudioActivityDefinitionImplementati
   focusDiagnosticLocation: ({ location, editorElement }) => {
     const fields: Record<string, string> = {
       "/instructions": "instructions", "/model": "model", "/model/providerKey": "model", "/model/connectionName": "model", "/model/modelId": "model",
-      "/settings": "temperature", "/limits": "calls", "/limits/maximumModelCalls": "calls",
+      "/settings": "model-group", "/settings/temperature": "temperature", "/limits": "calls", "/limits/maximumModelCalls": "calls",
       "/limits/timeoutMilliseconds": "timeout", "/limits/maximumOutputTokens": "tokens"
     };
     const field = fields[location.jsonPointer ?? ""];

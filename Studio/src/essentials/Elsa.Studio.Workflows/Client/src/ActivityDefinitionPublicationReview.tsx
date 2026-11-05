@@ -263,8 +263,8 @@ export function ActivityDefinitionPublicationReview({
         </details>
       </> : <ImpactReview changes={preflight.impactFirstChanges} compact={mode === "toolbar"} />}
       {mode === "toolbar" && (preflight.isPublishable || hasBlockingDiagnostics) ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
-        <ReadinessReview preflight={preflight} compact />
-      </details> : <ReadinessReview preflight={preflight} compact={mode === "toolbar"} />}
+        <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />
+      </details> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={mode === "toolbar"} />}
       {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
       {!publicationBlocked ? <div className="ad-publication-version">
         <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></label>
@@ -346,9 +346,9 @@ function ImpactReview({ changes, compact = false }: { changes: ActivityPublicati
   </section>;
 }
 
-function ReadinessReview({ preflight, compact = false }: { preflight: ActivityPublicationPreflight; compact?: boolean }) {
+function ReadinessReview({ preflight, compact = false, blocked = false, previous = false }: { preflight: ActivityPublicationPreflight; compact?: boolean; blocked?: boolean; previous?: boolean }) {
   const readiness = [preflight.provider, ...preflight.storage, ...preflight.runtime];
-  return <section className="ad-publication-readiness" aria-labelledby="activity-readiness-title"><header><h3 id="activity-readiness-title">{compact ? "Readiness" : "Dependencies &amp; Runtime readiness"}</h3><span className={preflight.isPublishable ? "is-ready" : "is-blocked"}>{preflight.isPublishable ? "Ready to publish" : "Publication blocked"}</span></header>
+  return <section className="ad-publication-readiness" aria-labelledby="activity-readiness-title"><header><h3 id="activity-readiness-title">{previous ? "Checks from the earlier review" : compact ? "Readiness" : "Dependencies &amp; Runtime readiness"}</h3><span className={preflight.isPublishable && !blocked ? "is-ready" : "is-blocked"}>{previous ? "Recheck after correcting the issues above" : preflight.isPublishable && !blocked ? "Ready to publish" : "Publication blocked"}</span></header>
     <div className="ad-readiness-grid">{readiness.map((item, index) => <article key={`${item.kind}:${item.key}:${index}`}><strong>{item.kind}</strong>{compact ? <details><summary>Technical details</summary><code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code></details> : <code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code>}<span>{item.status}</span></article>)}</div>
     {preflight.dependencies.length ? <details><summary>{preflight.dependencies.length} exact direct {preflight.dependencies.length === 1 ? "dependency" : "dependencies"}</summary><ul>{preflight.dependencies.map(item => <li key={item.occurrenceId}><strong>{item.version}</strong><code>{item.definitionId} · {item.versionId}</code></li>)}</ul></details> : <p>No direct reusable-activity dependencies were reported.</p>}
   </section>;

@@ -114,3 +114,24 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+
+for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
+  test(`rejected publication does not reuse earlier readiness at ${width}px ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&provider=agent&theme=${theme}`);
+    await page.locator(".ad-publication-toolbar-trigger").click();
+    const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Publish 1.0.0", exact: true }).click();
+    await expect(dialog.locator(".ad-publication-blockers")).toContainText("Publication did not complete");
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
+    await page.screenshot({ path: info.outputPath("rejected.png"), fullPage: true });
+    await dialog.getByText("Technical readiness checks", { exact: true }).click();
+    const readiness = dialog.locator(".ad-publication-readiness");
+    await expect(readiness.getByRole("heading", { name: "Checks from the earlier review", exact: true })).toBeVisible();
+    await expect(readiness).not.toContainText("Ready to publish");
+    await readiness.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath("earlier-readiness.png"), fullPage: true });
+  });
+}

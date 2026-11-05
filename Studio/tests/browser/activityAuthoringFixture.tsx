@@ -94,10 +94,19 @@ export function ActivityAuthoringFixture() {
         localStorage.setItem(storageKey, JSON.stringify(draft.current));
         return structuredClone(draft.current);
       },
-      postJson: async (url: string) => {
+      postJson: async (url: string, body?: unknown) => {
         const current = draft.current;
         if (url === "/connections/picker") return { items: [{ name: "proofreader", displayName: "Proofreader model", status: "Ready", settings: { modelId: "editor-model" } }] };
         if (url === "/agent/specialists/model-capabilities") return { supportsJsonSchema: true, maximumOutputTokens: 4096, settingsSchema: { type: "object", properties: { temperature: { type: "number", minimum: 0, maximum: 1 } } } };
+        if (url.endsWith("/publication")) {
+          const request = body as { idempotencyKey: string; expectedDraftRevision: number; reviewToken: string; version: string };
+          return { idempotencyKey: request.idempotencyKey, status: "Rejected", draftId: current.draftId,
+            expectedDraftRevision: request.expectedDraftRevision, expectedDefinitionHeadVersionId: null,
+            reviewToken: request.reviewToken, requestedVersion: request.version, outcome: null, updatedAt: timestamp,
+            diagnostics: [{ code: "specialist.model.unavailable", severity: "Info", message: "The selected model connection cannot be used right now.",
+              remediation: "Choose another authorized model connection, or check its endpoint, credentials and access policy in Connections, then check again.",
+              subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/model" }, metadata: { actionLabel: "Review model connection" } }] };
+        }
         if (url.endsWith("/publication-preflight")) {
           const payload = current.provider.payload as { instructions?: string; model?: { connectionName?: string } };
           const diagnostics = [];

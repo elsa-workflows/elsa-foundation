@@ -42,10 +42,10 @@ public static partial class ActivityProviderDiagnosticSanitizer
         return new(
             code,
             diagnostic.Severity,
-            descriptor?.Message ?? $"The activity provider reported diagnostic '{code}'.",
+            descriptor?.Message ?? "The activity provider reported an issue.",
             new("ActivityDefinition", safeProviderKey),
             new(ProviderKey: safeProviderKey, JsonPointer: descriptor?.JsonPointer),
-            descriptor?.Remediation ?? "Ask an administrator to check the activity provider using this diagnostic code.",
+            descriptor?.Remediation ?? "Ask an administrator to review the diagnostic details and activity provider logs.",
             descriptor?.ActionLabel is { } action
                 ? new Dictionary<string, string>(StringComparer.Ordinal) { ["actionLabel"] = action }
                 : new Dictionary<string, string>(StringComparer.Ordinal));

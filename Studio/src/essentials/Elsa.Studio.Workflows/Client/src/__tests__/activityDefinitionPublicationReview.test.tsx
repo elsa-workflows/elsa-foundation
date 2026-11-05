@@ -56,6 +56,26 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it.each(["Rejected", "Failed"])("keeps earlier readiness distinct after a %s receipt", async status => {
+    const harness = renderReview({ postJson: async (url, body) => url.endsWith("/publication-preflight")
+      ? publicationPreflight()
+      : { ...publicationReceipt(body as Record<string, unknown>), status, outcome: null, diagnostics: [{
+        code: "provider.model.unavailable", severity: "Info", message: "Choose an available model connection.",
+        subject: { kind: "ActivityDefinition", id: "provider" }, location: { providerKey: "provider", jsonPointer: "/model" },
+        remediation: "Review the connection in Designer.", metadata: { actionLabel: "Review model connection" }
+      }] } });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    click(buttonByText(harness.container, "Publish 1.0.0"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    const readiness = harness.container.querySelector(".ad-publication-readiness")!;
+    expect(readiness.textContent).toContain("Checks from the earlier review");
+    expect(readiness.textContent).not.toContain("Ready to publish");
+    expect(harness.container.querySelector(".ad-publication-summary")?.textContent).toContain("Blocked");
+    expect(harness.container.querySelector(".ad-publication-blockers")?.textContent).toContain("Publication did not complete");
+    expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("opens with exact save and preflight, then resumes the retained review without another preflight", async () => {
     const preflight = vi.fn(async () => publicationPreflight());
     const flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));

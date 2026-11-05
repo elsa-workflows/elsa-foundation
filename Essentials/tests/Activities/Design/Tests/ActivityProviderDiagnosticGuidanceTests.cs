@@ -26,7 +26,8 @@ public sealed class ActivityProviderDiagnosticGuidanceTests
     public void Undeclared_codes_keep_the_non_disclosing_fallback()
     {
         var result = Assert.Single(ActivityProviderDiagnosticSanitizer.Sanitize([PrivateDiagnostic() with { Code = "acme.unknown" }], "acme", [Guidance]));
-        Assert.Contains("acme.unknown", result.Message);
+        Assert.Equal("acme.unknown", result.Code);
+        Assert.DoesNotContain(result.Code, result.Message);
         Assert.Contains("administrator", result.Remediation);
         Assert.Null(result.Location!.JsonPointer);
         Assert.Empty(result.Metadata);
@@ -46,7 +47,7 @@ public sealed class ActivityProviderDiagnosticGuidanceTests
             _ => [Guidance with { JsonPointer = "PRIVATE/not-a-pointer" }]
         };
         var result = Assert.Single(ActivityProviderDiagnosticSanitizer.Sanitize([PrivateDiagnostic()], "acme", declarations));
-        Assert.StartsWith("The activity provider reported", result.Message);
+        Assert.Equal("The activity provider reported an issue.", result.Message);
         Assert.Null(result.Location!.JsonPointer);
         Assert.Empty(result.Metadata);
     }

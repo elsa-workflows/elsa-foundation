@@ -112,6 +112,19 @@ describe("specialist editor", () => {
     expect(unsupported.kind).toBe("unsupported");
   });
 
+  it("focuses the settings group for generic settings errors instead of a valid temperature", async () => {
+    const { context } = fakeContext();
+    const { container } = await render(context, { ...configured(), settings: { temperature: 0.3, top_p: 0.9 } });
+    const result = await specialistEditorContributions[0].focusDiagnosticLocation!({
+      location: { providerKey: "elsa.specialist", jsonPointer: "/settings" },
+      subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, editorElement: container
+    });
+    expect(result.kind).toBe("focused");
+    expect(document.activeElement).toBe(container.querySelector("[data-specialist-field='model-group']"));
+    expect(document.activeElement).not.toBe(field(container, "Temperature"));
+    expect(button(container, "Remove unsupported settings")).toBeTruthy();
+  });
+
   it("links the saved draft revision to the agent playground", async () => {
     const { context } = fakeContext();
     const { container } = await render(context, { ...initialSpecialistManifest(), allowContinuity: false });
