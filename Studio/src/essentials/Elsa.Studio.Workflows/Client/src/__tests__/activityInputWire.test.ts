@@ -116,6 +116,49 @@ describe("activity input wire adapter", () => {
     ]);
   });
 
+  it.each([
+    ["WorkflowRequest", { memberKey: "route", path: "customer.choice", referenceExtension: { authoredBy: "module", flags: ["retain"] } }],
+    ["ActivityResult", { producerNodeId: "producer", producerScopeId: "nested", projectionKey: "$result", path: "choice",
+      referenceExtension: { authoredBy: "module", revision: 2 } }],
+    ["Secret", { name: "customer-api-key", typeName: "ApiKey", scope: "tenant" }]
+  ] as const)("preserves a nested %s object binding through ordinary authored read/save", (expressionType, reference) => {
+    // The ordinary Studio read/save path reaches every activity inside BPMN/Sequence scopes. These
+    // references are JSON objects in the backend contract; JSON text with the same characters is a
+    // different payload that the publication compiler refuses. No secret value is present here.
+    const input = { referenceKey: "value", value: { value: reference, expressionType },
+      isSensitive: expressionType === "Secret", futureArgumentField: { preserved: true } };
+    const consumer: ActivityNode = { ...writeLine("consumer", {}), inputs: [input] };
+    const nested: ActivityNode = { nodeId: "nested", activityVersionId: "sequence-version", inputs: [], outputs: [],
+      structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [consumer] } } };
+    const root: ActivityNode = { nodeId: "process", activityVersionId: "bpmn-version", inputs: [], outputs: [],
+      structure: { kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: {
+        activities: [nested], elements: [{ elementId: "nested-task", elementType: "subProcess", childNodeId: "nested" }],
+        sequenceFlows: []
+      } } };
+    const loaded = stateOf(root);
+    const resaved = canonicalizeStateForWire(expandStateFromWire(loaded));
+    const twice = canonicalizeStateForWire(expandStateFromWire(resaved));
+    const savedNested = (resaved.rootActivity!.structure!.payload.activities as ActivityNode[])[0];
+    const savedConsumer = (savedNested.structure!.payload.activities as ActivityNode[])[0];
+
+    expect(savedConsumer.inputs).toEqual([input]);
+    expect(resaved).toEqual(loaded);
+    expect(twice).toEqual(loaded);
+    expect(loaded.rootActivity).toBe(root);
+    expect(consumer.inputs).toEqual([input]);
+  });
+
+  it("retains provider-owned structured payload encoding outside the recognized reference contracts", () => {
+    const value = { providerSetting: { enabled: true } };
+    const input = { referenceKey: "value", value: { value, expressionType: "ModuleExpression" } };
+    const loaded = stateOf({ ...writeLine("module", {}), inputs: [input] });
+    const resaved = canonicalizeStateForWire(expandStateFromWire(loaded));
+
+    expect(resaved.rootActivity!.inputs).toEqual([{ referenceKey: "value", value: {
+      value: JSON.stringify(value), expressionType: "ModuleExpression"
+    } }]);
+  });
+
   it("round-trips a portable expression definition as a structured value", () => {
     const definition = {
       language: "JavaScript",

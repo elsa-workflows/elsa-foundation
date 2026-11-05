@@ -6,7 +6,7 @@ type Node = {
   activityVersionId: string;
   inputs: unknown[];
   outputs: unknown[];
-  structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> };
+  structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } | null;
   [key: string]: unknown;
 };
 type Element = { elementId: string; elementType: string; name?: string; childNodeId?: string; defaultFlowId?: string };
@@ -64,10 +64,10 @@ async function seed(api: Api, suffix: string) {
     version("Elsa.Activities.Bpmn.Activities.BpmnProcess"), version("Elsa.Activities.Bpmn.Activities.BpmnDecision"),
     version("Elsa.Activities.Primitives.Activities.Inline"), version("Elsa.Activities.Sequence.Activities.Sequence")
   ]);
-  const inline = (nodeId: string, expression: string): Node => ({ nodeId, activityVersionId: inlineVersion,
+  const inline = (nodeId: string, expression: string): Node => ({ nodeId, activityVersionId: inlineVersion, structure: null,
     inputs: [{ referenceKey: "Expression", value: { expressionType: "JavaScript", value: expression } }], outputs: [] });
   const captureResult = (nodeId: string, producerNodeId: string, producerScopeId: string): Node => ({
-    nodeId, activityVersionId: "elsa.intrinsic.set-output@1", outputs: [],
+    nodeId, activityVersionId: "elsa.intrinsic.set-output@1", structure: null, outputs: [],
     intrinsic: { kind: "setOutput", valueType: { alias: "Elsa.Any", collectionKind: "single" } },
     inputs: [literal("name", "result"), { referenceKey: "value", value: {
       expressionType: "ActivityResult", value: { producerNodeId, producerScopeId, projectionKey: "$result" }
@@ -95,7 +95,7 @@ async function seed(api: Api, suffix: string) {
   ];
   const root: Node = { nodeId: "process", activityVersionId: bpmnVersion, inputs: [], outputs: [], structure: {
     kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: {
-      activities: [{ nodeId: "decision", activityVersionId: decisionVersion, inputs: [{ referenceKey: "Outcome", value: {
+      activities: [{ nodeId: "decision", activityVersionId: decisionVersion, structure: null, inputs: [{ referenceKey: "Outcome", value: {
         expressionType: "WorkflowRequest", value: { memberKey: "route" }
       } }], outputs: [] }, inline("high", '"Original high"'), captureResult("capture-high", "high", "process"), nested],
       elements, sequenceFlows
