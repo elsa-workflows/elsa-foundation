@@ -1,3 +1,5 @@
+using System.Data.Common;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -44,8 +46,20 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
             }
             return policy;
         }
-        catch (Exception exception) when (exception is IOException or TimeoutException or NotSupportedException)
+        catch (Exception exception) when (IsUnavailablePolicyRead(exception))
         { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Callback history source metadata is unavailable.", exception); }
+    }
+
+    private static bool IsUnavailablePolicyRead(Exception exception)
+    {
+        if (exception is OperationCanceledException or InvalidDataException or JsonException or ArgumentException or
+            RuntimeSchedulerWorkUnavailableException or RuntimeCheckpointInconsistentDurabilityException)
+            return false;
+        if (exception is IOException or DbException or TimeoutException or NotSupportedException) return true;
+        // Native adapters keep a provider cause behind a contextual InvalidOperationException. Bare contract/scope
+        // refusals and wrapped corruption stay hard; the wrapper must not turn a read outage into acknowledged poison.
+        return exception is InvalidOperationException && exception.InnerException is { } inner && inner is not NotSupportedException &&
+            (IsUnavailablePolicyRead(inner) || inner is InvalidOperationException { InnerException: null });
     }
 
     internal static async ValueTask<T> ObserveAsync<T>(ActivityHistory? history, Func<ValueTask<T>> callback, Func<T, string> kind)
