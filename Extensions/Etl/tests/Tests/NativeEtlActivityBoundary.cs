@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Core.Contracts;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;

@@ -67,6 +67,31 @@ public sealed class ActivityPublicationPreflightParityTests
         Assert.Equal(expectedErrorCode is null ? 1 : 0, scenario.Commits.Count);
     }
 
+    [Fact]
+    public async Task Replaced_core_evaluator_controls_both_preflight_and_publish()
+    {
+        var evaluator = new RefusingEvaluator();
+        var scenario = new Scenario(Candidate.Publishable, evaluator: evaluator);
+        var preflight = await scenario.PreflightAsync();
+        var publish = await scenario.PublishAsync();
+        Assert.Equal(ActivityErrorCodes.PublicationInvalid, preflight.ErrorCode);
+        Assert.Equal("fixture.replaced-evaluator", preflight.DiagnosticCodes);
+        Assert.Equal(preflight, publish);
+        Assert.Equal(3, evaluator.Calls);
+        Assert.Empty(scenario.Commits);
+    }
+
+    private sealed class RefusingEvaluator : IActivityPublicationCandidateEvaluator
+    {
+        public int Calls;
+        public Task<EvaluatedPublicationCandidate> EvaluateAsync(ActivityTemplateCompilerRequest request, ActivityDraftValidation validation, CancellationToken cancellationToken)
+        {
+            Calls++;
+            ActivityDiagnostic diagnostic = new("fixture.replaced-evaluator", ActivityDiagnosticSeverity.Error, "The replacement policy refuses this candidate.", new(request.Candidate.SubjectKind, request.Candidate.Id));
+            return Task.FromResult(new EvaluatedPublicationCandidate(new(null, new(0, 0, 0, 0, 0, 0, 0), [], [diagnostic]), [diagnostic], false));
+        }
+    }
+
     /// <summary>
     /// What an entry point concluded, reduced to what a caller can act on. A preflight that returns a view it does not
     /// call publishable is the same refusal publish raises as <see cref="ActivityErrorCodes.PublicationInvalid"/>.
@@ -90,7 +115,7 @@ public sealed class ActivityPublicationPreflightParityTests
         private readonly string? _headVersionId;
         private readonly string _version;
 
-        public Scenario(Candidate candidate, IReadOnlyList<ActivityNodePresentationRecord>? presentation = null)
+        public Scenario(Candidate candidate, IReadOnlyList<ActivityNodePresentationRecord>? presentation = null, IActivityPublicationCandidateEvaluator? evaluator = null)
         {
             var hasHead = candidate is Candidate.VersionTaken or Candidate.VersionBelowRequiredBump;
             _headVersionId = hasHead ? "version-head" : null;
@@ -155,7 +180,7 @@ public sealed class ActivityPublicationPreflightParityTests
                 new SequentialIdentityGenerator(),
                 TimeProvider.System,
                 receipts,
-                candidate == Candidate.RuntimeConsumerMissing ? null : [new ReadyActivationStrategy()]);
+                candidate == Candidate.RuntimeConsumerMissing ? null : [new ReadyActivationStrategy()], publicationEvaluator: evaluator);
         }
 
         public List<ActivityPublicationDesignMutation> Commits { get; } = [];
