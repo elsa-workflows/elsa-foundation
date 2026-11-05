@@ -12,7 +12,8 @@ public static class AgentEfModule
 
     internal const string Name = "Agent";
     internal const string SchemaFamily = "Agent";
-    internal const string SchemaVersion = "1.0.0";
+    internal const string LegacySchemaVersion = "1.0.0";
+    internal const string SchemaVersion = "1.1.0";
 
     internal const string SessionTableName = "elsa_agent_sessions";
     internal const string MessageTableName = "elsa_agent_messages";
@@ -26,4 +27,13 @@ public static class AgentEfModule
 
     /// <summary>The canonical chain used by metadata readers and host schema-readability tooling.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(AgentEfModule).Assembly, SchemaFamily);
+}
+
+/// <summary>Protected content stays byte-identical; absent optional members default only after authenticated decoding.</summary>
+[EfSchemaUpcaster(AgentEfModule.LegacySchemaVersion, AgentEfModule.SchemaVersion)]
+internal sealed class AgentEffectsV1Upcaster : IEfSchemaUpcaster
+{
+    public AgentEffectsV1Upcaster() { }
+
+    public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
 }

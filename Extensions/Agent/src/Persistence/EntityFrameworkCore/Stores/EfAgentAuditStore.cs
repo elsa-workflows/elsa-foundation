@@ -3,6 +3,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Agent.Persistence.EntityFrameworkCore.Services;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,27 +28,33 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
             throw new ArgumentException("An audit record identity exceeds the durable agent store's limits.", nameof(auditEvent));
         await GuardAsync("append", async () =>
         {
-            var payload = codec.Protect(AgentRecordCodec.AuditPurpose, auditEvent.SessionId ?? "", auditEvent.Id, auditEvent);
             return await Retry.RunUntilSettledAsync<bool>(null, async () =>
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var db = resolveContext(scope.ServiceProvider);
+                string? writeVersion = null;
+                var saving = false;
                 try
                 {
+                    writeVersion = AgentWriteVersion.Select(db);
+                    var payload = codec.Protect(AgentRecordCodec.AuditPurpose, auditEvent.SessionId ?? "", auditEvent.Id, auditEvent);
                     await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-                    var sequence = await AllocateAsync(db, cancellationToken);
+                    var sequence = await AllocateAsync(db, writeVersion, cancellationToken);
                     db.Add(new AgentAuditRow
                     {
                         Sequence = sequence, EventId = auditEvent.Id, Kind = (int)auditEvent.Kind, SessionId = auditEvent.SessionId,
-                        ActorId = auditEvent.ActorId, CreatedAtUtcTicks = auditEvent.CreatedAt.UtcTicks, SchemaVersion = AgentEfModule.SchemaVersion,
+                        ActorId = auditEvent.ActorId, CreatedAtUtcTicks = auditEvent.CreatedAt.UtcTicks, SchemaVersion = writeVersion,
                         Payload = payload
                     });
+                    saving = true;
                     await db.SaveChangesAsync(cancellationToken);
+                    saving = false;
                     await transaction.CommitAsync(cancellationToken);
                     return true;
                 }
                 // Only the first append ever races to create the counter row; it and transient failures are retried.
-                catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<bool>.Retry(exception); }
+                catch (Exception exception) when (Retry.ShouldRetry(null, exception) || saving && AgentWriteVersion.IsForwardAdoption(db, writeVersion, exception))
+                { return EfWriteAttempt<bool>.Retry(exception); }
             }, conflict => throw new AgentContributionException("The agent audit store could not append a record: the bounded store retries were exhausted.", conflict),
                 cancellationToken);
         });
@@ -59,19 +66,21 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
     /// a rolled-back append releases its position. A store without the counter row starts it after the highest recorded
     /// position; a competing first append that created it first fails its key and is retried.
     /// </summary>
-    private static async Task<long> AllocateAsync(DbContext db, CancellationToken cancellationToken)
+    private static async Task<long> AllocateAsync(DbContext db, string writeVersion, CancellationToken cancellationToken)
     {
         var counter = db.Set<AgentAuditSequenceRow>();
         if (await counter.Where(x => x.Id == SequenceRowId).ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Last, x => x.Last + 1), cancellationToken) == 1)
         {
             var allocated = await counter.AsNoTracking().Where(x => x.Id == SequenceRowId).Select(x => new { x.Last, x.SchemaVersion }).SingleAsync(cancellationToken);
             // A counter a newer module version wrote reports skew; the update rolls back with the append.
-            if (allocated.SchemaVersion != AgentEfModule.SchemaVersion)
-                throw new InvalidDataException($"The agent audit sequence schema '{allocated.SchemaVersion}' is not supported by this build.");
+            EfSchemaVersion.EnsureReadable(AgentEfModule.Chain, allocated.SchemaVersion);
             return allocated.Last;
         }
-        var next = (await db.Set<AgentAuditRow>().MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0) + 1;
-        counter.Add(new AgentAuditSequenceRow { Id = SequenceRowId, Last = next, SchemaVersion = AgentEfModule.SchemaVersion });
+        var maxima = await db.Set<AgentAuditRow>().AsNoTracking().GroupBy(x => x.SchemaVersion)
+            .Select(group => new { SchemaVersion = group.Key, Last = group.Max(x => x.Sequence) }).ToListAsync(cancellationToken);
+        foreach (var group in maxima) EfSchemaVersion.EnsureReadable(AgentEfModule.Chain, group.SchemaVersion);
+        var next = maxima.Select(x => x.Last).DefaultIfEmpty(0).Max() + 1;
+        counter.Add(new AgentAuditSequenceRow { Id = SequenceRowId, Last = next, SchemaVersion = writeVersion });
         return next;
     }
 
@@ -113,6 +122,9 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
             var rows = db.Set<AgentAuditRow>().AsNoTracking().Where(x => x.SessionId != null && owned.Any(owner => owner.SessionId == x.SessionId));
             if (query.SessionId is { } sessionId) rows = rows.Where(x => x.SessionId == sessionId);
             var page = await rows.OrderByDescending(x => x.CreatedAtUtcTicks).ThenByDescending(x => x.Sequence).Take(query.Take).ToListAsync(cancellationToken);
+            var selectedIds = page.Select(x => x.SessionId).Distinct().ToArray();
+            var ownerStamps = await owned.Where(x => selectedIds.Contains(x.SessionId)).Select(x => x.SchemaVersion).Distinct().ToListAsync(cancellationToken);
+            foreach (var stamp in ownerStamps) EfSchemaVersion.EnsureReadable(AgentEfModule.Chain, stamp);
             return new AgentAuditQueryResult(AgentAuditQueryOutcome.Succeeded, page.Select(Decode).ToList().AsReadOnly());
         });
     }
@@ -130,18 +142,28 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
         {
             await using var scope = scopes.CreateAsyncScope();
             var db = resolveContext(scope.ServiceProvider);
+            string? writeVersion = null;
+            var saving = false;
             try
             {
                 // The first association wins: repeating it agrees, a conflicting owner is refused without a change.
                 var recorded = await db.Set<AgentAuditOwnerRow>().AsNoTracking().SingleOrDefaultAsync(x => x.SessionId == sessionId, cancellationToken);
                 if (recorded is not null)
-                    return recorded.ActorId == actorId && recorded.TenantId == tenantId;
-                db.Add(new AgentAuditOwnerRow { SessionId = sessionId, ActorId = actorId, TenantId = tenantId, SchemaVersion = AgentEfModule.SchemaVersion });
+                {
+                    if (recorded.ActorId != actorId || recorded.TenantId != tenantId) return false;
+                    EfSchemaVersion.EnsureReadable(AgentEfModule.Chain, recorded.SchemaVersion);
+                    return true;
+                }
+                writeVersion = AgentWriteVersion.Select(db);
+                db.Add(new AgentAuditOwnerRow { SessionId = sessionId, ActorId = actorId, TenantId = tenantId, SchemaVersion = writeVersion });
+                saving = true;
                 await db.SaveChangesAsync(cancellationToken);
+                saving = false;
                 return true;
             }
             // A competing first association committed; the next attempt reads and compares it.
-            catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<bool>.Retry(exception); }
+            catch (Exception exception) when (Retry.ShouldRetry(null, exception) || saving && AgentWriteVersion.IsForwardAdoption(db, writeVersion, exception))
+                { return EfWriteAttempt<bool>.Retry(exception); }
         }, conflict => throw new AgentContributionException(
             $"Agent session '{sessionId}' audit ownership could not be associated: the bounded store retries were exhausted.", conflict), cancellationToken).AsTask());
     }
@@ -154,9 +176,8 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
 
     private AgentAuditEvent Decode(AgentAuditRow row)
     {
-        if (row.SchemaVersion != AgentEfModule.SchemaVersion)
-            throw new InvalidDataException($"The agent audit record schema '{row.SchemaVersion}' is not supported by this build.");
-        var value = codec.Unprotect<AgentAuditEvent>(AgentRecordCodec.AuditPurpose, row.SessionId ?? "", row.EventId, row.Payload);
+        var content = AgentEfModule.Chain.Upcast<AgentAuditRow>(row.SchemaVersion, (nameof(row.Payload), row.Payload));
+        var value = codec.Unprotect<AgentAuditEvent>(AgentRecordCodec.AuditPurpose, row.SessionId ?? "", row.EventId, content[nameof(row.Payload)]!);
         if (value.Id != row.EventId || (int)value.Kind != row.Kind || value.SessionId != row.SessionId || value.ActorId != row.ActorId
             || value.CreatedAt.UtcTicks != row.CreatedAtUtcTicks)
             throw new InvalidDataException("An agent audit record's columns do not match its protected record.");
@@ -170,7 +191,8 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
         {
             return await run();
         }
-        catch (Exception exception) when (exception is not (OperationCanceledException or ObjectDisposedException or AgentContributionException))
+        catch (Exception exception) when (exception is not (OperationCanceledException or ObjectDisposedException or AgentContributionException
+            or EfSchemaVersionSkewException or SchemaWriteRefusedException))
         {
             throw new AgentContributionException($"The agent audit store could not complete its {operation}; nothing was changed.", exception);
         }

@@ -41,6 +41,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfSchemaFinalizationTestSupport.cs" Link="Schema/EfSchemaFinalizationTestSupport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
