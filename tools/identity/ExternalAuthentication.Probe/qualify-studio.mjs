@@ -1,10 +1,13 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const repo = resolve(import.meta.dirname, "../../..");
+const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+const sourceSha = git("rev-parse", "HEAD");
+if (git("status", "--porcelain")) throw new Error("Commit source changes before full Studio qualification; a dirty run cannot certify a revision.");
 const profile = process.argv[2] ?? null;
 const profiles = {
   configuration: { databaseManagement: false },
@@ -71,7 +74,10 @@ try {
     code = await new Promise((done, reject) => { child.once("error", reject); child.once("exit", done); });
   } finally { closeSync(browserLog); }
   if (code !== 0) throw new Error(`Owned full Studio browser journey failed (${code}); inspect ${join(root, "browser.log")}.`);
-  const receipt = JSON.parse(readFileSync(join(root, "browser-receipt.json"), "utf8"));
+  if (git("rev-parse", "HEAD") !== sourceSha || git("status", "--porcelain")) throw new Error("Source changed during Studio qualification; rerun the committed revision.");
+  const receipt = { ...JSON.parse(readFileSync(join(root, "browser-receipt.json"), "utf8")),
+    sourceSha, headSha: process.env.UX_PR_HEAD_SHA ?? sourceSha, dirty: false, kind: "composed-source",
+    visualApproval: "requires independent review" };
   if (!receipt.fullStudioHost) throw new Error("Browser receipt did not prove the full Studio host.");
   writeFileSync(join(root, "studio-receipt.json"), JSON.stringify(receipt, null, 2));
   console.log(JSON.stringify(receipt));

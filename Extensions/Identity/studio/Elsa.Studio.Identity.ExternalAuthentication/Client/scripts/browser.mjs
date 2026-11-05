@@ -61,6 +61,9 @@ try {
   page.on("pageerror", error => errors.push(error.message));
   page.on("dialog", dialog => dialog.accept());
   await page.goto(backend + "/_elsa/identity/login?returnUrl=/backend/__probe");
+  await expect(page.getByRole("button", { name: /^Continue with Company(?: Preferred)?$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Continue with Partner(?: Preferred)?$/ })).toBeVisible();
+  await page.screenshot({ path: join(root, "login-chooser.png"), fullPage: false });
   await page.locator("input[name=username]").fill("admin"); await page.locator("input[name=password]").fill("Password123!");
   await Promise.all([page.waitForURL(url => url.pathname === "/backend/__probe"), page.getByRole("button", { name: "Sign in", exact: true }).click()]);
   const adminSession = await (await admin.request.get(backend + "/_elsa/identity/session")).json();
