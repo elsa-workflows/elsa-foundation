@@ -17,7 +17,14 @@ await new Promise((done, reject) => { listener.once("error", reject); listener.l
 const origin = `http://127.0.0.1:${listener.address().port}`;
 await new Promise(done => listener.close(done));
 const backend = origin + "/default";
-const password = "Qa1!" + randomBytes(24).toString("base64url");
+function fixturePassword() {
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const value = randomBytes(24).toString("base64url");
+    if (/[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value)) return value;
+  }
+  throw new Error("Could not generate an owned fixture password satisfying the standard policy.");
+}
+const password = fixturePassword();
 const key = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "der" }, publicKeyEncoding: { type: "spki", format: "der" } });
 const connection = `Data Source=${join(root, "identity.db")};Pooling=False`;
 const features = {
