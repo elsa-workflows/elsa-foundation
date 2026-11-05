@@ -50,7 +50,11 @@ async function activityVersion(request: APIRequestContext, type: string) {
   const hit = page.items.find((item: { definition: { activityTypeKey: string } }) => item.definition.activityTypeKey === type);
   expect(hit, `Normal activity catalog contains ${type}`).toBeTruthy(); return hit.definition.headVersionId as string;
 }
-async function seed(request: APIRequestContext, suffix: string, onDefinition: (id: string) => void) {
+type OwnedTimelineTask = { workflowExecutionId: string; definitionId: string; title: string; taskId?: string };
+type TimelineTaskView = { id: string; workflowExecutionId: string; title: string; status: string; revision: number; actions: string[];
+  decision?: { requestId: string; response: { action: string } } | null };
+
+async function seed(request: APIRequestContext, suffix: string, onDefinition: (id: string) => void, onRun: (task: OwnedTimelineTask) => void) {
   const actor = await json(request, "/runtime/user-task-identity");
   const taskVersion = await activityVersion(request, "Elsa.Activities.Primitives.Activities.CreateUserTask");
   const flowVersion = await activityVersion(request, "Elsa.Activities.Flowchart.Activities.Flowchart");
@@ -65,10 +69,13 @@ async function seed(request: APIRequestContext, suffix: string, onDefinition: (i
   onDefinition(definition.definition.id);
   const published = await json(request, `/publishing/workflows/${definition.version.id}/publish`, {});
   const run = await json(request, `/runtime/workflows/executables/${published.artifactId}/execute`, { sourceReferenceId: published.sourceReferenceId });
+  const owned: OwnedTimelineTask = { workflowExecutionId: run.workflowExecutionId, definitionId: definition.definition.id, title };
+  onRun(owned); // Retain exact ownership even if the subsequent task-discovery assertion fails.
   let taskId = "";
   await expect.poll(async () => {
     const page = await json(request, "/runtime/user-tasks?view=mine&limit=100");
     taskId = page.items.find((item: { workflowExecutionId: string }) => item.workflowExecutionId === run.workflowExecutionId)?.id ?? "";
+    if (taskId) owned.taskId = taskId;
     return taskId;
   }, { timeout: 30_000 }).not.toBe("");
   return { workflowExecutionId: run.workflowExecutionId as string, taskId, title, definitionId: definition.definition.id as string };
@@ -96,12 +103,88 @@ async function restartBackend(info: TestInfo, run: string) {
 }
 
 const ownedDefinitions = new WeakMap<Page, string[]>();
-test.afterEach(async ({ page }) => {
-  // Keep the existing collection reference journeys empty. Only this test's disposable definitions are archived.
-  for (const id of ownedDefinitions.get(page) ?? []) {
-    const response = await page.request.delete(`${backend}/design/workflows/definitions/${encodeURIComponent(id)}`);
-    expect(response.ok(), `Archive owned acceptance definition ${id}`).toBe(true);
+const ownedTasks = new WeakMap<Page, OwnedTimelineTask>();
+test.afterEach(async ({ page }, info) => {
+  const original = { status: info.status, expectedStatus: info.expectedStatus, errors: info.errors.map(error => ({ message: error.message, stack: error.stack })) };
+  const failures: Error[] = [];
+  const operations: unknown[] = [];
+  const receipt: Record<string, unknown> = { purpose: "Owned Timeline teardown only; never UI completion or restart acceptance", original,
+    owned: ownedTasks.get(page), operations };
+  async function attempt(label: string, action: () => Promise<void>) {
+    try { await action(); } catch (cause) {
+      const error = new Error(label, { cause }); failures.push(error);
+      operations.push({ operation: label, failed: true, error: cause instanceof Error ? cause.message : String(cause) });
+    }
   }
+  // Preserve the failed experience before any guarded cleanup decision/reconciliation can alter its task/run.
+  if (info.status !== info.expectedStatus) {
+    await attempt("Retain pre-cleanup failure screenshot", async () => {
+      const path = info.outputPath("pre-cleanup-failure.png"); await page.screenshot({ path, fullPage: true, timeout: 5_000 });
+      await info.attach("pre-cleanup-failure.png", { path, contentType: "image/png" });
+    });
+    await attempt("Retain pre-cleanup failure accessibility", async () => {
+      const path = info.outputPath("pre-cleanup-failure.aria.yml"); writeFileSync(path, await page.locator("body").ariaSnapshot({ timeout: 5_000 }));
+      await info.attach("pre-cleanup-failure.aria.yml", { path, contentType: "text/yaml" });
+    });
+  }
+  const owned = ownedTasks.get(page);
+  if (owned) await attempt("Settle only the exact owned Timeline task", async () => {
+    if (!(ownedDefinitions.get(page) ?? []).includes(owned.definitionId)) throw new Error("Owned task has no matching definition cleanup receipt.");
+    const get = async (path: string) => {
+      const response = await page.request.get(`${backend}${path}`, { timeout: 5_000 });
+      if (!response.ok()) throw new Error(`${response.status()} ${path}: ${await response.text()}`);
+      return response.json();
+    };
+    const run = await get(`/runtime/workflows/instances/${encodeURIComponent(owned.workflowExecutionId)}?activityPageSize=1`);
+    if (run.instance.workflowExecutionId !== owned.workflowExecutionId || run.instance.definitionId !== owned.definitionId)
+      throw new Error("Owned Timeline run/definition identity differs; no task decision submitted.");
+    if (!owned.taskId) {
+      // One bounded, title-filtered discovery page is used only if seed failed before returning its exact task ID.
+      const taskPage = await get(`/runtime/user-tasks?view=mine&limit=100&search=${encodeURIComponent(owned.title)}`) as { items: TimelineTaskView[]; next?: string | null };
+      const matches = taskPage.items.filter(task => task.workflowExecutionId === owned.workflowExecutionId && task.title === owned.title);
+      if (taskPage.next || matches.length !== 1) throw new Error("Exact owned task discovery was incomplete or ambiguous; no broad inbox cleanup attempted.");
+      owned.taskId = matches[0].id;
+    }
+    const path = `/runtime/user-tasks/${encodeURIComponent(owned.taskId)}`;
+    const read = async () => {
+      const task = await get(path) as TimelineTaskView;
+      if (task.id !== owned.taskId || task.workflowExecutionId !== owned.workflowExecutionId || task.title !== owned.title)
+        throw new Error("Task identity differs from the exact owned fixture; no decision submitted.");
+      return task;
+    };
+    let task = await read(); operations.push({ operation: "pre-cleanup-task", task });
+    if (task.status === "Open") {
+      if (task.decision || !task.actions.includes("Reject")) throw new Error("Owned open task does not permit this teardown rejection.");
+      const data = { revision: task.revision, requestId: `timeline-teardown-${crypto.randomUUID()}`, action: "Reject",
+        data: { Reason: "Owned Timeline fixture teardown; this API rejection is not UI acceptance evidence." } };
+      operations.push({ operation: "teardown-reject-not-ui-proof", taskId: task.id, request: data });
+      // Exactly one normal revision-guarded submission. A conflict/outage is retained, never retried with another decision.
+      const response = await page.request.post(`${backend}${path}/complete`, { data, timeout: 5_000 });
+      if (!response.ok()) throw new Error(`${response.status()} owned task teardown completion: ${await response.text()}`);
+      task = await response.json() as TimelineTaskView;
+      operations.push({ operation: "teardown-decision-receipt-not-ui-proof", httpStatus: response.status(), task });
+      if (task.decision?.requestId !== data.requestId || task.decision.response.action !== "Reject") throw new Error("Teardown decision receipt does not match its single submitted request.");
+    }
+    // GET performs the normal accepted-decision reconciliation. CompletionPending keeps its ORIGINAL decision;
+    // it never receives a conflicting cleanup request. Bounded successful reads do not retry failed submissions.
+    for (let readCount = 0; task.status === "CompletionPending" && readCount < 6; readCount++) {
+      task = await read();
+      if (task.status === "CompletionPending" && readCount < 5) await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    operations.push({ operation: "post-cleanup-task-not-ui-proof", task });
+    if (task.status !== "Completed" && task.status !== "Cancelled") throw new Error(`Owned task remains ${task.status}; teardown did not establish a terminal receipt.`);
+  });
+  // Archive every exact owned definition even when task cleanup/evidence fails; never clear another test's inbox.
+  for (const id of ownedDefinitions.get(page) ?? []) await attempt(`Archive owned acceptance definition ${id}`, async () => {
+    const response = await page.request.delete(`${backend}/design/workflows/definitions/${encodeURIComponent(id)}`, { timeout: 5_000 });
+    if (!response.ok()) throw new Error(`${response.status()} archive owned definition: ${await response.text()}`);
+    operations.push({ operation: "archive-owned-definition", definitionId: id });
+  });
+  await attempt("Retain separate Timeline teardown receipt", async () => {
+    const path = info.outputPath("timeline-teardown-not-ui-proof.json"); writeFileSync(path, JSON.stringify(receipt, null, 2));
+    await info.attach("timeline-teardown-not-ui-proof", { path, contentType: "application/json" });
+  });
+  if (failures.length) throw new AggregateError(failures, "Owned Timeline teardown failed; original verdict and pre-cleanup evidence remain retained.");
 });
 
 test("durable run timeline across a native task resume and owned process restart", async ({ page }, info) => {
@@ -115,7 +198,7 @@ test("durable run timeline across a native task resume and owned process restart
   await login.getByLabel(/username/i).fill("admin"); await login.getByLabel(/password/i).fill("Password123!"); await login.getByRole("button", { name: /sign in/i }).press("Enter");
   await expect(page.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible({ timeout: 60_000 });
   const definitions: string[] = []; ownedDefinitions.set(page, definitions);
-  const fixture = await seed(page.request, `${info.project.name}-${crypto.randomUUID().slice(0, 8)}`, id => definitions.push(id));
+  const fixture = await seed(page.request, `${info.project.name}-${crypto.randomUUID().slice(0, 8)}`, id => definitions.push(id), task => ownedTasks.set(page, task));
   const run = fixture.workflowExecutionId, runPath = `/workflows/instances/${run}`;
   let creation: RuntimeHistoryEvent | undefined;
   await expect.poll(async () => { creation = (await history(page.request, run)).events.find(event => event.name === "BookmarkCreated"); return !!creation; }, { timeout: 30_000 }).toBe(true);

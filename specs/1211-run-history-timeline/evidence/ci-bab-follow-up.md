@@ -7,6 +7,7 @@ Independent review remains at **3/6**. No failure, skip or timeout is waived.
 
 - PR head: `bab905ec25df7e32fd1909dacfac2922f0a3f5e0`.
 - Actual hosted composed source: merge `6845c15f8fc2eb8479d996824ddab94211aba714`, reported clean.
+- Verified merge parents are main `fbd86b5ead89d4a00f12d647605a7e7502f7d2a6` and the PR head above. Tested merge and PR head have the same tree, `dab5c83725ac7602105b00a58c6e6db5bc9087b4`.
 - [CI run 42023615032](https://github.com/elsa-workflows/elsa-foundation/actions/runs/42023615032) completed with failures while delivery was paused.
 - Downloaded native artifact: `studio-ux-6845c15f8fc2eb8479d996824ddab94211aba714-1`, artifact ID `13417457448`, 379,422,180 bytes. Its original report, Playwright results, screenshots, ARIA and traces are retained. The author opened the failed 320px Timeline image; this is diagnosis, not independent visual acceptance.
 
@@ -35,7 +36,7 @@ All four actual Timeline traces stop at the same Minimal capture locator. The ou
 
 The browser failures also identify a product initialization defect: opening Diagram with no activity selected can request the activity inspector before the measured narrow layout is available, hiding the canvas behind an empty inspector. The correction must preserve explicit activity/incident targets and the Timeline workspace. Existing Data-value assertions must navigate to Data while preserving the Journal default and their keyboard/focus checks. Off-route appearance fixtures must use a canonical owned run URL rather than weakening the product URL-write guard. Golden Runs tests must recognize the intended Timeline default without discarding their list-return and identity assertions.
 
-The three User Tasks failures are `desktop-dark`, `narrow-light` and `narrow-dark`; `desktop-light` passed. They fail the `No tasks here` heading assertion. Their owning stream has been given the retained artifact/results for investigation; no unrelated User Tasks product change is inferred from these failures.
+The three User Tasks failures are `desktop-dark`, `narrow-light` and `narrow-dark`; `desktop-light` passed. They fail the `No tasks here` heading assertion. The actual desktop-dark ARIA inbox contains the Open task `Purchase approval desktop-light-56bb233b`, created by the preceding failed Timeline case. Its timeout occurs before UI task completion, and its old teardown archives only the definition. These are downstream fixture contamination, not a demonstrated User Tasks product defect. The Tasks owner has been informed. Exact owned task/run/definition cleanup through existing guarded APIs is being prepared separately from UI completion/restart acceptance; the original failure verdict and pre-cleanup evidence must remain visible.
 
 The shared Inputs renderer pair and adjacent CSS remain reserved. At local main-integrated `1b372d5ad`, the blobs are `7fba03d55df3ba489d5acfb55892de7fe86c4bc2` (WorkflowActivityExecutionDetails), `88be5d2426b4b348797462bcb1e27f3959d9b6fd` (RuntimeValueEvidence) and `b0b5f0874ccb224098a5d8ec3f8a691792ed6d23` (activityInspection.css). This is an integration handoff, not published or accepted source.
 
