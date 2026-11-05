@@ -110,6 +110,18 @@ function metadataValue(container: ParentNode, label: string) {
     ?.querySelector(".wf-activity-meta-value")?.textContent;
 }
 
+function openInputTechnicalDetails(container: ParentNode, name: string) {
+  const button = [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find(candidate => candidate.getAttribute("aria-label") === `Technical details for ${name}`);
+  expect(button).toBeDefined();
+  const region = document.getElementById(button!.getAttribute("aria-controls")!);
+  expect(region?.hidden).toBe(true);
+  flushSync(() => button!.click());
+  expect(button!.getAttribute("aria-expanded")).toBe("true");
+  expect(region?.hidden).toBe(false);
+  return region!;
+}
+
 function installClipboard(writeText: (value: string) => Promise<void>) {
   const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -1080,8 +1092,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     ])("keeps the authored %s source hidden under %s when the backend did not flag the record", async (_label, expressionType, declared) => {
       const container = renderDeclaredInput(declared, { expressionType, value: authoredSource }, [sourceBinding]);
 
-      await waitFor(() => expect(container.textContent).toContain("Protected source"));
-      expect(container.textContent).toContain("Authored source is protected because this input is sensitive.");
+      const technical = openInputTechnicalDetails(container, "Token");
+      expect(technical.textContent).toContain("Authored source is protected because this input is sensitive.");
       expect(container.innerHTML).not.toContain(authoredSource);
     });
 
@@ -1092,7 +1104,8 @@ describe("WorkflowActivityExecutionDetails", () => {
       const container = renderDeclaredInput({ isSensitive: true, isCredential: true }, { expressionType: "Secret", value });
 
       await waitFor(() => expect(container.textContent).toContain("api-tokens"));
-      expect(container.textContent).not.toContain("Protected source");
+      expect(openInputTechnicalDetails(container, "Token").textContent)
+        .not.toContain("Authored source is protected because this input is sensitive.");
       // Nothing is withheld when there is no compiled binding.
       expect(container.textContent).not.toContain(withheldBindingNote);
     });
@@ -1138,7 +1151,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     it("keeps a Secret Reference hidden when the backend flagged the record", async () => {
       const container = renderDeclaredInput({ isCredential: true }, { expressionType: "Secret", value: { name: "api-tokens" }, isSensitive: true });
 
-      await waitFor(() => expect(container.textContent).toContain("Protected source"));
+      expect(openInputTechnicalDetails(container, "Token").textContent)
+        .toContain("Authored source is protected because this input is sensitive.");
       expect(container.innerHTML).not.toContain("api-tokens");
     });
   });
