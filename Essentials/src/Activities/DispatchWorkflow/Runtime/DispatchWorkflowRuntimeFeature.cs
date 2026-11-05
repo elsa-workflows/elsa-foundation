@@ -80,6 +80,7 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.AddRuntimePostCommitIntentHandler<ChildCancelExecutor>(
             DispatchWorkflowConstants.CancelChildIntentKind,
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
+        services.TryAddScoped<ParentResumeExecutor>(ParentResumeExecutor.Create);
         services.AddRuntimePostCommitIntentHandler<ParentResumeExecutor>(
             DispatchWorkflowConstants.ResumeParentIntentKind,
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
@@ -91,8 +92,9 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCompletionEnricher>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchHistoryEnricher>());
-        services.AddSingleton(new RuntimeHistorySourceSupport([
-            RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested, RuntimeHistorySourceFactKind.ChildWorkflowSettled]));
+        services.AddSingleton(new RuntimeHistorySourceSupport([RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested]));
+        services.AddSingleton(RuntimeHistorySourceSupport.ForSourceOwner(DispatchWorkflowConstants.ResumeParentIntentKind,
+            [RuntimeHistorySourceFactKind.ChildWorkflowSettled]));
         services.AddSingleton(RuntimeHistorySourceSupport.ForOwnerObservations(DispatchWorkflowConstants.StartChildIntentKind, [
             ChildStartHistoryObservations.AttemptKind, ChildStartHistoryObservations.DispositionKind]));
         services.TryAddEnumerable(

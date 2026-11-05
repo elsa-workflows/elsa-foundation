@@ -17,8 +17,8 @@ const names: Record<string, string> = {
   DeliveryReceived: "Delivery received", DeliveryAccepted: "Delivery accepted", DeliveryRejected: "Delivery rejected",
   DeliveryDispatched: "Delivery dispatched", DeliveryUnmatched: "No matching recipient", DeliveryDeferred: "Delivery deferred", DeliveryFaulted: "Delivery failed",
   TimerScheduled: "Timer scheduled", TimerDispatched: "Timer dispatch reported", TimerRetired: "Timer retired", TimerCancellationRequested: "Timer cancellation requested",
-  ActivityContinuationStarted: "Continuation started", ActivityContinuationReturned: "Continuation returned a result",
-  ActivityContinuationSuspended: "Continuation waiting again", ActivityContinuationCompleted: "Continuation completed",
+  ActivityContinuationStarted: "Activity callback started", ActivityContinuationReturned: "Activity callback returned a result",
+  ActivityContinuationSuspended: "Continuation waiting", ActivityContinuationCompleted: "Continuation completed",
   ActivityContinuationFaulted: "Continuation faulted", ActivityContinuationCancelled: "Continuation cancelled",
   ChildWorkflowDispatched: "Child run dispatch recorded", ChildWorkflowDispatchRequested: "Child run dispatch requested",
   ChildWorkflowSettled: "Child run settled", StimulusPublished: "Stimulus publication recorded", StimulusPublicationCommitted: "Stimulus publication committed",
@@ -28,7 +28,7 @@ const names: Record<string, string> = {
   ActivityRetryScheduled: "Activity retry scheduled", RecoveryRequested: "Recovery requested", ControlApplied: "Control applied", AlterationApplied: "Run alteration applied",
   CompensationRegistered: "Compensation registered", CompensationStarted: "Compensation started", CompensationHandlerScheduled: "Compensation handler scheduled",
   CompensationHandlerCompleted: "Compensation handler completed", CompensationHandlerFaulted: "Compensation handler faulted", CompensationConfirmed: "Compensation confirmed",
-  CompensationResolved: "Compensation resolved", CompensationCompleted: "Compensation completed", BookmarkSuperseded: "Bookmark superseded",
+  CompensationResolved: "Compensation resolved", CompensationCompleted: "Compensation completed", CompensationAbandoned: "Compensation abandoned", BookmarkSuperseded: "Bookmark superseded",
   DurableStateRecorded: "Durable state recorded", DurableStateRemoved: "Durable state removed",
   DeliveryDuplicate: "Duplicate delivery observed", BookmarkResumeReceived: "Bookmark resume received", BookmarkResumeDispatched: "Bookmark resume dispatched"
 };
@@ -36,7 +36,7 @@ export function isKnownHistoryEvent(event: Pick<RuntimeHistoryEvent, "name">) { 
 export function historyEventLabel(event: Pick<RuntimeHistoryEvent, "name">) { return names[event.name] ?? (humanizeTypeName(event.name) || event.name); }
 export function historyEventExplanation(event: Pick<RuntimeHistoryEvent, "name">) {
   switch (event.name) {
-    case "ActivityContinuationReturned": return "The continuation returned a result. Its committed completion, further waiting or fault is recorded separately.";
+    case "ActivityContinuationReturned": return "The activity callback returned a result. Its committed continuation outcome is recorded separately; validation or disposal can still fail after the callback returns.";
     case "BookmarkConsumed": return "The handle was consumed at this committed transition. Continuation and its outcome are separate recorded facts.";
     case "ChildWorkflowDispatchRequested": return "A child-start responsibility was committed. Child admission, execution and outcome are separate recorded facts.";
     case "StimulusPublicationCommitted": return "The publication responsibility was committed. Routing, recipient admission and execution are separate recorded facts.";

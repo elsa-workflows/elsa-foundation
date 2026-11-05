@@ -715,6 +715,9 @@ public sealed class RuntimeHistoryCaptureTests
         Assert.Equal(qualified, availability.OwnerObservations(owner));
         var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, owner.ObservationKinds);
         Assert.Equal(qualified, new RuntimeHistoryCapture(fixture.Executions, [owner], availability).CanCapture(policy));
+        var settled = RuntimeHistorySourceSupport.ForSourceOwner("owned-kind", [RuntimeHistorySourceFactKind.ChildWorkflowSettled]);
+        Assert.Equal(qualified, new RuntimeHistoryCapture(fixture.Executions, [settled], availability).CanCapture(
+            new("runtime-history-v3", 3, true, ["ChildWorkflowSettled"])));
         var intent = new RuntimePostCommitIntent("intent", "run", "owned-kind", At, null, null, null)
         { HistoryCausation = new("source-event", "run", "source:intent") };
         var item = new RuntimePostCommitOutboxItem("source:intent", intent, RuntimePostCommitOutboxStatus.Delivering, At, At,
@@ -799,6 +802,33 @@ public sealed class RuntimeHistoryCaptureTests
         var unqualified = new InMemoryRuntimeCheckpointCommitStore(state: fixture.State);
         var replay = await unqualified.CommitAsync(fixture.State.Commits[legacy.CommitId].Commit with { ExpectedFence = new("old", "owner", 1) }, new(RuntimeCheckpointPersistenceMode.Immediate));
         Assert.Equal(["naked-marker:receipt"], replay.PendingPostCommitWorkIds);
+    }
+
+    [Fact]
+    public async Task Exact_memory_source_read_refuses_an_ambient_transaction_before_lookup()
+    {
+        var fixture = new Fixture();
+        Assert.Null(await fixture.Store.FindDurableAsync("missing-source"));
+        using (var ambient = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+            await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FindDurableAsync("missing-source").AsTask());
+        Assert.Null(await fixture.Store.FindDurableAsync("missing-source"));
+    }
+
+    [Fact]
+    public void Lazy_structural_owner_facts_survive_clones_without_running_during_ordinary_serialization()
+    {
+        var calls = 0;
+        var continuation = RuntimeStructuralContinuation.Complete().WithHistorySourceFacts(at =>
+        {
+            calls++; Assert.Equal(At, at);
+            return [new(RuntimeHistorySourceFactKind.CompensationStarted, "scope", at)];
+        });
+        var value = ValueEnvelope.Inline(new("test-state"), JsonSerializer.SerializeToElement(new { step = 1 }), ValueProtectionPolicy.InstanceInline);
+        var clone = continuation.WithState(value);
+        _ = JsonSerializer.Serialize(clone);
+        Assert.Equal(0, calls); Assert.Null(clone.HistorySourceFacts);
+        var fact = Assert.Single(clone.MaterializeHistorySourceFacts(At));
+        Assert.Equal(RuntimeHistorySourceFactKind.CompensationStarted, fact.Kind); Assert.Equal(1, calls);
     }
 
     [Fact]

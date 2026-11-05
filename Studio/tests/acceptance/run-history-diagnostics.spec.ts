@@ -76,7 +76,15 @@ async function waitTasks(page: Page, backend: string, run: string, count: number
   let tasks: Task[] = [];
   await expect.poll(async () => {
     const value = await api<{ items: Task[] }>(page.request, backend, "/runtime/user-tasks?view=mine&limit=100");
-    tasks = value.items.filter(item => item.workflowExecutionId === run && ["Open", "Claimed"].includes(item.status)); return tasks.length;
+    tasks = value.items.filter(item => item.workflowExecutionId === run && ["Open", "Claimed"].includes(item.status));
+    if (tasks.length !== count) {
+      const observed = await api<WorkflowInstanceDetails>(page.request, backend, `/runtime/workflows/instances/${run}`);
+      if (["Completed", "Faulted", "Cancelled"].includes(observed.instance.status)) {
+        const incidents = observed.incidents?.map(item => ({ incidentId: item.incidentId, status: item.status, failureType: item.failureType }));
+        throw new Error(`Task fixture ${run} became ${observed.instance.status} with ${tasks.length}/${count} open tasks; incidents: ${JSON.stringify(incidents ?? [])}`);
+      }
+    }
+    return tasks.length;
   }, { timeout: 300_000 }).toBe(count); return tasks;
 }
 async function complete(page: Page, backend: string, task: Task) {
@@ -207,7 +215,7 @@ test("diagnose exact executions, long history, retention and restricted access",
   await row(timelineOf(page), resolved).press("Enter"); await inspectorOf(page).getByRole("button", { name: "Inspect incident →", exact: true }).press("Enter");
   await expect(inspectorOf(page)).toContainText("Resolved"); await capture(page, info, "resolved-incident");
 
-  const longRun = await execute(await publish(sequence("long-root", [node("warmup", types.each, { Collection: Array(2500).fill(0) }, { kind: "elsa.foreach.structure", payload: { body: node("long-inline", types.inline, { Expression: null }) } }), task("late-task")]), "Long retained history diagnostics"), 300_000);
+  const longRun = await execute(await publish(sequence("long-root", [node("warmup", types.each, { Collection: Array(2500).fill(0) }, { kind: "elsa.foreach.structure", payload: { body: node("long-inline", types.inline, { Expression: 0 }) } }), task("late-task")]), "Long retained history diagnostics"), 300_000);
   const lateTasks = await waitTasks(page, backend, longRun, 1);
   const headPage = await api<RuntimeHistoryPage>(page.request, backend, `/runtime/workflows/instances/${longRun}/history?limit=1`);
   expect(headPage.coverage.lastSequence).toBeGreaterThanOrEqual(10_000);

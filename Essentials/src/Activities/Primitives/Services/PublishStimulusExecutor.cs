@@ -45,6 +45,7 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
             _ = _historyServices.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
             return ReferenceEquals(writer, _historyServices.GetService<IRuntimeHistoryObservationWriter>()) &&
                 ReferenceEquals(reader, _historyServices.GetService<IRuntimeHistoryStore>()) && writer.CanRecordHistory(reader) &&
+                ReferenceEquals(_clock, _historyServices.GetService<TimeProvider>()) &&
                 ReferenceEquals(_stimulusRouter, _historyServices.GetService<IStimulusRouter>());
         }
         catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException) { return false; }

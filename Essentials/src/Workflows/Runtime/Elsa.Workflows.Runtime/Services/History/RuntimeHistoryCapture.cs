@@ -32,12 +32,14 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && sourceAvailability?.Values() != true) return false;
         var available = Kinds.ToHashSet(StringComparer.Ordinal);
         var owners = (sourceSupport ?? []).ToArray();
-        if (policy.Version >= 2) { available.UnionWith(Version2Kinds); available.UnionWith(owners.SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName)); }
+        if (policy.Version >= 2) { available.UnionWith(Version2Kinds); available.UnionWith(owners.Where(owner => owner.Kinds.Any(kind => policy.SupportedKinds.Contains(RuntimeHistorySourceFacts.EventName(kind), StringComparer.Ordinal)) &&
+            (owner.SourceIntentKind is null || sourceAvailability?.SourceOwner(owner.SourceIntentKind) == true))
+            .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName)); }
         if (policy.SupportedKinds.Intersect(RuntimeHistoryDeliveryFacts.Kinds, StringComparer.Ordinal).Any() && sourceAvailability?.Delivery() == true)
             available.UnionWith(RuntimeHistoryDeliveryFacts.Kinds);
         if (owners.Any(owner => owner.TimerOwner) && policy.SupportedKinds.Intersect(DurableTimerHistoryFacts.Kinds, StringComparer.Ordinal).Any() && sourceAvailability?.Timer() == true)
             available.UnionWith(DurableTimerHistoryFacts.Kinds);
-        foreach (var owner in owners.Where(owner => owner.ObservationKinds.Count > 0 && sourceAvailability?.OwnerObservations(owner) == true))
+        foreach (var owner in owners.Where(owner => owner.ObservationKinds.Any(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal)) && sourceAvailability?.OwnerObservations(owner) == true))
             available.UnionWith(owner.ObservationKinds);
         return policy.SupportedKinds.All(available.Contains);
     }
@@ -289,7 +291,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                     RuntimeHistorySourceFactKind.CompensationRegistered or RuntimeHistorySourceFactKind.CompensationStarted or
                     RuntimeHistorySourceFactKind.CompensationHandlerScheduled or RuntimeHistorySourceFactKind.CompensationHandlerCompleted or
                     RuntimeHistorySourceFactKind.CompensationHandlerFaulted or RuntimeHistorySourceFactKind.CompensationConfirmed or
-                    RuntimeHistorySourceFactKind.CompensationResolved or RuntimeHistorySourceFactKind.CompensationCompleted => RuntimeHistoryEventCategory.OperationalLifecycle,
+                    RuntimeHistorySourceFactKind.CompensationResolved or RuntimeHistorySourceFactKind.CompensationCompleted or RuntimeHistorySourceFactKind.CompensationAbandoned => RuntimeHistoryEventCategory.OperationalLifecycle,
                 _ => throw new InvalidOperationException("History has no semantic catalogue entry for this source fact.")
             };
             Add(RuntimeHistorySourceFacts.EventName(fact.Kind), category, fact.SubjectId, activity, metadata: metadata, owner: fact.ActivityExecutionId,

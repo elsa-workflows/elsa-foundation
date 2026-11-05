@@ -269,7 +269,8 @@ internal static class StructuralParentEvaluationSupport
         RuntimeSchedulerWorkItem WorkItem,
         IActivityCommandPayload Payload,
         IReadOnlyDictionary<string, string> Metadata,
-        IReadOnlyDictionary<string, string> DerivedCommandMetadata);
+        IReadOnlyDictionary<string, string> DerivedCommandMetadata)
+    { internal IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts { get; init; } }
 
     /// <summary>
     /// Builds a <see cref="ParentEvaluationCommitSource"/> with the checkpoint metadata every parent evaluation
@@ -403,7 +404,7 @@ internal static class StructuralParentEvaluationSupport
             Metadata: metadata);
 
         commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
-            CancellationIncidentFacts(subtreeCancellations)
+            (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations))
                 .Concat((incidentChanges ?? []).Select(incident => RuntimeHistoryIncidentFacts.DecisionApplied(incident))), cancellationToken);
         await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
@@ -526,7 +527,7 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () => CancellationIncidentFacts(subtreeCancellations), cancellationToken);
+        commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () => (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations)), cancellationToken);
         await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 

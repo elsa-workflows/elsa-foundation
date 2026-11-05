@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
@@ -14,7 +15,8 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
     IActivityInspectionContextAsync authorization, TimeProvider time, IRuntimeHistoryStore? history = null,
     IBookmarkStateStore? bookmarks = null, IActivityExecutionStateStore? activities = null,
     IRuntimeCheckpointCommitStore? writer = null, IEnumerable<IRuntimeCheckpointCommitEnricher>? captureChain = null,
-    IDurableTimerStore? timers = null, ILogger<RuntimeHistoryInspectionService>? logger = null)
+    IDurableTimerStore? timers = null, ILogger<RuntimeHistoryInspectionService>? logger = null,
+    IServiceProvider? sourceServices = null)
 {
     public async Task<RuntimeHistoryPageView> ReadAsync(GetRuntimeHistory request, CancellationToken token = default)
     {
@@ -161,19 +163,33 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
                     logger?.LogWarning("Timer history settlement could not be read for an authorized run ({FailureType}).", error.GetType().Name);
                     sourceLimitation = "Timer history settlement could not be checked. Recorded events remain readable.";
                 }
-                // A source append+ACK can occur after the first page snapshot. Refresh the head after observing
-                // no pending work; retain the page's original traversal watermark and catch-up token.
-                if (sourcePending == false && history is not null)
-                {
-                    var refreshed = await history.FindHeadAsync(workflow.WorkflowExecutionId, token);
-                    if (refreshed is not null && refreshed.LastSequence >= head.LastSequence) head = refreshed;
-                    else sourceLimitation = "History changed while source settlement was read. Refresh to inspect its current boundary.";
-                }
+            }
+        }
+        if (head is not null && policy is not null && OwnerSourceKinds(policy).Length != 0)
+        {
+            var ownerSources = await OwnerSourceResponsibilityAsync(workflow.WorkflowExecutionId, head, policy, token);
+            sourcePending = sourcePending == true || ownerSources.Pending == true ? true
+                : ownerSources.Pending == false && sourceLimitation is null ? sourcePending ?? false : null;
+            sourceLimitation = string.Join(" ", new[] { sourceLimitation, ownerSources.Limitation }.Where(value => value is not null));
+            if (sourceLimitation.Length == 0) sourceLimitation = null;
+        }
+        // These are observations of current responsibility for the retained prefix, never source closure.
+        // Check the head again after a negative observation, retaining the page's original traversal bounds.
+        if (sourcePending == false && history is not null && head is not null)
+        {
+            var refreshed = await history.FindHeadAsync(workflow.WorkflowExecutionId, token);
+            if (refreshed is not null && (refreshed.LastSequence == head.LastSequence ||
+                (policy is null || OwnerSourceKinds(policy).Length == 0) && refreshed.LastSequence >= head.LastSequence)) head = refreshed;
+            else
+            {
+                sourcePending = null;
+                sourceLimitation = "History changed while source settlement was read. Refresh to inspect its current boundary.";
+                if (refreshed is not null && refreshed.LastSequence >= head.LastSequence) head = refreshed;
             }
         }
         var coverage = Coverage(workflow, head);
         if (sourcePending == true && coverage.State == "captured")
-            coverage = coverage with { State = "pending", Limitation = "Timer source history is awaiting acknowledgement. The recorded prefix remains readable." };
+            coverage = coverage with { State = "pending", Limitation = "Source history is awaiting acknowledgement. The recorded prefix remains readable." };
         else if (sourceLimitation is not null && coverage.State == "captured")
             coverage = coverage with { State = "partial", Limitation = sourceLimitation };
         return coverage with
@@ -183,6 +199,81 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
             SourceHistoryPending = sourcePending,
             SourceHistoryLimitation = sourceLimitation
         };
+    }
+
+    private static string[] OwnerSourceKinds(RuntimeHistoryCapturePolicy policy)
+    {
+        var kinds = new List<string>();
+        bool Supports(string kind) => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal);
+        if (Supports("ChildWorkflowDispatchRequested") && Supports("ChildStartAttemptObserved") && Supports("ChildStartDispositionObserved"))
+            kinds.Add("ChildWorkflowDispatchRequested");
+        if (Supports("StimulusPublicationCommitted") && Supports("StimulusRoutingAttemptObserved") && Supports("StimulusRoutingDispositionObserved"))
+            kinds.Add("StimulusPublicationCommitted");
+        if (Supports("ChildWorkflowSettled") && Supports("DeliveryReceived") && Supports("DeliveryDispatched")) kinds.Add("ChildWorkflowSettled");
+        return kinds.ToArray();
+    }
+
+    private async ValueTask<(bool? Pending, string? Limitation)> OwnerSourceResponsibilityAsync(string run,
+        RuntimeHistoryHead head, RuntimeHistoryCapturePolicy policy, CancellationToken token)
+    {
+        const int sourceLimitPerKind = 100;
+        if (history is null)
+            return (null, "This host cannot inspect the delivery-owner history responsibility covered by this run's capture policy.");
+        if (!head.CapturedFromStart || head.HasGaps || head.PurgedThroughSequence > 0)
+            return (null, "Unavailable history prevents establishing all delivery-owner responsibility for this run.");
+        try
+        {
+            // Do not activate an optional source provider while reading a profile that does not use it.
+            var sources = sourceServices?.GetService<IPostCommitOutboxLookupStore>();
+            if (sources is null)
+                return (null, "This host cannot inspect the delivery-owner history responsibility covered by this run's capture policy.");
+            var binding = await BindingAsync(token);
+            var checkedSources = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var kind in OwnerSourceKinds(policy))
+            {
+                // Each kind has its own indexed path. Never traverse the entire history or scan the global outbox.
+                var page = await history.ReadPageAsync(new(run, sourceLimitPerKind, name: kind, accessBinding: binding), token);
+                if (page.UpperSequence != head.LastSequence || page.NextContinuationToken is not null || !page.ScopeComplete || page.Items.Count > sourceLimitPerKind)
+                    return (null, "The bounded delivery-source inspection could not establish this range. More or newer source history may remain.");
+                foreach (var item in page.Items)
+                {
+                    if (item.SchemaVersion != 1)
+                        return (null, "A source history version is unsupported for settlement inspection.");
+                    if (item.Authority != RuntimeHistoryAuthority.CommittedTransition || item.Name != kind || item.WorkflowExecutionId != run)
+                        throw new RuntimeHistoryIntegrityException(run, "delivery source lacks committed transition authority");
+                    var sourceId = item.Causation?.DeliveryId;
+                    // Fire-and-forget child settlement has no parent-resume source to acknowledge.
+                    if (sourceId is null && kind == "ChildWorkflowSettled") continue;
+                    if (sourceId is null)
+                        return (null, "A recorded delivery source has no inspectable responsibility identity.");
+                    if (checkedSources.TryGetValue(sourceId, out var original))
+                    {
+                        if (original != item.HistoryEventId)
+                            throw new RuntimeHistoryIntegrityException(run, "one delivery source has conflicting recorded origins");
+                        continue;
+                    }
+                    checkedSources.Add(sourceId, item.HistoryEventId);
+                    var source = await sources.FindDurableAsync(sourceId, token);
+                    if (source is null)
+                        return (null, "Part of the recorded delivery-source responsibility is no longer inspectable.");
+                    // Parent-resume intents address the parent, while their committed origin is the child's terminal event.
+                    var expectedTargetRun = kind == "ChildWorkflowSettled"
+                        ? item.Metadata?.GetValueOrDefault("history.relatedWorkflowExecutionId") : run;
+                    if (string.IsNullOrWhiteSpace(expectedTargetRun) || source.Intent.WorkflowExecutionId != expectedTargetRun ||
+                        source.Intent.HistoryCausation is not { } cause ||
+                        cause.WorkflowExecutionId != run || cause.HistoryEventId != item.HistoryEventId || cause.DeliveryId != sourceId)
+                        throw new RuntimeHistoryIntegrityException(run, "delivery source disagrees with its recorded origin");
+                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered) return (true, null);
+                }
+            }
+            return (false, null);
+        }
+        catch (RuntimeHistoryIntegrityException) { throw; }
+        catch (Exception error) when (error is not OperationCanceledException and not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        {
+            logger?.LogWarning("Delivery-owner history responsibility could not be read for an authorized run ({FailureType}).", error.GetType().Name);
+            return (null, "Delivery-owner history settlement could not be checked. Recorded events remain readable.");
+        }
     }
 
     private RuntimeHistoryCoverageView Coverage(WorkflowExecutionState workflow, RuntimeHistoryHead? head)

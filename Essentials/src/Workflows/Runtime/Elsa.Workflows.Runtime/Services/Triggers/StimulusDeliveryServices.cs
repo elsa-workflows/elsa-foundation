@@ -105,28 +105,31 @@ internal sealed class StimulusDeliveryServices(
             throw new InvalidDataException("The accepted cohort differs from its canonical routing input or lacks complete recipient captures.");
     }
 
-    internal async ValueTask<SavedBookmarkResume?> PrepareResumeAsync(PostCommitDeliveryContext supplied, string executionId,
+    internal async ValueTask<SavedBookmarkResumePreparation> PrepareResumeAsync(PostCommitDeliveryContext supplied, string executionId,
         string bookmarkId, CancellationToken cancellationToken)
     {
         RequireBoundary(supplied);
         var source = await sources.ReadSourceAsync(supplied, cancellationToken); var request = Request(source); ValidateWinner(source, request);
         var expected = source.Claim.Item.RecipientSnapshot!.Resumes.SingleOrDefault(entry => entry.WorkflowExecutionId == executionId && entry.BookmarkId == bookmarkId)
             ?? throw new InvalidDataException("The exact saved wait is absent from its source cohort.");
+        var resume = new BookmarkResumeDispatchRequest(executionId, request.StimulusType, request.StimulusHash, request.Input,
+            $"{request.IdempotencyKey}:resume:{executionId}", request.RequestedBy, request.BuildDispatchMetadata(), request.PayloadType,
+            request.ProviderId, bookmarkId, null);
         var observed = await bookmarks.ObserveAsync(executionId, bookmarkId, cancellationToken);
-        if (observed is null) return null;
+        if (observed is null) return new(source, resume, expected, null);
         var execution = await executions.FindAsync(executionId, cancellationToken)
             ?? throw new IOException("The saved wait's owning execution is unavailable.");
         var activity = await activities.FindAsync(executionId, expected.ActivityExecutionId, cancellationToken)
             ?? throw new IOException("The saved wait's owning activity is unavailable.");
         access!.Current.EnsureTenantScope(execution.TenantId);
-        if (!expected.MatchesAdmission(observed, execution, activity, source.Scope, clock.GetUtcNow())) return null;
-        var resume = new BookmarkResumeDispatchRequest(executionId, request.StimulusType, request.StimulusHash, request.Input,
-            $"{request.IdempotencyKey}:resume:{executionId}", request.RequestedBy, request.BuildDispatchMetadata(), request.PayloadType,
-            request.ProviderId, bookmarkId, null);
-        return new(source, resume, expected, observed.State, execution);
+        return new(source, resume, expected, expected.MatchesAdmission(observed, execution, activity, source.Scope, clock.GetUtcNow())
+            ? new(source, resume, expected, observed.State, execution) : null);
     }
 
 }
 
 internal sealed record SavedBookmarkResume(PostCommitDeliveryContext Source, BookmarkResumeDispatchRequest Request,
     StimulusResumeRecipient Expected, BookmarkState Bookmark, WorkflowExecutionState Workflow);
+
+internal sealed record SavedBookmarkResumePreparation(PostCommitDeliveryContext Source, BookmarkResumeDispatchRequest Request,
+    StimulusResumeRecipient Expected, SavedBookmarkResume? Eligible);

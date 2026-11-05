@@ -324,7 +324,7 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
 
     private static async Task<BehaviorHost> HistoryHostAsync(HistorySource? source, BrowserAuthorization? authorization = null,
         bool legacy = false, IBookmarkStateStore? nativeBookmarks = null, bool? captureAtAdmission = null, IDurableTimerStore? nativeTimers = null,
-        bool timerHistoryUnavailable = false)
+        bool timerHistoryUnavailable = false, IPostCommitOutboxLookupStore? nativeSources = null)
     {
         var workflows = new InMemoryWorkflowExecutionStateStore();
         await workflows.SaveAsync(new WorkflowExecutionState("wf-1", new("artifact", "definition", "version", "1", "hash"),
@@ -340,6 +340,7 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
             if (nativeBookmarks is not null) services.AddSingleton(nativeBookmarks);
             if (timerHistoryUnavailable) services.AddSingleton<IDurableTimerStore>(new HistoryUnsupportedTimerStore());
             if (nativeTimers is not null) services.AddSingleton(nativeTimers);
+            if (nativeSources is not null) services.AddSingleton(nativeSources);
         });
     }
 
@@ -364,12 +365,22 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         internal bool EmptyWindow { get; init; }
         internal bool Uncaptured { get; init; }
         internal bool Invalid { get; init; }
+        internal RuntimeHistoryEvent? DeliverySource { get; init; }
+        internal bool MoreSourceHistory { get; init; }
+        internal bool AdvanceAfterSourceInspection { get; init; }
+        internal List<RuntimeHistoryQuery> SourceQueries { get; } = [];
         public ValueTask<RuntimeHistoryHead?> FindHeadAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
-        { Calls++; return ValueTask.FromResult<RuntimeHistoryHead?>(Uncaptured ? null : Head); }
+        { Calls++; return ValueTask.FromResult<RuntimeHistoryHead?>(Uncaptured ? null : AdvanceAfterSourceInspection && SourceQueries.Count != 0 ? Head with { LastSequence = 2 } : Head); }
         public ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken cancellationToken = default)
         {
             Calls++; Query = query;
             if (Invalid) throw new RuntimeHistoryIntegrityException(query.WorkflowExecutionId, "private-sentinel");
+            if (query.Name is "StimulusPublicationCommitted" or "ChildWorkflowSettled" or "ChildWorkflowDispatchRequested")
+            {
+                SourceQueries.Add(query);
+                return ValueTask.FromResult(new RuntimeHistoryPage(Head, DeliverySource is null ? [] : [DeliverySource],
+                    1, 1, DeliverySource is null ? 0 : 1, MoreSourceHistory ? "more-source-history" : null, "catch-up"));
+            }
             return ValueTask.FromResult(Uncaptured ? new(null, [], 0, 0, 0, null, "catch-up") : EmptyWindow
                 ? new(Head, [], 40, 40, 40, "next-window", "catch-up") { ScopeComplete = false, ScopeLimitation = "Missing recorded ancestry." }
                 : new RuntimeHistoryPage(Head, [Event()], 1, 1, 1, null, "catch-up"));

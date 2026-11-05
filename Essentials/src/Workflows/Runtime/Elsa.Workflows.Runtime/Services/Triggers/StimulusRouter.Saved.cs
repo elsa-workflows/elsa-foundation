@@ -38,7 +38,7 @@ public sealed partial class StimulusRouter
                     key.WorkflowExecutionId, key.StartKey, metadata, null, null, request.Input, binding.ExecutableNodeId,
                     WorkflowRunKind.PublishedRun, null, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
                     null, null, winner.Scope.TenantId, winner.Scope.Partition, null, WorkflowExecutableStartAuthority.FromStimulusDelivery(source, binding.TriggerBindingId),
-                    triggerMetadata: binding.Metadata);
+                    triggerMetadata: binding.Metadata) { HistoryCausation = source.Intent.HistoryCausation };
                 var (result, refused) = await TryDispatchStartAsync(start, null, binding.TriggerBindingId, binding.ArtifactId, cancellationToken);
                 if (result is null)
                 {

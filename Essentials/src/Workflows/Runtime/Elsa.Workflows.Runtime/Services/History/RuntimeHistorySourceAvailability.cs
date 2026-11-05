@@ -33,11 +33,12 @@ internal sealed class RuntimeHistorySourceAvailability(IServiceProvider services
         return commit with { HistorySourceFacts = RuntimeHistorySourceFacts.ForPolicy(policy, combined) };
     }
 
-    internal bool OwnerObservations(RuntimeHistorySourceSupport owner)
+    internal bool OwnerObservations(RuntimeHistorySourceSupport owner) => owner.ObservationIntentKind is { } kind && SourceOwner(kind);
+    internal bool SourceOwner(string intentKind)
     {
-        try { return owner.ObservationIntentKind is { } kind && services.GetService<IRuntimeHistoryObservationWriter>() is { } writer &&
+        try { return services.GetService<IRuntimeHistoryObservationWriter>() is { } writer &&
             services.GetService<IRuntimeHistoryStore>() is { } reader && writer.CanRecordHistory(reader) &&
-            services.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(kind, writer, reader) == true; }
+            services.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(intentKind, writer, reader) == true; }
         catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException) { return false; }
     }
     internal bool Values() => services.GetService<IRuntimeActivityExecutionInspectionAccumulator>()?.SupportsCheckpointValueCapture == true;

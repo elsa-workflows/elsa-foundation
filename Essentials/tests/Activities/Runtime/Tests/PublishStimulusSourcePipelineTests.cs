@@ -127,6 +127,49 @@ public sealed class PublishStimulusSourcePipelineTests
     }
 
     [Theory]
+    [InlineData("missing")] [InlineData("payload")] [InlineData("scope")]
+    [InlineData("expired")] [InlineData("reclaimed")] [InlineData("delivered")]
+    [Trait("Feature", "RunHistory")]
+    public async Task Rejected_publication_source_context_adds_no_observation_and_routes_no_recipient(string scenario)
+    {
+        await using var harness = new Harness(history: true); await harness.SeedMaterial(); await harness.Bind("one-start");
+        var item = await harness.Commit(); var claims = (IRuntimePostCommitOutboxClaimStore)harness.Store;
+        var claim = Assert.Single(await claims.ClaimAsync(new("source-context-owner", harness.Clock.GetUtcNow(), TimeSpan.FromMinutes(5), 1)));
+        var context = new PostCommitDeliveryContext(claim, Scope);
+        if (scenario is "missing" or "payload" or "scope") context = TamperSource(context, scenario);
+        if (scenario is "expired" or "reclaimed") harness.Clock.Advance(TimeSpan.FromMinutes(6));
+        if (scenario == "reclaimed") Assert.Single(await claims.ClaimAsync(new("replacement-owner", harness.Clock.GetUtcNow(), TimeSpan.FromMinutes(5), 1)));
+        if (scenario == "delivered") await claims.RecordDeliveryResultAsync(claim, new(claim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, harness.Clock.GetUtcNow()));
+        var beforeSource = (await harness.Find(item.OutboxItemId))!;
+        var before = await harness.History.ReadPageAsync(new("publisher"));
+        if (scenario is "expired" or "reclaimed" or "delivered")
+            await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(async () => { await harness.HandleSource(context); });
+        else
+            Assert.False((await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(async () => { await harness.HandleSource(context); })).IsUnavailable);
+        Assert.Empty(harness.Actors.Accepted); Assert.Empty(harness.Actors.Attempts); Assert.Equal(0, harness.Lookup.Reads);
+        var after = await harness.History.ReadPageAsync(new("publisher"));
+        Assert.Equal(before.Head, after.Head); Assert.Equal(before.Items.Select(e => e.HistoryEventId), after.Items.Select(e => e.HistoryEventId));
+        Assert.True(beforeSource.IsEquivalentTo(await harness.Find(item.OutboxItemId)));
+    }
+
+    private static PostCommitDeliveryContext TamperSource(PostCommitDeliveryContext source, string scenario)
+    {
+        if (scenario == "scope") return new(source.Claim, new("another-tenant"));
+        var item = source.Claim.Item; var id = scenario == "missing" ? "fabricated-commit:" + item.Intent.IntentId : item.OutboxItemId;
+        var intent = new RuntimePostCommitIntent(item.Intent.IntentId, item.Intent.WorkflowExecutionId, item.Intent.Kind,
+            item.Intent.RecordedAt, item.Intent.ActivityExecutionId, item.Intent.IdempotencyKey,
+            scenario == "payload" ? JsonSerializer.SerializeToElement(new { forged = true }) : item.Intent.Payload,
+            item.Intent.Metadata, item.Intent.DependsOnWaitRegistrationId, item.Intent.WaitFailurePolicy,
+            item.Intent.MaterializedSchedulerWorkItem, item.Intent.NotBefore)
+            { HistoryCausation = item.Intent.HistoryCausation! with { DeliveryId = id } };
+        var forged = new RuntimePostCommitOutboxItem(id, intent, item.Status, item.RecordedAt, item.AvailableAt, item.RetryPolicy,
+            item.DeliveryAttemptCount, item.DeliveringOwnerId, item.DeliveryStartedAt, item.DeliveredAt, item.LastFailureMessage,
+            item.Metadata, item.DeliveryFencingToken, item.DeliveryVisibleAfter, item.StimulusDeliveryProtocolVersion,
+            item.StimulusDeliverySourceScope, item.RecipientSnapshot);
+        return new(new(forged, source.Claim.OwnerId, source.Claim.FencingToken, source.Claim.ClaimedAt, source.Claim.VisibleAfter), source.Scope);
+    }
+
+    [Theory]
     [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
     public async Task Actual_publisher_pipeline_commits_protocol_without_recipients_then_saves_complete_cohort_before_effect(bool coalescing, bool local)
     {

@@ -290,7 +290,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             throw AuthorityRejected("stimulus-delivery-source-input-unavailable", "Saved start admission requires the canonical intent's owning decoder.");
         var canonical = _stimulusRequests.Read(source);
         StimulusDeliveryServices.ValidateWinner(source, canonical);
-        if (request.RequestedBy != canonical.RequestedBy || !SameStimulusInput(request.StimulusInput, canonical.Input))
+        if (request.RequestedBy != canonical.RequestedBy || !SameStimulusInput(request.StimulusInput, canonical.Input) ||
+            request.HistoryCausation != source.Intent.HistoryCausation)
             throw AuthorityRejected("stimulus-delivery-input-mismatch", "The saved start differs from its canonical persisted stimulus input or source identity.");
         var recipient = snapshot.Starts.SingleOrDefault(entry => entry.Binding.TriggerBindingId == authority.TriggerBindingId);
         if (recipient is null || !recipient.SourceProvenanceCaptured)

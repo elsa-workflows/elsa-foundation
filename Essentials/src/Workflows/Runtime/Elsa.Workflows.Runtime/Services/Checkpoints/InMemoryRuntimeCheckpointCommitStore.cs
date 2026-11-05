@@ -753,6 +753,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     public async ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (System.Transactions.Transaction.Current is not null)
+            throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
         var item = await FindAsync(outboxItemId, cancellationToken);
         if (item is null) return null;
         var access = _persistenceAccessContextAccessor?.Current ??

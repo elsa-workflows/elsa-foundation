@@ -49,8 +49,11 @@ internal static class RuntimeHistoryRegistration
         if (provider.GetService<IRuntimeActivityExecutionInspectionAccumulator>()?.SupportsCheckpointValueCapture != true)
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The selected value owner cannot supply immutable checkpoint evidence contributions.");
         var owners = provider.GetServices<RuntimeHistorySourceSupport>().ToArray();
-        var kinds = owners.SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName).ToList();
-        if (provider.GetService<IRuntimeHistoryObservationWriter>() is { } observations && observations.CanRecordHistory(reader))
+        var observations = provider.GetService<IRuntimeHistoryObservationWriter>();
+        var kinds = owners.Where(owner => owner.SourceIntentKind is null || observations is not null && observations.CanRecordHistory(reader) &&
+                provider.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(owner.SourceIntentKind, observations, reader) == true)
+            .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName).ToList();
+        if (observations is not null && observations.CanRecordHistory(reader))
         {
             foreach (var owner in owners.Where(owner => owner.ObservationIntentKind is { } kind &&
                          provider.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(kind, observations, reader) == true))

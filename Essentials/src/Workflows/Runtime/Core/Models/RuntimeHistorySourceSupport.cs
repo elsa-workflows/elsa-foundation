@@ -13,6 +13,12 @@ public sealed class RuntimeHistorySourceSupport
     public bool TimerOwner { get; }
     public IReadOnlyList<string> ObservationKinds { get; private init; } = Array.Empty<string>();
     public string? ObservationIntentKind { get; private init; }
+    public string? SourceIntentKind { get; private init; }
+    public static RuntimeHistorySourceSupport ForSourceOwner(string intentKind, IReadOnlyList<RuntimeHistorySourceFactKind> kinds)
+    {
+        RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
+        return new(kinds) { SourceIntentKind = intentKind };
+    }
     public static RuntimeHistorySourceSupport ForOwnerObservations(string intentKind, IReadOnlyList<string> kinds)
     {
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));

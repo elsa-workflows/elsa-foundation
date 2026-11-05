@@ -56,8 +56,8 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         {
             var delivery = _delivery ?? throw new NotSupportedException("This dispatcher has no canonical source support.");
             var prepared = await delivery.PrepareResumeAsync(source, workflowExecutionId, bookmarkId, cancellationToken);
-            return prepared is null ? new(BookmarkResumeDispatchStatus.NotFound, workflowExecutionId, reason: "The exact saved wait is retired or no longer eligible.") :
-                await DispatchObservedAsync(prepared.Request, null, prepared, cancellationToken);
+            return await DispatchObservedAsync(prepared.Request, null, prepared.Eligible, cancellationToken,
+                prepared.Eligible is null ? prepared : null);
         }
         catch (StimulusDeliveryBoundaryException) { throw; }
         catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
@@ -109,10 +109,16 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         CancellationToken cancellationToken = default) => DispatchObservedAsync(request, dispatchOptions, null, cancellationToken);
 
     private async ValueTask<BookmarkResumeDispatchResult> DispatchObservedAsync(BookmarkResumeDispatchRequest request,
-        WorkflowExecutionCommandDispatchOptions? options, SavedBookmarkResume? saved, CancellationToken cancellationToken)
+        WorkflowExecutionCommandDispatchOptions? options, SavedBookmarkResume? saved, CancellationToken cancellationToken,
+        SavedBookmarkResumePreparation? unmatched = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (_historyServices is null && _history is null && _historyReader is null) return await DispatchCoreAsync(request, options, saved, cancellationToken);
+        BookmarkResumeDispatchResult Unmatched() => new(BookmarkResumeDispatchStatus.NotFound, request.WorkflowExecutionId,
+            reason: "The exact saved wait is retired or no longer eligible.");
+        if (_historyServices is null && _history is null && _historyReader is null)
+            return unmatched is null ? await DispatchCoreAsync(request, options, saved, cancellationToken) : Unmatched();
+        var source = saved?.Source ?? unmatched?.Source;
+        var target = saved?.Expected ?? unmatched?.Expected;
         var receivedAt = _timeProvider.GetUtcNow();
         var owner = await _workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
         var policy = owner?.HistoryCapturePolicy;
@@ -126,12 +132,12 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Delivery history requires its scoped owner provider.");
             _historyAccess.Current.RequireScope(); _historyAccess.Current.EnsureTenantScope(owner!.TenantId);
             receiptId = Guid.NewGuid().ToString("N");
-            var logicalDelivery = saved?.Source.SourceOutboxItemId ?? (request.IdempotencyKey is { } key
+            var logicalDelivery = source?.SourceOutboxItemId ?? (request.IdempotencyKey is { } key
                 ? RuntimeHistoryIdentity.CreateBinding([request.WorkflowExecutionId, key]) : receiptId);
-            cause = saved?.Source.Intent.HistoryCausation ?? request.HistoryCausation ?? new RuntimeHistoryCausation(WorkflowExecutionId: saved?.Source.Intent.WorkflowExecutionId,
+            cause = source?.Intent.HistoryCausation ?? request.HistoryCausation ?? new RuntimeHistoryCausation(WorkflowExecutionId: source?.Intent.WorkflowExecutionId,
                 DeliveryId: logicalDelivery);
             var receipt = RuntimeHistoryDeliveryFacts.Create(policy, request.WorkflowExecutionId, receiptId, "DeliveryReceived", receivedAt,
-                request.StimulusType, saved?.Bookmark.BookmarkId, saved?.Bookmark.ActivityExecutionId, saved?.Bookmark.ExecutableNodeId, cause);
+                request.StimulusType, target?.BookmarkId, target?.ActivityExecutionId, target?.ExecutableNodeId, cause);
             if (!(await RecordHistoryAsync(receipt, cancellationToken)).Recorded)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Delivery history is waiting for its retained execution head.");
             receiptEventId = receipt.Event.HistoryEventId;
@@ -139,7 +145,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         BookmarkResumeDispatchResult result;
         var queuedCause = receiptEventId is null ? null : new RuntimeHistoryCausation(HistoryEventId: receiptEventId,
             WorkflowExecutionId: request.WorkflowExecutionId, DeliveryId: cause?.DeliveryId);
-        try { result = await DispatchCoreAsync(request, options, saved, cancellationToken, queuedCause); }
+        try { result = unmatched is null ? await DispatchCoreAsync(request, options, saved, cancellationToken, queuedCause) : Unmatched(); }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             if (receiptId is not null)
@@ -159,7 +165,9 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         };
         var responseCause = cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId };
         var disposition = RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, name, _timeProvider.GetUtcNow(),
-            request.StimulusType, result.Bookmark?.BookmarkId, result.Bookmark?.ActivityExecutionId, result.Bookmark?.ExecutableNodeId,
+            request.StimulusType, result.Bookmark?.BookmarkId ?? unmatched?.Expected.BookmarkId,
+            result.Bookmark?.ActivityExecutionId ?? unmatched?.Expected.ActivityExecutionId,
+            result.Bookmark?.ExecutableNodeId ?? unmatched?.Expected.ExecutableNodeId,
             responseCause, result.CommandDispatch?.Status.ToString() ?? result.Status.ToString());
         var recorded = await RecordHistoryAsync(disposition, cancellationToken);
         if (!recorded.Recorded) return result;

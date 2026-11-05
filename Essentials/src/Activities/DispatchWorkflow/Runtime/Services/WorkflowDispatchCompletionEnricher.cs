@@ -173,6 +173,10 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                 activityExecutionId: commit.StateChanges.ActivityExecutions.Where(change => change.Operation != RuntimeStateChangeOperation.Delete &&
                     change.State.Execution.WorkflowExecutionId == child.WorkflowExecutionId && change.State.ParentActivityExecutionId is null)
                     .Select(change => change.State.InvocationId).SingleOrDefault(),
+                causation: dispatch.Mode == WorkflowDispatchMode.WaitForCompletion
+                    ? new(WorkflowExecutionId: commit.WorkflowExecutionId, DeliveryId: RuntimePostCommitOutboxIdentity.CreateLogicalValue(
+                        commit.CommitId, new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).ParentResumeIntentId))
+                    : null,
                 relatedWorkflowExecutionId: dispatch.ParentWorkflowExecutionId, relatedActivityExecutionId: dispatch.ParentActivityExecutionId,
                 reasonCode: terminalStatus.ToString()));
         }, cancellationToken);

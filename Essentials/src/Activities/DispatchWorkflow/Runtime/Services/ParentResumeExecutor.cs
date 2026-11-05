@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
@@ -21,8 +22,19 @@ public sealed class ParentResumeExecutor(
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ILogger<ParentResumeExecutor> _logger = logger ?? NullLogger<ParentResumeExecutor>.Instance;
+    private IServiceProvider? _historyServices;
+    private TimeProvider _historyClock = TimeProvider.System;
+
+    internal static ParentResumeExecutor Create(IServiceProvider services) => new(
+        services.GetRequiredService<IBookmarkResumeDispatcher>(), services.GetRequiredService<IWorkflowExecutionStateStore>(),
+        services.GetRequiredService<IActivityExecutionStateStore>(), services.GetRequiredService<IBookmarkStateStore>(),
+        services.GetService<ILogger<ParentResumeExecutor>>())
+        { _historyServices = services, _historyClock = services.GetRequiredService<TimeProvider>() };
 
     bool IRuntimeHistoryDeliverySource.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        _historyServices is not null && ReferenceEquals(writer, _historyServices.GetService<IRuntimeHistoryObservationWriter>()) &&
+        ReferenceEquals(reader, _historyServices.GetService<IRuntimeHistoryStore>()) &&
+        ReferenceEquals(bookmarkResumeDispatcher, _historyServices.GetService<IBookmarkResumeDispatcher>()) &&
         bookmarkResumeDispatcher is IRuntimeHistoryDeliverySource source && source.CanRecordHistory(writer, reader);
 
     public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
@@ -39,6 +51,7 @@ public sealed class ParentResumeExecutor(
         if (source.Intent.HistoryCausation is { } cause && cause.DeliveryId != source.SourceOutboxItemId)
             throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
                 new InvalidOperationException("The parent resume differs from its exact child source."), false);
+        source = await WorkflowDispatchHistorySource.ValidateAsync(source, _historyServices, _historyClock, cancellationToken);
         try { await HandleCoreAsync(source.Intent, source.Intent.HistoryCausation, cancellationToken); }
         catch (RuntimeSchedulerWorkUnavailableException exception) when (exception.Code == "runtime.history.capture-unavailable")
         { throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, true); }

@@ -63,6 +63,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHa
             _ = _historyServices.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
             return ReferenceEquals(writer, _historyServices.GetService<IRuntimeHistoryObservationWriter>()) &&
                 ReferenceEquals(reader, _historyServices.GetService<IRuntimeHistoryStore>()) && writer.CanRecordHistory(reader) &&
+                ReferenceEquals(_timeProvider, _historyServices.GetService<TimeProvider>()) &&
                 ReferenceEquals(_workflowStartDispatcher, _historyServices.GetService<IWorkflowStartDispatcher>()) &&
                 ReferenceEquals(_workflowDispatchStore, _historyServices.GetService<IWorkflowDispatchStore>()) &&
                 ReferenceEquals(_workflowExecutionStateStore, _historyServices.GetService<IWorkflowExecutionStateStore>());

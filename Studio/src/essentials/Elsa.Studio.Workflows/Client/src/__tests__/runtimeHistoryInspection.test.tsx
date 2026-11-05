@@ -84,13 +84,32 @@ it("labels committed responsibilities, source observations, settlement and incid
     ["ChildStartDispositionObserved", "Child start disposition observed"], ["StimulusRoutingAttemptObserved", "Stimulus routing attempt observed"],
     ["StimulusRoutingDispositionObserved", "Stimulus routing disposition observed"], ["IncidentStrategyEvaluated", "Incident strategy evaluated"],
     ["IncidentProjectionReconciled", "Incident projection reconciled"], ["IncidentSuppressed", "Incident suppressed"],
-    ["IncidentDecisionApplied", "Incident decision applied"], ["IncidentResolutionBatchApplied", "Incident strategy decisions applied"]
+    ["IncidentDecisionApplied", "Incident decision applied"], ["IncidentResolutionBatchApplied", "Incident strategy decisions applied"],
+    ["ActivityContinuationStarted", "Activity callback started"], ["ActivityContinuationReturned", "Activity callback returned a result"],
+    ["ActivityContinuationSuspended", "Continuation waiting"], ["ActivityContinuationCompleted", "Continuation completed"],
+    ["ActivityContinuationFaulted", "Continuation faulted"], ["CompensationAbandoned", "Compensation abandoned"]
   ];
   const events = labels.map(([name], index) => historyEvent(index + 1, { name, authority: name.endsWith("Observed") ? "DeliveryObservation" : "CommittedTransition" }));
   render(<HistoryEventList items={events} onSelect={vi.fn()} />);
   expect([...container.querySelectorAll(".wf-history-event strong")].map(item => item.textContent)).toEqual(labels.map(([, label]) => label));
   expect(container.querySelectorAll(".wf-history-event small").length).toBeGreaterThan(0);
   expect(container.textContent?.match(/Recorded source observation/g)).toHaveLength(4);
+});
+it("keeps callback return distinct from a later continuation fault and recognizes abandoned compensation", async () => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { name: "ActivityContinuationReturned" }), readAt: "now" });
+  const element = (id: string) => <HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id }} onSelect={vi.fn()} onBack={vi.fn()} />;
+  render(element("event-1"));
+  await vi.waitFor(() => expect(container.textContent).toContain("Activity callback returned a result"));
+  expect(container.textContent).toContain("validation or disposal can still fail after the callback returns");
+  expect(container.textContent).toContain("committed continuation outcome is recorded separately");
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(2, { name: "ActivityContinuationFaulted" }), readAt: "now" });
+  render(element("event-2"));
+  await vi.waitFor(() => expect(container.textContent).toContain("Continuation faulted"));
+  expect(container.textContent).not.toContain("Callback faulted");
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(3, { name: "CompensationAbandoned" }), readAt: "now" });
+  render(element("event-3"));
+  await vi.waitFor(() => expect(container.textContent).toContain("Compensation abandoned"));
+  expect(container.textContent).not.toContain("event kind is unrecognized");
 });
 it.each([
   ["ChildWorkflowDispatchRequested", "Child admission, execution and outcome are separate recorded facts"],
