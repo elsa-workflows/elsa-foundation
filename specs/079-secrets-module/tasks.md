@@ -251,3 +251,4 @@ Reviewed spec/plan consistency: the name's spelling is preserved, its normalized
 - [ ] C004 Run affected backend/frontend suites, typecheck and architecture/maps gates; commit, run composed acceptance on clean source and inspect captures independently. Record shared evidence and current limitations on the PR.
 
 - [x] C005 Version the case-preserving payload as Secrets 2.0.0 with a v1 upcaster and existing finalization-gate write selection. Add `SecretsNameSchemaTests.cs` for old-format continuation, gated refusal, finalization, legacy reads and preceding-reader version-skew diagnosis.
+- [x] C006 Map duplicate creation to a bounded conflict problem in `Essentials/src/Secrets/Api/SecretsApi.cs`; tighten backend and composed duplicate-message regressions. The stricter backend regression failed before the mapping and the whole Secrets suite passed after it.

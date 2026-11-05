@@ -89,7 +89,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
   await secret.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(secret.getByRole("alert")).toBeVisible();
+  await expect(secret.getByRole("alert")).toHaveText("A secret with the same name already exists.");
   await expect(technicalName).toHaveValue(secretName.toUpperCase());
   await capture(page, info, "secret-duplicate");
   await secret.getByRole("button", { name: "Cancel", exact: true }).click();
