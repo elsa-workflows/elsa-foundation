@@ -164,6 +164,7 @@ test("durable run timeline across a native task resume and owned process restart
   await expect(inspector.getByRole("region", { name: "History event details", exact: true })).toBeVisible();
   await expect(eventRow(timeline, consumed)).toBeVisible();
   await expect(inspector).toContainText("Bookmark consumed"); await expect(inspector).toContainText("Committed runtime transition");
+  await eventRow(timeline, consumed).scrollIntoViewIfNeeded(); await expect(eventRow(timeline, consumed)).toBeInViewport();
   await capture(page, info, "resumed-event");
   await inspector.getByRole("button", { name: "Inspect bookmark →", exact: true }).press("Enter");
   await expect(inspector).toContainText("current eligibility: Not active"); await expect(inspector).toContainText("Consumed");

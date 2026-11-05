@@ -80,7 +80,7 @@ async function waitTasks(page: Page, backend: string, run: string, count: number
   }, { timeout: 300_000 }).toBe(count); return tasks;
 }
 async function complete(page: Page, backend: string, task: Task) {
-  return api(page.request, backend, `/runtime/user-tasks/${task.id}/complete`, { revision: task.revision, requestId: crypto.randomUUID(), action: "Approve", data: { Reason: "Owned diagnostics" } });
+  return api(page.request, backend, `/runtime/user-tasks/${task.id}/complete`, { revision: task.revision, requestId: crypto.randomUUID(), action: "Approve", data: {} });
 }
 async function selectedRun(page: Page, run: string, owner: string, extra = "") {
   await page.goto(`/workflows/instances/${run}?selected=${encodeURIComponent(owner)}${extra}`);
