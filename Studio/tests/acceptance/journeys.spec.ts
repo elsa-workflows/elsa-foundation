@@ -1,3 +1,4 @@
+import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
@@ -301,6 +302,10 @@ test("agent authoring and navigation", async ({ page }, info) => {
   }
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "completed");
+});
+
+test("save template toast", async ({ page }, info) => {
+  await templateToastJourney(page, info, capture);
 });
 
 test("workflow template metadata defaults", async ({ page }, info) => {
