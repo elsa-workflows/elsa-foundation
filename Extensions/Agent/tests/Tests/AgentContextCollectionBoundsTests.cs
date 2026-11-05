@@ -269,7 +269,7 @@ public sealed class AgentContextCollectionBoundsTests
         }
     }
 
-    private sealed class TriggeredTimeProvider : TimeProvider
+    internal sealed class TriggeredTimeProvider : TimeProvider
     {
         private readonly Queue<TriggeredTimer> timers = new();
         public List<TimeSpan> DueTimes { get; } = [];

@@ -129,7 +129,7 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
     {
         using var deadline = new CancellationTokenSource(options.Value.SourceTimeout, timeProvider);
         using var sourceCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
-        Task<AgentContextContribution>? pending = null;
+        Task? pending = null;
         try
         {
             var needsEffects = descriptor.ModuleCodes is not null;
@@ -137,28 +137,33 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             {
                 // New retained results need current feature admission even when their disclosure source is legacy.
                 // Installed metadata is not execution authority; only the shared feature check is performed here.
-                var installed = (await tools.ListAsync(cancellationToken)).Select(tool => tool.Descriptor).ToArray();
+                var metadata = tools.ListAsync(sourceCancellation.Token);
+                pending = metadata;
+                var installed = (await metadata.WaitAsync(sourceCancellation.Token)).Select(tool => tool.Descriptor).ToArray();
                 needsEffects |= retainedDisclosure.Results.Any(result => result.Receipt is { ModuleCode: not null }
                     or { Scope: AgentEffectScope.NoPersistedEffect }
                     || installed.Any(tool => tool.Name == result.ToolName
                         && tool.ModuleId == result.Access?.ModuleId && Services.AgentEffectsAdmission.UsesNewContract(tool)));
             }
-            if (needsEffects && await effects.CheckAsync(cancellationToken) is { } unavailable)
+            if (needsEffects && await CheckAdmissionAsync() is { } unavailable)
             {
                 diagnostics.Add(new(descriptor.Id, unavailable.Code, unavailable.Message, request.Disclosure is not null || descriptor.Required));
                 return null;
             }
-            pending = request.Disclosure is { } disclosure
+            sourceCancellation.Token.ThrowIfCancellationRequested();
+            var sourceTask = request.Disclosure is { } disclosure
                 ? source.AdmitDisclosureAsync(disclosure, sourceCancellation.Token).AsTask()
                 : source.CollectAsync(request, sourceCancellation.Token).AsTask();
-            var contribution = await pending.WaitAsync(sourceCancellation.Token);
+            pending = sourceTask;
+            var contribution = await sourceTask.WaitAsync(sourceCancellation.Token);
             sourceCancellation.Token.ThrowIfCancellationRequested();
             // A source may await I/O while the shared observation changes. Its returned payload is not yet admitted.
-            if (needsEffects && await effects.CheckAsync(cancellationToken) is { } changed)
+            if (needsEffects && await CheckAdmissionAsync() is { } changed)
             {
                 diagnostics.Add(new(descriptor.Id, changed.Code, changed.Message, request.Disclosure is not null || descriptor.Required));
                 return null;
             }
+            sourceCancellation.Token.ThrowIfCancellationRequested();
             return contribution;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -186,11 +191,20 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             if (pending is not null)
                 _ = ObserveLateCompletionAsync(pending);
         }
+
+        async Task<AgentError?> CheckAdmissionAsync()
+        {
+            var check = effects.CheckAsync(sourceCancellation.Token).AsTask();
+            pending = check;
+            var result = await check.WaitAsync(sourceCancellation.Token);
+            sourceCancellation.Token.ThrowIfCancellationRequested();
+            return result;
+        }
     }
 
-    private static async Task ObserveLateCompletionAsync(Task<AgentContextContribution> pending)
+    private static async Task ObserveLateCompletionAsync(Task pending)
     {
-        // A source may ignore cancellation. Its late result never rejoins admission; observe faults only.
+        // An owner, registry or shared observer may ignore cancellation. Late data never rejoins admission.
         try { await pending; }
         catch (Exception) { }
     }

@@ -1,5 +1,6 @@
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core;
 using Elsa.Agent.Extensions;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
@@ -12,12 +13,14 @@ namespace Elsa.Agent.Services;
 internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrations, IServiceProvider services, AgentPrivilegePolicy privileges)
 {
     internal ValueTask<AgentError?> CheckPreparationAsync(AgentToolDescriptor descriptor, CancellationToken cancellationToken = default)
-        => CheckPrivilegesAsync(null, descriptor.Risk, UsesNewContract(descriptor) || descriptor.Risk == AgentRisk.Admin, cancellationToken);
+        => CheckPrivilegesAsync(null, descriptor.Risk, UsesNewContract(descriptor) || descriptor.Risk == AgentRisk.Admin,
+            $"Tool '{descriptor.Name}'", cancellationToken);
 
     internal ValueTask<AgentError?> CheckInvocationAsync(AgentPreparedToolInvocation prepared,
         AgentToolDescriptor? descriptor = null, CancellationToken cancellationToken = default)
         => CheckPrivilegesAsync(prepared.RequiredPrivilegeClasses, prepared.Risk,
-            prepared.RequiredPrivilegeClasses is { Count: > 0 } || descriptor is not null && UsesNewContract(descriptor), cancellationToken);
+            prepared.RequiredPrivilegeClasses is { Count: > 0 } || descriptor is not null && UsesNewContract(descriptor),
+            $"Prepared invocation '{prepared.InvocationId}'", cancellationToken);
 
     /// <summary>Approval reads retained core meaning only; it never resolves a tool or a principal.</summary>
     internal ValueTask<AgentError?> CheckReviewAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
@@ -32,13 +35,21 @@ internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrat
     internal static bool UsesNewContract(AgentToolDescriptor descriptor) => descriptor.CanPerformWithoutPersistence || descriptor.ModuleCodes is not null;
 
     private async ValueTask<AgentError?> CheckPrivilegesAsync(IReadOnlyList<AgentPrivilegeClass>? requirements, AgentRisk risk,
-        bool needsEffects, CancellationToken cancellationToken)
+        bool needsEffects, string subject, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (privileges.Check(requirements, risk) is { } veto) return veto;
-        if (needsEffects && await CheckAsync(cancellationToken) is { } unavailable) return unavailable;
-        // A shared refresh can await I/O. The host setting observed before it is no longer current authority.
-        return privileges.Check(requirements, risk);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (privileges.Check(requirements, risk) is { } veto) return veto;
+            if (needsEffects && await CheckAsync(cancellationToken) is { } unavailable) return unavailable;
+            // A shared refresh can await I/O. The host setting observed before it is no longer current authority.
+            return privileges.Check(requirements, risk);
+        }
+        catch (Exception error) when (error is not (OperationCanceledException or AgentContributionException))
+        {
+            // Context collection calls CheckAsync directly and keeps its optional/required failure policy.
+            throw new AgentContributionException($"{subject} effects admission could not be established.", error);
+        }
     }
 
     internal async ValueTask<AgentError?> CheckAsync(CancellationToken cancellationToken = default)

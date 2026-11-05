@@ -275,6 +275,204 @@ public sealed class AgentEffectsCollectionTests
         Assert.Equal(0, source.Calls);
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task An_uncooperative_admission_refresh_is_bounded_and_cannot_admit_late_context(bool afterCallback, bool retained, bool required)
+    {
+        var clock = new AgentContextCollectionBoundsTests.TriggeredTimeProvider();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new Source("slow-observation", [], required);
+        var healthy = new Source("healthy-legacy", null);
+        var calls = 0;
+        CancellationToken observed = default;
+        using var root = Build("available", new()
+        {
+            Available = true,
+            BeforeEvaluate = token =>
+            {
+                if (++calls != (afterCallback ? 2 : 1)) return ValueTask.CompletedTask;
+                observed = token;
+                entered.SetResult();
+                return new(release.Task); // Deliberately ignores cancellation, like a stalled infrastructure call.
+            }
+        }, services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
+            services.AddSingleton<IAgentContextProvider>(source);
+            services.AddSingleton<IAgentContextProvider>(healthy);
+        });
+        using var scope = root.CreateScope();
+        var collection = scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+            new("session", "*", new Dictionary<string, string>())
+                { Disclosure = retained ? new("session", [source.Attachment()], [], false) : null });
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            clock.FireNext();
+            var result = await collection.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(observed.IsCancellationRequested);
+            Assert.Equal(!retained && !required, result.Succeeded);
+            var contribution = result.Value!;
+            Assert.Equal(retained ? 0 : 1, contribution.Attachments.Count);
+            Assert.DoesNotContain(source.Canary, JsonSerializer.Serialize(result));
+            var diagnostic = Assert.Single(contribution.Diagnostics);
+            Assert.Equal("agent.context.source_timed_out", diagnostic.Code);
+            Assert.Equal(retained || required, diagnostic.Required);
+            Assert.Equal(afterCallback ? 1 : 0, source.Calls);
+            release.SetResult();
+            await release.Task;
+            Assert.Equal(retained ? 0 : 1, contribution.Attachments.Count);
+            Assert.Single(contribution.Diagnostics);
+        }
+        finally { release.TrySetResult(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Caller_stop_does_not_wait_for_an_uncooperative_pre_or_post_source_observer(bool afterCallback)
+    {
+        using var stop = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new Source("stopped-observer", [], false);
+        var calls = 0;
+        using var root = Build("available", new()
+        {
+            Available = true,
+            BeforeEvaluate = _ =>
+            {
+                if (++calls != (afterCallback ? 2 : 1)) return ValueTask.CompletedTask;
+                entered.SetResult();
+                return new(release.Task);
+            }
+        }, services => services.AddSingleton<IAgentContextProvider>(source));
+        using var scope = root.CreateScope();
+        var collection = scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+            new("session", "*", new Dictionary<string, string>()), stop.Token);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            stop.Cancel();
+            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => collection.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Equal(stop.Token, error.CancellationToken);
+            Assert.Equal(afterCallback ? 1 : 0, source.Calls);
+        }
+        finally { release.TrySetResult(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retained_result_metadata_lookup_is_bounded_independently_of_registry_cooperation(bool callerStop)
+    {
+        using var stop = new CancellationTokenSource();
+        var clock = new AgentContextCollectionBoundsTests.TriggeredTimeProvider();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyCollection<IAgentTool>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new Source("metadata-owner", null, false);
+        CancellationToken observed = default;
+        using var root = Build("memory", new(), services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolRegistry>(_ => new Registry(token =>
+            {
+                observed = token;
+                entered.SetResult();
+                return release.Task;
+            })));
+            services.AddSingleton<IAgentContextProvider>(source);
+        });
+        using var scope = root.CreateScope();
+        var collection = scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+            new("session", "*", new Dictionary<string, string>())
+                { Disclosure = new("session", [], [source.Result("performed")], false) }, stop.Token);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (callerStop)
+            {
+                stop.Cancel();
+                var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => collection.WaitAsync(TimeSpan.FromSeconds(10)));
+                Assert.Equal(stop.Token, error.CancellationToken);
+            }
+            else
+            {
+                clock.FireNext();
+                var result = await collection.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.False(result.Succeeded);
+                Assert.Empty(result.Value!.Attachments);
+                Assert.True(Assert.Single(result.Value.Diagnostics).Required);
+                Assert.Equal("agent.context.source_timed_out", result.Value.Diagnostics.Single().Code);
+            }
+            Assert.True(observed.IsCancellationRequested);
+            Assert.Equal(0, source.Calls);
+        }
+        finally { release.TrySetResult([]); }
+    }
+
+    [Theory]
+    [InlineData("prepare")]
+    [InlineData("raised")]
+    [InlineData("execute")]
+    public async Task Direct_tool_and_proposal_facades_wrap_observation_infrastructure_failures_before_dispatch(string phase)
+    {
+        var failure = new IOException(Guid.NewGuid().ToString("N"));
+        var observation = new Observation { Available = true };
+        var mutation = new ProposalMutationTool { PrivilegeClasses = [AgentPrivilegeClass.Activation] };
+        var read = new Tool("failing_read", [], false);
+        using var fixture = await ProposalFixture.CreateAsync(phase == "prepare" ? read : mutation, configure: services =>
+        {
+            new AgentEffectsFeatureTests.ObservedEffectsFeature().ConfigureServices(services);
+            services.AddScoped<ISchemaDormancyCheck>(_ => observation);
+            services.Configure<AgentPrivilegePolicyOptions>(options => options.Activation = true);
+        });
+        AgentActionProposal? proposal = null;
+        if (phase == "execute")
+        {
+            proposal = await fixture.ProposeAsync();
+            Assert.True((await fixture.ApproveAsync(proposal)).Succeeded);
+        }
+        observation.Failure = failure;
+        var error = await Assert.ThrowsAsync<AgentContributionException>(async () =>
+        {
+            if (proposal is not null) await fixture.ExecuteAsync(proposal);
+            else await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+        });
+        Assert.Same(failure, error.InnerException);
+        Assert.DoesNotContain(failure.Message, error.Message);
+        Assert.Contains(phase == "prepare" ? read.Descriptor.Name : proposal?.PreparedInvocation?.InvocationId ?? "Prepared invocation", error.Message);
+        Assert.Equal(0, read.PrepareCalls);
+        Assert.Equal(phase == "prepare" ? 0 : 1, mutation.PrepareCalls);
+        Assert.Equal(0, mutation.DispatchCalls);
+        if (proposal is not null) Assert.Equal(AgentActionProposalStatus.Approved, (await fixture.Proposals.FindAsync(proposal.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task Direct_tool_admission_preserves_caller_cancellation_instead_of_wrapping_it()
+    {
+        using var stop = new CancellationTokenSource();
+        var observation = new Observation { OnEvaluate = stop.Cancel };
+        var tool = new Tool("cancelled_read", [], false);
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+        {
+            new AgentEffectsFeatureTests.ObservedEffectsFeature().ConfigureServices(services);
+            services.AddScoped<ISchemaDormancyCheck>(_ => observation);
+        });
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy, stop.Token));
+        Assert.Equal(stop.Token, error.CancellationToken);
+        Assert.Equal(0, tool.PrepareCalls);
+    }
+
     private static ServiceProvider Build(string composition, Observation observation, Action<IServiceCollection> configure)
         => AgentTestServices.Create(services =>
         {
@@ -364,16 +562,24 @@ public sealed class AgentEffectsCollectionTests
         }
     }
 
+    private sealed class Registry(Func<CancellationToken, Task<IReadOnlyCollection<IAgentTool>>> list) : IAgentToolRegistry
+    {
+        public Task<IReadOnlyCollection<IAgentTool>> ListAsync(CancellationToken cancellationToken = default) => list(cancellationToken);
+        public Task<IAgentTool?> FindAsync(string toolName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
     private sealed class Observation : ISchemaDormancyCheck
     {
         internal bool Available { get; set; }
-        internal Exception? Failure { get; init; }
+        internal Exception? Failure { get; set; }
         internal Action? OnEvaluate { get; init; }
+        internal Func<CancellationToken, ValueTask>? BeforeEvaluate { get; init; }
         public SchemaAvailability Evaluate(IEnumerable<SchemaVersionRequirement> requirements) => SchemaDormancyRule.Evaluate(requirements,
             family => new(family, null, ["0.0.0", "1.0.0"], Available ? "1.0.0" : "0.0.0", Available ? "1.0.0" : "0.0.0", false, null, [], null, DateTimeOffset.UnixEpoch));
         public async ValueTask<SchemaAvailability> EvaluateAsync(IEnumerable<SchemaVersionRequirement> requirements, CancellationToken cancellationToken = default)
         {
             await Task.Yield();
+            if (BeforeEvaluate is { } before) await before(cancellationToken);
             OnEvaluate?.Invoke();
             cancellationToken.ThrowIfCancellationRequested();
             if (Failure is { } error) throw error;
