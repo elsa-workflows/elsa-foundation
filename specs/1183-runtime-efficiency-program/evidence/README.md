@@ -21,3 +21,8 @@ ordinary filenames; this packaging change does not change their production libra
 Read each fixture's bounds and measurement/accounting boundary before use. Use fresh task-owned output directories,
 private synthetic data/connections and a recorded source/binary/configuration identity. Preserve failures and account
 for every attempted execution. None of these fixtures is a benchmark service, CI timing gate or production SLO.
+
+The [native driver](native-qualification/README.md) also contains input-profile source preparation, with its
+compilation and runtime qualification still pending. [Topology declaration controls](topology/README.md) are pure
+Python and need no frozen project template; they validate supplied declarations, not live machine identity,
+actor participation or permission to provision resources.
