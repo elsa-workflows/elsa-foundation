@@ -138,6 +138,8 @@ describe("manual editor export confirmation lifecycle", () => {
     const fixture = renderOperations({ deferred, retained: change === "retained visit" });
     const work = fixture.current().exportExecutableArtifact();
     await vi.waitFor(() => expect(fixture.getJson.mock.calls.some(([url]) => url.includes("/executable-export"))).toBe(true));
+    expect(downloads).toHaveLength(0); expect(notify).not.toHaveBeenCalled();
+    expect(fixture.setOperation).toHaveBeenLastCalledWith("exportingArtifact");
     if (change === "scope") fixture.render({ next: true });
     else { fixture.render(undefined, "hidden"); fixture.render(); }
     finish(closurePayload); await work;
@@ -153,6 +155,8 @@ describe("manual editor export confirmation lifecycle", () => {
     const fixture = renderOperations({ deferred: new Promise(resolve => { finish = resolve; }) });
     const work = fixture.current().exportExecutableArtifact();
     await vi.waitFor(() => expect(fixture.getJson.mock.calls.some(([url]) => url.includes("/executable-export"))).toBe(true));
+    expect(downloads).toHaveLength(0); expect(notify).not.toHaveBeenCalled();
+    expect(fixture.setOperation).toHaveBeenLastCalledWith("exportingArtifact");
     fixture.writeStatus("Autosaved"); fixture.writeOperation("saving");
     finish(closurePayload); await work;
     expect(downloads).toHaveLength(1);
@@ -423,7 +427,7 @@ function renderArtifactDownload(options: {
           payload: options.failWith
         });
       }
-      return options.deferred ? await options.deferred : closurePayload;
+      return closurePayload;
     }
     throw new Error(`Unexpected GET ${url}`);
   });
@@ -561,7 +565,7 @@ function renderOperations(options: {
           payload: options.failWith
         });
       }
-      return closurePayload;
+      return options.deferred ? await options.deferred : closurePayload;
     }
     throw new Error(`Unexpected GET ${url}`);
   });
