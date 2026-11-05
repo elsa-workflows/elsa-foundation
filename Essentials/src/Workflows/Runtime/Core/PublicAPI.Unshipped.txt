@@ -10882,6 +10882,7 @@ static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.WithPostComm
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.ObservationIntentKind.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationAbandoned = 31 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.DurableStateRecorded = 32 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.SourceIntentKind.get -> string?
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.ForSourceOwner(string! intentKind, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind>! kinds) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport!
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithHistorySourceFacts(System.Func<System.DateTimeOffset, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!>! facts) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!

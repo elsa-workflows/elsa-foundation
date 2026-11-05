@@ -72,45 +72,18 @@
   padding: 10px 16px 0;
 }
 
-.wf-history-controls label,
+.wf-history-controls > .studio-field,
 .wf-history-search-field {
-  display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--studio-text-muted);
 }
 
-.wf-history-controls select,
-.wf-history-search input {
-  min-width: 0;
-  max-width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--studio-edge-control);
-  border-radius: var(--studio-radius-sm);
-  background: var(--studio-surface);
-  color: var(--studio-text);
-  font: inherit;
-}
-
-.wf-history-controls label:first-child {
+.wf-history-controls > .studio-field:first-child {
   max-width: 100%;
   flex: 1 1 180px;
 }
 
 .wf-history-search-field {
   flex: 1 1 200px;
-}
-
-.wf-history-search > button,
-.wf-history-reading-controls > button,
-.wf-history-more {
-  padding: 6px 9px;
-  border: 1px solid var(--studio-edge-control);
-  border-radius: var(--studio-radius-sm);
-  background: var(--studio-surface);
-  color: var(--studio-text);
 }
 
 .wf-history-reading-controls {
@@ -308,12 +281,6 @@
   margin-left: 0;
 }
 
-.wf-history-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .wf-history-technical {
   margin: 16px 0;
 }
@@ -339,10 +306,6 @@
 
 .wf-history-facts button:not(.wf-copy-button) {
   max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--studio-text);
   text-align: left;
   overflow-wrap: anywhere;
 }
@@ -496,6 +459,16 @@
   overflow: visible;
 }
 
+.wf-run-history-workspace.run-layout-narrow .wf-activity-overview-heading {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.wf-run-history-workspace.run-layout-narrow .wf-activity-overview-status {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
 .wf-run-history-workspace .wf-run-inspector-backdrop {
   display: none;
 }
@@ -530,17 +503,9 @@
 }
 
 @media (pointer: coarse) {
-  .wf-run-history button,
-  .wf-history-inspection button,
-  .wf-activity-history button,
-  .wf-run-history select,
+  .wf-history-event,
   .wf-history-checkbox {
     min-height: 44px;
-  }
-
-  .wf-history-search input {
-    min-height: 44px;
-    font-size: 16px;
   }
 }
 

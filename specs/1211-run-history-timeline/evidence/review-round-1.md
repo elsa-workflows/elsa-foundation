@@ -1,6 +1,17 @@
-# Review round 1 — in progress
+# Review round 1 — source feedback recorded; acceptance pending
 
-This is a scoped receipt within the first feature review round. Whole-feature correctness, repository standards, acceptance and final UX review remain open. No merge approval is asserted.
+This records the first feature source-review round and its earlier scoped cancellation receipt. Fresh correctness and repository-standards reviews are complete at 8ba; two standards findings require a scoped second source round. Acceptance and final UX review remain open. No merge approval is asserted, and the six-round count is not reset.
+
+## Fresh feature source reviews at 8ba
+
+The supervisor commissioned separate fresh reviewers without the author conversation, author conclusions or another lens's output. Both inspected exact head `8baecc12ff1a6807abeeed2dce09badef4d87abb` against actual main `38136624cbdbdad19824118c997a6fa5a5517b58`. They ran no tests/builds/hosts and did not establish rendered UX acceptance.
+
+- [Independent correctness report](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6654107006): no confirmed actionable UI-critical correctness defect. Its source conclusions and explicit provider/runtime/rendering limits remain as recorded; this is not a whole-feature execution pass.
+- [Independent standards report](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6654110541): changes requested for P2, raw provider failures escaping the new EF history read/observation/retention ports, and P3, local generic toolbar controls bypassing public Studio controls/density.
+
+Both findings were independently verified against framework §2.23.5, actual EF boundaries and Studio module UI guidance. P2 is being corrected with a named internal EF sibling exception in the existing IOException failure family, retaining original cause and localizing identifiers without a new public API or altered retry policy. P3 is being corrected with the actual exported Studio controls and their field/select recipe, preserving diagnostic-stream geometry and semantics. Source/test fixes are not yet qualified or published as a second-round candidate. No finding has been dropped.
+
+Supporting source-bound results at 8ba: Activities 771, Dispatch 403 and API 324 passed, zero skips. The manifested preflight control has six predicted old-source failures/eight hard-classification passes, then 14 corrected-source passes. Compensation has 430 passes and one new fixture assertion failure before bulk materialization; its one-line null-contract correction is untested. Scheduling did not run. Final frontend, composed 18 and independently inspected downloadable UX remain pending. The prior Runtime 3,428 pass is at 732 with unchanged default Runtime/Core source through 8ba.
 
 ## Cancellation boundary correctness
 
@@ -16,4 +27,4 @@ Limits retained from independent review: the negative log alone does not attest 
 
 ## Remaining round work
 
-Complete actual semantic-owner and physical-source integration, qualify the final whole suites/providers/long-history/access/native UX, obtain downloadable current-head visual evidence, and commission separate fresh correctness (remaining feature), repository-standards and acceptance/UX lenses without sharing their output. Record findings and additive fix/retest evidence here and on PR3850. Converge within the standing six-round cap; do not merge with incomplete UX or required checks.
+Freeze the coherent P2/P3 and fixture corrections for source round 2, run the permitted causal/affected qualification and obtain fresh independent follow-up without sharing another lens's output. Complete the remaining provider, long-history/access and native UX proof, obtain downloadable current-head visual evidence and commission independent acceptance/UX inspection. Record additive fixes, exact source and actual results here and on PR3850. Converge within the standing six-round cap; do not merge with incomplete UX or required checks.

@@ -217,6 +217,8 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         RuntimeHistoryHead head, RuntimeHistoryCapturePolicy policy, CancellationToken token)
     {
         const int sourceLimitPerKind = 100;
+        if (!RuntimeHistorySourceFacts.IsFinalProfile(policy))
+            return (null, "This capture profile is unsupported for delivery-source settlement inspection. Recorded events remain readable.");
         if (history is null)
             return (null, "This host cannot inspect the delivery-owner history responsibility covered by this run's capture policy.");
         if (!head.CapturedFromStart || head.HasGaps || head.PurgedThroughSequence > 0)
@@ -259,7 +261,15 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
                     // Parent-resume intents address the parent, while their committed origin is the child's terminal event.
                     var expectedTargetRun = kind == "ChildWorkflowSettled"
                         ? item.Metadata?.GetValueOrDefault("history.relatedWorkflowExecutionId") : run;
+                    var expectedIntentKind = kind switch
+                    {
+                        "ChildWorkflowDispatchRequested" => WorkflowDispatchLifecycle.StartChildIntentKind,
+                        "ChildWorkflowSettled" => WorkflowDispatchLifecycle.ResumeParentIntentKind,
+                        // Wire protocol identity; no dependency on the optional activity module.
+                        _ => "Elsa.Activities.Primitives.PublishStimulus"
+                    };
                     if (string.IsNullOrWhiteSpace(expectedTargetRun) || source.Intent.WorkflowExecutionId != expectedTargetRun ||
+                        source.Intent.Kind != expectedIntentKind ||
                         source.Intent.HistoryCausation is not { } cause ||
                         cause.WorkflowExecutionId != run || cause.HistoryEventId != item.HistoryEventId || cause.DeliveryId != sourceId)
                         throw new RuntimeHistoryIntegrityException(run, "delivery source disagrees with its recorded origin");

@@ -90,6 +90,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         BackgroundActivityWorkItem? backgroundResult = null;
         if (executableNode.ExecutionPlacement == ActivityExecutionPlacement.Background)
         {
+            await ActivityHistory.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
             try
             {
                 backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()

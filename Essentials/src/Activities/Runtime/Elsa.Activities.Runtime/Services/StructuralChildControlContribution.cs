@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -6,8 +7,37 @@ namespace Elsa.Activities.Runtime.Services;
 /// One exact call's inbox acceptance, applied only to the final consumer decision checkpoint. Merges the inbox
 /// into any cancellation projection already in that checkpoint instead of restoring an obsolete call status.
 /// </summary>
-internal sealed class StructuralChildControlContribution(ActivityExecutionState acceptedChild, string? completionWorkItemId = null)
+internal sealed class StructuralChildControlContribution(ActivityExecutionState acceptedChild, string? completionWorkItemId = null,
+    RuntimeChildControlTransport? incoming = null, bool newlyAccepted = false, IReadOnlyList<RuntimeChildControlTransport>? ready = null)
 {
+    internal async ValueTask<RuntimeCheckpointCommit> ApplyAsync(RuntimeCheckpointCommitter committer,
+        RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        commit = Apply(commit);
+        return await committer.AddHistorySourceFactsAsync(commit, () => Facts(commit.Checkpoint.OccurredAt), cancellationToken);
+    }
+
+    private IEnumerable<RuntimeHistorySourceFact> Facts(DateTimeOffset at)
+    {
+        if (incoming is null) yield break;
+        if (newlyAccepted)
+            yield return new(RuntimeHistorySourceFactKind.ChildControlAccepted,
+                RuntimeHistoryIdentity.CreateBinding([incoming.DispatchId, incoming.SourceOutboxItemId]), at,
+                acceptedChild.InvocationId,
+                causation: new(WorkflowExecutionId: incoming.Batch.ChildWorkflowExecutionId, DeliveryId: incoming.SourceOutboxItemId),
+                relatedWorkflowExecutionId: incoming.Batch.ChildWorkflowExecutionId,
+                relatedActivityExecutionId: incoming.ConsumerActivityExecutionId, reasonCode: "inbox-accepted");
+        // One exact prefix decision can release an arbitrary number of already-buffered ordinals. This is a
+        // bounded aggregate of actual inbox consumption, including a committed consumer fault, not callback success.
+        if (ready is { Count: > 0 })
+            yield return new(RuntimeHistorySourceFactKind.ChildControlApplied,
+                RuntimeHistoryIdentity.CreateBinding([incoming.DispatchId, ready[0].SourceOutboxItemId, ready[^1].SourceOutboxItemId]), at,
+                incoming.ConsumerActivityExecutionId,
+                causation: new(WorkflowExecutionId: incoming.Batch.ChildWorkflowExecutionId, DeliveryId: incoming.SourceOutboxItemId),
+                relatedWorkflowExecutionId: incoming.Batch.ChildWorkflowExecutionId,
+                relatedActivityExecutionId: acceptedChild.InvocationId, reasonCode: "ordered-prefix-consumed");
+    }
+
     internal RuntimeCheckpointCommit Apply(RuntimeCheckpointCommit commit)
     {
         if (acceptedChild.ChildControlInbox is not { } inbox ||

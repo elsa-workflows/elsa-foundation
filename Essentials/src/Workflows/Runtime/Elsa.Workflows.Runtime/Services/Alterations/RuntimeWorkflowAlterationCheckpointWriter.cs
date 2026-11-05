@@ -79,6 +79,12 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
             builder.PostCommitIntents.ToArray(),
             metadata);
 
+        commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            request.StagedChanges.OfType<IAlterationHistorySource>().SelectMany(change => change.HistoryFacts(occurredAt))
+                .Concat(request.TerminalJobChange.Status == WorkflowAlterationJobStatus.Succeeded && request.StagedChanges.Count > 0
+                    ? [new RuntimeHistorySourceFact(RuntimeHistorySourceFactKind.AlterationApplied, request.Job.JobId, occurredAt, reasonCode: "succeeded")]
+                    : []), cancellationToken);
+
         // The provider-facing checkpoint owns the entire transaction, including the typed terminal job change.
         // An unrestricted alteration-store callback cannot prevent side effects before provider participation.
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);

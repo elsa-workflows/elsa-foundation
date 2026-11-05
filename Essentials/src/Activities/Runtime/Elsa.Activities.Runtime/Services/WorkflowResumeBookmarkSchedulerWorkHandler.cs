@@ -245,11 +245,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityAttempt? claimedAttempt,
         CancellationToken cancellationToken)
     {
-        var historyOwnerReader = serviceProvider.GetService<IWorkflowExecutionStateStore>();
-        RuntimeHistoryCapturePolicy? historyPolicy;
-        try { historyPolicy = historyOwnerReader is null ? null : (await historyOwnerReader.FindAsync(workItem.WorkflowExecutionId, cancellationToken))?.HistoryCapturePolicy; }
-        catch (Exception exception) when (exception is not (OperationCanceledException or ArgumentException or InvalidDataException or RuntimeSchedulerWorkUnavailableException))
-        { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History source metadata is unavailable.", exception); }
+        var historyPolicy = await ActivityHistory.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
         ActivityAttempt? historyAttempt = null;
         var historyFacts = new List<RuntimeHistorySourceFact>();
         void RecordContinuation(RuntimeHistorySourceFactKind kind, IReadOnlyList<string>? outcomes = null, string? reasonCode = null)

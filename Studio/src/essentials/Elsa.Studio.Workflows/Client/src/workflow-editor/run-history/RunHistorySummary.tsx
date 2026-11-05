@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityExecutionStateSummary, WorkflowInstanceSummary } from "../../workflowTypes";
 import { listWorkflowHistoryBookmarks } from "../../api/runtimeHistory";
 import { formatDuration, humanizeTypeName } from "../../workflowFormatting";
@@ -31,7 +32,7 @@ export function RunHistorySummary({ context, instance, name, activities, activit
         <strong>{humanizeTypeName(bookmark.stimulusType) || "Recorded stimulus"}</strong><span>{(owner && labelForActivity?.(owner)) || humanizeTypeName(owner?.activityType) || "Activity"} · execution {bookmark.identity.activityExecutionId}</span>
         {age ? <span>Handle open for {age}</span> : null}{item.eligibility !== "eligible" ? <span>Eligibility: {item.eligibility}{item.eligibilityReason ? ` · ${item.eligibilityReason.replaceAll("-", " ")}` : ""}</span> : null}
       </button></li>;
-    })}</ul>{current.length > 3 ? <button type="button" aria-expanded={showAll} onClick={() => setExpanded({ run: instance.workflowExecutionId, value: !showAll })}>{showAll ? "Show fewer waiting handles" : `Show all ${current.length} loaded waiting handles`}</button> : null}</> : !terminal && waiting.size ? <p>Waiting activity observed. Expected stimuli are {bookmarks.status === "loading" ? "loading…" : "unavailable in this recorded range."}</p> : null}
+    })}</ul>{current.length > 3 ? <StudioButton type="button" aria-expanded={showAll} onClick={() => setExpanded({ run: instance.workflowExecutionId, value: !showAll })}>{showAll ? "Show fewer waiting handles" : `Show all ${current.length} loaded waiting handles`}</StudioButton> : null}</> : !terminal && waiting.size ? <p>Waiting activity observed. Expected stimuli are {bookmarks.status === "loading" ? "loading…" : "unavailable in this recorded range."}</p> : null}
     {current.length > 0 && observedAt ? <p>Waiting handles observed {historyInstant(observedAt)}.</p> : null}
     {activitiesLimited || recorded?.nextContinuationToken || recorded && !recorded.scopeComplete ? <p>Waiting summary is limited to loaded executions and handles.</p> : null}
     {bookmarks.error ? <p role="status">{bookmarks.error}</p> : null}

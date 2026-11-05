@@ -144,6 +144,32 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task Required_capture_module_removal_defers_the_actual_resume_before_consumption_or_callback()
+    {
+        var (work, clock) = await PrepareExactResume();
+        var owner = (await _exactWorkflowStates!.FindAsync("wfexec-1"))!;
+        await _exactWorkflowStates.SaveAsync(owner with { HistoryCapturePolicy = new("runtime-history-v3", 3, true, ["ActivityContinuationStarted"]) });
+        var poison = new InMemoryWorkflowSchedulerPoisonStore();
+        var activator = new StatefulResumeActivator();
+        var observer = new RecordingBookmarkObserver();
+        var original = (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!;
+        var generation = (await _bookmarkStateStore.ObserveAsync("wfexec-1", "bookmark-1"))!.Generation;
+        await _schedulerWorkQueue.EnqueueAsync(work);
+        await using var provider = NewProvider(activator, observer);
+        var result = await ExactDrainer(provider, clock, poison).DrainAsync(new("wfexec-1", maxWorkItems: 1));
+        Assert.True(result.StoppedOnDeferral);
+        Assert.Equal(0, result.DrainedCount);
+        Assert.Equal(work.Payload!.Value.GetRawText(), Assert.Single(await _schedulerWorkQueue.ListAllAsync("wfexec-1")).Payload!.Value.GetRawText());
+        Assert.Empty(activator.Requests);
+        Assert.Empty(observer.Consumed);
+        Assert.Empty(_checkpointWriter.ListCommits());
+        Assert.Equal(original, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
+        Assert.Equal(generation, (await _bookmarkStateStore.ObserveAsync("wfexec-1", "bookmark-1"))!.Generation);
+        Assert.Empty(await _incidentStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await poison.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
     public async Task Exact_test_receipt_root_lease_refusal_retains_work_then_commits_receipt_and_real_callback()
     {
         var (work, clock) = await PrepareExactResume(testReceipt: true);

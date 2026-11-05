@@ -1,4 +1,5 @@
 import { flushSync } from "react-dom";
+import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -50,6 +51,7 @@ it("renders unknown totals honestly and retains loaded bookmark rows during the 
   api.listWorkflowHistoryBookmarks.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
   render(<ActivityBookmarkHistory context={context} workflowExecutionId="run" activityExecutionId="activity-1" onSelect={vi.fn()} />);
   await vi.waitFor(() => expect(container.textContent).toContain("lifetime total unavailable")); click("Load more bookmarks");
+  await vi.waitFor(() => expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Load more bookmarks")?.disabled).toBe(true));
   expect(container.textContent).toContain("bookmark-1"); complete(bookmarkPage({ items: [] }));
   await vi.waitFor(() => expect(api.listWorkflowHistoryBookmarks.mock.calls[1][2].continuationToken).toBe("second"));
   flushSync(() => window.dispatchEvent(new Event(authSessionEndedEvent)));
@@ -157,6 +159,37 @@ it("does not claim an empty search is globally complete while another scanned ra
   render(<RunHistoryTimeline context={context} workflowExecutionId="run" filters={{ ...defaultHistoryFilters, search: "delivery-42" }} onFiltersChange={vi.fn()} onSelectEvent={vi.fn()} />);
   await vi.waitFor(() => expect(container.textContent).toContain("No matching events in this searched range"));
   expect(container.textContent).toContain("Continue searching recorded history"); expect(container.textContent).toContain("more history not loaded");
+});
+it("submits search explicitly, clears query filters and keeps live/follow toggles independent", async () => {
+  const changed = vi.fn();
+  function ControlledTimeline() {
+    const [filters, setFilters] = useState(defaultHistoryFilters);
+    return <RunHistoryTimeline context={context} workflowExecutionId="run" filters={filters}
+      onFiltersChange={next => { changed(next); setFilters(next); }} onSelectEvent={vi.fn()} />;
+  }
+  render(<ControlledTimeline />);
+  await vi.waitFor(() => expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(1));
+  const input = container.querySelector<HTMLInputElement>('[role="searchbox"][aria-label="Search recorded events"]')!;
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  bookmark-42  ");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(changed).not.toHaveBeenCalled(); expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(1);
+  click("Search");
+  await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith({ ...defaultHistoryFilters, search: "bookmark-42" }));
+  await vi.waitFor(() => expect(api.getWorkflowHistoryPage.mock.calls.at(-1)?.[2].search).toBe("bookmark-42"));
+  click("Clear filters");
+  await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith(defaultHistoryFilters));
+  const category = container.querySelector<HTMLSelectElement>('[aria-label="History category"]')!;
+  flushSync(() => { category.value = "BookmarkLifecycle"; category.dispatchEvent(new Event("change", { bubbles: true })); });
+  await vi.waitFor(() => expect(api.getWorkflowHistoryPage.mock.calls.at(-1)?.[2].category).toBe("BookmarkLifecycle"));
+  const changesBeforeToggles = changed.mock.calls.length;
+  click("Pause live updates");
+  expect([...container.querySelectorAll("button")].find(button => button.textContent === "Resume live updates")?.getAttribute("aria-pressed")).toBe("false");
+  click("Follow latest");
+  expect([...container.querySelectorAll("button")].find(button => button.textContent === "Following latest")?.getAttribute("aria-pressed")).toBe("true");
+  expect(changed).toHaveBeenCalledTimes(changesBeforeToggles);
+  expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled(); expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });
 it("discloses long open handles as waits for a stimulus and separates elapsed from active execution", async () => {
   const item = historyBookmark({ eligibility: "eligible", bookmark: { ...historyBookmark().bookmark, createdAt: "2026-11-03T09:00:00Z" } });

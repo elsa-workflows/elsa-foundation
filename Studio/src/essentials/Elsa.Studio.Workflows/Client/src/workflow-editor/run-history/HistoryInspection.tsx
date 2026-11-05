@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookmarkCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { getWorkflowHistoryBookmark, getWorkflowHistoryEvent, listWorkflowHistoryBookmarks } from "../../api/runtimeHistory";
 import type { RunHistorySelection, RuntimeHistoryBookmark, RuntimeHistoryBookmarkPage } from "../../runtimeHistoryTypes";
 import { formatDuration, humanizeTypeName } from "../../workflowFormatting";
@@ -64,9 +65,9 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
   const relatedRun = event?.metadata["history.relatedWorkflowExecutionId"] || event?.metadata["history.childWorkflowId"];
   const explanation = event ? historyEventExplanation(event) : null;
   return <section className="wf-history-inspection" aria-label="History event details">
-    <button type="button" className="wf-history-back" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> Back to activity inspection</button>
+    <StudioButton type="button" className="wf-history-back" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> Back to activity inspection</StudioButton>
     <p className="wf-history-eyebrow">Recorded event</p><h3 data-history-heading tabIndex={-1}>{event ? historyEventLabel(event) : "History event"}</h3>
-    {resource.error ? <p role="status">{resource.error} <button type="button" onClick={resource.retry}>Retry event</button></p> : null}
+    {resource.error ? <p role="status">{resource.error} <StudioButton type="button" onClick={resource.retry}>Retry event</StudioButton></p> : null}
     {event && resource.value ? <>
       <p className="wf-history-note">{historyAuthorityLabel(event.authority)}</p>
       {!isKnownHistoryEvent(event) ? <p className="wf-history-note">This event kind is unrecognized. Its safe common recorded fields remain inspectable.</p> : null}
@@ -79,10 +80,10 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
         {event.metadata["history.valuePhase"] ? <HistoryFact label="Value phase" value={event.metadata["history.valuePhase"]} /> : null}
       </dl>
       <div className="wf-history-lifecycle-links">
-        {event.activityExecutionId && onActivity ? <button type="button" onClick={() => onActivity(event.activityExecutionId!)}>Inspect owning execution →</button> : null}
-        {event.bookmarkId ? <button type="button" onClick={() => onSelect({ kind: "bookmark", id: event.bookmarkId! })}>Inspect bookmark →</button> : null}
-        {event.incidentId && onIncident ? <button type="button" onClick={() => onIncident(event.incidentId!)}>Inspect incident →</button> : null}
-        {event.causation?.historyEventId ? <button type="button" onClick={showCause} disabled={!!event.causation.workflowExecutionId && event.causation.workflowExecutionId !== workflowExecutionId && !navigate}>Inspect causal event →</button> : null}
+        {event.activityExecutionId && onActivity ? <StudioButton type="button" onClick={() => onActivity(event.activityExecutionId!)}>Inspect owning execution →</StudioButton> : null}
+        {event.bookmarkId ? <StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: event.bookmarkId! })}>Inspect bookmark →</StudioButton> : null}
+        {event.incidentId && onIncident ? <StudioButton type="button" onClick={() => onIncident(event.incidentId!)}>Inspect incident →</StudioButton> : null}
+        {event.causation?.historyEventId ? <StudioButton type="button" onClick={showCause} disabled={!!event.causation.workflowExecutionId && event.causation.workflowExecutionId !== workflowExecutionId && !navigate}>Inspect causal event →</StudioButton> : null}
       </div>
       <details className="wf-history-technical"><summary>Technical details</summary><dl className="wf-history-facts">
         <HistoryFact label="Event ID" value={event.historyEventId} /><HistoryFact label="Recorded" value={historyInstant(event.recordedAt)} />
@@ -103,15 +104,15 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
         {event.causation?.schedulerWorkItemId ? <HistoryFact label="Scheduled work" value={event.causation.schedulerWorkItemId} /> : null}
       </dl>{event.physicalCommitId ? <p className="wf-history-note">Events in one atomic group became durable together. Their local ordinal does not imply separately committed intermediate states.</p> : null}</details>
       {Object.entries(event.metadata).some(([key]) => metadataLabels[key]) ? <details><summary>Recorded metadata</summary><dl className="wf-history-facts">{Object.entries(event.metadata).filter(([key]) => metadataLabels[key]).map(([key, value]) => <HistoryFact key={key} label={metadataLabels[key]} value={value} />)}</dl></details> : null}
-      {event.metadata["history.selectedBookmarkId"] ? <p><button type="button" onClick={() => onSelect({ kind: "bookmark", id: event.metadata["history.selectedBookmarkId"] })}>Inspect selected bookmark →</button></p> : null}
-      <p><button type="button" aria-expanded={showSuccessors} onClick={() => setShowSuccessors(value => !value)}>Find causal successors in this run</button></p>
+      {event.metadata["history.selectedBookmarkId"] ? <p><StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: event.metadata["history.selectedBookmarkId"] })}>Inspect selected bookmark →</StudioButton></p> : null}
+      <p><StudioButton type="button" aria-expanded={showSuccessors} onClick={() => setShowSuccessors(value => !value)}>Find causal successors in this run</StudioButton></p>
       {showSuccessors ? <CausalSuccessors context={context} workflowExecutionId={workflowExecutionId} historyEventId={event.historyEventId} onSelect={onSelect} /> : null}
-      {relatedRun && navigate ? <p><button type="button" onClick={() => navigate(`/workflows/instances/${encodeURIComponent(relatedRun)}?view=timeline`)}>Open related run {relatedRun} →</button></p> : null}
+      {relatedRun && navigate ? <p><StudioButton type="button" onClick={() => navigate(`/workflows/instances/${encodeURIComponent(relatedRun)}?view=timeline`)}>Open related run {relatedRun} →</StudioButton></p> : null}
       {valueIds.length ? <div><p>{valueIds.length} phase-specific value reference{valueIds.length === 1 ? "" : "s"}. Values load only when requested through their existing inspection policy.</p>
-        <ul>{valueIds.map(id => <li key={id}><code>{id}</code>{event.activityExecutionId ? <button ref={element => { if (element) valueTriggers.current.set(id, element); else valueTriggers.current.delete(id); }} type="button" aria-expanded={valueTarget === id} onClick={() => setValueTarget(valueTarget === id ? null : id)}>Inspect recorded value →</button> : <span> Owning execution unavailable.</span>}</li>)}</ul>
+        <ul>{valueIds.map(id => <li key={id}><code>{id}</code>{event.activityExecutionId ? <StudioButton ref={element => { if (element) valueTriggers.current.set(id, element); else valueTriggers.current.delete(id); }} type="button" aria-expanded={valueTarget === id} onClick={() => setValueTarget(valueTarget === id ? null : id)}>Inspect recorded value →</StudioButton> : <span> Owning execution unavailable.</span>}</li>)}</ul>
       </div> : null}
       {valueTarget && valueIds.includes(valueTarget) && event.activityExecutionId ? <Suspense fallback={<p role="status">Loading recorded value view…</p>}><HistoryValueInspection key={valueTarget} context={context} workflowExecutionId={workflowExecutionId} activityExecutionId={event.activityExecutionId} evidenceId={valueTarget} onClose={() => { const id = valueTarget; setValueTarget(null); requestAnimationFrame(() => valueTriggers.current.get(id)?.focus()); }} /></Suspense> : null}
-      {event.activityExecutionId && onFocusTimeline ? <p><button type="button" onClick={() => onFocusTimeline(event.activityExecutionId!)}>Focus this execution in timeline</button></p> : null}
+      {event.activityExecutionId && onFocusTimeline ? <p><StudioButton type="button" onClick={() => onFocusTimeline(event.activityExecutionId!)}>Focus this execution in timeline</StudioButton></p> : null}
       <HistoryCoverage coverage={resource.value.coverage} readAt={resource.value.readAt} />
     </> : resource.status === "loading" ? <p role="status">Loading exact recorded event…</p> : null}
   </section>;
@@ -125,11 +126,11 @@ function CausalSuccessors({ context, workflowExecutionId, historyEventId, onSele
   const items = value?.items.filter(item => item.causation?.historyEventId === historyEventId
     && (!item.causation.workflowExecutionId || item.causation.workflowExecutionId === workflowExecutionId)) ?? [];
   return <section aria-label="Recorded causal successors"><p>Explicit causal references in this run. Other runs require their own authorized inspection.</p>
-    {history.error ? <p role="status">{history.error} <button type="button" onClick={history.refresh}>Retry causal search</button></p> : null}
+    {history.error ? <p role="status">{history.error} <StudioButton type="button" onClick={history.refresh}>Retry causal search</StudioButton></p> : null}
     {value ? <><HistoryEventList compact items={items} unloadedAfterSequence={value.next ? value.snapshotUpperSequence : undefined} onSelect={item => onSelect({ kind: "event", id: item.historyEventId })} />
       {!items.length ? <p>No recorded causal successors in this searched range.</p> : null}
-      {value.next ? <button type="button" disabled={history.loading} onClick={history.loadMore}>Continue searching causal history</button> : null}
-      {value.pending.length ? <button type="button" onClick={history.showNew}>Show new causal observations</button> : null}
+      {value.next ? <StudioButton type="button" disabled={history.loading} onClick={history.loadMore}>Continue searching causal history</StudioButton> : null}
+      {value.pending.length ? <StudioButton type="button" onClick={history.showNew}>Show new causal observations</StudioButton> : null}
       <HistoryCoverage coverage={value.page.coverage} readAt={value.page.readAt} scopeComplete={value.page.scopeComplete} scopeLimitation={value.page.scopeLimitation} />
     </> : history.loading ? <p role="status">Searching recorded causal references…</p> : null}
   </section>;
@@ -147,7 +148,7 @@ function BookmarkRecord({ item, onSelect }: { item: RuntimeHistoryBookmark; onSe
     <p>{item.priorState === "Unknown" ? "Creation metadata unavailable" : `Created ${historyInstant(bookmark.createdAt)}`}</p>
     <p>Current eligibility: {bookmarkEligibilityLabel(item.eligibility)} · observed {historyInstant(item.eligibilityObservedAt)}</p>
     {item.endedAt ? <p>{item.status} {historyInstant(item.endedAt)}</p> : null}
-    <button type="button" onClick={() => onSelect({ kind: "bookmark", id: bookmark.identity.bookmarkId })}>View lifecycle →</button>
+    <StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: bookmark.identity.bookmarkId })}>View lifecycle →</StudioButton>
   </article>;
 }
 
@@ -160,15 +161,15 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
   const bookmark = item?.bookmark;
   const age = item && bookmark && item.priorState !== "Unknown" ? formatDuration(bookmark.createdAt, item.endedAt ?? item.eligibilityObservedAt) : "";
   return <section className="wf-history-inspection" aria-label="Bookmark lifecycle" aria-busy={resource.loading}>
-    <button type="button" className="wf-history-back" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> Back to activity inspection</button>
-    <button type="button" onClick={resource.retry} disabled={resource.loading}>Refresh bookmark observation</button>
+    <StudioButton type="button" className="wf-history-back" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> Back to activity inspection</StudioButton>
+    <StudioButton type="button" onClick={resource.retry} disabled={resource.loading}>Refresh bookmark observation</StudioButton>
     {resource.loading && item ? <p className="wf-history-note">Refreshing this exact bookmark. Showing its previous recorded observation until the read completes.</p> : null}
     <p className="wf-history-eyebrow">Bookmark lifecycle</p><h3 data-history-heading tabIndex={-1}>{bookmark ? humanizeTypeName(bookmark.stimulusType) || "Recorded wait" : "Bookmark"}</h3>
-    {resource.error ? <p role="status">{resource.error} <button type="button" onClick={resource.retry}>Retry bookmark</button></p> : null}
+    {resource.error ? <p role="status">{resource.error} <StudioButton type="button" onClick={resource.retry}>Retry bookmark</StudioButton></p> : null}
     {item && bookmark && resource.value ? <>
       <p><span className="wf-history-badge" data-status={item.status}>{item.status}</span> · current eligibility: {bookmarkEligibilityLabel(item.eligibility)}</p>
       <dl className="wf-history-facts"><HistoryFact label="Bookmark ID" value={bookmark.identity.bookmarkId} />
-        <dt>Owning execution</dt><dd>{onActivity ? <button type="button" onClick={() => onActivity(bookmark.identity.activityExecutionId)}>{bookmark.identity.activityExecutionId} →</button> : bookmark.identity.activityExecutionId}</dd>
+        <dt>Owning execution</dt><dd>{onActivity ? <StudioButton type="button" onClick={() => onActivity(bookmark.identity.activityExecutionId)}>{bookmark.identity.activityExecutionId} →</StudioButton> : bookmark.identity.activityExecutionId}</dd>
         <HistoryFact label="Stimulus type" value={bookmark.stimulusType} /><HistoryFact label="Stimulus hash" value={bookmark.stimulusHash} />
         <HistoryFact label="Resume target" value={bookmark.identity.resumeTargetId} />
         <HistoryFact label="Created" value={item.priorState === "Unknown" ? "Not recorded" : historyInstant(bookmark.createdAt)} />
@@ -180,10 +181,10 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
       </dl>
       {item.eligibility === "expired" ? <p className="wf-history-note">Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.</p> : item.eligibility === "unavailable" || item.eligibility === "unknown" ? <p className="wf-history-note">Current eligibility cannot be established. A missing handle does not prove consumption.</p> : null}
       <div className="wf-history-lifecycle-links">
-        {item.createdHistoryEventId ? <button type="button" onClick={() => onSelect({ kind: "event", id: item.createdHistoryEventId! })}>Inspect creation event →</button> : <p>Creation event not captured{item.priorState === "CreationMetadata" ? "; creation metadata comes from the recorded handle" : ""}.</p>}
-        {item.endedHistoryEventId ? <button type="button" onClick={() => onSelect({ kind: "event", id: item.endedHistoryEventId! })}>Inspect {item.status.toLowerCase()} event →</button> : null}
-        {item.selectedBookmarkId && item.selectedBookmarkId !== bookmarkId ? <button type="button" onClick={() => onSelect({ kind: "bookmark", id: item.selectedBookmarkId! })}>Inspect winning bookmark →</button> : null}
-        <button type="button" onClick={() => onSelect({ kind: "event", id: item.lastHistoryEventId })}>Inspect last recorded transition →</button>
+        {item.createdHistoryEventId ? <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.createdHistoryEventId! })}>Inspect creation event →</StudioButton> : <p>Creation event not captured{item.priorState === "CreationMetadata" ? "; creation metadata comes from the recorded handle" : ""}.</p>}
+        {item.endedHistoryEventId ? <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.endedHistoryEventId! })}>Inspect {item.status.toLowerCase()} event →</StudioButton> : null}
+        {item.selectedBookmarkId && item.selectedBookmarkId !== bookmarkId ? <StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: item.selectedBookmarkId! })}>Inspect winning bookmark →</StudioButton> : null}
+        <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.lastHistoryEventId })}>Inspect last recorded transition →</StudioButton>
       </div>
       <BookmarkLifecycleEvents context={context} workflowExecutionId={workflowExecutionId} bookmarkId={bookmarkId} onSelect={onSelect} />
       <HistoryCoverage coverage={resource.value.coverage} readAt={resource.value.readAt} />
@@ -200,8 +201,8 @@ function BookmarkEventJournal({ context, workflowExecutionId, bookmarkId, onSele
   const history = useRunHistory(context, workflowExecutionId, { bookmarkId });
   return <>{history.error ? <p role="status">{history.error}</p> : null}{history.value ? <>
     <HistoryEventList compact items={history.value.items} onSelect={event => onSelect({ kind: "event", id: event.historyEventId })} />
-    {history.value.next ? <button type="button" onClick={history.loadMore} disabled={history.loading}>Load more bookmark events</button> : null}
-    {history.value.pending.length ? <button type="button" onClick={history.showNew}>Show new bookmark events</button> : null}
+    {history.value.next ? <StudioButton type="button" onClick={history.loadMore} disabled={history.loading}>Load more bookmark events</StudioButton> : null}
+    {history.value.pending.length ? <StudioButton type="button" onClick={history.showNew}>Show new bookmark events</StudioButton> : null}
   </> : null}</>;
 }
 
@@ -237,14 +238,14 @@ export function ActivityBookmarkHistory({ context, workflowExecutionId, activity
   return <section className="wf-activity-history" aria-label="Activity bookmark history" aria-busy={resource.loading}>
     <p className="wf-history-note">Bookmarks created by this execution. Historical handles remain after retirement or consumption. Eligibility is an observation, not permission to resume.</p>
     <p className="wf-history-note">Each handle has its own observation time. A bounded refresh rereads the first page and replaces older loaded pages only after that read succeeds.</p>
-    <button type="button" onClick={retryBookmarks} disabled={resource.loading}>Refresh bookmarks</button>
+    <StudioButton type="button" onClick={retryBookmarks} disabled={resource.loading}>Refresh bookmarks</StudioButton>
     {resource.loading && page ? <p className="wf-history-note">Reading bookmarks. Previously loaded observations remain visible until confirmed.</p> : null}
-    {resource.error ? <p role="status">{resource.error} <button type="button" onClick={retryBookmarks}>Retry bookmarks</button></p> : null}
+    {resource.error ? <p role="status">{resource.error} <StudioButton type="button" onClick={retryBookmarks}>Retry bookmarks</StudioButton></p> : null}
     {page ? <><p>{page.activeCount === null || page.activeCount === undefined ? `${items.filter(item => item.status === "Active").length} recorded active in loaded records` : `${page.activeCount} recorded active`}
       {" · "}{page.totalCount === null || page.totalCount === undefined ? `${items.length} loaded; lifetime total unavailable` : `${page.totalCount} recorded handles`}</p><p className="wf-history-note">Counts observed {historyInstant(page.readAt)}; loaded handles retain their individual observation times.</p>
       {items.map(item => <BookmarkRecord key={item.bookmark.identity.bookmarkId} item={item} onSelect={onSelect} />)}
       {!items.length ? <p>No bookmarks recorded in this available range.</p> : null}
-      {page.nextContinuationToken ? <button type="button" disabled={resource.loading} onClick={() => setCursor(page.nextContinuationToken!)}>Load more bookmarks</button> : null}
+      {page.nextContinuationToken ? <StudioButton type="button" disabled={resource.loading} onClick={() => setCursor(page.nextContinuationToken!)}>Load more bookmarks</StudioButton> : null}
       <HistoryCoverage coverage={page.coverage} readAt={page.readAt} scopeComplete={accumulated?.scopeComplete ?? page.scopeComplete} scopeLimitation={accumulated?.scopeLimitation ?? page.scopeLimitation} />
     </> : resource.status === "loading" ? <p role="status">Loading recorded bookmarks…</p> : null}
   </section>;

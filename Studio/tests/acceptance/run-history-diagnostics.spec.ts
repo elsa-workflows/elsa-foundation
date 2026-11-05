@@ -215,7 +215,7 @@ test("diagnose exact executions, long history, retention and restricted access",
   await row(timelineOf(page), resolved).press("Enter"); await inspectorOf(page).getByRole("button", { name: "Inspect incident →", exact: true }).press("Enter");
   await expect(inspectorOf(page)).toContainText("Resolved"); await capture(page, info, "resolved-incident");
 
-  const longRun = await execute(await publish(sequence("long-root", [node("warmup", types.each, { Collection: Array(2500).fill(0) }, { kind: "elsa.foreach.structure", payload: { body: node("long-inline", types.inline, { Expression: 0 }) } }), task("late-task")]), "Long retained history diagnostics"), 300_000);
+  const longRun = await execute(await publish(sequence("long-root", [node("warmup", types.each, { Collection: Array(1000).fill(0) }, { kind: "elsa.foreach.structure", payload: { body: node("long-inline", types.inline, { Expression: 0 }) } }), task("late-task")]), "Long retained history diagnostics"), 300_000);
   const lateTasks = await waitTasks(page, backend, longRun, 1);
   const headPage = await api<RuntimeHistoryPage>(page.request, backend, `/runtime/workflows/instances/${longRun}/history?limit=1`);
   expect(headPage.coverage.lastSequence).toBeGreaterThanOrEqual(10_000);

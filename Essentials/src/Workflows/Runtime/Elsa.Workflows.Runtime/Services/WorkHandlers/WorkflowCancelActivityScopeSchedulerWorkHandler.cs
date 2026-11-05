@@ -86,7 +86,7 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
                 metadata));
         }
 
-        return new RuntimeCheckpointCommit(
+        var commit = new RuntimeCheckpointCommit(
             $"commit:{workItem.WorkItemId}:activity-scope-cancelled:{command.ExecutionScopeId}",
             new RuntimeCheckpoint(
                 checkpointId,
@@ -115,6 +115,12 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
                 activityScopeCleanups: [plan.Cleanup]),
             PostCommitIntents: [],
             Metadata: metadata);
+
+        return await checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            plan.IncidentChanges.Select(incident => RuntimeHistoryIncidentFacts.Suppressed(incident))
+                .Append(new(RuntimeHistorySourceFactKind.ControlApplied, workItem.WorkItemId, occurredAt,
+                    outer.InvocationId, causation: new(CommandId: workItem.CommandId, SchedulerWorkItemId: workItem.WorkItemId),
+                    reasonCode: "activity-scope-cancelled")), cancellationToken);
     }
 
     private static CancelActivityScopeCommand Deserialize(RuntimeSchedulerWorkItem workItem)

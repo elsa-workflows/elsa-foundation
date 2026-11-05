@@ -18,10 +18,11 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
     [InlineData("advanced")]
     [InlineData("child")]
     [InlineData("child-corrupt")]
+    [InlineData("wrong-kind")]
     public async Task Owner_source_coverage_uses_bounded_kind_pages_and_exact_physical_sources(string scenario)
     {
         var child = scenario.StartsWith("child", StringComparison.Ordinal);
-        var corrupt = scenario is "corrupt" or "child-corrupt";
+        var corrupt = scenario is "corrupt" or "child-corrupt" or "wrong-kind";
         var nativeKind = child ? "ChildWorkflowSettled" : "StimulusPublicationCommitted";
         var source = new HistorySource
         {
@@ -84,7 +85,9 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
             if (scenario == "unavailable") throw new IOException("private-source-sentinel");
             if (scenario == "missing") return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(null);
             var targetRun = scenario == "child" ? "parent-run" : scenario == "child-corrupt" ? "foreign-parent" : "wf-1";
-            var intent = new RuntimePostCommitIntent("publish", targetRun, "test.publication", DateTimeOffset.UnixEpoch, null, null, null)
+            var kind = scenario.StartsWith("child", StringComparison.Ordinal) ? WorkflowDispatchLifecycle.ResumeParentIntentKind
+                : scenario == "wrong-kind" ? "test.unrelated" : "Elsa.Activities.Primitives.PublishStimulus";
+            var intent = new RuntimePostCommitIntent("publish", targetRun, kind, DateTimeOffset.UnixEpoch, null, null, null)
                 { HistoryCausation = new(scenario == "corrupt" ? "wrong-event" : "source-event", "wf-1", "source") };
             var status = scenario == "pending" ? RuntimePostCommitOutboxStatus.Pending : RuntimePostCommitOutboxStatus.Delivered;
             return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(new("source", intent, status,

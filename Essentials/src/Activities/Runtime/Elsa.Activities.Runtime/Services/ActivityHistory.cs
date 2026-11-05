@@ -1,3 +1,5 @@
+using System.Data.Common;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -7,7 +9,7 @@ namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>Actual callback observations carried by its existing outcome checkpoint, never an extra boundary.</summary>
 internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string activityId, string? attemptId, TimeProvider clock,
-    RuntimeHistoryCausation? cause)
+    RuntimeHistoryCausation? cause, CancellationToken cancellationToken)
 {
     private readonly List<RuntimeHistorySourceFact> _facts = [];
     private bool _started;
@@ -17,21 +19,47 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
     internal static async ValueTask<ActivityHistory?> CreateAsync(IServiceProvider services, RuntimeSchedulerWorkItem work,
         ActivityExecutionState state, TimeProvider clock, CancellationToken cancellationToken, RuntimeHistoryCausation? cause = null)
     {
-        if (services.GetService<IRuntimeHistorySourceContributor>() is null) return null;
+        var policy = await ReadPolicyAndValidateAsync(services, work.WorkflowExecutionId, cancellationToken);
+        if (policy is null) return null;
+        return new(work, state.InvocationId, state.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId,
+            clock, cause is null ? new(CommandId: work.CommandId, SchedulerWorkItemId: work.WorkItemId) : cause with { CommandId = work.CommandId, SchedulerWorkItemId = work.WorkItemId }, cancellationToken);
+    }
+
+    internal static async ValueTask<RuntimeHistoryCapturePolicy?> ReadPolicyAndValidateAsync(IServiceProvider services,
+        string workflowId, CancellationToken cancellationToken)
+    {
         try
         {
-            var native = await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(work.WorkflowExecutionId, cancellationToken);
+            // Native admission is authoritative even when the optional capture module was removed. No history
+            // query is resolved for an uncaptured run, and a required pin is checked before callback effects.
+            var nativeStore = services.GetService<IWorkflowExecutionStateStore>();
+            var native = nativeStore is null ? null : await nativeStore.FindAsync(workflowId, cancellationToken);
             if (native?.HistoryCapturePolicy is not { } policy) return null;
-            if (!RuntimeHistorySourceFacts.IsFinalProfile(policy) ||
+            if (services.GetService<IRuntimeHistorySourceContributor>() is null || !RuntimeHistorySourceFacts.IsFinalProfile(policy) ||
                 !services.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(source => source.CanCapture(policy)) ||
                 services.GetService<IRuntimeHistoryStore>() is not { } reader ||
                 services.GetRequiredService<IRuntimeCheckpointCommitStore>().CanCommitHistory(reader) != true)
-                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The callback cannot acknowledge its admitted history profile.");
-            return new(work, state.InvocationId, state.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId,
-                clock, cause is null ? new(CommandId: work.CommandId, SchedulerWorkItemId: work.WorkItemId) : cause with { CommandId = work.CommandId, SchedulerWorkItemId = work.WorkItemId });
+            {
+                if (policy.Required)
+                    throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The callback cannot acknowledge its admitted history profile.");
+                return null;
+            }
+            return policy;
         }
-        catch (Exception exception) when (exception is IOException or TimeoutException or NotSupportedException)
+        catch (Exception exception) when (IsUnavailablePolicyRead(exception))
         { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Callback history source metadata is unavailable.", exception); }
+    }
+
+    private static bool IsUnavailablePolicyRead(Exception exception)
+    {
+        if (exception is OperationCanceledException or InvalidDataException or JsonException or ArgumentException or
+            RuntimeSchedulerWorkUnavailableException or RuntimeCheckpointInconsistentDurabilityException)
+            return false;
+        if (exception is IOException or DbException or TimeoutException or NotSupportedException) return true;
+        // Native adapters keep a provider cause behind a contextual InvalidOperationException. Bare contract/scope
+        // refusals and wrapped corruption stay hard; the wrapper must not turn a read outage into acknowledged poison.
+        return exception is InvalidOperationException && exception.InnerException is { } inner && inner is not NotSupportedException &&
+            (IsUnavailablePolicyRead(inner) || inner is InvalidOperationException { InnerException: null });
     }
 
     internal static async ValueTask<T> ObserveAsync<T>(ActivityHistory? history, Func<ValueTask<T>> callback, Func<T, string> kind)
@@ -40,7 +68,7 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
         if (history is not null) history._started = true;
         T result;
         try { result = await callback(); }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (history is null || history.IsCancellationRequested) { throw; }
         catch
         {
             history?.Record(RuntimeHistorySourceFactKind.ActivityContinuationFaulted, "callback-threw");
@@ -50,6 +78,8 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
             history._returnedAt = history.Record(RuntimeHistorySourceFactKind.ActivityContinuationReturned, kind(result));
         return result;
     }
+
+    private bool IsCancellationRequested => cancellationToken.IsCancellationRequested;
 
     internal void SetAttempt(string? actualAttemptId) => _attemptId = string.IsNullOrWhiteSpace(actualAttemptId) ? null : actualAttemptId;
 

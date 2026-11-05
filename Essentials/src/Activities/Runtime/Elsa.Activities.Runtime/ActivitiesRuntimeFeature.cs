@@ -33,7 +33,8 @@ public class ActivitiesRuntimeFeature : Elsa.Events.EventsFeature
         services.AddSingleton(new RuntimeHistorySourceSupport([
             RuntimeHistorySourceFactKind.ActivityContinuationStarted, RuntimeHistorySourceFactKind.ActivityContinuationReturned,
             RuntimeHistorySourceFactKind.ActivityContinuationSuspended, RuntimeHistorySourceFactKind.ActivityContinuationCompleted,
-            RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled]));
+            RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled,
+            RuntimeHistorySourceFactKind.ChildControlAccepted, RuntimeHistorySourceFactKind.ChildControlApplied]));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();

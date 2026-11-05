@@ -57,7 +57,9 @@ public static class RuntimeCoreServiceCollectionExtensions
     private static readonly RuntimeHistorySourceSupport CoreHistorySources = new([
         RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
         RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
-        RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied]);
+        RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
+        RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.ControlApplied,
+        RuntimeHistorySourceFactKind.AlterationApplied, RuntimeHistorySourceFactKind.DurableStateRecorded]);
     /// <summary>
     /// Registers the host-agnostic workflow runtime composition root. Idempotent (all registrations use <c>TryAdd</c>),
     /// so a host may register durable-provider overrides before or after calling this. Runs drain only once

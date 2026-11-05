@@ -112,8 +112,9 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         else if (policy.Version >= 2) EmitFacts(null);
 
         if (commit.StateChanges.WorkflowExecution is { } workflow &&
-            checkpoint.Name is RuntimeCheckpointNames.WorkflowStarted or RuntimeCheckpointNames.WorkflowCompleted or RuntimeCheckpointNames.WorkflowFaulted or RuntimeCheckpointNames.WorkflowCancelled or RuntimeCheckpointNames.WorkflowSuspended)
-            Add(checkpoint.Name, RuntimeHistoryEventCategory.WorkflowLifecycle, commit.WorkflowExecutionId,
+            (checkpoint.Name is RuntimeCheckpointNames.WorkflowStarted or RuntimeCheckpointNames.WorkflowCompleted or RuntimeCheckpointNames.WorkflowFaulted or RuntimeCheckpointNames.WorkflowCancelled or RuntimeCheckpointNames.WorkflowSuspended ||
+             workflow.State.Status == WorkflowExecutionStatus.Cancelled && (commit.HistorySourceFacts ?? []).Any(fact => fact.Kind == RuntimeHistorySourceFactKind.ControlApplied && fact.ReasonCode == "workflow-cancelled")))
+            Add(workflow.State.Status == WorkflowExecutionStatus.Cancelled ? "WorkflowCancelled" : checkpoint.Name, RuntimeHistoryEventCategory.WorkflowLifecycle, commit.WorkflowExecutionId,
                 metadata: new Dictionary<string, string> { ["history.status"] = workflow.State.Status.ToString() });
 
         foreach (var change in commit.StateChanges.ActivityExecutions.OrderBy(change => change.State.ExecutionSequence).ThenBy(change => change.StateId, StringComparer.Ordinal))
@@ -121,7 +122,9 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             var a = change.State;
             if (checkpoint.Name is not (RuntimeCheckpointNames.ActivityScheduled or RuntimeCheckpointNames.ActivityStarted or
                 RuntimeCheckpointNames.ActivityAttemptClaimed or RuntimeCheckpointNames.ActivityCompleted or RuntimeCheckpointNames.IntrinsicCompleted or
-                RuntimeCheckpointNames.ActivitySuspended or RuntimeCheckpointNames.ActivityCancelled or RuntimeCheckpointNames.ActivityRecovered or RuntimeCheckpointNames.IncidentRecorded))
+                RuntimeCheckpointNames.ActivitySuspended or RuntimeCheckpointNames.ActivityCancelled or RuntimeCheckpointNames.ActivityRecovered or RuntimeCheckpointNames.IncidentRecorded) &&
+                !(checkpoint.Name == RuntimeCheckpointNames.BookmarkCreated && a.Status == ActivityExecutionStatus.Suspended &&
+                  (commit.HistorySourceFacts ?? []).Any(fact => fact.Kind == RuntimeHistorySourceFactKind.ActivityContinuationSuspended && fact.ActivityExecutionId == a.InvocationId)))
                 continue; // Re-projecting a state is not itself an activity lifecycle transition.
             string? name = a.Status switch
             {
@@ -286,6 +289,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 RuntimeHistorySourceFactKind.IncidentResolutionApplied or RuntimeHistorySourceFactKind.IncidentCreated or
                     RuntimeHistorySourceFactKind.IncidentResolved or RuntimeHistorySourceFactKind.IncidentStrategyEvaluated or RuntimeHistorySourceFactKind.IncidentProjectionReconciled or
                     RuntimeHistorySourceFactKind.IncidentSuppressed or RuntimeHistorySourceFactKind.IncidentDecisionApplied => RuntimeHistoryEventCategory.IncidentLifecycle,
+                RuntimeHistorySourceFactKind.DurableStateRecorded => RuntimeHistoryEventCategory.ValueLifecycle,
                 RuntimeHistorySourceFactKind.ChildControlAccepted or RuntimeHistorySourceFactKind.ChildControlApplied or RuntimeHistorySourceFactKind.RecoveryRequested or
                     RuntimeHistorySourceFactKind.ControlApplied or RuntimeHistorySourceFactKind.AlterationApplied or
                     RuntimeHistorySourceFactKind.CompensationRegistered or RuntimeHistorySourceFactKind.CompensationStarted or

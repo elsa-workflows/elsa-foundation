@@ -216,8 +216,14 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
 
         Assert.True(result.IsAccepted, result.Failure?.Message);
         var builder = Apply(Assert.Single(staging.StagedChanges));
+        var facts = Assert.IsAssignableFrom<IAlterationHistorySource>(Assert.Single(staging.StagedChanges)).HistoryFacts(DateTimeOffset.UnixEpoch).ToArray();
+        Assert.Equal([RuntimeHistorySourceFactKind.IncidentResolved, RuntimeHistorySourceFactKind.ActivityRetryScheduled], facts.Select(fact => fact.Kind));
+        Assert.Equal("incident", facts[0].IncidentId);
+        Assert.Equal("source", facts[1].ActivityExecutionId);
+        Assert.DoesNotContain("Delivery service restored", JsonSerializer.Serialize(facts), StringComparison.Ordinal);
         var superseded = Assert.Single(builder.ActivityExecutions, change => change.StateId == "source").State;
         var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != "source").State;
+        Assert.Equal(successor.InvocationId, facts[1].RelatedActivityExecutionId);
         Assert.Equal(ActivityExecutionStatus.Superseded, superseded.Status);
         Assert.Equal(successor.Execution.ActivityExecutionId, superseded.SupersededByActivityExecutionId);
 

@@ -109,7 +109,9 @@ internal static class ActivityCancellationCheckpointService
             ],
             Metadata: metadata) { HistorySourceFacts = historySourceFacts };
 
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        if (childControlContribution is not null)
+            commit = await childControlContribution.ApplyAsync(checkpointCommitter, commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     private static ActivityExecutionState EndOpenAttempt(ActivityExecutionState state, DateTimeOffset endedAt)

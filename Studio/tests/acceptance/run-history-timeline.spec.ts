@@ -7,9 +7,29 @@ const backend = process.env.ELSA_BACKEND_URL;
 const restartDirectory = process.env.UX_ACCEPTANCE_RESTART_DIR;
 if (process.env.UX_ACCEPTANCE_OWNED !== "1" || !backend || !restartDirectory) throw new Error("History acceptance requires the owned runner and restart supervisor.");
 
-async function capture(page: Page, info: TestInfo, name: string) {
+async function revealCaptureAnchor(anchor: Locator, block: "start" | "center" = "center") {
+  await anchor.scrollIntoViewIfNeeded();
+  await anchor.evaluate((element, alignment) => element.scrollIntoView({ block: alignment, inline: "nearest", behavior: "instant" }), block);
+}
+async function assertCaptureAnchor(anchor: Locator) {
+  await expect(anchor).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => anchor.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const inset = Math.min(4, bounds.width / 4, bounds.height / 4);
+    return [[bounds.left + inset, bounds.top + inset], [bounds.right - inset, bounds.top + inset],
+      [bounds.left + inset, bounds.bottom - inset], [bounds.right - inset, bounds.bottom - inset],
+      [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2]].every(([x, y]) => {
+      const hit = document.elementFromPoint(x, y);
+      return !!hit && (element.contains(hit) || hit.contains(element));
+    });
+  })).toBe(true);
+}
+async function capture(page: Page, info: TestInfo, name: string, anchors: Locator[] = []) {
+  await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  for (const anchor of anchors) await assertCaptureAnchor(anchor);
   const png = info.outputPath(`${name}.png`); await page.screenshot({ path: png, fullPage: true });
+  for (const anchor of anchors) await assertCaptureAnchor(anchor);
   await info.attach(`${name}.png`, { path: png, contentType: "image/png" });
   const aria = info.outputPath(`${name}.aria.yml`); writeFileSync(aria, await page.locator("body").ariaSnapshot());
   await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
@@ -109,7 +129,47 @@ test("durable run timeline across a native task resume and owned process restart
   await expect(inspector.getByRole("heading", { name: "CreateUserTask", exact: true })).toBeVisible();
   await eventRow(timeline, creation!).scrollIntoViewIfNeeded();
   await expect(eventRow(timeline, creation!)).toBeInViewport();
+  await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "linen");
   await capture(page, info, "reference");
+  const urlBeforeStyle = page.url(), rowsBeforeStyle = await recordedRows(timeline);
+  const previousStyle = await page.locator("html").getAttribute("data-workspace-style");
+  const theme = page.getByRole("button", { name: "Select theme", exact: true });
+  await theme.click();
+  const previousStyleName = (await page.locator('[aria-label="Workspace style"]').getByRole("menuitemradio", { checked: true }).innerText()).trim();
+  const minimalControlBounds: Array<{ name: string; height: number; roleHeight: number }> = [];
+  try {
+    // Use Studio's ordinary preference action, preserving the real authorized run and
+    // palette. The original reference and every later frame keep their Linen treatment.
+    await page.getByRole("menuitemradio", { name: "Minimal", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+    const search = timeline.getByRole("searchbox", { name: "Search recorded events", exact: true });
+    const submit = timeline.getByRole("button", { name: "Search", exact: true });
+    const searchField = search.locator("xpath=ancestor::label[1]");
+    const surfaces: Array<[string, Locator]> = [["Search field", searchField], ["Search surface", search.locator("..")], ["Search button", submit],
+      ...["History scope", "History detail", "History category"].map(name => [name, timeline.getByRole("combobox", { name, exact: true })] as [string, Locator]),
+      ["Refresh button", timeline.getByRole("button", { name: "Refresh run history", exact: true })],
+      ["Live button", timeline.getByRole("button", { name: "Pause live updates", exact: true })],
+      ["Follow button", timeline.getByRole("button", { name: "Follow latest", exact: true })]];
+    for (const [name, control] of surfaces) {
+      await expect(control).toBeVisible();
+      const bounds = await control.evaluate(element => ({ height: element.getBoundingClientRect().height,
+        roleHeight: Number.parseFloat(getComputedStyle(element).getPropertyValue("--studio-control-height")) }));
+      expect(bounds.roleHeight, `${name}: Minimal density is active`).toBe(36);
+      expect(bounds.height + 0.5, `${name}: rendered control honors the public role`).toBeGreaterThanOrEqual(bounds.roleHeight);
+      minimalControlBounds.push({ name, ...bounds });
+    }
+    await search.focus(); await page.keyboard.press("Tab"); await expect(submit).toBeFocused();
+    await expect(submit).toHaveCSS("outline-style", "solid"); await expect(submit).toHaveCSS("outline-width", "2px");
+    expect(page.url()).toBe(urlBeforeStyle); expect(await recordedRows(timeline)).toEqual(rowsBeforeStyle);
+    await revealCaptureAnchor(timeline.locator("form").filter({ has: search }));
+    await capture(page, info, "minimal-controls", [searchField, submit]);
+  } finally {
+    await page.keyboard.press("Escape"); await theme.click();
+    await page.getByRole("menuitemradio", { name: previousStyleName, exact: true }).click(); await page.keyboard.press("Escape");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", previousStyle!);
+  }
+  expect(page.url()).toBe(urlBeforeStyle); expect(await recordedRows(timeline)).toEqual(rowsBeforeStyle);
   await inspector.getByRole("tab", { name: "Bookmarks", exact: true }).press("Enter");
   await expect(inspector.getByText(bookmarkId, { exact: true })).toBeVisible();
   await inspector.getByRole("button", { name: "View lifecycle →", exact: true }).first().press("Enter");
@@ -175,8 +235,16 @@ test("durable run timeline across a native task resume and owned process restart
   await inspector.getByRole("tab", { name: "Journal", exact: true }).press("Enter");
   const journal = inspector.getByRole("list", { name: "Activity journal events", exact: true });
   await expect(journal).toContainText("Bookmark consumed");
+  const activityHeading = inspector.getByRole("heading", { name: "CreateUserTask", exact: true });
+  const journalTab = inspector.getByRole("tab", { name: "Journal", exact: true });
+  await expect(journalTab).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+  await revealCaptureAnchor(activityHeading, "start");
+  await expect.poll(() => activityHeading.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await capture(page, info, "activity-journal-context", [activityHeading, journalTab]);
   await eventRow(journal, consumed).scrollIntoViewIfNeeded(); await expect(eventRow(journal, consumed)).toBeInViewport();
-  await capture(page, info, "activity-journal");
+  await revealCaptureAnchor(eventRow(journal, consumed));
+  await capture(page, info, "activity-journal", [eventRow(journal, consumed)]);
   expect(payloadRequests).toEqual([]);
   await timeline.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
   await expect(eventRow(timeline, consumed)).toBeVisible();
@@ -198,8 +266,14 @@ test("durable run timeline across a native task resume and owned process restart
   await inspector.getByRole("button", { name: "Inspect causal event →", exact: true }).press("Enter");
   await expect.poll(() => new URL(page.url()).searchParams.get("historyEvent")).toBe(consumed.causation!.historyEventId);
   await expect(inspector).toContainText("Recorded source observation");
-  await inspector.getByRole("heading", { name: "Delivery received", exact: true }).scrollIntoViewIfNeeded();
-  await capture(page, info, "causal-delivery");
+  const causalHeading = inspector.getByRole("heading", { name: "Delivery received", exact: true });
+  await causalHeading.scrollIntoViewIfNeeded();
+  const causalEvent = final!.events.find(event => event.historyEventId === consumed.causation!.historyEventId);
+  expect(causalEvent, "The exact causal observation is retained in the run snapshot").toBeTruthy();
+  const causalRow = eventRow(timeline, causalEvent!);
+  if (info.project.use.viewport!.width >= 1024) await revealCaptureAnchor(causalRow);
+  else await revealCaptureAnchor(causalHeading);
+  await capture(page, info, "causal-delivery", info.project.use.viewport!.width >= 1024 ? [causalRow, causalHeading] : [causalHeading]);
   await inspector.getByRole("button", { name: "Find causal successors in this run", exact: true }).press("Enter");
   const successors = inspector.getByRole("region", { name: "Recorded causal successors", exact: true });
   await expect(eventRow(successors, consumed)).toBeVisible();
@@ -221,7 +295,10 @@ test("durable run timeline across a native task resume and owned process restart
   await expect(eventRow(timeline, consumed)).toBeFocused();
   await inspector.getByRole("tab", { name: "Data", exact: true }).press("Enter");
   await expect(inspector.getByRole("heading", { name: /^Inputs/ })).toBeVisible();
-  await inspector.getByRole("heading", { name: /^Inputs/ }).scrollIntoViewIfNeeded(); await capture(page, info, "activity-data");
+  await expect(inspector.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+  const capturedTitle = inspector.getByText(fixture.title, { exact: true }).first();
+  await expect(capturedTitle).toBeVisible(); await revealCaptureAnchor(capturedTitle);
+  await capture(page, info, "activity-data", [capturedTitle]);
   const valueEvent = final!.events.find(event => event.name === "ValueCaptured" && event.activityExecutionId === owner && event.metadata["history.valueEvidenceIds"]);
   expect(valueEvent, "The normal runtime captured a safe exact value reference").toBeTruthy();
   await eventRow(timeline, valueEvent!).press("Enter");
@@ -277,6 +354,7 @@ test("durable run timeline across a native task resume and owned process restart
   expect(page.url()).toBe(urlBeforeOffline); await capture(page, info, "reconnected-history");
   const finalUrl = new URL(page.url()); expect(finalUrl.searchParams.get("selected")).toBe(owner); expect(finalUrl.searchParams.get("returnTo")).toBe("/workflows/instances");
   const facts = info.outputPath("durable-facts.json"); writeFileSync(facts, JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, fixture, owner, bookmarkId, creation, consumed, before: before.events, after: final!.events,
+    minimalControls: { control: "Studio ThemeSwitcher workspace-style preference", previousStyle, previousStyleName, selectedStyle: "minimal", restoredStyle: previousStyle, bounds: minimalControlBounds },
     catchUp: { usedSamePreRestartToken: true, upperSequence: before.upperSequence, afterRestart: catchUpAfterRestart.items.map(event => event.historyEventId), afterResume: catchUpAfterResume.items.map(event => event.historyEventId) }, runRows, journalRows }, null, 2));
   await info.attach("durable-facts", { path: facts, contentType: "application/json" });
   expect(errors).toEqual([]);

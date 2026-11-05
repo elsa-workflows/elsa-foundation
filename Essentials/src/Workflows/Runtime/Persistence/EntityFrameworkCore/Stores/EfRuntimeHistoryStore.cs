@@ -1,9 +1,11 @@
 using System.Transactions;
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.ActivityExecutionEfSupport;
@@ -29,18 +31,20 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
     internal bool Uses(RuntimeDbContext candidate, IPersistenceAccessContextAccessor candidateAccess) =>
         ReferenceEquals(context, candidate) && ReferenceEquals(access, candidateAccess);
 
+    /// <exception cref="RuntimeHistoryEntityFrameworkPersistenceException">A provider failed; includes the original cause, scope and workflow execution.</exception>
     public async ValueTask<RuntimeHistoryHead?> FindHeadAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         var scope = Scope;
-        return await ReadConsistentlyAsync(scope, workflowExecutionId, () => HeadAsync(scope, workflowExecutionId, cancellationToken), cancellationToken);
+        return await ReadConsistentlyAsync("reading the history head", scope, workflowExecutionId, () => HeadAsync(scope, workflowExecutionId, cancellationToken), cancellationToken);
     }
 
+    /// <exception cref="RuntimeHistoryEntityFrameworkPersistenceException">A provider failed; includes the original cause, scope and workflow execution.</exception>
     public async ValueTask<RuntimeHistoryEvent?> FindEventAsync(string workflowExecutionId, string historyEventId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); ArgumentException.ThrowIfNullOrWhiteSpace(historyEventId);
         var scope = Scope;
-        return await ReadConsistentlyAsync(scope, workflowExecutionId, async () =>
+        return await ReadConsistentlyAsync("reading an exact history event", scope, workflowExecutionId, async () =>
         {
             var head = await HeadAsync(scope, workflowExecutionId, cancellationToken);
             var id = Id("event", scope, workflowExecutionId, historyEventId);
@@ -52,11 +56,12 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
         }, cancellationToken);
     }
 
+    /// <exception cref="RuntimeHistoryEntityFrameworkPersistenceException">A provider failed; includes the original cause, scope and workflow execution.</exception>
     public async ValueTask<RuntimeHistoryBookmark?> FindBookmarkAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
         var scope = Scope;
-        return await ReadConsistentlyAsync(scope, workflowExecutionId, async () =>
+        return await ReadConsistentlyAsync("reading an exact history bookmark", scope, workflowExecutionId, async () =>
         {
             var head = await HeadAsync(scope, workflowExecutionId, cancellationToken);
             var id = Id("bookmark", scope, workflowExecutionId, bookmarkId);
@@ -68,6 +73,7 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
         }, cancellationToken);
     }
 
+    /// <exception cref="RuntimeHistoryEntityFrameworkPersistenceException">A provider failed; includes the original cause, scope and workflow execution.</exception>
     public async ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -76,7 +82,7 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
             query.ActivityExecutionId, query.IncludeDescendants ? "true" : "false", query.BookmarkId,
             query.Category is { } category ? Number((int)category) : null, query.Name, query.Search]);
         var cursor = DecodeCursor(EventPurpose, query.ContinuationToken, binding);
-        return await ReadConsistentlyAsync(scope, query.WorkflowExecutionId, async () =>
+        return await ReadConsistentlyAsync("reading a history page", scope, query.WorkflowExecutionId, async () =>
         {
             var run = query.WorkflowExecutionId;
             var head = await HeadAsync(scope, run, cancellationToken);
@@ -134,6 +140,7 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
         }, cancellationToken);
     }
 
+    /// <exception cref="RuntimeHistoryEntityFrameworkPersistenceException">A provider failed; includes the original cause, scope and workflow execution.</exception>
     public async ValueTask<RuntimeHistoryBookmarkPage> ListBookmarksAsync(RuntimeHistoryBookmarkQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -142,7 +149,7 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
             query.ActivityExecutionId, query.IncludeDescendants ? "true" : "false", query.Status is { } status ? Number((int)status) : null]);
         var cursor = DecodeCursor(BookmarkPurpose, query.ContinuationToken, binding);
         if (cursor?.CatchUp == true) throw new ArgumentException("Bookmark inventory does not accept an event catch-up cursor.", nameof(query));
-        return await ReadConsistentlyAsync(scope, query.WorkflowExecutionId, async () =>
+        return await ReadConsistentlyAsync("reading a bookmark history page", scope, query.WorkflowExecutionId, async () =>
         {
             var run = query.WorkflowExecutionId;
             var head = await HeadAsync(scope, run, cancellationToken);
@@ -192,21 +199,27 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
         var row = await context.RuntimeHistoryHeads.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         return row is null ? null : Read(row, scope, run);
     }
-    private async Task<T> ReadConsistentlyAsync<T>(string scope, string run, Func<Task<T>> read, CancellationToken cancellationToken)
+    private async Task<T> ReadConsistentlyAsync<T>(string operation, string scope, string run, Func<Task<T>> read, CancellationToken cancellationToken)
     {
         if (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null)
             throw new InvalidOperationException("History inspection requires committed rows and a clean context without a caller transaction.");
-        // Hold the one run head while bounded rows are read: a concurrent purge or bookmark mutation must not
-        // combine a pre-write head with post-write projections and masquerade as corruption.
-        await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
-        // The mutation lock order is native run, then history head. Match it before taking the head read lock,
-        // including descendant queries which may consult native ancestry later in this read boundary.
-        var runId = EfWorkflowExecutionStateStore.CreateId(scope, run);
-        _ = await context.WorkflowExecutionStates.AsNoTracking().Where(x => x.Id == runId).Select(x => x.Id).SingleOrDefaultAsync(cancellationToken);
-        var result = await read();
-        await transaction.CommitAsync(cancellationToken);
-        return result;
+        try
+        {
+            // Hold the one run head while bounded rows are read: a concurrent purge or bookmark mutation must not
+            // combine a pre-write head with post-write projections and masquerade as corruption.
+            await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+            // The mutation lock order is native run, then history head. Match it before taking the head read lock,
+            // including descendant queries which may consult native ancestry later in this read boundary.
+            var runId = EfWorkflowExecutionStateStore.CreateId(scope, run);
+            _ = await context.WorkflowExecutionStates.AsNoTracking().Where(x => x.Id == runId).Select(x => x.Id).SingleOrDefaultAsync(cancellationToken);
+            var result = await read();
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new RuntimeHistoryEntityFrameworkPersistenceException(operation, scope, run, exception); }
     }
     private async Task<Dictionary<string, string?>> LoadAncestryAsync(string scope, string run, IEnumerable<string?> owners, CancellationToken cancellationToken)
     {
