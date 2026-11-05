@@ -77,3 +77,40 @@ test("saved invalid limits are revealed and read-only settings remain inspectabl
   await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toBeDisabled();
   await expect(advanced.getByRole("textbox", { name: /^Timeout/ })).toBeDisabled();
 });
+
+
+for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
+  test(`blocked publication explains corrections and focuses settings at ${width}px ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&provider=agent&publication-blocked&theme=${theme}`);
+    const editor = page.getByTestId("specialist-editor");
+    const trigger = page.locator(".ad-publication-toolbar-trigger");
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
+    const blockers = dialog.locator(".ad-publication-blockers");
+    await expect(blockers.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
+    await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(2);
+    await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(1);
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
+    await expect(dialog.getByText("specialist.manifest.model", { exact: true })).toBeHidden();
+    await page.screenshot({ path: info.outputPath("blocked.png"), fullPage: true });
+    await blockers.getByRole("button", { name: "Edit instructions", exact: true }).press("Enter");
+    const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
+    await expect(dialog).toBeHidden();
+    await expect(instructions).toBeFocused();
+    await instructions.fill("Proofread the supplied text.");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await trigger.click();
+    await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(1);
+    await blockers.getByRole("button", { name: "Choose model connection", exact: true }).click();
+    const model = editor.getByRole("combobox", { name: /^Model connection/ });
+    await expect(model).toBeFocused();
+    await model.selectOption("azure-openai|proofreader");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await trigger.click();
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
+    await expect(blockers).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath("ready.png"), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
