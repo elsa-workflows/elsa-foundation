@@ -4,6 +4,7 @@ import argparse
 import json
 import pathlib
 import secrets
+import string
 import subprocess
 import urllib.request
 
@@ -79,7 +80,8 @@ def prepare(root):
     write(root / "config" / "shells.json", {"CShells": {"Shells": {"default": {"Name": "default", "Features": features, "Configuration": {"WebRouting": {"Path": ""}}}}}})
     write(root / "catalog" / "workflows.json", [])
     if not (root / "private.env").exists():
-        password = "Fr2!" + secrets.token_urlsafe(24) + "Aa7"
+        policy_groups = (string.ascii_uppercase, string.ascii_lowercase, string.digits, "!@#%+")
+        password = ''.join(secrets.choice(group) for group in policy_groups) + secrets.token_urlsafe(24)
         key = secrets.token_urlsafe(40)
         config = {
             "ASPNETCORE_ENVIRONMENT": "Production", "DOTNET_ENVIRONMENT": "Production",

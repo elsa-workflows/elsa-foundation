@@ -13,14 +13,14 @@ process. The host acquired 69 packages from public remote feeds before the live 
 set contained 72 packages: the original remote set, the remotely added JSON reconciliation package and the
 two compatible local witnesses. The incompatible witness was refused and never became active or loaded.
 
-The final execution `01a1add35f207802a0d5739ae7d87bcf` was a persisted `PublishedRun`, `Completed` with
+The final execution `01a1addc247a7d679c8629df2e7aa408` was a persisted `PublishedRun`, `Completed` with
 zero incidents and output `proof = remote-feed-execution-passed`. It ran after the incompatibility control,
 on the same serving process used for cold boot and the live remote addition. The container is stopped;
 its owned state and database are retained locally.
 
 | Criterion | Public evidence |
 | --- | --- |
-| Pin and isolate | [Summary](evidence/summary.json), [environment](evidence/environment.json), [launch](evidence/attempt-09-launch.json), [image dependencies](evidence/host.deps.json), [production declarations](evidence/host.production.json), [initial feed configuration](evidence/initial-appsettings.json) |
+| Pin and isolate | [Summary](evidence/summary.json), [environment](evidence/environment.json), [launch](evidence/attempt-10-launch.json), [image dependencies](evidence/host.deps.json), [production declarations](evidence/host.production.json), [initial feed configuration](evidence/initial-appsettings.json) |
 | Remote acquisition and activation | [Cold inventory](evidence/cold-inventory.json), [initial readiness](evidence/readiness.json), [live remote addition](evidence/live-remote-reconcile.json), [final discovery](evidence/final-directory-witness.json) |
 | File reconciliation, publication and execution | [Authored catalog](evidence/workflow-catalog.json), [definition read](evidence/workflow-definition.json), [publication](evidence/workflow-publish.json), [execution](evidence/workflow-execute.json), [completed instance and output](evidence/workflow-instance.json) |
 | Directory coexistence | [Directory witness](evidence/directory-witness.json), [compatible witness](evidence/compatible-witness.json), [final package inventory](evidence/final-inventory.json), workflow execution after the controls |
@@ -118,3 +118,11 @@ trigger projection needed by aggregate EF publication. The default collectible l
 metadata; the owner selected HostIntegrated instead. A driver check was also corrected to observe the original
 authentication challenge rather than following its redirect to the HTML login page. These attempts are not
 reported as completed acceptance runs. No product code was changed to make them pass.
+
+## Review corrections
+
+Code Review round 1 identified an optional scanner false positive in the password-construction expression
+and a log filter that skipped values containing `=`. The generator now chooses its password-policy characters
+randomly, and log redaction includes padded base64 values. The [regression receipt](evidence/redaction-regression.json)
+records the saved-log test failing against the original source and passing after the correction. The entire
+fresh-state proof was rerun after both changes; the published receipts and fixture-source hashes are from that run.

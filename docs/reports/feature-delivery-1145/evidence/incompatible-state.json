@@ -78,8 +78,8 @@
       "packageId": "Fr2Proof.Incompatible",
       "stage": "host-version-unsatisfied",
       "message": "Package 'Fr2Proof.Incompatible@1.0.0' requires 'Elsa.Primitives [4.0.999-preview,5.0.0)', but the host provides 'Elsa.Primitives 4.0.17-preview'. A package the host declares it provides is never acquired, so the dependent is refused rather than loaded against a version it was not built for.",
-      "occurredAt": "2026-11-05T22:27:51.3872068+00:00",
-      "correlationId": "d73a394114ee48ef8fb74cea8d4cbe60"
+      "occurredAt": "2026-11-05T22:37:26.9365143+00:00",
+      "correlationId": "b370e20beffe4134bceb776d313a795f"
     }
   }
 }

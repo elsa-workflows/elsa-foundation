@@ -141,7 +141,7 @@ class Proof:
         self.save('container-current', {k: state[k] for k in ['Status', 'Running', 'Pid', 'StartedAt', 'ExitCode']})
         logs = subprocess.check_output(['docker', 'logs', self.host['name']], text=True, stderr=subprocess.STDOUT)
         for value in self.env.values():
-            if len(value) > 20 and ('=' not in value):
+            if len(value) > 20:
                 logs = logs.replace(value, '<fixture-secret>')
         (self.root / 'receipts' / 'host.log').write_text(logs)
 

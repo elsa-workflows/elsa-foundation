@@ -5,8 +5,8 @@
       "id": "wfdef_fr2_remote_delivery_1145",
       "name": "FR2 remote delivery proof",
       "description": null,
-      "createdAt": "2026-11-05T22:27:40.0154977+00:00",
-      "lastModifiedAt": "2026-11-05T22:27:40.0154977+00:00",
+      "createdAt": "2026-11-05T22:37:13.6469371+00:00",
+      "lastModifiedAt": "2026-11-05T22:37:13.6469371+00:00",
       "deletedAt": null,
       "draftId": null,
       "latestVersionId": "wfver-19eb68111ec851e33c29168f25901504bcbf4cd60aaa1a8b9019494bf25ff8b8",
@@ -24,7 +24,7 @@
       {
         "id": "wfver-19eb68111ec851e33c29168f25901504bcbf4cd60aaa1a8b9019494bf25ff8b8",
         "version": "1.0.0",
-        "createdAt": "2026-11-05T22:27:40.0612334+00:00"
+        "createdAt": "2026-11-05T22:37:13.719051+00:00"
       }
     ]
   },
