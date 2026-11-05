@@ -34,9 +34,9 @@ for (const width of [320, 768, 1024, 1440]) {
     if (width >= 768) {
       expect(Math.abs(centerY(initialCanvasTools!) - centerY(initialSave!))).toBeLessThan(1);
     }
-    if (width >= 1024) {
+    if (width > 1100) {
       expect(Math.abs(centerY(initialTitle!) - centerY(initialSave!))).toBeLessThan(1);
-    } else if (width === 768) {
+    } else if (width >= 768) {
       expect(initialTitleRow!.y + initialTitleRow!.height).toBeLessThanOrEqual(initialSave!.y);
     }
     await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");
