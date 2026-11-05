@@ -242,18 +242,22 @@ describe("secrets page", () => {
   it.each(["Test", "Revoke"])("does not toast a retired %s after hiding and showing the retained tab", async action => {
     let finish!: (value: unknown) => void;
     const work = new Promise(resolve => { finish = resolve; });
-    const postJson = vi.fn().mockReturnValueOnce(work).mockResolvedValue({ succeeded: true, code: "resolved" });
-    const { container, setVisible } = render({ postJson });
+    let revoked = false;
+    const postJson = vi.fn().mockImplementationOnce(async () => {
+      const result = await work; revoked = action === "Revoke"; return result;
+    }).mockResolvedValue({ succeeded: true, code: "resolved" });
+    const { container, setVisible } = render({ postJson, getItems: () => [paymentSecret({ status: revoked ? "Revoked" : "Active" })] });
     await waitForText(container, "Payments API");
     await clickSecretAction(container, "payments.api", action);
     await waitFor(() => postJson.mock.calls.length === 1);
     setVisible(false); setVisible(true);
     finish({ succeeded: true, code: "resolved" }); await work; await Promise.resolve();
     expect(notifications.notify).not.toHaveBeenCalled();
-    await waitFor(() => container.querySelector("button[aria-label='Actions for payments.api']") !== null);
-    await clickSecretAction(container, "payments.api", action);
+    if (action === "Revoke") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    await clickSecretAction(container, "payments.api", "Test");
     await waitFor(() => notifications.notify.mock.calls.length === 1);
-    expect(notifications.notify.mock.calls[0][0].title).toBe(action === "Test" ? "Secret test succeeded." : "Secret revoked.");
+    expect(postJson).toHaveBeenCalledTimes(2);
+    expect(notifications.notify.mock.calls[0][0].title).toBe("Secret test succeeded.");
   });
 
   it.each(["success", "failure"] as const)("reconciles an owned revoke %s after the resumed list read precedes its result", async outcome => {
@@ -268,7 +272,8 @@ describe("secrets page", () => {
     await waitFor(() => listRequests.length > before && container.querySelector("tr td") !== null);
     expect(revoked).toBe(false);
     finish();
-    await waitForText(container, outcome === "success" ? "revoked" : "Revoke refused.");
+    if (outcome === "success") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    else await waitForText(container, "Revoke refused.");
     if (outcome === "success") expect(listRequests.length).toBeGreaterThan(before + 1);
     expect(notifications.notify).not.toHaveBeenCalled();
   });
@@ -1032,6 +1037,7 @@ function openEditor(container: HTMLElement) {
 
 async function clickSecretAction(container: HTMLElement, secretName: string, action: string) {
   const menu = await openSecretMenu(container, secretName);
+  await waitFor(() => !menuItem(menu, action).disabled);
   const item = menuItem(menu, action);
   flushSync(() => item.click());
   await waitFor(() => document.body.querySelector("[role='menu']") === null);

@@ -368,12 +368,11 @@ export async function copyTextToClipboard(value: string) {
   textArea.style.position = "fixed";
   textArea.style.opacity = "0";
   document.body.appendChild(textArea);
-  textArea.select();
-  const copied = document.execCommand("copy");
-  textArea.remove();
-
-  if (!copied) {
-    throw new Error("Clipboard copy failed.");
+  try {
+    textArea.select();
+    if (!document.execCommand("copy")) throw new Error("Clipboard copy failed.");
+  } finally {
+    textArea.remove();
   }
 }
 

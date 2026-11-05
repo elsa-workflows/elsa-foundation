@@ -477,3 +477,34 @@ test("the journey keeps its strict selector, visibility wait, original click and
   await assert.rejects(new AsyncFunction("page", `let stage; ${runSource.slice(start, end)}`)(page), /wait failed/);
   assert.deepEqual(calls, []);
 });
+
+test("workflow creation waits for the pinned root catalog before submitting", async () => {
+  const start = runSource.indexOf('  stage = "workflow-create";');
+  const end = runSource.indexOf('  await page.waitForFunction(', start);
+  assert.ok(start > 0 && end > start);
+  const ready = deferred();
+  const waitingForRoot = deferred();
+  const calls = [];
+  const createDialog = {
+    getByLabel: () => ({ fill: async () => {} }),
+    getByRole(role, options) {
+      calls.push([role, options]);
+      return { click: async () => {
+        if (role === "radio") { waitingForRoot.resolve(); await ready.promise; calls.push("root-ready"); }
+        else calls.push("submitted");
+      } };
+    }
+  };
+  const page = {
+    locator: () => ({ waitFor: async () => {}, click: async () => {} }),
+    getByRole: () => createDialog
+  };
+  const pending = new AsyncFunction("page", "workflowName", `let stage; ${runSource.slice(start, end)}`)(page, "Owned workflow");
+  await Promise.race([waitingForRoot.promise, pending]);
+  assert.deepEqual(calls, [["radio", { name: "Flowchart", exact: true }]]);
+  ready.resolve(); await pending;
+  assert.deepEqual(calls, [
+    ["radio", { name: "Flowchart", exact: true }], "root-ready",
+    ["button", { name: "Create", exact: true }], "submitted"
+  ]);
+});

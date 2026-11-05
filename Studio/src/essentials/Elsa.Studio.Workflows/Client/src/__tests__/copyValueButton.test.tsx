@@ -8,6 +8,7 @@ let root: Root;
 let container: HTMLDivElement;
 const onCopied = vi.fn(), onCopyFailed = vi.fn();
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+const execCommandDescriptor = Object.getOwnPropertyDescriptor(document, "execCommand");
 beforeEach(() => {
   onCopied.mockClear(); onCopyFailed.mockClear();
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
@@ -16,6 +17,8 @@ afterEach(() => {
   flushSync(() => root.unmount()); container.remove();
   if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
   else Reflect.deleteProperty(navigator, "clipboard");
+  if (execCommandDescriptor) Object.defineProperty(document, "execCommand", execCommandDescriptor);
+  else Reflect.deleteProperty(document, "execCommand");
 });
 function render(value = "first", scope: object = {}) {
   flushSync(() => root.render(<CopyValueButton value={value} scope={scope} ariaLabel="Copy identifier" copiedLabel="identifier" onCopied={onCopied} onCopyFailed={onCopyFailed} />));
@@ -37,13 +40,17 @@ it.each(["disposal", "value replacement", "scope replacement"])("suppresses dela
   expect(onCopyFailed).not.toHaveBeenCalled();
 });
 
-it("keeps current-copy failure and successful retry callbacks", async () => {
+it.each(["absent", "throws", "refuses"] as const)("cleans the %s fallback on current-copy failure and permits a successful retry", async fallback => {
+  const legacy = fallback === "absent" ? undefined : vi.fn(() => { if (fallback === "throws") throw new Error("Clipboard denied"); return false; });
+  Object.defineProperty(document, "execCommand", { configurable: true, value: legacy });
   const writeText = vi.fn().mockRejectedValueOnce(new Error("Clipboard unavailable")).mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
   render(); copy();
   await vi.waitFor(() => expect(onCopyFailed).toHaveBeenCalledWith("identifier"));
   expect(onCopied).not.toHaveBeenCalled();
+  expect(document.querySelectorAll("textarea")).toHaveLength(0);
   copy();
   await vi.waitFor(() => expect(onCopied).toHaveBeenCalledWith("identifier"));
   expect(onCopied).toHaveBeenCalledTimes(1);
+  expect(document.querySelectorAll("textarea")).toHaveLength(0);
 });

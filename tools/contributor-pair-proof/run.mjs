@@ -458,6 +458,10 @@ async function runBrowserJourney() {
   await createButton.click();
   const createDialog = page.getByRole("dialog", { name: "Create Workflow" });
   await createDialog.getByLabel("Display name", { exact: true }).fill(workflowName);
+  // The pinned Studio can enable Create before its root catalog finishes loading.
+  // Clicking the default root waits for the real radio to become enabled; check()
+  // can return early when that disabled radio is already visually checked.
+  await createDialog.getByRole("radio", { name: "Flowchart", exact: true }).click();
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
   await page.waitForFunction(() => new URL(window.location.href).searchParams.has("definition"));
   const definitionId = await page.evaluate(() => new URL(window.location.href).searchParams.get("definition"));

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Inbox, LayoutList, Menu, Move, PanelLeftClose, PanelLeftOpen, Trash2, X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
@@ -8,8 +8,10 @@ import { WorkflowFolderDeletionDialog } from "./WorkflowFolderDeletionDialog";
 import { notifySuccess, useNotificationGuard } from "./notifications";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
-import { MoveWorkflowFolderDialog, RenameWorkflowFolderDialog } from "./WorkflowFolderMutationDialogs";
 import { useWorkflowFolderTree, workflowFolderRootKey, workflowFolderTreeKey } from "./useWorkflowFolderTree";
+
+const RenameWorkflowFolderDialog = lazy(() => import("./WorkflowFolderMutationDialogs").then(module => ({ default: module.RenameWorkflowFolderDialog })));
+const MoveWorkflowFolderDialog = lazy(() => import("./WorkflowFolderMutationDialogs").then(module => ({ default: module.MoveWorkflowFolderDialog })));
 
 export type WorkflowFolderSelection = "all" | "unfiled" | { id: string };
 
@@ -304,6 +306,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         {folderActions}
       </div> : null}
     </FolderDrawer> : null}
+    <Suspense fallback={<p role="status">Loading folder actions…</p>}>
     {available && mutationDialog === "rename" && selectedFolder ? <RenameWorkflowFolderDialog
       context={context}
       folder={selectedFolder}
@@ -324,6 +327,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         if (canNotify()) notifySuccess("Folder moved");
       }}
     /> : null}
+    </Suspense>
     {available && mutationDialog === "delete" && selectedFolder ? <WorkflowFolderDeletionDialog
       key={`${context.baseUrl}:${selectedFolder.id}`}
       context={context}
