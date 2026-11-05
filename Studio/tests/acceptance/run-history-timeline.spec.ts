@@ -218,12 +218,13 @@ test("durable run timeline across a native task resume and owned process restart
   const previousStyle = await page.locator("html").getAttribute("data-workspace-style");
   const theme = page.getByRole("button", { name: "Select theme", exact: true });
   await theme.click();
-  const previousStyleName = (await page.locator('[aria-label="Workspace style"]').getByRole("menuitemradio", { checked: true }).innerText()).trim();
+  const workspaceStyle = page.getByRole("group", { name: "Workspace style", exact: true });
+  const previousStyleName = (await workspaceStyle.getByRole("menuitemradio", { checked: true }).innerText()).trim();
   const minimalControlBounds: Array<{ name: string; height: number; roleHeight: number }> = [];
   try {
     // Use Studio's ordinary preference action, preserving the real authorized run and
     // palette. The original reference and every later frame keep their Linen treatment.
-    await page.getByRole("menuitemradio", { name: "Minimal", exact: true }).click();
+    await workspaceStyle.getByRole("menuitemradio", { name: "Minimal", exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
     const search = timeline.getByRole("searchbox", { name: "Search recorded events", exact: true });
@@ -250,7 +251,7 @@ test("durable run timeline across a native task resume and owned process restart
     await capture(page, info, "minimal-controls", [searchField, submit]);
   } finally {
     await page.keyboard.press("Escape"); await theme.click();
-    await page.getByRole("menuitemradio", { name: previousStyleName, exact: true }).click(); await page.keyboard.press("Escape");
+    await workspaceStyle.getByRole("menuitemradio", { name: previousStyleName, exact: true }).click(); await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("data-workspace-style", previousStyle!);
   }
   expect(page.url()).toBe(urlBeforeStyle); expect(await recordedRows(timeline)).toEqual(rowsBeforeStyle);

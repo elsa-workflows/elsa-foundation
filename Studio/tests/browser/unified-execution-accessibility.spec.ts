@@ -45,6 +45,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);
     await expect(source).toHaveAccessibleName(/Selected/);
     await source.press(" ");
+    await showRunData(page, host);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     if (!narrowInstance) await expect(source).toBeFocused();
