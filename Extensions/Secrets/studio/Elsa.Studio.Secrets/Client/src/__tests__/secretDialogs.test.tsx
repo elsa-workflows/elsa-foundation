@@ -119,6 +119,18 @@ describe("entered secret visibility", () => {
 });
 
 describe("Create dialog regression contract", () => {
+  it("preserves technical name casing on blur and submit while trimming whitespace", () => {
+    const { container, onSave } = renderDialog("create");
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    change(name, " DbConnectionString ");
+    flushSync(() => name.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(name.value).toBe("DbConnectionString");
+    change(fieldControl<HTMLInputElement>(container, "Value"), "new-secret-value");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
+  });
+
   it("associates compact name validation and guidance with the input and clears the error after recovery", () => {
     const { container } = renderDialog("create");
     const name = fieldControl<HTMLInputElement>(container, "Technical name");
@@ -127,7 +139,7 @@ describe("Create dialog regression contract", () => {
     expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Use letters, numbers, dot, dash, underscore, or colon.");
     change(name, "valid.name");
     expect(name.hasAttribute("aria-invalid")).toBe(false);
-    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toContain("Trimmed and lowercased");
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toContain("Casing is preserved; names are matched case-insensitively.");
   });
 
   it("disables field editing while pending and restores the draft after a failed save", async () => {
@@ -136,14 +148,17 @@ describe("Create dialog regression contract", () => {
     onSave.mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectSave = reject; }));
     const name = fieldControl<HTMLInputElement>(container, "Technical name");
     const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(name, " DbConnectionString ");
     change(value, "demonstration-value");
     flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("true");
     expect(name.disabled).toBe(true);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
     expect(value.disabled).toBe(true);
     rejectSave(new Error("Demonstration failure"));
     await waitFor(() => expect(name.disabled).toBe(false));
     expect(value.value).toBe("demonstration-value");
+    expect(name.value).toBe(" DbConnectionString ");
     expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("false");
   });
 
@@ -269,11 +284,12 @@ describe("Create dialog regression contract", () => {
 
     const scopeHint = [...dialog.querySelectorAll<HTMLParagraphElement>("p")].filter(paragraph => paragraph.textContent?.trim() === SECRET_SCOPE_MATCHING_HINT);
     expect(scopeHint).toHaveLength(1);
-    expect(body.contains(scopeHint[0])).toBe(true);
+    expect(body.contains(scopeHint[0])).toBe(false);
     const scopeSelect = fieldControl<HTMLSelectElement>(dialog, "Scope");
     const scopeDescriptionIds = scopeSelect.getAttribute("aria-describedby")!.split(/\s+/);
-    expect(scopeDescriptionIds).toHaveLength(1);
-    expect(document.getElementById(scopeDescriptionIds[0])?.contains(scopeHint[0])).toBe(true);
+    expect(scopeDescriptionIds).toHaveLength(2);
+    expect(scopeDescriptionIds).toContain(scopeHint[0].id);
+    expect(document.getElementById(scopeDescriptionIds.find(id => id !== scopeHint[0].id)!)).not.toBeNull();
 
     change(name, "authored.name");
     change(value, "authored-source");
@@ -384,7 +400,7 @@ describe("Create dialog regression contract", () => {
     flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     expect(onSave).toHaveBeenCalledWith({
-      name: "payments.api",
+      name: "PAYMENTS.Api",
       displayName: "Payments API",
       description: "API credential",
       typeName: "text",

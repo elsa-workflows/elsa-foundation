@@ -4,9 +4,9 @@ import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import { AdvancedSection, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 import { SecretFormField } from "./SecretFormField";
-import { SecretScopePicker } from "./SecretScopePicker";
+import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
 
-const technicalNamePattern = /^[a-z0-9._:-]+$/;
+const technicalNamePattern = /^[a-zA-Z0-9._:-]+$/;
 
 export function CreateSecretDialog({
   descriptors,
@@ -39,8 +39,10 @@ export function CreateSecretDialog({
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
-  const normalizedName = normalizeTechnicalName(name);
-  const nameInvalid = normalizedName.length > 0 && !technicalNamePattern.test(normalizedName);
+  const descriptionInputId = useId();
+  const scopeMatchingHintId = useId();
+  const trimmedName = name.trim();
+  const nameInvalid = trimmedName.length > 0 && !technicalNamePattern.test(trimmedName);
   const selectedType = descriptors.types.find(type => type.name === typeName);
   const supportedStores = useMemo(() => storesForType(descriptors, typeName), [descriptors, typeName]);
   const selectedStore = descriptors.stores.find(store => store.name === storeName);
@@ -53,7 +55,7 @@ export function CreateSecretDialog({
     storeName.length > 0 && storeName !== defaultStoreName
   ].filter(Boolean).length;
   const usesConfigurationKey = storeName === "configuration";
-  const canSubmit = normalizedName.length > 0 && !nameInvalid && typeName.length > 0 && storeName.length > 0 && (usesConfigurationKey ? configurationKey.trim().length > 0 : value.length > 0);
+  const canSubmit = trimmedName.length > 0 && !nameInvalid && typeName.length > 0 && storeName.length > 0 && (usesConfigurationKey ? configurationKey.trim().length > 0 : value.length > 0);
   useDialogFocus(dialogRef, submitting ? null : onCancel);
 
   useEffect(() => {
@@ -67,8 +69,8 @@ export function CreateSecretDialog({
     setError("");
     try {
       await onSave({
-        name: normalizedName,
-        displayName: displayName.trim() || normalizedName,
+        name: trimmedName,
+        displayName: displayName.trim() || trimmedName,
         description: description.trim() || undefined,
         typeName,
         storeName,
@@ -105,9 +107,9 @@ export function CreateSecretDialog({
             {error ? <p ref={errorRef} className="secrets-alert" role="alert" tabIndex={0}>{error}</p> : null}
             <fieldset className="secrets-create-fields" disabled={submitting}>
               <SecretFormField label="Technical name" value={name} disabled={submitting}
-                hint="Trimmed and lowercased. Use letters, numbers, dot, dash, underscore, or colon."
+                hint="Casing is preserved; names are matched case-insensitively. Use letters, numbers, dot, dash, underscore, or colon."
                 error={nameInvalid ? "Use letters, numbers, dot, dash, underscore, or colon." : undefined}>
-                {attributes => <input {...attributes} value={name} placeholder=" " autoComplete="off" onChange={event => setName(event.target.value)} onBlur={() => setName(normalizedName)} />}
+                {attributes => <input {...attributes} value={name} placeholder=" " autoComplete="off" onChange={event => setName(event.target.value)} onBlur={() => setName(trimmedName)} />}
               </SecretFormField>
               <SecretFormField label="Type" value={typeName} raised disabled={submitting}>
                 {attributes => <select {...attributes} value={typeName} onChange={event => changeType(event.target.value)}>{descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}</select>}
@@ -120,10 +122,11 @@ export function CreateSecretDialog({
               <SecretFormField label="Expires" value={expiresAt} raised disabled={submitting}>
                 {attributes => <input {...attributes} type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} />}
               </SecretFormField>
+              <ScopeMatchingHint id={scopeMatchingHintId} />
               <AdvancedSection label="More options" setCount={configuredOptionalCount} allowCollapseWhenSet forceOpen={!storeName || scopeCatalogError}>
                 <div className="secrets-create-options">
                   <CompactTextField label="Display name" value={displayName} onChange={setDisplayName} disabled={submitting} />
-                  <SecretFormField label="Description" value={description} raised disabled={submitting}>
+                  <SecretFormField label="Description" controlId={descriptionInputId} value={description} raised disabled={submitting}>
                     {attributes => <textarea {...attributes} value={description} onChange={event => setDescription(event.target.value)} rows={3} />}
                   </SecretFormField>
                   <CompactTextField label="Tags" value={tags} onChange={setTags} hint="Separate tags with commas." disabled={submitting} />
@@ -137,6 +140,7 @@ export function CreateSecretDialog({
                     error={scopeCatalogError}
                     onChange={setScope}
                     onRetry={onRetryScopeCatalog}
+                    externalMatchingHintId={scopeMatchingHintId}
                     compact
                     disabled={submitting}
                   />
@@ -299,10 +303,6 @@ function storesForType(descriptors: SecretDescriptorsResponse, typeName: string)
 
 function defaultStoreNameForType(descriptors: SecretDescriptorsResponse, typeName: string) {
   return storesForType(descriptors, typeName)[0]?.name ?? descriptors.stores[0]?.name ?? "encrypted";
-}
-
-function normalizeTechnicalName(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function parseTags(value: string) {
