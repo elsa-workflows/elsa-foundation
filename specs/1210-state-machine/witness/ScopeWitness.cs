@@ -69,10 +69,11 @@ internal static class ScopeWitness
         return receipts.Count == 6 && receipts.All(item => item.ObservedExpectedResult);
     }
 
-    private static async Task<ProcessReceipt> ChildAsync(string directory, string scenario, int generation, bool expectedSuccess)
+    internal static async Task<ProcessReceipt> ChildAsync(string directory, string scenario, int generation, bool expectedSuccess,
+        string command = "scope-generation", string? negativeDiagnostic = null)
     {
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var arg in new[] { Assembly.GetExecutingAssembly().Location, "scope-generation", directory, scenario, generation.ToString(System.Globalization.CultureInfo.InvariantCulture) })
+        foreach (var arg in new[] { Assembly.GetExecutingAssembly().Location, command, directory, scenario, generation.ToString(System.Globalization.CultureInfo.InvariantCulture) })
             start.ArgumentList.Add(arg);
         var outputPath = Path.Join(directory, $"{scenario}-g{generation}.stdout.log");
         var errorPath = Path.Join(directory, $"{scenario}-g{generation}.stderr.log");
@@ -97,7 +98,7 @@ internal static class ScopeWitness
         await errorFile.FlushAsync();
         using var errorReader = new StreamReader(new FileStream(errorPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
         var error = await errorReader.ReadToEndAsync();
-        var matches = !timedOut && (expectedSuccess ? child.ExitCode == 0 : child.ExitCode != 0 && error.Contains(NegativeDiagnostic, StringComparison.Ordinal));
+        var matches = !timedOut && (expectedSuccess ? child.ExitCode == 0 : child.ExitCode != 0 && error.Contains(negativeDiagnostic ?? NegativeDiagnostic, StringComparison.Ordinal));
         var receipt = new ProcessReceipt(scenario, generation, child.Id, child.ExitCode, expectedSuccess, matches, timedOut);
         await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.process.json"), receipt);
         return receipt;

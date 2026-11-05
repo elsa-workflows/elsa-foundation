@@ -39,7 +39,10 @@ internal static partial class Program
         {
             if (args.Length == 0) throw new ArgumentException("Use run, scope-run or a generation command with a new owned output directory.");
             if (args[0] == "scope-run") return await ScopeWitness.RunAsync(Path.GetFullPath(args[1])) ? 0 : 1;
+            if (args[0] == "integration-run") return await CauseWitness.RunIntegrationAsync(Path.GetFullPath(args[1])) ? 0 : 1;
+            if (args[0] == "cause-run") return await CauseWitness.RunAsync(Path.GetFullPath(args[1])) ? 0 : 1;
             if (args[0] == "scope-generation") await ScopeWitness.GenerationAsync(Path.GetFullPath(args[1]), args[2], int.Parse(args[3]));
+            else if (args[0] == "cause-generation") await CauseWitness.GenerationAsync(Path.GetFullPath(args[1]), args[2], int.Parse(args[3]));
             else if (args[0] == "run") return await RunAsync(Path.GetFullPath(args[1])) ? 0 : 1;
             else if (args[0] == "generation") await GenerationAsync(Path.GetFullPath(args[1]), args[2], int.Parse(args[3]), args.ElementAtOrDefault(4));
             else throw new ArgumentException("Unknown command.");
