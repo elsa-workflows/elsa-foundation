@@ -43,6 +43,7 @@
     <Project Path="Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj" />
     <Project Path="Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/tests/Workflows/" />
   <Folder Name="/Extensions/Agent/tests/Workflows/Runtime/">
     <Project Path="Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj" />
   </Folder>
@@ -181,6 +182,13 @@
   <Folder Name="/tools/versioning/">
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
     <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Jobs/" />
+  <Folder Name="/Extensions/Jobs/src/">
+    <Project Path="Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Jobs/tests/">
+    <Project Path="Extensions/Jobs/tests/Tests/Elsa.Jobs.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Rules/" />
   <Folder Name="/Extensions/Rules/src/">
@@ -597,6 +605,7 @@
   <Folder Name="/Essentials/tests/Connections/">
     <Project Path="Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Connections/Persistence/" />
   <Folder Name="/Essentials/tests/Connections/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
