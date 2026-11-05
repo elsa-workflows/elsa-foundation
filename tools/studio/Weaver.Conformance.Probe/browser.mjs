@@ -1285,8 +1285,16 @@ async function incompatibleModule() {
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
   await expect(page.locator(".topbar h1")).toHaveText("Home");
   await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
+  const backendReference = new URL(page.url()).searchParams.get("backend");
+  need(backendReference, "The prepared backend must be explicit in native Studio resource URLs.");
+  const workflowDestination = new URL("/workflows/definitions", studio);
+  workflowDestination.searchParams.set("backend", backendReference);
   await navigateToWorkflows();
-  await expect(page.locator(".topbar h1")).toContainText("Workflow");
+  await expect(page).toHaveURL(workflowDestination.toString());
+  const workflowsPage = page.getByRole("main");
+  await expect(workflowsPage.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible();
+  await expect(workflowsPage.getByRole("navigation", { name: "Workflows views", exact: true })
+    .getByRole("link", { name: "Definitions", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("main")).not.toContainText("No Studio route is registered");
   await page.getByRole("button", { name: /^Weaver/ }).click();
   await expect(dock().getByTestId("weaver-provider-status")).toBeVisible();
@@ -2084,7 +2092,7 @@ async function workflowVersionHistory() {
   const definitionBefore = await owner("definition-before", wf.definitionPath);
   await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   await expect(dock()).toBeVisible();
-  await nativeEnter("properties-tab", page.getByRole("tab", { name: "Properties", exact: true }), "Properties");
+  await nativeEnter("versions-tab", page.getByRole("tab", { name: "Versions", exact: true }), "Versions");
   const select = page.getByRole("button", { name: "Select version " + version.version, exact: true });
   await expect(select).toBeVisible();
   await nativeEnter("select-version", select, "Select version");

@@ -1,3 +1,5 @@
+import { URL } from "node:url";
+
 /** Compare parsed URLs, ignoring only query-key order; preserve each key's value sequence. */
 export function hasExactUrlMultimap(actual, expected) {
   let left, right;

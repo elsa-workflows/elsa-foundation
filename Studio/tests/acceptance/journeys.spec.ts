@@ -32,15 +32,40 @@ async function signIn(page: Page) {
 
 const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
+const designerDefinitions = new WeakMap<Page, string[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 
-test.afterEach(async ({ page }) => {
-  // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
-  for (const creation of createdWorkflows.get(page) ?? []) {
-    const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
-    expect(removed.ok()).toBe(true);
+test.afterEach(async ({ page, request }, info) => {
+  // The request fixture and teardown budget are independent of a timed-out page journey.
+  const designerIds = designerDefinitions.get(page) ?? [];
+  const base = process.env.ELSA_WORKBENCH_URL!;
+  const receipts: Array<{ id: string; status?: number; error?: string }> = [];
+  if (designerIds.length) {
+    try {
+      const login = await request.post(`${base}/_elsa/identity/login`, {
+        data: { username: "admin", password: "Password123!" }, timeout: 5_000
+      });
+      if (!login.ok()) receipts.push({ id: "cleanup-login", status: login.status() });
+    } catch {
+      receipts.push({ id: "cleanup-login", error: "request-failed" });
+    }
   }
+  const owned: Array<{ id: string; url: string; headers: Record<string, string> }> = [
+    ...(createdWorkflows.get(page) ?? []).map(item => ({ ...item, headers: { Authorization: item.authorization } })),
+    ...designerIds.map(id => ({ id, url: `${base}/design/workflows/definitions`, headers: {} }))
+  ];
+  // Attempt every exact owned ID; one error must not prevent the other cleanup requests.
+  await Promise.all(owned.map(async item => {
+    try {
+      const removed = await request.delete(`${item.url}/${encodeURIComponent(item.id)}`, { headers: item.headers, timeout: 5_000 });
+      receipts.push({ id: item.id, status: removed.status() });
+    } catch {
+      receipts.push({ id: item.id, error: "request-failed" });
+    }
+  }));
+  await info.attach("owned-definition-cleanup", { body: JSON.stringify({ ownedIds: owned.map(item => item.id), receipts }), contentType: "application/json" });
+  expect(receipts.filter(item => item.error || !item.status || item.status < 200 || item.status >= 300), "Every owned definition cleanup and login succeeds").toEqual([]);
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
@@ -52,6 +77,7 @@ test.beforeEach(async ({ page }, info) => {
     localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
   }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
+  designerDefinitions.set(page, []);
   const errors: string[] = [];
   browserErrors.set(page, errors);
   page.on("pageerror", error => errors.push(error.message));
@@ -63,7 +89,17 @@ test.beforeEach(async ({ page }, info) => {
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
     await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
   }
-  await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
+  const main = page.getByRole("main");
+  await expect(page).toHaveURL(url => url.pathname === "/workflows/definitions");
+  const empty = main.getByRole("heading", { name: "No active workflow definitions in All workflows", exact: true });
+  const populated = main.getByRole("table", { name: "Workflow definitions", exact: true });
+  await expect(empty.or(populated)).toBeVisible();
+  if (await populated.isVisible()) {
+    await expect(populated).toHaveAttribute("aria-busy", "false");
+    expect(await populated.getByRole("row").count(), "Populated readiness includes a real data row").toBeGreaterThan(1);
+  }
+  // This first journey in each serial project still owns the strict empty-store fixture proof.
+  if (info.title === "user tasks inbox and response") await expect(empty).toBeVisible();
   await capture(page, info, "reference");
 });
 
@@ -599,6 +635,54 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await page.keyboard.press("Escape");
 });
 
+test("publication blockers explain how to correct agent settings", async ({ page }, info) => {
+  await page.goto("/agents");
+  await page.getByRole("button", { name: "New agent", exact: true }).click();
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Publication guidance ${info.project.name} ${Date.now()}`);
+  await page.getByRole("textbox", { name: /^Purpose/ }).fill("Verify publication guidance without calling a model.");
+  await page.getByRole("button", { name: "Create and edit", exact: true }).click();
+  const editor = page.getByTestId("specialist-editor");
+  const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
+  await instructions.fill("");
+  await instructions.press("Tab");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+  const publish = page.locator(".ad-publication-toolbar-trigger");
+  await publish.click();
+  const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
+  const blockers = dialog.locator(".ad-publication-blockers");
+  await expect(blockers.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
+  await expect(blockers.getByText("Agent instructions are required.", { exact: true })).toBeVisible();
+  await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
+  await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(1);
+  await expect(blockers.getByRole("button", { name: "Choose model connection", exact: true })).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
+  await expect(dialog.getByText("Review the provider documentation for this diagnostic code.", { exact: true })).toHaveCount(0);
+  await capture(page, info, "blocked");
+  await blockers.getByRole("button", { name: "Edit instructions", exact: true }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(instructions).toBeFocused();
+  await capture(page, info, "instructions-focused");
+  await instructions.fill("Proofread the supplied text and return concise suggestions.");
+  await instructions.press("Tab");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+  await publish.click();
+  await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
+  await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(0);
+  await capture(page, info, "model-blocked");
+  await blockers.getByRole("button", { name: "Choose model connection", exact: true }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(editor.getByRole("combobox", { name: /^Model connection/ })).toBeFocused();
+  await expect(editor.getByText(/There are no model connections you can use yet/)).toBeVisible();
+  await capture(page, info, "model-focused");
+  await publish.click();
+  await blockers.getByRole("button", { name: "Check again", exact: true }).click();
+  await expect(blockers.getByRole("button", { name: "Choose model connection", exact: true })).toBeVisible();
+  await blockers.getByRole("button", { name: "Return to editor", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(publish).toBeFocused();
+  await capture(page, info, "completed");
+});
+
 test("save template toast", async ({ page }, info) => {
   await templateToastJourney(page, info, capture);
 });
@@ -706,5 +790,5 @@ test("workflow template metadata defaults", async ({ page }, info) => {
 });
 
 test("executable designer parity", async ({ page }, info) => {
-  await executableDesignerJourney(page, info, capture);
+  await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
 });
