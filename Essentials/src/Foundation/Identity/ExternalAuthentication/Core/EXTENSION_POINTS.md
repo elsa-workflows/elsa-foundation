@@ -29,7 +29,7 @@ enabled effective path requires a proved remaining path or local recovery; confi
 long-lived provider links. Source/shadowing comes from the registry, not a writable source field. Secrets are
 `SecretReference` objects. Admission/default role IDs reference existing Elsa roles. Integrator policies may assign saved roles at initial
 provisioning; later sign-ins use saved memberships. Recurring external group-to-role mappings are excluded
-under the owner decision in spec 1205; upstream role names confer no automatic authority.
+under the owner decision in spec 1212; upstream role names confer no automatic authority.
 
 `ExternalAdmissionContext` is server-only input. Client preview/login requests carry a flow handle; the validating
 protocol adapter supplies issuer, subject and claims after verification. An assessment is prospective: it creates

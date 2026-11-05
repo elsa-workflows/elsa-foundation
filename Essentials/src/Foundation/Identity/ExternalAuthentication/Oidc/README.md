@@ -4,7 +4,7 @@ Optional `FoundationIdentityExternalOidc` protocol contribution for the
 [managed connection feature](../Elsa.Foundation.Identity.ExternalAuthentication/README.md).
 It does not modify the existing direct-bearer Identity.Oidc feature or register per-connection ASP.NET schemes.
 The broker/session/API/Studio composition and deployment qualification remain in
-[spec 1205](../../../../../../specs/1205-external-authentication/spec.md); installing this protocol alone does not
+[spec 1212](../../../../../../specs/1212-external-authentication/spec.md); installing this protocol alone does not
 expose a sign-in endpoint or prove a complete deployment.
 
 ## Connection settings

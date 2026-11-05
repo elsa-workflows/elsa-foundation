@@ -52,7 +52,7 @@ Phase 1, users and roles:
 Phase 2 external authentication/OIDC is active under the owner's 4 November 2026 scoped authorization:
 
 - #3579 end-to-end external connection management and sign-in, adapted to Elsa 4; design/specification
-  [1205](../../specs/1205-external-authentication/spec.md).
+  [1205](../../specs/1212-external-authentication/spec.md).
 - #2848 identity/token scope isolation as a necessary prerequisite, coordinated through its existing issue.
 
 Phase 1's remaining user/role administration work retains its existing issues and priorities. This feature adds

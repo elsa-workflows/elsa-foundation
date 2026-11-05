@@ -56,4 +56,4 @@ rejection and content-preserving incremental schema upgrade. Actual HTTP tests p
 invalidation and unrelated-session survival. Separate-process restart, cross-node completion/replay, concurrent
 revocation and link/catalog races pass on native SQLite (same machine) and PostgreSQL 16.15, in managed and
 deployment-only profiles. See [runners](../../../../../../../tools/identity/ExternalAuthentication.Probe/README.md)
-and [bounded evidence](../../../../../../../specs/1205-external-authentication/evidence.md) for configuration and limits.
+and [bounded evidence](../../../../../../../specs/1212-external-authentication/evidence.md) for configuration and limits.

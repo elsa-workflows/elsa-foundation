@@ -1,6 +1,6 @@
 # Owned external-authentication qualification probe
 
-Development-only, non-packable executable for spec 1205. It composes the actual Identity/API/managed OIDC/native EF/OpenIddict implementations with two controlled real HTTP OIDC providers. It shares the provider fixture and explicit vendor EF wiring used by backend tests; it does not replace authentication handlers with fake responses.
+Development-only, non-packable executable for spec 1212. It composes the actual Identity/API/managed OIDC/native EF/OpenIddict implementations with two controlled real HTTP OIDC providers. It shares the provider fixture and explicit vendor EF wiring used by backend tests; it does not replace authentication handlers with fake responses.
 
 ```sh
 dotnet build tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj
@@ -14,7 +14,7 @@ Direct invocation accepts `--owned-root <new-directory>` and optional `--ui <own
 The Chromium journey signs in through normal local login, creates a disabled Studio connection using existing Elsa roles and a secret reference, tests real metadata/JWKS, follows an actual provider preview and restores the saved draft, checks unchanged user/link/token rows and administrator identity, enables the connection, checks narrow layout, then completes ordinary external reader sign-in in a separate browser context. Through the real user-access component it refuses removal of the last sign-in link, attaches the second provider to the existing user, completes normal sign-in through that provider, removes the first link, verifies denied reader panels and revokes the selected session. Its cookie is rejected and access/refresh credentials return 401. It scans both pages with axe against WCAG 2 A/AA and 2.1 AA tags using actual Studio Classic light styles. Redacted aggregate counts/result categories and screenshots are retained; no browser trace or credentials are published.
 
 This proves a controlled HTTP provider, native SQLite and the mounted product component/public transport. It does **not** prove an external IdP product, the full Studio host, separately hosted/cross-site cookie topology, server databases, restart or shared separate-node behavior. The separate profiles below cover additional boundaries; their results and limits are recorded in the
-[spec 1205 evidence](../../../specs/1205-external-authentication/evidence.md).
+[spec 1212 evidence](../../../specs/1212-external-authentication/evidence.md).
 
 ## Provider interoperability and reference hosts
 
@@ -117,3 +117,17 @@ The default controlled-provider full Studio journey additionally edits/disables/
 managed connection, then prepares/tests/previews/promotes a complete same-key override. It proves an ordinary
 draft does not shadow, a disabled explicit override does, archive/removal reveal the baseline and restore
 reinstates the override. Actual Keycloak and cross-process proofs remain separate profiles above.
+
+## Packed public API consumer
+
+```sh
+python3 tools/identity/ExternalAuthentication.Probe/qualify-packages.py
+```
+
+This requires a clean committed checkout, archives that revision into a new owned directory, and builds/packs
+only the four selected Identity roots and their production project closure. Candidate versions and repository
+commit metadata are checked. An independent console application outside the archive restores exact local NuGet
+candidates with a lock file and fresh package directory, with no project references. It composes optional managed
+OIDC/API/artifact/session registrations, implements the public pure provisioning-policy contract and checks exact
+scoped token identity values. It does not claim to repeat the full HTTP/provider journey. Reports, package hashes,
+producer sources and build/consumer logs remain in the owned directory; nothing is published.

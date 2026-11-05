@@ -118,7 +118,7 @@ services.AddScoped<CompanyPolicy>();
 services.AddScoped<IExternalProvisioningPolicy, CompanyPolicy>();
 using var provider = services.BuildServiceProvider();
 using var scope = provider.CreateScope();
-var record = new ConnectionRecord { Id = "consumer", TenantId = "default", Key = "company", DisplayName = "Company", Protocol = "oidc", Admission = new() { Type = "company-onboarding", DefaultRoleIds = ["reader", "operator"] } };
+var record = new ConnectionRecord { Id = "consumer", Key = "company", DisplayName = "Company", Protocol = "oidc", Admission = new() { Type = "company-onboarding", DefaultRoleIds = ["reader", "operator"] } };
 var context = new ExternalAdmissionContext(new(record, ConnectionSource.Deployment, true, null, false, "revision"),
     new ExternalIdentityKey("default", "company", "https://idp.example.invalid", "opaque-subject"),
     [new Claim("department", "Operations"), new Claim("role", "upstream-admin")]);

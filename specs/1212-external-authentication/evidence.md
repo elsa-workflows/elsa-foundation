@@ -1065,3 +1065,28 @@ fresh sign-in required for older external credentials lacking it. They route to 
 evidence. Existing direct-bearer composition remains separately documented. T030 is complete; T031 and SC-009
 still require final distributions/public consumers/current required CI, exact-head independent review, merge and
 resulting-main qualification. No issue/program or goal completion is claimed at this checkpoint.
+
+
+## Current-main integration and allocation correction (5 November)
+
+Pre-integration frozen-source architecture passes **616/616**, zero skips; generated-filter and whitespace
+checks pass (`/tmp/elsa-3579-ui-modes-{architecture,maps}.log`). The branch then merges current main at
+`074259b35`, including the Parcel Room login design and composed Studio acceptance policy. The merge resolves
+cleanly and preserves managed provider chooser rendering. Affected Identity/login and actual composed journeys
+must be rerun against the integrated candidate; preceding receipts are not substituted for that proof.
+
+Main already owns `1205-studio-ux-acceptance`, exposing a numbering collision in this branch. After checking
+main/archive paths and all open PR file inventories (including paginated PR #1192), the highest allocated number
+is 1211. This feature is renumbered to `1212-external-authentication`, with current inbound paths and its local
+Spec Kit selection updated. The work and #3579/#2848 scope are unchanged. Historical commit links retain their
+original paths. Current receipts now bind clean source/head SHAs and refuse source changes during a run.
+
+
+The affected integrated login/presentation/user-directory subset passes **67/67**, zero skips, including the new
+Parcel Room presentation expectations (`/tmp/elsa-3579-integrated-login.log`). Composed UX tooling **10/10** and
+Studio aggregate-gate controls **3/3** pass. Browser ESLint and whitespace checks pass after correcting the new
+chooser screenshot's owned-directory variable. CI now runs the full managed Studio journey and all seven actual
+mode profiles after the standard composed regression suite, retaining only screenshots and source-bound receipts
+in `external-auth-ux-<tested SHA>-<attempt>`. Owned configurations, credentials, databases and keys are excluded.
+Independent visual acceptance remains incomplete until the reviewer opens current-head evidence; no author-written
+receipt is presented as independent approval.

@@ -1068,6 +1068,27 @@ jobs:
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
+      - name: Exercise managed external sign-in on the full Studio host
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          dotnet build tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj -p:RestoreLockedMode=true -v:q -nologo
+          node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs
+          for profile in configuration provider-reader denied external-owned hybrid missing-api missing-sessions; do
+            node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs "$profile"
+          done
+      - name: Retain external sign-in screenshots and source-bound receipts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-auth-ux-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/elsa-3579-full-studio-*/*.png
+            ${{ runner.temp }}/elsa-3579-full-studio-*/studio-receipt.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/browser-receipt.json
       - name: Retain reviewable success and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

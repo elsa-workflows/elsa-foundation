@@ -322,5 +322,5 @@ The [qualification runners](../../tools/identity/ExternalAuthentication.Probe/RE
 provider, Keycloak, full Studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
 Managed and deployment-only backend modes share their configured Data Protection ring/application name and
 first-party signing key across nodes; the SQLite profile runs on one machine. See the
-[profile evidence](../../specs/1205-external-authentication/evidence.md) for exact qualified modes and limits.
+[profile evidence](../../specs/1212-external-authentication/evidence.md) for exact qualified modes and limits.
 Receipts for one configuration do not establish another deployment mode.

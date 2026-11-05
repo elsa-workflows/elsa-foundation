@@ -73,7 +73,7 @@ native SQLite IAM/artifact/vendor-token stores and owned key files. They cover n
 logout, preview isolation, live discovery, ownership modes, CSRF/browser/purpose/replay, concurrent tabs and local
 recovery. The separate [qualification runners](../../../../../../tools/identity/ExternalAuthentication.Probe/README.md)
 exercise actual Keycloak, reference Studio/Workbench and separate backend processes on native SQLite and
-PostgreSQL. Their [evidence and limits](../../../../../../specs/1205-external-authentication/evidence.md) are
+PostgreSQL. Their [evidence and limits](../../../../../../specs/1212-external-authentication/evidence.md) are
 recorded independently; unit/HTTP tests do not substitute for those product and deployment journeys.
 
 ## Connection management API

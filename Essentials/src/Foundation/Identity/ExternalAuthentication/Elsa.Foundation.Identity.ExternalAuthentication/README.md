@@ -9,7 +9,7 @@ Current implementation: live deployment/catalog selection, explicit complete ove
 role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. The optional API also implements source/revision/permission-protected management, bounded lookups/testing,
 link administration and selected-session revocation. The optional Studio module exposes those capabilities.
 Composition and qualified provider, browser and process/store profiles are recorded in the
-[qualification evidence](../../../../../../specs/1205-external-authentication/evidence.md).
+[qualification evidence](../../../../../../specs/1212-external-authentication/evidence.md).
 This module alone does not compose a complete external sign-in deployment.
 
 ## Configuration and composition
@@ -172,5 +172,5 @@ and owned shared key directories across independent service providers/restarts. 
 and preview isolation evidence lives in the optional API's tests. Actual Keycloak, reference Studio/Workbench,
 and separate-process native SQLite/PostgreSQL managed and deployment-only profiles are reproducible with the
 [owned qualification runners](../../../../../../tools/identity/ExternalAuthentication.Probe/README.md).
-The [evidence](../../../../../../specs/1205-external-authentication/evidence.md) states their limits; these results
+The [evidence](../../../../../../specs/1212-external-authentication/evidence.md) states their limits; these results
 do not establish universal cross-site cookie behavior or runtime qualification for every supported EF engine.

@@ -487,7 +487,7 @@ bound callback and never issues a normal session. Owned real HTTP tests cover co
 logout, durable selected-session enforcement and preview isolation with two protocol fixtures and native SQLite
 stores. Actual Keycloak sign-in, reference Studio/Workbench, seven representative permission/ownership/installation
 UI profiles and separate-process SQLite/PostgreSQL managed/deployment-only journeys are recorded in the
-[spec 1205 evidence](../../specs/1205-external-authentication/evidence.md). The
+[spec 1205 evidence](../../specs/1212-external-authentication/evidence.md). The
 [owned runners](../../tools/identity/ExternalAuthentication.Probe/README.md) document reproducible commands and
 limits. Same-site separate-origin Studio and same-machine SQLite are qualified profiles; universal cross-site
 cookie topology and additional server engines are not established by those receipts.
