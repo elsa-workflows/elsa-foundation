@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Agent.Specialists.Api;
 

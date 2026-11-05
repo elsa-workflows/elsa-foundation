@@ -57,7 +57,7 @@ Shell 'default' requested 1 feature(s) that are not available: WorkflowsRuntimeE
 Rule 2 has a subtler edge: a package genuinely in the host's `deps.json` is correctly not downloaded,
 but it is loaded in the host's default context. A feed package only sees it if it is also listed in
 `Nuplane:Loading:SharedAssemblies` — acquisition-skipping and assembly-sharing are two separate lists,
-and Nuplane does not keep them in step. `NativeEndpoints` behaves this way, and a feature depending on it
+and Nuplane does not keep them in step. `ValenceWorks.MinimalEndpoints` behaves this way, and a feature depending on it
 fails with `FeatureNotFoundException` rather than a missing-file error.
 
 The reverse direction is kept in step by this repository instead. A shared assembly always resolves to
