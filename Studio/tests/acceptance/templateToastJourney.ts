@@ -4,8 +4,10 @@ type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export async function templateToastJourney(page: Page, info: TestInfo, capture: Capture) {
   async function revealCanvas() {
     if (!info.project.name.startsWith("narrow")) return;
-    const collapse = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
-    if (await collapse.isVisible()) await collapse.click();
+    for (const name of ["Collapse activities panel", "Collapse inspector panel"]) {
+      const collapse = page.getByRole("button", { name, exact: true });
+      if (await collapse.isVisible()) await collapse.click();
+    }
   }
   const base = process.env.ELSA_WORKBENCH_URL!;
   expect(base, "Owned Workbench URL").toBeTruthy();
