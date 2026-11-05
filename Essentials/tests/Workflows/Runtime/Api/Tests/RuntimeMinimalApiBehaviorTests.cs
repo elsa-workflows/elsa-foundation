@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -41,6 +42,29 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
     private const string LayoutPath = ActivityPath + "/layout";
     private const string ValuePayloadPath = ActivityPath + "/value-evidence/value-1/payload";
     private const string ActivationSlotPath = "/runtime/workflows/activation-slots/definition-1/default";
+
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Persistence_mode_read_reports_the_configured_host_default(PersistenceMode mode)
+    {
+        await using var host = await StartAsync(_ => null, services =>
+            services.AddSingleton(new PersistenceModeOptions { Mode = mode }));
+        using var response = await host.Client.GetAsync("/runtime/workflows/persistence-mode");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(mode.ToString(), json.RootElement.GetProperty("persistenceMode").GetString());
+        var endpoint = host.FindEndpoint("runtime/workflows/persistence-mode");
+        var policy = Assert.Single(endpoint.Metadata.GetOrderedMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(policy.Policy!);
+        Assert.Equal(PermissionKey.Normalize(Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
+        var link = Assert.Single(Elsa.Workflows.Runtime.Api.Capabilities.RuntimeApiCapabilities.StaticDeclaration.Links,
+            item => item.Rel == "runtime-persistence-mode");
+        Assert.Equal("runtime/workflows/persistence-mode", link.Href);
+        Assert.False(link.Templated);
+    }
 
     [Fact]
     public async Task Activity_collection_pages_exact_matches_and_binds_cursor_to_query_and_access()
