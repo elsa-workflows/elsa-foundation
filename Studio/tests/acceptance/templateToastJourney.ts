@@ -74,11 +74,13 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     await expect(page.getByRole("heading", { name: "Workflow templates", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
     await capture(page, info, "template-list");
+    const templateTabLabel = await page.getByRole("tab", { selected: true }).getAttribute("aria-label");
+    expect(templateTabLabel, "The Templates workspace tab has an accessible name").toBeTruthy();
     // The toast opens another workspace tab so the source workflow keeps its unsaved edits.
     await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
     await expect(page.locator(".wf-sequence-summary").filter({ hasText: "Unsaved template text" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Text", exact: true })).toHaveValue("Unsaved template text");
-    await page.getByRole("tab", { name: "Workflow templates", exact: true }).click();
+    await page.getByRole("tab", { name: templateTabLabel!, exact: true }).click();
     // The original workflow deliberately retains unsaved edits. Its template copy is persisted;
     // accept only the native reload guard for this owned disposable journey.
     const allowOwnedReload = async (dialog: Dialog) => { expect(dialog.type()).toBe("beforeunload"); await dialog.accept(); };
