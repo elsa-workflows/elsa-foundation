@@ -134,7 +134,7 @@ try
             targets[0].ResumeTargetId, "history.native-legacy-expiry", run + ":stimulus", null, expiresAt,
             RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
         var work = new RuntimeSchedulerWorkItem(run + ":create-bookmark", run, run + ":command", WorkflowExecutionCommandKind.CreateBookmark,
-            run + ":envelope", run + ":idempotency", now, now, 1, JsonSerializer.SerializeToElement(payload, json), metadata, metadata);
+            run + ":envelope", run + ":idempotency", now, now, 1, JsonSerializer.SerializeToElement(payload), metadata, metadata);
         var handler = new WorkflowCreateBookmarkSchedulerWorkHandler(runtime.GetRequiredService<IWorkflowExecutableStore>(),
             runtime.GetRequiredService<IActivityExecutionStateStore>(), committer,
             new RuntimeActivityExecutionInspectionAccumulator(runtime.GetRequiredService<IActivityExecutionInspectionStore>()), TimeProvider.System);
