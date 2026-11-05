@@ -57,7 +57,7 @@ function safeFailureFrames(error) {
 function retainFailureDiagnostic(error) {
   const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
   try {
-    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600 });
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600, flag: "wx" });
   } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
   return diagnostic;
 }
