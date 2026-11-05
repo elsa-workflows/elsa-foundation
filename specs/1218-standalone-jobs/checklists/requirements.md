@@ -9,8 +9,8 @@ Draft review record, 6 November 2026. Feature: [spec.md](../spec.md).
 - [x] Accepted jobs, physical attempts, retained results and model consumption are distinct.
 - [x] Failure, race, version, scope, retention and duplicate-delivery edges are identified.
 - [x] Dependency boundaries, exclusions and provider/deployment evidence limits are explicit.
-- [ ] Independent cross-artifact review is complete and all findings resolved.
-- [ ] ADR0096/constitution agreement and the implementation Constitution Check are complete.
+- [x] Independent cross-artifact design review is complete and findings resolved at44c22f34f.
+- [x] ADR0096's scoped domain adoption and initial design Constitution Check are recorded; concrete implementation/package checks remain pending.
 
 The product names .NET/native/BPMN and package isolation because #3586 explicitly requires those
 consumer shapes. Algorithms, concrete API/schema and provider design live in the plan/contracts.

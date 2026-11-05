@@ -2,8 +2,8 @@
 
 **Branch**: `agent/codex/3586-background-jobs` | **Date**: 2026-11-06 | **Spec**: [spec.md](spec.md)
 
-**Status**: Provisional design/viability plan. Constitution Check is OPEN; production implementation
-does not proceed until domain admission and reviewed contracts are agreed. Discovery is authorized.
+**Status**: Reviewed implementation plan. ADR0096 domain admission was explicitly adopted by the owner
+on 6 November 2026; M1 begins with concrete contracts and packaged consumers. Runtime/provider proof remains open.
 
 ## Summary
 
@@ -46,11 +46,11 @@ progress of unrelated eligible work. Do not invent throughput or latency claims 
 ## Constitution Check
 
 Both constitutions and [review checklist](../../docs/contributing/review-checklist.md) apply. Current
-owning versions are framework 6.1.0 and Elsa 6.3.0; the AGENTS summary is not the version authority.
+owning versions on this branch are framework 6.1.0 and Elsa 6.4.0; the AGENTS summary is not the version authority.
 
 | Gate | Proposed treatment | State |
 |---|---|---|
-| Elsa §E2.1 and framework Governance | [ADR 0096](../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) admits optional Jobs; concrete additive delta/approval plan prepared | OPEN — agreement required |
+| Elsa §E2.1 and framework Governance | [ADR 0096](../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) admits optional Jobs under explicit scoped owner adoption, propagated as Elsa6.4.0 | Passed for domain admission; reconcile concurrent version changes before merge |
 | §2.1–§2.4, §2.13–§2.20 | Core only contracts/abstractions; concrete provider/operations adapters; one verb-led purpose; no universal Execution umbrella | Design review pending; closure checks before code acceptance |
 | §2.5–§2.11 | Public inheritable features; scoped services, declared replacement kinds, diagnosed duplicate handlers and bounded CQS store transitions | Required in implementation |
 | §2.17 | Extract only demonstrated mechanics with concrete consumers; preserve existing workflow APIs through adapters | Review extraction before implementation |
@@ -61,8 +61,9 @@ owning versions are framework 6.1.0 and Elsa 6.3.0; the AGENTS summary is not th
 | #3052 boundary | Consume accepted contracts; route amendments to its background/variable/recovery topics separately | Recheck if a concrete adapter changes those semantics |
 | Elsa §E7 and delivery gates | New test projects in tiers; locked restore/architecture/maps, current-head review/CI, resulting main | Not run |
 
-No exception is silently claimed. The pre-production gate remains OPEN. Repeat this check after
-agreement, package design and every material contract change.
+The domain exception is explicit and limited to that admission. Independent R3 design review was clean
+at `44c22f34f`; apply remaining code/package gates as implementation arrives. Repeat the check after
+package design and each material contract change. No runtime/provider/UX acceptance is implied.
 
 ## Project Structure
 
@@ -144,6 +145,5 @@ source/PR heads, artifacts, provider versions/deployment and actual resulting-ma
 
 ## Complexity Tracking
 
-New domain admission is an intentional pending constitutional change, not an exception hidden in host
-Tasks. A general Execution umbrella, synthetic workflow jobs, dual scheduler stores and job-chain
+New domain admission is explicitly adopted in ADR0096, rather than hidden in host Tasks. A general Execution umbrella, synthetic workflow jobs, dual scheduler stores and job-chain
 language are rejected because existing domains already own those separate responsibilities.

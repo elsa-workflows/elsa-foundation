@@ -1,6 +1,6 @@
 # Standalone durable jobs
 
-- **Status:** Active; owner authorization, 5 November 2026; discovery/design.
+- **Status:** Active; delivery authorized 5 November; Jobs admission adopted on the owner's authority 6 November 2026.
 - **Area:** Standalone .NET jobs, optional native/BPMN integration, API/Studio operations.
 - **Steward:** Sipke.
 - **Canonical feature/program delivery record:** [#3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586).
@@ -35,8 +35,8 @@ feature/program rollup is needed. Claim ownership and state transitions remain o
 
 | Milestone | Outcome | State |
 |---|---|---|
-| M0 | Current-source/provider research, agreed product/architecture/domain admission, reviewed spec/plan/tasks and pre-code UX acceptance | In progress |
-| M1 | Packaged standalone client/worker, handler/input/result identity, durable intake and recoverable attempts | Not started |
+| M0 | Current-source/provider research, scoped domain admission, reviewed spec/plan/tasks and pre-code UX acceptance | Design reviewed; domain adopted 6 November; runtime contracts remain subject to concrete consumer proof |
+| M1 | Packaged standalone client/worker, handler/input/result identity, durable intake and recoverable attempts | In progress |
 | M2 | Immediate/delayed/recurring jobs, retry/cancel/timeout, all four pauses and distributed concurrency/recovery | Not started |
 | M3 | Real native and BPMN invocation of the same handler, retained results and model-owned continuation | Not started |
 | M4 | Authorized API/Studio operations and integrator/operator documentation | Not started |
@@ -55,8 +55,8 @@ M0 is not product completion. This record claims no production implementation or
   integrations and the historical task-runner follow-up. Consume suitable contracts; its whole
   program is not a prerequisite. Coordinate shared Runtime changes with current
   [StateMachine #3815](https://github.com/elsa-workflows/elsa-foundation/issues/3815) work.
-- New job-domain admission needs the applicable numbered ADR and constitution amendment. Delivery
-  authorization is not architect consensus or exact-text ratification. Ordinary adapters consume
+- [ADR0096](../adr/0096-jobs-owns-durable-handler-invocations.md) records the explicit 6 November
+  owner-authority exception adopting only Jobs admission; no multi-architect consensus is claimed. Ordinary adapters consume
   accepted contracts; amendments to [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)
   topics follow its agreement process without placing the whole job product in that initiative.
 

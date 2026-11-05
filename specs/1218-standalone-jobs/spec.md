@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Draft — product decisions recorded; architecture/domain admission pending.
+**Status**: In progress — scoped domain admission adopted 6 November 2026; M1 implementation underway; qualification pending.
 
 **Input**: [Canonical feature #3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586),
 owner-authorized end-to-end delivery on 5 November 2026, and this delivery chat's selected decisions.
@@ -203,7 +203,7 @@ retention during an owed result; cross-tenant cursors/associations; raw exceptio
 
 ## Assumptions
 
-- New domain admission follows the constitution's agreement process; no unratified proposal is implementation authority.
+- ADR0096 records the owner's explicit scoped adoption of Jobs admission; no other unratified proposal becomes authority.
 - First-party persistence follows current EF policy; claimed engine/deployment profiles require their own proof.
 - UTC interval/cron schedules are the initial scheduling surface; any additional civil-time contract needs explicit design.
 - Awaited jobs inherit validated workflow association and cancellation responsibility; independent submission states its

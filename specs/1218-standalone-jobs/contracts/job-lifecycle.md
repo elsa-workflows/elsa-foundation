@@ -1,6 +1,6 @@
 # Proposed standalone job lifecycle contract
 
-Status: proposed for architecture and implementation review; neither ratified nor implemented.
+Status: reviewed implementation design; public ABI and runtime guarantees remain subject to concrete consumer qualification. Domain admission is accepted through ADR0096 on the owner's scoped authority; no multi-architect vote or runtime acceptance is asserted.
 Source audit: `e0ba87ecfc3b1e774c509ed274b19cd3f34a1124` (5 November 2026).
 Canonical request: [#3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586).
 Owner selections include the durable permission cutoff and default coalesced catch-up described below.
@@ -10,7 +10,7 @@ Owner selections include the durable permission cutoff and default coalesced cat
 - One selected job authority owns accepted invocations, schedules, attempts, retry eligibility, pause gates, concurrency permits and retained results.
 - Registered .NET handlers run without a workflow graph, workflow authoring stack or Studio. Independently hosted workers and optional native/BPMN adapters use the same handler contract.
 - A provider adapter must preserve this contract; Elsa and a third-party engine must not independently own the same schedule, retry budget or result selection.
-- Proposed `Elsa.Jobs` domain admission requires the applicable constitution/ADR agreement; no agreement is asserted here.
+- Optional `Elsa.Jobs` admission is recorded in [ADR0096](../../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) under the owner's explicit scoped adoption of 6 November 2026.
 - Native/BPMN models retain parent state, cancellation and continuation semantics. There is no global kernel model-name switch or new graph language.
 
 ## Durable identity and acceptance
@@ -129,7 +129,7 @@ Owner selections include the durable permission cutoff and default coalesced cat
 - Native uses a real BookmarkCreated checkpoint plus outbox admission responsibility, idempotent job admission and typed result delivery to the exact saved wait.
 - BPMN records its own invocation/result input identity and consumes the result through its normal fenced model input/checkpoint protocol.
 - Native/BPMN adapters preserve completed ResultId/payload durably while workflow instance/definition holds block new continuation permission.
-- **Proposed continuation cutoff:** model-delivery permission is serialized with those holds; a grant before Pause counts as an already started continuation. The owner selected the attempt cutoff and held result-driven continuation; this analogous model cutoff is an engineering recommendation requiring review.
+- **Reviewed engineering continuation cutoff:** model-delivery permission is serialized with those holds; a grant before Pause counts as an already started continuation. The owner selected the attempt cutoff and held result-driven continuation; this analogous model cutoff is an engineering design choice after independent review, not a separate owner selection. Actual model qualification remains required.
 - A previously granted continuation can finish after Pause returns. This is not a physical-stop or atomic cross-store checkpoint guarantee.
 - Continuation permission is bound to exact ContinuationId, ResultId, model pin/association and deterministic model input/resume identity.
 - Repeating a granted model-delivery request resolves that **same permission, result and model input**; it never submits or executes a new physical job.
@@ -160,5 +160,5 @@ Owner selections include the durable permission cutoff and default coalesced cat
 - [Native resume validation](../../../Essentials/src/Workflows/Runtime/Core/Events/ActivityResumeValidating.cs) and [BPMN driver](../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs) identify proposed model-owned continuation integration points.
 - [Current pause mapping](../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerPauseGate.cs) does not implement this four-scope job contract; [outbox/coalescing settlement](../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs) must retain its delivered-elsewhere refresh behavior.
 - [ADR 0087](../../../docs/adr/0087-etl-owns-its-execution-domain.md) and [ADR 0088](../../../docs/adr/0088-rules-owns-its-execution-domain.md) preserve domain-owned semantics; this proposal does not claim job-domain admission from those decisions.
-- Review must resolve provider/default-adapter selection, domain agreement, concrete gate/permit storage, recovery proof and the proposed linked-invocation manual retry UX before implementation contracts freeze.
+- Implementation selects the Elsa-owned default, scope-gate revision arbitration and linked-invocation Retry as new run described here; domain admission is accepted. Concrete public ABI, recovery proofs and UX still require their consumer/provider/composed acceptance before stabilization.
 - Qualify all pause overlaps/races, recurrence policies, accepted backlog preservation, lease/physical overlap, duplicate delivery, timeout/cancellation races, exact model consumption and tenant denial against real packaged and composed hosts.

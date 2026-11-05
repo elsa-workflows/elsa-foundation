@@ -1,13 +1,14 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-06
 ---
 
 # Jobs owns durable handler invocations
 
-Status: Proposed. [#3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586) authorizes
-end-to-end delivery, not exact-text constitutional ratification. No architect consensus or production
-qualification is asserted. [Spec 1218](../../specs/1218-standalone-jobs/spec.md) remains Draft.
+Status: Accepted (6 November 2026), under Sipke Schoorstra's explicit scoped owner adoption of the Jobs
+domain amendment in this delivery chat: “Adopt this scoped Jobs amendment on my authority”. This
+records domain admission after the clean independent design review, not multi-architect consensus or
+runtime qualification. [Spec 1218](../../specs/1218-standalone-jobs/spec.md) owns implementation acceptance.
 
 ## Problem and evidence
 
@@ -22,7 +23,7 @@ pause contract. An adapter would still need an Elsa admission/result authority; 
 lifecycle/retry authorities would increase recovery risk. This is a design inference, not provider
 runtime qualification.
 
-## Proposed decision
+## Decision
 
 Admit optional `Elsa.Jobs`, with the purpose **“Executes registered handler invocations with durable
 attempts and retained results.”** It owns invocation/handler/schema identity, durable acceptance,
@@ -90,23 +91,26 @@ Initial proposed qualification profiles are local SQLite restart and PostgreSQL 
 multi-node operation. Other engines/deployments are unqualified until demonstrated. Final scope,
 provider admissions and package closures must be reconciled with the current accepted constitution.
 
-## Proposed constitution amendment and approval plan
+## Constitution amendment and authority
 
-The concrete requested amendment is additive:
+The owner adopted this additive amendment:
 
 1. Insert `Elsa.Jobs` in the alphabetically ordered pinned root domains in Elsa constitution §E2.1.
 2. Add its verb-led purpose above to `docs/reference/elsa-domain-tree.md`.
 3. Add a Sync Impact Report and minor version bump from the actual merged Elsa constitution;
-   current main is 6.3.0. ADR 0095/PR #3689 already proposes 6.4.0 for another domain, so reconcile
+   the branch applies 6.3.0 → 6.4.0. ADR 0095/PR #3689 also proposes 6.4.0 for another domain, so reconcile
    against the then-current version instead of overwriting that concurrent admission.
 4. Keep framework 6.1.0 and every existing domain purpose unchanged. Recheck derived templates;
    current templates contain no pinned domain list. Ratify no draft/provisional sections.
 
-The amendment follows framework **Governance → Amendment process**: “ratified by consensus of the
-architects”. Required architects are Joey Barten, Sipke Schoorstra and Frans van Ek, acting in their
-architecture capacity, unless an explicitly recorded applicable owner exception changes that plan.
-Prepare final amendment text/version for their agreement before adoption. Bot review, publishing
-identity and the general delivery instruction are not substitutes for that agreement.
+Framework **Governance → Amendment process** normally requires amendments to be “ratified by consensus
+of the architects”: Joey Barten, Sipke Schoorstra and Frans van Ek. For this specific additive admission,
+the owner explicitly selected adoption on his authority after the concrete amendment and normal
+consensus route were presented in the owning chat. This scoped exception covers Jobs admission and
+its propagated minor version/purpose only; existing rules and provisional sections stay unchanged.
+Bot review, publishing identity and the earlier general delivery instruction did not establish it.
+The ownership/decision receipt remains on [#3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586#issuecomment-6672110215)
+and [PR #3909](https://github.com/elsa-workflows/elsa-foundation/pull/3909).
 
 The new domain has no #3052 initiative ancestry/topic. If a model adapter needs to amend that
 initiative's background eligibility, variable lifecycle or recorded-step recovery decisions, route

@@ -2,7 +2,7 @@
 
 **Research date:** 5 November 2026. **Assembled:** 6 November 2026. **Canonical request:** [#3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586).
 
-**Status:** Research and architecture recommendation. The proposed Elsa-owned default remains subject to ADR 0096 consensus and the applicable domain/constitution agreement; it is not adopted or implemented by this document. No job-runner provider or product qualification was performed. Elsa source findings below are pinned to [`e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`](https://github.com/elsa-workflows/elsa-foundation/commit/e0ba87ecfc3b1e774c509ed274b19cd3f34a1124).
+**Status:** Research evidence. On 6 November, [ADR0096](../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) records the owner's explicit scoped Jobs-domain adoption after independent design review. Implementation uses the Elsa-owned default recommended below. No third-party dependency is selected; no runtime/provider or product qualification is established by this research. Elsa source findings remain pinned to [`e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`](https://github.com/elsa-workflows/elsa-foundation/commit/e0ba87ecfc3b1e774c509ed274b19cd3f34a1124).
 
 ## Selected product constraints
 
@@ -71,7 +71,7 @@ Group pause persists across nodes/restarts and can cover future additions to exa
 
 ## Recommendation and proof still required
 
-Recommend an **Elsa-owned default job domain**, using existing EF/hosting infrastructure and reviewed small shared primitives. Native and BPMN adapters consume its retained result through their own progression contracts. This avoids installing a second scheduler/store/retry authority to emulate the four-scope start invariant. None of the researched providers directly proves that complete contract. This is a reasoned recommendation awaiting ADR 0096 consensus, not a selected implementation dependency.
+Recommend an **Elsa-owned default job domain**, using existing EF/hosting infrastructure and reviewed small shared primitives. Native and BPMN adapters consume its retained result through their own progression contracts. This avoids installing a second scheduler/store/retry authority to emulate the four-scope start invariant. None of the researched providers directly proves that complete contract. The implementation now selects this recommendation after independent design review and scoped owner adoption of the Jobs domain in ADR0096. It is not runtime/provider qualification.
 
 Quartz is the strongest optional schedule-producer candidate if existing Elsa scheduling cannot support the reviewed recurrence policy. Hangfire/TickerQ integrations can serve customers with those installations, subject to version/provider/license qualification. A producer adapter should submit a stable occurrence identity to one durable admission authority. A provider that owns execution must prove the complete lifecycle contract; a pre-handler pause query or dashboard stop button is insufficient.
 
@@ -80,7 +80,7 @@ Implementation qualification must show atomic permission grant against every app
 ## Selection, inference and evidence
 
 - **Selected:** The product constraints and later owner choices above, recorded on #3586 and its specification. Delivery authorization permits the work; it is not architect consensus or constitution ratification.
-- **Inferred/recommended:** Elsa-owned default, optional producer/adapters, bounded extraction of reused mechanics and the proposed package/persistence shape. ADR 0096 must resolve adoption; this file does not do so.
+- **Inferred/recommended:** Elsa-owned default, optional producer/adapters, bounded extraction of reused mechanics and the proposed package/persistence shape. ADR0096 now records the scoped owner domain adoption; the runtime/default choice is reviewed engineering design, with provider/product proof still pending.
 - **Observed evidence:** Source contracts/implementations at the pinned Elsa commit and linked third-party releases/source/docs as inspected on 5 November. Reading an implementation or existing test does not demonstrate the new product's provider, deployment or acceptance guarantees.
 
 [workflow-queue]: https://github.com/elsa-workflows/elsa-foundation/blob/e0ba87ecfc3b1e774c509ed274b19cd3f34a1124/Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs

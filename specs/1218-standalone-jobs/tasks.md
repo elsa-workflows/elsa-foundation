@@ -3,16 +3,16 @@
 **Input**: [spec](spec.md), [provisional plan](plan.md), [research](research.md),
 [data model](data-model.md), [lifecycle](contracts/job-lifecycle.md) and [acceptance matrix](acceptance-matrix.md).
 
-**Status**: Provisional task breakdown. No production task has started. Domain agreement and the
-reviewed spec/plan gate must pass first. Tests are risk-based; application TDD cadence is undeclared,
+**Status**: M1 implementation underway after scoped domain adoption and clean independent design review.
+Concrete public ABI and provider/model guarantees still require qualification. Tests are risk-based; application TDD cadence is undeclared,
 so the template does not invent it. Required behavioral red/green bite-proofs remain obligations.
 
 ## M0 — Setup and design gates
 
 - [x] T001 Record scoped owner authorization, source/provider research and selected decisions in `docs/program-goals/standalone-jobs.md` and `specs/1218-standalone-jobs/research.md`.
-- [ ] T002 Agree ADR0096 and apply its additive domain/version/sync-impact delta in `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`; record actual human authority and concurrent ADR0095 reconciliation.
-- [ ] T003 Review and settle continuation permits, authority/time/lease/race protocol and linked manual retry in `specs/1218-standalone-jobs/contracts/job-lifecycle.md`; coordinate shared paths through #3582/#3583/#2892/#3815.
-- [ ] T004 Review `specs/1218-standalone-jobs/spec.md`, `plan.md`, `data-model.md`, `tasks.md` and `ux-acceptance.md` together; resolve Constitution Check and record agreement before production code.
+- [x] T002 Adopt ADR0096 on the owner's explicit 6 November authority and apply its additive domain/version/sync-impact delta in `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`; reconcile concurrent ADR0095 again before merge.
+- [x] T003 Record reviewed engineering choices for continuation permission cutoff, scope-gate/provider-time arbitration and linked Retry as new run in `specs/1218-standalone-jobs/contracts/job-lifecycle.md`; coordinate shared paths through the existing #3582/#3583/#2892/#3815 records.
+- [x] T004 Review `specs/1218-standalone-jobs/spec.md`, `plan.md`, `data-model.md`, `tasks.md` and `ux-acceptance.md` together; record clean R3 at44c22f34f and scoped domain adoption before M1. Concrete code/package gates remain required.
 
 ## Foundation — concrete contracts and package closure
 
