@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useId } from "react";
 import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import {
   defaultStudioHostId,
@@ -19,6 +19,7 @@ import { registerBuiltInSettingEditors,
   SkeletonRows,
   StudioAlert,
   StudioTabs,
+  StudioTabPanel,
   StudioToolbar,
   StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import "./styles.css";
@@ -475,6 +476,7 @@ function stageFeatureToggle(state: FeatureHostState, rootIds: Iterable<string>, 
 }
 
 export function FeatureManagementPage() {
+  const hostTabsBaseId = useId();
   const session = useAuthSession();
   const permissions = usePermissions();
   const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
@@ -832,8 +834,13 @@ export function FeatureManagementPage() {
           }));
           setActiveHostId(hostId as FeatureHostId);
         }}
+        baseId={hostTabsBaseId}
         ariaLabel="Hosts"
       />
+      {hosts.map((item, index) => item.id !== activeHost.id ? (
+        <StudioTabPanel key={item.id} baseId={hostTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={hostTabsBaseId} index={hosts.findIndex(item => item.id === activeHost.id)} className="feature-management-host-panel">
 
       {!reviewSnapshot && error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {!reviewSnapshot && completionMessage ? (
@@ -907,6 +914,7 @@ export function FeatureManagementPage() {
         />
       </div>
 
+      </StudioTabPanel>
       {reviewSnapshot && reviewSnapshot.hostId === activeHost.id ? (
         <FeatureImpactReviewDialog
           hostLabel={activeHost.label}

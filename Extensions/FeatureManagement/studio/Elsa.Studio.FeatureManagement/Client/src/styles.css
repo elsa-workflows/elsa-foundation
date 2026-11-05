@@ -1164,3 +1164,7 @@
     gap: 4px;
   }
 }
+
+.feature-management-host-panel {
+  min-width: 0;
+}

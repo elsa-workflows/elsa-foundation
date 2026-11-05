@@ -1,0 +1,107 @@
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import axe from "axe-core";
+
+async function assertLinkedTabs(scope: Locator) {
+  const errors = await scope.evaluate(element => {
+    const problems: string[] = [];
+    const ids = Array.from(element.querySelectorAll("[id]"), node => node.id);
+    if (new Set(ids).size !== ids.length) problems.push("Duplicate IDs");
+    const tabs = element.querySelectorAll('[role="tab"]');
+    if (!tabs.length) problems.push("No tabs rendered");
+    for (const tab of tabs) {
+      const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+      const selected = tab.getAttribute("aria-selected") === "true";
+      if (!panel || panel.getAttribute("role") !== "tabpanel" || panel.getAttribute("aria-labelledby") !== tab.id) {
+        problems.push(`Missing or incorrectly labelled panel: ${tab.textContent}`);
+      } else if (panel.hidden === selected || Boolean(panel.getClientRects().length) !== selected || (selected && !panel.textContent?.trim())) {
+        problems.push(`Incorrect panel visibility or missing selected content: ${tab.textContent}`);
+      }
+    }
+    return problems;
+  });
+  expect(errors).toEqual([]);
+}
+
+async function selectByKey(list: Locator, key: string, label: RegExp) {
+  const selected = list.getByRole("tab", { selected: true });
+  await selected.focus();
+  await selected.press(key);
+  const next = list.getByRole("tab", { selected: true });
+  await expect(next).toHaveText(label);
+  await expect(next).toBeFocused();
+}
+
+export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
+  for (const [route, selector, prefix] of [
+    ["modules", ".modules-page", "modules"],
+    ["package-feeds", ".package-feeds-page", "feeds"],
+    ["feature-management", ".feature-management-page", "features"]
+  ]) {
+    await page.goto(`/settings/${route}`);
+    const section = page.locator(`${selector}:visible`);
+    const hosts = section.getByRole("tablist", { name: "Hosts", exact: true });
+    await expect(hosts).toBeVisible();
+    for (const host of ["studio", "server"]) {
+      await selectByKey(hosts, host === "studio" ? "Home" : "End", new RegExp(`^${host}`, "i"));
+      await expect(section.getByRole("button", { name: /^Refresh/ }).first()).toBeEnabled();
+      await assertLinkedTabs(section);
+      await capture(page, info, `${prefix}-${host}`);
+      const inspector = section.getByRole("tablist", { name: "Inspector", exact: true });
+      if (prefix === "modules" && await inspector.count()) {
+        await selectByKey(inspector, "Home", /^Overview$/);
+        for (const label of ["Contributions", "Package", "Manifest", "Diagnostics"]) {
+          await selectByKey(inspector, "ArrowRight", new RegExp(`^${label}$`));
+          await assertLinkedTabs(section);
+          if (host === "studio" && ["Manifest", "Diagnostics"].includes(label)) await capture(page, info, `modules-${label.toLowerCase()}`);
+        }
+      }
+    }
+    await page.addScriptTag({ content: axe.source });
+    const violations = await section.evaluate(async element => {
+      const result = await (window as unknown as Window & { axe: typeof axe }).axe.run(element, { runOnly: { type: "rule", values: ["aria-valid-attr-value"] } });
+      return result.violations.map(violation => violation.id);
+    });
+    expect(violations).toEqual([]);
+  }
+
+  await page.goto("/settings/theme-builder");
+  const theme = page.locator(".theme-builder-page:visible");
+  const views = theme.getByRole("tablist", { name: "Theme Builder views", exact: true });
+  await expect(views).toBeVisible();
+  await assertLinkedTabs(theme);
+  await capture(page, info, "theme-overview");
+  await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
+  const name = theme.getByRole("textbox", { name: "Name", exact: true });
+  await expect(name).toBeEditable();
+  const edited = `Panel navigation ${info.project.name}`;
+  await name.fill(edited);
+  await selectByKey(views, "ArrowRight", /^Tokens$/);
+  await assertLinkedTabs(theme);
+  await capture(page, info, "theme-tokens");
+  const modes = theme.getByRole("tablist", { name: "Theme mode", exact: true });
+  for (const [key, label] of [["Home", "Light"], ["ArrowRight", "Dark"], ["ArrowRight", "Dim"], ["End", "High contrast"]]) {
+    await selectByKey(modes, key, new RegExp(`^${label}$`));
+    await assertLinkedTabs(theme);
+  }
+  await capture(page, info, "theme-mode-last");
+  await selectByKey(views, "ArrowRight", /^Assets$/);
+  await assertLinkedTabs(theme);
+  await capture(page, info, "theme-assets");
+  await selectByKey(views, "End", /^Preview$/);
+  await assertLinkedTabs(theme);
+  await capture(page, info, "theme-preview");
+  await selectByKey(views, "Home", /^Overview$/);
+  await expect(name).toHaveValue(edited);
+  await assertLinkedTabs(theme);
+  await capture(page, info, "theme-edited");
+  await theme.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("dialog", { name: "Delete theme", exact: true }).getByRole("button", { name: "Delete theme", exact: true }).click();
+  await expect(name).toBeDisabled();
+  await assertLinkedTabs(theme);
+  await page.addScriptTag({ content: axe.source });
+  const violations = await theme.evaluate(async element => {
+    const result = await (window as unknown as Window & { axe: typeof axe }).axe.run(element, { runOnly: { type: "rule", values: ["aria-valid-attr-value"] } });
+    return result.violations.map(violation => violation.id);
+  });
+  expect(violations).toEqual([]);
+}
