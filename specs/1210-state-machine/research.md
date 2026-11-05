@@ -55,6 +55,8 @@ The witness has not been implemented or executed. Its technical plan and any arc
 
 **Status:** Proposed engineering closures against OD1–OD49, not accepted defaults, an implementation plan or runtime proof. Q1–Q3 remain open until this proposal is reviewed, sufficient integration seams are identified, and the applicable agreement is recorded. Public API/schema, persistence placement and production code remain unchosen.
 
+DE1 authorizes using this reviewed packet as the provisional basis for the bounded native-first witness, with model hosting as fallback. The subsequent supervisory delegation permits necessary owner decisions and progress through repository gates without waiting for Sipke to return, while preserving actual designated non-author approvals. This is delegated authority, not a claim of personal human commit inspection. The focused next work unit is [the M0 witness plan](m0-witness-plan.md); results must amend the proposal before final placement/schema is justified.
+
 ### P1 — Qualify the native composite first
 
 | Candidate | Source-grounded fit | Gap the witness must settle | Proposed disposition |

@@ -1,0 +1,54 @@
+# M0 native integration witness work unit
+
+**Status:** Delegated engineering work under DE1/DE2; review before executing the fixture. This is a research witness plan, not the production StateMachine implementation plan or final engine/schema approval.
+
+**Authority:** Supervisory delegation recorded on [Program #3815](https://github.com/elsa-workflows/elsa-foundation/issues/3815#issuecomment-6646432172), preserving OD1–OD49. The supervisor separately relayed Sipke's authority to make necessary decisions and proceed without waiting for his approval. Record delegated decisions as such; do not fabricate human inspection or another designated approver's agreement.
+
+**Route:** StateMachine program M0, feature #3820, existing owned worktree and draft PR #3840. [Product specification](spec.md) remains provisional as a complete contract; [research P1–P6](research.md#m0-engineering-proposal-for-review) is the provisional engineering basis. The prototype proves only the observations listed below.
+
+## Goal and boundary
+
+Exercise the native runtime, actual SQLite persistence, ordinary child work and normal operator retry while a small structural parent retains input/phase state. Separate process generations reopen the same owned database; no cached parent instance, in-memory workflow store or custom scheduler may supply recovery state.
+
+The first carrier is an ordinary `Event` child, re-armed by the structural parent after each completion. The fixture must distinguish bookmark transport dispatch from the parent's committed semantic receipt. If this does not provide sufficient continuous machine-directed admission or an authoritative admission result, report the gap and qualify a reviewed shared extension or the existing model-hosting alternative. Do not turn a partial carrier proof into a complete inbox claim.
+
+No production activity module, public endpoint, database migration, Studio designer or Saga type is added by this work unit. The fixture is a non-packable executable under `witness/`, using the existing native execution test harness, EF runtime aggregate and migration startup. Its public CLR fixture types exist only so the normal CLR activity binder can construct them.
+
+## Concrete fixture
+
+- A structural parent schedules ordinary Exit work, then an ordinary typed waiting Action. A separate ordinary Event child carries business inputs while Action waits. Phase and input state use `RuntimeStructuralContinuation.WithState` and the native activity state store.
+- Fixture inputs have an ID and public JSON content. Pending capacity is C = 2. The parent records accepted order/content and final status, keeps the input selected/in flight within that capacity, and preserves unrelated waiting work. Fixture values are not production defaults or a chosen public schema.
+- After Action succeeds, two ordinary guard/probe children carry the same immutable scheduling input ID. Reverse their scheduling order in one case. The parent groups their callbacks by that ID and records the child-first selection independently of callback order. This is a provenance/adapter witness, not qualification of the complete statechart selection algorithm or all expression bindings.
+- An injected transient guard failure leaves the parent awaiting intervention through the existing child-fault protocol. Normal `RetryFaultedActivity/1` must retry that child while preserving Exit, Action, the successful sibling and the selected input's identity. No whole-parent retry is substituted.
+- Every generation creates a fresh native host/service provider. The executable invokes later generations as owned child processes over the same SQLite file; process exit clears actors and singleton fixture controls. A generation may read only state committed by the prior generation.
+
+## Observations and negative controls
+
+| Witness | Required actual observation | What it does not establish |
+|---|---|---|
+| N1 — waiting phase | Exit completed once, Action waits, two distinct inputs are committed without evaluation; another input reports full; identical/conflicting IDs remain distinguishable | No production ingress/public API contract or universal input-retention policy |
+| N2 — restart and drain | A new process sees the pending Action and ordered receipts; finishing Action drains the accepted inputs in order | No complete hierarchical/parallel StateMachine implementation |
+| N3 — guard recovery | A real fault/incident and normal operator retry preserve the completed sibling/phases and input scheduling provenance | No claim that inline expression faults already have the same recovery seam without an adapter |
+| N4 — logical cause | Both guard callbacks retain the same scheduled input ID despite reverse source order; a later input is never substituted for it | No equivalence between arbitrary composite triggers and a single logical event without further qualification |
+| N5 — retired wait | A saved old Action bookmark cannot complete a replacement Action after retry; only the new exact wait can do so | No retargeting of old completions to new visits |
+| N6 — terminal state | Completed/cancelled native state and retained private receipts can be read in a later process; queued versus selected inputs remain distinguishable | No receipt SLA after deletion or outside normal retention guarantees |
+
+Mutation/negative control: omit the parent's structural state update, remove its rescheduled-child opt-in, or corrupt the callback's expected input ID in an isolated local run. At least the corresponding restart/retry/provenance assertion must fail. Restore the fixture before committing. These controls establish that the witness depends on the real checkpoint/recovery/provenance mechanisms; they do not prove production behavior that has not been implemented.
+
+## Execution and evidence
+
+1. Review this plan with the repository's independent correctness, standards and spec-conformance lenses. Resolve concrete defects using source and failure scenarios.
+2. Build only the focused executable, through `dotnet` on PATH, once. Reuse that output for its child process generations. No broad Workbench/Studio build or provider matrix starts before the coordinator releases that shared-machine validation turn.
+3. Run the bounded SQLite witness against owned temporary paths and capture source head, assembly paths, persistence mode, process generations, exact workflow/activity/input identities, receipts, incidents, retry jobs and relevant activity states in JSON.
+4. If a build slot wrapper is present, respect it. The current task PATH resolves the dotnet host directly; keep MSBuild concurrency narrow and do not bypass a wrapper if one becomes available. Record load; do not classify timing-shaped failures under contention as product failures without a lower-load check.
+5. Record each N1–N6 as passed, failed, partial or not executed with concrete evidence. A source observation, successful transport enqueue or a small model assertion is not a passed integration witness.
+6. Amend research from the result, document the smallest required shared change or fallback, and perform another independent review. Then advance the full specification and production plan/tasks through normal gates under delegation. Preserve actual designated non-author approval requirements if a real dependency introduces them.
+
+## Proposed artifacts
+
+- `witness/StateMachine.M0.Witness.csproj`: non-packable focused executable; no production project references it.
+- `witness/Program.cs`: process-generation runner and assertions using actual runtime stores/dispatchers.
+- `witness/NativeProbe.cs`: small CLR fixture activities and their native continuation data.
+- `evidence/m0-native-witness.json`: captured results and limits, added only after execution. Do not prefill passing observations.
+
+The exact execution commands and counts belong in the evidence/PR receipt after they run. Shared-machine broad validation and full first-release qualification remain separate delivery gates.

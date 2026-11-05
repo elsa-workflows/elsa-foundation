@@ -16,6 +16,8 @@ The program's [OD1–OD49 register](https://github.com/elsa-workflows/elsa-found
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
+Delegated engineering direction DE1 permits the reviewed M0 proposal to be used provisionally for a bounded native-first witness, with model hosting as fallback. Later supervisory authority covers necessary owner decisions and progress through the normal gates without waiting for Sipke's return. Record that provenance separately from OD1–OD49 and never infer another designated approver's agreement. This does not establish runtime sufficiency, final engine placement or a public schema; the [focused witness plan](m0-witness-plan.md) is design qualification work.
+
 Hierarchy and parallel regions both belong to first-release acceptance. Delivery priority and independently testable stories do not reduce that scope. No implementation plan or implementation task list is authorized by this draft.
 
 ## User Scenarios & Testing
