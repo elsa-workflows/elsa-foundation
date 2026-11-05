@@ -10,10 +10,12 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.ExternalAuthentication;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.ExternalAuthentication.Api;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Foundation.Identity.ExternalAuthentication.Oidc;
@@ -131,7 +133,7 @@ services.AddFoundationExternalAuthentication(options =>
 {
     options.AllowDatabaseManagement = settings.DatabaseManagement; options.AllowDeploymentOverrides = settings.DatabaseManagement;
     if (settings.StudioUrl is not null) options.AllowedReturnUrlOrigins.Add(settings.StudioUrl);
-    options.Connections = [Connection("company", "Company", settings.CompanyIssuer ?? company.Issuer, settings.ClientId, settings.Provisioning),
+    options.Connections = settings.EmptyCatalog ? [] : [Connection("company", "Company", settings.CompanyIssuer ?? company.Issuer, settings.ClientId, settings.Provisioning),
         Connection("partner", "Partner", settings.PartnerIssuer ?? partner.Issuer, settings.ClientId, settings.Provisioning)];
 });
 if (settings.ManagedApi) services.AddFoundationExternalAuthenticationApi();
@@ -155,6 +157,19 @@ services.AddAuthentication(options =>
     options.DefaultAuthenticateScheme = OpenIddictIdentityDefaults.SelectorScheme;
     options.DefaultChallengeScheme = OpenIddictIdentityDefaults.SelectorScheme;
 });
+if (settings.UiRecovery)
+{
+    var original = services.Single(descriptor => descriptor.ServiceType == typeof(IAuthenticationSessionStore));
+    if (original.Lifetime != ServiceLifetime.Scoped || original.ImplementationType is null)
+        throw new InvalidOperationException("The owned fault fixture requires the ordinary scoped session implementation.");
+    var implementation = original.ImplementationType;
+    services.Remove(original);
+    services.AddSingleton<ProbeSessionFaults>();
+    services.AddScoped<IAuthenticationSessionStore>(provider => new ProbeSessionStore(
+        (IAuthenticationSessionStore)ActivatorUtilities.CreateInstance(provider, implementation),
+        provider.GetRequiredService<ProbeSessionFaults>()));
+    services.EnsureReplacementContract<IAuthenticationSessionStore, ProbeSessionStore>();
+}
 await using var app = builder.Build();
 app.UsePathBase("/backend"); app.UseRouting();
 if (settings.StudioUrl is not null) app.UseCors("owned-studio");
@@ -185,6 +200,26 @@ app.MapGet("/__probe/state", async (HttpContext context) =>
         Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted),
         Sessions = sessionCount, company.TokenRequests });
 }).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
+if (settings.UiRecovery)
+{
+    var controlKey = await File.ReadAllTextAsync(OwnedFile("ui-control-key.txt"));
+    app.MapPost("/__probe/ui-control", async (HttpContext context) =>
+    {
+        if (context.Request.Headers["X-Owned-Probe-Control"] != controlKey) return Results.Unauthorized();
+        if (context.Request.ContentLength is null or > 4096) return Results.BadRequest();
+        var command = await context.Request.ReadFromJsonAsync<ProbeUiControl>(context.RequestAborted);
+        if (command?.Mode == "deny-preview") { company.DenyNextAuthorization(); return Results.Ok(new { armed = true }); }
+        if (command?.Mode is not ("before-write" or "after-commit") || command.UserId is null || command.SessionId is null)
+            return Results.BadRequest();
+        await using var scope = app.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
+        var store = scope.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>();
+        var session = await store.FindAsync("default", command.SessionId, context.RequestAborted);
+        if (session is null || session.UserId != command.UserId || session.RevokedAt is not null) return Results.BadRequest();
+        return context.RequestServices.GetRequiredService<ProbeSessionFaults>().Arm(command.SessionId, command.Mode)
+            ? Results.Ok(new { armed = true }) : Results.Conflict();
+    }).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
+}
 if (ui is not null)
 {
     using var uiClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
@@ -220,6 +255,9 @@ async Task Run()
     await using (var scope = app.Services.CreateAsyncScope())
     {
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
+        if (settings.UiRecovery || settings.EmptyCatalog)
+            await scope.ServiceProvider.GetRequiredService<IUserStore>().SaveAsync(new("pending-fixture-user", "default", "pending-fixture-user",
+                null, "Pending fixture user", UserStatus.Active, ResourceOwnership.Foundation, new HashSet<string>(), new HashSet<string>()));
         var readerPermissions = new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead };
         if (settings.StudioUrl is not null) readerPermissions.Add("api-capabilities:read");
         await scope.ServiceProvider.GetRequiredService<IRoleStore>().SaveAsync(new("reader", "default", "Reader", null, readerPermissions, false));
@@ -251,7 +289,7 @@ async Task Run()
 string? Option(string name) { var index = Array.IndexOf(args, name); return index >= 0 && index + 1 < args.Length ? args[index + 1] : null; }
 static ConnectionRecord Connection(string key, string displayName, string issuer, string clientId, bool provisioning) => new()
 {
-    Key = key, DisplayName = displayName, Enabled = true, Settings = new Dictionary<string, string> { ["authority"] = issuer, ["clientId"] = clientId },
+    Key = key, DisplayName = displayName, Enabled = true, Preferred = key == "company", Settings = new Dictionary<string, string> { ["authority"] = issuer, ["clientId"] = clientId },
     Secrets = new Dictionary<string, SecretReference> { ["clientSecret"] = new("client-" + key, "text", "identity/external") },
     Admission = new() { Type = provisioning ? "jit" : "reject", DefaultRoleIds = provisioning ? ["reader"] : [] }
 };
@@ -281,5 +319,9 @@ internal sealed class ProbeSettings
     public bool SessionStore { get; init; } = true;
     public bool ManagedApi { get; init; } = true;
     public bool SecretsAvailable { get; init; } = true;
+    public bool UiRecovery { get; init; }
+    public bool EmptyCatalog { get; init; }
 }
 internal sealed record ProbeSubjectChange(string Provider, string Subject);
+
+internal sealed record ProbeUiControl(string Mode, string? UserId, string? SessionId);

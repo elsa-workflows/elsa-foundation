@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -10,6 +11,7 @@ const sourceSha = git("rev-parse", "HEAD");
 if (git("status", "--porcelain")) throw new Error("Commit source changes before full Studio qualification; a dirty run cannot certify a revision.");
 const profile = process.argv[2] ?? null;
 const profiles = {
+  empty: { emptyCatalog: true },
   configuration: { databaseManagement: false },
   "provider-reader": { secretsAvailable: false, administratorPermissions: ["identity/providers:read", "identity/users:read", "api-capabilities:read"] },
   denied: { administratorPermissions: ["identity/users:read", "api-capabilities:read"] },
@@ -31,7 +33,9 @@ async function port() {
 }
 const backend = (previous.listen ?? `http://127.0.0.1:${await port()}`) + "/backend";
 const studioUrl = `http://127.0.0.1:${await port()}`;
-writeFileSync(join(root, "probe-settings.json"), JSON.stringify({ ...previous, ...profiles[profile], uiProfile: profile, listen: new URL(backend).origin, studioUrl }), { mode: 0o600 });
+const uiRecovery = !profile && previous.provider !== "Keycloak";
+if (uiRecovery) writeFileSync(join(root, "ui-control-key.txt"), randomBytes(32).toString("hex"), { mode: 0o600 });
+writeFileSync(join(root, "probe-settings.json"), JSON.stringify({ ...previous, ...profiles[profile], emptyCatalog: profile === "empty", uiRecovery, uiProfile: profile, listen: new URL(backend).origin, studioUrl }), { mode: 0o600 });
 const content = join(root, "studio"); mkdirSync(content); mkdirSync(join(content, "packages")); mkdirSync(join(content, "wwwroot"));
 writeFileSync(join(content, "appsettings.json"), JSON.stringify({
   Logging: { LogLevel: { Default: "Warning", "Microsoft.Hosting.Lifetime": "Information" } },

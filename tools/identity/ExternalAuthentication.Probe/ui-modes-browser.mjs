@@ -1,10 +1,13 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const repo = resolve(import.meta.dirname, "../../..");
+const { createUiEvidence } = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-evidence.mjs")));
+const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+const sourceDirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" }).trim());
 const root = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT;
 if (!root || readFileSync(join(root, ".elsa-3579-owned-probe"), "utf8") !== "elsa-external-authentication-probe/v1") throw new Error("An owned Studio runner root is required.");
 const settings = JSON.parse(readFileSync(join(root, "probe-settings.json"), "utf8"));
@@ -13,7 +16,7 @@ const expect = baseExpect.configure({ timeout: 30_000 });
 const instance = randomUUID(); const log = openSync(join(root, "host.log"), "w", 0o600);
 const host = spawn("dotnet", [join(repo, "tools/identity/ExternalAuthentication.Probe/bin/Debug/net10.0/ExternalAuthentication.Probe.dll"),
   "--owned-root", root, "--instance", instance], { cwd: repo, stdio: ["ignore", log, log] });
-let browser;
+let browser; let uiEvidence;
 try {
   const deadline = Date.now() + 90_000;
   while (true) {
@@ -22,6 +25,8 @@ try {
     await new Promise(done => setTimeout(done, 100));
   }
   const backend = JSON.parse(readFileSync(join(root, "probe.json"), "utf8")).Backend;
+  uiEvidence = createUiEvidence({ root, sourceSha, dirty: sourceDirty, origins: [new URL(settings.studioUrl).origin], forbidden: ["client secret +/:?&"] });
+
   browser = await chromium.launch({ headless: true }); const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage(); const errors = []; const writes = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -31,7 +36,29 @@ try {
   await Promise.all([page.waitForURL(backend + "/resource"), page.getByRole("button", { name: "Sign in", exact: true }).click()]);
   await page.goto(settings.studioUrl + "/security/external-sign-in?backend=owned");
   const profile = settings.uiProfile;
-  if (profile === "missing-api") {
+  if (profile === "empty") {
+    await expect(page.getByText("No external sign-in connections yet. Add one to prepare a disabled draft.", { exact: true })).toBeVisible();
+    await uiEvidence.capture(page, "empty-managed-catalog", { action: "inspect-empty-connection-list" });
+    await page.getByRole("button", { name: "Add connection", exact: true }).click();
+    await page.getByLabel("Connection key", { exact: true }).fill("first-fixture"); await page.getByLabel("Display name", { exact: true }).fill("First fixture");
+    const metadata = JSON.parse(readFileSync(join(root, "probe.json"), "utf8"));
+    await page.getByLabel("Issuer URL", { exact: true }).fill(metadata.CompanyIssuer); await page.getByLabel("Client ID", { exact: true }).fill(metadata.ClientId);
+    await page.getByLabel("Client secret reference", { exact: true }).fill(metadata.CompanySecret); await page.getByLabel("Secret scope (optional)", { exact: true }).fill("identity/external");
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Save draft", exact: true });
+    await uiEvidence.capture(page, "first-draft-confirmation", { region: '[role="dialog"]', action: "save-first-disabled-draft" });
+    await dialog.getByRole("button", { name: "Save draft", exact: true }).click();
+    const row = page.locator(".external-auth-row").filter({ hasText: "First fixture" }); await expect(row).toBeEnabled(); await row.focus(); await page.keyboard.press("Enter");
+    await expect(page.getByLabel("Connection key", { exact: true })).toHaveValue("first-fixture");
+    await expect(page.getByRole("button", { name: "Enable sign-in", exact: true })).toBeDisabled();
+    await uiEvidence.capture(page, "first-disabled-draft-reopened", { action: "reopen-first-disabled-draft" });
+    await page.goto(settings.studioUrl + "/security/user-access?backend=owned");
+    await page.getByLabel("Exact username or email").fill("pending-fixture-user"); await page.getByRole("button", { name: "Find users", exact: true }).click();
+    await page.locator(".external-auth-row").filter({ hasText: "pending-fixture-user" }).click();
+    await expect(page.getByText("No identities are linked to this user.", { exact: true })).toBeVisible();
+    await expect(page.getByText("No retained sessions for this user.", { exact: true })).toBeVisible();
+    await uiEvidence.capture(page, "empty-user-links-sessions", { action: "inspect-pending-user-without-access" });
+  } else if (profile === "missing-api") {
     await expect(page.getByRole("status").filter({ hasText: "does not support elsa.api.identity.external-authentication" })).toBeVisible();
     await expect(page.locator(".external-auth-shell")).toHaveCount(0);
     expect((await context.request.get(backend + "/_elsa/identity/external-connections")).status()).toBe(404);
@@ -96,18 +123,20 @@ try {
   await page.evaluate(() => Promise.all(globalThis.document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations)).map(animation => animation.finished.catch(() => {}))));
   const dark = await accessibility(); expect(dark).toEqual([]);
   await page.screenshot({ path: join(root, "mode-dark.png"), fullPage: false });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 844 });
   expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth)).toBe(true);
   await page.screenshot({ path: join(root, "mode-narrow.png"), fullPage: false });
-  expect(writes).toEqual([]); expect(errors).toEqual([]);
+  await uiEvidence.capture(page, "profile-narrow-dark", { region: "body", action: "inspect-profile-at-360" });
+  expect(writes).toEqual(profile === "empty" ? ["POST", "POST"] : []); expect(errors).toEqual([]);
   const result = { passed: true, ownedRoot: root, profile, fullStudioHost: true, browser: "Chromium", store: "native SQLite",
-    noExternalManagementWrites: true, accessibility: { light, dark }, narrowNoOverflow: true,
+    noExternalManagementWrites: profile !== "empty", uiEvidence: uiEvidence.result(profile === "empty" ? ["empty-managed-catalog", "first-draft-confirmation", "first-disabled-draft-reopened", "empty-user-links-sessions", "profile-narrow-dark"] : ["profile-narrow-dark"]), accessibility: { light, dark }, narrowNoOverflow: true,
     limitations: ["representative ownership/permission/installation UI profile; full provider and process/store journeys are recorded separately"] };
   writeFileSync(join(root, "browser-receipt.json"), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } catch (error) {
   if (browser) for (const page of browser.contexts().flatMap(context => context.pages())) {
-    await page.screenshot({ path: join(root, "mode-failure.png"), fullPage: false }).catch(() => {});
-    writeFileSync(join(root, "mode-failure.json"), JSON.stringify({ path: new URL(page.url()).pathname, text: (await page.locator("body").innerText().catch(() => "")).slice(0, 3000) }));
+    await uiEvidence?.capture(page, "mode-failure", { region: "body", action: "failure-checkpoint" }).catch(() => {
+      writeFileSync(join(root, "mode-failure.json"), JSON.stringify({ capture: "withheld-unsafe-or-unavailable" }));
+    });
   }
   throw error;
 } finally {

@@ -1075,9 +1075,10 @@ jobs:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           TMPDIR: ${{ runner.temp }}
         run: |
+          node --test tools/identity/ExternalAuthentication.Probe/ui-evidence.test.mjs
           dotnet build tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj -p:RestoreLockedMode=true -v:q -nologo
           node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs
-          for profile in configuration provider-reader denied external-owned hybrid missing-api missing-sessions; do
+          for profile in empty configuration provider-reader denied external-owned hybrid missing-api missing-sessions; do
             node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs "$profile"
           done
       - name: Retain external sign-in screenshots and source-bound receipts
@@ -1091,6 +1092,7 @@ jobs:
             ${{ runner.temp }}/elsa-3579-full-studio-*/*.png
             ${{ runner.temp }}/elsa-3579-full-studio-*/studio-receipt.json
             ${{ runner.temp }}/elsa-3579-full-studio-*/browser-receipt.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/ui-evidence/*.json
       - name: Retain reviewable success and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

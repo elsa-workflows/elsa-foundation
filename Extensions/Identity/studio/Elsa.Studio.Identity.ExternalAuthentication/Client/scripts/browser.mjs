@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +7,11 @@ import { pathToFileURL } from "node:url";
 
 const repo = resolve(import.meta.dirname, "../../../../../..");
 const clientRoot = resolve(import.meta.dirname, "..");
+const { createUiEvidence } = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-evidence.mjs")));
+const recovery = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-recovery.mjs")));
+const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+const sourceDirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" }).trim());
+let uiEvidence;
 const { createServer } = await import(pathToFileURL(join(repo, "Studio/node_modules/vite/dist/node/index.js")));
 const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
 const expect = baseExpect.configure({ timeout: 30_000 });
@@ -52,7 +57,9 @@ async function confirmStudio(page, title, label = title) {
       expect(box.left).toBeGreaterThanOrEqual(geometry.left);
       expect(box.right).toBeLessThanOrEqual(geometry.right);
     }
-    await page.screenshot({ path: join(ownedRoot, `confirmation-${++confirmationNumber}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`), fullPage: false });
+    confirmationNumber++;
+    await uiEvidence.capture(page, `dialog-${confirmationNumber}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 45)}`, { region: '[role="dialog"]', action: "inspect-confirmation" });
+    await page.screenshot({ path: join(ownedRoot, `confirmation-${confirmationNumber}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`), fullPage: false });
     await dialog.getByRole("button", { name: label, exact: true }).click();
   }
 }
@@ -80,6 +87,10 @@ try {
   }
   const metadata = JSON.parse(readFileSync(metadataFile, "utf8"));
   const backend = metadata.Backend;
+  const controlKey = settings.uiRecovery ? readFileSync(join(ownedRoot, "ui-control-key.txt"), "utf8") : null;
+  uiEvidence = createUiEvidence({ root: ownedRoot, dirty: sourceDirty, origins: [new URL(backend).origin, ...(settings.studioUrl ? [new URL(settings.studioUrl).origin] : [])],
+    forbidden: [controlKey, "client secret +/:?&", ...(settings.clientSecretFile ? [readFileSync(join(ownedRoot, settings.clientSecretFile), "utf8")] : [])], sourceSha });
+  const capture = (...args) => uiEvidence.capture(...args);
   const componentUrl = view => settings.studioUrl ? `${settings.studioUrl}/security/${view === "access" ? "user-access" : "external-sign-in"}?backend=owned`
     : backend + `/__tests__/live.html?backend=owned${view === "access" ? "&view=access" : ""}`;
   browser = await chromium.launch({ headless: true });
@@ -92,9 +103,21 @@ try {
   await expect(page.getByRole("button", { name: /^Continue with Company(?: Preferred)?$/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Continue with Partner(?: Preferred)?$/ })).toBeVisible();
   await page.screenshot({ path: join(ownedRoot, "login-chooser.png"), fullPage: false });
+  if (settings.uiRecovery) {
+    await expect(page.getByRole("button", { name: /^Continue with Company/ })).toContainText("Preferred");
+    await page.setViewportSize({ width: 360, height: 844 });
+    await expect(page.getByRole("button", { name: /^Continue with Company/ })).toBeInViewport();
+    await expect(page.getByRole("button", { name: /^Continue with Partner/ })).toBeInViewport();
+    await capture(page, "preferred-chooser-narrow", { region: ".login-methods", blankLogin: true, action: "inspect-all-choices-before-login" });
+    await page.setViewportSize({ width: 1440, height: 1100 });
+  }
   await page.locator("input[name=username]").fill("admin"); await page.locator("input[name=password]").fill("Password123!");
   await Promise.all([page.waitForURL(url => url.pathname === "/backend/__probe"), page.getByRole("button", { name: "Sign in", exact: true }).click()]);
   const adminSession = await (await admin.request.get(backend + "/_elsa/identity/session")).json();
+  async function control(mode, userId = null, sessionId = null) {
+    const result = await admin.request.post(backend + "/__probe/ui-control", { headers: { "X-Owned-Probe-Control": controlKey }, data: { mode, userId, sessionId } });
+    expect(result.status()).toBe(200); expect((await result.json()).armed).toBe(true);
+  }
   const administratorExchanges = [];
   page.on("response", response => {
     if (new URL(response.url()).pathname === "/backend/_elsa/identity/token" && response.status() === 200) {
@@ -111,19 +134,31 @@ try {
   }
   await page.goto(componentUrl("connections"));
   await expect(page.getByRole("heading", { name: "External sign-in", level: 2, exact: true })).toBeVisible();
+  if (settings.uiRecovery) {
+    await page.getByLabel("Find a connection", { exact: true }).fill("no-such-connection");
+    await expect(page.getByText("No connections match this search.", { exact: true })).toBeVisible();
+    await capture(page, "connection-no-match", { action: "filter-absent-connection" });
+    await page.getByLabel("Find a connection", { exact: true }).fill("");
+    await expect(page.locator(".external-auth-row").filter({ has: page.getByText("Company", { exact: true }) })).toBeVisible();
+    await capture(page, "connection-filter-cleared", { action: "clear-connection-filter" });
+  }
   await page.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByLabel("Connection key", { exact: true }).focus(); await page.keyboard.press("Tab");
   await expect(page.getByLabel("Display name", { exact: true })).toBeFocused();
+  await capture(page, "key-to-name-tab", { action: "tab-from-key-to-name" });
   await page.getByLabel("Connection key", { exact: true }).fill("studio-company"); await page.getByLabel("Display name", { exact: true }).fill("Studio company");
   await page.getByLabel("Issuer URL", { exact: true }).fill(metadata.CompanyIssuer); await page.getByLabel("Client ID", { exact: true }).fill(metadata.ClientId);
   await page.getByLabel("Client secret reference", { exact: true }).fill(metadata.CompanySecret); await page.getByLabel("Secret scope (optional)", { exact: true }).fill("identity/external");
   await page.getByLabel("Unknown identities", { exact: true }).selectOption("jit"); await page.getByLabel("Reader", { exact: true }).check();
+  if (settings.uiRecovery) await recovery.prepareInvalidDraft({ page, expect, capture, setMode: connectionMode });
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await confirmStudio(page, "Save draft");
   await expect(page.getByRole("heading", { name: "Studio company", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Enable sign-in", exact: true })).toBeDisabled();
+  if (settings.uiRecovery) await recovery.recoverFailedTest({ page, expect, capture, metadata, confirm: confirmStudio });
   await page.getByRole("button", { name: "Test configuration", exact: true }).click();
   await expect(page.getByText("Configuration test passed", { exact: true })).toBeVisible();
+  if (settings.uiRecovery) await recovery.exercisePreviewDenial({ page, admin, backend, expect, capture, confirm: confirmStudio, control, exchangeCount });
   const beforeExchanges = await exchangeCount();
   const beforePreview = await (await admin.request.get(backend + "/__probe/state")).json();
   await page.getByRole("button", { name: "Preview sign-in", exact: true }).click();
@@ -141,6 +176,7 @@ try {
   expect((await (await admin.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(adminSession.subject);
   expect(new URL(page.url()).searchParams.has("externalPreviewHandle")).toBe(false);
   await expect(page.getByLabel("Reader", { exact: true })).toBeVisible();
+  if (settings.uiRecovery) await capture(page, "preview-recovery-succeeded", { action: "successful-preview-after-denial" });
   await page.addScriptTag({ path: join(repo, "Studio/node_modules/axe-core/axe.min.js") });
   const accessibility = await page.evaluate(async () => {
     const result = await globalThis.axe.run(globalThis.document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
@@ -174,28 +210,36 @@ try {
     expect(connectionDarkAccessibility).toEqual([]);
     await connectionMode("light");
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 844 });
   expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth)).toBe(true);
   await captureConnectionPanels("light", "narrow");
   if (settings.studioUrl) {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await connectionMode("dark");
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width: 360, height: 844 });
     await captureConnectionPanels("dark", "narrow");
     await page.setViewportSize({ width: 1440, height: 1100 });
     await connectionMode("light");
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
   if (settings.studioUrl) {
+    const beforeCancel = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();
     const enable = page.getByRole("button", { name: "Enable sign-in", exact: true });
+    await enable.click(); await capture(page, "enable-before-escape", { region: '[role="dialog"]', action: "open-enable-confirmation" });
+    await page.keyboard.press("Escape"); await expect(page.getByRole("dialog", { name: "Enable sign-in", exact: true })).toHaveCount(0);
+    await expect(enable).toBeFocused(); await capture(page, "enable-escape-focus", { action: "escape-return-to-enable" });
     await enable.click();
     await page.getByRole("dialog", { name: "Enable sign-in", exact: true }).getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(enable).toBeFocused(); await expect(page.getByLabel("Reader", { exact: true })).toBeChecked();
+    const afterCancel = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();
+    expect(afterCancel.revision).toBe(beforeCancel.revision);
+    expect(afterCancel.connections.map(item => item.document)).toEqual(beforeCancel.connections.map(item => item.document));
+    await capture(page, "enable-cancel-focus", { action: "cancel-enable-preserve-form" });
   }
   await page.getByRole("button", { name: "Enable sign-in", exact: true }).click();
   await confirmStudio(page, "Enable sign-in");
   await expect(page.getByRole("button", { name: "Disable sign-in", exact: true })).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 844 });
   expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.window.innerWidth)).toBe(true);
   await page.screenshot({ path: join(ownedRoot, "connection-narrow.png"), fullPage: false });
   const user = await browser.newContext(); const signIn = await user.newPage();
@@ -213,15 +257,22 @@ try {
   await expect(page.getByRole("heading", { name: "User access", level: 2, exact: true })).toBeVisible();
   const directory = await (await admin.request.get(backend + "/_elsa/identity/external-connections/users?take=25")).json();
   const target = directory.items.find(item => item.id === session.subject); expect(target).toBeTruthy();
+  if (settings.uiRecovery) {
+    await page.getByLabel("Exact username or email").fill("no-such-fixture-user"); await page.getByRole("button", { name: "Find users", exact: true }).click();
+    await expect(page.getByText("No users match this search.", { exact: true })).toBeVisible();
+    await capture(page, "user-no-match", { action: "search-absent-fixture-user" });
+  }
   await page.getByLabel("Exact username or email").fill(target.userName);
   await page.getByRole("button", { name: "Find users", exact: true }).click();
   const row = page.locator(".external-auth-row").filter({ hasText: target.userName });
   await expect(row).toHaveCount(1); await row.click();
   await expect(page.getByRole("heading", { name: "Identity links", exact: true })).toBeVisible();
+  if (settings.uiRecovery) await capture(page, "known-user-search-recovered", { action: "find-known-user-after-no-match" });
   await expect(page.getByRole("button", { name: "Remove link", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Remove link", exact: true }).click();
   await confirmStudio(page, "Remove link");
   await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("Keep a usable sign-in method for this user and an administrator");
+  await capture(page, "last-login-path-refused", { action: "refuse-final-link-removal" });
   await expect(page.getByRole("button", { name: "Remove link", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Refresh user access", exact: true }).click();
   await expect(page.getByRole("button", { name: "Remove link", exact: true })).toBeEnabled();
@@ -251,6 +302,8 @@ try {
   await companyCard.getByRole("button", { name: "Remove link", exact: true }).click();
   await confirmStudio(page, "Remove link");
   await expect(page.locator(".external-auth-notice")).toContainText("Identity link removed.");
+  await expect(companyCard).toHaveCount(0);
+  await capture(page, "proved-sibling-safe-removal", { action: "remove-link-after-proving-sibling" });
   expect((await (await user.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(session.subject);
   // A reader can use the directory, while link/session inspection remains explicitly denied.
   const readerPage = await user.newPage(); await readerPage.goto(componentUrl("access"));
@@ -276,13 +329,20 @@ try {
   expect((await (await user.request.get(backend + "/_elsa/identity/session")).json()).status).toBe("anonymous");
   expect((await user.request.get(backend + "/resource", { headers: { Authorization: `Bearer ${pair.accessToken}` } })).status()).toBe(401);
   expect((await user.request.post(backend + "/_elsa/identity/refresh", { data: { refreshToken: pair.refreshToken } })).status()).toBe(401);
+  let errorRecovery = null;
+  if (settings.uiRecovery) {
+    await recovery.exerciseAccessRecovery({ page, admin, browser, backend, componentUrl, target, partnerSession, subject, expect, capture, confirm: confirmStudio, control, setMode: connectionMode });
+    errorRecovery = { ownershipConflict: true, beforeWriteFailureThenRetry: true, lostAcknowledgementRefreshAndIdempotence: true };
+  }
   let retainedDraft = null;
   if (settings.studioUrl) {
     await page.getByLabel("External subject", { exact: true }).fill("unattached-retained-proof");
+    await capture(page, "link-draft-before-tab", { action: "edit-fixture-link-draft" });
     await page.getByRole("tab", { name: "External sign-in", exact: true }).click();
     await expect(page.getByRole("heading", { name: "External sign-in", level: 2, exact: true })).toBeVisible();
     await page.getByRole("tab", { name: /^User access/ }).click();
     await expect(page.getByLabel("External subject", { exact: true })).toHaveValue("unattached-retained-proof");
+    await capture(page, "link-draft-after-tab", { action: "return-to-retained-link-draft" });
     await page.getByRole("button", { name: "Discard link draft", exact: true }).click();
     await expect(page.getByText("Loading user access…", { exact: true })).toHaveCount(0);
     retainedDraft = true;
@@ -315,7 +375,7 @@ try {
       .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations))
       .map(animation => animation.finished.catch(() => {}))));
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 844 });
   expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.window.innerWidth)).toBe(true);
   await page.getByRole("heading", { name: "User access", level: 2, exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: join(ownedRoot, "user-access-narrow.png"), fullPage: !settings.studioUrl });
@@ -329,8 +389,11 @@ try {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.getByRole("tab", { name: "External sign-in", exact: true }).click();
     await page.locator(".external-auth-list .external-auth-row").filter({ has: page.getByText("Studio company", { exact: true }) }).click();
-    await page.getByLabel("Display name", { exact: true }).fill("Studio company edited");
-    await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirmStudio(page, "Save changes");
+    if (settings.uiRecovery) await recovery.exerciseConnectionConflict({ page, admin, componentUrl, expect, capture, confirm: confirmStudio });
+    else {
+      await page.getByLabel("Display name", { exact: true }).fill("Studio company edited");
+      await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirmStudio(page, "Save changes");
+    }
     await expect(page.getByRole("heading", { name: "Studio company edited", exact: true })).toBeVisible();
     for (const [label, title] of [["Disable sign-in", "Disable sign-in"], ["Archive", "Archive connection"], ["Restore", "Restore connection"], ["Remove", "Remove Studio connection"]]) {
       await page.getByRole("button", { name: label, exact: true }).click(); await confirmStudio(page, title);
@@ -386,19 +449,26 @@ try {
   const access = { targetRolesPreserved: partnerSession.roles.includes("reader"), finalPathRefused: true, attachedExistingUser: true,
     provedSiblingThenRemoved: true, readerPanelsDenied: true, selectedRevocation: { cookie: true, access: true, refresh: true }, retainedDraft,
     accessibility: accessAccessibility, darkAccessibility };
+  if (settings.uiRecovery) await recovery.exerciseSelfRevocation({ page, admin, backend, componentUrl, adminSession, expect, capture, confirm: confirmStudio });
   expect(errors).toEqual([]);
   const result = { passed: true, ownedRoot, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
-    accessibility, connectionDarkAccessibility, access, connectionLifecycle, provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
+    accessibility, connectionDarkAccessibility, access, connectionLifecycle, errorRecovery, uiEvidence: uiEvidence.result(settings.uiRecovery ? [
+      "preferred-chooser-narrow", "key-to-name-tab", "missing-name-narrow-dark", "invalid-key", "configuration-test-failed", "corrected-draft-enter-reopen",
+      "preview-provider-denied", "preview-recovery-succeeded", "connection-no-match", "connection-filter-cleared", "enable-before-escape", "enable-escape-focus", "enable-cancel-focus",
+      "user-no-match", "known-user-search-recovered", "last-login-path-refused", "proved-sibling-safe-removal", "pending-user-empty-access", "identity-ownership-conflict", "revocation-before-write-failure",
+      "revocation-before-write-recovered", "revocation-after-commit-failure", "revocation-after-commit-recovered", "link-draft-before-tab", "link-draft-after-tab",
+      "stale-draft-preserved", "discard-conflicting-draft", "discard-cancel-preserves-draft", "conflict-recovered-save-reopen", "self-session-revoked", "self-session-reauthenticated"
+    ] : ["key-to-name-tab", "last-login-path-refused"]), provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
     fullStudioHost: Boolean(settings.studioUrl),
-    limitations: [...(settings.provider === "Keycloak" ? [] : ["not an external IdP product"]), ...(settings.studioUrl ? [] : ["not a full Studio host"]), "not server-database or separate-node qualification"] };
+    limitations: [...(settings.provider === "Keycloak" ? [] : ["not an external IdP product"]), ...(settings.studioUrl ? [] : ["not a full Studio host"]), "not server-database or separate-node qualification", "custom evidence is selected ARIA and named actions; native replay remains unverified"] };
   writeFileSync(join(ownedRoot, "browser-receipt.json"), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } catch (error) {
   if (browser) {
     for (const [index, page] of browser.contexts().flatMap(context => context.pages()).entries()) {
-      await page.screenshot({ path: join(ownedRoot, `failure-${index}.png`), fullPage: true }).catch(() => {});
-      writeFileSync(join(ownedRoot, `failure-${index}.json`), JSON.stringify({ path: new URL(page.url()).pathname,
-        text: (await page.locator("body").innerText().catch(() => "")).slice(0, 2000) }));
+      await uiEvidence?.capture(page, `failure-${index}`, { action: "failure-checkpoint" }).catch(() => {
+        writeFileSync(join(ownedRoot, `failure-${index}.json`), JSON.stringify({ capture: "withheld-unsafe-or-unavailable" }));
+      });
     }
   }
   throw error;

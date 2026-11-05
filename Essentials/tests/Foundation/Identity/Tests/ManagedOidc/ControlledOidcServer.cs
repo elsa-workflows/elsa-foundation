@@ -35,6 +35,8 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
     public bool RotateOnToken { get; set; }
     public int TokenRequests;
     public int KeyRequests;
+    private int denyNextAuthorization;
+    public void DenyNextAuthorization() => Interlocked.Exchange(ref denyNextAuthorization, 1);
 
     public static async Task<ControlledOidcServer> Start()
     {
@@ -85,6 +87,9 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
         if (query["client_id"] != ClientId || !RegisteredCallbacks.Contains(callback) || query["response_type"] != "code" ||
             query["code_challenge_method"] != "S256" || string.IsNullOrEmpty(query["nonce"]) || string.IsNullOrEmpty(query["state"]))
             return Results.BadRequest();
+        if (Interlocked.Exchange(ref denyNextAuthorization, 0) == 1)
+            return Results.Redirect(QueryHelpers.AddQueryString(callback, new Dictionary<string, string?>
+                { ["error"] = "access_denied", ["state"] = query["state"], ["iss"] = Issuer }));
         var code = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
         codes[code] = new(query["nonce"].ToString(), query["code_challenge"].ToString(), callback, Subject);
         return Results.Redirect(QueryHelpers.AddQueryString(callback, new Dictionary<string, string?>
