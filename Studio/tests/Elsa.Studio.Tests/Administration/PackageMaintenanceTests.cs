@@ -31,7 +31,7 @@ public sealed class PackageMaintenanceTests
         Assert.All(preview["candidates"]!.AsArray(), candidate => Assert.Equal("NotAttempted", (string?)candidate!["attempt"]));
         Assert.True(Directory.Exists(old));
         var execute = await Prune(host, Execute(preview));
-        Assert.True((string?)execute["status"] == "Completed", execute.ToJsonString());
+        PackageMaintenanceAssertions.Completed(execute, PackageMaintenancePhase.RecoverStaleUses);
         Assert.True((string?)execute["protectionKnowledge"] == "Known", execute.ToJsonString());
         Assert.Contains(execute["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
         Assert.False(Directory.Exists(old));
@@ -71,14 +71,14 @@ public sealed class PackageMaintenanceTests
         Assert.True((string?)keepAllPreview["protectionKnowledge"] == "Known", keepAllPreview.ToJsonString());
         Assert.Null(keepAllPreview["retention"]);
         var keepAll = await Prune(host, Execute(keepAllPreview));
-        AssertCompleted(keepAllPreview, keepAll);
+        PackageMaintenanceAssertions.Completed(keepAll, PackageMaintenancePhase.KeepAll);
         Assert.DoesNotContain(keepAll["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
         Assert.True(Directory.Exists(obsolete));
         await SavePolicy(host, 0);
         var preview = await Prune(host, new JsonObject());
         Assert.True((string?)preview["protectionKnowledge"] == "Known", preview.ToJsonString());
         var firstPrune = await Prune(host, Execute(preview));
-        AssertCompleted(preview, firstPrune);
+        PackageMaintenanceAssertions.Completed(firstPrune, PackageMaintenancePhase.DeleteObsolete);
         Assert.Contains(firstPrune["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
         Assert.False(Directory.Exists(obsolete));
 
@@ -91,7 +91,7 @@ public sealed class PackageMaintenanceTests
             Assert.Equal("second", current.ServiceProvider.GetRequiredService<string>());
         var replacedPreview = await Prune(host, new JsonObject());
         var replaced = await Prune(host, Execute(replacedPreview));
-        AssertCompleted(replacedPreview, replaced);
+        PackageMaintenanceAssertions.Completed(replaced, PackageMaintenancePhase.PreserveRetainedGeneration);
         Assert.Contains(replaced["candidates"]!.AsArray(), candidate => (string?)candidate!["install"]!["version"] == "1.0.0"
             && (string?)candidate["physicalOutcome"] == "Retained" && candidate["reasons"]!.AsArray().Any(reason => (string?)reason == "ProtectedLiveUse"));
         Assert.True(Directory.Exists(firstPath));
@@ -157,7 +157,7 @@ public sealed class PackageMaintenanceTests
         Assert.Null(preview["retention"]);
         Assert.Equal("Unknown", (string?)preview["protectionKnowledge"]);
         var result = await Prune(host, Execute(preview));
-        Assert.True((string?)result["status"] == "Completed", result.ToJsonString());
+        PackageMaintenanceAssertions.Completed(result, PackageMaintenancePhase.RetainAll);
         Assert.True((string?)result["protectionKnowledge"] == "Known", result.ToJsonString());
         Assert.DoesNotContain(result["candidates"]!.AsArray(), candidate => (string?)candidate!["attempt"] == "Completed");
         Assert.DoesNotContain(result["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
@@ -266,9 +266,6 @@ public sealed class PackageMaintenanceTests
             ["Studio:PackageManagement:RetentionPolicy:KeepNewestInactiveVersionsPerPackage"] = "99"
         };
     }
-
-    private static void AssertCompleted(JsonObject preview, JsonObject result) =>
-        Assert.True((string?)result["status"] == "Completed", $"Preview: {preview.ToJsonString()}; execution: {result.ToJsonString()}");
 
     private static async Task SavePolicy(AdministrationHost host, int? count)
     {
