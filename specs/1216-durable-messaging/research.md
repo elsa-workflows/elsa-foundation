@@ -1,8 +1,8 @@
 # Durable messaging: implementation gap inventory
 
-**Date:** 2026-11-05  
-**Canonical request:** [#3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583)  
-**Inspected baseline:** [`e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`](https://github.com/elsa-workflows/elsa-foundation/commit/e0ba87ecfc3b1e774c509ed274b19cd3f34a1124)  
+**Date:** 2026-11-05
+**Canonical request:** [#3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583)
+**Inspected baseline:** [`e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`](https://github.com/elsa-workflows/elsa-foundation/commit/e0ba87ecfc3b1e774c509ed274b19cd3f34a1124)
 **Evidence:** Source and test inspection only. No build, test, composed-host journey, provider qualification or acceptance claim is recorded here.
 
 This inventory separates existing mechanisms from the proposed integration. The owner-selected product contract remains on #3583. Use the [Elsa glossary](../../docs/glossary/elsa.md) and [framework glossary](../../docs/glossary/root.md) for canonical terminology; this document does not redefine it.

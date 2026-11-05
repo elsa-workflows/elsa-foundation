@@ -1,7 +1,7 @@
 # Durable messaging acceptance matrix
 
-**Canonical request:** [#3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583)  
-**Date:** 2026-11-05  
+**Canonical request:** [#3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583)
+**Date:** 2026-11-05
 **Qualification status:** **NOT RUN**. This is a before-code acceptance plan, not implementation, provider qualification or UX approval evidence.
 
 Owner-selected first-release capabilities remain required. Resolve outstanding product contracts in the [specification](spec.md) before converting their design-dependent assertions into final checks. An unresolved contract, unsupported provider, skipped journey or green fixture must not silently narrow the feature. Source observations are in the [gap inventory](research.md); proposed engineering contracts are separate from accepted requirements.
