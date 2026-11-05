@@ -1,0 +1,10 @@
+{
+  "fixture": "runtime-efficiency-i69",
+  "completedAtUtc": "2026-11-03 (after evidence download and archive hash check)",
+  "precondition": "raw collection downloaded and extracted locally before any removal",
+  "resourceGroup": "rg-elsa-efficiency-i69 (3 Standard_D2s_v6 VMs, NICs, OS disks, VNet, NSG, public IP, auto-shutdown schedules) deleted; az group exists = false",
+  "subscriptionCheck": "No eff-i69 or claudeTask-tagged resources remain; no VM is running in the subscription",
+  "safetyNet": "Auto-shutdown at 01:30 UTC was set on all three VMs while they existed",
+  "secrets": "The database password existed only on the three deleted VMs (the database host and each node's node.env); the task SSH key and SSH config were deleted from the operator machine",
+  "existingResources": "No existing resource was touched"
+}
