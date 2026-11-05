@@ -30,6 +30,8 @@ parallel Foundation/picker work follows the committed shared contract and uses s
 - [Studio Expression Developer Experience #2310](studio-expression-developer-experience.md) retains text
   code-authoring scope. Share existing SDK, editor adapters, portable bindings and the delivered #3501/#3502 picker.
 - [Native Compensation #3035](native-compensation.md) and its consumers retain their semantics and ownership.
+  #3094's original "before M3" note is historical: [#3046 is completed](https://github.com/elsa-workflows/elsa-foundation/issues/3046#issuecomment-6297263367).
+  Retain compensation regression coverage; closing the still-open compensation program is not a prerequisite here.
 - Accepted [ADR 0045](../adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
   governs causal occurrences. This program does not decide draft ADR 0089 activity-name/occurrence syntax or the
   broader proposed ADR 0046 coercion model. Governed amendments follow their existing agreement process;

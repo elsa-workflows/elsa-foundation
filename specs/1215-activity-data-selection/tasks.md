@@ -35,7 +35,7 @@ of optional expression languages. This phase blocks production story integration
 - [ ] T007 Implement the scoped shared analyzer in `Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/` and refactor `Validators/ValueFlowValidator.cs` to consume it; retain all legal Flowchart entries, projected Switch inputs, scope/optional-result rules and separate concurrent-write logic (depends T005–T006).
 - [ ] T008 Add the independent language-neutral capability and authorized persisted/current-snapshot endpoint in `Essentials/src/Workflows/Design/Api/`; resolve untouched inputs, exact resource/base/hash/target and provider/permission revisions, bound metadata/no-store responses, and translate safe failures without browsing persistence writes (depends T007).
 - [ ] T009 Require WorkflowDesignValidations in `Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/WorkflowsPublishingFeature.cs` and enforce shared direct/portable static admission in `Handlers/PublishWorkflowRequestHandler.cs`, `Services/WorkflowExecutableCompiler.cs`, `Services/ActivityTemplateCompiler.cs` and `Essentials/src/Workflows/Publishing/Api/Handlers/StartWorkflowTestRunRequestHandler.cs`; cover all executable-producing paths before artifact/publication/activation writes (depends T007).
-- [ ] T010 Prove analysis/composition/admission behavior in `Essentials/tests/Workflows/Design/Tests/ValueFlowValidatorTests.cs`, `Essentials/tests/Workflows/Design/Api/Tests/` and `Essentials/tests/Workflows/Publishing/Api/Tests/`: untouched/current unsaved targets, denied/stale/unknown facts, all entries/joins/backedges/Switch, direct/portable missing producers and no-write rejection; include endpoint-free Publishing and Design-only/combined resolution (depends T008–T009).
+- [ ] T010 Prove analysis/composition/admission behavior in `Essentials/tests/Workflows/Design/Tests/ValueFlowValidatorTests.cs`, `Essentials/tests/Workflows/Design/Api/Tests/` and `Essentials/tests/Workflows/Publishing/Api/Tests/`: untouched/current unsaved targets, denied/stale/unknown facts, all entries/joins/backedges/Switch, preserved compensation-handler own/prior forward-result visibility, direct/portable missing producers and no-write rejection; include endpoint-free Publishing and Design-only/combined resolution (depends T008–T009).
 
 **Checkpoint:** Real authorized API and headless publication agree; no optional validation fallback remains.
 Update owning extension-point catalogs with the new analysis port in the same delivery slice.
@@ -146,7 +146,7 @@ expression/UI work proceeds. Final qualification waits for every story and cross
 |---|---|
 | Shared authority | T004–T010; Foundation owner, API/validation/metadata/Publishing wiring. |
 | Member binding/runtime | T011–T017; Foundation owner, coordinate shared Core/compiler commits before UI member enablement. Split only at a tested contract boundary. |
-| Existing #3094 | Whole-output portion of T018–T021/T023–T025; preserve its compensation dependency and independent acceptance. Later member enablement is a separate leaf. |
+| Existing #3094 | Whole-output portion of T018–T021/T023–T025; retain compensation regression coverage and independent acceptance. Historical compensation M3 #3046 is completed, not a current blocker. Later member enablement is a separate leaf. |
 | Member picker and equivalent inputs | Remaining T018–T025/T041–T046; Studio owner on committed source/binding contracts, with owned composed-host integration. |
 | Expressions and reference editing | T026–T035; existing adapter/document paths, coordinate shared module/inspector edits. |
 | Causal/recovery qualification | T036–T040; runtime/e2e owner, no unrelated recovery refactor. |
@@ -154,6 +154,9 @@ expression/UI work proceeds. Final qualification waits for every story and cross
 
 These are bounded proposals, not new Ready issues or assigned workers. Create only the next executable
 leaves after M2 approval, within issue caps, with exact task ranges and claim/PR/dependency receipts.
+When a leaf delivers only a task's whole-output subset, record that exact receipt and leave its checkbox
+open until all stated member/source-family obligations pass. The open compensation Program #3035 is not
+a dependency gate here; preserve its existing structure-handler visibility and causal/restart behavior.
 
 ## Requirement and journey traceability
 

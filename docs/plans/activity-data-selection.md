@@ -84,6 +84,12 @@ covering PR was found. Establishment links it to #3882 while preserving its orig
 23 October restart in [ADR 0080](../adr/0080-elsa-4-simplification-decisions.md); its bookkeeping is separate
 work. This program must not silently enlarge or repair that program.
 
+The M2 handoff refresh confirms that #3094 has no native blockers. Its original "before compensation M3"
+sequencing note is historical: [#3046 completed](https://github.com/elsa-workflows/elsa-foundation/issues/3046#issuecomment-6297263367)
+with #3126/#3127 and Implemented spec 258. Preserve compensation-handler own/prior forward-result visibility
+through its structure hook and existing causal/restart controls; do not wait for closure of the broader
+compensation program or absorb its later qualification work. M1/M2 and shared-authority gates still apply.
+
 The [ADR 0089 amendment PR #3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420) was draft and
 unmerged when inspected. The picker must not settle proposed ambient activity-name/occurrence syntax.
 Broader ADR 0046 coercion also remains proposed outside its accepted output-capture slice. Link existing
