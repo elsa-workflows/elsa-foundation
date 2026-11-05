@@ -105,7 +105,15 @@ describe("execution attached to the editor canvas", () => {
   });
 
   it("clears overlays in the first render after a draft change, before any async effect", async () => {
-    render(); await settle();
+    let releaseEvidence!: (value: unknown) => void;
+    api.browse.mockImplementationOnce(() => new Promise(resolve => { releaseEvidence = resolve; }));
+    render();
+    await vi.waitFor(() => expect(api.browse).toHaveBeenCalledOnce());
+    expect(latest.loading).toBe(true);
+    expect(latest.nodes[0].data.runtime).toBeUndefined();
+    releaseEvidence({ totalCount: 1, items: [{ execution: activity }] });
+    await vi.waitFor(() => expect(latest.nodes[0].data.runtime?.status).toBe("Completed"));
+    // Evidence readiness is asynchronous; invalidation must still happen in this very render.
     expect(latest.nodes[0].data.runtime).toBeDefined();
     render({ draftSignature: "a later design" });
     expect(latest.nodes).toBe(nodes);
