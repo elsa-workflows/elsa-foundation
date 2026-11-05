@@ -1,15 +1,17 @@
-# Activity Data Selection: proposed program and delivery plan
+# Activity Data Selection: program and delivery plan
 
-**Status:** Draft proposal; the product direction is agreed, program establishment is proposed.
+**Status:** Owner-authorized delivery plan, 5 November 2026; production contracts/specification follow the bounded proof.
 **Date:** 2026-11-05
 **Planning baseline:** `origin/main` at `8e2acfd4d85a937e888ad378fdb7c6a742a80bda`.
+**Establishment refresh:** `697e9a342998282a08a598ad7137b2e90c9435c2`; source gaps and existing issue ownership rechecked.
+**Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882) · [current goal](../program-goals/activity-data-selection.md).
 **Existing feature:** [#3094 — Author activity-output references in Studio](https://github.com/elsa-workflows/elsa-foundation/issues/3094).
-**Program-goal state:** `none/free-flow` while preparing this proposal. Proposed bucket: **Activity Data Selection**.
-**Product owner:** Sipke. Assign a delivery lead when establishing the program.
+**Program-goal state:** **Activity Data Selection**, authorized by the owner's "Proceed as proposed" instruction.
+**Product owner:** Sipke. Codex coordinates establishment and the first proof; executable ownership is claimed per issue.
 
 ## Recommendation
 
-Establish a focused program for selecting data at activity inputs. Start with a bounded proof in the real
+Deliver the focused program for selecting data at activity inputs. Start with a bounded proof in the real
 Studio/Workbench, then review the source/binding contract and distribute production work. The interaction
 direction is clear enough to build against; a second standalone visual prototype would not resolve the
 remaining integration questions.
@@ -77,10 +79,10 @@ These are source findings, not execution acceptance. The live issue/PR observati
 | Graph operations | [duplicateActivities](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/duplicateActivities.ts) remaps node/structure identities. | Define traversal/remapping of producer references inside inputs and expression parameters. |
 | Input constraints | [ActivityPropertiesPanel](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx) honors secret-only, options-provider, masked and read-only contracts. | Apply Choose data only where the target's source contract permits it. |
 
-#3094 was open, without an assignee, comments or a native parent, when inspected. No open covering PR was
-found. This proposal claims no issue ownership. #2310's GitHub parked label is stale relative to its accepted
+#3094 was open, without an assignee, comments or a native parent at planning and establishment refresh. No open
+covering PR was found. Establishment links it to #3882 while preserving its original scope. #2310's GitHub parked label is stale relative to its accepted
 23 October restart in [ADR 0080](../adr/0080-elsa-4-simplification-decisions.md); its bookkeeping is separate
-work. The proposed program must not silently enlarge or repair that program.
+work. This program must not silently enlarge or repair that program.
 
 The [ADR 0089 amendment PR #3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420) was draft and
 unmerged when inspected. The picker must not settle proposed ambient activity-name/occurrence syntax.
@@ -89,7 +91,7 @@ decisions; route any needed semantic amendment through its normal agreement proc
 
 ## Milestones and handoff gates
 
-### M0 — Establish the scoped program
+### M0 — Establish the scoped program ([#3883](https://github.com/elsa-workflows/elsa-foundation/issues/3883))
 
 Record an owner amendment to ADR 0080 D0 naming this program and its sequencing, add its concise goal file
 and registry row, and open the program issue. Proposed sequencing: run alongside existing active programs,
@@ -101,9 +103,10 @@ issue hierarchy and dependency records, with one integration lane. A separate Pr
 and must not delay the first useful result.
 
 **Exit:** one discoverable charter, existing-feature links, a delivery lead and a bounded first assignment.
-Program establishment is not product delivery. This draft does not activate a program or dispatch workers.
+The owner authorized establishment and the proposed sequence on 5 November. Program establishment is not
+product delivery; the first worker's code begins after merged establishment records and resulting-main qualification.
 
-### M1 — Prove one complete customer journey
+### M1 — Prove one complete customer journey ([#3884](https://github.com/elsa-workflows/elsa-foundation/issues/3884))
 
 Use an isolated research worktree and owned disposable hosts/stores. Exercise production authoring,
 publishing and runtime seams with deterministic customer data. Reuse cataloged activities or a disposable
@@ -128,7 +131,8 @@ Resolve two questions with concrete findings:
 
 - **Nested representation:** prefer a language-neutral member projection. Evaluate the smallest extension
   to the existing result/projection contracts; compare it with explicit expression lowering. Record types,
-  optionality, path validation and durability consequences. Do not freeze a new wire contract from a sketch.
+  optionality, path validation and durability consequences. Check CLR member names against camelCase and
+  explicit serialized JSON names, including conversion-plan source typing. Do not freeze a new wire contract from a sketch.
 - **Availability:** establish the source of truth for unsaved/current draft revisions, permissions and
   linear Flowchart order. Characterize joins, branches and backedges for the production spec; do not
   approximate them from canvas coordinates or broad reachability.
@@ -138,7 +142,7 @@ clear result for each criterion. If a criterion fails, name the failing seam and
 Keep the experiment bounded to these questions; further work becomes a scoped spec. Research code is
 adopted only through the reviewed production spec and normal delivery process.
 
-### M2 — Review the production specification and contracts
+### M2 — Review the production specification and contracts ([#3885](https://github.com/elsa-workflows/elsa-foundation/issues/3885))
 
 Follow [specification → plan → tasks](../contributing/task-paths.md#feature-development), reviewing each
 artifact before the next. Allocate the next [spec number](../reference/spec-lifecycle.md) against the tree,
@@ -246,5 +250,5 @@ artifact-only execution, explicit value roles and meaningful risk-based tests. N
 Draft/provisional framework §2.24 and Elsa §E2.8 versioning/Model X and §E2.9 remain unratified; this proposal
 does not ratify them. Recheck affected gates during the formal spec/plan review.
 
-The current work is a local planning document only. No product code, program registry, issue, PR, worker
-queue or deployment was changed. No workflow run or prototype acceptance is claimed by this document.
+M0 publishes the owner amendment, registry/goal/plan and native tracker links. M1 owns the actual experiment
+and its evidence; no workflow run or prototype acceptance is claimed by these establishment records.
