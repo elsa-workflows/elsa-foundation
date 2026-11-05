@@ -52,6 +52,7 @@ test("feature filtering empty-state alignment", async ({ page }, info) => {
     await filter.fill("no-such-feature-acceptance");
     const message = list.getByText("No features match this filter.", { exact: true });
     await expect(message).toBeVisible();
+    await message.scrollIntoViewIfNeeded();
     const alignment = await message.evaluate(element => {
       const heading = document.querySelector(".feature-management-list-heading strong");
       if (!heading) throw new Error("Feature list heading is missing.");
@@ -67,6 +68,7 @@ test("feature filtering empty-state alignment", async ({ page }, info) => {
     await filter.fill("");
     await expect(message).toBeHidden();
     await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await list.locator(".feature-management-card").first().scrollIntoViewIfNeeded();
     await capture(page, info, `features-${host.toLowerCase()}-populated`);
   }
 });
