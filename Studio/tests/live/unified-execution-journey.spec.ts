@@ -54,7 +54,7 @@ for (const [theme, width] of [["Light", 1440], ["Dark", 390]] as const) {
       }));
       const pulseSamples = Promise.all([page, instance].map(observeNewPulseStyles));
       await page.getByRole("button", { name: "Deliver event", exact: true }).press("Enter");
-      await expect(page.getByRole("group", { name: "Attached Test Run", exact: true })).toContainText("Faulted", { timeout: 30_000 });
+      await expect(page.getByRole("region", { name: "Test run summary" })).toContainText("Faulted", { timeout: 30_000 });
       await expect(instance.getByRole("region", { name: "Workflow run canvas", exact: true })).toContainText("Faulted", { timeout: 30_000 });
 
       for (const [index, samples] of (await pulseSamples).entries()) {
@@ -93,7 +93,7 @@ for (const [theme, width] of [["Light", 1440], ["Dark", 390]] as const) {
           response.request().method() === "POST" && response.url().includes("/_elsa/identity/logout/"), { timeout: 120_000 });
         await page.getByRole("menuitem", { name: "Sign out", exact: true }).press("Enter");
         expect((await logoutCompleted).status()).toBe(204);
-        await expect(page.getByRole("group", { name: "Attached Test Run", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("region", { name: "Test run summary" })).toHaveCount(0);
         await expect(page.locator("input[type=password]")).toBeVisible({ timeout: 30_000 });
         await instance.getByRole("button", { name: "Refresh", exact: true }).press("Enter");
         await expect(instance.getByText("Execution observation unavailable", { exact: true })).toBeVisible();

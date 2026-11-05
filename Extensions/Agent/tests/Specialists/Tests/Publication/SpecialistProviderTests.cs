@@ -128,10 +128,43 @@ public sealed class SpecialistProviderTests
         Assert.Equal(2, result.ResourceMeasurements.ClosedNodeCount);
     }
 
+    [Fact]
+    public async Task Guarded_specialist_validation_explains_each_missing_setting_without_echoing_values()
+    {
+        await using var services = Services(new MetadataFactory());
+        var source = Request(Manifest() with { Instructions = "", Model = new("", "", "") }).Provider;
+        var registry = new Elsa.Activities.Design.Core.Services.ActivityProviderRegistry([services.GetRequiredService<IActivityProvider>()]);
+        var problems = await registry.Resolve(source.ProviderKey, source.SchemaVersion).ValidateAsync(source, Contract());
+        Assert.Equal(2, problems.Count);
+        var instructions = Assert.Single(problems, x => x.Code == "specialist.manifest.instructions");
+        Assert.Contains("instructions", instructions.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("/instructions", instructions.Location!.JsonPointer);
+        Assert.Equal("Edit instructions", instructions.Metadata["actionLabel"]);
+        var model = Assert.Single(problems, x => x.Code == "specialist.manifest.model");
+        Assert.Contains("model connection", model.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Connections", model.Remediation);
+        Assert.Equal("/model", model.Location!.JsonPointer);
+    }
+
+    [Fact]
+    public async Task Guarded_unavailable_model_gives_safe_recovery_instead_of_exception_text()
+    {
+        var factory = new MetadataFactory { Unavailable = true };
+        await using var services = Services(factory);
+        var compiler = new Elsa.Workflows.Publishing.Core.Services.ActivityTemplateProviderCompilerRegistry([services.GetRequiredService<IActivityTemplateProviderCompiler>()]);
+        var result = await compiler.Resolve(SpecialistRuntimeIds.ProviderKey, SpecialistRuntimeIds.ManifestSchema).CompileAsync(Request());
+        var problem = Assert.Single(result.Diagnostics);
+        Assert.Equal("specialist.model.unavailable", problem.Code);
+        Assert.Contains("model connection", problem.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("access policy", problem.Remediation);
+        Assert.Equal("/model", problem.Location!.JsonPointer);
+        Assert.DoesNotContain("PRIVATE", System.Text.Json.JsonSerializer.Serialize(result.Diagnostics));
+    }
+
     [Theory]
     [InlineData("{\"temperature\":3}", "specialist.model.settings")]
     [InlineData("{\"unknown\":true}", "specialist.model.settings")]
-    [InlineData("[]", "specialist.manifest.invalid")]
+    [InlineData("[]", "specialist.manifest.settings")]
     public async Task Rejects_settings_outside_current_provider_metadata(string settings, string code)
     {
         await using var services = Services(new MetadataFactory());

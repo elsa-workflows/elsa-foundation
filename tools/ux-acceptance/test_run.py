@@ -45,11 +45,12 @@ class VerdictTests(unittest.TestCase):
         with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
 
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
-        for change in ('missing', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
+        for change in ('missing', 'missing-journey', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
             with self.subTest(change=change):
                 report = copy.deepcopy(self.report)
                 tests = report['suites'][0]['specs'][0]['tests']
                 if change == 'missing': tests.pop()
+                if change == 'missing-journey': report['suites'][0]['specs'].pop()
                 if change == 'duplicate': tests.append(copy.deepcopy(tests[0]))
                 if change == 'empty': report['suites'] = []
                 if change == 'skipped': tests[0]['results'][0]['status'] = 'skipped'
