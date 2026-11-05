@@ -8,9 +8,11 @@ Programmatic registration is `AddExternalAuthenticationEntityFrameworkCore(new()
 ConnectionString = ... })`. The host supplies the selected provider engine. The shell feature additionally
 registers module migrations; programmatic hosts must run their ordinary EF module migration lifecycle before
 handling authentication requests. The module name is `Identity.ExternalAuthentication`, with its own migration
-history and `IdentityExternalAuthentication` schema family at `1.1.0`. The additive `DurableSessions` migration
-preserves Initial history and prior one-time flows through the content-preserving 1.0.0→1.1.0 chain for SQLite,
-PostgreSQL, SQL Server and MySQL. This does not establish native runtime qualification for every engine.
+history and `IdentityExternalAuthentication` schema family at `1.2.0`. The additive `DurableSessions` migration
+and `QualifiedLinkSessionBinding` schema step preserve Initial history and prior one-time flows through the
+1.0.0→1.1.0→1.2.0 chain for SQLite, PostgreSQL, SQL Server and MySQL. Old external session payloads lacking the
+exact link-revision binding require a fresh sign-in; migration never invents that binding. Schema-chain support
+does not establish native runtime qualification for every engine.
 
 Each immutable row holds hashed ID/tenant/browser/admin bindings, purpose, creation/expiry milliseconds,
 protected payload, a random version and a schema stamp. Consumption reads only a matching unexpired row,
@@ -40,7 +42,10 @@ account/qualified-link checks. Cookies reject absent/revoked/expired/wrong-versi
 lifetime is eight hours (`AspNetCoreIdentityOptions.SessionLifetime` and the corresponding shell setting,
 one minute–thirty days); cookie renewal and refresh cannot extend it. User status transitions rotate the account
 security stamp atomically, including whole-record saves, so disable→enable cannot resurrect prior credentials.
-Session administration API/events/UI and cross-IAM recovery coordination remain the following spec stage.
+The optional [API](../../Api/README.md#link-and-session-administration) and Studio module provide bounded
+session inspection and selected revocation, guarded link administration and redacted security notifications.
+Link removal checks the exact revision and recovery before committing; removing/recreating a link cannot revive
+earlier sessions or recovery evidence.
 
 Native SQLite tests prove migrations, reopen, deliberately synchronized concurrent consumption, all bindings,
 expiry, schema skew, scope checks, transaction rejection and bounded cleanup. Flow component tests also prove
@@ -48,5 +53,7 @@ real HTTP code exchange and preview across independent service providers sharing
 Native session tests additionally prove protected reopen/shared keys, bounded exact-owner paging, revisioned
 selected revocation, forced two-node races, write-failure retry, wrong-key/tamper/schema refusal, transaction
 rejection and content-preserving incremental schema upgrade. Actual HTTP tests prove cookie/access/refresh
-invalidation and unrelated-session survival. Separate-process and server-database qualification remain required
-by spec 1205.
+invalidation and unrelated-session survival. Separate-process restart, cross-node completion/replay, concurrent
+revocation and link/catalog races pass on native SQLite (same machine) and PostgreSQL 16.15, in managed and
+deployment-only profiles. See [runners](../../../../../../../tools/identity/ExternalAuthentication.Probe/README.md)
+and [bounded evidence](../../../../../../../specs/1205-external-authentication/evidence.md) for configuration and limits.

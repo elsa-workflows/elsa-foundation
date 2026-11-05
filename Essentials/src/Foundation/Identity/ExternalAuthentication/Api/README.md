@@ -71,8 +71,10 @@ Unrelated users retain their sessions; ordinary same-owner metadata updates pres
 `ExternalAuthenticationHttpTests` drive actual owned Kestrel HTTP hosts and two actual HTTP OIDC fixtures with
 native SQLite IAM/artifact/vendor-token stores and owned key files. They cover normal cookie/access/refresh/
 logout, preview isolation, live discovery, ownership modes, CSRF/browser/purpose/replay, concurrent tabs and local
-recovery. Browser rendering, external product interoperability, separate-process/two-node/server-database,
-Studio and resulting-main qualification remain required by spec 1205. These tests are not substituted for them.
+recovery. The separate [qualification runners](../../../../../../tools/identity/ExternalAuthentication.Probe/README.md)
+exercise actual Keycloak, reference Studio/Workbench and separate backend processes on native SQLite and
+PostgreSQL. Their [evidence and limits](../../../../../../specs/1205-external-authentication/evidence.md) are
+recorded independently; unit/HTTP tests do not substitute for those product and deployment journeys.
 
 ## Connection management API
 
@@ -153,7 +155,9 @@ Successful preview still returns the one-time `externalPreviewHandle` and `exter
 
 Owned real HTTP/native SQLite tests cover the complete draft-assess-save-test-enable-retire and explicit
 override/archive/restore paths, current permission/delegation changes, source/revision/CSRF/body/role/unknown-field
-refusals, safe projections and bounded lookups. Studio/browser and deployment qualification remain in spec 1205.
+refusals, safe projections and bounded lookups. Actual Studio journeys also exercise creation, test, preview,
+enablement, full override promotion, disable, archive, restore and removal. The qualification evidence above
+records browser/ownership/permission profiles separately from process/store modes.
 
 ## Link and session administration
 

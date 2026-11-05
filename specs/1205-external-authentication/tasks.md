@@ -48,13 +48,13 @@ Delivery record #3579; program #2771; necessary identity-isolation prerequisite 
 ## Phase 7 — US5: actual provider and deployment qualification
 
 - [x] T026 [US5] Build a controlled actual OIDC-provider/composed-host harness and reproducible runtime evidence in `specs/1205-external-authentication/`; use owned stores/keys/ports only. The owned controlled-provider journey, pinned Keycloak interoperability, reference Studio and Workbench runners are executable under `tools/identity/ExternalAuthentication.Probe/`; their bounded results and remaining process/server-database matrix are recorded separately.
-- [ ] T027 [US5] Prove two-provider/local choice, admission/JIT/matching/roles, explicit override lifecycle, preview isolation, secrets, revocation and last-login protection with actual hosts/Studio; record results in `evidence.md`.
+- [x] T027 [US5] Prove two-provider/local choice, admission/JIT/matching/roles, explicit override lifecycle, preview isolation, secrets, revocation and last-login protection with actual hosts/Studio; record results in `evidence.md`.
 - [x] T028 [US5] Prove durable restart and shared two-node flow completion/replay/catalog races for each claimed mode; record exact store/key/provider configuration without credentials in `evidence.md`. Separate Kestrel processes pass on native SQLite (same machine) and PostgreSQL 16.15, each in managed and deployment-only modes; replay, revocation, exact-link/final-path races and source changes are checked, with managed catalog CAS/lifecycle and private frozen PostgreSQL dumps. Broader UI/topology and final consumer/CI/delivery qualification remain separate.
-- [ ] T029 [US5] Qualify representative permission/ownership/source/missing-module/theme/responsive/keyboard/retained-tab Studio journeys in `evidence.md`.
+- [x] T029 [US5] Qualify representative permission/ownership/source/missing-module/theme/responsive/keyboard/retained-tab Studio journeys in `evidence.md`.
 
 ## Phase 8 — Documentation, gates, review and closeout
 
-- [ ] T030 Update `Identity/**/README.md`, `EXTENSION_POINTS.md`, root catalog, `docs/reference/authentication-architecture.md` and `identity-configuration.md`; remove obsolete behavior/docs and account for public API changes.
+- [x] T030 Update `Identity/**/README.md`, `EXTENSION_POINTS.md`, root catalog, `docs/reference/authentication-architecture.md` and `identity-configuration.md`; remove obsolete behavior/docs and account for public API changes.
 - [ ] T031 Run affected backend/EF/Studio gates, generated-map checks, packed module/assets and separate public consumer; preserve detailed result statuses in `evidence.md`.
 - [x] T032 Revalidate claims/PRs, commit/push only alongside one draft PR for #3579 (also resolving #2848), map all acceptance criteria and post required gate evidence.
 - [ ] T033 Run independent correctness/standards/acceptance reviews on the exact draft head; fix findings, satisfy current required checks and merge under live org rules. Record rounds on the PR/issues.

@@ -11,6 +11,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Dependency
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Core.Ownership;
+using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.ExternalAuthentication;
 using Elsa.Foundation.Identity.ExternalAuthentication.Api;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
@@ -99,6 +101,7 @@ builder.Logging.ClearProviders();
 builder.WebHost.UseKestrel().UseUrls(listenValue ?? "http://127.0.0.1:0");
 var services = builder.Services;
 services.AddAuthorization();
+services.AddElsaEndpoints();
 services.AddApiCapabilities();
 if (settings.StudioUrl is not null)
 {
@@ -118,8 +121,10 @@ string PostgreSqlConnection(string? file)
 }
 var database = settings.Provider == "Sqlite" ? $"Data Source={Path.Combine(ownedRoot, "identity.db")};Pooling=False" : PostgreSqlConnection(settings.ConnectionStringFile);
 services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
+if (!Enum.TryParse<OwnershipMode>(settings.OwnershipMode, out var ownershipMode) || !Enum.IsDefined(ownershipMode)) throw new InvalidOperationException("Invalid owned fixture ownership mode.");
+services.Configure<FoundationIdentityOptions>(options => options.OwnershipMode = ownershipMode);
 if (settings.DatabaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
-services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
+if (settings.SessionStore) services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
 services.AddSingleton<ISecretValueResolver>(new ProbeSecrets(clientSecret));
 services.AddFoundationExternalOidc(options => options.AllowLoopbackHttpForDevelopment = true);
 services.AddFoundationExternalAuthentication(options =>
@@ -129,7 +134,8 @@ services.AddFoundationExternalAuthentication(options =>
     options.Connections = [Connection("company", "Company", settings.CompanyIssuer ?? company.Issuer, settings.ClientId, settings.Provisioning),
         Connection("partner", "Partner", settings.PartnerIssuer ?? partner.Issuer, settings.ClientId, settings.Provisioning)];
 });
-services.AddFoundationExternalAuthenticationApi(); services.AddFoundationIdentityApi();
+if (settings.ManagedApi) services.AddFoundationExternalAuthenticationApi();
+services.AddFoundationIdentityApi();
 services.AddOpenIddictVendorForTests(options =>
 {
     if (settings.Provider == "Sqlite") options.UseSqlite($"Data Source={Path.Combine(ownedRoot, "tokens.db")};Pooling=False");
@@ -154,7 +160,8 @@ app.UsePathBase("/backend"); app.UseRouting();
 if (settings.StudioUrl is not null) app.UseCors("owned-studio");
 app.UseAuthentication(); app.UseAuthorization();
 ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
-FoundationIdentityApi.MapFoundationIdentityApi(app); AspNetCoreIdentityApi.MapAspNetCoreIdentityApi(app); ExternalAuthenticationApi.MapExternalAuthenticationApi(app);
+FoundationIdentityApi.MapFoundationIdentityApi(app); AspNetCoreIdentityApi.MapAspNetCoreIdentityApi(app);
+if (settings.ManagedApi) ExternalAuthenticationApi.MapExternalAuthenticationApi(app);
 app.MapGet("/resource", () => Results.Ok()).RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
 object? metadata = null;
 app.MapGet("/__probe", () => Results.Json(metadata)).AllowPublic("qualification-probe", "Owned development probe exposes only public route/provider metadata.");
@@ -164,12 +171,16 @@ app.MapGet("/__probe/state", async (HttpContext context) =>
     scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
     var iam = scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>();
     var tokens = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
-    var sessions = scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>();
-    await sessions.Database.OpenConnectionAsync(context.RequestAborted);
-    await using var count = sessions.Database.GetDbConnection().CreateCommand();
-    var table = sessions.Model.GetEntityTypes().Single(type => type.GetTableName() == "identity_authentication_sessions");
-    count.CommandText = "SELECT COUNT(*) FROM " + sessions.GetService<ISqlGenerationHelper>().DelimitIdentifier(table.GetTableName()!, table.GetSchema());
-    var sessionCount = Convert.ToInt64(await count.ExecuteScalarAsync(context.RequestAborted));
+    var sessions = scope.ServiceProvider.GetService<ExternalAuthenticationDbContext>();
+    long? sessionCount = null;
+    if (sessions is not null)
+    {
+        await sessions.Database.OpenConnectionAsync(context.RequestAborted);
+        await using var count = sessions.Database.GetDbConnection().CreateCommand();
+        var table = sessions.Model.GetEntityTypes().Single(type => type.GetTableName() == "identity_authentication_sessions");
+        count.CommandText = "SELECT COUNT(*) FROM " + sessions.GetService<ISqlGenerationHelper>().DelimitIdentifier(table.GetTableName()!, table.GetSchema());
+        sessionCount = Convert.ToInt64(await count.ExecuteScalarAsync(context.RequestAborted));
+    }
     return Results.Json(new { Users = await iam.Users.CountAsync(context.RequestAborted), Links = await iam.ExternalIdentities.CountAsync(context.RequestAborted),
         Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted),
         Sessions = sessionCount, company.TokenRequests });
@@ -199,7 +210,7 @@ async Task Initialize()
     scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
     await scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.MigrateAsync();
     if (settings.DatabaseManagement) await scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>().Database.MigrateAsync();
-    await scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>().Database.MigrateAsync();
+    if (settings.SessionStore) await scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>().Database.MigrateAsync();
 }
 async Task Run()
 {
@@ -212,6 +223,13 @@ async Task Run()
         var readerPermissions = new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead };
         if (settings.StudioUrl is not null) readerPermissions.Add("api-capabilities:read");
         await scope.ServiceProvider.GetRequiredService<IRoleStore>().SaveAsync(new("reader", "default", "Reader", null, readerPermissions, false));
+        if (settings.AdministratorPermissions is not null)
+        {
+            var admin = (await scope.ServiceProvider.GetRequiredService<IUserStore>().FindByEmailAsync("default", TestAdmin.Email))!;
+            var roles = scope.ServiceProvider.GetRequiredService<IRoleStore>();
+            foreach (var role in admin.RoleIds)
+                await roles.SaveAsync((await roles.FindAsync("default", role))! with { Permissions = settings.AdministratorPermissions.ToHashSet(StringComparer.Ordinal) });
+        }
         var flow = scope.ServiceProvider.GetRequiredService<IExternalAuthenticationFlowService>();
         foreach (var (key, provider) in new[] { ("company", company), ("partner", partner) })
         {
@@ -258,5 +276,9 @@ internal sealed class ProbeSettings
     public string? PublicBaseUrl { get; init; }
     public bool DatabaseManagement { get; init; } = true;
     public bool Provisioning { get; init; }
+    public string OwnershipMode { get; init; } = "FoundationOwned";
+    public string[]? AdministratorPermissions { get; init; }
+    public bool SessionStore { get; init; } = true;
+    public bool ManagedApi { get; init; } = true;
 }
 internal sealed record ProbeSubjectChange(string Provider, string Subject);

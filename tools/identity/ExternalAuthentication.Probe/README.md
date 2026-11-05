@@ -13,7 +13,8 @@ Direct invocation accepts `--owned-root <new-directory>` and optional `--ui <own
 
 The Chromium journey signs in through normal local login, creates a disabled Studio connection using existing Elsa roles and a secret reference, tests real metadata/JWKS, follows an actual provider preview and restores the saved draft, checks unchanged user/link/token rows and administrator identity, enables the connection, checks narrow layout, then completes ordinary external reader sign-in in a separate browser context. Through the real user-access component it refuses removal of the last sign-in link, attaches the second provider to the existing user, completes normal sign-in through that provider, removes the first link, verifies denied reader panels and revokes the selected session. Its cookie is rejected and access/refresh credentials return 401. It scans both pages with axe against WCAG 2 A/AA and 2.1 AA tags using actual Studio Classic light styles. Redacted aggregate counts/result categories and screenshots are retained; no browser trace or credentials are published.
 
-This proves a controlled HTTP provider, native SQLite and the mounted product component/public transport. It does **not** prove an external IdP product, the full Studio host, separately hosted/cross-site cookie topology, server databases, restart or shared separate-node behavior. Those acceptance obligations remain open in [spec 1205](../../../specs/1205-external-authentication/tasks.md).
+This proves a controlled HTTP provider, native SQLite and the mounted product component/public transport. It does **not** prove an external IdP product, the full Studio host, separately hosted/cross-site cookie topology, server databases, restart or shared separate-node behavior. The separate profiles below cover additional boundaries; their results and limits are recorded in the
+[spec 1205 evidence](../../../specs/1205-external-authentication/evidence.md).
 
 ## Provider interoperability and reference hosts
 
@@ -89,3 +90,30 @@ Contexts/processes stop before PostgreSQL is frozen to private custom-format dum
 and removes only the owned container and its anonymous volumes. Receipts mark inapplicable catalog races/lifecycle
 as null in deployment-only mode. These are HTTP process/store proofs, separate from the browser, external product
 and full Studio profiles; they do not establish universal cross-site or other server-engine qualification.
+
+## Representative full Studio modes
+
+Use the same built Studio host/probe for each independent profile; each invocation owns a fresh root:
+
+```sh
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs configuration
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs provider-reader
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs denied
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs external-owned
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs hybrid
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs missing-api
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs missing-sessions
+```
+
+These use saved administrator role permissions, actual ownership settings and actual omitted module/store
+registrations. The browser checks current metadata against visible read-only/denied/unavailable actions and
+requires zero external-management writes. External-owned mode refuses link changes and session revocation;
+hybrid preserves read-only links but permits session revocation under the application authority. Missing API
+capability uses the host's unavailable-module surface. Missing durable sessions keeps ordinary local login while
+explaining unavailable session administration. Each profile scans settled light/dark themes with axe, changes
+colour mode with the keyboard and checks 390-pixel layout without horizontal overflow.
+
+The default controlled-provider full Studio journey additionally edits/disables/archives/restores/removes a
+managed connection, then prepares/tests/previews/promotes a complete same-key override. It proves an ordinary
+draft does not shadow, a disabled explicit override does, archive/removal reveal the baseline and restore
+reinstates the override. Actual Keycloak and cross-process proofs remain separate profiles above.

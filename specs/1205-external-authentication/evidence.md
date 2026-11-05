@@ -1013,3 +1013,55 @@ claims, and do not close #3579/#2848/#2771 or the active goal.
 
 Final frozen-source architecture **616/616** passes, zero skips; generated-filter and staged/worktree whitespace
 checks pass. No production library/API behavior changed in this process-qualification increment.
+
+## Full Studio source lifecycle and representative modes (5 November)
+
+T027 and T029 combine the actual Keycloak/reference-host and separate-process receipts above with an extended
+controlled-provider full Studio journey. Its owned root is
+`/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-full-studio-YhaxYZ`.
+`studio-receipt.json` records actual editor changes, disable/archive/restore/removal, complete disabled same-key
+override creation, real test/preview and explicit promotion. The ordinary draft leaves the deployment baseline
+effective; the disabled explicit override shadows it. Archive/removal reveals the baseline and restore reinstates
+the override. No backend restart occurs. The same run preserves the administrator and saved Reader roles, refuses
+the final user-link removal, proves the second provider through normal sign-in, safely removes the first link,
+refuses reader panels, preserves retained drafts and invalidates selected cookie/access/refresh credentials.
+
+Preview leaves users/links/normal sessions at 1/0/1. As in the earlier full Studio receipt, its normal redirect
+adapter makes exactly twelve observed ordinary administrator token-pair exchanges (24 token rows), with the
+administrator subject unchanged; preview adds no other credentials. The override preview independently accounts
+for the same twelve ordinary exchanges. Isolated protocol/mounted profiles still prove strict zero token-row
+change. Preview, provider errors, role delegation, rejection/JIT/verified matching/conflicts, disabled users,
+secret rotation/bindings and cross-administrator/purpose/replay isolation remain covered by the actual owned
+HTTP and native tests described above, rather than being inferred from screenshots.
+
+Seven further full reference Studio profiles each pass against a fresh actual backend and native SQLite stores:
+
+| Profile | Observed boundary | Owned root suffix under the system temporary directory |
+|---|---|---|
+| Configuration-only | Deployment-owned connection fields and creation disabled | `elsa-3579-full-studio-configuration-71GVmy` |
+| Provider reader | Read-only catalog; link/session panels independently denied | `elsa-3579-full-studio-provider-reader-OMT0kl` |
+| Denied provider access | Provider permission guidance; no writable controls or link/session access | `elsa-3579-full-studio-denied-mnhhKl` |
+| External-owned | Links read-only and session revocation disabled | `elsa-3579-full-studio-external-owned-DKbUd6` |
+| Hybrid | Links read-only; application-authority session revocation available | `elsa-3579-full-studio-hybrid-rnDIlc` |
+| Missing managed API | Capability omitted, API returns 404, host unavailable-module view | `elsa-3579-full-studio-missing-api-DVisZH` |
+| Missing durable sessions | Local sign-in works; session administration explains unavailable capability | `elsa-3579-full-studio-missing-sessions-HoivOP` |
+
+Each root contains `studio-receipt.json`, browser/backend logs and light/dark/narrow screenshots. All seven
+receipts require no external-management writes, zero page errors, zero settled light/dark WCAG 2 A/AA and 2.1 AA
+axe violations, keyboard colour-mode switching and no document overflow at 390 pixels. Representative external-owned
+dark, missing-API narrow and source-lifecycle screenshots were visually inspected. These are representative UI
+profiles, not claims about every possible engine/topology combination. The browser uses real SDK transports,
+capability discovery, normal local authentication, saved role permissions and product routing; no domain responses
+are mocked. Missing-module profiles omit the actual API/store registration.
+
+The UI metadata check exposed `ownershipMode` returning a record debug string instead of the enum name. The
+existing bounded user-directory HTTP regression fails before changing the projection to `ownership.Mode.ToString()`
+and passes after it (`/tmp/elsa-3579-ui-ownership-{red,green}.log`). Full current Identity **895/895** then passes,
+zero skips (`/tmp/elsa-3579-ui-modes-identity.log`). Probe build passes with zero warnings/errors; browser script
+ESLint and Node syntax checks pass. Architecture/generated-filter results follow below.
+
+Operator/module docs now describe implemented administration and schema 1.2.0 exact-link session binding, with
+fresh sign-in required for older external credentials lacking it. They route to owned commands and bounded profile
+evidence. Existing direct-bearer composition remains separately documented. T030 is complete; T031 and SC-009
+still require final distributions/public consumers/current required CI, exact-head independent review, merge and
+resulting-main qualification. No issue/program or goal completion is claimed at this checkpoint.

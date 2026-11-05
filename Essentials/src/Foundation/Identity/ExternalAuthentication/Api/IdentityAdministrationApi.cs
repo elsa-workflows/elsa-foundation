@@ -67,7 +67,7 @@ public static partial class ExternalAuthenticationApi
             services.GetService<ICanonicalUserSignInService>()?.SupportsDurableSessions == true;
         await ManagementJson(context, new ManagedIdentityUsersResponse(Tenant(context),
             context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalAuthenticationOptions>>().Value.CallbackPath.TrimEnd('/'),
-            ownership.ToString(), capabilities.CanManageUsers, capabilities.CanRevokeTokens,
+            ownership.Mode.ToString(), capabilities.CanManageUsers, capabilities.CanRevokeTokens,
             await Granted(DefaultIdentityPermissionKeys.IdentityLinksRead), await Granted(DefaultIdentityPermissionKeys.IdentitySessionsRead),
             LinkAdministrationAvailable(context, services) ? null : "link-administration-unavailable",
             sessionsAvailable ? null : "session-administration-unavailable",

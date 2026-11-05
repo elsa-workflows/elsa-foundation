@@ -450,7 +450,7 @@ yet options on the module** — do not expect them to work from configuration al
    you would configure the handler yourself via `AddFoundationIdentityOidc(configure)` or a
    `PostConfigure<OpenIdConnectOptions>`/`PostConfigure<JwtBearerOptions>`. Use the separate `Audience` setting for an API audience.
 
-2. **Interactive admission is separate.** The opt-in bearer bridge uses current owned mappings without a local account and does not call `IPrincipalFactory` or provision links. Optional managed external-authentication modules own interactive admission; their provider/broker integration remains under spec 1205. Default-false bearer behavior stays compatible. Dynamic tenancy, multiple normalized external schemes and deployed IdP interoperability remain separate proof boundaries.
+2. **Interactive admission is separate.** The opt-in bearer bridge uses current owned mappings without a local account and does not call `IPrincipalFactory` or provision links. Optional managed external-authentication modules implement interactive admission; their composition and bounded interoperability evidence are linked below. Default-false bearer behavior stays compatible. Dynamic tenancy, multiple normalized external schemes and deployed IdP interoperability remain separate proof boundaries.
 
 ---
 
@@ -459,10 +459,6 @@ yet options on the module** — do not expect them to work from configuration al
 - [`identity-configuration.md`](identity-configuration.md) — operator settings, keys, cookie/CSRF hardening, dev defaults, and the production go-live checklist.
 - [`../plans/studio-bearer-token-issuance.md`](../plans/studio-bearer-token-issuance.md) — the design rationale for the bearer-issuance stack (now implemented).
 - [`../glossary/elsa.md`](../glossary/elsa.md) — canonical short definitions.
-</content>
-</invoke>
-
-
 ## Managed external admission
 
 Elsa users, role definitions and permissions remain in Elsa's IAM authority. An external provider supplies verified
@@ -488,6 +484,10 @@ connects admission to the ordinary canonical-user cookie authority and first-par
 sources supplement static modules in bootstrap; their capabilities reflect Elsa's configured IAM authority and
 ownership policy, rather than the upstream IdP's role vocabulary. Preview has a separate administrator/browser-
 bound callback and never issues a normal session. Owned real HTTP tests cover cookies, token exchange/refresh/
-logout and preview isolation with two protocol fixtures and native SQLite stores. Browser/Studio, durable
-selected-session enforcement, external-product and deployment qualification remain required by
-[spec 1205](../../specs/1205-external-authentication/spec.md).
+logout, durable selected-session enforcement and preview isolation with two protocol fixtures and native SQLite
+stores. Actual Keycloak sign-in, reference Studio/Workbench, seven representative permission/ownership/installation
+UI profiles and separate-process SQLite/PostgreSQL managed/deployment-only journeys are recorded in the
+[spec 1205 evidence](../../specs/1205-external-authentication/evidence.md). The
+[owned runners](../../tools/identity/ExternalAuthentication.Probe/README.md) document reproducible commands and
+limits. Same-site separate-origin Studio and same-machine SQLite are qualified profiles; universal cross-site
+cookie topology and additional server engines are not established by those receipts.

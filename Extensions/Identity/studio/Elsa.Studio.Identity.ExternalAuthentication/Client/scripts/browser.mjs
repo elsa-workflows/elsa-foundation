@@ -248,12 +248,66 @@ try {
     await lastAction.scrollIntoViewIfNeeded(); await expect(lastAction).toBeInViewport();
     await page.screenshot({ path: join(ownedRoot, "user-access-narrow-sessions.png"), fullPage: false });
   }
+  let connectionLifecycle = null;
+  if (settings.studioUrl && settings.provider !== "Keycloak") {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.getByRole("tab", { name: "External sign-in", exact: true }).click();
+    await page.locator(".external-auth-list .external-auth-row").filter({ has: page.getByText("Studio company", { exact: true }) }).click();
+    await page.getByLabel("Display name", { exact: true }).fill("Studio company edited");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirmStudio(page, "Save changes");
+    await expect(page.getByRole("heading", { name: "Studio company edited", exact: true })).toBeVisible();
+    for (const [label, title] of [["Disable sign-in", "Disable sign-in"], ["Archive", "Archive connection"], ["Restore", "Restore connection"], ["Remove", "Remove Studio connection"]]) {
+      await page.getByRole("button", { name: label, exact: true }).click(); await confirmStudio(page, title);
+      await expect(page.getByText(title + "…", { exact: true })).toHaveCount(0);
+      if (label === "Archive") await expect(page.getByRole("button", { name: "Restore", exact: true })).toBeVisible();
+      if (label === "Restore") await expect(page.getByRole("button", { name: "Archive", exact: true })).toBeVisible();
+    }
+    await expect(page.locator(".external-auth-list .external-auth-row").filter({ hasText: "Studio company edited" })).toHaveCount(0);
+    await page.locator(".external-auth-list .external-auth-row").filter({ has: page.getByText("Company", { exact: true }) }).click();
+    await page.getByRole("button", { name: "Prepare full override", exact: true }).click();
+    await page.getByLabel("Unknown identities", { exact: true }).selectOption("jit"); await page.getByLabel("Reader", { exact: true }).check();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click(); await confirmStudio(page, "Save draft");
+    await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toBeEnabled();
+    const beforePromotion = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();
+    expect(beforePromotion.connections.find(item => item.source === 0 && item.document.key === "company").effective).toBe(true);
+    expect(beforePromotion.connections.find(item => item.source === 1 && item.document.key === "company").effective).toBe(false);
+    await page.getByRole("button", { name: "Test configuration", exact: true }).click();
+    await expect(page.getByText("Configuration test passed", { exact: true })).toBeVisible();
+    const beforeOverrideExchanges = await exchangeCount(); const beforeOverridePreview = await (await admin.request.get(backend + "/__probe/state")).json();
+    await page.getByRole("button", { name: "Preview sign-in", exact: true }).click(); await confirmStudio(page, "Preview provider sign-in", "Continue to provider");
+    await expect(page.getByText("Would be created", { exact: true })).toBeVisible();
+    const overrideAdministratorExchanges = await exchangeCount() - beforeOverrideExchanges;
+    const afterOverridePreview = await (await admin.request.get(backend + "/__probe/state")).json();
+    for (const field of ["users", "links", "sessions"]) expect(afterOverridePreview[field]).toBe(beforeOverridePreview[field]);
+    expect(afterOverridePreview.tokens).toBe(beforeOverridePreview.tokens + overrideAdministratorExchanges * 2);
+    await page.getByRole("button", { name: "Use as override", exact: true }).click(); await confirmStudio(page, "Use as override");
+    await expect(page.getByRole("button", { name: "Disable sign-in", exact: true })).toBeVisible();
+    const promoted = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();
+    const overrideId = promoted.connections.find(item => item.source === 1 && item.document.key === "company").document.id;
+    expect(promoted.connections.find(item => item.source === 0 && item.document.key === "company").effective).toBe(false);
+    for (const [label, title, baselineEffective] of [["Disable sign-in", "Disable sign-in", false], ["Archive", "Archive connection", true], ["Restore", "Restore connection", false], ["Remove", "Remove Studio connection", true]]) {
+      await page.getByRole("button", { name: label, exact: true }).click(); await confirmStudio(page, title);
+      await expect.poll(async () => {
+        const state = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();
+        const stored = state.connections.find(item => item.document.id === overrideId);
+        if (label === "Remove" && stored) return null;
+        if (label === "Archive" && !stored?.document.archivedAt) return null;
+        if (label === "Restore" && stored?.document.archivedAt) return null;
+        if (label === "Disable sign-in" && stored?.document.enabled) return null;
+        return state.connections.find(item => item.source === 0 && item.document.key === "company").effective;
+      }).toBe(baselineEffective);
+    }
+    connectionLifecycle = { edited: true, retiredAndRestored: true, draftDoesNotShadow: true, explicitPromotion: true,
+      disabledOverrideShadows: true, archiveRevealsBaseline: true, restoreShadowsAgain: true, removalRevealsBaseline: true,
+      previewAdministratorTokenExchanges: overrideAdministratorExchanges };
+    await page.screenshot({ path: join(ownedRoot, "connection-lifecycle.png"), fullPage: false });
+  }
   const access = { targetRolesPreserved: partnerSession.roles.includes("reader"), finalPathRefused: true, attachedExistingUser: true,
     provedSiblingThenRemoved: true, readerPanelsDenied: true, selectedRevocation: { cookie: true, access: true, refresh: true }, retainedDraft,
     accessibility: accessAccessibility, darkAccessibility };
   expect(errors).toEqual([]);
   const result = { passed: true, ownedRoot, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
-    accessibility, access, provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
+    accessibility, access, connectionLifecycle, provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
     fullStudioHost: Boolean(settings.studioUrl),
     limitations: [...(settings.provider === "Keycloak" ? [] : ["not an external IdP product"]), ...(settings.studioUrl ? [] : ["not a full Studio host"]), "not server-database or separate-node qualification"] };
   writeFileSync(join(ownedRoot, "browser-receipt.json"), JSON.stringify(result, null, 2));

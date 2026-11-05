@@ -20,6 +20,7 @@ public sealed partial class ExternalAuthenticationHttpTests
         Assert.Equal("target", Assert.Single(root.GetProperty("items").EnumerateArray()).GetProperty("id").GetString());
         Assert.Equal(1, root.GetProperty("totalCount").GetInt64()); Assert.True(root.GetProperty("canReadLinks").GetBoolean());
         Assert.False(root.GetProperty("canReadSessions").GetBoolean()); Assert.Equal("/identity/external", root.GetProperty("protocolPath").GetString());
+        Assert.Equal("FoundationOwned", root.GetProperty("ownershipMode").GetString());
         foreach (var forbidden in new[] { "password", "securityStamp", "directPermissions", "roleIds", "credentialBinding" }) Assert.DoesNotContain(forbidden, text, StringComparison.OrdinalIgnoreCase);
         using (var denied = await administrator.GetAsync(Management)) Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
         await GrantAdministrator(host, DefaultIdentityPermissionKeys.IdentityLinksRead);

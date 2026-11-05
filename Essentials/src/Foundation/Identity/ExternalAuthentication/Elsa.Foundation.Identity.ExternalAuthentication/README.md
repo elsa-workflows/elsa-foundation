@@ -6,9 +6,11 @@ managed OIDC belongs to the optional ExternalAuthentication/Oidc adapter; existi
 and persistence scope contracts without adding them to every base Identity.Core consumer.
 
 Current implementation: live deployment/catalog selection, explicit complete overrides, catalog persistence/CAS,
-role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. The optional API also implements source/revision/permission-protected management and bounded lookups/testing. Link/session administration and the remaining Studio/deployment
-qualification are still in progress under [spec 1205](../../../../../../specs/1205-external-authentication/spec.md).
-This module alone is not a qualified external sign-in deployment.
+role-delegation checks, lifecycle commands, the final-path guard, policy assessment/atomic admission and protected one-time flow coordination. The optional managed OIDC adapter implements protocol validation; the optional [API](../Api/README.md) connects normal cookies and administrator preview. The optional API also implements source/revision/permission-protected management, bounded lookups/testing,
+link administration and selected-session revocation. The optional Studio module exposes those capabilities.
+Composition and qualified provider, browser and process/store profiles are recorded in the
+[qualification evidence](../../../../../../specs/1205-external-authentication/evidence.md).
+This module alone does not compose a complete external sign-in deployment.
 
 ## Configuration and composition
 
@@ -66,8 +68,9 @@ Local recovery checks the enabled password method, an actual password, current f
 membership status and current provider-management permission. Custom canonical session authorities must implement
 read-only eligibility and durable-session support; the default `CanSignInAsync` returns false and the
 default durable-session capability is unavailable. The ASP.NET implementation binds sessions through the
-[optional durable store](../Persistence/EntityFrameworkCore/README.md). Session administration and cross-IAM
-recovery coordination remain separate from ordinary live credential validation.
+[optional durable store](../Persistence/EntityFrameworkCore/README.md). The optional API coordinates guarded
+link administration and recovery with current IAM/catalog revisions; ordinary live credential validation also
+checks current account and exact-link bindings.
 For recovery recording, a custom canonical authority returns its issued `AuthenticationSessionId` on the
 server-side `AuthSession` and supports reading/validating that committed session. This metadata is excluded from
 JSON. Missing or mismatched bindings never produce recovery evidence.
@@ -75,7 +78,10 @@ JSON. Missing or mismatched bindings never produce recovery evidence.
 Before disabling/replacing an enabled effective provider, the writer proves a remaining external recovery path
 or actual local recovery, then saves the complete catalog with CAS. External checks share a thirty-second bound;
 caller cancellation propagates. Concurrent workers cannot both save stale decisions against one catalog revision.
-Concurrent IAM/link/session mutation guards and full deployment qualification remain required in spec 1205.
+The native IAM adapter atomically checks user, role, link and catalog revisions in one owned serializable
+relational transaction. It refuses split targets, caller-owned transactions and pending changes. The
+[API README](../Api/README.md#link-and-session-administration) describes coordinated link mutations and recovery;
+selected-session revocation uses the durable session store's independent revision guard.
 
 ## Extension points and tests
 
@@ -163,5 +169,8 @@ selected `ICanonicalUserSignInService` for the ordinary Elsa session. Preview ru
 short-lived result artifact. Result reads consume it once and flag observations whose source material changed.
 No raw upstream access/refresh tokens are persisted. Component tests use a real HTTP OIDC fixture, native SQLite
 and owned shared key directories across independent service providers/restarts. Actual composed HTTP cookie/token
-and preview isolation evidence now lives in the optional API's tests. Browser, durable session administration,
-separate-process and PostgreSQL/SQL Server deployment qualification remain open in spec 1205.
+and preview isolation evidence lives in the optional API's tests. Actual Keycloak, reference Studio/Workbench,
+and separate-process native SQLite/PostgreSQL managed and deployment-only profiles are reproducible with the
+[owned qualification runners](../../../../../../tools/identity/ExternalAuthentication.Probe/README.md).
+The [evidence](../../../../../../specs/1205-external-authentication/evidence.md) states their limits; these results
+do not establish universal cross-site cookie behavior or runtime qualification for every supported EF engine.

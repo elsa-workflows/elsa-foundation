@@ -5,7 +5,16 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const repo = resolve(import.meta.dirname, "../../..");
-const root = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT ?? mkdtempSync(join(tmpdir(), "elsa-3579-full-studio-"));
+const profile = process.argv[2] ?? null;
+const profiles = {
+  configuration: { databaseManagement: false },
+  "provider-reader": { administratorPermissions: ["identity/providers:read", "identity/users:read", "api-capabilities:read"] },
+  denied: { administratorPermissions: ["identity/users:read", "api-capabilities:read"] },
+  "external-owned": { ownershipMode: "ExternalOwned" }, hybrid: { ownershipMode: "Hybrid" },
+  "missing-api": { managedApi: false }, "missing-sessions": { sessionStore: false }
+};
+if (profile && !Object.hasOwn(profiles, profile)) throw new Error("Unknown owned Studio qualification profile.");
+const root = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT ?? mkdtempSync(join(tmpdir(), `elsa-3579-full-studio-${profile ? profile + "-" : ""}`));
 console.log(`Owned full Studio qualification: ${root}`);
 if (process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT && (!existsSync(join(root, ".elsa-3579-owned-probe")) ||
   readFileSync(join(root, ".elsa-3579-owned-probe"), "utf8") !== "elsa-external-authentication-probe/v1" || existsSync(join(root, "identity.db"))))
@@ -19,7 +28,7 @@ async function port() {
 }
 const backend = (previous.listen ?? `http://127.0.0.1:${await port()}`) + "/backend";
 const studioUrl = `http://127.0.0.1:${await port()}`;
-writeFileSync(join(root, "probe-settings.json"), JSON.stringify({ ...previous, listen: new URL(backend).origin, studioUrl }), { mode: 0o600 });
+writeFileSync(join(root, "probe-settings.json"), JSON.stringify({ ...previous, ...profiles[profile], uiProfile: profile, listen: new URL(backend).origin, studioUrl }), { mode: 0o600 });
 const content = join(root, "studio"); mkdirSync(content); mkdirSync(join(content, "packages")); mkdirSync(join(content, "wwwroot"));
 writeFileSync(join(content, "appsettings.json"), JSON.stringify({
   Logging: { LogLevel: { Default: "Warning", "Microsoft.Hosting.Lifetime": "Information" } },
@@ -55,7 +64,9 @@ try {
   const browserLog = openSync(join(root, "browser.log"), "w", 0o600);
   let code;
   try {
-    const child = spawn(process.execPath, [join(repo, "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/scripts/browser.mjs")],
+    const entry = profile ? "tools/identity/ExternalAuthentication.Probe/ui-modes-browser.mjs"
+      : "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/scripts/browser.mjs";
+    const child = spawn(process.execPath, [join(repo, entry)],
       { cwd: repo, env: { ...environment, ELSA_EXTERNAL_AUTH_PROBE_ROOT: root }, stdio: ["ignore", browserLog, browserLog] });
     code = await new Promise((done, reject) => { child.once("error", reject); child.once("exit", done); });
   } finally { closeSync(browserLog); }

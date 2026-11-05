@@ -319,5 +319,8 @@ by the owning API; registration alone does not enable managed sign-in.
 
 Durable selected-session and exact-link validation applies across ordinary cookies, access and refresh tokens.
 The [qualification runners](../../tools/identity/ExternalAuthentication.Probe/README.md) distinguish controlled
-provider, Keycloak, full Studio and reference Workbench evidence. Deployment-specific qualification remains tracked
-in spec 1205; receipts for one configuration do not establish another deployment mode.
+provider, Keycloak, full Studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
+Managed and deployment-only backend modes share their configured Data Protection ring/application name and
+first-party signing key across nodes; the SQLite profile runs on one machine. See the
+[profile evidence](../../specs/1205-external-authentication/evidence.md) for exact qualified modes and limits.
+Receipts for one configuration do not establish another deployment mode.
