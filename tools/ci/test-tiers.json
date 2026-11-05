@@ -723,6 +723,11 @@
       "project": "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     }
   ],
   "splits": {

@@ -2,7 +2,7 @@
 
 **Branch**: `agent/codex/3602-business-decisions` | **Date**: 2026-11-02 | **Spec**: [spec.md](spec.md)
 **Issue**: [#3602](https://github.com/elsa-workflows/elsa-foundation/issues/3602)
-**State**: Proposed architecture; product specification reviewed; new domain admission awaits an explicit owner decision.
+**State**: Approved 5 November 2026 by Sipke; implementation in progress. [Owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3602#issuecomment-6670626201).
 
 ## Summary
 
@@ -27,7 +27,7 @@ Loaded framework v6.1.0, Elsa v6.3.0, both Gate indexes and [review checklist](.
 
 | Gate | Disposition |
 | --- | --- |
-| Elsa §E2.1 / Governance | **Pending admission**: new domain/purpose, numbered ADR and Elsa minor bump with sync-impact report. No production project before the owner decision. |
+| Elsa §E2.1 / Governance | **Approved**: ADR0095 admits the domain/purpose, with Elsa minor bump and sync-impact report under the explicit 5 November owner decision. |
 | Framework §2.1 / §2.4 | Core contains contracts/immutable values, without XML/evaluator policy, EF, HTTP, workflow or Studio dependencies. |
 | §2.6 / §2.6.4 / §2.7 | Named publication/permission/capability contributions; separate design selection and runtime evaluation; no hidden dispatch coupling. |
 | §2.9 / §2.10 / §2.20 | Provider-independent invariants, separate commands/queries, CAS and immutability. Exact EF closure admission only. |
@@ -38,7 +38,7 @@ Loaded framework v6.1.0, Elsa v6.3.0, both Gate indexes and [review checklist](.
 | Elsa §E2.2 / §E2.6 | Workflow runtime consumes frozen executable metadata without Decisions Design/store references; all three deployment shapes qualified. |
 | Elsa §E5 / §E7 | Computed versions/bounded package ranges; new test projects in correct tier and solution filters. |
 
-Post-design: new domain admission is the unresolved governance gate. Research/specification/design may proceed; product implementation waits for that recorded decision. No other gate waiver is requested.
+Post-design: the 5 November owner decision resolves domain admission. No test, review or CI gate is waived.
 
 ## Project Structure
 

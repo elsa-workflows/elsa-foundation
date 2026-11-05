@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3602-business-decisions`
 **Created**: 2026-11-02
-**Status**: Draft
+**Status**: In progress
 **Input**: [#3602](https://github.com/elsa-workflows/elsa-foundation/issues/3602), including the 1 November interview and the owner's 2 November autonomous delivery request.
 **Program-goal state**: `none/free-flow`. This feature does not widen Unified Execution #2892 or activate a new program.
 
@@ -154,6 +154,6 @@ An administrator controls who may read, edit, publish, invoke, test and inspect 
 
 The first release serves input-to-result tables, not fact inference, rule chaining or business actions. Full FEEL, full DMN conformance and full Camunda compatibility are not implied. The research and contracts choose an explicit interoperable subset. Broader types, dependent decisions and functions require a later profile rather than silent widening.
 
-Research/specification/design and delivery are authorized by the current request. A new constitutional domain admission requires an explicit recorded owner decision under the governance process; the proposed design will be presented before that admission is made. Draft/provisional constitutional material is not ratified by this feature.
+Research/specification/design and delivery are authorized by the current request. Sipke explicitly approved the separate Decisions domain and necessary constitutional amendment on 5 November 2026; [the approval receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3602#issuecomment-6670626201) authorizes admission and autonomous end-to-end implementation. Draft/provisional constitutional material is not ratified by this feature.
 
 User Tasks #3577, regression suites #3588, releases #3590 and optional BPMN editor #3597 are adjacent consumers, not prerequisites or scope expansions. No release, deployment, vendor purchase or publisher activation is authorized.

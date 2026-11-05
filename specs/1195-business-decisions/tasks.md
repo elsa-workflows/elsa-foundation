@@ -1,12 +1,12 @@
 # Tasks: Business decisions
 
 **Input**: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](data-model.md), [contracts](contracts/) and [qualification](quickstart.md).
-**State**: Reviewed tasks. No product task is complete. Domain admission is the blocking owner decision; the current request authorizes ordinary downstream delivery after that decision.
+**State**: Reviewed tasks. No product task is complete. Domain admission was approved by Sipke on 5 November 2026; implementation continues autonomously under that decision.
 **Cadence**: Risk-based behavior tests under ADR 0080 D1 and framework §2.23. No mandatory test-first cadence is inferred. Required causal red/green controls prove meaningful new safeguards. One issue/branch/draft PR; no new tracking issues or program.
 
 ## Phase 1 — Admission and setup
 
-- [ ] T001 Record the owner's explicit Decisions-domain decision on #3602 and in `specs/1195-business-decisions/plan.md`; if approved, add a numbered `docs/adr/` decision, admit the narrow purpose in `.specify/memory/constitution.md` with minor bump/sync-impact report and `docs/reference/elsa-domain-tree.md`, preserving ADR 0088 and framework v6.1.0.
+- [x] T001 Record the owner's explicit Decisions-domain decision on #3602 and in `specs/1195-business-decisions/plan.md`; if approved, add a numbered `docs/adr/` decision, admit the narrow purpose in `.specify/memory/constitution.md` with minor bump/sync-impact report and `docs/reference/elsa-domain-tree.md`, preserving ADR 0088 and framework v6.1.0.
 - [x] T002 Review final specification, plan and this task list independently for correctness, standards and #3602 conformance; record outcomes in `specs/1195-business-decisions/evidence/design-review.md` before product implementation.
 - [ ] T003 Create only the initial Core/evaluator/test projects under `Extensions/Decisions/src/` and `Extensions/Decisions/tests/Tests/`, with public-API tracking, computed package versions and the appropriate entries in `Elsa.Server.slnx` / `tools/ci/test-tiers.json`. Add later projects with their slices.
 
