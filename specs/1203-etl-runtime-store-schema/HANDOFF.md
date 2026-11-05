@@ -1,6 +1,17 @@
 # Handoff: #2908 ETL delivery, from spec 1203 onward (2026-11-04)
 
-## Codex continuation checkpoint — 5 November
+## Post-demo continuation — 5 November
+
+Live GitHub state overrides older entries. Owner resumption is verified: the demo is done and all work resumes. Keep the existing #2908/#2892 scope and claims. The retired demo hosts/database are not restored; all validation remains owned and disposable.
+
+- Tested source `154762f4714bc861d46289d30c055a51f6bb9d00` ordinarily integrates delivered GitHub main `697e9a342998282a08a598ad7137b2e90c9435c2`, conflict-free, with the whole88-file authored diff byte-identical to reviewed51b9 against5a3. No ETL source/semantics changed in that integration. Docs-only main055 is not integrated just to refresh CI. Unpublished primary P5/b7fc0ec33 and all primary user changes remain untouched.
+- The coordinated one-attempt whole ETL phase passes **1328/1328**, zero failed/skipped, in362.56s; discovery1328 matches exact case names, phase364.28s. [Receipt and source/process/command bindings](evidence/qualification-resumed-etl.json). Selected child build-server settings are recorded; no owned live survivor remained, no cleanup signal was needed and the slot is returned. No new heavy phase without coordination.
+- This evidence-only update records the fresh counts before final review; it does not change products or relabel154762 execution as a later commit's execution. All8 prior full review rounds remain. One scoped integration R9 was recorded at [the owning-PR disposition](https://github.com/elsa-workflows/elsa-foundation/pull/3803#issuecomment-6663370041); exact final source/evidence binding must remain explicit. No copied verdict, broad cap reset or fresh R9 outcome is assumed.
+- Current native-provider whole qualification/new server control cases, architecture/generator gates, all3 authentic exact-head required checks, protected and resulting-main delivery remain. Published schema head51b9's old CI41950629166/41950801461 is cancelled, not green. The PR stays draft while this work is completed. Central pause-only hold withdrawal does not remove technical/security/architecture holds. Server runtime activation remains existing1206/3804; mid-work/old-host recovery and Studio remain separate.
+- Existing3804 remains023f061cd5fc484cf7c94053dc134e6a4a1febea, and local unpublished3789 remainsfc2d5f657569a738e569c0b621d9343547f166b7. Continue schema→concurrency→SQL authoring, transforms/admission, recovery/stale-writer, BPMN/Studio. Four future3789 overlap paths are recorded in the [resume checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6659863497); no later slice or primary P5 was merged here.
+- Core3838 publication contracts are delivered; durable non-runnable Runtime retention stays in the [existing Runtime intake](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6641948798). Remaining program acceptance, compatibility/frozen artifacts/legacy producers and existing deferrals remain. Feature/program/Project62 stay In Progress / Partial.
+
+## Earlier Codex continuation — 5 November (before pause)
 
 Live GitHub state overrides the historical checkpoints below. Part of #2908.
 
