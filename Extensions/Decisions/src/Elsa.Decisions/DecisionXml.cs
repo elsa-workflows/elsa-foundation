@@ -92,7 +92,7 @@ internal sealed class DecisionXml
         var outputs = outputElements.Select(output =>
         {
             var name = (string?)output.Attribute("name") ?? "";
-            if (!ValidSymbol(name)) Error("InvalidOutputName", output);
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 256 || !DecisionScalars.ValidString(name)) Error("InvalidOutputName", output);
             return new DecisionOutput(Id(output, true), name, Type(output));
         }).ToArray();
         if (inputs.Select(i => i.Name).Distinct(StringComparer.Ordinal).Count() != inputs.Length) Error("DuplicateInputName", table);
