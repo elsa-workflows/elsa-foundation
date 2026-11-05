@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Dialog, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export async function templateToastJourney(page: Page, info: TestInfo, capture: Capture) {
@@ -73,7 +73,12 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     await expect(page.getByRole("heading", { name: "Workflow templates", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
     await capture(page, info, "template-list");
+    // The original workflow deliberately retains unsaved edits. Its template copy is persisted;
+    // accept only the native reload guard for this owned disposable journey.
+    const allowOwnedReload = async (dialog: Dialog) => { expect(dialog.type()).toBe("beforeunload"); await dialog.accept(); };
+    page.on("dialog", allowOwnedReload);
     await page.reload();
+    page.off("dialog", allowOwnedReload);
     await page.getByRole("button", { name, exact: true }).click();
     await expect(page.locator(".wf-sequence-summary").filter({ hasText: "Unsaved template text" })).toBeVisible();
     await capture(page, info, "reopened-template");

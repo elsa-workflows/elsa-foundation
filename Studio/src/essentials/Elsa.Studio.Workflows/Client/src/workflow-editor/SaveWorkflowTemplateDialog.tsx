@@ -13,10 +13,12 @@ export function SaveWorkflowTemplateDialog({ context, draft, name: initialName, 
   const ref = useRef<HTMLElement>(null); useDialogFocus(ref, saving ? null : onClose);
   return <div className="wf-dialog-backdrop"><section ref={ref} tabIndex={-1} className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="save-template-title">
     <form onSubmit={event => { event.preventDefault(); if (pending.current || !name.trim()) return; pending.current = true; setSaving(true); setError("");
+      const notifications = getNotifications();
+      const templatePath = qualifyStudioBackendPath("/workflows/templates");
       void saveWorkflowTemplate(context, { name, description: text, content: templateContent(draft) }).then(() => {
         onClose();
-        getNotifications().notify({ level: "success", title: "Template saved",
-          link: { label: "View templates", path: qualifyStudioBackendPath("/workflows/templates") } });
+        notifications.notify({ level: "success", title: "Template saved",
+          link: { label: "View templates", path: templatePath } });
       })
         .catch(error => setError(error instanceof Error ? error.message : String(error))).finally(() => { pending.current = false; setSaving(false); }); }}>
       <h3 id="save-template-title">Save as template</h3>

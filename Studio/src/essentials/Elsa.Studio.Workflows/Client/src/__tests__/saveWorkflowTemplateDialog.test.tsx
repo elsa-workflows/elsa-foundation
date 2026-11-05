@@ -54,10 +54,13 @@ describe("Save template feedback", () => {
     expect(cancel.disabled).toBe(true);
     flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(element.querySelector('[role="dialog"]')).not.toBeNull();
+    window.history.replaceState({}, "", "/workflows/definitions?backend=other");
+    const otherNotify = vi.fn<StudioNotificationApi["notify"]>(() => ({ id: "other", update() {}, dismiss() {} }));
+    setNotifications({ notify: otherNotify, track: work => work });
     resolve(saved);
     await vi.waitFor(() => expect(element.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(opener);
-    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1); expect(otherNotify).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith({ level: "success", title: "Template saved", link: { label: "View templates", path: "/workflows/templates?backend=secondary" } });
     expect(element.textContent).not.toContain("Done");
   });
