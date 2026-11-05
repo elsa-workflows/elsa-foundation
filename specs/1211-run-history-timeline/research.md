@@ -4,7 +4,7 @@ Source baseline: main 074259b3565e046701acbce69613120d7bed5f64; feature head ini
 
 ## R1 — Capture before state folding, persist with the existing commit
 
-**Decision**: Add an optional typed history participant to RuntimeCheckpointStateChangeSet. IRuntimeCheckpointCommitEnricher derives deterministic candidates before coalescing; RuntimeCheckpointFold concatenates them without last-state collapse. Existing native/EF writers persist queryable history atomically.
+**Decision**: Add an optional typed write sidecar to RuntimeCheckpointCommit, separate from RuntimeCheckpointStateChangeSet and RuntimeStateCategory. IRuntimeCheckpointCommitEnricher derives deterministic candidates before coalescing; RuntimeCoalescingSession retains their original ordered groups in a separate buffer while RuntimeCheckpointFold folds continuation changes only. Existing native/EF writers persist queryable history atomically. No execution decision reads a history event, bookmark-history projection or history query result.
 
 **Rationale**: RuntimeCheckpointCommitter already enriches before persistence policy. Current fold keeps the last activity/inspection state, so inspecting only folded projections loses intermediate transitions. Existing QA ExecutionEvidenceCheckpointEnricher writes volatile data before commit and swallows failure. It is not authoritative production history.
 
@@ -85,3 +85,24 @@ Current checkout already displays persistenceMode/inspectionGranularity through 
 Open adjacent PRs researched: #3828 head 8bc1129ec299b4b5359e31c6f6176a6ae1b1552d (toolbar/selection), #3847 head eeec9a5d915a5174e9106ab64cd9d8a1e960aa04 (User Tasks/run diagnostics). Do not copy branches wholesale; reconcile live heads before editing shared boundaries.
 
 Use tools/ux-acceptance/run.py with owned hosts/stores and a new history journey/artifact inventory. Existing Connections/Agent passes do not prove this feature. Add spec-required 320px coverage (current general proof uses 360px). Commit source before final composed proof, retain downloadable exact-head evidence and independently inspect it. Four-provider migrations are additive using tools/ef/generate-module-migrations.sh --runtime-incremental RunHistory; preserve Runtime Initial and qualify frozen-store upgrade.
+
+## R10 — Implementation decisions under delivery authority
+
+The delivery agent, acting on behalf of @sfmskywalker within the authorized end-to-end scope, selected these bounded implementation refinements on 5 November. These are implementation choices, not a claim that the owner personally inspected a candidate.
+
+- Keep closed typed source facts on the logical checkpoint contribution for facts whose actual owner precedes an existing outcome/suspension/fault checkpoint. An actual continuation entry can be carried to that checkpoint without another physical boundary. Activation/input failure before entry cannot create a continuation-start fact. Source facts participate conditionally in replay identity; absent facts retain historical shapes.
+- Keep explicit unknown execution ancestry. Null is a known root only when actual typed source provenance establishes it; absent ancestry is a visible scope limitation. Retained scoped ancestry and bookmark-count indexes support bounded reads after native cleanup. These are internal projections owned by Runtime.
+- Pin nullable admission capture provenance: true with enabled capture, false when newly admitted with capture off, null for legacy/unknown. Retained null never inherits a new host setting. This permits an honest disabled-at-admission state without fabricating an empty captured head.
+- Preserve the timer-before-bookmark guarantee. A timer is independently durable before the suspension checkpoint, so later inspection of that checkpoint cannot establish atomic history for the timer write. The optional timer owner instead retains bounded typed scheduled/terminal history responsibility on its existing timer document, in the same owner write. Retirement remains non-fireable until its pending facts are acknowledged. The existing bounded pump handles these responsibilities through guarded observation append; no generic materialization queue is added. Legacy timer providers do not advertise this capability. Exact owner/claim/deletion guards and restart qualification remain required.
+- Explicit purge removes event content but retains compact semantic replay receipts, allocation/policy and a purge boundary through run deletion. Otherwise a delayed retry under another physical commit could resurrect purged history. Exact kind/category/identity indexes and bounded safe text windows serve different query needs.
+- Current eligibility observes native handle, workflow/test scope and activity ownership/status. It remains separate from historical disposition and command authority. Changed native versus recorded metadata yields unknown eligibility rather than combining two observations into a false fact.
+
+## R11 — CI-enforced continuation separation and lazy admission qualification
+
+Published foundation CI found a real ownership error: placing HistoryBatches on RuntimeCheckpointStateChangeSet violated the existing unchanged RuntimeContinuationState_DoesNotDependOnHistoryOrAuditRecords invariant. Move the write contribution to RuntimeCheckpointCommit, preserve it independently through cloning/coalescing/flush, and leave continuation state and RuntimeStateCategory free of history/audit records. The conditional fingerprint wrapper remains byte-compatible; absence still emits no history wrapper. This correction does not amend or weaken the invariant.
+
+The same CI run found eager writer/reader qualification while constructing WorkflowStartDispatcher. Generic feature composition has no execution scope, so service resolution must remain possible without one. Resolve the pinned policy and selected atomic writer/reader pair lazily at actual new admission, before its payload is enqueued. Retained admission policy and legacy absent-policy replay remain unchanged. An actual captured admission with an unqualified pairing still refuses.
+
+Runtime-owned policy/provenance and closed typed source contributions are write inputs, not diagnostic read-model authority. The capture module converts those inputs into the checkpoint sidecar. Required capture refusal is limited to runs that pinned that contract; optional/disabled ordinary execution cannot acquire a dependency on querying history. A temporary module or store outage does not authorize an unsafe callback replay or replace existing poison/uncertain-effect handling.
+
+Status: corrective implementation and independent source review in progress. Published failing checks remain recorded; no passing rerun is claimed here.

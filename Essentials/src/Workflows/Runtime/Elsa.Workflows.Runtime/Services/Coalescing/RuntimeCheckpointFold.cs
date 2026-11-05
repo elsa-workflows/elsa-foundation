@@ -21,7 +21,6 @@ public static class RuntimeCheckpointFold
 
         RuntimeStateChange<WorkflowExecutionState>? workflowExecution = null;
         RuntimeStateChange<SchedulerState>? scheduler = null;
-        var history = new List<RuntimeHistoryBatch>();
         var activityExecutions = new MergeBuffer<ActivityExecutionState>();
         var inspections = new MergeBuffer<ActivityExecutionInspectionProjection>();
         var bookmarks = new MergeBuffer<BookmarkState>();
@@ -45,7 +44,6 @@ public static class RuntimeCheckpointFold
             if (changeSet.Scheduler is not null)
                 scheduler = changeSet.Scheduler;
 
-            if (changeSet.HistoryBatches is { } groups) history.AddRange(groups);
             activityExecutions.AddRange(changeSet.ActivityExecutions);
             inspections.AddRange(changeSet.ActivityExecutionInspections);
             bookmarks.AddRange(changeSet.Bookmarks);
@@ -88,7 +86,7 @@ public static class RuntimeCheckpointFold
             backgroundActivityWork: new BackgroundActivityWorkCheckpointChanges(
                 backgroundActivityAdmissions,
                 backgroundActivityAcceptances,
-                backgroundActivityCancellations)) { HistoryBatches = history.Count == 0 ? null : history.ToArray() };
+                backgroundActivityCancellations));
     }
 
     private sealed class MergeBuffer<TState>

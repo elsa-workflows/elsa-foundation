@@ -102,6 +102,21 @@ public sealed class BookmarkConsumptionCheckpointRequest
         WorkflowExecutionChange = workflowExecutionChange;
     }
 
+    private IReadOnlyList<RuntimeHistorySourceFact>? _historySourceFacts;
+    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts
+    {
+        get => _historySourceFacts;
+        init => _historySourceFacts = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+
+    /// <summary>Copies this validated request with immutable owner-supplied semantic facts.</summary>
+    public BookmarkConsumptionCheckpointRequest WithHistorySourceFacts(IReadOnlyList<RuntimeHistorySourceFact>? facts)
+    {
+        var copy = (BookmarkConsumptionCheckpointRequest)MemberwiseClone();
+        copy._historySourceFacts = facts is null ? null : Array.AsReadOnly(facts.ToArray());
+        return copy;
+    }
+
     public BookmarkResumeCheckpointTransitionKind TransitionKind { get; }
     public RuntimeSchedulerWorkItem ResumeWorkItem { get; }
     public RuntimeResumeBookmarkCommandPayload ResumePayload { get; }

@@ -225,6 +225,17 @@ public sealed class RuntimeHistoryQueryTests
             await fixture.Reader.FindBookmarkAsync("run", "approval"));
     }
 
+    [Fact]
+    public async Task Exact_late_kind_uses_its_owned_index_instead_of_scanning_ten_thousand_rows()
+    {
+        var fixture = new Fixture();
+        for (var sequence = 1; sequence <= 10000; sequence++) fixture.Append(sequence, name: sequence >= 9998 ? "rare-kind" : "ActivityStarted");
+        var page = await fixture.Reader.ReadPageAsync(new("run", limit: 10, name: "rare-kind"));
+        Assert.Equal([9998L, 9999L, 10000L], page.Items.Select(e => e.Sequence));
+        Assert.Equal(3, page.ScannedCount);
+        Assert.Null(page.NextContinuationToken);
+    }
+
     private sealed class Fixture
     {
         public InMemoryRuntimeCheckpointStoreState State { get; } = new();
@@ -246,19 +257,8 @@ public sealed class RuntimeHistoryQueryTests
                 PhysicalCommitId = $"physical-{sequence}", RecordedAt = At,
                 ParentActivityExecutionId = parent, BookmarkId = bookmark
             };
-            if (!State.HistoryEvents.TryGetValue(key, out var events)) State.HistoryEvents[key] = events = [];
-            events.Add(item);
-            State.HistoryEventsById[(Access.Scope, "run", item.HistoryEventId)] = item;
-            if (!State.HistoryActivityEvents.TryGetValue((Access.Scope, "run", activity), out var activityEvents))
-                State.HistoryActivityEvents[(Access.Scope, "run", activity)] = activityEvents = [];
-            activityEvents.Add(item);
+            State.PublishHistoryEvent(Access.Scope, item, "seed:" + sequence);
             State.HistoryParents[(Access.Scope, "run", activity)] = parent;
-            if (bookmark is not null)
-            {
-                if (!State.HistoryBookmarkEvents.TryGetValue((Access.Scope, "run", bookmark), out var bookmarkEvents))
-                    State.HistoryBookmarkEvents[(Access.Scope, "run", bookmark)] = bookmarkEvents = [];
-                bookmarkEvents.Add(item);
-            }
             State.HistoryHeads[key] = new("run", 1, sequence, item.PhysicalCommitId!, At, Policy, true, false, 0);
         }
 
@@ -268,12 +268,7 @@ public sealed class RuntimeHistoryQueryTests
             var summary = new ActivityExecutionBookmarkSummary(new(id, "run", activity, "continue"), "task", "safe-hash", At, expires);
             var value = new RuntimeHistoryBookmark(summary, "review-node", status, $"event-{firstSequence}",
                 null, $"event-{firstSequence}", firstSequence, firstSequence, null, null, null, RuntimeHistoryPriorState.CreationEvent);
-            State.HistoryBookmarks[(Access.Scope, "run", id)] = value;
-            if (!State.HistoryBookmarkOrder.TryGetValue((Access.Scope, "run"), out var order)) State.HistoryBookmarkOrder[(Access.Scope, "run")] = order = [];
-            order.Add(id);
-            if (!State.HistoryActivityBookmarkOrder.TryGetValue((Access.Scope, "run", activity), out var activityOrder))
-                State.HistoryActivityBookmarkOrder[(Access.Scope, "run", activity)] = activityOrder = [];
-            activityOrder.Add(id);
+            State.PublishHistoryBookmark(Access.Scope, value);
         }
     }
 

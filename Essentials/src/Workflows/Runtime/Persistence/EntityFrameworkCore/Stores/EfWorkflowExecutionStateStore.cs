@@ -616,6 +616,26 @@ public sealed class EfWorkflowExecutionStateStore(
         var executionHash = Hash(workflowExecutionId);
         var executionKey = Encode(workflowExecutionId);
 
+        await context.RuntimeHistoryEvents.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.RuntimeHistoryBookmarks.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.RuntimeHistoryBookmarkCounts.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.RuntimeHistoryActivities.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
+        await context.RuntimeHistoryHeads.Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)
+            .ExecuteDeleteAsync(cancellationToken);
         await context.ActivityExecutionStates.Where(row =>
             row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
             row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey)

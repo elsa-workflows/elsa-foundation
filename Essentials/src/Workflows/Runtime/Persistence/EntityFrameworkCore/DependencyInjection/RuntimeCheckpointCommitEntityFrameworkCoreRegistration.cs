@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -20,6 +21,7 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             services.AddRuntimeBackgroundActivityWorkEntityFrameworkCore();
             services.TryAddScoped<IRuntimeModelExecutionReader, EfRuntimeModelExecutionReader>();
             RequireEfParticipants(services);
+            RegisterHistory(services);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime checkpoint EF persistence");
 
             var selected = RuntimeCheckpointCommitStoreBackend.Find(services);
@@ -60,6 +62,29 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             foreach (var descriptor in snapshot)
                 services.Add(descriptor);
             throw;
+        }
+    }
+
+    private static void RegisterHistory(IServiceCollection services)
+    {
+        Register(typeof(IRuntimeHistoryStore), typeof(InMemoryRuntimeHistoryStore));
+        Register(typeof(IRuntimeHistoryObservationWriter), typeof(InMemoryRuntimeHistoryWriter));
+        Register(typeof(IRuntimeHistoryRetentionStore), typeof(InMemoryRuntimeHistoryWriter));
+        services.TryAddScoped<EfRuntimeHistoryStore>();
+
+        void Register(Type contract, Type ownedDefault)
+        {
+            var selected = services.Where(x => x.ServiceType == contract).ToArray();
+            if (selected.Length > 1) throw new InvalidOperationException("Runtime history EF persistence refuses an ambiguous history contract.");
+            if (selected is [{ Lifetime: ServiceLifetime.Scoped } owned] && owned.ImplementationType == typeof(EfRuntimeHistoryStore)) return;
+            foreach (var descriptor in selected)
+            {
+                if (descriptor.Lifetime != ServiceLifetime.Scoped ||
+                    descriptor.ImplementationType != typeof(EfRuntimeHistoryStore) && descriptor.ImplementationType != ownedDefault)
+                    throw new InvalidOperationException("Runtime history EF persistence refuses to replace an unowned history contract.");
+                services.Remove(descriptor);
+            }
+            services.Add(ServiceDescriptor.Scoped(contract, typeof(EfRuntimeHistoryStore)));
         }
     }
 

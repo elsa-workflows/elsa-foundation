@@ -293,6 +293,33 @@ public sealed class WorkflowStartLineageTests
         Assert.Equal(0, new WorkflowExecutionStartCommandPayload(NewExecutable().Identity, "artifact-1").DispatchNestingDepth);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task Actual_start_handoff_preserves_the_admitted_history_decision(bool? enabled)
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var executable = NewExecutable();
+        await executableStore.SaveAsync(executable);
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowStartSchedulerWorkHandler(executableStore, queue, new FixedIdGenerator(), new FakeTimeProvider(Now), new InMemoryWorkflowExecutionStateStore());
+        var policy = enabled == true ? new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true, ["WorkflowStarted"]) : null;
+        var payload = new WorkflowExecutionStartCommandPayload(executable.Identity, executable.Identity.ArtifactId)
+        {
+            HistoryCapturePolicy = policy,
+            HistoryCaptureEnabledAtAdmission = enabled
+        };
+
+        await handler.HandleAsync(NewStartWorkItem(payload));
+
+        var work = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("child-1")));
+        var forwarded = work.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(enabled, forwarded.HistoryCaptureEnabledAtAdmission);
+        Assert.Equal(policy is null, forwarded.HistoryCapturePolicy is null);
+        if (policy is not null) Assert.True(policy.IsEquivalentTo(forwarded.HistoryCapturePolicy));
+    }
+
     private static WorkflowTestScope NewTestScope() =>
         new("scope-1", Now.AddHours(1), "tenant-1", new WorkflowExecutionPartition("partition-1"));
 

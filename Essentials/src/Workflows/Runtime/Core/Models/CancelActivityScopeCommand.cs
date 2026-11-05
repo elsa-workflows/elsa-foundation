@@ -34,4 +34,8 @@ public sealed record ActivityScopeCleanupRequest(
     IReadOnlyCollection<string> ActivityExecutionIds,
     IReadOnlyCollection<string> BookmarkIds,
     IReadOnlyCollection<string> TimerIds,
-    IReadOnlyCollection<string> SchedulerWorkItemIds);
+    IReadOnlyCollection<string> SchedulerWorkItemIds)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityExecutionBookmarkSummary>? HistoryBookmarks { get; init; }
+}

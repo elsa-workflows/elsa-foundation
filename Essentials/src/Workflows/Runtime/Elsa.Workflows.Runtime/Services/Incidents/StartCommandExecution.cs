@@ -60,6 +60,8 @@ internal static class StartCommandExecution
             payload.TenantId,
             SystemMetadataOf(envelope.Command))
         {
+            HistoryCapturePolicy = payload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = payload.HistoryCaptureEnabledAtAdmission,
             RunKind = payload.RunKind,
             PinnedSource = payload.PinnedSource,
             Partition = payload.Partition,

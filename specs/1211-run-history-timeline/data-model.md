@@ -8,7 +8,7 @@ The existing RuntimeHistoryEvent envelope supplies identity, run, category/name,
 
 Required semantic context includes kind/schema version, provenance authority, exact optional execution/node/bookmark/delivery/incident/related-run and causal identity, safe outcomes/reason and value-evidence reference/disposition. Do not serialize full source metadata, checkpoint inputs, exception messages, bookmark payloads or signed capabilities. No inline value payload is required for the baseline.
 
-An optional versioned history batch is a checkpoint participant. Candidate IDs derive from logical checkpoint identity plus semantic kind/subject/ordinal. They are not wall-clock/random IDs. Conflicting content under an existing candidate ID refuses the checkpoint. Repeating an equivalent durable checkpoint allocates no new sequence.
+An optional versioned history batch is a RuntimeCheckpointCommit write sidecar, separate from authoritative RuntimeCheckpointStateChangeSet and RuntimeStateCategory. The coalescing session preserves its ordered logical groups independently of continuation-state folding. Candidate IDs derive from logical checkpoint identity plus semantic kind/subject/ordinal. They are not wall-clock/random IDs. Conflicting content under an existing candidate ID refuses the checkpoint. Repeating an equivalent durable checkpoint allocates no new sequence.
 
 Capture profile is pinned to admission/run identity and carried through retry. Legacy profile absence means uncaptured rather than automatic retroactive enrichment. A later explicit policy change has its own new effective boundary; old queued logical commits retain their original profile/fingerprint.
 
@@ -36,10 +36,14 @@ A first observed consumption/removal after late capture or an explicit gap may h
 
 ## Query range and continuation
 
-A page contains records, available capture/retention/granularity/settlement coverage, bounded traversal position, captured upper watermark, next continuation and optional new-events information. No baseline asynchronous materializer exists: committed native/EF history is settled through its acknowledged physical boundary. A settled prefix does not close the history to future events or late ingress observations. Optional source limitations remain explicit.
+A page contains records, available capture/retention/granularity/settlement coverage, bounded traversal position, captured upper watermark, next continuation and optional new-events information. Native checkpoint history has no asynchronous materializer: committed native/EF history is settled through its acknowledged physical boundary. Optional independent source responsibilities retain their own pending state until acknowledged. A settled prefix does not close the history to future events or late ingress observations. Optional source limitations remain explicit.
 
 Exact IDs use indexed lookup. Free text searches a bounded ordered window of safe summary/context fields and reports searched-through coverage; an empty window may still have more range. Do not return a full filtered total based on an unbounded scan. Continuations authenticate purpose/run/query/limit/scope/tenant/subject/authorization context and are reauthorized on use.
 
 ## Retention and values
 
 Run deletion atomically removes head/events/bookmark projections through existing owned deletion. Explicit earlier history purge preserves retained/coverage boundaries. A shorter captured-value lifetime yields an explicit value disposition; history references existing phase-specific evidence and never causes automatic sensitive payload resolution.
+
+Implementation indexes are scoped projections: bookmark counts by run/exact activity and known activity ancestry support bounded inventories/descendants without whole-history grouping or reliance on later native state. Explicit purge retains compact event identity/fingerprint/original-position receipts until run deletion; a receipt is not readable event content and cannot imply an available historical detail.
+
+Optional timers retain bounded typed history responsibility on their existing owner document. The schedule and terminal responsibilities have stable identities, pinned policy and safe metadata, with retirement/acknowledgement state. An independently appended timer observation does not advance native checkpoint coverage. Missing native run/head retains pending responsibility; it does not create a synthetic captured run. Timer retirement is non-fireable and cannot discard an unacknowledged responsibility. This optional owner recovery is distinct from the direct atomic native history path.

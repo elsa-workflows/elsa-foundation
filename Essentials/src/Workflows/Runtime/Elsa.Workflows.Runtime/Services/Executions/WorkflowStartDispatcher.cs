@@ -11,6 +11,8 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     internal RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
+    internal bool? HistoryCaptureEnabledAtAdmission { get; init; }
+    internal Func<(RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
 
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
@@ -499,6 +501,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var requestedAt = _timeProvider.GetUtcNow();
         var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope, persistenceMode);
+        var history = HistoryAdmission?.Invoke() ?? (HistoryCapturePolicy, HistoryCaptureEnabledAtAdmission);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
@@ -516,7 +519,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata) { HistoryCapturePolicy = HistoryCapturePolicy });
+            triggerMetadata: request.TriggerMetadata) { HistoryCapturePolicy = history.Item1, HistoryCaptureEnabledAtAdmission = history.Item2 });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 

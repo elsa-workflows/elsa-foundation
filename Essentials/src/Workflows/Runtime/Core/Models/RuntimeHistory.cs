@@ -30,7 +30,11 @@ public sealed record RuntimeHistoryCausation(string? HistoryEventId = null, stri
     string? DeliveryId = null, string? CommandId = null, string? SchedulerWorkItemId = null);
 
 public sealed record RuntimeHistoryBookmarkMutation(ActivityExecutionBookmarkSummary Bookmark,
-    RuntimeHistoryBookmarkStatus Status, string? Reason = null, string? SelectedBookmarkId = null);
+    RuntimeHistoryBookmarkStatus Status, string? Reason = null, string? SelectedBookmarkId = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RelatedActivityExecutionId { get; init; }
+}
 
 /// <summary>A deterministic unpositioned event; only the atomic writer assigns its durable position.</summary>
 public sealed record RuntimeHistoryCandidate
@@ -85,7 +89,11 @@ public sealed record RuntimeHistoryHead(string WorkflowExecutionId, long FirstSe
 public sealed record RuntimeHistoryBookmark(ActivityExecutionBookmarkSummary Bookmark, string? ExecutableNodeId,
     RuntimeHistoryBookmarkStatus Status, string? CreatedHistoryEventId, string? EndedHistoryEventId,
     string LastHistoryEventId, long LastSequence, long FirstRecordedSequence, DateTimeOffset? EndedAt,
-    string? Reason, string? SelectedBookmarkId, RuntimeHistoryPriorState PriorState);
+    string? Reason, string? SelectedBookmarkId, RuntimeHistoryPriorState PriorState)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SupersededByActivityExecutionId { get; init; }
+}
 
 /// <summary>Immutable filters; AccessBinding is caller authorization context for token binding, never authority.</summary>
 public sealed record RuntimeHistoryQuery : RuntimeStorePageRequest

@@ -188,6 +188,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             var foldedCommit = commit with
             {
                 StateChanges = foldedState.WithPostCommitOutbox(outbox),
+                HistoryBatches = session.FoldHistoryBatchesWith(commit),
                 PostCommitIntents = [],
             };
 

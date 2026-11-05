@@ -15,6 +15,7 @@ public interface IRuntimeHistoryStore
 /// <summary>Records delivery observations at their own durable authority, without asserting execution effects.</summary>
 public interface IRuntimeHistoryObservationWriter
 {
+    bool CanRecordHistory(IRuntimeHistoryStore selectedStore) => false;
     ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default);
 }
 

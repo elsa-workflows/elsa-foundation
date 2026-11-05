@@ -8,6 +8,7 @@ for (const theme of ["light", "dark"]) {
     const node = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     await expect(node).toHaveAccessibleName(/Run state: Running/);
     await node.click();
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     const viewport = canvas.locator(".react-flow__viewport");
     const bounds = (await canvas.boundingBox())!;
@@ -42,6 +43,7 @@ for (const theme of ["light", "dark"]) {
     await node.click();
     await page.getByRole("button", { name: "10 recorded executions", exact: false }).click();
     await page.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Running/ }).click();
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
     await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);

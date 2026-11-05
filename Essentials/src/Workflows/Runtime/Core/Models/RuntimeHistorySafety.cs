@@ -3,6 +3,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>Shared validation for history participants before a provider may commit them.</summary>
 public static class RuntimeHistorySafety
 {
+    public static bool IsSafeMetadataKey(string key) => SafeMetadata.Contains(key);
+
     public static void Validate(RuntimeHistoryBatch batch, string workflowExecutionId)
     {
         ArgumentNullException.ThrowIfNull(batch);
@@ -24,7 +26,7 @@ public static class RuntimeHistorySafety
                 if (e.Category != RuntimeHistoryEventCategory.BookmarkLifecycle || !Enum.IsDefined(mutation.Status) ||
                     string.IsNullOrWhiteSpace(mutation.Bookmark.StimulusType) || mutation.Bookmark.StimulusType.Length > 1024 ||
                     mutation.Bookmark.StimulusHash is null || mutation.Bookmark.StimulusHash.Length > 1024 ||
-                    mutation.Reason?.Length > 128 || mutation.SelectedBookmarkId?.Length > 1024)
+                    mutation.Reason?.Length > 128 || mutation.SelectedBookmarkId?.Length > 1024 || mutation.RelatedActivityExecutionId?.Length > 1024)
                     throw new InvalidOperationException("Bookmark history has an invalid typed lifecycle projection.");
             }
             ValidateMetadata(e);
@@ -50,5 +52,6 @@ public static class RuntimeHistorySafety
         "history.status", "history.reasonCode", "history.outcomeNames", "history.stimulusType", "history.resumeTargetId",
         "history.selectedBookmarkId", "history.childWorkflowId", "history.timerId", "history.scheduledAt", "history.controlKind",
         "history.valueEvidenceIds", "history.incidentFailureType", "history.originalCheckpoint", "history.capturePolicyId"
+        , "history.relatedActivityExecutionId", "history.compensationEntryId", "history.valuePhase", "history.valueEvaluationId", "history.durableStateAddress", "history.operation", "history.lifecycle", "history.storage", "history.sourceCapturedAt"
     };
 }

@@ -25,6 +25,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
     {
         switch (exception)
         {
+            case RuntimeSchedulerWorkUnavailableException unavailable when unavailable.Code.StartsWith("runtime.history.", StringComparison.Ordinal):
+                await RuntimeProblemWriting.HistoryUnavailableAsync(context);
+                return true;
             case RuntimeHistoryUnsupportedSignal:
                 await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status501NotImplemented,
                     "This host does not provide run history.");

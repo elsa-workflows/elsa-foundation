@@ -7,7 +7,7 @@ public sealed class RuntimeHistoryOptions
 {
     public bool Enabled { get; set; } = true;
 
-    internal RuntimeHistoryCapturePolicy? CreatePolicy() => Enabled
-        ? new("runtime-history-v1", 1, true, RuntimeHistoryCapture.Kinds)
+    internal RuntimeHistoryCapturePolicy? CreatePolicy(IEnumerable<string>? sourceKinds = null) => Enabled
+        ? new("runtime-history-v2", 2, true, RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(sourceKinds ?? []).ToArray())
         : null;
 }

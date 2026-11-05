@@ -245,6 +245,23 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityAttempt? claimedAttempt,
         CancellationToken cancellationToken)
     {
+        var historyOwnerReader = serviceProvider.GetService<IWorkflowExecutionStateStore>();
+        RuntimeHistoryCapturePolicy? historyPolicy;
+        try { historyPolicy = historyOwnerReader is null ? null : (await historyOwnerReader.FindAsync(workItem.WorkflowExecutionId, cancellationToken))?.HistoryCapturePolicy; }
+        catch (Exception exception) when (exception is not (OperationCanceledException or ArgumentException or InvalidDataException or RuntimeSchedulerWorkUnavailableException))
+        { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History source metadata is unavailable.", exception); }
+        ActivityAttempt? historyAttempt = null;
+        var historyFacts = new List<RuntimeHistorySourceFact>();
+        void RecordContinuation(RuntimeHistorySourceFactKind kind, IReadOnlyList<string>? outcomes = null, string? reasonCode = null)
+        {
+            var fact = new RuntimeHistorySourceFact(kind, RuntimeHistoryIdentity.CreateBinding([workItem.WorkItemId, historyAttempt?.AttemptId, kind.ToString()]),
+                _timeProvider.GetUtcNow(), resumePayload.ActivityExecutionId, historyAttempt?.AttemptId,
+                resumePayload.HistoryCausation is { } sourceCause ? sourceCause with { CommandId = workItem.CommandId, SchedulerWorkItemId = workItem.WorkItemId } :
+                    new RuntimeHistoryCausation(WorkflowExecutionId: workItem.WorkflowExecutionId, DeliveryId: triggerDelivery.DeliveryId,
+                        CommandId: workItem.CommandId, SchedulerWorkItemId: workItem.WorkItemId), reasonCode: reasonCode, outcomeNames: outcomes);
+            historyFacts.AddRange(RuntimeHistorySourceFacts.ForPolicy(historyPolicy, [fact]) ?? []);
+        }
+
         // Released once the outcome is recorded, after every fault boundary below has masked its text.
         using var faultMasking = ActivityFaultMasking.For(serviceProvider, resumePayload.ActivityExecutionId);
         ActivityExecutionState executionState = state;
@@ -295,6 +312,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             resumeAttempt = replacementClaim.Attempt;
             executionState = replacementClaim.State;
         }
+
+        historyAttempt = resumeAttempt;
 
         try
         {
@@ -396,13 +415,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             if (activity is not IStatefulActivity statefulActivity)
                 throw new InvalidOperationException($"Typed activity '{activity.GetType().FullName}' does not implement the stateful resume contract.");
 
-            var transition = await statefulActivity.ResumeAsync(NewTypedResumeRequest(
-                workItem,
-                resumePayload,
-                executionState,
-                resumeAttempt,
-                triggerDelivery,
-                cancellationToken));
+            var actualResume = NewTypedResumeRequest(workItem, resumePayload, executionState, resumeAttempt, triggerDelivery, cancellationToken);
+            RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationStarted);
+            var transition = await statefulActivity.ResumeAsync(actualResume);
+            RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationReturned, reasonCode: transition.Kind.ToString());
             if (transition is IStatefulActivitySuspensionTransition suspension)
             {
                 StatefulSuspensionSupport.ValidateRegistrations(executable, executableNode, suspension);
@@ -457,7 +473,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityResumeFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken, historyFacts);
             return;
         }
 
@@ -476,7 +492,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 activationDisposalException,
                 "ActivityDisposalFailed",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, historyFacts);
             return;
         }
 
@@ -499,12 +515,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 new ActivityTransitionFaultException(returnedFault),
                 "ActivityReturnedFault",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, historyFacts);
             return;
         }
 
         if (returnedCancellationReason is not null)
         {
+            RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationCancelled);
             await ActivityCancellationCheckpointService.CommitAsync(
                 checkpointCommitter,
                 serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
@@ -513,7 +530,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executionState,
                 returnedCancellationReason,
                 valueSnapshots,
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken, historySourceFacts: historyFacts);
             return;
         }
 
@@ -537,6 +554,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         if (replacementSuspendedState is not null)
         {
+            RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationSuspended);
             var replacementWorkItems = NewReplacementBookmarkWorkItems(workItem, resumePayload, replacementSuspendedState).ToArray();
             await bookmarkConsumptionCheckpointService.CommitAsync(
                 BookmarkConsumptionCheckpointRequest.ForSuspension(
@@ -545,7 +563,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     replacementSuspendedState,
                     replacementWorkItems,
                     valueSnapshots,
-                    []),
+                    []).WithHistorySourceFacts(historyFacts),
                 cancellationToken);
             return;
         }
@@ -590,6 +608,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 [RuntimeMetadataKeys.CheckpointReason] = RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason
             },
             cancellationToken);
+        RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, outcomeNames.ToArray());
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,
@@ -599,7 +618,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     _timeProvider, workItem, resumePayload.PinnedExecutable, resumePayload.ExecutableNodeId, resumePayload.ActivityExecutionId, completedState),
                 valueSnapshots,
                 captureProjection.DurableValues,
-                workflowVariableWriteBack),
+                workflowVariableWriteBack).WithHistorySourceFacts(historyFacts),
             cancellationToken);
     }
 
@@ -971,10 +990,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         Exception exception,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null) =>
         RecordMaskedFaultAsync(
             serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state,
-            faultMasking.Mask(exception), subStatus, valueSnapshots, cancellationToken);
+            faultMasking.Mask(exception), subStatus, valueSnapshots, cancellationToken, historyFacts);
 
     private async ValueTask RecordMaskedFaultAsync(
         IServiceProvider serviceProvider,
@@ -986,7 +1005,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         Exception maskedException,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, resumePayload.ActivityExecutionId, subStatus);
         state = EndOpenAttempt(
@@ -996,6 +1015,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             incidentId);
         state = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(state);
         var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, maskedException, subStatus, valueSnapshots);
+        if (historyFacts is { Count: > 0 })
+        {
+            var owner = await serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var started = historyFacts.Last(fact => fact.Kind == RuntimeHistorySourceFactKind.ActivityContinuationStarted);
+            var faulted = new RuntimeHistorySourceFact(RuntimeHistorySourceFactKind.ActivityContinuationFaulted,
+                RuntimeHistoryIdentity.CreateBinding([workItem.WorkItemId, started.AttemptId, "fault"]), _timeProvider.GetUtcNow(),
+                state.InvocationId, started.AttemptId, started.Causation, incidentId: incidentId, reasonCode: subStatus);
+            request = request with { HistorySourceFacts = RuntimeHistorySourceFacts.ForPolicy(owner?.HistoryCapturePolicy, historyFacts.Append(faulted)) };
+        }
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
             activityExecutionStateStore, _timeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);

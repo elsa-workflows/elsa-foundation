@@ -96,7 +96,7 @@ internal sealed class InMemoryRuntimeHistoryStore(
             var source = EventSource(scope, query);
             if (head is null && source.Count != 0)
                 throw new RuntimeHistoryIntegrityException(query.WorkflowExecutionId, "event records have no sequence head");
-            var wholeRunSource = query.BookmarkId is null && (query.ActivityExecutionId is null || query.IncludeDescendants);
+            var wholeRunSource = query.Name is null && query.Category is null && query.BookmarkId is null && (query.ActivityExecutionId is null || query.IncludeDescendants);
             var index = FirstAfter(source, after);
             var items = new List<RuntimeHistoryEvent>(query.Limit);
             var scanned = 0;
@@ -187,9 +187,12 @@ internal sealed class InMemoryRuntimeHistoryStore(
             }
             var hasMore = low < order.Count && Resolve(low).FirstRecordedSequence <= upper;
             var next = hasMore ? Encode(BookmarkPurpose, new(binding, through, upper, false)) : null;
-            long? total = head is { CapturedFromStart: true, HasGaps: false, PurgedThroughSequence: 0 } && !query.IncludeDescendants
-                ? order.Count : null;
-            return ValueTask.FromResult(new RuntimeHistoryBookmarkPage(head, items, next, total, null)
+            var exactCounts = head is { CapturedFromStart: true, HasGaps: false, PurgedThroughSequence: 0 } && head.Policy.SupportedKinds.Contains("BookmarkCreated", StringComparer.Ordinal) && head.LastSequence == upper && !query.IncludeDescendants;
+            long? active = exactCounts ? query.ActivityExecutionId is { } owner
+                ? state.HistoryActivityActiveBookmarks.GetValueOrDefault((scope, query.WorkflowExecutionId, owner))
+                : state.HistoryActiveBookmarks.GetValueOrDefault((scope, query.WorkflowExecutionId)) : null;
+            long? total = exactCounts && query.Status is null ? order.Count : query.Status == RuntimeHistoryBookmarkStatus.Active ? active : null;
+            return ValueTask.FromResult(new RuntimeHistoryBookmarkPage(head, items, next, total, active)
             {
                 ScopeComplete = scopeComplete,
                 ScopeLimitation = scopeComplete ? null : "Some recorded execution ancestry is unavailable; this window cannot establish the complete descendant scope."
@@ -199,10 +202,16 @@ internal sealed class InMemoryRuntimeHistoryStore(
 
     private IReadOnlyList<RuntimeHistoryEvent> EventSource(string scope, RuntimeHistoryQuery query)
     {
+        var indexes = new List<IReadOnlyList<RuntimeHistoryEvent>>();
+        if (query.Name is { } name)
+            indexes.Add(state.HistoryNameEvents.GetValueOrDefault((scope, query.WorkflowExecutionId, name)) ?? []);
+        if (query.Category is { } category)
+            indexes.Add(state.HistoryCategoryEvents.GetValueOrDefault((scope, query.WorkflowExecutionId, category)) ?? []);
         if (query.BookmarkId is { } bookmark)
-            return state.HistoryBookmarkEvents.GetValueOrDefault((scope, query.WorkflowExecutionId, bookmark)) ?? [];
+            indexes.Add(state.HistoryBookmarkEvents.GetValueOrDefault((scope, query.WorkflowExecutionId, bookmark)) ?? []);
         if (query.ActivityExecutionId is { } activity && !query.IncludeDescendants)
-            return state.HistoryActivityEvents.GetValueOrDefault((scope, query.WorkflowExecutionId, activity)) ?? [];
+            indexes.Add(state.HistoryActivityEvents.GetValueOrDefault((scope, query.WorkflowExecutionId, activity)) ?? []);
+        if (indexes.Count != 0) return indexes.MinBy(index => index.Count)!;
         return state.HistoryEvents.GetValueOrDefault((scope, query.WorkflowExecutionId)) ?? [];
     }
 
@@ -218,7 +227,7 @@ internal sealed class InMemoryRuntimeHistoryStore(
         if (string.IsNullOrEmpty(query.Search)) return true;
         // Only explicitly safe common fields are searched; no captured payload or arbitrary metadata scan.
         return new[] { item.HistoryEventId, item.Name, item.ActivityExecutionId, item.ExecutableNodeId,
-                item.BookmarkId, item.IncidentId, item.CheckpointId, item.Causation?.DeliveryId,
+                item.BookmarkId, item.IncidentId, item.CheckpointId, item.PhysicalCommitId, item.Causation?.HistoryEventId, item.Causation?.DeliveryId,
                 item.Causation?.CommandId, item.Causation?.SchedulerWorkItemId }
             .Any(value => value?.Contains(query.Search, StringComparison.OrdinalIgnoreCase) == true);
     }

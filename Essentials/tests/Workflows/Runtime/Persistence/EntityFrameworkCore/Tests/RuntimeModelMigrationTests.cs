@@ -37,14 +37,15 @@ public sealed class RuntimeModelMigrationTests
             }
             var after = await LegacyRows(connection);
             foreach (var (table, digest) in before) Assert.Equal(digest, after[table]);
-            Assert.Equal(before.Count + 4, after.Count);
+            Assert.Equal(before.Count + 9, after.Count);
+            foreach (var table in new[] { RuntimeHistoryEfModule.HeadTable, RuntimeHistoryEfModule.EventTable, RuntimeHistoryEfModule.BookmarkTable, RuntimeHistoryEfModule.BookmarkCountTable, RuntimeHistoryEfModule.ActivityTable }) Assert.Contains(table, after.Keys);
             Assert.Contains("UserTasks", after.Keys); Assert.Contains("UserTaskForms", after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.StateTable, after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 3, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "RunHistory"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 4, upgradedHistory.Length);
             await using (var nativeKinds = connection.CreateCommand())
             {
                 nativeKinds.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\" WHERE IsModelMaterial <> 0";
@@ -83,7 +84,8 @@ public sealed class RuntimeModelMigrationTests
             {
                 // Compare every original column; the newly added discriminator is verified separately above.
                 var columns = Enumerable.Range(0, reader.FieldCount).Where(i =>
-                    table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial").ToArray();
+                    (table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial") &&
+                    (table != RuntimeOperationalStateEfModule.DurableTimerTableName || reader.GetName(i) is not ("HistoryPending" or "HistoryRetired" or "HistoryRevision"))).ToArray();
                 var row = columns.Select(i => reader.IsDBNull(i) ? null : reader.GetValue(i)).ToArray();
                 rows.Add(JsonSerializer.Serialize(row));
             }

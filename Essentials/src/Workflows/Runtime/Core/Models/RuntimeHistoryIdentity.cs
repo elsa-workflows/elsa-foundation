@@ -52,6 +52,8 @@ public static class RuntimeHistoryIdentity
             e.ExecutionScopeId, e.IterationId, e.Causation, e.Payload,
             Metadata = e.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray()
         }, ExactOptions);
+        if (e.ActivityAncestryKnown is { } known)
+            bytes = JsonSerializer.SerializeToUtf8Bytes(new { AncestryVersion = 1, Event = Convert.ToHexStringLower(SHA256.HashData(bytes)), Known = known }, ExactOptions);
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -75,7 +77,7 @@ public static class RuntimeHistoryIdentity
         {
             CheckpointOrdinal = checkpointOrdinal ?? e.CheckpointOrdinal,
             SchemaVersion = e.SchemaVersion, Authority = e.Authority, BookmarkId = e.BookmarkId, AttemptId = e.AttemptId,
-            ParentActivityExecutionId = e.ParentActivityExecutionId, ExecutionScopeId = e.ExecutionScopeId,
+            ParentActivityExecutionId = e.ParentActivityExecutionId, ActivityAncestryKnown = e.ActivityAncestryKnown, ExecutionScopeId = e.ExecutionScopeId,
             IterationId = e.IterationId, Causation = e.Causation, PhysicalCommitId = physicalCommitId, RecordedAt = recordedAt
         };
     }

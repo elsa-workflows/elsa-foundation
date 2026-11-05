@@ -2,13 +2,21 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -17,6 +25,19 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 public sealed partial class RuntimeMinimalApiBehaviorTests
 {
     private const string HistoryPath = "/runtime/workflows/instances/wf-1/history";
+
+    [Fact]
+    public async Task Capture_outage_is_a_safe_infrastructure_problem_instead_of_an_activity_fault_response()
+    {
+        await using var host = await StartAsync(_ => throw new RuntimeSchedulerWorkUnavailableException(
+            "runtime.history.capture-unavailable", "private-sentinel"));
+        using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("private-sentinel", text, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(text);
+        Assert.Equal("runtime.history.unavailable", json.RootElement.GetProperty("code").GetString());
+    }
 
     [Fact]
     public async Task History_page_preserves_unknown_common_envelope_and_never_serializes_legacy_payload_or_arbitrary_metadata()
@@ -33,6 +54,8 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         Assert.Equal(("future-event", "FutureActivityKind", 2, "CommittedTransition", "ActivityLifecycle", 1L, 3),
             (item.HistoryEventId, item.Name, item.SchemaVersion, item.Authority, item.Category, item.Sequence, item.CheckpointOrdinal));
         Assert.Equal("captured", page.Coverage.State);
+        Assert.False(page.Coverage.CaptureAvailable);
+        Assert.NotNull(page.Coverage.CaptureLimitation);
         Assert.Equal(1L, page.Coverage.SettledSequence);
         Assert.Equal((1, "ae-1", RuntimeHistoryEventCategory.ActivityLifecycle),
             (source.Query!.Limit, source.Query.ActivityExecutionId, source.Query.Category));
@@ -112,6 +135,46 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
     }
 
     [Fact]
+    public async Task Explicit_disabled_admission_remains_distinct_from_legacy_unknown_capture()
+    {
+        await using var host = await HistoryHostAsync(new HistorySource { Uncaptured = true }, legacy: true, captureAtAdmission: false);
+        var page = await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath);
+        Assert.Equal("disabled", page!.Coverage.State);
+        Assert.False(page.Coverage.CapturedFromStart);
+        Assert.Empty(page.Items);
+    }
+
+    [Fact]
+    public async Task Promised_timer_source_responsibility_remains_pending_with_readable_committed_rows()
+    {
+        var source = new HistorySource { CapturePolicy = new("test-source", 2, true, ["FutureActivityKind", "TimerScheduled"]) };
+        var timers = new InMemoryDurableTimerStore(new InMemoryDurableTimerStoreState(), new HistoryNativeAccess(),
+            new FakeTimeProvider(DateTimeOffset.UnixEpoch));
+        var timer = new DurableTimer("timer", "wf-1", "elapsed", "hash", DateTimeOffset.UnixEpoch.AddMinutes(1), DateTimeOffset.UnixEpoch);
+        var scheduled = DurableTimerHistoryFacts.CreateScheduled(timer, source.CapturePolicy)!;
+        await timers.SaveAsync(timer with { HistoryResponsibility = new(source.CapturePolicy, [scheduled.Event], false) });
+        await using var host = await HistoryHostAsync(source, nativeTimers: timers);
+        var page = await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath);
+        Assert.Equal("pending", page!.Coverage.State);
+        Assert.True(page.Coverage.SourceHistoryPending);
+        Assert.Single(page.Items);
+        Assert.Equal(1, page.Coverage.SettledSequence);
+        Assert.NotNull(page.CatchUpToken);
+    }
+
+    [Fact]
+    public async Task Unavailable_promised_source_does_not_make_the_readable_prefix_look_complete()
+    {
+        var source = new HistorySource { CapturePolicy = new("test-source", 2, true, ["FutureActivityKind", "TimerScheduled"]) };
+        await using var host = await HistoryHostAsync(source, timerHistoryUnavailable: true);
+        var page = await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath);
+        Assert.Equal("partial", page!.Coverage.State);
+        Assert.Null(page.Coverage.SourceHistoryPending);
+        Assert.NotNull(page.Coverage.SourceHistoryLimitation);
+        Assert.Single(page.Items);
+    }
+
+    [Fact]
     public async Task Inconsistent_history_returns_an_explicit_invalid_range_and_conflict_for_exact_targets()
     {
         var source = new HistorySource { Invalid = true };
@@ -136,6 +199,12 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         Assert.Equal(("Active", "expired", "CreationEvent", (string?)null),
             (exact!.Bookmark.Status, exact.Bookmark.Eligibility, exact.Bookmark.PriorState, exact.Bookmark.EndedHistoryEventId));
         Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(2), exact.Bookmark.EligibilityObservedAt);
+        Assert.Equal("handle-expired", exact.Bookmark.EligibilityReason);
+        await native.SaveAsync(new("bookmark", "wf-1", "ae-1", "node", "continue", "task", "hash", null,
+            new Dictionary<string, string>(), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddMinutes(10)));
+        var changed = await host.Client.GetFromJsonAsync<RuntimeHistoryBookmarkDetailsView>(HistoryPath + "/bookmarks/bookmark");
+        Assert.Equal(("Active", "unknown", "handle-changed"),
+            (changed!.Bookmark.Status, changed.Bookmark.Eligibility, changed.Bookmark.EligibilityReason));
         await native.DeleteAsync("wf-1", "bookmark");
         var missing = await host.Client.GetFromJsonAsync<RuntimeHistoryBookmarkDetailsView>(HistoryPath + "/bookmarks/bookmark");
         Assert.Equal(("Active", "unavailable"), (missing!.Bookmark.Status, missing.Bookmark.Eligibility));
@@ -145,14 +214,116 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         Assert.Equal(1L, Assert.Single(page.Items).LastSequence);
     }
 
+    [Fact]
+    public async Task Native_checkpoint_capture_is_shared_by_run_journal_exact_event_bookmark_and_fault_inspection()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var metadata = new Dictionary<string, string>();
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v1", 1, true,
+            ["WorkflowStarted", "ActivitySuspended", "BookmarkCreated", "ActivityFaulted", "IncidentRecorded"]);
+        var workflow = new WorkflowExecutionState("wf-1", new("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Running, null, now, now, now, null, null, null, "tenant-a", metadata)
+            { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = true };
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var workflows = new InMemoryWorkflowExecutionStateStore(state, null);
+        var activities = new InMemoryActivityExecutionStateStore();
+        var handles = new InMemoryBookmarkStateStore();
+        var incidents = new InMemoryIncidentStateStore();
+        var access = new HistoryNativeAccess();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowExecutionStateStore: workflows,
+            activityExecutionStateStore: activities, bookmarkStateStore: handles, incidentStateStore: incidents,
+            state: state, persistenceAccessContextAccessor: access, rootWriteLeaseManager: new HistoryNativeLease());
+        var services = new ServiceCollection();
+        services.AddSingleton(state);
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(now));
+        services.AddSingleton<IPersistenceAccessContextAccessor>(access);
+        services.AddSingleton<IWorkflowExecutionStateStore>(workflows);
+        services.AddSingleton<IRuntimeRecoveryContinuationCodec>(new HmacRuntimeRecoveryContinuationCodec(
+            Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "native-history-api-signing-key-at-least-32-bytes" })));
+        services.AddRuntimeHistory();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>();
+        var capability = Assert.Single(await new RuntimeHistoryCapabilitySource(writer, reader).GetCapabilitiesAsync());
+        Assert.Equal(["workflow-history-bookmark", "workflow-history-bookmarks", "workflow-history-event", "workflow-history-page"],
+            capability.Links.Select(link => link.Rel));
+        Assert.Empty(await new RuntimeHistoryCapabilitySource(writer, new HistorySource()).GetCapabilitiesAsync());
+        var capture = Assert.Single(scope.ServiceProvider.GetServices<IRuntimeCheckpointCommitEnricher>());
+        var bookmark = new BookmarkState("bookmark", "wf-1", "ae-1", "node", "continue", "task", "hash", null,
+            new Dictionary<string, string> { ["capability"] = "private-sentinel" }, now, null);
+        var waitingActivity = new ActivityExecutionState(new("ae-1", "wf-1", "node", "authored", "Test", "1"),
+            ActivityExecutionStatus.Suspended, null, 1, now, now, null, null, null, null, null,
+            ActivitySchedulingProvenance.From("wf-1", null, null, null, null, null, null, "test"), 0,
+            ["bookmark"], [], 0, 0, metadata);
+        await CommitAsync("start", RuntimeCheckpointNames.WorkflowStarted, workflow);
+        await CommitAsync("wait", RuntimeCheckpointNames.ActivitySuspended, activity: waitingActivity, handle: bookmark);
+        await using var host = await StartAsync(_ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted), collection =>
+        {
+            collection.AddSingleton<IWorkflowExecutionStateStore>(workflows);
+            collection.AddSingleton<IActivityExecutionStateStore>(activities);
+            collection.AddSingleton<IBookmarkStateStore>(handles);
+            collection.AddSingleton<IRuntimeHistoryStore>(reader);
+            collection.AddSingleton<IRuntimeCheckpointCommitStore>(writer);
+            collection.AddSingleton<IRuntimeCheckpointCommitEnricher>(capture);
+            collection.AddSingleton<IActivityInspectionContextAsync>(new BrowserAuthorization());
+        });
+        var run = await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath);
+        Assert.Equal(["WorkflowStarted", "ActivitySuspended", "BookmarkCreated"], run!.Items.Select(item => item.Name));
+        Assert.True(run.Coverage.CaptureAvailable);
+        var journal = await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath + "?activityExecutionId=ae-1");
+        Assert.Equal(run.Items.Skip(1).Select(item => item.HistoryEventId), journal!.Items.Select(item => item.HistoryEventId));
+        var target = journal.Items.Last();
+        var exact = await host.Client.GetFromJsonAsync<RuntimeHistoryEventDetailsView>(HistoryPath + "/events/" + Uri.EscapeDataString(target.HistoryEventId));
+        Assert.Equal(target.HistoryEventId, exact!.Event.HistoryEventId);
+        var wait = await host.Client.GetFromJsonAsync<RuntimeHistoryBookmarkDetailsView>(HistoryPath + "/bookmarks/bookmark");
+        Assert.Equal(("Active", "eligible", target.HistoryEventId),
+            (wait!.Bookmark.Status, wait.Bookmark.Eligibility, wait.Bookmark.CreatedHistoryEventId));
+        var faultIncident = new IncidentState("incident", "wf-1", "ae-1", "node", IncidentSeverity.Error, IncidentStatus.Blocking,
+            null, "TestFailure", "private-sentinel", now, null);
+        await CommitAsync("fault", RuntimeCheckpointNames.IncidentRecorded,
+            activity: waitingActivity with { Status = ActivityExecutionStatus.Faulted }, incident: faultIncident);
+        var fault = await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath);
+        Assert.Equal(["ActivityFaulted", "IncidentRecorded"], fault!.Items.Skip(3).Select(item => item.Name));
+        Assert.DoesNotContain("private-sentinel", JsonSerializer.Serialize(fault), StringComparison.Ordinal);
+        var ineligible = await host.Client.GetFromJsonAsync<RuntimeHistoryBookmarkDetailsView>(HistoryPath + "/bookmarks/bookmark");
+        Assert.Equal(("Active", "ineligible", "activity-not-waiting"),
+            (ineligible!.Bookmark.Status, ineligible.Bookmark.Eligibility, ineligible.Bookmark.EligibilityReason));
+
+        async Task CommitAsync(string id, string name, WorkflowExecutionState? runState = null,
+            ActivityExecutionState? activity = null, BookmarkState? handle = null, IncidentState? incident = null)
+        {
+            var source = new RuntimeCheckpointCommit(id, new("checkpoint-" + id, name, "wf-1", now,
+                activity is null ? [] : [activity.InvocationId], metadata),
+                new(runState is null ? null : new("wf-1", RuntimeStateChangeOperation.Upsert, runState, metadata), null,
+                    activity is null ? [] : [new(activity.InvocationId, RuntimeStateChangeOperation.Upsert, activity, metadata)],
+                    handle is null ? [] : [new(handle.BookmarkId, RuntimeStateChangeOperation.Upsert, handle, metadata)], [],
+                    incident is null ? [] : [new(incident.IncidentId, RuntimeStateChangeOperation.Upsert, incident, metadata)], []), [], metadata);
+            var captured = await capture.EnrichAsync(source);
+            await capture.ValidateFinalAsync(captured);
+            await writer.CommitAsync(captured, new(RuntimeCheckpointPersistenceMode.Immediate));
+        }
+    }
+
+    private sealed class HistoryNativeAccess : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("tenant-a"));
+    }
+
+    private sealed class HistoryNativeLease : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) => write(cancellationToken);
+    }
+
     private static async Task<BehaviorHost> HistoryHostAsync(HistorySource? source, BrowserAuthorization? authorization = null,
-        bool legacy = false, IBookmarkStateStore? nativeBookmarks = null)
+        bool legacy = false, IBookmarkStateStore? nativeBookmarks = null, bool? captureAtAdmission = null, IDurableTimerStore? nativeTimers = null,
+        bool timerHistoryUnavailable = false)
     {
         var workflows = new InMemoryWorkflowExecutionStateStore();
         await workflows.SaveAsync(new WorkflowExecutionState("wf-1", new("artifact", "definition", "version", "1", "hash"),
             WorkflowExecutionStatus.Suspended, null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
             DateTimeOffset.UnixEpoch, null, null, null, "tenant-a", new Dictionary<string, string>())
-            { HistoryCapturePolicy = legacy ? null : HistorySource.Policy });
+            { HistoryCapturePolicy = legacy ? null : source?.CapturePolicy ?? HistorySource.Policy, HistoryCaptureEnabledAtAdmission = captureAtAdmission });
         return await StartAsync(_ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted), services =>
         {
             services.AddSingleton<IWorkflowExecutionStateStore>(workflows);
@@ -160,14 +331,27 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
             services.AddSingleton<TimeProvider>(new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddMinutes(2)));
             if (source is not null) services.AddSingleton<IRuntimeHistoryStore>(source);
             if (nativeBookmarks is not null) services.AddSingleton(nativeBookmarks);
+            if (timerHistoryUnavailable) services.AddSingleton<IDurableTimerStore>(new HistoryUnsupportedTimerStore());
+            if (nativeTimers is not null) services.AddSingleton(nativeTimers);
         });
+    }
+
+    // A valid legacy operational provider has no source-history responsibility capability. Its ordinary
+    // timer reads must not be used to infer that a promised history source is settled.
+    private sealed class HistoryUnsupportedTimerStore : IDurableTimerStore
+    {
+        public ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Operational access is outside this history read.");
+        public ValueTask<IReadOnlyCollection<DurableTimer>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Operational access is outside this history read.");
+        public ValueTask<DurableTimer?> FindAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Operational access is outside this history read.");
+        public ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Operational access is outside this history read.");
     }
 
     private sealed class HistorySource : IRuntimeHistoryStore
     {
         internal static readonly RuntimeHistoryCapturePolicy Policy = new("test", 1, true, ["FutureActivityKind"]);
-        private static readonly RuntimeHistoryHead Head = new("wf-1", 1, 1, "physical", DateTimeOffset.UnixEpoch,
-            Policy, true, false, 0);
+        internal RuntimeHistoryCapturePolicy CapturePolicy { get; init; } = Policy;
+        private RuntimeHistoryHead Head => new("wf-1", 1, 1, "physical", DateTimeOffset.UnixEpoch,
+            CapturePolicy, true, false, 0);
         internal int Calls { get; private set; }
         internal RuntimeHistoryQuery? Query { get; private set; }
         internal bool EmptyWindow { get; init; }

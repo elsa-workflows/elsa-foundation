@@ -44,6 +44,7 @@ for (const width of [390, 1440, 2400]) {
     await page.setViewportSize({ width, height: 1200 });
     await page.goto("/golden-runs.html?workbench-shell=1");
     await page.getByRole("button", { name: "Inspect workflow run run-01 · Billing workflow", exact: true }).click();
+    await page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Diagram", exact: true }).click();
     const header = page.locator(".studio-page-header");
     const toolbar = page.locator(".wf-toolbar");
     const canvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
@@ -60,7 +61,8 @@ for (const width of [390, 1440, 2400]) {
     expect(titleBox.y - pageBox.y).toBeGreaterThanOrEqual(16);
     expect(pageBox.x + pageBox.width - contextBox.x - contextBox.width).toBeGreaterThanOrEqual(16);
     expect(buttonBox.y - toolbarBox.y).toBeLessThanOrEqual(16);
-    expect(canvasBox.y - buttonBox.y - buttonBox.height).toBeLessThanOrEqual(width < 600 ? 180 : 24);
+    const viewNavigationBox = (await page.getByRole("navigation", { name: "Run workspace views", exact: true }).boundingBox())!;
+    expect(canvasBox.y - viewNavigationBox.y - viewNavigationBox.height).toBeLessThanOrEqual(24);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await page.screenshot({ path: test.info().outputPath("run-layout.png"), fullPage: true });
   });

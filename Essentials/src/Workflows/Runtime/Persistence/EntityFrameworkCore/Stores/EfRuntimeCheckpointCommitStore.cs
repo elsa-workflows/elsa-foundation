@@ -32,6 +32,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
+    bool IRuntimeCheckpointCommitStore.SupportsHistory => true;
+    bool IRuntimeCheckpointCommitStore.CanCommitHistory(IRuntimeHistoryStore selectedStore)
+    {
+        try { _ = accessContextAccessor.Current.RequireScope(); return selectedStore is EfRuntimeHistoryStore history && history.Uses(context, accessContextAccessor); }
+        catch (InvalidOperationException) { return false; }
+    }
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => true;
     bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => true;
@@ -307,6 +313,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
         // revalidates the fence, so a real ownership transition still fails as stale.
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitFencedAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
+            var historyRetryable = !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
+                context.Database.GetEnlistedTransaction() is null && Transaction.Current is null;
             var retryable = commit.ExpectedFence is not null && !context.ChangeTracker.HasChanges() &&
                 context.Database.CurrentTransaction is null && context.Database.GetEnlistedTransaction() is null && Transaction.Current is null;
             for (var attempt = 1; ; attempt++)
@@ -314,6 +322,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 try
                 {
                     return await CommitNewAsync(writeCancellationToken, requiredExistingRoot);
+                }
+                catch (Exception exception) when (historyRetryable && attempt < MaxFenceRenewalAttempts &&
+                    !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
+                    EfRuntimeHistoryCheckpoint.IsHeadConflict(exception))
+                {
+                }
+                catch (Exception exception) when (EfRuntimeHistoryCheckpoint.IsHeadConflict(exception))
+                {
+                    throw new RuntimeSchedulerWorkUnavailableException("runtime.history.head-busy",
+                        "The workflow history sequence head changed concurrently; checkpoint persistence remains owed.", exception);
                 }
                 catch (DbUpdateConcurrencyException exception) when (retryable && attempt < MaxFenceRenewalAttempts &&
                     exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity))
@@ -350,6 +368,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         _timeProvider,
                         writeCancellationToken);
                 }
+
+                await EfRuntimeHistoryCheckpoint.StageAsync(context, accessContextAccessor, commit, scope,
+                    _timeProvider.GetUtcNow(), writeCancellationToken);
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
                 await StageModelParentWaitAsync(commit, scope, touchedTestScopes, writeCancellationToken);
@@ -411,7 +432,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     context, commit.StateChanges.DurableValues, scope, writeCancellationToken);
 
                 await EfRuntimeCheckpointActivityScopeCleanupParticipantStaging.StageAsync(
-                    context, commit.StateChanges.ActivityScopeCleanups, scope, writeCancellationToken);
+                    context, commit.StateChanges.ActivityScopeCleanups, scope, writeCancellationToken, commit.Checkpoint.OccurredAt);
 
                 await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
                     context, commit.StateChanges.Operational, scope, writeCancellationToken);

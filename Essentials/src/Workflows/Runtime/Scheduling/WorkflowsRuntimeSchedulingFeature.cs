@@ -79,7 +79,10 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 
         // In-memory default; a durable persistence provider swaps IDurableTimerStore for a scoped,
         // restart-surviving adapter.
-        services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        services.TryAddSingleton<InMemoryDurableTimerStoreState>();
+        services.TryAddScoped<IDurableTimerStore>(provider => new InMemoryDurableTimerStore(
+            provider.GetRequiredService<InMemoryDurableTimerStoreState>(), provider.GetService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(new RuntimeHistorySourceSupport([], timerOwner: true));
         services.TryAddScoped<IDurableTimerScheduler, DurableTimerScheduler>();
 
         services.AddSingleton<IRecurringTask>(sp => new DurableTimerPumpTask(

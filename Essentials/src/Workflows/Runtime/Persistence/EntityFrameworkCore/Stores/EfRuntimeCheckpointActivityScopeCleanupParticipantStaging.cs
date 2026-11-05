@@ -11,7 +11,8 @@ internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
         RuntimeDbContext context,
         IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
         string scope,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateTimeOffset? occurredAt = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(cleanups);
@@ -55,8 +56,15 @@ internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
         {
             Remove(entry.Bookmarks, bookmarks, context.Bookmarks, cancellationToken,
                 (row, bookmarkId, rowId) => EfBookmarkStateStore.MapChecked(row, scope, entry.WorkflowExecutionId, bookmarkId, rowId));
-            Remove(entry.Timers, timers, context.DurableTimers, cancellationToken,
-                (row, timerId, _) => EfDurableTimerStore.ReadChecked(row, scope, entry.WorkflowExecutionId, timerId));
+            foreach (var (timerId, rowId) in entry.Timers)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!timers.TryGetValue(rowId, out var row)) continue;
+                var timer = EfDurableTimerStore.ReadChecked(row, scope, entry.WorkflowExecutionId, timerId);
+                if (timer.HistoryResponsibility?.Retired == true) continue;
+                var observation = DurableTimerHistoryFacts.CreateCancelled(timer, occurredAt ?? DateTimeOffset.UtcNow);
+                EfDurableTimerStore.StageRetirementOrDeletion(context, row, timer, observation);
+            }
             Remove(entry.WorkItems, workItems, context.SchedulerWorkItems, cancellationToken,
                 (row, workItemId, _) => EfSchedulerWorkQueueStore.ReadChecked(row, scope, entry.WorkflowExecutionId, workItemId));
         }

@@ -13,6 +13,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(options)
 {
+    internal DbSet<RuntimeHistoryActivityEntity> RuntimeHistoryActivities => Set<RuntimeHistoryActivityEntity>();
+    internal DbSet<RuntimeHistoryHeadEntity> RuntimeHistoryHeads => Set<RuntimeHistoryHeadEntity>();
+    internal DbSet<RuntimeHistoryEventEntity> RuntimeHistoryEvents => Set<RuntimeHistoryEventEntity>();
+    internal DbSet<RuntimeHistoryBookmarkEntity> RuntimeHistoryBookmarks => Set<RuntimeHistoryBookmarkEntity>();
+    internal DbSet<RuntimeHistoryBookmarkCountEntity> RuntimeHistoryBookmarkCounts => Set<RuntimeHistoryBookmarkCountEntity>();
+
     internal DbSet<UserTaskEntity> UserTasks => Set<UserTaskEntity>();
     internal DbSet<UserTaskFormEntity> UserTaskForms => Set<UserTaskFormEntity>();
 
@@ -53,6 +59,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     {
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
+        RuntimeHistoryEntityConfiguration.Configure(modelBuilder);
         modelBuilder.ApplyConfiguration(new UserTaskConfiguration());
         modelBuilder.ApplyConfiguration(new UserTaskFormConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());

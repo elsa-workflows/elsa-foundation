@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -10,8 +11,11 @@ internal static class MemoryHistoryCheckpoint
     internal static Action? Prepare(InMemoryRuntimeCheckpointStoreState state, IPersistenceAccessContextAccessor? access,
         RuntimeCheckpointCommit commit, DateTimeOffset recordedAt)
     {
-        var batches = commit.StateChanges.HistoryBatches;
+        var batches = commit.HistoryBatches;
         var incomingPolicy = commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy;
+        if (commit.StateChanges.WorkflowExecution?.State is { } incoming && incoming.HistoryCaptureEnabledAtAdmission is { } enabled &&
+            enabled != (incoming.HistoryCapturePolicy is not null))
+            throw new InvalidOperationException("Native history admission provenance disagrees with its pinned policy.");
         string? scope = null;
         if (access is not null)
         {
@@ -21,15 +25,16 @@ internal static class MemoryHistoryCheckpoint
         if (scope is null)
         {
             if (batches is { Count: > 0 } || incomingPolicy?.Required == true || state.RequiredHistoryRuns.Count > 0)
-                throw new NotSupportedException("History checkpoint persistence requires one explicit ordinary scope.");
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History checkpoint persistence requires its scoped provider.");
             return null;
         }
         var key = (scope, commit.WorkflowExecutionId);
+        if (state.HistoryDeletedRuns.Contains(key)) throw new InvalidOperationException("Deleted execution history cannot be recreated.");
         state.RequiredHistoryRuns.TryGetValue(key, out var required);
         if (batches is not { Count: > 0 })
         {
             if (incomingPolicy?.Required == true || required is not null)
-                throw new InvalidOperationException("This execution requires history capture; a checkpoint without its pinned batch cannot commit.");
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "This execution requires its pinned history capture contribution.");
             return null;
         }
         state.HistoryHeads.TryGetValue(key, out var head);
@@ -57,10 +62,14 @@ internal static class MemoryHistoryCheckpoint
                     continue;
                 }
                 seen.Add(e.HistoryEventId, fingerprint);
-                if (state.HistoryEventsById.TryGetValue((scope, commit.WorkflowExecutionId, e.HistoryEventId), out var old))
+                if (state.HistoryCandidateFingerprints.TryGetValue((scope, commit.WorkflowExecutionId, e.HistoryEventId), out var original))
                 {
-                    if (!state.HistoryCandidateFingerprints.TryGetValue((scope, commit.WorkflowExecutionId, old.HistoryEventId), out var original) || original != fingerprint)
+                    if (original != fingerprint)
                         throw new InvalidOperationException("A retained history identity has conflicting or unprovable content.");
+                    if (!state.HistoryReceiptPositions.TryGetValue((scope, commit.WorkflowExecutionId, e.HistoryEventId), out var position) ||
+                        position <= 0 || head is null || position > head.LastSequence ||
+                        position > head.PurgedThroughSequence && !state.HistoryEventsById.ContainsKey((scope, commit.WorkflowExecutionId, e.HistoryEventId)))
+                        throw new InvalidOperationException("A retained history receipt has missing content outside its acknowledged purge boundary.");
                     continue;
                 }
                 var stored = RuntimeHistoryIdentity.Position(e, checked(++sequence), commit.CommitId, recordedAt, candidate.CheckpointOrdinal);
@@ -76,7 +85,8 @@ internal static class MemoryHistoryCheckpoint
                     created ? null : stored.HistoryEventId, stored.HistoryEventId, stored.Sequence,
                     previous?.FirstRecordedSequence ?? stored.Sequence, created ? null : stored.OccurredAt,
                     mutation.Reason, mutation.SelectedBookmarkId,
-                    previous?.PriorState == RuntimeHistoryPriorState.CreationEvent || created ? RuntimeHistoryPriorState.CreationEvent : RuntimeHistoryPriorState.CreationMetadata);
+                    previous?.PriorState == RuntimeHistoryPriorState.CreationEvent || created ? RuntimeHistoryPriorState.CreationEvent : RuntimeHistoryPriorState.CreationMetadata)
+                { SupersededByActivityExecutionId = mutation.RelatedActivityExecutionId ?? previous?.SupersededByActivityExecutionId };
             }
         }
         var nextHead = new RuntimeHistoryHead(commit.WorkflowExecutionId,
@@ -87,40 +97,8 @@ internal static class MemoryHistoryCheckpoint
         {
             state.HistoryHeads[key] = nextHead;
             if (policy.Required) state.RequiredHistoryRuns[key] = policy;
-            if (!state.HistoryEvents.TryGetValue(key, out var history)) state.HistoryEvents[key] = history = [];
-            foreach (var e in events)
-            {
-                history.Add(e);
-                state.HistoryEventsById[(scope, commit.WorkflowExecutionId, e.HistoryEventId)] = e;
-                state.HistoryCandidateFingerprints[(scope, commit.WorkflowExecutionId, e.HistoryEventId)] = seen[e.HistoryEventId];
-                if (e.ActivityExecutionId is { } activity)
-                {
-                    var activityKey = (scope, commit.WorkflowExecutionId, activity);
-                    if (!state.HistoryActivityEvents.TryGetValue(activityKey, out var own)) state.HistoryActivityEvents[activityKey] = own = [];
-                    own.Add(e);
-                    if (e.ParentActivityExecutionId is not null ||
-                        e.Category == RuntimeHistoryEventCategory.ActivityLifecycle && !state.HistoryParents.ContainsKey(activityKey))
-                        state.HistoryParents[activityKey] = e.ParentActivityExecutionId;
-                }
-                if (e.BookmarkId is { } bookmark)
-                {
-                    var bookmarkKey = (scope, commit.WorkflowExecutionId, bookmark);
-                    if (!state.HistoryBookmarkEvents.TryGetValue(bookmarkKey, out var own)) state.HistoryBookmarkEvents[bookmarkKey] = own = [];
-                    own.Add(e);
-                }
-            }
-            foreach (var pair in bookmarks)
-            {
-                if (!state.HistoryBookmarks.ContainsKey(pair.Key))
-                {
-                    if (!state.HistoryBookmarkOrder.TryGetValue(key, out var order)) state.HistoryBookmarkOrder[key] = order = [];
-                    order.Add(pair.Key.Bookmark);
-                    var activityKey = (scope, commit.WorkflowExecutionId, pair.Value.Bookmark.Identity.ActivityExecutionId);
-                    if (!state.HistoryActivityBookmarkOrder.TryGetValue(activityKey, out var own)) state.HistoryActivityBookmarkOrder[activityKey] = own = [];
-                    own.Add(pair.Key.Bookmark);
-                }
-                state.HistoryBookmarks[pair.Key] = pair.Value;
-            }
+            foreach (var e in events) state.PublishHistoryEvent(scope, e, seen[e.HistoryEventId]);
+            foreach (var projection in bookmarks.Values) state.PublishHistoryBookmark(scope, projection);
         };
     }
 }

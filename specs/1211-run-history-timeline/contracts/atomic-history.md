@@ -4,9 +4,9 @@ Applies to FR-013–035, FR-040–044 and FR-047. Existing Runtime continuation 
 
 ## Contribution and writer support
 
-- A deterministic Runtime-owned checkpoint enricher contributes an optional versioned typed history batch before persistence policy/coalescing.
-- History-enabled capture requires an explicit capable writer/read-store pairing. Existing third-party writers default to unsupported; decorators forward capability only when their underlying writer preserves the participant.
-- Every checkpoint With* clone and fold preserves the batch. Fold concatenates original logical candidates without latest-state collapse. Synthetic flush envelopes do not recapture their final projections.
+- A deterministic Runtime-owned checkpoint enricher contributes an optional versioned typed history batch on RuntimeCheckpointCommit before persistence policy/coalescing. This is a write sidecar, never part of RuntimeCheckpointStateChangeSet or RuntimeStateCategory. Runtime continuation never reads the history query model.
+- History-enabled capture requires an explicit capable writer/read-store pairing at actual admission/write, not when an otherwise ordinary service is resolved without an execution scope. Existing third-party writers default to unsupported; decorators forward capability only when their underlying writer preserves the participant. Disabled capture leaves ordinary execution independent of history availability.
+- Every checkpoint With* clone preserves the sidecar. Coalescing retains original logical groups in a separate ordered buffer while RuntimeCheckpointFold folds continuation changes only. Boundary/cap/quiescence flushes attach that buffer without latest-state collapse or recapturing their final projections.
 - A history-free commit retains its historical serialized fingerprint shape. Nonempty history participates through a versioned logical wrapper; assigned sequence/physical commit timestamps never enter that logical fingerprint.
 - Capture profile is pinned to run/admission and original queued work. Enabling the feature MUST NOT enrich an old no-history replay with a different fingerprint. Legacy runs stay uncaptured unless a new explicit policy boundary enables future capture; profile changes cannot rewrite an earlier logical commit.
 - Validate deterministic identities, exact run/subject agreement, allowed metadata/value references, finite bounded fields and conflicting repeated IDs before effects can commit.

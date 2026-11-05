@@ -275,7 +275,9 @@ public static class RuntimeCheckpointCommitFingerprint
         var element = commit.ExpectedBookmarkResume is null
             ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
             : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
-        if (commit.StateChanges.HistoryBatches is { Count: > 0 } history)
+        if (commit.HistorySourceFacts is { Count: > 0 } facts)
+            element = JsonSerializer.SerializeToElement(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, ExactBookmarkOptions);
+        if (commit.HistoryBatches is { Count: > 0 } history)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistoryVersion = 1, Payload = element, HistoryBatches = history }, ExactBookmarkOptions);
         if (commit.ModelState is not null)
             element = JsonSerializer.SerializeToElement(new { ModelStateVersion = 1, Payload = element, commit.ModelState }, ExactBookmarkOptions);

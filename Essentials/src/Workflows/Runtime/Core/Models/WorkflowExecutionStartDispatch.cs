@@ -494,6 +494,9 @@ public sealed class WorkflowExecutionStartCommandPayload
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
 
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? HistoryCaptureEnabledAtAdmission { get; init; }
+
     public WorkflowExecutionStartCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId,

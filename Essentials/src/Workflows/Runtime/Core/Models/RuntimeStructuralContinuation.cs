@@ -14,7 +14,7 @@ public sealed class RuntimeStructuralContinuation
         ActivityFault? fault,
         string? cancellationReason,
         RuntimeStructuralStateUpdate? stateUpdate = null,
-        RuntimeChildControlBatch? control = null)
+        RuntimeChildControlBatch? control = null, IReadOnlyList<RuntimeHistorySourceFact>? historySourceFacts = null)
     {
         Kind = kind;
         OutcomeName = outcomeName;
@@ -22,6 +22,7 @@ public sealed class RuntimeStructuralContinuation
         CancellationReason = cancellationReason;
         StateUpdate = stateUpdate;
         Control = control;
+        HistorySourceFacts = historySourceFacts is null ? null : Array.AsReadOnly(historySourceFacts.ToArray());
     }
 
     public RuntimeStructuralContinuationKind Kind { get; }
@@ -35,6 +36,7 @@ public sealed class RuntimeStructuralContinuation
 
     /// <summary>Optional authored control staged separately from private semantic state and runtime fault diagnostics.</summary>
     public RuntimeChildControlBatch? Control { get; }
+    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts { get; }
 
     public static RuntimeStructuralContinuation Defer { get; } = new(RuntimeStructuralContinuationKind.Defer, null, null, null);
 
@@ -67,8 +69,11 @@ public sealed class RuntimeStructuralContinuation
             Fault,
             CancellationReason,
             new RuntimeStructuralStateUpdate(stateVersion, value),
-            Control);
+            Control, HistorySourceFacts);
     }
+
+    public RuntimeStructuralContinuation WithHistorySourceFacts(IReadOnlyList<RuntimeHistorySourceFact> facts) =>
+        new(Kind, OutcomeName, Fault, CancellationReason, StateUpdate, Control, facts);
 
     /// <summary>Returns a new decision with an indivisible control emission; this does not grant dispatch authority.</summary>
     public RuntimeStructuralContinuation WithControl(RuntimeChildControlBatch control)
@@ -78,7 +83,7 @@ public sealed class RuntimeStructuralContinuation
             throw new ArgumentException("Control terminal status must match the structural continuation.", nameof(control));
         if (control.AuthoredFailureCode is not null && Kind != RuntimeStructuralContinuationKind.Fault)
             throw new ArgumentException("Authored failure classification requires a fault continuation.", nameof(control));
-        return new RuntimeStructuralContinuation(Kind, OutcomeName, Fault, CancellationReason, StateUpdate, control);
+        return new RuntimeStructuralContinuation(Kind, OutcomeName, Fault, CancellationReason, StateUpdate, control, HistorySourceFacts);
     }
 }
 

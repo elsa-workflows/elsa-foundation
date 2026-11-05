@@ -56,6 +56,9 @@ public sealed class DurableTimerEntity
     public long? VisibleAfterUtcTicks { get; set; }
     public int? VisibleAfterOffsetMinutes { get; set; }
     public int FailureCount { get; set; }
+    internal long HistoryRevision { get; set; }
+    internal bool HistoryPending { get; set; }
+    internal bool HistoryRetired { get; set; }
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }

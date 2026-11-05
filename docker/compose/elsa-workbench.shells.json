@@ -139,6 +139,7 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeHistory": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Balanced",
             "MaxActivitiesPerCommit": 50

@@ -15,6 +15,8 @@ import type {
   WorkflowInstanceDetails,
   WorkflowInstanceSummary
 } from "../workflowTypes";
+import { historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
+import { readRunHistoryLocation } from "../workflow-editor/run-history/historyLocation";
 import { bpmnActivity, flowchartActivity, sequenceActivity, writeLine } from "./fixtures";
 
 const api = vi.hoisted(() => ({
@@ -30,6 +32,8 @@ const api = vi.hoisted(() => ({
   supportsWorkflowInstanceHealthFilter: vi.fn(),
   listActivities: vi.fn()
 }));
+const historyApi = vi.hoisted(() => ({ supportsWorkflowHistory: vi.fn(), getWorkflowHistoryPage: vi.fn(), getWorkflowHistoryEvent: vi.fn(), listWorkflowHistoryBookmarks: vi.fn() }));
+vi.mock("../api/runtimeHistory", async importOriginal => ({ ...await importOriginal<typeof import("../api/runtimeHistory")>(), ...historyApi }));
 const designApi = vi.hoisted(() => ({
   listDefinitions: vi.fn(),
   getDefinition: vi.fn()
@@ -94,6 +98,7 @@ const scrollIntoView = vi.fn();
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/workflows/instances/run-1");
   HTMLElement.prototype.scrollIntoView = scrollIntoView;
   window.localStorage.clear();
   window.localStorage.setItem("elsa-studio-run-detail-inspector-maximized", "true");
@@ -136,6 +141,14 @@ beforeEach(() => {
   api.supportsActivityExecutionInspection.mockResolvedValue(false);
   api.supportsActivityExecutionBrowsing.mockResolvedValue(false);
   api.getActivityExecutionInspection.mockResolvedValue(activityInspection());
+  historyApi.supportsWorkflowHistory.mockResolvedValue(true);
+  historyApi.getWorkflowHistoryPage.mockImplementation(async (_context, _run, request) => {
+    const snapshot = await api.getWorkflowInstance.mock.results.at(-1)?.value as WorkflowInstanceDetails;
+    const items = (snapshot?.activities ?? []).map((activity, index) => historyEvent(index + 1, { workflowExecutionId: "run-1", historyEventId: `event-${activity.activityExecutionId}`, activityExecutionId: activity.activityExecutionId, executableNodeId: activity.executableNodeId, name: activity.status === "Completed" ? "ActivityCompleted" : "ActivityFaulted" }));
+    return historyPage(request.continuationToken ? [] : items, { upperSequence: items.length, scannedCount: items.length, catchUpToken: "catchup" });
+  });
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (_context, _run, id) => ({ coverage: historyCoverage, event: historyEvent(1, { workflowExecutionId: "run-1", historyEventId: id }), readAt: "2026-10-01T12:02:00Z" }));
+  historyApi.listWorkflowHistoryBookmarks.mockResolvedValue({ coverage: historyCoverage, items: [], totalCount: null, activeCount: null, scopeComplete: true, readAt: "2026-10-01T12:02:00Z" });
   designApi.listDefinitions.mockResolvedValue({ definitions: [], page: 1, pageSize: 100, totalCount: 0 });
   designApi.getDefinition.mockRejectedValue(new Error("not found"));
 });
@@ -145,6 +158,7 @@ afterEach(() => {
   container.remove();
   HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
   window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   vi.resetAllMocks();
 });
@@ -469,6 +483,45 @@ describe("workflow run workbench incident navigation", () => {
     expect(scrollIntoView).toHaveBeenCalled();
   });
 
+  it("keeps the Timeline primary and returns from an exact journal event to the same activity tab", async () => {
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-history .wf-history-event")).toBeTruthy());
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(true);
+    expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
+    click(container.querySelector<HTMLButtonElement>(".wf-activity-history .wf-history-event"));
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(container.querySelector(".wf-activity-history")?.closest("[hidden]")).toBeTruthy();
+    click(buttonByText(container, "Back to activity inspection"));
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeNull());
+    expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".wf-activity-overview")?.closest("[hidden]")).toBeNull();
+  });
+
+  it("opens Diagram itself when leaving the stacked Timeline on a phone", async () => {
+    observedWidth = 320;
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.wf-run-history-workspace")).toBeTruthy());
+    click(buttonByText(container, "Diagram"));
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-canvas-view")).toBeTruthy());
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("leaves another retained workspace's URL and selection untouched", async () => {
+    window.history.replaceState({ workspace: "other" }, "", "/workflows/instances/other?selected=other-owner&bookmark=other-bookmark&returnTo=%2Fuser-tasks");
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    click(buttonByText(container, "Diagram"));
+    expect(window.location.pathname).toBe("/workflows/instances/other");
+    expect(new URLSearchParams(window.location.search).get("selected")).toBe("other-owner");
+    expect(new URLSearchParams(window.location.search).get("bookmark")).toBe("other-bookmark");
+    expect(new URLSearchParams(window.location.search).get("view")).toBeNull();
+    expect(window.history.state).toEqual({ workspace: "other" });
+    window.history.replaceState(null, "", "/");
+  });
+
   it("keeps the selected occurrence in the URL so a reload reopens it (spec 260 FR-423)", async () => {
     window.history.replaceState(null, "", "/workflows/instances/run-1?activityExecutionId=execution-target&tab=activity");
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
@@ -477,10 +530,10 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench("activity", "execution-target");
 
-    await vi.waitFor(() => expect(window.location.search).toBe("?tab=activity&selected=execution-target"));
+    await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("selected")).toBe("execution-target"));
     click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='target-node']"));
     // A design node is not an occurrence, so the URL no longer names one.
-    await vi.waitFor(() => expect(window.location.search).toBe("?tab=activity"));
+    await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("selected")).toBeNull());
     window.history.replaceState(null, "", "/");
   });
 
@@ -648,6 +701,8 @@ describe("workflow run workbench incident navigation", () => {
     click([...container.querySelectorAll<HTMLButtonElement>(".wf-instance-incident-summary")]
       .find(button => button.textContent?.includes("Second failure.")));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
+    await vi.waitFor(() => expect(buttonByText(container, "Data")).toBeTruthy());
+    click(buttonByText(container, "Data"));
 
     await vi.waitFor(() => expect(container.textContent).toContain("execution-second"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-row details")).toBeTruthy());
@@ -681,8 +736,9 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
 
-    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
-    click(container.querySelector<HTMLButtonElement>(".wf-timeline-entry"));
+    click(buttonByText(container, "Timeline"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-event")).toBeTruthy());
+    click(container.querySelector<HTMLButtonElement>(".wf-history-event"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.textContent).toContain("execution-healthy"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
@@ -723,8 +779,9 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "Refresh"));
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("RefreshedFailure"));
-    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
-    click(container.querySelector<HTMLButtonElement>(".wf-timeline-entry"));
+    click(buttonByText(container, "Timeline"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-event")).toBeTruthy());
+    click(container.querySelector<HTMLButtonElement>(".wf-history-event"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
 
@@ -792,8 +849,9 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "Refresh"));
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("ResolvedFailure-50"));
-    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
-    const timelineEntries = container.querySelectorAll<HTMLButtonElement>(".wf-timeline-entry");
+    click(buttonByText(container, "Timeline"));
+    await vi.waitFor(() => expect(container.querySelectorAll(".wf-history-event")).toHaveLength(lastIndex + 1));
+    const timelineEntries = container.querySelectorAll<HTMLButtonElement>(".wf-history-event");
     expect(timelineEntries).toHaveLength(lastIndex + 1);
     click(timelineEntries[lastIndex]);
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
@@ -1037,7 +1095,7 @@ describe("workflow run workbench incident navigation", () => {
       .find(item => item.querySelector("dt")?.textContent === label)
       ?.querySelector(".wf-activity-meta-value")?.textContent;
     expect(metadataValue("Incidents")).toBe("1");
-    expect(metadataValue("Bookmarks")).toBe("2");
+    expect(metadataValue("Current bookmarks")).toBe("2");
 
     olderLookup.resolve(activityInspection({
       activityExecutionId: "execution-shared",
@@ -1050,7 +1108,7 @@ describe("workflow run workbench incident navigation", () => {
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
     expect(metadataValue("Incidents")).toBe("1");
-    expect(metadataValue("Bookmarks")).toBe("2");
+    expect(metadataValue("Current bookmarks")).toBe("2");
   });
 });
 
@@ -1146,13 +1204,15 @@ function buttonByText(scope: ParentNode, text: string) {
 
 function renderWorkbench(
   initialInspectorTab: "issues" | "details" | "timeline" | "activity" = "issues",
-  initialActivityExecutionId: string | null = null
+  initialActivityExecutionId: string | null = null,
+  initialView: "diagram" | "timeline" = "diagram"
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
     ai={{ promptActions: { list: () => [] } } as unknown as StudioAgentRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
+    initialHistoryLocation={{ ...readRunHistoryLocation(""), view: initialView }}
     initialInspectorTab={initialInspectorTab}
     navigate={() => {}}
   />));

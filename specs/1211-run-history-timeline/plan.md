@@ -6,7 +6,7 @@
 
 ## Summary
 
-Deliver the selected Timeline workspace with one Runtime-owned, production history queried at run, execution and bookmark scope. Capture typed immutable candidates before coalescing and persist queryable history, its sequence head and bookmark lifecycle projections inside the existing checkpoint transaction. Do not use the volatile QA collector, ordinary per-step outbox intents, latest-state inference or another domain. Preserve persistence modes and current command/value authority.
+Deliver the selected Timeline workspace with one Runtime-owned, production history queried at run, execution and bookmark scope. Capture typed immutable candidates before coalescing into a RuntimeCheckpointCommit write sidecar, outside continuation state, and persist queryable history, its sequence head and bookmark lifecycle projections inside the existing checkpoint transaction. Do not use the volatile QA collector, ordinary per-step outbox intents, latest-state inference or another domain. Preserve persistence modes and current command/value authority.
 
 Research decisions and current-source evidence: [research.md](research.md). Shared model: [data-model.md](data-model.md). Contracts: [atomic capture](contracts/atomic-history.md), [queries and Studio](contracts/history-inspection.md). Qualification: [quickstart.md](quickstart.md).
 
@@ -35,6 +35,8 @@ Research decisions and current-source evidence: [research.md](research.md). Shar
 Loaded framework v6.1.0 and Elsa v6.3.0, both Gate indexes and docs/contributing/review-checklist.md. Apply §2.1/2.6 ownership and contract boundaries, §2.9 provider-independent ports, §2.22 catalogs, §2.23 risky behavior/registration/internal visibility/public API tracking, §E2.2 Runtime/Design boundary and all deployment shapes, §E5 computed versions and §E7 existing test tiers.
 
 New types stay in existing Workflows.Runtime ownership. Provider authors need the public atomic participant/query contracts; implementations remain internal unless an existing public contract requires otherwise. Reuse the existing RuntimeHistoryEvent observability envelope compatibly where suitable rather than removing its legacy constructors. Record additions in public API baselines and extension-point catalogs. No project/domain/feature identity is retired, no new project is planned and no constitution exception is requested.
+
+CI boundary correction: the existing continuation/history separation test remains unchanged. History batches move off RuntimeCheckpointStateChangeSet into a separate checkpoint write sidecar; coalescing preserves them independently. Writer/reader qualification is lazy at actual admission, preserving strict scoped pairing without making ordinary service resolution depend on an execution scope. See research R11. Corrective reruns and independent review remain required.
 
 Pre-design: passed for this boundary. Post-design: the direct participant avoids the outbox/Ephemeral conflict; shared transactions, scoped readers and explicit writer capability avoid another authority. Draft/provisional framework §2.24 and Elsa §E2.8/§E2.9 are not ratified or used to authorize an exception.
 
@@ -80,4 +82,4 @@ MVP is a sequencing checkpoint, not permission to close this feature early. End-
 
 ## Complexity Tracking
 
-No constitutional exception. Three small related persistence projections (head, immutable events, bookmark lifecycle) share one existing transaction/schema family: the bookmark projection avoids unbounded historical event grouping for an activity's inventory. No new materialization service or domain is introduced.
+No constitutional exception. Five related persistence projections (head, immutable events, bookmark lifecycle, scoped counts and ancestry) share one existing transaction/schema family: indexed lifecycle/count/ancestry data avoids unbounded historical grouping for an activity's inventory or descendants. No new materialization service or domain is introduced.

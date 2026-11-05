@@ -32,4 +32,8 @@ public sealed record DurableTimer(
     ValueTypeDescriptor? PayloadType = null,
     string? ProviderId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityExecutionId = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutionScopeId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutionScopeId = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DurableTimerHistoryResponsibility? HistoryResponsibility { get; init; }
+}

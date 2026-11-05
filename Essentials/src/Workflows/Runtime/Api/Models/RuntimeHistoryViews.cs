@@ -6,7 +6,13 @@ namespace Elsa.Workflows.Runtime.Api.Models;
 public sealed record RuntimeHistoryCoverageView(string State, string? Limitation, string? PolicyId, int? PolicyVersion,
     IReadOnlyList<string> SupportedKinds, bool CapturedFromStart, bool HasGaps, long FirstSequence,
     long LastSequence, long SettledSequence, long PurgedThroughSequence, string? LastPhysicalCommitId,
-    DateTimeOffset? LastCommittedAt);
+    DateTimeOffset? LastCommittedAt)
+{
+    public bool? CaptureAvailable { get; init; }
+    public string? CaptureLimitation { get; init; }
+    public bool? SourceHistoryPending { get; init; }
+    public string? SourceHistoryLimitation { get; init; }
+}
 
 public sealed record RuntimeHistoryPageView(RuntimeHistoryCoverageView Coverage, IReadOnlyList<RuntimeHistoryEventView> Items,
     long UpperSequence, long ScannedThroughSequence, int ScannedCount, string? NextContinuationToken,
@@ -24,27 +30,21 @@ public sealed record RuntimeHistoryEventView(string HistoryEventId, string Workf
         item.Authority.ToString(), item.OccurredAt, item.RecordedAt, item.ActivityExecutionId, item.ExecutableNodeId,
         item.CheckpointId, item.CheckpointOrdinal, item.PhysicalCommitId, item.BookmarkId, item.IncidentId,
         item.AttemptId, item.ParentActivityExecutionId, item.ExecutionScopeId, item.IterationId, item.Causation,
-        item.Metadata.Where(pair => SafeMetadata.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
-
-    // Keep unknown event kinds readable without returning arbitrary historical metadata or the legacy Payload slot.
-    private static readonly HashSet<string> SafeMetadata = new(StringComparer.Ordinal)
-    {
-        "history.status", "history.reasonCode", "history.outcomeNames", "history.stimulusType", "history.resumeTargetId",
-        "history.selectedBookmarkId", "history.childWorkflowId", "history.timerId", "history.scheduledAt", "history.controlKind",
-        "history.valueEvidenceIds", "history.incidentFailureType", "history.originalCheckpoint", "history.capturePolicyId"
-    };
+        // The same closed vocabulary governs pre-persistence capture and read-time disclosure of common metadata.
+        item.Metadata.Where(pair => RuntimeHistorySafety.IsSafeMetadataKey(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
 }
 
 public sealed record RuntimeHistoryBookmarkView(ActivityExecutionBookmarkSummaryView Bookmark, string? ExecutableNodeId,
     string Status, string? CreatedHistoryEventId, string? EndedHistoryEventId, string LastHistoryEventId,
     long LastSequence, long FirstRecordedSequence, DateTimeOffset? EndedAt, string? Reason,
-    string? SelectedBookmarkId, string PriorState, string Eligibility, DateTimeOffset EligibilityObservedAt)
+    string? SelectedBookmarkId, string PriorState, string Eligibility, string? EligibilityReason, DateTimeOffset EligibilityObservedAt)
 {
-    internal static RuntimeHistoryBookmarkView From(RuntimeHistoryBookmark item, DateTimeOffset readAt, string eligibility) => new(
+    internal static RuntimeHistoryBookmarkView From(RuntimeHistoryBookmark item, DateTimeOffset readAt, string eligibility, string? eligibilityReason) => new(
         ActivityExecutionBookmarkSummaryView.From(item.Bookmark), item.ExecutableNodeId, item.Status.ToString(),
         item.CreatedHistoryEventId, item.EndedHistoryEventId, item.LastHistoryEventId, item.LastSequence,
         item.FirstRecordedSequence, item.EndedAt, item.Reason, item.SelectedBookmarkId, item.PriorState.ToString(),
-        eligibility, readAt);
+        eligibility, eligibilityReason, readAt);
 }
 
 public sealed record RuntimeHistoryBookmarkPageView(RuntimeHistoryCoverageView Coverage,

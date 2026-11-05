@@ -82,6 +82,11 @@ file static class RuntimeProviderModel
 
     public static void ConfigureText(ModelBuilder modelBuilder, string type)
     {
+        foreach (var entity in new[] { typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity), typeof(RuntimeHistoryBookmarkCountEntity), typeof(RuntimeHistoryActivityEntity) })
+        {
+            foreach (var property in modelBuilder.Entity(entity).Metadata.GetProperties().Where(property => property.ClrType == typeof(string) && property.GetMaxLength() is null).ToArray())
+                modelBuilder.Entity(entity).Property(property.Name).HasColumnType(type);
+        }
         modelBuilder.Entity<UserTaskEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<UserTaskFormEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);

@@ -13,6 +13,7 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 public sealed class RuntimeCheckpointCommitter
 {
     internal IRuntimeHistoryStore? HistoryStore { get; init; }
+    internal Func<IRuntimeHistoryStore?>? HistoryStoreResolver { get; init; }
 
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
@@ -95,10 +96,11 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
 
-        if (commit.StateChanges.HistoryBatches is { Count: > 0 } history)
+        if (commit.HistoryBatches is { Count: > 0 } history)
         {
-            if (HistoryStore is null || !_checkpointCommitStore.SupportsHistory || !_checkpointCommitStore.CanCommitHistory(HistoryStore))
-                throw new NotSupportedException("History capture requires the selected writer and reader to share one atomic boundary.");
+            var selectedHistory = HistoryStore ?? HistoryStoreResolver?.Invoke();
+            if (selectedHistory is null || !_checkpointCommitStore.SupportsHistory || !_checkpointCommitStore.CanCommitHistory(selectedHistory))
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History capture requires its qualified atomic provider.");
             foreach (var batch in history) RuntimeHistorySafety.Validate(batch, commit.WorkflowExecutionId);
         }
 

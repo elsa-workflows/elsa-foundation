@@ -1,0 +1,176 @@
+import { flushSync } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { authSessionEndedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { ActivityBookmarkHistory, HistoryInspection } from "../workflow-editor/run-history/HistoryInspection";
+import { HistoryCoverage, HistoryEventList, historyDate, historyAuthorityLabel } from "../workflow-editor/run-history/historyPresentation";
+import { RunHistoryTimeline } from "../workflow-editor/run-history/RunHistoryTimeline";
+import { defaultHistoryFilters } from "../workflow-editor/run-history/historyLocation";
+import { RunHistorySummary } from "../workflow-editor/run-history/RunHistorySummary";
+import { historyBookmark, historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
+import type { RuntimeHistoryBookmarkPage } from "../runtimeHistoryTypes";
+import type { ActivityExecutionStateSummary, WorkflowInstanceSummary } from "../workflowTypes";
+const valueApi = vi.hoisted(() => ({ getActivityExecutionInspection: vi.fn(), getActivityExecutionValuePayload: vi.fn() }));
+vi.mock("../api/runtime", async original => ({ ...await original<typeof import("../api/runtime")>(), getActivityExecutionInspection: valueApi.getActivityExecutionInspection }));
+vi.mock("../api/activityExecutionValuePayload", () => ({ getActivityExecutionValuePayload: valueApi.getActivityExecutionValuePayload }));
+const api = vi.hoisted(() => ({ getWorkflowHistoryBookmark: vi.fn(), getWorkflowHistoryEvent: vi.fn(), listWorkflowHistoryBookmarks: vi.fn(), getWorkflowHistoryPage: vi.fn(), supportsWorkflowHistory: vi.fn() }));
+vi.mock("../api/runtimeHistory", async original => ({ ...await original<typeof import("../api/runtimeHistory")>(), ...api }));
+const context = { baseUrl: "https://history.example" } as StudioEndpointContext;
+let root: Root, container: HTMLDivElement;
+function render(ui: React.ReactNode) { flushSync(() => root.render(ui)); }
+function click(text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.includes(text)); expect(target).toBeTruthy(); flushSync(() => target!.click()); }
+function bookmarkPage(overrides: Partial<RuntimeHistoryBookmarkPage> = {}): RuntimeHistoryBookmarkPage { return { coverage: historyCoverage, items: [historyBookmark()], totalCount: null, activeCount: null, scopeComplete: true, readAt: "2026-11-05T09:02:00Z", ...overrides }; }
+beforeEach(() => {
+  vi.resetAllMocks(); api.supportsWorkflowHistory.mockResolvedValue(true); api.getWorkflowHistoryPage.mockResolvedValue(historyPage());
+  api.listWorkflowHistoryBookmarks.mockResolvedValue(bookmarkPage());
+  api.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: historyBookmark(), readAt: "2026-11-05T09:02:00Z" });
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(), readAt: "2026-11-05T09:02:00Z" });
+  container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+});
+afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+it("shows bookmark disposition separately from passive expiry, missing creation and current eligibility", async () => {
+  api.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: historyBookmark({ priorState: "Unknown", createdHistoryEventId: null }), readAt: "now" });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "bookmark", id: "bookmark-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Expiry makes this handle unmatchable"));
+  expect(container.textContent).toContain("Active"); expect(container.textContent).toContain("Expired");
+  expect(container.textContent).toContain("Creation event not captured"); expect(container.textContent).toContain("Handle lifetimeUnknown");
+  expect(container.textContent).not.toContain("Inspect creation event");
+  expect([...container.querySelectorAll("button")].some(button => button.textContent === "Resume")).toBe(false);
+});
+it("links a retired competing handle to its winner and its own retirement event", async () => {
+  api.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: historyBookmark({ status: "Removed", eligibility: "not-active", selectedBookmarkId: "winner", endedHistoryEventId: "retired", endedAt: "2026-11-05T09:02:00Z" }), readAt: "now" });
+  const select = vi.fn(); render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "bookmark", id: "bookmark-1" }} onSelect={select} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Inspect winning bookmark")); click("Inspect winning bookmark");
+  expect(select).toHaveBeenLastCalledWith({ kind: "bookmark", id: "winner" }); click("Inspect removed event");
+  expect(select).toHaveBeenLastCalledWith({ kind: "event", id: "retired" });
+});
+it("renders unknown totals honestly and retains loaded bookmark rows during the next page read", async () => {
+  api.listWorkflowHistoryBookmarks.mockResolvedValueOnce(bookmarkPage({ nextContinuationToken: "second" }));
+  let complete!: (page: RuntimeHistoryBookmarkPage) => void;
+  api.listWorkflowHistoryBookmarks.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  render(<ActivityBookmarkHistory context={context} workflowExecutionId="run" activityExecutionId="activity-1" onSelect={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("lifetime total unavailable")); click("Load more bookmarks");
+  expect(container.textContent).toContain("bookmark-1"); complete(bookmarkPage({ items: [] }));
+  await vi.waitFor(() => expect(api.listWorkflowHistoryBookmarks.mock.calls[1][2].continuationToken).toBe("second"));
+  flushSync(() => window.dispatchEvent(new Event(authSessionEndedEvent)));
+  await vi.waitFor(() => expect(container.textContent).not.toContain("bookmark-1"));
+});
+it("shows safe unknown-schema event details and exact causal navigation without value requests", async () => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { schemaVersion: 99, authority: "99", metadata: { "history.valueEvidenceIds": '["value-1"]' }, causation: { historyEventId: "cause" } }), readAt: "now" });
+  const select = vi.fn(); render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={select} onBack={vi.fn()} onActivity={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("unrecognized schema version"));
+  expect(container.textContent).toContain("Unrecognized recorded authority (99)"); expect(container.textContent).toContain("1 phase-specific value reference");
+  expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled(); click("Inspect causal event"); expect(select).toHaveBeenCalledWith({ kind: "event", id: "cause" });
+});
+it("keeps recorded sequence when clocks regress and labels every date transition and unloaded middle range", () => {
+  const items = [historyEvent(1, { occurredAt: "2026-11-05T09:00:00Z" }), historyEvent(4, { occurredAt: "2026-11-04T09:00:00Z", authority: "DeliveryObservation" })];
+  render(<HistoryEventList items={items} unloadedAfterSequence={3} onSelect={vi.fn()} />);
+  expect([...container.querySelectorAll("[data-history-sequence]")].map(row => row.getAttribute("data-history-sequence"))).toEqual(["1", "4"]);
+  expect([...container.querySelectorAll(".wf-history-date")].map(row => row.textContent)).toEqual(items.map(item => historyDate(item.occurredAt)));
+  expect(container.textContent).toContain("Earlier snapshot history is not fully loaded"); expect(container.textContent).toContain("Recorded source observation");
+  expect(historyAuthorityLabel("Unspecified")).toBe("Authority unspecified");
+});
+it("does not claim an empty search is globally complete while another scanned range remains", async () => {
+  api.getWorkflowHistoryPage.mockResolvedValue(historyPage([], { nextContinuationToken: "next" }));
+  render(<RunHistoryTimeline context={context} workflowExecutionId="run" filters={{ ...defaultHistoryFilters, search: "delivery-42" }} onFiltersChange={vi.fn()} onSelectEvent={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("No matching events in this searched range"));
+  expect(container.textContent).toContain("Continue searching recorded history"); expect(container.textContent).toContain("more history not loaded");
+});
+it("discloses long open handles as waits for a stimulus and separates elapsed from active execution", async () => {
+  const item = historyBookmark({ eligibility: "eligible", bookmark: { ...historyBookmark().bookmark, createdAt: "2026-11-03T09:00:00Z" } });
+  api.listWorkflowHistoryBookmarks.mockResolvedValue(bookmarkPage({ items: [item] }));
+  render(<RunHistorySummary context={context} instance={{ workflowExecutionId: "run", status: "Suspended", startedAt: "2026-11-03T09:00:00Z" } as WorkflowInstanceSummary} name="Approval" activities={[{ activityExecutionId: "activity-1", status: "Suspended", activityType: "Elsa.CreateUserTask" } as ActivityExecutionStateSummary]} activitiesLimited={false} onBookmark={vi.fn()} enabled />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Currently waiting for"));
+  expect(container.textContent).toContain("User Task Completed"); expect(container.textContent).toContain("Handle open for"); expect(container.textContent).toContain("Elapsed includes waiting");
+});
+
+
+it("separates current capture/source availability from the historically captured prefix and keeps unknown settlement explicit", () => {
+  render(<HistoryCoverage coverage={{ ...historyCoverage, captureAvailable: false, captureLimitation: "Current writer unavailable", sourceHistoryPending: null, sourceHistoryLimitation: "Timer responsibility cannot be inspected" }} readAt="2026-11-05T09:02:00Z" scopeComplete={false} scopeLimitation="Ancestor unavailable" />);
+  expect(container.textContent).toContain("History available from run start");
+  expect(container.textContent).toContain("Unavailable now; recorded history remains separate");
+  expect(container.textContent).toContain("Cannot establish source settlement");
+  expect(container.textContent).toContain("Ancestor unavailable"); expect(container.textContent).toContain("Timer responsibility cannot be inspected");
+  expect(container.textContent).not.toContain("capture was disabled");
+});
+
+
+it("waits for the exact recorded value action and keeps an earlier phase distinct from a later input with the same name", async () => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { metadata: { "history.valueEvidenceIds": '["early-value"]', "history.valuePhase": "invoke", "history.valueEvaluationId": "evaluation-1" } }), readAt: "now" });
+  const snapshot = { name: "Response", subject: "ActivityInput", capturedAt: "2026-11-05T09:00:00Z", captureMode: "DiagnosticSnapshot", captureState: "diagnosticSnapshotCaptured", accessState: "visible", phase: "invoke", sequence: 1, metadata: {} };
+  valueApi.getActivityExecutionInspection.mockResolvedValue({ workflowExecutionId: "run", activityExecutionId: "activity-1", valueSnapshots: [
+    { ...snapshot, evidenceId: "early-value", snapshot: { kind: "string", preview: "Earlier captured response" } },
+    { ...snapshot, evidenceId: "later-value", phase: "resume", sequence: 2, snapshot: { kind: "string", preview: "Later captured response" } }
+  ] });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Inspect recorded value"));
+  expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled(); expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  click("Inspect recorded value");
+  await vi.waitFor(() => expect(container.textContent).toContain("Earlier captured response"));
+  expect(container.textContent).not.toContain("Later captured response");
+  expect(container.querySelector("[aria-label='Recorded value Data']")?.textContent).toContain("invoke");
+  expect(valueApi.getActivityExecutionInspection).toHaveBeenCalledWith(context, "run", "activity-1", expect.any(AbortSignal));
+});
+
+it("reports an unavailable old value reference without substituting the current evaluation", async () => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { metadata: { "history.valueEvidenceIds": '["purged-value"]' } }), readAt: "now" });
+  valueApi.getActivityExecutionInspection.mockResolvedValue({ workflowExecutionId: "run", activityExecutionId: "activity-1", valueSnapshots: [
+    { evidenceId: "latest-value", name: "Response", snapshot: { kind: "string", preview: "Current response must not substitute" } }
+  ] });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Inspect recorded value")); click("Inspect recorded value");
+  await vi.waitFor(() => expect(container.textContent).toContain("This exact captured observation is unavailable"));
+  expect(container.textContent).not.toContain("Current response must not substitute"); expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+});
+
+
+it("searches causal successors only on request and excludes matching text without an exact causal reference", async () => {
+  api.getWorkflowHistoryPage.mockResolvedValue(historyPage([
+    historyEvent(2, { causation: { historyEventId: "event-1" } }),
+    historyEvent(3, { causation: { historyEventId: "other-event" }, metadata: { "history.status": "event-1" } })
+  ], { nextContinuationToken: "more-causal-range" }));
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Find causal successors")); expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled();
+  click("Find causal successors");
+  await vi.waitFor(() => expect(container.querySelector("[data-history-event-id='event-2']")).toBeTruthy());
+  expect(container.querySelector("[data-history-event-id='event-3']")).toBeNull();
+  expect(container.textContent).toContain("Continue searching causal history");
+  expect(api.getWorkflowHistoryPage.mock.calls[0][2].search).toBe("event-1");
+});
+
+it("refreshes the retained exact bookmark on checkpoint signals and explicit request, coalescing in-flight reads without changing selection", async () => {
+  const active = { coverage: historyCoverage, bookmark: historyBookmark({ eligibility: "eligible" }), readAt: "2026-11-05T09:02:00Z" };
+  const consumed = { coverage: historyCoverage, bookmark: historyBookmark({ status: "Consumed", eligibility: "not-active", endedAt: "2026-11-05T09:03:00Z", eligibilityObservedAt: "2026-11-05T09:03:01Z" }), readAt: "2026-11-05T09:03:01Z" };
+  let complete!: (value: typeof consumed) => void;
+  api.getWorkflowHistoryBookmark.mockResolvedValueOnce(active).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; })).mockResolvedValue(consumed);
+  const select = vi.fn();
+  const element = (refreshKey: number) => <HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "bookmark", id: "bookmark-1" }} refreshKey={refreshKey} onSelect={select} onBack={vi.fn()} />;
+  render(element(0)); await vi.waitFor(() => expect(container.textContent).toContain("current eligibility: Eligible"));
+  render(element(1)); await vi.waitFor(() => expect(api.getWorkflowHistoryBookmark).toHaveBeenCalledTimes(2));
+  const inFlight = api.getWorkflowHistoryBookmark.mock.calls[1][3] as AbortSignal;
+  render(element(2)); expect(inFlight.aborted).toBe(false); expect(api.getWorkflowHistoryBookmark).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain("previous recorded observation"); expect(container.textContent).toContain("current eligibility: Eligible");
+  complete(consumed); await vi.waitFor(() => expect(api.getWorkflowHistoryBookmark).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(container.textContent).toContain("current eligibility: Not active"));
+  await vi.waitFor(() => expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Refresh bookmark observation")?.disabled).toBe(false));
+  click("Refresh bookmark observation"); await vi.waitFor(() => expect(api.getWorkflowHistoryBookmark).toHaveBeenCalledTimes(4));
+  expect(select).not.toHaveBeenCalled(); expect(api.getWorkflowHistoryBookmark.mock.calls.every(call => call[1] === "run" && call[2] === "bookmark-1")).toBe(true);
+});
+
+it("retains individually observed bookmark pages during a bounded first-page refresh and replaces old pages only on success", async () => {
+  const second = historyBookmark({ bookmark: { ...historyBookmark().bookmark, identity: { ...historyBookmark().bookmark.identity, bookmarkId: "older-loaded-page" } }, firstRecordedSequence: 2, eligibilityObservedAt: "2026-11-05T09:04:00Z" });
+  let complete!: (value: RuntimeHistoryBookmarkPage) => void;
+  api.listWorkflowHistoryBookmarks.mockResolvedValueOnce(bookmarkPage({ nextContinuationToken: "second" }))
+    .mockResolvedValueOnce(bookmarkPage({ items: [second], readAt: "2026-11-05T09:04:00Z" }))
+    .mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  render(<ActivityBookmarkHistory context={context} workflowExecutionId="run" activityExecutionId="activity-1" onSelect={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("bookmark-1")); click("Load more bookmarks");
+  await vi.waitFor(() => expect(container.textContent).toContain("older-loaded-page")); click("Refresh bookmarks");
+  await vi.waitFor(() => expect(api.listWorkflowHistoryBookmarks).toHaveBeenCalledTimes(3));
+  expect(api.listWorkflowHistoryBookmarks.mock.calls[2][2].continuationToken).toBeNull();
+  expect(container.textContent).toContain("older-loaded-page"); await vi.waitFor(() => expect(container.textContent).toContain("Previously loaded observations remain visible"));
+  expect(container.textContent).not.toContain("No bookmarks recorded");
+  complete(bookmarkPage({ items: [historyBookmark({ status: "Consumed", eligibility: "not-active" })] }));
+  await vi.waitFor(() => expect(container.textContent).not.toContain("older-loaded-page"));
+  expect(container.textContent).toContain("Consumed"); expect(container.textContent).toContain("loaded handles retain their individual observation times");
+});
