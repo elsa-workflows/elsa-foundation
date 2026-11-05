@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 using CShells.Lifecycle;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
+using Elsa.Activities.Sequence;
+using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -25,7 +27,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.StateMachine.M0.Witness;
 
-internal static class Program
+internal static partial class Program
 {
     private const string WorkflowId = "m0-witness-workflow";
     private const string PayloadCanary = "public-payload-must-not-appear-in-terminal-output";
@@ -55,13 +57,14 @@ internal static class Program
             throw new InvalidOperationException("The owned output directory must be empty.");
         Directory.CreateDirectory(directory);
         var processes = new List<ProcessReceipt>();
-        foreach (var scenario in new[] { "normal", "action-retry", "guard-retry", "retry-without-reschedule-marker", "complete", "cancel", "cancel-selected" })
+        foreach (var scenario in new[] { "normal", "action-retry", "guard-retry", "retry-without-reschedule-marker", "complete", "cancel", "cancel-selected", "nested", "admission-blocked", "admission-race" })
             for (var generation = 1; generation <= 4; generation++)
                 processes.Add(await ChildAsync(directory, scenario, generation, null, expectedSuccess: true));
 
         // Separate databases isolate negative controls from the positive evidence.
         processes.Add(await ChildAsync(directory, "negative-state", 1, "omit-state", expectedSuccess: false));
         processes.Add(await ChildAsync(directory, "negative-provenance", 1, "corrupt-provenance", expectedSuccess: false));
+        processes.Add(await ChildAsync(directory, "admission-capacity-control", 1, "omit-in-flight-capacity", expectedSuccess: false));
         foreach (var (scenario, mutation) in new[] { ("negative-terminal", "omit-terminal-export"), ("negative-cancel", "omit-cancel-projection") })
         {
             processes.Add(await ChildAsync(directory, scenario, 1, mutation, expectedSuccess: true));
@@ -102,6 +105,7 @@ internal static class Program
             "corrupt-provenance" => "Provenance negative control",
             "omit-terminal-export" => "N6: terminal archive must retain the original receipt IDs and order",
             "omit-cancel-projection" => "N6: queued cancellation must have an explicit not-processed reason",
+            "omit-in-flight-capacity" => "N7: selected work must occupy one pending-capacity slot",
             _ => null
         };
         var matched = (process.ExitCode == 0) == expectedSuccess && (expectedSuccess || expectedDiagnostic is not null && error.Contains(expectedDiagnostic, StringComparison.Ordinal));
@@ -116,13 +120,15 @@ internal static class Program
         var database = Path.Join(directory, scenario + ".db");
         var controls = new ProbeControls
         {
-            FailGuardForInput = generation == 1 && scenario is "guard-retry" or "retry-without-reschedule-marker" or "cancel-selected" ? "A" : null,
+            FailGuardForInput = generation == 1 && (scenario is "guard-retry" or "retry-without-reschedule-marker" or "cancel-selected" || scenario.StartsWith("admission-", StringComparison.Ordinal)) ? "A" : null,
             OmitPrivateState = mutation == "omit-state",
             CorruptProvenance = mutation == "corrupt-provenance",
             DisableTerminalReceiptExport = mutation == "omit-terminal-export",
-            DisableCancellationProjection = mutation == "omit-cancel-projection"
+            DisableCancellationProjection = mutation == "omit-cancel-projection",
+            IgnoreInFlightCapacity = mutation == "omit-in-flight-capacity"
         };
         await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton(controls);
@@ -139,13 +145,18 @@ internal static class Program
             .Build(WorkflowExecutionHarness.Identity, WorkflowId, Enumerable.Range(1, 500).Select(i => $"{scenario}-g{generation}-activity-{i}"));
         foreach (var initializer in harness.Services.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
         harness.InitializeActivityTypes();
+        if (scenario.StartsWith("admission-", StringComparison.Ordinal))
+        {
+            await AdmissionGenerationAsync(harness, directory, scenario, generation);
+            return;
+        }
         var transport = new List<object>();
         object? recovery = null;
         try
         {
             if (generation == 1)
             {
-                var reference = await harness.PublishAsync(Executable(scenario == "retry-without-reschedule-marker"), "m0-publication");
+                var reference = await harness.PublishAsync(Executable(scenario == "retry-without-reschedule-marker", scenario == "nested"), "m0-publication");
                 // The harness publishes in its default persistence access scope. Start in that same
                 // durable partition, and use it explicitly for subsequent operator/cancellation calls.
                 await harness.StartPublishedAsync(reference, WorkflowId, partition: Partition);
@@ -192,7 +203,7 @@ internal static class Program
                 else if (scenario is "cancel" or "cancel-selected" or "negative-cancel") await harness.CancelAsync(WorkflowId, Partition);
                 else transport.Add(await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Action), new ActionSignal(Finish: scenario is "complete" or "negative-terminal")));
                 var after = await SnapshotAsync(harness);
-                if (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker")
+                if (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker" or "nested")
                 {
                     Check(after.RequiredState.Processed.SequenceEqual(["A", "B"]) && after.RequiredState.ExitCompletions == 1, "N2/N3: drain in admission order without repeating completed Exit.");
                     Check(after.RequiredState.Callbacks.GroupBy(x => x.InputId).All(group => group.Count() == 2 && group.Select(x => x.Source).ToHashSet().SetEquals(["child", "parent"])), "N4: both native guard callbacks must retain their scheduled logical input.");
@@ -216,14 +227,15 @@ internal static class Program
                 var restored = await SnapshotAsync(harness);
                 await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.restored.json"), restored);
                 await CheckOriginalRootAsync(directory, scenario, restored);
-                if (generation == 3 && (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker"))
+                if (generation == 3 && (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker" or "nested"))
                 {
                     Check(restored.RequiredState.Processed.SequenceEqual(["A", "B"]), "Cold verification must retain handled receipts.");
                     transport.Add(await AdmitAsync(harness, "stop"));
                 }
-                else CheckTerminal(restored, scenario, scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker" ? ["A", "B", "stop"] : ["A", "B"]);
+                else CheckTerminal(restored, scenario, scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker" or "nested" ? ["A", "B", "stop"] : ["A", "B"]);
             }
             var final = await SnapshotAsync(harness);
+            if (scenario == "nested") await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.nesting.json"), await CheckNestedAsync(harness, final));
             await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.json"), final);
             await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.delivery.json"), new { transport, recovery });
             Console.WriteLine($"{scenario} generation {generation}: assertions passed; phase={final.State?.Phase ?? "Terminal"}; workflow={final.WorkflowStatus}");
@@ -275,7 +287,9 @@ internal static class Program
         Check(restored.RootInvocationId == original.RootInvocationId, "Cold read must retain the original machine invocation identity.");
     }
 
-    private static async Task<object> ResumeAsync(WorkflowExecutionHarness harness, BookmarkState bookmark, object payload)
+    private sealed record DeliveryEvidence(string BookmarkId, string ActivityExecutionId, string TransportStatus, string? Reason);
+
+    private static async Task<DeliveryEvidence> ResumeAsync(WorkflowExecutionHarness harness, BookmarkState bookmark, object payload)
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var result = await scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(new BookmarkResumeDispatchRequest(
@@ -283,7 +297,7 @@ internal static class Program
             idempotencyKey: Guid.NewGuid().ToString("N"), requestedBy: "m0-public-fixture", metadata: null, payloadType: null, providerId: null,
             bookmarkId: bookmark.BookmarkId, testRunDelivery: null));
         await harness.SweepUntilQuietAsync();
-        return new { bookmark.BookmarkId, bookmark.ActivityExecutionId, transportStatus = result.Status.ToString(), result.Reason };
+        return new(bookmark.BookmarkId, bookmark.ActivityExecutionId, result.Status.ToString(), result.Reason);
     }
 
     private static async Task<BookmarkState> WaitAsync(WorkflowExecutionHarness harness, string node)
@@ -340,7 +354,7 @@ internal static class Program
         return new { jobId, sourceActivityExecutionId = activityId, status = job!.Status.ToString() };
     }
 
-    private static WorkflowExecutable Executable(bool withoutRescheduleOptIn)
+    private static WorkflowExecutable Executable(bool withoutRescheduleOptIn, bool nested = false)
     {
         static RuntimeInputBinding Literal(string name, string alias, object value)
         {
@@ -366,6 +380,21 @@ internal static class Program
         {
             var id = WorkflowExecutableResumeTarget.ComposeScopedId(node, local);
             targets[id] = new(id, node, "ResumeAsync", new Dictionary<string, string>(), local);
+        }
+        if (nested)
+        {
+            var consumer = Node("m0-result-consumer", typeof(ReceiptConsumer), new()
+            {
+                [nameof(ReceiptConsumer.Evidence)] = new(nameof(ReceiptConsumer.Evidence), new ValueTypeDescriptor(typeof(ProbeTerminalEvidence).FullName!),
+                    ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResult,
+                    activityResult: new RuntimeActivityResultReference(ProbeNames.Root, "$result", "scope:root"))
+            });
+            var nestedChildren = new[] { root, consumer };
+            root = new("m0-outer-sequence", "authored-m0-outer-sequence", typeof(SequenceActivity).FullName!, "1.0.0", "test",
+                JsonSerializer.SerializeToElement(new { type = "test" }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),
+                [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, nestedChildren)],
+                new ExecutableActivityStructure(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { activities = nestedChildren.Select(x => x.ExecutableNodeId).ToArray() })));
         }
         return new(WorkflowExecutionHarness.Identity, root, targets, WorkflowExecutionHarness.Timestamp, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }

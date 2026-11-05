@@ -33,8 +33,11 @@ public sealed record ProbeReceipt(string Id, JsonElement Content, long Order, st
 public sealed record ProbeDecision(string CarrierInvocationId, string InputId, string Status, long? Order);
 public sealed record ProbeCallback(string InvocationId, string InputId, string Source, string OperationKey);
 public sealed record ProbeSelection(string InputId, string Source);
-public sealed record ProbeFinalReceipt(string Id, long Order, string Status, string CarrierInvocationId);
-public sealed record ProbeTerminalEvidence(int FormatVersion, string RootInvocationId, string Reason, ProbeFinalReceipt[] Receipts);
+public sealed record ProbeFinalReceipt([property: JsonPropertyName("id")] string Id, [property: JsonPropertyName("order")] long Order,
+    [property: JsonPropertyName("status")] string Status, [property: JsonPropertyName("carrierInvocationId")] string CarrierInvocationId);
+public sealed record ProbeTerminalEvidence([property: JsonPropertyName("formatVersion")] int FormatVersion,
+    [property: JsonPropertyName("rootInvocationId")] string RootInvocationId, [property: JsonPropertyName("reason")] string Reason,
+    [property: JsonPropertyName("receipts")] ProbeFinalReceipt[] Receipts);
 public sealed record ProbeState(
     string Phase,
     int ExitCompletions,
@@ -63,6 +66,7 @@ public sealed class ProbeControls
     public bool CorruptProvenance { get; init; }
     public bool DisableTerminalReceiptExport { get; init; }
     public bool DisableCancellationProjection { get; init; }
+    public bool IgnoreInFlightCapacity { get; init; }
     private int _guardFailed;
 
     public bool ShouldFailGuard(string input) => input == FailGuardForInput && Interlocked.Exchange(ref _guardFailed, 1) == 0;
@@ -151,7 +155,7 @@ public abstract class NativeProbeBase(IActivityExecutionStateStore activities, P
                 status = JsonElement.DeepEquals(existing.Content, input.Content) ? "Duplicate" : "Conflict";
                 order = existing.Order;
             }
-            else if (pending.Count + (state.InFlight is null ? 0 : 1) >= PendingCapacity || receipts.Count >= ReceiptBudget)
+            else if (pending.Count + (controls.IgnoreInFlightCapacity || state.InFlight is null ? 0 : 1) >= PendingCapacity || receipts.Count >= ReceiptBudget)
                 status = "Full";
             else
             {
@@ -317,5 +321,22 @@ public sealed class GuardProbe(ProbeControls controls) : StructuralActivity, IRu
         if (Source == "child" && controls.ShouldFailGuard(input))
             throw new InvalidOperationException("Controlled transient guard adapter failure.");
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+}
+
+public sealed record ReceiptConsumption(string RootInvocationId, int ReceiptCount, string[] InputIds);
+
+[Activity(Icon = "Check")]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+public sealed class ReceiptConsumer : Activity<ReceiptConsumption>
+{
+    [ActivityInput] public ProbeTerminalEvidence Evidence { get; set; } = null!;
+
+    protected override ValueTask<ActivityTransition<ReceiptConsumption>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        if (Evidence is null || string.IsNullOrWhiteSpace(Evidence.RootInvocationId))
+            throw new InvalidOperationException("The ordinary result consumer needs the hydrated producer result.");
+        return ValueTask.FromResult(ActivityTransition.Complete(new ReceiptConsumption(Evidence.RootInvocationId,
+            Evidence.Receipts.Length, Evidence.Receipts.Select(x => x.Id).ToArray())));
     }
 }
