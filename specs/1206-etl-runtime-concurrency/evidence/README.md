@@ -1,5 +1,15 @@
 # Runtime concurrency evidence — implementation qualification
 
+## Current integration checkpoint — 5 November
+
+Schema PR #3803 is merged by Code Review at `f4b6c6d6de445ecbd160da7b16317ce3f03f25ad`, after actual approval on reviewed d27 and all three required checks passed. [Protected merge and source receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3803#issuecomment-6670565446). Its discovery comparison remained unrun at merge and is still an explicit evidence gap; its frozen source-matched discovery phase awaits allocation. Resulting-main CI42115816432 is monitored centrally, not claimed green here. Parent main5c85 includes newer Runtime/coalescing/outbox migrations, so old PR execution is not relabelled as qualification of this main.
+
+Existing PR #3804 now targets main and is draft again. Local source `451435f3` first merges original reviewed schema d27, then actual delivered main f4b6. Eleven squash-parent conflicts are resolved against the verified schema-equivalent base: the complete 64-file concurrency patch before documentation reconciliation is byte-identical across that integration (SHA256 `e9252ee45f89ed2a6ba2d88ffe568a43e015fd3ab4e2e972528440ffa7ad4e1a`). Both actual histories are retained; no force-push, parent-branch restoration or implementation rewrite is used. The schema corruption fix and regression remain included.
+
+**This is source integration, not new execution or a clean review of the integrated head.** Historical qualification below remains bound to its actual a48 and earlier sources. Fresh affected qualification, API/version and preserved-input checks, complete author-review round 3 and exact published-head required CI remain before delivery. T017–T018 stay open. No local build, test, host, container or new workflow was started for this integration; no heavy phase starts without allocation. Continue this PR, then #3789, transforms/admission, real recovery/stale-writer, BPMN and Studio. Runtime preparation retention and broader program acceptance remain open.
+
+## Historical implementation qualification
+
 The operation boundary is implemented at production source `eaeec794dbc9bca3fc1a88eda356ca7279adc884`. [Receipts](operation-boundary.json) keep exact counters, raw-result hashes and observed native error codes. The native fixture was executed as a working-tree test file against that production source and is committed unchanged with these receipts; its hash is recorded. This is not published-head CI or full feature acceptance.
 
 - Initial save-conflict regression: **1 failed**, then **1 passed** with retry. The failure is an intentionally injected concurrency failure on a real SQLite transaction.
@@ -11,7 +21,7 @@ The operation boundary is implemented at production source `eaeec794dbc9bca3fc1a
 - [Boundary, snapshot and multi-save controls](boundary-snapshot-preparation.json): **12 SQLite / 36 required-native cases pass**, zero failed/skipped, against unchanged production source eaeec794d and the recorded test-file hash. Raw/wrapped query failures retain the requested operation/cause through all three ports and allow context reuse. Schema refusal and corruption stay distinct. Caller-owned shard/effect collections changed after the first failed save cannot alter the captured operation.
 - The preparation controls observe two partitions and prepared state after the first successful engine save, before request insertion, then inject a classified conflict. Retry leaves one complete graph; exhausting all 16 attempts leaves no persisted/tracked partial graph, and the same context/lease can subsequently complete. These injected failures are separate from native-contention evidence.
 
-Server registration is enabled after the concurrency controls. Actual both-store hosts and full local qualification are now complete as recorded below. Independent implementation review, required CI and resulting-main verification remain; no merge or broader feature acceptance is inferred.
+Server registration was enabled after the recorded concurrency controls. Actual both-store hosts and full local qualification below retain their historical sources; the integrated candidate's current gates are listed above. No broader feature acceptance is inferred.
 
 A first native-fixture build stopped on two wrong helper/property names before test execution. They were corrected before the 27-case run; the diagnostic is distinct from a failing behavioral run. Existing package audit warnings are tracked separately in #3707. No suppression, migration change or literal version is added.
 
