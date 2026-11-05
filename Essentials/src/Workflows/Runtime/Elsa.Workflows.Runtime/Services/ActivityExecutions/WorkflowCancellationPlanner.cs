@@ -93,10 +93,10 @@ public sealed class WorkflowCancellationPlanner(
     }
 
     private static bool IsCancellable(ActivityExecutionState state) =>
-        state.Status is not ActivityExecutionStatus.Completed
-            and not ActivityExecutionStatus.Faulted
-            and not ActivityExecutionStatus.Cancelled
-            and not ActivityExecutionStatus.Recovered;
+        state.Status is ActivityExecutionStatus.Scheduled
+            or ActivityExecutionStatus.Running
+            or ActivityExecutionStatus.Waiting
+            or ActivityExecutionStatus.Suspended;
 }
 
 /// <summary>Checkpoint-ready cancellation changes with no persistence behavior.</summary>
