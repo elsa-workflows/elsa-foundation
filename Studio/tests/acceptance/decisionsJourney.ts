@@ -4,7 +4,7 @@ import { expect, type Locator, type Page, type TestInfo } from "@playwright/test
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 interface Asset { id: string; revision: string; sourceHash: string }
 interface Version { id: string; number: number }
-interface Receipt { passed: boolean; comparisons: { passed: boolean; failurePath?: string | null }[] }
+interface Receipt { passed: boolean; comparisons: { passed: boolean; status: string; expected?: unknown; actual?: unknown; failurePath?: string | null }[] }
 
 /** Uses normal authored assets, authentication and server operations; no fixture responses or direct database writes. */
 export async function decisionsJourney(page: Page, info: TestInfo, capture: Capture) {
@@ -35,7 +35,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     const receipt = await result.json() as Receipt; expect(receipt.passed).toBe(passed);
     await expect(surface.getByRole("heading", { name: passed ? "All cases passed" : "Cases failed", exact: true })).toBeVisible(); return receipt;
   }
-  async function addCase(amount: string, category: string, expected: string) {
+  async function addCase(amount: string, category: string, expected: string, status = "Success") {
     await button("Add case").click(); const form = surface.getByRole("form", { name: "New decision case" });
     if (caseCount === 0) {
       await expect(form.getByLabel("Case name", { exact: true })).toBeFocused();
@@ -45,12 +45,15 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await form.getByLabel("Case name", { exact: true }).fill(`Boundary ${amount} ${category}`);
     await form.getByRole("textbox", { name: "Case input amount", exact: true }).fill(amount);
     await form.getByRole("textbox", { name: "Case input customerCategory", exact: true }).fill(category);
-    await form.getByRole("textbox", { name: "Expected approvalLevel", exact: true }).fill(expected);
+    await form.getByLabel("Expected outcome", { exact: true }).selectOption(status);
+    if (status === "Success") await form.getByRole("textbox", { name: "Expected approvalLevel", exact: true }).fill(expected);
     if (caseCount === 0) { await part("decision-case-editor", form.getByLabel("Case name", { exact: true })); await part("decision-case-expectation", form.getByRole("textbox", { name: "Expected approvalLevel", exact: true })); }
     const response = page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname.endsWith("/cases"));
     await form.getByRole("button", { name: "Save case", exact: true }).click(); const saved = await response;
     expect(saved.ok(), await saved.text()).toBe(true); const item = await saved.json();
-    expect(item.inputs.amount).toEqual({ kind: "number", value: amount }); await expect(form).toHaveCount(0);
+    expect(item.inputs.amount).toEqual({ kind: "number", value: amount });
+    if (status === "NoMatch") expect(item.expectedResult).toEqual({ kind: "null", value: null });
+    await expect(form).toHaveCount(0);
     caseCount++;
   }
 
@@ -81,7 +84,10 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await part("decision-table", surface.getByRole("heading", { name: "Decision table", exact: true }));
 
   for (const values of [["1000", "Standard", "Automatic"], ["1000.01", "Standard", "Manager"], ["10000", "Standard", "Manager"], ["10000.01", "Standard", "Finance"], ["10000.01", "Strategic", "Account owner"], ["1234567890123456789012345678901234", "Standard", "Finance"]]) await addCase(values[0], values[1], values[2]);
-  await run(true); await part("decision-cases", surface.getByRole("heading", { name: "All cases passed", exact: true }));
+  await addCase("10000.01", "Unlisted", "", "NoMatch");
+  const initialCases = await run(true), noMatch = initialCases.comparisons.find(item => item.status === "NoMatch");
+  expect(noMatch).toEqual(expect.objectContaining({ passed: true, expected: { kind: "null", value: null }, actual: { kind: "null", value: null } }));
+  await part("decision-cases", surface.getByRole("heading", { name: "All cases passed", exact: true }));
   await surface.getByRole("textbox", { name: "Rule 2, input amount", exact: true }).fill("(1000..9999]"); await save();
   const regression = await run(false); expect(regression.comparisons.some(item => !item.passed && item.failurePath)).toBe(true);
   await part("decision-regression", surface.getByRole("heading", { name: "Cases failed", exact: true }));

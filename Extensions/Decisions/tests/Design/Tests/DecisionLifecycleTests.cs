@@ -12,6 +12,40 @@ namespace Elsa.Decisions.Design.Tests;
 public sealed class DecisionLifecycleTests
 {
     [Theory]
+    [InlineData("BudgetExceeded")]
+    [InlineData("Cancelled")]
+    public async Task Saved_cases_cannot_expect_whole_request_abort_outcomes(string status)
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Bounded cases", Fixture.Xml));
+        var error = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null,
+            new("rejected-case", status, Fixture.Input("1"), status, JsonSerializer.SerializeToElement<object?>(null))));
+        Assert.Equal("invalid", error.Code); Assert.Empty(await fixture.Reader.ListCasesAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Null(await fixture.Reader.FindOperationAsync(new(fixture.Caller.TenantId, fixture.Caller.SubjectId, "rejected-case")));
+    }
+
+    [Theory]
+    [InlineData("HitPolicyViolation")]
+    [InlineData("NoMatch")]
+    public async Task Saved_case_expectations_match_error_raw_null_and_no_match_tagged_null(string status)
+    {
+        await using var fixture = await Fixture.Create();
+        var xml = status == "HitPolicyViolation" ? Fixture.Xml.Replace("&gt; 1000", "-") :
+            Fixture.Xml.Replace("&lt;= 1000", "&lt; 0").Replace("&gt; 1000", "&lt; 0");
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Status cases", xml));
+        var expected = status == "NoMatch" ? JsonSerializer.SerializeToElement(new DecisionValue("null", null), new JsonSerializerOptions(JsonSerializerDefaults.Web)) : JsonSerializer.SerializeToElement<object?>(null);
+        var item = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null, new("case", status, Fixture.Input("1"), status, expected));
+        var run = await fixture.Service.TestAsync(fixture.Caller, asset.Id, new("test", asset.SourceHash, [new(item.Id, item.Revision)], asset.Revision));
+        Assert.True(run.Passed); Assert.Equal(status, run.Comparisons[0].Status); Assert.Null(run.Comparisons[0].FailurePath);
+        foreach (var invalidStatus in new[] { "Success", "NoMatch" })
+        {
+            var error = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null,
+                new("invalid-" + invalidStatus, "Invalid raw null", Fixture.Input("1"), invalidStatus, JsonSerializer.SerializeToElement<object?>(null))));
+            Assert.Equal("invalid", error.Code);
+        }
+    }
+
+    [Theory]
     [InlineData("value")]
     [InlineData("other")]
     public async Task Multi_output_kind_names_are_records_in_saved_cases_and_comparisons(string secondName)

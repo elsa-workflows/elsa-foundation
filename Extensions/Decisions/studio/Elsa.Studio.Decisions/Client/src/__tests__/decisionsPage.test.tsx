@@ -79,6 +79,26 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalled());
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/cases", expect.objectContaining({ inputs: { amount: { kind: "number", value: number } }, expectedResult: { kind: "number", value: number } }));
   });
+  it.each(["NoMatch", "HitPolicyViolation", "InvalidInput"])("saves and runs a %s case with the matching null representation", async status => {
+    const api = stubApi(), expectedResult = status === "NoMatch" ? { kind: "null", value: null } : null;
+    let saved: Record<string, unknown> | undefined;
+    api.backend.http.getJson.mockImplementation(async () => ({ items: saved ? [saved] : [] }));
+    api.backend.http.postJson.mockImplementation(async (path, body) => {
+      if (path.endsWith("/cases")) { saved = { ...body, id: "outcome-case", revision: "case-r1" }; return saved; }
+      return { id: "outcome-run", candidateId: "draft-r1", candidateHash: asset.sourceHash, passed: true, hasDetailedPayload: true, comparisons: [{ caseId: "outcome-case", name: status, status, passed: true, expected: expectedResult, actual: expectedResult }], evaluatedAt: asset.createdAt, completedAt: asset.createdAt };
+    });
+    const { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet")); click(button(host, "Add case"));
+    const form = host.querySelector("form")!; type(form.querySelector<HTMLInputElement>("input")!, status);
+    const outcomes = Array.from(form.querySelectorAll("select")).find(element => element.parentElement?.textContent?.startsWith("Expected outcome"))!;
+    expect(Array.from(outcomes.options).map(option => option.value)).toEqual(["Success", "NoMatch", "HitPolicyViolation", "InvalidInput"]); select(outcomes, status);
+    expect(form.querySelector('[aria-label="Expected result"]')).toBeNull(); click(button(host, "Save case"));
+    await vi.waitFor(() => expect(host.querySelector("form")).toBeNull());
+    expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/cases", expect.objectContaining({ expectedStatus: status, expectedResult }));
+    click(button(host, "Run saved cases")); await vi.waitFor(() => expect(host.textContent).toContain("All cases passed"));
+    expect(api.backend.http.postJson).toHaveBeenLastCalledWith("/tenant/decisions/approval/test", expect.objectContaining({ cases: [{ id: "outcome-case", revision: "case-r1" }] }));
+    if (status === "NoMatch") expect(host.textContent).toContain("Actual: null");
+  });
   it("keeps published tables read only and clones through revision-checked API", async () => {
     const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);

@@ -66,7 +66,7 @@ XML ≤1 MiB UTF-8, depth ≤64 and ≤100000 elements; disable DTD/external ent
 
 Meter actual cell/alternative/output/selection work. Default evaluation budget: 1000000 operations. Admission computes worst-case cost and rejects a document whose required cost exceeds configured publication ceilings. A caller may deliberately request a smaller budget and receive BudgetExceeded. Check cancellation between bounded operations; no partial successful output.
 
-Outcomes: Success, NoMatch, InvalidInput, Unsupported, HitPolicyViolation, BudgetExceeded, Cancelled, Unavailable. Invalid/unsupported compilation returns located diagnostics and no executable. Infrastructure failures become domain exceptions, never business no-match.
+Outcomes: Success, NoMatch, InvalidInput, Unsupported, HitPolicyViolation, BudgetExceeded, Cancelled, Unavailable. Invalid/unsupported compilation returns located diagnostics and no executable. Infrastructure failures become domain exceptions, never business no-match. Bounded saved-case test batches treat BudgetExceeded and Cancelled as whole-request aborts, with no completed receipt; these two engine outcomes are not valid saved expected statuses.
 
 ## XML and external evidence
 

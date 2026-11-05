@@ -198,7 +198,7 @@ def run(output, journey=None):
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha)
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                     if journey:
-                        browser_command.extend(['--grep', '^' + re.escape(journey) + '$'])
+                        browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
                     command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
                     report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, [journey] if journey else None)
         end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()

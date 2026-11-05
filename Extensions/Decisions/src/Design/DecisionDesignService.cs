@@ -12,7 +12,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     IDecisionEvaluator evaluator, IDecisionAccessPolicy policy, DecisionDesignOptions options)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private static readonly HashSet<string> Statuses = ["Success", "NoMatch", "InvalidInput", "Unsupported", "HitPolicyViolation", "BudgetExceeded", "Cancelled", "Unavailable"];
+    private static readonly HashSet<string> Statuses = ["Success", "NoMatch", "InvalidInput", "Unsupported", "HitPolicyViolation", "Unavailable"];
 
     public async ValueTask<IReadOnlyList<DecisionAssetView>> ListAsync(DecisionCaller caller, CancellationToken ct = default)
     {
@@ -117,8 +117,10 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         var asset = await Asset(caller, id, ct);
         var existing = caseId is null ? null : await reader.FindCaseAsync(caller.TenantId, id, caseId, ct) ?? throw Missing();
         if (asset.IsSensitive || existing?.IsSensitive == true || request.IsSensitive) await Ensure(caller, DecisionPermissions.SensitiveValues, id, ct);
-        ValidateExpected(request.ExpectedResult);
         if (!Statuses.Contains(request.ExpectedStatus)) throw new DecisionDesignException("invalid", "The expected decision status is unsupported.");
+        // Error outcomes carry a raw null result; successful and NoMatch outcomes use exact tagged values.
+        if (request.ExpectedResult.ValueKind != JsonValueKind.Null || request.ExpectedStatus is "Success" or "NoMatch")
+            ValidateExpected(request.ExpectedResult);
         var saved = await writer.SaveCaseAsync(Operation(caller, request.OperationId), new(id, caseId, request.ExpectedRevision, request.Name,
             request.Inputs, request.ExpectedStatus, request.ExpectedResult, asset.IsSensitive || request.IsSensitive), ct);
         return await CaseView(caller, await reader.FindCaseAsync(caller.TenantId, id, saved.Id, ct) ?? throw Missing(), ct);

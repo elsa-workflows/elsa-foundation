@@ -3,8 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using CShells.Lifecycle;
 using Elsa.Decisions.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Decisions.Evaluation.Tests;
 
@@ -323,6 +325,46 @@ public class DecisionEvaluationTests
         using var customProvider = custom.BuildServiceProvider(); Assert.Same(replacement, customProvider.GetRequiredService<IDecisionCompiler>());
         custom.AddSingleton<IDecisionCompiler>(new DecisionEngine());
         Assert.Throws<InvalidOperationException>(() => new DecisionsFeature().ConfigureServices(custom));
+    }
+
+    [Theory]
+    [InlineData(typeof(IDecisionCompiler), false)]
+    [InlineData(typeof(IDecisionEvaluator), false)]
+    [InlineData(typeof(IDecisionCompiler), true)]
+    [InlineData(typeof(IDecisionEvaluator), true)]
+    public async Task Shell_startup_refuses_late_duplicate_or_removed_evaluation_contracts(Type contract, bool remove)
+    {
+        var services = new ServiceCollection();
+        new DecisionsFeature().ConfigureServices(services);
+        if (remove) services.RemoveAll(contract);
+        else services.AddScoped(contract, typeof(DecisionEngine));
+        using var provider = services.BuildServiceProvider();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            foreach (var initializer in provider.GetServices<IShellInitializer>())
+                await initializer.InitializeAsync(CancellationToken.None);
+        });
+        Assert.Contains(contract.FullName!, exception.Message);
+        Assert.Contains("exactly one", exception.Message);
+    }
+
+    [Fact]
+    public async Task Shell_startup_accepts_one_host_replacement_registered_before_or_after_the_feature()
+    {
+        var services = new ServiceCollection();
+        var compiler = new DecisionEngine(); var evaluator = new DecisionEngine();
+        services.AddSingleton<IDecisionCompiler>(compiler);
+        var feature = new DecisionsFeature(); feature.ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Singleton<IDecisionEvaluator>(evaluator));
+        feature.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var initializer = Assert.Single(provider.GetServices<IShellInitializer>());
+        await initializer.InitializeAsync(CancellationToken.None);
+        var compiled = provider.GetRequiredService<IDecisionCompiler>().Compile(Table(["-"]));
+        Assert.True(compiled.Success);
+        Assert.Same(compiler, provider.GetRequiredService<IDecisionCompiler>());
+        Assert.Same(evaluator, provider.GetRequiredService<IDecisionEvaluator>());
+        Assert.Equal("Success", provider.GetRequiredService<IDecisionEvaluator>().Evaluate(compiled.Artifact!, Inputs(new("number", "1"))).Status);
     }
 
     [Fact]
