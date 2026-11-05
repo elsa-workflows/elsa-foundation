@@ -677,11 +677,15 @@ export function mapAdmittedContextAttachment(attachment: Record<string, unknown>
 }
 
 function mapExecution(result: BackendAgentProposalExecutionResult, fallbackId: string): AgentProposalDecisionResponse {
+  const status = getExecutionStatus(result);
+  const executed = readBoolean(result, "executed");
+  const clientInvocation = readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined;
+  const pendingClient = status === "awaiting-client" && executed === false;
   return {
     proposalId: readString(result, "proposalId") ?? fallbackId,
-    approvalStatus: getExecutionStatus(result),
-    executed: readBoolean(result, "executed"),
-    clientInvocation: readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined,
+    approvalStatus: clientInvocation && !pendingClient ? "uncertain" : status,
+    executed,
+    clientInvocation: pendingClient ? clientInvocation : undefined,
     toolResult: readField(result, "toolResult") as StudioAgentToolResult | undefined,
     result: {
       resourceType: readString(result, "resourceType") ?? "agent-proposal",

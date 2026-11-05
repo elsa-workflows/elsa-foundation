@@ -889,6 +889,12 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     if (!response) return;
     updateProposal(proposal.id, { status: response.approvalStatus });
     if (response.clientInvocation) {
+      // A custom client can bypass transport normalization; presence alone is never dispatch admission.
+      if (response.approvalStatus !== "awaiting-client" || response.executed !== false) {
+        updateProposal(proposal.id, { status: "uncertain", error: "The server did not confirm a pending client operation. Nothing was dispatched from this response." });
+        if (deliveryGeneration === turnGenerationRef.current) { publishTurnResult("failed", "", requestId); finishTurn(); }
+        return;
+      }
       const invocation = response.clientInvocation;
       const cancellation = new AbortController(); clientControllersRef.current.add(cancellation);
       if (deliveryGeneration !== turnGenerationRef.current) cancellation.abort();
@@ -921,6 +927,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
   function maybeAutoApplyProposal(proposalId: string, payload?: AgentActionProposalPayload) {
     const prepared = payload?.preparedInvocation;
+    const status = normalizeProposalStatus(payload?.status);
+    if (status !== "awaiting-approval" && status !== "approved") return;
     // The policy that admitted this turn decides, not a selector value chosen afterwards.
     if ((turnAcceptedPolicyRef.current?.autonomyMode ?? autoApplyModeRef.current) !== "full-auto" || !prepared || prepared.requiresApproval || prepared.executionLocation === "clientWorkingState") return;
     const revision = payload?.revision ?? payload?.baseRevision;
@@ -928,6 +936,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       const generation = turnGenerationRef.current;
       const approved = await runReviewedDecision("approveProposal", proposalId, revision, prepared);
       if (!approved || generation !== turnGenerationRef.current) return;
+      updateProposal(proposalId, { status: approved.approvalStatus });
+      if (approved.approvalStatus !== "approved") return;
       const response = await runReviewedDecision("executeProposal", proposalId, revision, prepared);
       if (!response) return;
       updateProposal(proposalId, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });

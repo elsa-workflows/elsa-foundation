@@ -46,6 +46,21 @@ describe("proposal status wire contract", () => {
       expect((await client.executeProposal("proposal", {})).approvalStatus).toBe("uncertain");
     });
 
+  it.each([
+    { status: "future-status", executed: false, admitted: false },
+    { status: "performed", executed: false, admitted: false },
+    { status: "executed", executed: true, admitted: false },
+    { status: "awaiting-client", executed: true, admitted: false },
+    { status: "awaiting-client", executed: undefined, admitted: false },
+    { status: "awaiting-client", executed: false, admitted: true }
+  ])("admits a client invocation only with pending-client status and no prior execution: %j", async ({ status, executed, admitted }) => {
+    const clientInvocation = { invocationId: "invocation" };
+    const client = createAgentClient(endpoint({ proposalId: "proposal", status, executed, clientInvocation }));
+    const response = await client.executeProposal("proposal", {});
+    expect(response.approvalStatus).toBe(admitted ? "awaiting-client" : "uncertain");
+    expect(response.clientInvocation).toEqual(admitted ? clientInvocation : undefined);
+  });
+
   it.each([[3, "denied"], [5, "expired"], [7, "failed"], [8, "cancelled"]] as const)(
     "preserves numeric refusal %s as authoritative terminal %s", async (status, expected) => {
       const envelope = { error: { code: "agent.proposal.refused", message: "No dispatch.", statusCode: 409 },
