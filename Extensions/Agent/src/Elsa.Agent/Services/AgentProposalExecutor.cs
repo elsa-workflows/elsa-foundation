@@ -51,7 +51,7 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
 
     public async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
-        (IAgentTool? Tool, AgentError? Error) resolved;
+        (AgentToolAdmission? Admission, AgentError? Error) resolved;
         // The current-authority recheck precedes any module or client dispatch, so cancellation here
         // is a known zero-effect outcome rather than an uncertain one.
         try { resolved = await resolver.ResolveAsync(proposal, cancellationToken); }
@@ -66,24 +66,42 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
         }
         if (resolved.Error is { } error)
             return RefusedBeforeDispatch(proposal, error, _dispatchOrigin);
+        try { return await ExecuteAdmittedAsync(proposal, resolved.Admission!, cancellationToken); }
+        catch (Exception)
+        {
+            return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
+                "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."));
+        }
+    }
+
+    internal async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAdmittedAsync(AgentActionProposal proposal,
+        AgentToolAdmission admission, CancellationToken cancellationToken)
+    {
         var prepared = proposal.PreparedInvocation!;
+        if (cancellationToken.IsCancellationRequested)
+            return CancelledBeforeDispatchResult(proposal, _dispatchOrigin);
         if (prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState)
         {
-            if (!proposal.RequiresApproval || proposal.ApprovedAt is null || prepared.Client is null || resolved.Tool is not IAgentClientTool)
+            if (!proposal.RequiresApproval || proposal.ApprovedAt is null || prepared.Client is null || admission.Tool is not IAgentClientTool)
                 return RefusedBeforeDispatch(proposal, new("agent.proposal.client_unavailable", "No reviewed originating client execution contract is available.", 409), _dispatchOrigin);
             return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, false,
                 "Waiting for the originating view to confirm the change.", "awaiting-client") with { ClientInvocation = prepared });
         }
 
-        var execution = await resolved.Tool!.ExecuteAsync(prepared, cancellationToken);
-        if (!execution.Succeeded || execution.Value is null)
-            return AgentResult<AgentProposalExecutionResult>.Failure(execution.Error?.Code ?? "agent.proposal.refused",
-                execution.Error?.Message ?? "The owning module refused application.", execution.Error?.StatusCode ?? 409);
-        if (!AgentInvocationIntegrity.ValidReceipt(prepared, execution.Value, AgentEffectScope.ServerPersisted))
+        var execution = await admission.Tool.ExecuteAsync(prepared, cancellationToken);
+        if (execution.Succeeded && execution.Value is null || !execution.Succeeded
+            && (execution.Value?.Succeeded == true || execution.Value?.Receipt is not null))
+            return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
+                "The module returned a contradictory or empty success after dispatch. Its effect is uncertain and will not be replayed."));
+        if (!execution.Succeeded)
+            return execution.Error is { } error ? new(null, error)
+                : AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.refused", "The owning module refused application.", 409);
+        var status = AgentInvocationIntegrity.SuccessStatus(prepared, execution.Value!, admission.Descriptor);
+        if (status is null)
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "The module returned without a valid owning-resource effect receipt. Its outcome is uncertain; the operation will not be replayed."));
-        var result = FreezeResult(execution.Value);
-        return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, true, result.Content, "executed") with { ToolResult = result });
+        var result = FreezeResult(execution.Value!);
+        return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, true, result.Content, status) with { ToolResult = result });
     }
 
     public async Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal,
@@ -91,11 +109,29 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
     {
         if (proposal.PreparedInvocation is not { ExecutionLocation: AgentExecutionLocation.ClientWorkingState, Client: not null } prepared)
             return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.client_unavailable", "This proposal has no bound client completion contract.", 409);
-        var resolved = await resolver.ResolveAsync(proposal, cancellationToken);
+        (AgentToolAdmission? Admission, AgentError? Error) resolved;
+        try { resolved = await resolver.ResolveAsync(proposal, cancellationToken); }
+        catch (Exception)
+        {
+            return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
+                "Client completion admission is unavailable. Its reported effect remains uncertain and will not be replayed."));
+        }
         if (resolved.Error is not null)
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "A client result was reported after its execution contract, authority or lifetime changed. The effect is unverified and will not be replayed."));
-        if (resolved.Tool is not IAgentClientTool clientTool)
+        try { return await CompleteAdmittedAsync(proposal, acknowledgement, resolved.Admission!, cancellationToken); }
+        catch (Exception)
+        {
+            return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
+                "Client completion validation was interrupted. Its reported effect remains uncertain and will not be replayed."));
+        }
+    }
+
+    internal async Task<AgentResult<AgentProposalExecutionResult>> CompleteAdmittedAsync(AgentActionProposal proposal,
+        AgentClientAcknowledgement acknowledgement, AgentToolAdmission admission, CancellationToken cancellationToken)
+    {
+        var prepared = proposal.PreparedInvocation!;
+        if (admission.Tool is not IAgentClientTool clientTool)
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "The installed tool no longer supports validation of the dispatched client operation. Its reported effect remains uncertain and will not be replayed."));
         if (acknowledgement.Outcome == AgentClientOutcome.Uncertain)
@@ -107,7 +143,7 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
             return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, false, refused.Content, "refused") with { ToolResult = refused });
         }
         var completed = await clientTool.CompleteAsync(prepared, acknowledgement, cancellationToken);
-        if (!completed.Succeeded || completed.Value is null || !AgentInvocationIntegrity.ValidReceipt(prepared, completed.Value, AgentEffectScope.ClientWorkingState))
+        if (!completed.Succeeded || completed.Value is null || AgentInvocationIntegrity.SuccessStatus(prepared, completed.Value, admission.Descriptor) != "executed")
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed."));
         var result = FreezeResult(completed.Value);
@@ -150,7 +186,7 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
             && identity.ValueKind == JsonValueKind.String && identity.GetString() == access.InvocationId;
     }
 
-    private static AgentToolResult FreezeResult(AgentToolResult value) => value with
+    internal static AgentToolResult FreezeResult(AgentToolResult value) => value with
     {
         Payload = value.Payload is null ? null : AgentInvocationIntegrity.Freeze(value.Payload),
         Receipt = value.Receipt is null ? null : value.Receipt with { Evidence = AgentInvocationIntegrity.Freeze(value.Receipt.Evidence) }

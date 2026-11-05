@@ -212,7 +212,8 @@ internal sealed class DefaultAgentToolInvoker(
                 var execution = await proposals.ExecuteAsync(proposal.Id, session.ActorId, prepared.Target?.Revision, cancellationToken);
                 if (execution.Succeeded && execution.Value?.ToolResult is { } applied)
                 {
-                    await AuditAsync(invocation, applied.Succeeded ? "executed" : "uncertain", cancellationToken);
+                    await AuditAsync(invocation, applied.Succeeded
+                        ? applied.Receipt?.Scope == AgentEffectScope.NoPersistedEffect ? "performed" : "executed" : "uncertain", cancellationToken);
                     return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(applied, prepared));
                 }
                 if (execution.Succeeded && execution.Value?.ClientInvocation is not null)

@@ -6,12 +6,16 @@ namespace Elsa.Agent.Services;
 /// <summary>Host authority is required; an installed tool may add its owner's current resource rules.</summary>
 internal static class AgentToolAccess
 {
-    internal static async ValueTask<AgentPolicyDecision> AuthorizeAsync(IAgentTool tool, IAgentToolAuthorizer host,
+    internal static ValueTask<AgentPolicyDecision> AuthorizeAsync(IAgentTool tool, IAgentToolAuthorizer host,
+        string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken)
+        => AuthorizeAsync(tool, tool.Descriptor, host, actorId, tenantId, target, cancellationToken);
+
+    internal static async ValueTask<AgentPolicyDecision> AuthorizeAsync(IAgentTool tool, AgentToolDescriptor descriptor, IAgentToolAuthorizer host,
         string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken)
     {
         // Only the owning tool's own decision may say its owner could not decide. A host denial stays a denial, and a
         // host's advisory violation can never turn an owner's plain denial into the unavailable outcome.
-        var admission = HostOnly(await host.AuthorizeAsync(tool.Descriptor, actorId, tenantId, target, cancellationToken));
+        var admission = HostOnly(await host.AuthorizeAsync(descriptor, actorId, tenantId, target, cancellationToken));
         if (!admission.Allowed || tool is not IAgentToolAuthorization owner) return admission;
         var owned = await owner.AuthorizeAsync(actorId, tenantId, target, cancellationToken);
         return new(owned.Allowed, admission.Violations.Concat(owned.Violations).ToArray());

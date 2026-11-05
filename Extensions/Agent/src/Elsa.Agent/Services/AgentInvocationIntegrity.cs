@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 
 namespace Elsa.Agent.Services;
@@ -76,8 +77,37 @@ internal static class AgentInvocationIntegrity
            && result.Payload is not null && result.Receipt is { } receipt
            && receipt.InvocationId == invocation.InvocationId && receipt.Scope == scope
            && SameTarget(invocation.Target, receipt.Before)
-           && receipt.After.ModuleId == invocation.ModuleId && !string.IsNullOrWhiteSpace(receipt.After.ResourceType)
-           && receipt.Evidence.Data.ValueKind != JsonValueKind.Undefined;
+           && receipt.After is { } after && after.ModuleId == invocation.ModuleId && !string.IsNullOrWhiteSpace(after.ResourceType)
+           && receipt.Evidence is { } evidence && evidence.Data.ValueKind != JsonValueKind.Undefined;
+
+    /// <summary>Derives an accepted outcome from this dispatch's actual admitted contract, never a later lookup.</summary>
+    internal static string? SuccessStatus(AgentPreparedToolInvocation invocation, AgentToolResult result, AgentToolDescriptor descriptor)
+    {
+        try
+        {
+            if (!ValidPayload(result.Payload) || !ValidPayload(result.Receipt?.Evidence)
+                || descriptor.Name != invocation.ToolName || descriptor.ModuleId != invocation.ModuleId
+                || descriptor.ContractVersion != invocation.ToolContractVersion || descriptor.ExecutionLocation != invocation.ExecutionLocation)
+                return null;
+            if (invocation.ExecutionLocation == AgentExecutionLocation.ClientWorkingState)
+                return ValidReceipt(invocation, result, AgentEffectScope.ClientWorkingState) ? "executed" : null;
+            if (invocation.ExecutionLocation != AgentExecutionLocation.Server) return null;
+            if (ValidReceipt(invocation, result, AgentEffectScope.ServerPersisted)) return "executed";
+            return descriptor.CanPerformWithoutPersistence && ValidReceipt(invocation, result, AgentEffectScope.NoPersistedEffect)
+                && SameTarget(result.Receipt!.Before, result.Receipt.After) ? "performed" : null;
+        }
+        catch (InvalidOperationException) { return null; } // Disposed/invalid owner JSON is not an admitted receipt.
+    }
+
+    internal static bool ValidSuccessOutcome(AgentActionProposal proposal, AgentProposalExecutionResult outcome, AgentToolDescriptor descriptor)
+        => proposal.PreparedInvocation is { } prepared && outcome.Executed && outcome.ClientInvocation is null
+            && outcome.ProposalId == proposal.Id && outcome.ResourceType == (prepared.Target?.ResourceType ?? proposal.ResourceType ?? "unavailable")
+            && outcome.ResourceId == (prepared.Target?.ResourceId ?? proposal.ResourceId ?? string.Empty)
+            && outcome.ToolResult is { } result && SuccessStatus(prepared, result, descriptor) is { } status && outcome.Status == status;
+
+    private static bool ValidPayload(AgentPayload? payload) => payload is not null
+        && !string.IsNullOrWhiteSpace(payload.TypeId) && !string.IsNullOrWhiteSpace(payload.SchemaVersion)
+        && payload.Data.ValueKind != JsonValueKind.Undefined;
 
     private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
     {
