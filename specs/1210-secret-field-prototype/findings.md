@@ -31,3 +31,7 @@ Selects, date/time fields, multiline inputs and long labels need an explicit per
 ## Validation boundary
 
 The theme gallery is isolated actual-component evidence. Read-only is a representative contract state, not a change to Create secret authorization. Arbitrary custom theme palettes and real password-manager integrations are not claimed as inspected; the prototype covers native autofill-compatible layout and inherits custom theme tokens. Product acceptance requires the separate owned composed-host journey and independent screenshot inspection described in the acceptance record. Exact revisions, run artifacts, counts and review receipts belong on the PR.
+
+## Local validation result
+
+Tested UI source: `6732623e2d9294a19f8ad5493f142ea7dacf6d7b`, clean. Secrets 73/73, browser 76/76 (48 appearance combinations, no skips/retries), owned composed 12/12, architecture 616/616, generated-map check, build/typecheck and touched-file lint passed. A focused mutation removing aria-invalid failed the new regression and passed again after restoration. The architecture discovery inventory has 601 entries; two deferred MemberData theories expand from 2 entries to 11 domain-feature and 6 collectible-metadata cases at execution, accounting for 616 executed cases. Independent review receipts and the pending shared CI artifact gate are recorded on PR #3857. Failed preliminary runs are retained separately from final evidence.

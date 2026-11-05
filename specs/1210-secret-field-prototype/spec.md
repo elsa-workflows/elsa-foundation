@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3851-secret-field-prototype`
 **Created**: 2026-11-05
-**Status**: Draft
+**Status**: Implemented
 **Issue**: #3851; program #2559
 **Input**: Prototype compact Material-inspired fields in Create secret across all themes and field states before shaping shared components and wider rollout.
 
@@ -63,3 +63,7 @@ Autofilled/password-manager content, long localized labels, long help/error mess
 ## Assumptions
 
 The owner's supplied Material floating-label image is the interaction reference; Studio's own form styling and design-token contract remain authoritative for theme appearance. This is a reviewable prototype; shared API extraction, unrelated forms, a new component library and product-wide rollout are follow-on work. The preview uses disposable demonstration values only.
+
+## Prototype validation
+
+Implemented as a bounded prototype in PR #3857. Local proof at source `6732623e2d9294a19f8ad5493f142ea7dacf6d7b` passed 73 module tests, 76 browser checks across 48 built-in theme/appearance combinations and 12 composed journeys. Shared downloadable CI evidence and the overall product acceptance gate remain pending; the PR stays draft for prototype review. This status records prototype implementation, not approval of the wider migration.

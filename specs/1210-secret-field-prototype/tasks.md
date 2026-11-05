@@ -23,10 +23,14 @@ Independent test: actual-component preview and complete registry-derived theme/a
 
 ## Validation and findings
 
-- [ ] T009 Run affected suites, typecheck/build/lint and focused mutation proof; retain results in specs/1210-secret-field-prototype/findings.md and PR evidence.
-- [ ] T010 Commit and run composed proof, inspect exact-revision captures and independent correctness/standards/acceptance review; preserve incomplete states explicitly.
-- [ ] T011 Record proposed shared field contract and rollout recommendations in specs/1210-secret-field-prototype/findings.md; open a reviewable draft prototype PR.
+- [x] T009 Run affected suites, typecheck/build/lint and focused mutation proof; retain results in specs/1210-secret-field-prototype/findings.md and PR evidence.
+- [x] T010 Commit and run composed proof, inspect exact-revision captures and independent correctness/standards/acceptance review; preserve incomplete states explicitly.
+- [x] T011 Record proposed shared field contract and rollout recommendations in specs/1210-secret-field-prototype/findings.md; open a reviewable draft prototype PR.
 
 ## Dependencies and implementation strategy
 
 T001 → T002 → T003 → T004 → T005. T006 follows T004, T007 follows T006, T008 follows T004, T009 follows T005/T007/T008, T010 follows T009, T011 follows findings. Test authoring in T005 and preview setup in T006 can proceed independently once T004 is stable; execute sequentially in this session. MVP is US1; US2 is required before recommending shared extraction. This existing-form change preserves valid regressions and uses risk-based tests; no greenfield TDD cadence is inferred.
+
+## Prototype closeout
+
+Local source proof at `6732623e2d9294a19f8ad5493f142ea7dacf6d7b`: Secrets 73/73 (inventory 73), browser 76/76 (inventory 76; 48 theme/appearance combinations), composed 12/12 with clean owned hosts/stores, architecture 616/616 and generated-map check passed. Independent correctness/standards and isolated visual reviews passed; composed visual review is recorded on PR #3857. Shared CI/downloadable acceptance evidence remains pending while runners are queued. These tasks complete the bounded prototype and preserve that pending gate; they do not authorize a shared-component rollout or production acceptance.
