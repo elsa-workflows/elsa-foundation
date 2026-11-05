@@ -1,6 +1,6 @@
 # M0 N10 composition correction and first follow-up
 
-**Status:** Reviewed research plan; correction source prepared, unbuilt and unexecuted after the failed `5d4c7359` batch. Independent correctness, standards and acceptance reviews are clean for the frozen plan and correction source. The new project reference still requires a separately granted normal restore and generated-lock review. This does not approve production placement, Q1–Q3 or a public schema. Review the exact dependency changes and freeze the resulting clean head before further execution.
+**Status:** Reviewed research plan; correction source remains unbuilt/unexecuted after the failed `5d4c7359` batch. Independent correctness, standards and acceptance reviews are clean for the plan, correction source and actual generated dependency delta. The separately granted normal restore completed; a clean execution-head freeze and another explicit resource release are required before build/N10 execution. This does not approve production placement, Q1–Q3 or a public schema.
 
 ## Retained cause and scope
 
@@ -31,6 +31,8 @@ dotnet restore specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj -
 Bound it to 300 seconds plus owned closeout, max one MSBuild worker, no build or generation. Preserve its actual exit, warnings/errors and every lock/project/source diff. Do not edit/copy a lock file manually. Any unexpected dependency or unrelated tracked-file change stops for inspection; do not silently discard it or proceed. Return the slot when the restore is terminal and all observed owned processes/groups are closed. A preparation failure gets no automatic retry.
 
 Review the actual generated dependency/lock delta, commit the coherent source/lock/evidence checkpoint through the existing draft PR and freeze the resulting clean execution head. A successful restore is dependency preparation, not runtime qualification.
+
+**Actual dependency preparation:** One released restore at `4e744cd1` exited 0 in 1.748 seconds with three NU1510 warning lines. Only the witness lock changed: the Readability project and Nuplane.Loading.Abstractions/Nuplane.Abstractions 0.0.12 were added; no existing entry changed or disappeared. Versions/content hashes match Readability's existing lock. Generated lock SHA-256: `58b275b4782d12a5381110f1a2adbf6e97354adb240fa1e4a4aa9b36405cc64c`. Three independent reviews found no issues. The recorded restore PID/parent and owned group were absent after normal closeout. The outside observation arrived after completion and captured zero rows, so it is not a live trace; sampling and unexercised timeout-path limits remain. No build, generation or retry ran, and the primary slot was returned. Raw logs, actual diff and process receipts are retained in `N10-generated-lock-r1` under the program's local evidence root. This is dependency preparation, not runtime acceptance.
 
 ## Later resource phase: N10 only, separately granted
 
