@@ -141,3 +141,39 @@ for (const width of [360, 390]) for (const appearance of ["light", "dark"]) test
   await target.click();
   await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
 });
+
+
+test("desktop group overlays keep layout stable and scroll nested destinations into view", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 480 });
+  await page.goto("/?mode=nav-placement&navigation=top&menuOverflow=1");
+  await page.evaluate(() => document.fonts.ready);
+  const sidebar = page.locator(".sidebar");
+  const content = page.getByText("Navigation composition fixture.", { exact: true });
+  const before = { header: await sidebar.boundingBox(), content: await content.boundingBox() };
+  const build = page.getByRole("navigation", { name: "Build", exact: true });
+  await build.getByRole("button", { name: "Build", exact: true }).click();
+  const panel = build.locator(".nav-group-panel");
+  await expect(panel).toBeVisible();
+  const after = { header: await sidebar.boundingBox(), content: await content.boundingBox() };
+  expect(Math.abs(after.header!.height - before.header!.height), "The opened overlay must not grow the header").toBeLessThanOrEqual(1);
+  expect(Math.abs(after.content!.y - before.content!.y), "Opening the overlay must not move page content").toBeLessThanOrEqual(1);
+  const bounds = await panel.boundingBox();
+  expect(bounds!.height).toBeLessThanOrEqual(370);
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(480);
+  expect(await panel.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+  const last = panel.getByRole("link", { name: "Overflow destination 24", exact: true });
+  const beforeScroll = await panel.evaluate(node => node.scrollTop);
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport({ ratio: 1 });
+  expect(await panel.evaluate(node => node.scrollTop)).toBeGreaterThan(beforeScroll);
+  expect(await last.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    const panel = node.closest(".nav-group-panel")!.getBoundingClientRect();
+    return rect.left >= panel.left && rect.right <= panel.right && rect.top >= panel.top && rect.bottom <= panel.bottom &&
+      node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
+  }), "The last nested destination must be inside the scrolled panel and unobscured").toBe(true);
+  await last.click();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Overflow destination 24", exact: true })).toBeVisible();
+  await expect(build.getByRole("button", { name: "Build", exact: true })).toHaveAttribute("aria-expanded", "false");
+});

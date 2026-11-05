@@ -30,10 +30,16 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
+const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
+  // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
+  for (const creation of createdWorkflows.get(page) ?? []) {
+    const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
+    expect(removed.ok()).toBe(true);
+  }
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
@@ -394,6 +400,29 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Loading availability…", { exact: true })).toHaveCount(0);
   await capture(page, info, "workflow-authoring-settings");
+  const settingsSections = page.getByRole("navigation", { name: "Settings sections", exact: true });
+  const sectionTabCount = await screens.getByRole("tab").count();
+  const settingsDocument = await page.evaluate(() => performance.timeOrigin);
+  await settingsSections.getByRole("link", { name: "Runtime evidence settings", exact: true }).click({ modifiers: ["Alt"] });
+  await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+  await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+  const originalSettingsUrl = page.url();
+  const nativeSectionPage = page.context().waitForEvent("page");
+  await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["ControlOrMeta"] });
+  const nativePage = await nativeSectionPage;
+  try {
+    await expect(nativePage).toHaveURL(/\/settings\/workflows-activity-availability(?:\?|$)/);
+    await expect(nativePage.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(originalSettingsUrl);
+    await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+  } finally { await nativePage.close(); }
+  await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click();
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+  await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
   // Existing bookmarked routes must resolve to their new Settings surface as well.
   await page.goto("/workflows/runtime-diagnostics");
   await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
@@ -497,6 +526,108 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
   await capture(page, info, "high-contrast");
   await page.keyboard.press("Escape");
+});
+
+test("workflow template metadata defaults", async ({ page }, info) => {
+  const stamp = `Metadata ${info.project.name} ${Date.now()}`;
+  const templateNames = [`${stamp} greeting`, `${stamp} order`];
+  const descriptions = ["Sends a greeting.", "Processes an order."];
+  const creations: Array<{ url: string; authorization: string; id: string }> = [];
+  createdWorkflows.set(page, creations);
+  // Persist real templates using the same composition and controls as a workflow author.
+  for (let index = 0; index < templateNames.length; index++) {
+    await page.goto("/workflows/templates");
+    await page.getByRole("button", { name: "New template", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Create template", exact: true });
+    await dialog.getByRole("textbox", { name: "Display name", exact: true }).fill(templateNames[index]);
+    await dialog.getByRole("textbox", { name: "Description", exact: true }).fill(descriptions[index]);
+    const sequence = dialog.getByRole("radio", { name: "Sequence", exact: true });
+    await sequence.focus();
+    await sequence.press("Space");
+    await expect(sequence).toBeChecked();
+    await dialog.getByRole("button", { name: "Create template", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
+  }
+
+  const submitAndInspect = async (expectedName: string, expectedDescription: string) => {
+    const response = page.waitForResponse(value => value.request().method() === "POST" && /\/definitions$/.test(new URL(value.url()).pathname));
+    await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
+    const saved = await response;
+    expect(saved.ok()).toBe(true);
+    const body = await saved.json();
+    creations.push({ url: saved.url(), authorization: saved.request().headers().authorization, id: body.definition.id });
+    expect(saved.request().postDataJSON()).toMatchObject({ name: expectedName });
+    expect(saved.request().postDataJSON().description || "").toBe(expectedDescription);
+    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible();
+    await page.reload();
+    const properties = page.getByRole("tab", { name: "Properties", exact: true });
+    await expect(properties).toBeVisible();
+    // Narrow layouts retain the user's inspector state; collapse it only when it is still open.
+    const collapseInspector = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
+    if ((page.viewportSize()?.width ?? 1440) < 700 && await collapseInspector.isVisible()) {
+      await collapseInspector.click();
+    }
+    await properties.click();
+    if ((page.viewportSize()?.width ?? 1440) < 700) {
+      const collapseActivities = page.getByRole("button", { name: "Collapse activities panel", exact: true });
+      if (await collapseActivities.isVisible()) await collapseActivities.click();
+    }
+    const savedName = page.getByRole("textbox", { name: "Workflow name", exact: true });
+    const savedDescription = page.getByRole("textbox", { name: "Workflow description", exact: true });
+    await expect(savedName).toHaveValue(expectedName);
+    await expect(savedDescription).toHaveValue(expectedDescription);
+    await expect(savedName).toBeInViewport();
+    await expect(savedDescription).toBeInViewport();
+    // Being onscreen alone can still leave an unusable one-character input beside a fixed-width label.
+    expect((await savedName.boundingBox())!.width).toBeGreaterThanOrEqual(120);
+    expect((await savedDescription.boundingBox())!.width).toBeGreaterThanOrEqual(120);
+  };
+
+  await page.goto("/workflows/definitions");
+  const open = page.getByRole("button", { name: "Create workflow", exact: true }).first();
+  await open.click();
+  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  const startingPoint = dialog.getByRole("combobox", { name: "Starting point", exact: true });
+  const name = dialog.getByRole("textbox", { name: "Display name", exact: true });
+  const description = dialog.getByRole("textbox", { name: "Description", exact: true });
+  await expect(startingPoint).toBeFocused();
+  await startingPoint.press("Tab");
+  await expect(name).toBeFocused();
+  await name.press("Tab");
+  await expect(description).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(open).toBeFocused();
+  await open.click();
+  await expect(startingPoint.locator("option").filter({ hasText: templateNames[0] })).toHaveCount(1);
+  await startingPoint.selectOption({ label: templateNames[0] });
+  await expect(name).toHaveValue(templateNames[0]);
+  await expect(description).toHaveValue(descriptions[0]);
+  await capture(page, info, "template-defaults");
+  await startingPoint.selectOption({ label: templateNames[1] });
+  await expect(name).toHaveValue(templateNames[1]);
+  await expect(description).toHaveValue(descriptions[1]);
+  await name.fill(`${stamp} custom`);
+  await startingPoint.selectOption({ label: templateNames[0] });
+  await expect(name).toHaveValue(`${stamp} custom`);
+  await expect(description).toHaveValue(descriptions[0]);
+  await description.fill("");
+  await startingPoint.selectOption({ label: templateNames[1] });
+  await expect(name).toHaveValue(`${stamp} custom`);
+  await expect(description).toHaveValue("");
+  await capture(page, info, "template-edits");
+  await submitAndInspect(`${stamp} custom`, "");
+
+  await page.goto("/workflows/templates");
+  const card = page.locator("article").filter({ has: page.getByRole("button", { name: templateNames[0], exact: true }) });
+  await card.getByRole("button", { name: "Use template", exact: true }).click();
+  await expect(name).toHaveValue(templateNames[0]);
+  await expect(description).toHaveValue(descriptions[0]);
+  await startingPoint.selectOption({ label: templateNames[1] });
+  await expect(name).toHaveValue(templateNames[1]);
+  await expect(description).toHaveValue(descriptions[1]);
+  await capture(page, info, "template-catalog-entry");
+  await submitAndInspect(templateNames[1], descriptions[1]);
+  await capture(page, info, "template-persisted");
 });
 
 test("executable designer parity", async ({ page }, info) => {

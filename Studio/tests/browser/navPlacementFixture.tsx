@@ -31,7 +31,12 @@ export function NavPlacementFixture() {
   const params = new URLSearchParams(window.location.search);
   const [path, setPath] = useState("/security/connections");
   writeAppearancePreferences({ themeId: params.get("theme") ?? "classic", mode: params.get("appearance") === "dark" ? "dark" : "light", navigation: params.get("navigation") === "top" ? "top" : "left" });
-  const navigation = filterAccessibleNavigation(getStudioNavigation(moduleNavigation, { includeThemeBuilder: true }));
+  const overflowNavigation: StudioNavigationContribution[] = params.has("menuOverflow") ? [
+    { id: "overflow-parent", label: "Long navigation", path: "/navigation-overflow", placement: "build", order: 100 },
+    ...Array.from({ length: 24 }, (_, index) => ({ id: `overflow-${index + 1}`, label: `Overflow destination ${index + 1}`,
+      path: `/navigation-overflow/${index + 1}`, parentId: "overflow-parent", order: index + 1 }))
+  ] : [];
+  const navigation = filterAccessibleNavigation(getStudioNavigation([...moduleNavigation, ...overflowNavigation], { includeThemeBuilder: true }));
   const views = findNavigationViews(path, navigation);
   const title = navigation.find(item => item.path === path && item.childDisplay !== "views")?.label ?? "Studio";
   return <ThemeProvider><ShellFrame navigation={navigation} panels={[]} path={path} title={title} backendBaseUrl="https://backend.example/" onNavigate={setPath}>

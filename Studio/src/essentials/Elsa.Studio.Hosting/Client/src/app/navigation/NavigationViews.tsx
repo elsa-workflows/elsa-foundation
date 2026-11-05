@@ -25,13 +25,14 @@ export function NavigationViews({ parent, views, path, onNavigate }: {
   </nav>;
 }
 
-export function NavigationContextLink({ path, current, onNavigate, children }: {
+export function NavigationContextLink({ path, current, className, onNavigate, children }: {
   path: string;
   current?: boolean;
+  className?: string;
   onNavigate(path: string): void;
   children: React.ReactNode;
 }) {
-  return <a href={qualifyStudioBackendPath(path)} aria-current={current ? "page" : undefined} onClick={event => {
+  return <a className={className} href={qualifyStudioBackendPath(path)} aria-current={current ? "page" : undefined} onClick={event => {
     if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; }
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(path);
