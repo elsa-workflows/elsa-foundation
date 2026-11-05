@@ -2,7 +2,6 @@
   "reviewedPredecessor": "799278d305c7dc08620504382783eafbdfb9a7ae",
   "ownSourceStatus": "frozen, UNCOMPILED/UNEXECUTED",
   "preparedAt": "2026-11-05T11:52:36.623403+00:00",
-  "plannedMainIntegration": "8e2acfd4d85a937e888ad378fdb7c6a742a80bda",
   "formalRound": 3,
   "maximumRounds": 6,
   "retainedFindings": [
@@ -26,9 +25,9 @@
   "schemaProfileCadence": "no migration/schema/policy-version/identity/fingerprint-format/physical-boundary change",
   "actualCiFeedback": "799 Workflows3416pass/2fail/1unhandled; test-only corrections unexecuted, original assertions retained",
   "localCapacity": "no heavy producer until explicit post-presentation queue release",
-  "nativeAcceptance": "INCOMPLETE; required18 journeys and20 Timeline frames per primary history project, downloaded independent inspection pending",
-  "sourceManifestKind": "static source identity; not binary/provider/runtime/UX proof",
-  "framedSha256": "e2bbf905e56376b49eaea6993b64f24e5191a51e1d39e911f12f19ed5dc14e2c",
+  "nativeAcceptance": "INCOMPLETE; current20 primary +2 diagnostics=22 journeys,20 Timeline frames per history project, downloaded independent inspection pending",
+  "sourceManifestKind": "Static combined-source identity after normal main integration; no binary/runtime/provider/UX execution proof.",
+  "framedSha256": "3d362c3d7a81d86caf3abe1f67fba550c6576a2728be6553d404182bde7aa1ab",
   "files": [
     {
       "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs",
@@ -188,15 +187,176 @@
     },
     {
       "path": "specs/1211-run-history-timeline/evidence/implementation-progress.md",
-      "bytes": 36845,
-      "sha256": "d6fa2b0cdf3755870405262da36bcdc94eb1bf070bb245c79f78e1993bd0cb3d",
-      "gitBlob": "a91f846b8ad48707ab1c1c87b530c7c074ffb4fd"
+      "bytes": 37162,
+      "sha256": "261d7dbec61ddd51bb97aa01c68948e794c9699041174a0e861d4b985b7d0610",
+      "gitBlob": "2e96998613cfef92a78db6c7fa1de8db7173a4e2"
     },
     {
       "path": "specs/1211-run-history-timeline/evidence/review-round-3.md",
-      "bytes": 5168,
-      "sha256": "d49a89a7b706cd23e2b757e3b12a2f3e2c97c2af3a5749099df69cdf32742a58",
-      "gitBlob": "076e581717a38ff989633de5b2836643ff6a0e9f"
+      "bytes": 5493,
+      "sha256": "2b0dbd395e0f51c646c9b26fc66ae1e22774dde6a86117304cc93ef013a4b84d",
+      "gitBlob": "7ed7ffa8a910283c314b99c99bb455a1d46b012f"
+    }
+  ],
+  "integratedMain": "fbd86b5ead89d4a00f12d647605a7e7502f7d2a6",
+  "ownFixCommit": "77157cb443b7888b0b38bee9d3abf8ed6bfbc666",
+  "nativeInventory": {
+    "primary": 20,
+    "diagnostics": 2,
+    "total": 22,
+    "timelineFramesPerHistoryProject": 20,
+    "incomingUserTasksFramesPerProject": 11
+  },
+  "mainIntegrationFiles": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "13b647610640d82f4e912dc65597133c6ef137a389877069bb84bc07e277e2cd",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/package.json",
+      "sha256": "a5688e2a1a97f614a21ecdfebf4f46f4700090bc35603312b9509649771849c0",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/FormsPage.tsx",
+      "sha256": "36750c36dc5a056e2503760fa4bede427e90f406fdf3ecb3ed16819389a23be6",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TasksPage.tsx",
+      "sha256": "a1a55d495487f1be48d78d2ddfef57b3aeb40a2ec3aeb4be4e73241ac8b17787",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/__tests__/taskUi.test.tsx",
+      "sha256": "83a40f23e940eab4f857800a1991ca235751cf74d1f253e64a4c58128e484bec",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css",
+      "sha256": "ddbc48d87dd56f94a14859d16a437c4f8daf97d20fb9d0c1fe9788167d59d8de",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/pnpm-lock.yaml",
+      "sha256": "56dba1eda739d2e97283f39572b4c9bb31da0296c16cdea86195ef7daaeeaa07",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx",
+      "sha256": "73ab0f2fa0b3b840d55fe14b5dbee7700a0323f9b1aae6e1a40e0439e26c4284",
+      "matchesMainExactly": false
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityExecutionBrowser.test.tsx",
+      "sha256": "f480fd1890e8053453472f4861bd0c2fc1e4d3bf335d7c6707081978139561d1",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityExecutionBrowser.tsx",
+      "sha256": "c210ae1218ee7cd56676be6d3f39d47634d5de14537ca4a6b6dfe46fea200668",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/AttachedRunActivityInspector.tsx",
+      "sha256": "854a8fcfdb40517eae530c302228d79d6b9c9119d4ae106e6bc1859e3163c9ed",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx",
+      "sha256": "9b84009da471ef341eae4bdfd68207c8cda4a104255bf7d7949addb9ddd59ecc",
+      "matchesMainExactly": false
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/activityExecutionBrowser.css",
+      "sha256": "85049dd66de506b8b605c8c7297ea190e2a86ee4354cc05b7a2a803f4de1219e",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/acceptance/journeys.spec.ts",
+      "sha256": "ccf5eda64c0d08fb7076b2058fa494fd37c348d77b8f1c0b9778fcbc67a02964",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/acceptance/userTasksJourney.ts",
+      "sha256": "07d0e8c40534feb840d2998e7dcb9beec24b4d5962e84aaeb063e48c80d1183e",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/activityDuplicateEditorFixture.tsx",
+      "sha256": "904ff8a50f61ca994a7e5152ba0e25b22b4cf81641fb46f97d72bdb5824c699f",
+      "matchesMainExactly": false
+    },
+    {
+      "path": "Studio/tests/browser/iteration-inspection.spec.ts",
+      "sha256": "28495669bf4534cfccfe6704b9bfd49ad35bcb2934f9263e6f4441ae06d37ec4",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/user-tasks-ux.html",
+      "sha256": "27cfa33a66d37702b2151b4468517fe61e10f988b68f8a4b0a728562ab514746",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/user-tasks-ux.spec.ts",
+      "sha256": "88adcba2f0f2da77b50e1e05a4f45c2c6bf7bf7680f3694fdca53a0df3f389d7",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/userTasksUxFixture.tsx",
+      "sha256": "f27826cbec5dd51cb7781638badcd2668bab27c2aacf771249cbe2835e07b4cb",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/live/user-tasks-journey.spec.ts",
+      "sha256": "3cc42074ec16a1b992c1a38d8615df9d78cdbc89f6d8abcd3c1b4268dd1599b9",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "docs/contributing/published-image-pair.md",
+      "sha256": "8342577056297a2c90b2128ecaee0580d1f7b80a9262d91195e7ac761c97679b",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "docs/contributing/studio-ux-acceptance.md",
+      "sha256": "151f939c22f444ac8ffd95e9902e275f0666e7c06ed81a670b7000753a020871",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/ci/qualify_studio_consumers.py",
+      "sha256": "3363f55291fc5e2b746ccbefc196fc8d7a180ac3379bd64d54f5cb77bafb85af",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/ci/test_studio_native_scratch.py",
+      "sha256": "601f1ccda6f1459b75f711fd5a16ab13f6e9f396207a555f6a01555a5e1b3aca",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/contributor-pair-proof/diagnostics.mjs",
+      "sha256": "01ae6b8e6190a009aaedd0abd81cc1e210ffe49ad4a16226d1f526f31aeaf29d",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/contributor-pair-proof/diagnostics.test.mjs",
+      "sha256": "bf063c4252722b878b74f7c982f13aa352991619632abf488995150e3b2a58ae",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/contributor-pair-proof/run.mjs",
+      "sha256": "ece012d0cf469c07d83cd9e3c2f679e99af9178e83a883faa3c60e96c89d0b08",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/studio/HostingReuse.Probe/StorePruning/Program.cs",
+      "sha256": "bc2b90327b36ba8bea142707ee903edb23cda46acf4cab3672b6be502ddf972f",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/ux-acceptance/run.py",
+      "sha256": "60023b0f7d99b2c7824f3eb87ec16af7d2ba3ab1a31a5488d64c0f35d725d816",
+      "matchesMainExactly": false
     }
   ]
 }
