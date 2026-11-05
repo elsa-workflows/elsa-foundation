@@ -234,15 +234,19 @@ public sealed class AgentModuleCodeTests
         Assert.Equal(0, tool.Inner.ExecuteCalls);
     }
 
-    [Fact]
-    public async Task Stripping_a_custom_authority_marker_also_replaces_its_associated_summary_even_for_a_valid_code()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Replaced_custom_errors_sanitize_failed_result_text_in_records_duplicates_and_HTTP(bool forgedAuthority)
     {
         var canary = Guid.NewGuid().ToString("N");
         var tool = new CodeTool { Codes = ["native.unavailable"] };
-        var forged = new AgentError("native.unavailable", canary, 503) { OwnerUnavailable = true, Limit = "bytes" };
+        var forged = new AgentError(forgedAuthority ? "native.unavailable" : "outside." + canary, canary, 503)
+            { OwnerUnavailable = forgedAuthority, Limit = "bytes" };
         using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
         {
             new FoundationAgentEffectsFeature().ConfigureServices(services);
+            services.AddRouting().AddElsaEndpoints();
             services.Replace(ServiceDescriptor.Scoped<IAgentActionProposalExecutor>(_ => new BorrowedErrorExecutor(forged, true)));
         });
         var proposal = await fixture.ProposeAsync();
@@ -251,8 +255,23 @@ public sealed class AgentModuleCodeTests
         Assert.False(result.Error!.OwnerUnavailable);
         Assert.Equal("bytes", result.Error.Limit);
         Assert.Equal(AgentModuleCodes.UnsupportedMessage, result.Value?.Summary);
+        Assert.Equal(AgentModuleCodes.UnsupportedMessage, result.Value?.ToolResult?.Content);
+        Assert.False(result.Value!.ToolResult!.Succeeded);
+        Assert.Null(result.Value.ToolResult.Receipt);
+        Assert.True(result.Value.ToolResult.Payload!.Data.GetProperty("refused").GetBoolean());
         Assert.DoesNotContain(canary, JsonSerializer.Serialize(result));
         Assert.DoesNotContain(canary, JsonSerializer.Serialize(await fixture.Services.GetRequiredService<IAgentSessionRecordStore>().LoadAsync(fixture.Session.Id)));
+        var duplicate = await fixture.ExecuteAsync(proposal);
+        Assert.Same(result.Value, duplicate.Value);
+        Assert.DoesNotContain(canary, JsonSerializer.Serialize(duplicate));
+        var response = await AgentApiExecutionOutcomeTests.ExecuteAsync(fixture, proposal, proposal.BaseRevision);
+        Assert.Equal(503, response.Status);
+        Assert.DoesNotContain(canary, response.Body.GetRawText());
+        var data = response.Body.GetProperty("data");
+        Assert.Equal(AgentModuleCodes.UnsupportedMessage, data.GetProperty("summary").GetString());
+        Assert.Equal(AgentModuleCodes.UnsupportedMessage, data.GetProperty("toolResult").GetProperty("content").GetString());
+        Assert.True(data.GetProperty("toolResult").GetProperty("payload").GetProperty("data").GetProperty("refused").GetBoolean());
+        Assert.Equal(0, tool.Inner.ExecuteCalls);
     }
 
     [Theory]
@@ -350,7 +369,11 @@ public sealed class AgentModuleCodeTests
     {
         public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
             => Task.FromResult(new AgentResult<AgentProposalExecutionResult>(includeValue
-                ? DefaultAgentActionProposalExecutor.Result(proposal, false, error.Message, "refused") : null, error));
+                ? DefaultAgentActionProposalExecutor.Result(proposal, false, error.Message, "refused") with
+                {
+                    ToolResult = new(proposal.PreparedInvocation!.ToolCallId, proposal.PreparedInvocation.ToolName, false, error.Message,
+                        new("test.change", "1", JsonSerializer.SerializeToElement(new { refused = true })))
+                } : null, error));
         public Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal, AgentClientAcknowledgement acknowledgement,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

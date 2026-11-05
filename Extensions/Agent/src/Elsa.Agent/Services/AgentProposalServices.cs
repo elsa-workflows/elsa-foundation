@@ -800,7 +800,12 @@ internal sealed class InMemoryAgentProposalService(
                 var normalized = AgentModuleCodes.Error(customError, admittedDescriptor.ModuleCodes, ownerOrigin: false, out var replaced);
                 outcome = outcome with { Error = normalized };
                 if (replaced && outcome.Value is { } errorValue)
-                    outcome = outcome with { Value = errorValue with { Summary = normalized.Message } };
+                    outcome = outcome with { Value = errorValue with
+                    {
+                        Summary = normalized.Message,
+                        ToolResult = errorValue.ToolResult is { } associated
+                            ? associated with { Content = normalized.Message } : null
+                    } };
             }
             if (outcome.Value?.ToolResult is { } customResult)
             {
