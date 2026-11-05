@@ -741,6 +741,7 @@ for (const theme of ["light", "dark"]) {
       await mockActivityDefinitionAuthoring(page);
       await page.setViewportSize({ width, height: 1000 });
       await createBrowserActivity(page, theme);
+      await page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first().locator("summary").click();
       await page.getByRole("tab", { name: "Inputs (0)", exact: true }).click();
       await page.getByRole("button", { name: "Add input", exact: true }).click();
       await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Topic");
