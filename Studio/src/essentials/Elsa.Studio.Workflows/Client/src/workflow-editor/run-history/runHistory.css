@@ -496,6 +496,16 @@
   overflow: visible;
 }
 
+.wf-run-history-workspace.run-layout-narrow .wf-activity-overview-heading {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.wf-run-history-workspace.run-layout-narrow .wf-activity-overview-status {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
 .wf-run-history-workspace .wf-run-inspector-backdrop {
   display: none;
 }

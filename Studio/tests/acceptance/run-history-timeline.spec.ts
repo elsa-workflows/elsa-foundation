@@ -7,9 +7,29 @@ const backend = process.env.ELSA_BACKEND_URL;
 const restartDirectory = process.env.UX_ACCEPTANCE_RESTART_DIR;
 if (process.env.UX_ACCEPTANCE_OWNED !== "1" || !backend || !restartDirectory) throw new Error("History acceptance requires the owned runner and restart supervisor.");
 
-async function capture(page: Page, info: TestInfo, name: string) {
+async function revealCaptureAnchor(anchor: Locator, block: "start" | "center" = "center") {
+  await anchor.scrollIntoViewIfNeeded();
+  await anchor.evaluate((element, alignment) => element.scrollIntoView({ block: alignment, inline: "nearest", behavior: "instant" }), block);
+}
+async function assertCaptureAnchor(anchor: Locator) {
+  await expect(anchor).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => anchor.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const inset = Math.min(4, bounds.width / 4, bounds.height / 4);
+    return [[bounds.left + inset, bounds.top + inset], [bounds.right - inset, bounds.top + inset],
+      [bounds.left + inset, bounds.bottom - inset], [bounds.right - inset, bounds.bottom - inset],
+      [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2]].every(([x, y]) => {
+      const hit = document.elementFromPoint(x, y);
+      return !!hit && (element.contains(hit) || hit.contains(element));
+    });
+  })).toBe(true);
+}
+async function capture(page: Page, info: TestInfo, name: string, anchors: Locator[] = []) {
+  await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  for (const anchor of anchors) await assertCaptureAnchor(anchor);
   const png = info.outputPath(`${name}.png`); await page.screenshot({ path: png, fullPage: true });
+  for (const anchor of anchors) await assertCaptureAnchor(anchor);
   await info.attach(`${name}.png`, { path: png, contentType: "image/png" });
   const aria = info.outputPath(`${name}.aria.yml`); writeFileSync(aria, await page.locator("body").ariaSnapshot());
   await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
@@ -175,8 +195,16 @@ test("durable run timeline across a native task resume and owned process restart
   await inspector.getByRole("tab", { name: "Journal", exact: true }).press("Enter");
   const journal = inspector.getByRole("list", { name: "Activity journal events", exact: true });
   await expect(journal).toContainText("Bookmark consumed");
+  const activityHeading = inspector.getByRole("heading", { name: "CreateUserTask", exact: true });
+  const journalTab = inspector.getByRole("tab", { name: "Journal", exact: true });
+  await expect(journalTab).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+  await revealCaptureAnchor(activityHeading, "start");
+  await expect.poll(() => activityHeading.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await capture(page, info, "activity-journal-context", [activityHeading, journalTab]);
   await eventRow(journal, consumed).scrollIntoViewIfNeeded(); await expect(eventRow(journal, consumed)).toBeInViewport();
-  await capture(page, info, "activity-journal");
+  await revealCaptureAnchor(eventRow(journal, consumed));
+  await capture(page, info, "activity-journal", [eventRow(journal, consumed)]);
   expect(payloadRequests).toEqual([]);
   await timeline.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
   await expect(eventRow(timeline, consumed)).toBeVisible();
@@ -198,8 +226,14 @@ test("durable run timeline across a native task resume and owned process restart
   await inspector.getByRole("button", { name: "Inspect causal event →", exact: true }).press("Enter");
   await expect.poll(() => new URL(page.url()).searchParams.get("historyEvent")).toBe(consumed.causation!.historyEventId);
   await expect(inspector).toContainText("Recorded source observation");
-  await inspector.getByRole("heading", { name: "Delivery received", exact: true }).scrollIntoViewIfNeeded();
-  await capture(page, info, "causal-delivery");
+  const causalHeading = inspector.getByRole("heading", { name: "Delivery received", exact: true });
+  await causalHeading.scrollIntoViewIfNeeded();
+  const causalEvent = final!.events.find(event => event.historyEventId === consumed.causation!.historyEventId);
+  expect(causalEvent, "The exact causal observation is retained in the run snapshot").toBeTruthy();
+  const causalRow = eventRow(timeline, causalEvent!);
+  if (info.project.use.viewport!.width >= 1024) await revealCaptureAnchor(causalRow);
+  else await revealCaptureAnchor(causalHeading);
+  await capture(page, info, "causal-delivery", info.project.use.viewport!.width >= 1024 ? [causalRow, causalHeading] : [causalHeading]);
   await inspector.getByRole("button", { name: "Find causal successors in this run", exact: true }).press("Enter");
   const successors = inspector.getByRole("region", { name: "Recorded causal successors", exact: true });
   await expect(eventRow(successors, consumed)).toBeVisible();
@@ -221,7 +255,10 @@ test("durable run timeline across a native task resume and owned process restart
   await expect(eventRow(timeline, consumed)).toBeFocused();
   await inspector.getByRole("tab", { name: "Data", exact: true }).press("Enter");
   await expect(inspector.getByRole("heading", { name: /^Inputs/ })).toBeVisible();
-  await inspector.getByRole("heading", { name: /^Inputs/ }).scrollIntoViewIfNeeded(); await capture(page, info, "activity-data");
+  await expect(inspector.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+  const capturedTitle = inspector.getByText(fixture.title, { exact: true }).first();
+  await expect(capturedTitle).toBeVisible(); await revealCaptureAnchor(capturedTitle);
+  await capture(page, info, "activity-data", [capturedTitle]);
   const valueEvent = final!.events.find(event => event.name === "ValueCaptured" && event.activityExecutionId === owner && event.metadata["history.valueEvidenceIds"]);
   expect(valueEvent, "The normal runtime captured a safe exact value reference").toBeTruthy();
   await eventRow(timeline, valueEvent!).press("Enter");
