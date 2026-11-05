@@ -18,6 +18,7 @@ import type {
 } from "../workflowTypes";
 import { historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
 import { readRunHistoryLocation } from "../workflow-editor/run-history/historyLocation";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds } from "../api/capabilities";
 import { bpmnActivity, flowchartActivity, sequenceActivity, writeLine } from "./fixtures";
 
 const api = vi.hoisted(() => ({
@@ -208,6 +209,42 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(api.listActivities).toHaveBeenCalledTimes(2));
     pending.resolve({ activities: [sequenceActivity, writeLine] });
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+  });
+
+  it.each([
+    ["forbidden", { status: 403 }, "with your permissions"],
+    ["not found", { status: 404 }, "on this backend"],
+    ["missing capability", new ApiCapabilityUnavailableError(capabilityIds.activityDesign, "activity-catalog"), "on this backend"],
+    ["unsupported capability", new ApiCapabilityVersionMismatchError(capabilityIds.activityDesign, "1", "2"), "on this backend"]
+  ] as const)("keeps authorized runtime history available without optional activity definitions (%s)", async (_kind, error, limitation) => {
+    api.listActivities.mockRejectedValue(error);
+    api.getExecutableInputSources.mockRejectedValue({ status: 403 });
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    const historySearch = "?historyEvent=retained-event&keep=unchanged";
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    renderWorkbench("timeline", null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.textContent).toContain(`Activity definitions are not available ${limitation}`);
+    expect(container.textContent).toContain("Activity labels and input descriptions may be limited.");
+    expect(container.textContent).not.toContain("Something went wrong");
+    expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalledWith(expect.anything(), "run-1", "retained-event", expect.anything());
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    expect(new URLSearchParams(window.location.search).get("keep")).toBe("unchanged");
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 503])("keeps authentication and transient activity-definition failures explicit (%s)", async status => {
+    api.listActivities.mockRejectedValue({ status });
+    renderWorkbench("timeline", null, "timeline");
+
+    await vi.waitFor(() => expect(container.textContent).toContain("Something went wrong"));
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(historyApi.getWorkflowHistoryPage).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
   });
 
   it("makes an interrupted ancestry read retryable after refresh", async () => {

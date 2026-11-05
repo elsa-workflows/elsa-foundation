@@ -14,6 +14,7 @@ import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowIn
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionLayout, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
@@ -834,6 +835,7 @@ function toUtcIso(value: string) {
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
   definitionName?: string | null;
+  activityCatalogAccess: "allowed" | "forbidden" | "unavailable";
   executableGraph: ExecutableActivityGraph | null;
   incidentActivityExecutions: ActivityExecutionStateSummary[];
   incidentAssociationLookupIncomplete: boolean;
@@ -1066,7 +1068,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           executable => ({ executable, error: "" }),
           error => ({ executable: null, error: error instanceof Error ? error.message : String(error) })
         ),
-        listActivities(context),
+        listActivities(context).then(
+          catalog => ({ ...catalog, access: "allowed" as const }),
+          error => {
+            const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+            if (status === 403) return { activities: [], access: "forbidden" as const };
+            if (status === 404 || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError)
+              return { activities: [], access: "unavailable" as const };
+            throw error;
+          }),
         details.instance.sourceReferenceId
           ? getExecutableInputSources(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
               sources => ({ sources, access: sources.accessState || sources.access || "allowed" }),
@@ -1120,6 +1130,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           : null,
         definitionVersionError: executableResult.error,
         activityCatalog: catalog,
+        activityCatalogAccess: activityCatalog.access,
         executableGraph,
         incidentActivityExecutions: incidentActivityResult.activities,
         incidentAssociationLookupIncomplete: incidentActivityResult.incomplete,
@@ -1729,6 +1740,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       </nav> : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "ready" && data && data.activityCatalogAccess !== "allowed" ? (
+        <p className="wf-instance-note" role="status">
+          Activity definitions are not available {data.activityCatalogAccess === "forbidden" ? "with your permissions" : "on this backend"}. Activity labels and input descriptions may be limited.
+        </p>
+      ) : null}
       {state === "ready" && data ? (
         <div ref={containerRef} className={`${historyLocation.view === "timeline" ? workbenchClassName.replace(/\binspector-(?:collapsed|maximized)\b/g, "") : workbenchClassName}${historyLocation.view === "timeline" ? " wf-run-history-workspace" : ""}`}
           style={historyLocation.view === "timeline" ? { ...workbenchStyle, "--wf-run-inspector-width": `${Math.max(340, inspectorWidth)}px` } as CSSProperties : workbenchStyle}>

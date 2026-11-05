@@ -298,6 +298,8 @@ test("diagnose exact executions, long history, retention and restricted access",
       reader.page.on("pageerror", error => errors.push(error.message));
       const discovery = await reader.page.request.get(`${backend}/capabilities`);
       expect(discovery.status(), `${profile} reader must be able to discover the backend capabilities`).toBe(200);
+      const designCatalog = await reader.page.request.get(`${backend}/design/activities/catalog`);
+      expect(designCatalog.status(), `${profile} reader must retain its lack of Design authority`).toBe(403);
       await reader.page.goto(`/workflows/instances/${protectedRun}?selected=${encodeURIComponent(protectedEvent.activityExecutionId!)}&historyEvent=${encodeURIComponent(protectedEvent.historyEventId)}`);
       const deniedPayload = await reader.page.request.get(`${backend}/runtime/workflows/instances/${protectedRun}/activity-executions/${protectedEvent.activityExecutionId}/value-evidence/${protectedEvidenceId}/payload`);
       if (profile === "denied") {
@@ -310,6 +312,7 @@ test("diagnose exact executions, long history, retention and restricted access",
         const inspection = await api<ActivityExecutionInspection>(reader.page.request, backend, `/runtime/workflows/instances/${protectedRun}/activity-executions/${protectedEvent.activityExecutionId}`);
         expect(JSON.stringify(inspection)).not.toContain(protectedValue);
         await expect(inspectorOf(reader.page)).toBeVisible();
+        await expect(reader.page.getByText(/Activity definitions are not available with your permissions/)).toBeVisible();
         await inspectorOf(reader.page).getByRole("button", { name: "Inspect recorded value →", exact: true }).first().press("Enter");
         const value = inspectorOf(reader.page).getByRole("region", { name: "Recorded value Data", exact: true });
         await expect(value).toContainText(profile === "metadata" ? /hidden by permissions|redacted/i : /Additional permission is required/i);
