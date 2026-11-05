@@ -1,6 +1,6 @@
 # Studio grouped navigation and theme spacing
 
-**Status**: In progress
+**Status**: Implemented — effective on merge of PR #3866; exact-head required checks remain the merge gate.
 **Issue**: #3863 · Program #2559 · Owner approved Open groups and theme polish, 2026-11-05.
 
 ## User outcome
