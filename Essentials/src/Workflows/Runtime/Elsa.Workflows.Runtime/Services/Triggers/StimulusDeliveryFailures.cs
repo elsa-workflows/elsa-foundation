@@ -10,7 +10,7 @@ internal static class StimulusDeliveryFailures
     {
         if (RuntimeCheckpointCommitValidationException.IsCauseOf(exception)) return false;
         if (exception is StimulusDeliveryBoundaryException boundary) return boundary.IsUnavailable;
-        if (exception is InvalidDataException or JsonException or ArgumentException or NotSupportedException or
+        if (exception is RuntimeHistoryIntegrityException or InvalidDataException or JsonException or ArgumentException or NotSupportedException or
             WorkflowExecutableReferenceRejectedException or WorkflowExecutableStartRejectedException) return false;
         if (exception is IOException or DbException or TimeoutException or OperationCanceledException or RuntimeSchedulerWorkUnavailableException or
             WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException) return true;

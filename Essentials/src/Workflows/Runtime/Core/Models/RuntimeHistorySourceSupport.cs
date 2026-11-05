@@ -98,8 +98,11 @@ public static class RuntimeHistorySourceFacts
         if (!IsFinalProfile(policy)) return null;
         // These prove actual owner decisions even when a pinned vocabulary omits a newer event kind.
         // The capture boundary independently filters emitted events by SupportedKinds.
-        var admitted = facts.ToArray();
-        if (admitted.Length > 256) throw new InvalidOperationException("One logical checkpoint exceeds its semantic source-fact bound.");
-        return admitted.Length == 0 ? null : Array.AsReadOnly(admitted);
+        // A native cancellation/incident decision can legitimately own more facts than one
+        // processing window. Keep every fact in its original logical group and order; the
+        // window bounds temporary processing, not the width of an admitted native decision.
+        var admitted = new List<RuntimeHistorySourceFact>();
+        foreach (var window in facts.Chunk(256)) admitted.AddRange(window);
+        return admitted.Count == 0 ? null : Array.AsReadOnly(admitted.ToArray());
     }
 }

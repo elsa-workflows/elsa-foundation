@@ -25,7 +25,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>Real feature, staging, committer, native provider, processor, router and default dispatchers; recording mailbox only.</summary>
-public sealed class PublishStimulusSourcePipelineTests
+public sealed partial class PublishStimulusSourcePipelineTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 27, 6, 0, 0, TimeSpan.Zero);
     private static readonly PersistenceScope Scope = new("tenant");
@@ -369,7 +369,8 @@ public sealed class PublishStimulusSourcePipelineTests
         public IWorkflowExecutableSourceReferenceStore References => Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
         public InMemoryExecutionLivenessStateStore Ownership => (InMemoryExecutionLivenessStateStore)Services.GetRequiredService<IExecutionLivenessStateStore>();
         public CountingLookup Lookup => Services.GetRequiredService<CountingLookup>();
-        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false, bool history = false, bool observationAckLoss = false, RuntimeHistoryCapturePolicy? historyPolicy = null, bool legacyReceiver = false)
+        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false, bool history = false, bool observationAckLoss = false, RuntimeHistoryCapturePolicy? historyPolicy = null, bool legacyReceiver = false,
+            Action<IServiceCollection>? configureServices = null)
         {
             this.history = history; this.historyPolicy = historyPolicy ?? PublicationHistoryPolicy;
             var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(Clock); services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
@@ -391,6 +392,7 @@ public sealed class PublishStimulusSourcePipelineTests
             services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
             services.AddScoped<CountingLookup>(sp => new(new GlobalBookmarkStimulusLookup((IBookmarkStimulusIndex)sp.GetRequiredService<IBookmarkStateStore>(), sp.GetRequiredService<IWorkflowExecutionStateStore>())));
             services.AddScoped<IGlobalBookmarkStimulusLookup>(sp => sp.GetRequiredService<CountingLookup>()); services.AddWorkflowStimulusRouter();
+            configureServices?.Invoke(services);
             provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }); scope = provider.CreateScope();
         }
         public async Task SeedMaterial()

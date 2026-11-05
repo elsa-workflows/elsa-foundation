@@ -1,4 +1,5 @@
 #nullable enable
+const Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryDeliveryFacts.ObservationFailureDataKey = "Elsa.Runtime.History.DeliveryObservationFailures" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.NativeModelWorkStartRetired = "NativeModelWorkStartRetired" -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputConsumer
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputConsumer.BindStructureInputs(System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>! inputs) -> void

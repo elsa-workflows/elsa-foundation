@@ -273,9 +273,12 @@ public sealed partial class SourceOwnedStimulusRouterTests
     private sealed class ObservationRecorder : IRuntimeHistoryObservationWriter, IRuntimeHistoryStore
     {
         public List<RuntimeHistoryObservation> Observations { get; } = [];
+        public Func<RuntimeHistoryObservation, Exception?>? Failure { get; set; }
         public bool CanRecordHistory(IRuntimeHistoryStore selectedStore) => ReferenceEquals(selectedStore, this);
         public ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default)
         {
+            if (Failure?.Invoke(observation) is { } failure)
+                return ValueTask.FromException<RuntimeHistoryObservationResult>(failure);
             Observations.Add(observation);
             return ValueTask.FromResult(new RuntimeHistoryObservationResult(true, observation.Event));
         }

@@ -73,9 +73,11 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
         }
         catch (StimulusDeliveryBoundaryException exception)
         {
-            if (observation is not null) await observation.DispositionAsync("routing-source-unavailable-observed", cancellationToken);
-            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, exception.IsUnavailable);
+            var primary = new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, exception.IsUnavailable);
+            await ObserveFailureAsync(source, observation, "routing-source-unavailable-observed", primary, primary.IsUnavailable, cancellationToken);
+            throw primary;
         }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
         catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (OperationCanceledException)
         {
@@ -83,13 +85,14 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
         }
         catch (Exception exception)
         {
-            if (observation is not null) await observation.DispositionAsync("routing-failure-observed", cancellationToken);
             // A checkpoint rule violation in a routed start or resume recurs on every attempt, and a retried start that is
             // now a duplicate would report the delivery as a success. Anything else may be infrastructure.
             var kind = RuntimeCheckpointCommitValidationException.IsCauseOf(exception)
                 ? PostCommitFailureKind.Permanent
                 : PostCommitFailureKind.Transient;
-            throw new RuntimePostCommitDeliveryException(kind, DeliveryFailureCode, DeliveryFailureSummary, exception);
+            var primary = new RuntimePostCommitDeliveryException(kind, DeliveryFailureCode, DeliveryFailureSummary, exception);
+            await ObserveFailureAsync(source, observation, "routing-failure-observed", primary, kind == PostCommitFailureKind.Transient, cancellationToken);
+            throw primary;
         }
 
         // Admission shed a start at capacity (#2548): nothing was written and its key is unconsumed, so reporting the
@@ -97,12 +100,35 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
         // starts and resumes that did go through answer the retry as duplicates under the same keys.
         if (result.ShedStartCount > 0)
         {
-            if (observation is not null) await observation.DispositionAsync("routing-capacity-shed-observed", cancellationToken);
-            throw new RuntimePostCommitDeliveryException(
+            var primary = new RuntimePostCommitDeliveryException(
                 PostCommitFailureKind.Transient,
                 ShedFailureCode,
                 $"{result.ShedStartCount} start(s) were refused by runtime admission at capacity and will be retried.");
+            await ObserveFailureAsync(source, observation, "routing-capacity-shed-observed", primary, true, cancellationToken);
+            throw primary;
         }
         if (observation is not null) await observation.DispositionAsync("saved-cohort-routing-acknowledged-observed", cancellationToken);
     }
+
+    private static async ValueTask ObserveFailureAsync(PostCommitDeliveryContext source, PublishStimulusHistoryObservations? observation,
+        string reason, Exception primary, bool primaryUnavailable, CancellationToken cancellationToken)
+    {
+        if (observation is null) return;
+        try { await observation.DispositionAsync(reason, cancellationToken); }
+        catch (Exception secondary)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                new AggregateException("Publication delivery and its failure observation both failed.", primary, secondary),
+                primaryUnavailable && ObservationUnavailable(secondary));
+        }
+    }
+
+    private static bool ObservationUnavailable(Exception failure) => failure switch
+    {
+        RuntimePostCommitSourceBoundaryException source => source.IsUnavailable,
+        StimulusDeliveryBoundaryException source => source.IsUnavailable,
+        RuntimePostCommitDeliveryException delivery => delivery.Kind == PostCommitFailureKind.Transient,
+        RuntimeHistoryIntegrityException or InvalidDataException or ArgumentException or NotSupportedException => false,
+        _ => failure is not InvalidOperationException
+    };
 }

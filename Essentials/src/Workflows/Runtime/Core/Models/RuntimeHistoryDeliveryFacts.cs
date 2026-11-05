@@ -3,6 +3,18 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>Delivery-owner observations, separately durable from native execution effects.</summary>
 public static class RuntimeHistoryDeliveryFacts
 {
+    /// <summary>Supplementary diagnostics on an unchanged direct-delivery exception, never persisted history or source authority.</summary>
+    /// <remarks>
+    /// The value is an immutable <c>IReadOnlyList&lt;object&gt;</c>. Owned entries are
+    /// <c>KeyValuePair&lt;WeakReference&lt;object&gt;, Exception&gt;</c>: the weak reference identifies the exact live
+    /// dispatch-request invocation and the exception retains its failed failure-observation write. Previous entries
+    /// remain diagnostic only; opaque entries, including diagnostic-listener failures, never affect classification.
+    /// A caller already holding a verified source may correlate only its own newly-created
+    /// request by reference; neither an old entry nor an opaque prior value grants current source authority.
+    /// Weak references avoid retaining request payloads. This key and its values must never enter history metadata.
+    /// </remarks>
+    public const string ObservationFailureDataKey = "Elsa.Runtime.History.DeliveryObservationFailures";
+
     public static IReadOnlyList<string> Kinds { get; } = Array.AsReadOnly(new[]
     {
         "DeliveryReceived", "DeliveryDispatched", "DeliveryDuplicate", "DeliveryUnmatched", "DeliveryRejected", "DeliveryDeferred", "DeliveryFaulted"

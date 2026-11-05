@@ -69,7 +69,7 @@ internal sealed class ChildStartHistoryObservations(PostCommitDeliveryContext so
             catch (Exception exception) when (attempt == 0 && (exception is IOException or TimeoutException) && exception is not InvalidDataException)
             { /* An ambiguous write retries the SAME immutable event, without repeating a delivery effect. */ }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch (Exception exception) when (exception is InvalidDataException or InvalidOperationException or ArgumentException)
+            catch (Exception exception) when (exception is RuntimeHistoryIntegrityException or InvalidDataException or InvalidOperationException or ArgumentException)
             { throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, false); }
             catch (Exception exception) { throw Unavailable(source, exception); }
         }

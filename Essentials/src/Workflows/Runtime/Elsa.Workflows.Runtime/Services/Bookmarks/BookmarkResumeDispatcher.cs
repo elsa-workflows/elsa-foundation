@@ -146,13 +146,28 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         var queuedCause = receiptEventId is null ? null : new RuntimeHistoryCausation(HistoryEventId: receiptEventId,
             WorkflowExecutionId: request.WorkflowExecutionId, DeliveryId: cause?.DeliveryId);
         try { result = unmatched is null ? await DispatchCoreAsync(request, options, saved, cancellationToken, queuedCause) : Unmatched(); }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             if (receiptId is not null)
-                await RecordHistoryAsync(RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, "DeliveryFaulted",
-                    _timeProvider.GetUtcNow(), request.StimulusType, target?.BookmarkId, target?.ActivityExecutionId, target?.ExecutableNodeId,
-                    cause: cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId },
-                    reasonCode: exception is RuntimeSchedulerWorkUnavailableException ? "runtime-unavailable" : "dispatch-threw"), cancellationToken);
+            {
+                var primaryUnavailable = CompoundCauseUnavailable(exception);
+                try
+                {
+                    await RecordHistoryAsync(RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, "DeliveryFaulted",
+                        _timeProvider.GetUtcNow(), request.StimulusType, target?.BookmarkId, target?.ActivityExecutionId, target?.ExecutableNodeId,
+                        cause: cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId },
+                        reasonCode: exception is RuntimeSchedulerWorkUnavailableException ? "runtime-unavailable" : "dispatch-threw"), cancellationToken);
+                }
+                catch (Exception observationFailure)
+                {
+                    if (source is not null)
+                        throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId,
+                            new AggregateException("Delivery and its failure observation both failed.", exception, observationFailure),
+                            primaryUnavailable && CompoundCauseUnavailable(observationFailure));
+                    PreserveDirectObservationFailure(request, exception, observationFailure);
+                }
+            }
             throw;
         }
         if (receiptId is null) return result;
@@ -176,6 +191,39 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
             result.CommandDispatch, result.Agent, result.Reason, result.Lookup)
         { HistoryCausation = responseCause with { HistoryEventId = disposition.Event.HistoryEventId } };
     }
+
+    private static void PreserveDirectObservationFailure(BookmarkResumeDispatchRequest request, Exception primary, Exception secondary)
+    {
+        AppendSupplementaryDiagnostic(primary, new KeyValuePair<WeakReference<object>, Exception>(new(request), secondary));
+        try
+        {
+            System.Diagnostics.Trace.TraceWarning("A delivery failure observation also failed; its unchanged primary exception retains the supplementary cause.");
+        }
+        catch (Exception diagnosticFailure) when (diagnosticFailure is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+        {
+            // A host diagnostic listener is supplementary too; it cannot replace either delivery cause.
+            AppendSupplementaryDiagnostic(primary, diagnosticFailure);
+        }
+    }
+
+    private static void AppendSupplementaryDiagnostic(Exception primary, object diagnostic)
+    {
+        var data = primary.Data;
+        lock (data.SyncRoot)
+        {
+            var old = data[RuntimeHistoryDeliveryFacts.ObservationFailureDataKey];
+            var entries = old is IReadOnlyList<object> retained ? retained.ToList() : old is null ? [] : new List<object> { old };
+            entries.Add(diagnostic);
+            data[RuntimeHistoryDeliveryFacts.ObservationFailureDataKey] = Array.AsReadOnly(entries.ToArray());
+        }
+    }
+
+    private static bool CompoundCauseUnavailable(Exception failure) => failure switch
+    {
+        RuntimePostCommitSourceBoundaryException source => source.IsUnavailable,
+        RuntimePostCommitDeliveryException delivery => delivery.Kind == PostCommitFailureKind.Transient,
+        _ => StimulusDeliveryFailures.IsUnavailable(failure)
+    };
 
     private async ValueTask<RuntimeHistoryObservationResult> RecordHistoryAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken)
     {

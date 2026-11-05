@@ -23,11 +23,26 @@ internal sealed class RuntimeHistorySourceAvailability(IServiceProvider services
         var policy = native is not null ? native.HistoryCapturePolicy : commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy;
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy)) return commit;
         var combined = new List<RuntimeHistorySourceFact>(commit.HistorySourceFacts ?? []);
-        foreach (var fact in facts(policy!))
+        var bySubject = new Dictionary<(RuntimeHistorySourceFactKind Kind, string SubjectId), (RuntimeHistorySourceFact First, int Count)>();
+        foreach (var existing in combined)
         {
-            var existing = combined.SingleOrDefault(item => item.Kind == fact.Kind && item.SubjectId == fact.SubjectId);
-            if (existing is null) combined.Add(fact);
-            else if (JsonSerializer.Serialize(existing) != JsonSerializer.Serialize(fact))
+            var key = (existing.Kind, existing.SubjectId);
+            bySubject[key] = bySubject.TryGetValue(key, out var prior) ? (prior.First, checked(prior.Count + 1)) : (existing, 1);
+        }
+        foreach (var window in facts(policy!).Chunk(256))
+        foreach (var fact in window)
+        {
+            if (!bySubject.TryGetValue((fact.Kind, fact.SubjectId), out var existing))
+            {
+                combined.Add(fact);
+                bySubject.Add((fact.Kind, fact.SubjectId), (fact, 1));
+            }
+            // Retain the old conditional SingleOrDefault refusal. Untouched prior facts,
+            // including duplicates omitted by the pinned event vocabulary, retain their
+            // original order/content in the immutable source proof.
+            else if (existing.Count != 1)
+                throw new InvalidOperationException("One checkpoint owner supplied multiple prior facts for the contributed subject.");
+            else if (JsonSerializer.Serialize(existing.First) != JsonSerializer.Serialize(fact))
                 throw new InvalidOperationException("One checkpoint owner supplied conflicting semantic facts.");
         }
         return commit with { HistorySourceFacts = RuntimeHistorySourceFacts.ForPolicy(policy, combined) };

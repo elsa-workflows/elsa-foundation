@@ -156,14 +156,17 @@ internal static class EfRuntimeHistoryCheckpoint
     {
         var summaries = new Dictionary<string, ActivityExecutionBookmarkSummary>(StringComparer.Ordinal);
         foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
-        foreach (var summary in cleanup.HistoryBookmarks ?? [])
         {
-            if (summary.Identity.WorkflowExecutionId != commit.WorkflowExecutionId || cleanup.WorkflowExecutionId != commit.WorkflowExecutionId ||
-                !cleanup.BookmarkIds.Contains(summary.Identity.BookmarkId, StringComparer.Ordinal))
-                throw new InvalidOperationException("A cleanup history source does not belong to its exact native cleanup.");
-            if (summaries.TryGetValue(summary.Identity.BookmarkId, out var old) && !SameSummary(old, summary))
-                throw new InvalidOperationException("A cleanup contains conflicting exact bookmark source summaries.");
-            summaries[summary.Identity.BookmarkId] = summary;
+            var ownedBookmarks = cleanup.BookmarkIds.ToHashSet(StringComparer.Ordinal);
+            foreach (var summary in cleanup.HistoryBookmarks ?? [])
+            {
+                if (summary.Identity.WorkflowExecutionId != commit.WorkflowExecutionId || cleanup.WorkflowExecutionId != commit.WorkflowExecutionId ||
+                    !ownedBookmarks.Contains(summary.Identity.BookmarkId))
+                    throw new InvalidOperationException("A cleanup history source does not belong to its exact native cleanup.");
+                if (summaries.TryGetValue(summary.Identity.BookmarkId, out var old) && !SameSummary(old, summary))
+                    throw new InvalidOperationException("A cleanup contains conflicting exact bookmark source summaries.");
+                summaries[summary.Identity.BookmarkId] = summary;
+            }
         }
         if (summaries.Count == 0) return;
         var claimed = ordered.Where(candidate => !retained.ContainsKey(candidate.Event.HistoryEventId) &&
