@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -35,6 +36,14 @@ public sealed class RuntimeModelCheckpointPostgreSqlSmokeTests(RuntimeBookmarksP
 
     [SkippableFact]
     public Task PostgreSql_terminal_cleanup_keeps_result_authority_and_current_fence() => RuntimeModelCheckpointProviderSmoke.SettlementAsync(fixture, Open);
+
+    [SkippableTheory]
+    [InlineData("before-write")]
+    [InlineData("after-write")]
+    [InlineData("ack-cancel")]
+    [InlineData("ack-unreadable")]
+    public Task PostgreSql_native_admission_preserves_committed_outcomes(string scenario) =>
+        RuntimeModelCheckpointProviderSmoke.NativeAdmissionAsync(fixture, Open, scenario);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -53,6 +62,14 @@ public sealed class RuntimeModelCheckpointSqlServerSmokeTests(RuntimeBookmarksSq
 
     [SkippableFact]
     public Task SqlServer_terminal_cleanup_keeps_result_authority_and_current_fence() => RuntimeModelCheckpointProviderSmoke.SettlementAsync(fixture, Open);
+
+    [SkippableTheory]
+    [InlineData("before-write")]
+    [InlineData("after-write")]
+    [InlineData("ack-cancel")]
+    [InlineData("ack-unreadable")]
+    public Task SqlServer_native_admission_preserves_committed_outcomes(string scenario) =>
+        RuntimeModelCheckpointProviderSmoke.NativeAdmissionAsync(fixture, Open, scenario);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -71,6 +88,14 @@ public sealed class RuntimeModelCheckpointMySqlSmokeTests(RuntimeBookmarksMySqlF
 
     [SkippableFact]
     public Task MySql_terminal_cleanup_keeps_result_authority_and_current_fence() => RuntimeModelCheckpointProviderSmoke.SettlementAsync(fixture, Open);
+
+    [SkippableTheory]
+    [InlineData("before-write")]
+    [InlineData("after-write")]
+    [InlineData("ack-cancel")]
+    [InlineData("ack-unreadable")]
+    public Task MySql_native_admission_preserves_committed_outcomes(string scenario) =>
+        RuntimeModelCheckpointProviderSmoke.NativeAdmissionAsync(fixture, Open, scenario);
 }
 
 internal static class RuntimeModelCheckpointProviderSmoke
@@ -80,6 +105,105 @@ internal static class RuntimeModelCheckpointProviderSmoke
     private static readonly RuntimeExecutionLease Lease = new("lease", "execution", "owner", Now, Now.AddMinutes(10), 1);
     private static readonly string[] Tables = [RuntimeModelStateEfModule.StateTable, RuntimeModelStateEfModule.InputTable,
         "elsa_runtime_post_commit_outbox", "elsa_runtime_scheduler_work_item", "elsa_runtime_checkpoint_commit"];
+
+    public static async Task NativeAdmissionAsync(RuntimeBookmarksProviderFixture fixture,
+        Func<string, IInterceptor[], RuntimeDbContext> open, string scenario)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
+        var access = new Access(new("native-outcome-" + Guid.NewGuid().ToString("N")));
+        var material = await PrepareAsync(fixture.ConnectionString, open, access);
+        var nativeLease = new RuntimeExecutionLease("native-lease", "native-worker", "owner", Now, Now.AddMinutes(10), 1);
+        RuntimeModelExecutionState expected;
+        await using (var setup = open(fixture.ConnectionString, []))
+        {
+            await Store(setup, access).CommitAsync(Commit(access, material, 1), Immediate);
+            expected = (await Reader(setup, access).FindAsync("execution"))!;
+            await new EfExecutionLivenessStateStore(setup, access, new Codec()).SaveAsync(
+                new("ownership:native-worker", "native-worker", nativeLease, null, null, null));
+        }
+        var at = Now.AddSeconds(2);
+        var pin = new WorkflowExecutableIdentity("native-artifact", "worker", "worker-version", "1.0.0", "worker-hash");
+        var workflow = new WorkflowExecutionState("native-worker", pin, WorkflowExecutionStatus.Running,
+            null, at, at, at, null, null, null, null, new Dictionary<string, string>())
+        {
+            Partition = new(access.Current.RequireScope().Value), Authority = expected.Authority,
+            ModelWorkOrigin = new(1, expected.Scope, expected.ExecutionId, expected.Protocol, expected.Executable,
+                expected.MaterialIncarnationId, "binding", "invocation", "attempt", pin, "native-worker",
+                "commit-1:invocation", "invocation", "test.native-result", "result-input")
+        };
+        var intent = new RuntimePostCommitIntent("root", workflow.WorkflowExecutionId, "test.native-root", at, null,
+            "root", JsonSerializer.SerializeToElement(new { node = "root" }));
+        var outboxId = RuntimePostCommitOutboxIdentity.CreateLogicalValue("native-admission", intent.IntentId);
+        var item = new RuntimePostCommitOutboxItem(outboxId, intent, RuntimePostCommitOutboxStatus.Pending, at, at);
+        var admission = new RuntimeCheckpointCommit("native-admission", new("native-admission", RuntimeCheckpointNames.WorkflowStarted,
+                workflow.WorkflowExecutionId, at, [], new Dictionary<string, string>()),
+            new(new(workflow.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, workflow, new Dictionary<string, string>()),
+                null, [], [], [], [], [], postCommitOutbox: [new(outboxId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())]),
+            [intent], new Dictionary<string, string>()) { ExpectedFence = nativeLease.ToFence(), ExpectedModelExecution = expected };
+        var acknowledgement = new NativeAdmissionAcknowledgement(scenario);
+        var lookup = new NativeAdmissionLookup(acknowledgement, scenario == "ack-unreadable");
+        await using (var context = open(fixture.ConnectionString, [acknowledgement, lookup]))
+        {
+            // Only the lease boundary is injected. All participant writes, COMMIT and marker reads use this provider.
+            var writer = new EfRuntimeCheckpointCommitStore(context, access, new Clock(), new NativeAdmissionLease(scenario));
+            if (scenario == "before-write")
+                await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => writer.CommitAsync(admission, Immediate).AsTask());
+            else if (scenario == "ack-unreadable")
+            {
+                var failure = await Assert.ThrowsAnyAsync<Exception>(() => writer.CommitAsync(admission, Immediate).AsTask());
+                Assert.Equal("NativeAdmissionCommitOutcomeUnknownException", failure.GetType().Name);
+                var causes = Assert.IsType<AggregateException>(failure.InnerException);
+                Assert.Same(acknowledgement.Failure, causes.InnerExceptions[0]);
+                Assert.Same(lookup.Failure, causes.InnerExceptions[1]);
+            }
+            else Assert.Equal([outboxId], (await writer.CommitAsync(admission, Immediate)).PendingPostCommitWorkIds);
+        }
+        await using var reopened = open(fixture.ConnectionString, []);
+        var landed = scenario != "before-write";
+        Assert.Equal(landed ? 1 : 0, await reopened.WorkflowExecutionStates.CountAsync(row => row.ScopeKeyHash == access.Hash));
+        Assert.Equal(landed ? 1 : 0, await reopened.RuntimePostCommitOutbox.CountAsync(row => row.ScopeKeyHash == access.Hash));
+        Assert.Equal(landed ? 2 : 1, await reopened.RuntimeCheckpointCommits.CountAsync(row => row.ScopeKeyHash == access.Hash));
+        Assert.Equal(1, (await Reader(reopened, access).FindAsync("execution"))!.Revision);
+        if (landed)
+            Assert.Equal([outboxId], (await Store(reopened, access).CommitAsync(admission, Immediate)).PendingPostCommitWorkIds);
+    }
+
+    private sealed class NativeAdmissionLease(string scenario) : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public async ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default)
+        {
+            if (scenario == "before-write") throw new WorkflowExecutableRootWriteLeaseLostException(artifactId, leaseId);
+            await write(cancellationToken);
+            if (scenario == "after-write") throw new WorkflowExecutableRootWriteLeaseLostException(artifactId, leaseId);
+        }
+    }
+
+    private sealed class NativeAdmissionAcknowledgement(string scenario) : DbTransactionInterceptor
+    {
+        public bool Committed { get; private set; }
+        public Exception Failure { get; } = scenario == "ack-cancel" ? new OperationCanceledException("Native commit acknowledgement cancelled.")
+            : new IOException("Native commit acknowledgement lost.");
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            if (!scenario.StartsWith("ack-", StringComparison.Ordinal)) return Task.CompletedTask;
+            Committed = true;
+            throw Failure;
+        }
+    }
+
+    private sealed class NativeAdmissionLookup(NativeAdmissionAcknowledgement acknowledgement, bool fail) : DbCommandInterceptor
+    {
+        public IOException Failure { get; } = new("Native admission marker lookup failed.");
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (fail && acknowledgement.Committed && command.CommandText.Contains("elsa_runtime_checkpoint_commit", StringComparison.Ordinal))
+                throw Failure;
+            return ValueTask.FromResult(result);
+        }
+    }
 
     public static async Task AtomicAsync(RuntimeBookmarksProviderFixture fixture, Func<string, IInterceptor[], RuntimeDbContext> open, bool failMarker)
     {
