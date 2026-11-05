@@ -3,6 +3,7 @@ import { createActivityNode, flowchartStructureKind, sequenceStructureKind } fro
 import { applyNativeBlockPlan, planCreateNativeBlock, planExtractNativeBlock, planUngroupNativeBlock, type NativeBlockContext, type NativeBlockPlan } from "../graph-authoring/nativeBlocks";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 import { flowchartActivity, sequenceActivity, writeLine, whileActivity, whileNode } from "./fixtures";
+import { compensationScopeStructureKind } from "../compensationScope";
 
 const action: ActivityCatalogItem = { ...writeLine, ports: [{ name: "Done", isBrowsable: true }] };
 const outcomes = (item: ActivityCatalogItem, names: string[]) => ({ ...item, ports: names.map(name => ({ name })), designFacets: [...item.designFacets ?? [], { kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: names.map(name => ({ name })) } }] });
@@ -30,6 +31,27 @@ const extract = (ctx: NativeBlockContext, ids = ["c", "b"]) => planExtractNative
 function flow() { return context(container("flowchart", [node("a"), node("b"), node("c"), node("d")], { connections: [edge("a", "b"), edge("b", "c"), edge("c", "d")], startNodeId: "a" })); }
 const payload = (ctx: NativeBlockContext) => ctx.document.rootActivity.structure!.payload;
 const planPayload = (plan: ReturnType<typeof accepted>) => plan.document.rootActivity.structure!.payload;
+
+function compensationContext(kind: "sequence" | "flowchart", withHandler = true, editHandler = false) {
+  const body = container(kind, [node("a"), node("b"), node("c"), node("d")], kind === "flowchart" ? {
+    connections: [edge("a", "b"), edge("b", "c"), edge("c", "d")], startNodeId: "a"
+  } : {});
+  body.nodeId = "body";
+  const scope: ActivityNode = {
+    ...node("scope"), activityVersionId: "compensation-v1",
+    structure: { kind: compensationScopeStructureKind, schemaVersion: "1.0.0", payload: { steps: [
+      { name: "Attempt", activity: editHandler ? node("forward") : body,
+        ...(withHandler ? { compensation: editHandler ? body : node("handler") } : {}), future: { keep: "row" } },
+      { name: "Later", activity: node("later"), future: { keep: "later" } }
+    ] } }
+  };
+  const ctx = context(container("sequence", [scope, node("outside")]));
+  ctx.scope = [
+    { ownerNodeId: "scope", slotId: `${compensationScopeStructureKind}:steps:steps:${editHandler ? "compensation" : "activity"}:0`, label: "Attempt" },
+    { ownerNodeId: "body", slotId: `${body.structure!.kind}:activities`, label: "Body" }
+  ];
+  return { ctx, scope, body, steps: scope.structure!.payload.steps as Record<string, unknown>[] };
+}
 
 describe("pure native block planning", () => {
   it("extracts authored Sequence order and preserves every child value and unrelated sidecar", () => {
@@ -382,5 +404,80 @@ describe("no-loss Ungroup", () => {
     const plan = accepted(planCreateNativeBlock(ctx, { ...request, kind: "flowchart", activityVersionId: flowchartActivity.activityVersionId, position: { x: 0, y: 0 } }));
     (planPayload(plan).activities as ActivityNode[])[0].structure!.payload[property] = property === "connections" ? [{ bad: true }] : "gone";
     refused(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"), property === "connections" ? "malformed-connection" : "invalid-start");
+  });
+});
+
+describe("native blocks alongside compensation steps", () => {
+  it.each([
+    ["sequence", false], ["sequence", true], ["flowchart", false], ["flowchart", true]
+  ] as const)("extracts and ungroups a nested %s with handler=%s without changing step records", (kind, withHandler) => {
+    const { ctx } = compensationContext(kind, withHandler);
+    const before = structuredClone(ctx);
+    const plan = accepted(planExtractNativeBlock(ctx, {
+      ...request, selectedNodeIds: ["b", "c"],
+      activityVersionId: (kind === "sequence" ? sequenceActivity : flowchartActivity).activityVersionId
+    }));
+    const outer = plan.document.rootActivity.structure!.payload.activities as ActivityNode[];
+    const steps = outer[0].structure!.payload.steps as Record<string, unknown>[];
+    const beforeSteps = (before.document.rootActivity.structure!.payload.activities as ActivityNode[])[0].structure!.payload.steps as Record<string, unknown>[];
+    expect(steps[0].future).toEqual({ keep: "row" });
+    expect(steps[1]).toEqual(beforeSteps[1]);
+    const body = steps[0].activity as ActivityNode;
+    expect((body.structure!.payload.activities as ActivityNode[]).map(child => child.nodeId)).toEqual(["a", "new-block", "d"]);
+    const restored = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block")).document;
+    if (kind === "flowchart") {
+      const restoredScope = (restored.rootActivity.structure!.payload.activities as ActivityNode[])[0];
+      const restoredBody = (restoredScope.structure!.payload.steps as Record<string, unknown>[])[0].activity as ActivityNode;
+      const originalBody = beforeSteps[0].activity as ActivityNode;
+      const actualConnections = restoredBody.structure!.payload.connections as ReturnType<typeof edge>[];
+      const originalConnections = originalBody.structure!.payload.connections as ReturnType<typeof edge>[];
+      // Flowchart routing is independent of connection-array order; retain every connection field.
+      expect([...actualConnections].sort((a, b) => a.id.localeCompare(b.id))).toEqual([...originalConnections].sort((a, b) => a.id.localeCompare(b.id)));
+      restoredBody.structure!.payload.connections = originalConnections;
+    }
+    expect(restored).toEqual(before.document);
+    expect(ctx).toEqual(before);
+  });
+
+  it("creates and ungroups a block in a compensation handler without rewriting forward steps", () => {
+    const { ctx } = compensationContext("sequence", true, true);
+    const before = structuredClone(ctx.document);
+    const plan = accepted(planCreateNativeBlock(ctx, { ...request, kind: "sequence", beforeNodeId: "b", position: { x: 20, y: 30 } }));
+    expect(accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block")).document).toEqual(before);
+  });
+
+  it("retains an unrelated compensation scope when extracting outside it", () => {
+    const { scope } = compensationContext("sequence");
+    const ctx = context(container("sequence", [scope, node("outer-b"), node("outer-c")]));
+    const plan = accepted(extract(ctx, ["outer-b", "outer-c"]));
+    expect((planPayload(plan).activities as ActivityNode[])[0]).toEqual(scope);
+  });
+
+  it("does not offer extraction of the compensation overview itself", () => {
+    const { scope } = compensationContext("sequence");
+    refused(extract(context(scope)), "unsupported-scope");
+  });
+
+  it("reserves real compensation handler identities without counting the overview twice", () => {
+    const { ctx } = compensationContext("sequence");
+    refused(planExtractNativeBlock(ctx, { ...request, nodeId: "handler", selectedNodeIds: ["b", "c"] }), "occupied-identity");
+  });
+
+  it("still rejects an identity authored in both forward and compensation slots", () => {
+    const { ctx, steps } = compensationContext("sequence");
+    steps[0].compensation = node("b");
+    refused(extract(ctx), "duplicate-node");
+  });
+
+  it.each(["not-array", "null-row", "array-row", "bad-forward", "bad-handler"])("refuses malformed compensation children: %s", fault => {
+    const { ctx, scope, steps } = compensationContext("sequence");
+    if (fault === "not-array") scope.structure!.payload.steps = {};
+    if (fault === "null-row") steps.push(null as never);
+    if (fault === "array-row") steps.push([] as never);
+    if (fault === "bad-forward") steps[0].activity = { nodeId: "invalid" };
+    if (fault === "bad-handler") steps[0].compensation = { nodeId: "invalid" };
+    const before = structuredClone(ctx);
+    refused(extract(ctx), "malformed-children");
+    expect(ctx).toEqual(before);
   });
 });

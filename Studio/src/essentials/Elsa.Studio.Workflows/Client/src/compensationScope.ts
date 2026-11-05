@@ -55,13 +55,16 @@ export function compensationScopeChildSlots(structure: ActivityNodeStructure): C
 // Writes activities back by node id. The "Steps" slot is a view over the steps, never an array to store: an
 // activity that is no longer present is removed from its step, and one that belongs to no step is ignored.
 export function replaceCompensationScopeActivities(scope: ActivityNode, activities: ActivityNode[]): ActivityNode {
+  if (!scope.structure || !Array.isArray(scope.structure.payload.steps)) return scope;
   const byNodeId = new Map(activities.map(activity => [activity.nodeId, activity]));
-  const steps = readCompensationSteps(scope).map(step => ({
+  // Update the authored records rather than reconstructing the designer projection: unrelated row
+  // metadata and omitted optional children must survive a scoped edit or a no-loss Ungroup.
+  const steps = scope.structure.payload.steps.map(step => !isRecord(step) || Array.isArray(step) ? step : ({
     ...step,
-    activity: step.activity ? byNodeId.get(step.activity.nodeId) ?? null : null,
-    compensation: step.compensation ? byNodeId.get(step.compensation.nodeId) ?? null : null
+    ...(isActivityNode(step.activity) ? { activity: byNodeId.get(step.activity.nodeId) ?? null } : {}),
+    ...(isActivityNode(step.compensation) ? { compensation: byNodeId.get(step.compensation.nodeId) ?? null } : {})
   }));
-  return withCompensationSteps(scope, steps);
+  return { ...scope, structure: { ...scope.structure, payload: { ...scope.structure.payload, steps } } };
 }
 
 export function withCompensationSteps(scope: ActivityNode, steps: CompensationStep[]): ActivityNode {

@@ -1,5 +1,6 @@
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { createActivityNode, getChildSlots, resolveScope, sequenceStructureKind, flowchartStructureKind, updateScopeOwner, type ScopeFrame } from "../workflowAdapter";
+import { compensationScopeStructureKind, compensationStepsSlotId } from "../compensationScope";
 
 // Internal document edits only. Resource authorization, persistence and history remain with each host.
 export interface NativeBlockDocument {
@@ -116,7 +117,15 @@ function prepare(context: NativeBlockContext) {
     if (node.structure?.kind === flowchartStructureKind) {
       Object.keys(metadata(node.structure.payload.nodeMetadata, `${path}.structure.payload.nodeMetadata`)).forEach(id => retainedMetadataIdentities.add(id));
     }
+    const compensation = node.structure?.kind === compensationScopeStructureKind;
+    if (compensation) {
+      const steps = node.structure!.payload.steps;
+      if (!Array.isArray(steps) || steps.some(step => !record(step)))
+        refuse("malformed-children", `${path}.structure.payload.steps`, "Repair the compensation step collection before refactoring.");
+    }
     for (const slot of getChildSlots(node, context.catalog)) {
+      // The Steps overview projects the same children as the authored forward/handler slots.
+      if (compensation && slot.id === compensationStepsSlotId) continue;
       // Adapter reads are deliberately tolerant for rendering; edits must never silently drop bad entries.
       {
         const collection = slot.collectionProperty ? node.structure?.payload[slot.collectionProperty] : undefined;
