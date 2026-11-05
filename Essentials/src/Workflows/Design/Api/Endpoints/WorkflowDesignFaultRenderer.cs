@@ -2,7 +2,7 @@ using Elsa.Workflows.Design.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints;
 

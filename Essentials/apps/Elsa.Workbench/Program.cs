@@ -82,7 +82,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
