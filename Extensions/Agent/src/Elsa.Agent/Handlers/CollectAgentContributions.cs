@@ -11,6 +11,8 @@ namespace Elsa.Agent.Handlers;
 internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sources, IOptions<AgentContextOptions> options,
     TimeProvider timeProvider) : IEventHandler<AgentContextCollecting>
 {
+    private sealed record RegisteredSource(IAgentContextProvider Provider, AgentContextProviderDescriptor Descriptor);
+
     public async Task Handle(AgentContextCollecting domainEvent, CancellationToken cancellationToken)
     {
         var request = domainEvent.Request;
@@ -21,7 +23,8 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             return;
         }
 
-        var registered = sources.ToList();
+        var registered = sources.Select(source => new RegisteredSource(source, source.Descriptor)).ToList();
+        foreach (var registration in registered) Services.AgentModuleCodes.Validate(registration.Descriptor.ModuleCodes);
         var duplicate = registered.GroupBy(x => x.Descriptor.Id, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
         if (duplicate is not null)
             throw new AgentContributionException($"Duplicate agent context source '{duplicate.Key}'.");
@@ -33,10 +36,11 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
         }
 
         var claimed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var source in registered)
+        foreach (var registration in registered)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var descriptor = source.Descriptor;
+            var source = registration.Provider;
+            var descriptor = registration.Descriptor;
             var caller = request.CallerAttachments.Where(x => x.ModuleId == descriptor.ModuleId && descriptor.ContextKinds.Contains(x.ContentType, StringComparer.Ordinal)).ToList();
             var applicable = descriptor.ScopeKind == "*" || caller.Count > 0 || descriptor.ResourceTypes.Contains(request.Target?.ResourceType ?? string.Empty, StringComparer.Ordinal)
                 || (!string.IsNullOrEmpty(request.ScopeKind) && string.Equals(descriptor.ScopeKind, request.ScopeKind, StringComparison.Ordinal));
@@ -57,11 +61,11 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
                         Sensitivity = attachment.Sensitivity == AgentContextSensitivity.SecretRedacted ? AgentContextSensitivity.Secret : attachment.Sensitivity
                     });
             }
-            var contribution = await CollectSourceAsync(source, request with { CallerAttachments = admittedInputs }, domainEvent.Diagnostics, cancellationToken);
+            var contribution = await CollectSourceAsync(source, descriptor, request with { CallerAttachments = admittedInputs }, domainEvent.Diagnostics, cancellationToken);
             if (contribution is null)
                 continue;
             foreach (var diagnostic in contribution.Diagnostics)
-                Add(domainEvent, OwnedMarker(diagnostic, descriptor.Id));
+                Add(domainEvent, diagnostic, descriptor);
             foreach (var attachment in contribution.Attachments)
             {
                 if (attachment.ModuleId != descriptor.ModuleId)
@@ -76,7 +80,7 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             throw new AgentContributionException($"Duplicate admitted context attachment '{duplicateAttachment.Key}'.");
     }
 
-    private async Task AdmitDisclosureAsync(IReadOnlyList<IAgentContextProvider> registered, AgentContextRequest request,
+    private async Task AdmitDisclosureAsync(IReadOnlyList<RegisteredSource> registered, AgentContextRequest request,
         AgentContextDisclosureRequest disclosure, AgentContextCollecting domainEvent, CancellationToken cancellationToken)
     {
         var sourceIds = disclosure.Context.Select(x => x.ContributorId)
@@ -84,13 +88,15 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
         foreach (var sourceId in sourceIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var source = registered.SingleOrDefault(x => x.Descriptor.Id == sourceId);
+            var registration = registered.SingleOrDefault(x => x.Descriptor.Id == sourceId);
+            var source = registration?.Provider;
+            var descriptor = registration?.Descriptor;
             var ownedContext = disclosure.Context.Where(x => x.ContributorId == sourceId).ToArray();
             var ownedResults = disclosure.Results.Where(x => x.Access?.DisclosureSourceId == sourceId).ToArray();
-            if (source is null || ownedContext.Any(x => x.ModuleId != source.Descriptor.ModuleId
-                    || !source.Descriptor.ContextKinds.Contains(x.ContentType, StringComparer.Ordinal)
-                    || !source.Descriptor.SchemaVersions.Contains(x.SchemaVersion, StringComparer.Ordinal))
-                || ownedResults.Any(x => x.Access?.ModuleId != source.Descriptor.ModuleId))
+            if (source is null || descriptor is null || ownedContext.Any(x => x.ModuleId != descriptor.ModuleId
+                    || !descriptor.ContextKinds.Contains(x.ContentType, StringComparer.Ordinal)
+                    || !descriptor.SchemaVersions.Contains(x.SchemaVersion, StringComparer.Ordinal))
+                || ownedResults.Any(x => x.Access?.ModuleId != descriptor.ModuleId))
             {
                 domainEvent.Diagnostics.Add(new("host", "agent.context.disclosure_unavailable",
                     "The original installed context source, owner or schema is unavailable. Start a fresh request with current modules.", true));
@@ -101,24 +107,24 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
                 Context = ownedContext.Select(Snapshot).ToArray(),
                 Results = ownedResults
             };
-            var contribution = await CollectSourceAsync(source, request with { CallerAttachments = [], Disclosure = owned },
+            var contribution = await CollectSourceAsync(source, descriptor, request with { CallerAttachments = [], Disclosure = owned },
                 domainEvent.Diagnostics, cancellationToken);
             if (contribution is null) continue;
-            foreach (var diagnostic in contribution.Diagnostics) Add(domainEvent, OwnedMarker(diagnostic, source.Descriptor.Id));
+            foreach (var diagnostic in contribution.Diagnostics) Add(domainEvent, diagnostic, descriptor);
             foreach (var attachment in contribution.Attachments)
             {
-                if (attachment.ModuleId != source.Descriptor.ModuleId
-                    || !source.Descriptor.ContextKinds.Contains(attachment.ContentType, StringComparer.Ordinal)
-                    || !source.Descriptor.SchemaVersions.Contains(attachment.SchemaVersion, StringComparer.Ordinal))
-                    throw new AgentContributionException($"Context source '{source.Descriptor.Id}' returned an invalid disclosure projection.");
-                domainEvent.Attachments.Add(Snapshot(attachment) with { ContributorId = source.Descriptor.Id });
+                if (attachment.ModuleId != descriptor.ModuleId
+                    || !descriptor.ContextKinds.Contains(attachment.ContentType, StringComparer.Ordinal)
+                    || !descriptor.SchemaVersions.Contains(attachment.SchemaVersion, StringComparer.Ordinal))
+                    throw new AgentContributionException($"Context source '{descriptor.Id}' returned an invalid disclosure projection.");
+                domainEvent.Attachments.Add(Snapshot(attachment) with { ContributorId = descriptor.Id });
             }
         }
         if (domainEvent.Attachments.GroupBy(x => x.Id, StringComparer.Ordinal).Any(x => x.Count() > 1))
             throw new AgentContributionException("Retained context disclosure produced duplicate attachment identities.");
     }
 
-    private async Task<AgentContextContribution?> CollectSourceAsync(IAgentContextProvider source, AgentContextRequest request,
+    private async Task<AgentContextContribution?> CollectSourceAsync(IAgentContextProvider source, AgentContextProviderDescriptor descriptor, AgentContextRequest request,
         ICollection<AgentContributionDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(options.Value.SourceTimeout, timeProvider);
@@ -139,19 +145,19 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
-            diagnostics.Add(new(source.Descriptor.Id, "agent.context.source_timed_out",
-                "The installed context source did not complete within the host's collection bound.", request.Disclosure is not null || source.Descriptor.Required));
+            diagnostics.Add(new(descriptor.Id, "agent.context.source_timed_out",
+                "The installed context source did not complete within the host's collection bound.", request.Disclosure is not null || descriptor.Required));
             return null;
         }
-        catch (Exception error) when (request.Disclosure is null && !source.Descriptor.Required && error is not AgentContributionException)
+        catch (Exception error) when (request.Disclosure is null && !descriptor.Required && error is not AgentContributionException)
         {
-            diagnostics.Add(new(source.Descriptor.Id, "agent.context.source_failed",
+            diagnostics.Add(new(descriptor.Id, "agent.context.source_failed",
                 "Optional installed context is unavailable because its source failed.", false));
             return null;
         }
         catch (Exception error)
         {
-            throw new AgentContributionException($"Required context source '{source.Descriptor.Id}' failed.", error);
+            throw new AgentContributionException($"Required context source '{descriptor.Id}' failed.", error);
         }
         finally
         {
@@ -169,18 +175,13 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
 
     // Only this handler records markers, and only for a source's own diagnostics: another event handler that adds a
     // marked diagnostic to the public collection is never recorded, so the collector clears its marker.
-    private static void Add(AgentContextCollecting domainEvent, AgentContributionDiagnostic diagnostic)
+    private static void Add(AgentContextCollecting domainEvent, AgentContributionDiagnostic diagnostic, AgentContextProviderDescriptor descriptor)
     {
-        domainEvent.Diagnostics.Add(diagnostic);
-        if (diagnostic.OwnerUnavailable) Services.AgentContextOwnerMarkers.Record(domainEvent, diagnostic);
+        var owned = diagnostic.ContributorId == descriptor.Id && diagnostic.ContributorId != "host";
+        var normalized = Services.AgentModuleCodes.Diagnostic(diagnostic, descriptor.ModuleCodes, owned);
+        domainEvent.Diagnostics.Add(normalized);
+        if (owned) Services.AgentContextOwnerMarkers.Record(domainEvent, normalized, descriptor.ModuleCodes is not null);
     }
-
-    // The owner-unavailable marker counts only on a diagnostic a source reports under its own descriptor id, so a source
-    // cannot impersonate the engine's "host" diagnostics or another source to claim it.
-    private static AgentContributionDiagnostic OwnedMarker(AgentContributionDiagnostic diagnostic, string sourceId) =>
-        diagnostic.OwnerUnavailable && !string.Equals(diagnostic.ContributorId, sourceId, StringComparison.Ordinal)
-            ? diagnostic with { OwnerUnavailable = false }
-            : diagnostic;
 
     private static AgentContextAttachment Snapshot(AgentContextAttachment attachment)
     {
@@ -225,9 +226,11 @@ internal sealed class CollectAgentTools(IEnumerable<IAgentTool> tools, IEnumerab
         // Registration integrity uses only public metadata. Context/disclosure behavior remains
         // exclusively on AgentContextCollecting and is rechecked under current authority there.
         var descriptors = sources.Select(source => source.Descriptor).ToArray();
+        foreach (var source in descriptors) Services.AgentModuleCodes.Validate(source.ModuleCodes);
         foreach (var tool in installed)
         {
             var descriptor = tool.Descriptor;
+            Services.AgentModuleCodes.Validate(descriptor.ModuleCodes);
             var owners = descriptors.Where(source => source.Id == descriptor.DisclosureSourceId).ToArray();
             if (string.IsNullOrWhiteSpace(descriptor.DisclosureSourceId) || owners.Length != 1
                 || owners[0].ModuleId != descriptor.ModuleId)

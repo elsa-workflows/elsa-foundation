@@ -15,14 +15,18 @@ namespace Elsa.Agent.Services;
 /// </remarks>
 internal static class AgentContextOwnerMarkers
 {
-    private static readonly ConditionalWeakTable<AgentContextCollecting, HashSet<AgentContributionDiagnostic>> Recorded = new();
+    private static readonly ConditionalWeakTable<AgentContextCollecting, Dictionary<AgentContributionDiagnostic, bool>> Recorded = new();
 
-    internal static void Record(AgentContextCollecting collecting, AgentContributionDiagnostic diagnostic) =>
-        Recorded.GetValue(collecting, _ => new HashSet<AgentContributionDiagnostic>(ReferenceEqualityComparer.Instance)).Add(diagnostic);
+    internal static void Record(AgentContextCollecting collecting, AgentContributionDiagnostic diagnostic, bool declaredCodes = false) =>
+        Recorded.GetValue(collecting, _ => new(ReferenceEqualityComparer.Instance))[diagnostic] = declaredCodes;
 
     /// <summary>Whether this exact diagnostic is a recorded source marker with an owner code.</summary>
     internal static bool IsRecorded(AgentContextCollecting collecting, AgentContributionDiagnostic diagnostic) =>
-        Recorded.TryGetValue(collecting, out var recorded) && recorded.Contains(diagnostic) && AgentToolAccess.IsOwnerUnavailable(diagnostic);
+        Recorded.TryGetValue(collecting, out var recorded) && recorded.ContainsKey(diagnostic) && AgentToolAccess.IsOwnerUnavailable(diagnostic);
 
-    internal static AgentError Unavailable(string code) => new(code, AgentToolAccess.OwnerUnavailableMessage, 503);
+    internal static AgentError Unavailable(AgentContextCollecting collecting, AgentContributionDiagnostic diagnostic) =>
+        new(diagnostic.Code, AgentToolAccess.OwnerUnavailableMessage, 503)
+        {
+            OwnerUnavailable = IsRecorded(collecting, diagnostic) && Recorded.GetValue(collecting, _ => new(ReferenceEqualityComparer.Instance))[diagnostic]
+        };
 }

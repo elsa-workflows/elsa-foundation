@@ -80,9 +80,9 @@ internal sealed class DefaultAgentToolInvoker(
                     var existing = await proposals.FindAsync(existingId, cancellationToken);
                     if (existing?.PreparedInvocation is not { } original)
                         return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                    var replayAdmission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken);
-                    if (AgentToolAccess.OwnerUnavailable(replayAdmission) is { } replayUnavailable)
-                        return await DeniedAsync(replayUnavailable.Code, replayUnavailable.Message, replayUnavailable.StatusCode);
+                    var replayAdmission = await AgentToolAccess.AuthorizeAsync(tool, descriptor, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken);
+                    if (AgentToolAccess.OwnerUnavailable(replayAdmission, descriptor.ModuleCodes is not null) is { } replayUnavailable)
+                        return await DenyErrorAsync(replayUnavailable);
                     if (!replayAdmission.Allowed)
                         return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
                     if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
@@ -91,7 +91,7 @@ internal sealed class DefaultAgentToolInvoker(
                 }
 
                 if (await effects.CheckPreparationAsync(descriptor, cancellationToken) is { } preparationVeto)
-                    return await DeniedAsync(preparationVeto.Code, preparationVeto.Message, preparationVeto.StatusCode);
+                    return await DenyErrorAsync(preparationVeto);
 
                 AgentResult<AgentToolPreparation> preparation;
                 try
@@ -104,7 +104,9 @@ internal sealed class DefaultAgentToolInvoker(
                     return await DeniedAsync("agent.tool.preparation_failed", "The installed module could not prepare this operation.", 400);
                 }
                 if (!preparation.Succeeded || preparation.Value is null)
-                    return await DeniedAsync(preparation.Error?.Code ?? "agent.tool.preparation_failed", preparation.Error?.Message ?? "The module refused this operation.", preparation.Error?.StatusCode ?? 400);
+                    return preparation.Error is { } preparationError
+                        ? await DenyErrorAsync(AgentModuleCodes.Error(preparationError, descriptor.ModuleCodes, ownerOrigin: true))
+                        : await DeniedAsync("agent.tool.preparation_failed", "The module refused this operation.", 400);
 
                 var module = preparation.Value;
                 var isMutation = descriptor.Mutability == AgentToolMutability.Mutating;
@@ -125,9 +127,9 @@ internal sealed class DefaultAgentToolInvoker(
                         || invocation.Client is not null && binding != invocation.Client || !matchingSnapshot)
                         return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
                 }
-                var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
-                if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
-                    return await DeniedAsync(unavailable.Code, unavailable.Message, unavailable.StatusCode);
+                var admission = await AgentToolAccess.AuthorizeAsync(tool, descriptor, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
+                if (AgentToolAccess.OwnerUnavailable(admission, descriptor.ModuleCodes is not null) is { } unavailable)
+                    return await DenyErrorAsync(unavailable);
                 if (!admission.Allowed)
                     return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
 
@@ -154,7 +156,7 @@ internal sealed class DefaultAgentToolInvoker(
                 }
 
                 if (await effects.CheckInvocationAsync(prepared, descriptor, cancellationToken) is { } preparedVeto)
-                    return await DeniedAsync(preparedVeto.Code, preparedVeto.Message, preparedVeto.StatusCode);
+                    return await DenyErrorAsync(preparedVeto);
 
                 if (!isMutation)
                 {
@@ -162,12 +164,15 @@ internal sealed class DefaultAgentToolInvoker(
                     {
                         var result = await tool.ExecuteAsync(prepared, cancellationToken);
                         if (!result.Succeeded || result.Value is null)
-                            return await DeniedAsync(result.Error?.Code ?? "agent.tool.failed", result.Error?.Message ?? "The module refused the read.", result.Error?.StatusCode ?? 400);
+                            return result.Error is { } readError
+                                ? await DenyErrorAsync(AgentModuleCodes.Error(readError, descriptor.ModuleCodes, ownerOrigin: true))
+                                : await DeniedAsync("agent.tool.failed", "The module refused the read.", 400);
                         if (result.Value.Receipt is not null || result.Value.ToolCallId != prepared.ToolCallId || result.Value.ToolName != prepared.ToolName)
                             return await DeniedAsync("agent.tool.result_invalid", "The module returned a mismatched read result.", 500);
-                        var read = AgentResultProvenance.Stamp(result.Value with
+                        var normalized = AgentModuleCodes.Result(result.Value, descriptor.ModuleCodes).Value;
+                        var read = AgentResultProvenance.Stamp(normalized with
                         {
-                            Payload = result.Value.Payload is null ? null : AgentInvocationIntegrity.Freeze(result.Value.Payload)
+                            Payload = normalized.Payload is null ? null : AgentInvocationIntegrity.Freeze(normalized.Payload)
                         }, prepared);
                         await AuditAsync(invocation, "executed", cancellationToken);
                         return AgentToolDispatch.Executed(read);
@@ -218,7 +223,8 @@ internal sealed class DefaultAgentToolInvoker(
                 }
                 if (execution.Succeeded && execution.Value?.ClientInvocation is not null)
                     return AgentToolDispatch.Proposed((await proposals.FindAsync(proposal.Id, cancellationToken))!);
-                return await DeniedAsync(execution.Error?.Code ?? "agent.tool.execution_incomplete", execution.Error?.Message ?? execution.Value?.Summary ?? "The operation has no applied receipt.", execution.Error?.StatusCode ?? 409);
+                return execution.Error is { } executionError ? await DenyErrorAsync(executionError)
+                    : await DeniedAsync("agent.tool.execution_incomplete", execution.Value?.Summary ?? "The operation has no applied receipt.", 409);
             }
             finally { callGate?.Release(); }
         }
@@ -229,10 +235,12 @@ internal sealed class DefaultAgentToolInvoker(
             if (preparationClaim is not null) _owner!.Release(preparationClaim);
         }
 
-        async Task<AgentToolDispatch> DeniedAsync(string code, string message, int status)
+        Task<AgentToolDispatch> DeniedAsync(string code, string message, int status) => DenyErrorAsync(new(code, message, status));
+
+        async Task<AgentToolDispatch> DenyErrorAsync(AgentError error)
         {
             await AuditAsync(invocation, "denied", cancellationToken);
-            return AgentToolDispatch.Denied(new(code, message, status));
+            return AgentToolDispatch.Denied(error);
         }
     }
 

@@ -89,6 +89,8 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
         }
 
         var execution = await admission.Tool.ExecuteAsync(prepared, cancellationToken);
+        if (execution.Error is { } ownerError)
+            execution = execution with { Error = AgentModuleCodes.Error(ownerError, admission.Descriptor.ModuleCodes, ownerOrigin: true) };
         if (execution.Succeeded && execution.Value is null || !execution.Succeeded
             && (execution.Value?.Succeeded == true || execution.Value?.Receipt is not null))
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
@@ -96,11 +98,12 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
         if (!execution.Succeeded)
             return execution.Error is { } error ? new(null, error)
                 : AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.refused", "The owning module refused application.", 409);
-        var status = AgentInvocationIntegrity.SuccessStatus(prepared, execution.Value!, admission.Descriptor);
+        var normalized = AgentModuleCodes.Result(execution.Value!, admission.Descriptor.ModuleCodes).Value;
+        var status = AgentInvocationIntegrity.SuccessStatus(prepared, normalized, admission.Descriptor);
         if (status is null)
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "The module returned without a valid owning-resource effect receipt. Its outcome is uncertain; the operation will not be replayed."));
-        var result = FreezeResult(execution.Value!);
+        var result = FreezeResult(normalized);
         return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, true, result.Content, status) with { ToolResult = result });
     }
 
@@ -143,10 +146,16 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
             return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, false, refused.Content, "refused") with { ToolResult = refused });
         }
         var completed = await clientTool.CompleteAsync(prepared, acknowledgement, cancellationToken);
-        if (!completed.Succeeded || completed.Value is null || AgentInvocationIntegrity.SuccessStatus(prepared, completed.Value, admission.Descriptor) != "executed")
+        if (completed.Error is { } ownerError)
+            completed = completed with { Error = AgentModuleCodes.Error(ownerError, admission.Descriptor.ModuleCodes, ownerOrigin: true) };
+        if (!completed.Succeeded || completed.Value is null)
+            return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
+                    "Client completion validation is unavailable. Its reported effect remains uncertain and will not be replayed."));
+        var normalized = AgentModuleCodes.Result(completed.Value, admission.Descriptor.ModuleCodes).Value;
+        if (AgentInvocationIntegrity.SuccessStatus(prepared, normalized, admission.Descriptor) != "executed")
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed."));
-        var result = FreezeResult(completed.Value);
+        var result = FreezeResult(normalized);
         return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, true, result.Content, "executed") with { ToolResult = result });
     }
 

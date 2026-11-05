@@ -76,7 +76,7 @@ internal sealed class AgentPreparedInvocationResolver(
         if (await effects.CheckInvocationAsync(prepared, descriptor, cancellationToken) is { } contractVeto)
             return (null, contractVeto);
         var admission = await AgentToolAccess.AuthorizeAsync(tool, descriptor, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken);
-        if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
+        if (AgentToolAccess.OwnerUnavailable(admission, descriptor.ModuleCodes is not null) is { } unavailable)
             return (null, unavailable);
         if (!admission.Allowed)
             return (null, new("agent.proposal.forbidden", "Current server authority denies the prepared target.", 403));

@@ -791,6 +791,27 @@ internal sealed class InMemoryAgentProposalService(
             || DefaultAgentActionProposalExecutor.IsCancelledBeforeDispatch(outcome)))
             outcome = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                 "The executor returned an unverified refusal after handoff. Its effect is uncertain and will not be replayed."));
+        // A replaced executor is not a fresh callback from this installed owner. Its public marker,
+        // including a borrowed genuine error object, cannot create owner authority.
+        if (!beforeDispatch && executor is not DefaultAgentActionProposalExecutor && admittedDescriptor is not null)
+        {
+            if (outcome.Error is { } customError)
+            {
+                var normalized = AgentModuleCodes.Error(customError, admittedDescriptor.ModuleCodes, ownerOrigin: false, out var replaced);
+                outcome = outcome with { Error = normalized };
+                if (replaced && outcome.Value is { } errorValue)
+                    outcome = outcome with { Value = errorValue with { Summary = normalized.Message } };
+            }
+            if (outcome.Value?.ToolResult is { } customResult)
+            {
+                var normalized = AgentModuleCodes.Result(customResult, admittedDescriptor.ModuleCodes);
+                outcome = outcome with { Value = outcome.Value with
+                {
+                    ToolResult = normalized.Value,
+                    Summary = normalized.Replaced ? normalized.Value.Content : outcome.Value.Summary
+                } };
+            }
+        }
         if (outcome.Succeeded && outcome.Value is null)
             outcome = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                 "The executor returned an empty success after handoff. Its effect is uncertain and will not be replayed."));

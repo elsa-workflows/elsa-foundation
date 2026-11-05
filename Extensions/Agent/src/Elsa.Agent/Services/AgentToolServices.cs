@@ -25,6 +25,7 @@ internal sealed partial class DefaultAgentToolRegistry(IInlineEventPublisher eve
         foreach (var tool in tools)
         {
             var descriptor = tool.Descriptor;
+            AgentModuleCodes.Validate(descriptor.ModuleCodes);
             if (!ToolNameRegex().IsMatch(descriptor.Name ?? string.Empty))
                 throw new AgentContributionException($"Invalid agent tool name '{descriptor.Name}'; expected ^[a-zA-Z0-9_-]+$.");
             if (string.IsNullOrWhiteSpace(descriptor.ModuleId) || string.IsNullOrWhiteSpace(descriptor.ContractVersion))
