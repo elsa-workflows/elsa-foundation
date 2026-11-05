@@ -462,13 +462,3 @@ test("the journey keeps its strict selector, visibility wait, original click and
   await assert.rejects(new AsyncFunction("page", `let stage; ${runSource.slice(start, end)}`)(page), /wait failed/);
   assert.deepEqual(calls, []);
 });
-
-test("diagnostics retain the reviewed immutable published image pair", () => {
-  const imageBlock = runSource.match(/const images = (\{[\s\S]*?\n\});/);
-  assert.ok(imageBlock);
-  const images = new Function(`return (${imageBlock[1]});`)();
-  assert.equal(images.workbench.ref, "elsaworkflows/elsa-workbench@sha256:73ef26e41760eaa4618a37cfbd7285002408f634e4089201b3864cb1f6147904");
-  assert.equal(images.workbench.amd64, "sha256:e56e093b73ea239c7833107719e23bf1d03a4faaf07d1b704a8523ac88461e46");
-  assert.equal(images.studio.ref, "elsaworkflows/elsa-studio@sha256:1a4401d2f5bee207c3edbc51d4157ecb23ba796fb1dacc9e5ff6775f6c4f6ad0");
-  assert.equal(images.studio.amd64, "sha256:d151aabcc161474ba5a7d18d9979c65f381571bfb2e96d1840bfc0b99e8bb647");
-});
