@@ -55,12 +55,15 @@ const scopeCases = [
   { scope: "clientWorkingState", label: "Local working state" },
   { scope: "ClientWorkingState", label: "Local working state" },
   { scope: 0, label: "Local working state" },
+  { scope: "client-working-state", label: "Local working state" },
   { scope: "serverPersisted", label: "Persisted resource" },
   { scope: "ServerPersisted", label: "Persisted resource" },
   { scope: 1, label: "Persisted resource" },
+  { scope: "server-persisted", label: "Persisted resource" },
   { scope: "noPersistedEffect", label: "No persisted resource change" },
   { scope: "NoPersistedEffect", label: "No persisted resource change" },
   { scope: 2, label: "No persisted resource change" },
+  { scope: "no-persisted-effect", label: "No persisted resource change" },
   ...["future-scope", 3, -1, 0.5, null].map(scope => ({ scope, label: "Effect scope unavailable" }))
 ];
 it.each(scopeCases)("labels owning receipt scope $scope as $label without interpreting the module verdict", ({ scope, label }) => {

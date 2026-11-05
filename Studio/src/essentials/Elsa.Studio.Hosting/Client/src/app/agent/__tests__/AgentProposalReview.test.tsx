@@ -11,14 +11,22 @@ describe("AgentProposalReview", () => {
     { risk: 2, label: "destructive" }, { risk: 3, label: "admin" },
     { risk: "ReadOnly", label: "read only" }, { risk: "reviewRequired", label: "review required" },
     { risk: "review-required", label: "review required" }, { risk: "Admin", label: "admin" },
-    { risk: "admin", label: "admin" }, { risk: "future-risk", label: "unknown risk" },
+    { risk: "admin", label: "admin" },
+    { risk: "low", label: "low" }, { risk: "medium", label: "medium" },
+    { risk: "high", label: "high" }, { risk: "critical", label: "critical" },
+    { risk: "future-risk", label: "unknown risk" },
     { risk: 4, label: "unknown risk" }, { risk: null, label: "unknown risk" }
   ])("renders wire risk $risk as $label without crashing the review", ({ risk, label }) => {
-    const { container, unmount } = render(<AgentProposalReview proposals={[{ id: "proposal", title: "Review resource", summary: "Review the owner's operation.",
-      revision: "r1", risk: risk as AgentActionProposal["risk"], status: "awaiting-approval",
+    const proposal = Object.freeze({ id: "proposal", title: "Review resource", summary: "Review the owner's operation.",
+      revision: "r1", risk: risk as AgentActionProposal["risk"], status: "awaiting-approval" as const,
       resourceTarget: { moduleId: "Owner", resourceType: "sample", resourceId: "one", revision: "r1" }
-    }]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} />);
-    try { expect(container.querySelector(".agent-proposal-risk")?.textContent?.trim()).toBe(label); }
+    });
+    const { container, unmount } = render(<AgentProposalReview proposals={[proposal]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} />);
+    try {
+      expect(container.querySelector(".agent-proposal-risk")?.textContent?.trim()).toBe(label);
+      expect(container.querySelector(".agent-proposal")?.getAttribute("data-risk")).toBe(label === "unknown risk" ? "unknown" : label.replace(/ /g, "-"));
+      expect(proposal.risk).toBe(risk);
+    }
     finally { unmount(); }
   });
 
