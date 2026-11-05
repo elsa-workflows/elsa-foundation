@@ -4,6 +4,8 @@
 production commands/routes below are acceptance targets to deliver, not a claim they already work.
 The [support contract](contracts/support.md) owns the finite matrix and actual status of each cell.
 
+**Design-only ownership amendment**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [W1–W8](contracts/agent-ownership.md#acceptance-witnesses) propose first-class Agent source. The existing commands, paths and receipts below describe the baseline. They are not implementation or migration instructions for the amendment. After agreement, T070 must qualify the Agent-owned create/test/publish/use/inspect/configuration journeys, shared Workflow/Agent CAS/snapshot and crash/receipt recovery, within-deployment runtime/journal replay and clean-store initialization/republish after a declared pre-GA break. No legacy adoption proof is required. This draft does not reset the existing demo or any database.
+
 ## Existing research evidence
 
 Use .NET 10 and Python 3.12+, a new absolute directory outside the checkout and a unique local version:
@@ -108,5 +110,5 @@ Test the real Studio permission/read-only/conflict/save/undo/keyboard/narrow jou
 Run all24 deterministic/protocol provider/store/host cells, the independent deployment/Studio shapes,
 and four authorized live native/BPMN provider journeys. Retain exact versions/hashes, assertions,
 process identities, original failure statuses and cleanup/closure proof. Ship docs/examples/configuration/
-upgrade/rollback/recovery guidance. Complete A1–A15 only from observed product receipts, independent
+declared pre-GA reset/recreation/republish and within-deployment recovery guidance. Complete A1–A15 only from observed product receipts, independent
 review, required exact-head CI and resulting descendant-main qualification.

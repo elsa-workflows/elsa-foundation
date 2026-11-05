@@ -23,11 +23,13 @@ Every PR carries this evidence. It is what a reviewer checks, not permission to 
 - A diff review is done, and a revert or mutation bite-proof shows red then green wherever a behavioral change is claimed.
 - The evidence is posted as a PR comment, because that comment is the notification of record.
 
+Visible Studio changes also carry the [UX acceptance receipt](studio-ux-acceptance.md#independent-ux-acceptance-review): exact head, goal/reference, actual states inspected, downloadable composed evidence, independent reviewer, findings/retest and unverified states. Machine proof success is separate from visual approval. Failed or incomplete UX acceptance is not delivery acceptance, including under a standing self-merge exception.
+
 ## CI tiers
 
 CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/test-tiers.json) assigns every test project to one of them and groups the projects into shards that run in parallel.
 
-- **PR tier, on every commit.** The required check `Build & test` is the aggregate of `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards` and `Core-only build & test`. Each shard builds the whole solution and runs its projects, or its share of a long project split by test class.
+- **PR tier, on every commit.** The required check `Build & test` is the aggregate of `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards` and `Core-only build & test`, plus selected Studio frontend/browser/.NET and composed UX acceptance jobs. Selected Studio proof failures or skips fail the aggregate before any docs-only return. Each shard builds the whole solution and runs its projects, or its share of a long project split by test class.
 - **Full tier, once the PR is not a draft.** The required check `Full tier` (workflow `CI`) runs the integration-tier projects and every EF container suite with its required-provider mode, plus the Secrets EF composition proof. It runs when a PR is opened as ready, reopened, marked ready, and on every push while it is ready.
 - **The tier rule.** A test project that reaches Testcontainers, directly or through a referenced test project, is integration tier. So is one that launches a child host (a Workbench host, a child host process, a worker, a probe or the `dotnet-elsa` CLI) and takes 2 minutes or more. Every other project is PR tier. A new test project needs an entry in the manifest; `Generated maps fresh` fails until it has one. Check locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 
@@ -42,9 +44,12 @@ gh workflow run ci.yml --ref <branch> -f suite=studio
 ```
 
 Other suite values are `backend-source`, `weaver`, `published-images`, and `studio-order`.
-The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready runs the
-full tier and affected Weaver proof without replacing its existing `Build & test` and
-`Generated maps fresh` results or cancelling an in-progress PR-tier run.
+The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready starts a
+complete ready run: the PR tier, full tier, generated maps and affected focused proofs report
+together. It supersedes an in-progress draft run. This avoids
+the protected-merge failure where splitting successful required contexts across draft and ready
+suites still leaves GitHub expecting `Build & test` and `Generated maps fresh` (#3708). A later
+push supersedes that ready run through the same PR concurrency group.
 
 Trusted flake recording, CodeQL scanning, daily stale processing and the weekly branch sweep share the
 `Repository maintenance` workflow. Flake artifacts remain data read by default-branch code with

@@ -4,13 +4,16 @@
 product** until its implementation run is retained. Existing module support and M0 fixtures are not
 specialist acceptance. FR-023–FR-026 and Program A13–A15 own completion.
 
+**Proposed ownership qualification**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) adds W1–W8 in [agent-ownership.md](agent-ownership.md) to each affected source/store/host profile before it can qualify the new model. Existing matrix dimensions and baseline receipts are retained; none is recertified by a design edit. Use owned fresh stores for the new model. Include both Workflow/Agent adapters, unavailable source storage during artifact execution, independent-store publication repair, reference-pin retention and explicit clean initialization/republish after a pre-GA break. Old-schema adoption/rollback is not required.
+
 ## First-party scope
 
 | Axis | Named target | Required evidence |
 |---|---|---|
+| Shared revision/publishing persistence through Workflow and Agent adapters | SQLite, PostgreSQL, SQL Server, MySQL | Shared CAS/snapshot/history/pin storage, publication reservation/repair, revision/release separation and clean-store readiness W1–W7 |
 | Activity/publication/runtime persistence | SQLite, PostgreSQL, SQL Server, MySQL | Existing real provider contexts/migrations plus exact specialist publication, runtime checkpoint and restart behavior |
 | Specialist journal/evaluation persistence | EF implementations for those same four providers | Tenant/CAS/fence/acceptance/receipt/protection/retention/recovery tests and actual native handoff |
-| Connection metadata | New durable existing-repository implementation for those four providers | Restart, create/version-CAS/revoke/delete/rollback/secret-reference behavior; durable Secrets composed separately |
+| Connection metadata | New durable existing-repository implementation for those four providers | Restart, create/version-CAS/revoke/delete/transaction-rollback/secret-reference behavior; durable Secrets composed separately |
 | Model providers | Anthropic; Azure OpenAI | Official SDK protocol fixtures through actual MAF, verified capability profiles and authorized live editorial examples |
 | Assistant regressions | Existing Weaver Anthropic and GitHub Copilot | Existing turn/tool/session/provider suites and normal single-harness composition after MEAI upgrade |
 | Normal development/product journey | Elsa.Workbench + Elsa.Studio.Web | Real create/test/publish/use/evaluate/inspect, permissions and browser evidence |
@@ -64,8 +67,7 @@ partial matrix, quarantine and a failed retry keep their actual status. No cell 
    archives and loaded assembly/static-asset identities, not only project XML.
 4. Start normal hosts through public lifecycle/readiness, actual shell activation and tenant-bound services.
    A listening port is not readiness. Use private databases/configuration and normal authorization.
-5. Run original, disabled-new-admission, incompatible and restored transitions. Retain admitted old
-   readers/workers and accepted results; do not weaken tenant guards or remove old artifact support.
+5. Run disabled-new-admission, restart and incompatible-profile transitions within the supported deployment, retaining required readers/workers and accepted results. Separately qualify the declared clean-store pre-GA initialization/recreation/republish; no cross-break old-data support is implied.
 6. Run positive journeys and causal negatives: missing consumer/codec, wrong schema/version/scope,
    unsupported settings, source/closure substitution, denied/revoked access and corrupted receipts.
    Wrong-cause failure fails the qualification driver.
@@ -74,27 +76,14 @@ M0 establishes bounded external provider/compiler/runtime contracts and a resear
 this normal host matrix. Keep its existing command as a regression witness and replace the recorded
 BPMN gap only after a fresh actual Design-free closure qualifies.
 
-## Migrations, upgrade and rollback
+## Persistence and pre-GA breaking deployment
 
-- Own specialist journal/evaluation tables in the specialist EF module. Connection documents belong to
-  Connections EF; generic activity/catalog data remains in its existing stores. Use portable mappings
-  and real provider migrations, plus consumer-owned DbContext composition. No IQueryable or provider
-  SQL escapes a persistence boundary.
-- Deliver model capability/codec/schema identities with compatible readers before admitting new writes.
-  Keep stable activity/feature/consumer aliases, schema readers, key-ring entries and accepted receipts
-  for supported in-flight work. Disabling new admission is separate from unloading a required reader.
-- Expand first, migrate/backfill through the owning module's supported process, then validate. A crash
-  between module migrations does not imply a cross-module transaction; startup/readiness must expose
-  incomplete capability and refuse new admission without corrupting existing state.
-- Rollback is supported only when the old binary can read all written formats or while new writes are
-  fenced and an explicit supported data restore/reverse migration is performed. Never claim arbitrary
-  downgrade support. Record a compatibility matrix for old artifact, old/new journal/session/receipt
-  and provider codec revisions.
-- The BPMN authored-type package move is a documented pre-GA source/package change. Preserve compiled
-  graph JSON/aliases and neutral-type forwarders; do not add a runtime-to-Design forwarder. Qualify
-  Design/Interchange host registrations and old persisted executable/session fixtures separately.
-- The MEAI central upgrade includes locks/public signatures/nuspec/shared-assembly closure and existing
-  assistant regressions. No local version override or private assembly load is a supported shortcut.
+- Own journal/evaluation tables in the Agent persistence feature; Connections metadata stays with Connections. Shared source revision storage and publishing have their own persistence boundaries. Use real provider mappings and consumer-owned DbContexts; no IQueryable/provider SQL escapes the boundary.
+- Deliver required schema/model/codec profiles before admitting work. Within a supported deployment, disabling new admission does not unload readers required by retained artifacts or accepted operations. Ordinary retry/restart preserves journal, scope and receipt guarantees.
+- The owner permits clean database recreation for pre-GA breaking changes. No expand/backfill, old-reader aliases, historical hash/ID preservation, rolling mixed-schema transfer or cross-break rollback matrix is required by this amendment. Declare affected source/catalog/artifact/journal/connection stores and packages explicitly; retained dependencies cannot silently reference reset data.
+- A future reset procedure stops/drains affected hosts, excludes incompatible binaries, initializes the coordinated schema/configuration profile and recreates sources/republishes before admission. Qualify on owned disposable stores. Never drop stores automatically on startup/publication failure. This design changes no hosts or databases.
+- BPMN/Core and provider/package clean changes still require Design/Interchange and runtime-only closure qualification; no runtime-to-Design dependency is permitted. Historical implementation receipts remain historical, not a promise to load every old serialized fixture.
+- The central MEAI upgrade still requires normal lock/public API/nuspec/shared-assembly qualification and assistant regressions; private assembly loading is not supported.
 
 ## Failure and threat analysis
 
@@ -114,7 +103,7 @@ BPMN gap only after a fresh actual Design-free closure qualifies.
 
 ## Release and evidence gate
 
-User/module-author/operator docs, runnable examples and configuration/migration/recovery guidance ship
+User/module-author/operator docs, runnable examples and configuration/reset/recreation/recovery guidance ship
 with implementation. Each leaf posts meaningful tests, complete affected suites, discovery/count
 reconciliation, architecture/maps/tier/catalog/API/lock evidence, independent review and causal controls.
 Required checks must pass on the exact reviewed head; verify resulting descendant main and requalify

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { StudioEndpointContext, StudioExpressionEditorContribution, StudioBackendSession, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { findExecutableNodeFacts } from "../executableGraph";
 import { resolveRuntimeActivityLabel } from "../runtimeActivityDisplay";
@@ -16,6 +17,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
   observationRevision: number;
   onEnter(execution: ActivityExecutionStateSummary): void;
 }) {
+  const choiceFocus = useRef<string | null>(null);
   const graph = canvas.graph;
   const details = canvas.details;
   if (!canvas.attached) return <p role="status">Attach the unchanged Test Run snapshot to inspect its run data.</p>;
@@ -45,7 +47,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
         void selection.choose(item.execution, graph, labelFor, true, item.label).then(ready => { if (ready) onEnter(item.execution); });
       }}>{item.label}</button>)}
     </nav>
-    {scope ? <ExecutionScopeNavigator context={context} execution={scope.execution} refreshKey={canvas.refreshKey}
+    {scope ? <ExecutionScopeNavigator context={context} execution={scope.execution} label={labelFor(scope.execution)} refreshKey={canvas.refreshKey}
       initialPage={prepared?.scopePage?.executionId === scope.execution.activityExecutionId ? prepared.scopePage.page : undefined}
       onSelect={value => { void selection.choose(value, graph, labelFor, true); }} onUnavailable={selection.unavailable} onIncident={choose} /> : null}
     <div className="wf-execution-transition" role="status" aria-live="polite">
@@ -59,7 +61,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
       nodeLabel={authoredFacts?.presentation?.displayName ?? identity.activityType}
       exactId={inspected?.activityExecutionId} seed={null} confirmedExecution={inspected} onUnavailable={selection.unavailable} ancestorId={ancestorId} refreshKey={canvas.refreshKey}
       initialPage={prepared?.page}
-      requireExplicitSelection labelFor={labelFor} onSelect={choose} onIncident={choose}
+      choiceFocus={choiceFocus} requireExplicitSelection labelFor={labelFor} onSelect={choose} onIncident={choose}
       onEnter={entry => {
         const occurrence = entry.execution.iterationId && entry.iterationPosition && !entry.attempt ? `Iteration ${entry.iterationPosition}` : `Execution ${entry.position}`;
         void selection.choose(entry.execution, graph, labelFor, true, `${labelFor(entry.execution)} · ${occurrence}`)

@@ -78,7 +78,7 @@ Response is metadata-only.
 
 Rules:
 
-- `name` is normalized and immutable.
+- `name` is trimmed and immutable, preserving entered casing. Lookup and uniqueness are case-insensitive within a tenant.
 - `value` is accepted only for stores/types that support direct value submission.
 - `configurationKey` is accepted for configuration-backed references.
 

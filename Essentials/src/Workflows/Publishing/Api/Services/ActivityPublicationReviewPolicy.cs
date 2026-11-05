@@ -1,4 +1,6 @@
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,85 +20,24 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// </summary>
 internal sealed class ActivityPublicationReviewPolicy(
     IEnumerable<IActivityActivationStrategy>? activityActivationStrategies,
-    IRuntimeDurableValueStorageDriverRegistry? storageDrivers)
+    IRuntimeDurableValueStorageDriverRegistry? storageDrivers,
+    IActivityPublicationReadiness? readiness = null,
+    IActivityPublicationVersionPolicy? versions = null)
 {
-    private readonly IActivityActivationStrategy[] _activityActivationStrategies =
-        activityActivationStrategies?.ToArray() ?? [];
+    internal IActivityPublicationReadiness CandidateReadiness { get; } = readiness ?? new ActivityPublicationReadiness(activityActivationStrategies, storageDrivers);
+    private readonly IActivityPublicationVersionPolicy versions = versions ?? new ActivityPublicationVersions();
 
-    public IReadOnlyList<ActivityPublicationCapabilityReadinessView> StorageReadiness(
-        ExecutableActivityTemplate? template) =>
-        template?.StorageDriverRequirements
-            .Distinct()
-            .OrderBy(x => x.DriverKey, StringComparer.Ordinal)
-            .Select(x => new ActivityPublicationCapabilityReadinessView(
-                "StorageDriver",
-                x.DriverKey,
-                null,
-                storageDrivers?.Contains(x.DriverKey) == true ? "Available" : "Missing",
-                []))
-            .ToArray() ?? [];
+    public IReadOnlyList<ActivityPublicationCapabilityReadinessView> StorageReadiness(ExecutableActivityTemplate? template) =>
+        CandidateReadiness.StorageReadiness(template?.StorageDriverRequirements ?? []).Select(View).ToArray();
 
-    public IReadOnlyList<ActivityPublicationCapabilityReadinessView> RuntimeReadiness(
-        ExecutableActivityTemplate? template) =>
-        template?.RuntimeRequirements
-            .Distinct()
-            .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
-            .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal)
-            .Select(x =>
-            {
-                var supported = _activityActivationStrategies
-                    .Where(strategy => StringComparer.Ordinal.Equals(strategy.ConsumerKey, x.ConsumerKey))
-                    .SelectMany(strategy => strategy.SupportedSchemaVersions)
-                    .Distinct(StringComparer.Ordinal)
-                    .Order(StringComparer.Ordinal)
-                    .ToArray();
-                var status = supported.Contains(x.SchemaVersion, StringComparer.Ordinal)
-                    ? "Available"
-                    : supported.Length == 0 ? "Missing" : "UnsupportedSchema";
-                return new ActivityPublicationCapabilityReadinessView(
-                    "RuntimeConsumer",
-                    x.ConsumerKey,
-                    x.SchemaVersion,
-                    status,
-                    supported);
-            })
-            .ToArray() ?? [];
+    public IReadOnlyList<ActivityPublicationCapabilityReadinessView> RuntimeReadiness(ExecutableActivityTemplate? template) =>
+        CandidateReadiness.RuntimeReadiness(template?.RuntimeRequirements ?? []).Select(View).ToArray();
 
-    public IEnumerable<ActivityDiagnostic> ReadinessDiagnostics(
-        ActivityDefinitionDraft draft,
-        ExecutableActivityTemplate? template)
-    {
-        var subject = new ActivityDiagnosticSubject(
-            "ActivityDraft",
-            draft.Id,
-            draft.DefinitionId,
-            Revision: draft.Revision);
-        foreach (var item in StorageReadiness(template).Where(x => x.Status != "Available"))
-            yield return new(
-                "activity.runtime.storage-driver-missing",
-                ActivityDiagnosticSeverity.Error,
-                $"Required durable value storage driver '{item.Key}' is unavailable.",
-                subject,
-                Remediation: "Register the required durable value storage driver before publication.",
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["driverKey"] = item.Key
-                });
-        foreach (var item in RuntimeReadiness(template).Where(x => x.Status != "Available"))
-            yield return new(
-                item.Status == "UnsupportedSchema"
-                    ? "activity.runtime.consumer-schema-unsupported"
-                    : "activity.runtime.consumer-missing",
-                ActivityDiagnosticSeverity.Error,
-                $"Required Runtime consumer '{item.Key}' schema '{item.SchemaVersion}' is unavailable.",
-                subject,
-                Remediation: "Deploy and register a Runtime consumer that supports the exact schema before publication.",
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["consumerKey"] = item.Key,
-                    ["schemaVersion"] = item.SchemaVersion ?? ""
-                });
-    }
+    public IEnumerable<ActivityDiagnostic> ReadinessDiagnostics(ActivityDiagnosticSubject subject, ExecutableActivityTemplate? template) =>
+        CandidateReadiness.ReadinessDiagnostics(subject, template?.RuntimeRequirements ?? [], template?.StorageDriverRequirements ?? []);
+
+    private static ActivityPublicationCapabilityReadinessView View(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness value) =>
+        new(value.Kind, value.Key, value.SchemaVersion, value.Status, value.SupportedSchemaVersions);
 
     public static int ImpactRank(ActivityVersionChange change) => change.Impact switch
     {
@@ -113,7 +54,7 @@ internal sealed class ActivityPublicationReviewPolicy(
         return $"{head.Major}.{head.Minor}.{checked(head.Patch + 1)}";
     }
 
-    public static IReadOnlyList<string> AvailableVersionChoices(
+    public IReadOnlyList<string> AvailableVersionChoices(
         string? headVersion,
         ActivityVersionBump requiredBump,
         IReadOnlyCollection<ActivityDefinitionVersionPublication> existingVersions)
@@ -129,7 +70,7 @@ internal sealed class ActivityPublicationReviewPolicy(
             .ToArray();
     }
 
-    public static string MinimumVersion(string? headVersion, ActivityVersionBump requiredBump) =>
+    public string MinimumVersion(string? headVersion, ActivityVersionBump requiredBump) =>
         ValidVersionChoices(headVersion, requiredBump)[0];
 
     public static string StableCandidateVersionId(string definitionId, string draftId, long revision)
@@ -217,22 +158,10 @@ internal sealed class ActivityPublicationReviewPolicy(
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(material))}";
     }
 
-    private static IReadOnlyList<string> ValidVersionChoices(
-        string? headVersion,
-        ActivityVersionBump requiredBump)
+    private IReadOnlyList<string> ValidVersionChoices(string? headVersion, ActivityVersionBump requiredBump)
     {
-        if (headVersion is null)
-            return ["1.0.0"];
-        var head = ParseHeadVersion(headVersion);
-        var patch = $"{head.Major}.{head.Minor}.{checked(head.Patch + 1)}";
-        var minor = $"{head.Major}.{checked(head.Minor + 1)}.0";
-        var major = $"{checked(head.Major + 1)}.0.0";
-        return requiredBump switch
-        {
-            ActivityVersionBump.Major => [major],
-            ActivityVersionBump.Minor => [minor, major],
-            _ => [patch, minor, major]
-        };
+        if (headVersion is not null) _ = ParseHeadVersion(headVersion);
+        return versions.Choices(headVersion, requiredBump);
     }
 
     private static SemVer ParseHeadVersion(string headVersion)

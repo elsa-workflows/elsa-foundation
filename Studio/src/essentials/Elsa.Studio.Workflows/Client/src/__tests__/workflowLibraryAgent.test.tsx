@@ -123,7 +123,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
   it("prefills the create dialog with a root activity or a listed template, never creating anything", () => {
     const draft: CreateWorkflowDraft = { name: "", description: "", rootActivityVersionId: null };
     expect(applyCreateDialogPrefill(draft, { name: "Onboard", description: "New hires", rootActivityVersionId: "flowchart-v1" }, []))
-      .toEqual({ name: "Onboard", description: "New hires", rootActivityVersionId: "flowchart-v1" });
+      .toEqual({ name: "Onboard", description: "New hires", rootActivityVersionId: "flowchart-v1", metadataEdited: { name: true, description: true } });
     const templates = [{ id: "template-1", name: "Approval", revision: "t-r3", content: { state: { rootActivity: null }, layout: [], activityPresentation: [] } as never }];
     expect(applyCreateDialogPrefill(draft, { name: "Onboard", templateId: "template-1" }, templates)).toMatchObject({ templateId: "template-1", rootActivityVersionId: null });
     expect(applyCreateDialogPrefill(draft, { name: "Onboard", templateId: "template-9" }, templates)).toBeNull();

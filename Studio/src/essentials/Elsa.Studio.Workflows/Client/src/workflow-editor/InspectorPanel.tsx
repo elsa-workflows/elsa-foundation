@@ -29,7 +29,7 @@ import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
 import { readContainerVariables, shadowingWarningMap, writeContainerVariables } from "../scopedVariables";
 import { describeSlotContents } from "./editorHelpers";
 import { ConnectMenu } from "./graph";
-import { activityDescriptionMaxLength, activityDisplayNameMaxLength } from "../activityPresentation";
+import { ActivityPresentationFields } from "./ActivityPresentationFields";
 import { StudioLink } from "../StudioLink";
 
 // The open change-activity picker. Holds only the slot ID (not the ChildSlot descriptor): the menu can
@@ -431,38 +431,8 @@ export function InspectorPanel({
           </StudioTabPanel>
         ) : null}
         <StudioTabPanel {...tabPanelProps("details")}>
-          <div className="wf-activity-presentation-fields">
-            <label>
-              <span>Display name</span>
-              <input
-                type="text"
-                maxLength={activityDisplayNameMaxLength}
-                value={selectedPresentation?.displayName ?? ""}
-                placeholder={selectedNodeLabel}
-                disabled={!onSelectedPresentationChange}
-                onChange={event => onSelectedPresentationChange?.({
-                  displayName: event.target.value,
-                  description: selectedPresentation?.description
-                })}
-              />
-              <small>{selectedPresentation?.displayName?.length ?? 0}/{activityDisplayNameMaxLength}</small>
-            </label>
-            <label>
-              <span>Description</span>
-              <textarea
-                rows={5}
-                maxLength={activityDescriptionMaxLength}
-                value={selectedPresentation?.description ?? ""}
-                placeholder="Explain what this activity does in this workflow."
-                disabled={!onSelectedPresentationChange}
-                onChange={event => onSelectedPresentationChange?.({
-                  displayName: selectedPresentation?.displayName,
-                  description: event.target.value
-                })}
-              />
-              <small>{selectedPresentation?.description?.length ?? 0}/{activityDescriptionMaxLength}</small>
-            </label>
-          </div>
+          <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
+            label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />
         </StudioTabPanel>
         <StudioTabPanel {...tabPanelProps("version")}>

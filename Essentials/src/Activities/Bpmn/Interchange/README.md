@@ -20,6 +20,12 @@ The library supplies its selected XML/semantic profile: coded errors, named even
 
 Default markers are derived from the source element's DefaultFlowId. Import/edit/export preserves Foundation's authored markers; it does not replace them with a library bindingRef envelope. Error classification is separate from ordinary host faults/incidents. Compensation handlers retain their associated ordinary bound task identities; called escalation is carried through real child-control sources rather than an authored marker alone.
 
+## Exact task bindings
+
+A task's own bound work travels as `elsa:taskBinding`: its exact activity version and literal inputs. `ExportAsync` writes it only when the visible catalog resolves the version and declares every bound input a portable literal; a sensitive, credential, connection or password input, an expression, an unresolvable version or input, an output capture, or a storage, evaluation or conversion setting leaves the whole binding out, reported for its element. Synchronous `Export` has no catalog and carries none.
+
+Import never executes what a document says on its own. A retained binding is proposed on the task's capability with its version and input keys, and the task stays `RequiresBinding`, so `CanExecute` is false. Confirming the element (`confirmedBindings` on analyze or import) binds it; the catalog pass then refuses it as Unsupported unless it names an exact version (never a binding-profile placeholder) that this host's visible catalog can read and that declares every carried input as portable. Confirming an element with no retained binding is reported Degraded.
+
 ## Direct binding metadata retention
 
 The optional authored element property `elsa.direct.binding` round-trips as `elsa:directBinding` in the existing Elsa vendor namespace. Interchange retains the exact JSON object, including future schema versions, with a limit of16KiB UTF-8 and a maximum depth of32. Malformed values and conflicting attributes under both vendor namespace aliases are refused with element context. Other unrepresented extension content still reports degradation; documents without the property emit no new binding attribute.

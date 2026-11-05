@@ -119,6 +119,18 @@ describe("entered secret visibility", () => {
 });
 
 describe("Create dialog regression contract", () => {
+  it("preserves technical name casing on blur and submit while trimming whitespace", () => {
+    const { container, onSave } = renderDialog("create");
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    change(name, " DbConnectionString ");
+    flushSync(() => name.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(name.value).toBe("DbConnectionString");
+    change(fieldControl<HTMLInputElement>(container, "Value"), "new-secret-value");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
+  });
+
   it("uses descriptor defaults, gates submission on Value, and submits the exact default request without reading stored values", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
@@ -357,7 +369,7 @@ describe("Create dialog regression contract", () => {
     flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     expect(onSave).toHaveBeenCalledWith({
-      name: "payments.api",
+      name: "PAYMENTS.Api",
       displayName: "Payments API",
       description: "API credential",
       typeName: "text",

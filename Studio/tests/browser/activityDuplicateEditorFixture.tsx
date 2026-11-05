@@ -342,6 +342,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const hostPersistenceMode = new URLSearchParams(window.location.search).get("host-persistence-mode");
+  const iterationFixture = new URLSearchParams(window.location.search).has("iteration-provenance");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
@@ -380,6 +381,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
     parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
+    ...(iterationFixture && node.nodeId === "write-one" ? { iterationId: `iteration-${index + 1}`,
+      provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null, iterationId: `iteration-${index + 1}` } } : {}),
     ...(motionFixture ? { outcomeNames: ["Done"], provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
       schedulingActivityExecutionId: `activity-exec-${predecessors.get(node.nodeId) ?? parent}`,
       schedulingCause: draft.state.rootActivity?.structure?.kind === "elsa.sequence.structure" ? "ActivityCompletion" : "continuation" } } : {}),
@@ -498,6 +501,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
             && (!ancestor || record.parentActivityExecutionId === ancestor));
           const anchor = query.get("anchorActivityExecutionId");
           const items = filtered.map((execution, index) => ({ execution, position: index + 1,
+            ...(execution.iterationId ? { iterationPosition: index + 1 } : {}),
             ...(motionFixture ? { attempt: null } : {}), previousActivityExecutionId: filtered[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: filtered[index + 1]?.activityExecutionId ?? null }));
           return { totalCount: items.length, previousCursor: null, nextCursor: null,
             items: query.get("limit") === "1" ? [anchor ? items.find(item => item.execution.activityExecutionId === anchor) : items.at(-1)].filter(Boolean) : items };
