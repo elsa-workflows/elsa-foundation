@@ -67,8 +67,10 @@ The owner's supplied Material floating-label image is the interaction reference;
 
 ## Prototype validation
 
-Implemented as a bounded prototype in PR #3857. Local proof at source `6732623e2d9294a19f8ad5493f142ea7dacf6d7b` passed 73 module tests, 76 browser checks across 48 built-in theme/appearance combinations and 12 composed journeys. Shared downloadable CI evidence and the overall product acceptance gate remain pending; the PR stays draft for prototype review. This status records prototype implementation, not approval of the wider migration.
+Implemented as a bounded prototype in PR #3857. Local proof at source `6732623e2d9294a19f8ad5493f142ea7dacf6d7b` passed 73 module tests, 76 browser checks across 48 built-in theme/appearance combinations and 12 composed journeys. Shared downloadable CI evidence, independent review and required checks gate merge through the normal PR process. This status records bounded prototype implementation; wider migration remains a separate work unit.
 
 ## Filled / Outlined comparison extension
 
 Owner requested the second presentation on 2026-11-05. Extend the same draft prototype and matrix to both styles before deciding shared defaults. Prior implementation evidence above describes the Filled baseline; comparison qualification is recorded separately on PR #3857.
+
+Comparison validation: the local suite passed 134/134 on UI source `1becff2c915df35468996a3930b61000e378c13c`, covering both presentations across 96 style/theme/appearance combinations. CI retains per-shard PNGs, full browser inventories and source/head provenance under `secret-fields-<head>-<shard>-<attempt>` artifacts, alongside the existing composed-source artifacts. Owner delegation on 2026-11-05 authorizes completion of this scoped prototype through review/checks/merge without a further design-approval pause; it does not expand to a Studio-wide rollout.

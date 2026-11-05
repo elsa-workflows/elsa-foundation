@@ -35,7 +35,7 @@ Pre-design gate: passed. Post-design gate: passed; helper stays internal to the 
 
 ## Validation and review
 
-Run affected Secrets unit suite whole, module typecheck/build, CSS/JS lint for touched files, browser scope regressions and theme/state matrix. Compare before/after dialog geometry at the same viewport/theme. Commit before composed proof. Independent acceptance reviewer inspects screenshots of the exact source revision; fixture passes cannot substitute for composed proof. Publish a draft prototype PR and retain the prototype status until its findings guide a future shared component decision.
+Run affected Secrets unit suite whole, module typecheck/build, CSS/JS lint for touched files, browser scope regressions and theme/state matrix. Compare before/after dialog geometry at the same viewport/theme. Commit before composed proof. Independent acceptance reviewer inspects screenshots of the exact source revision; fixture passes cannot substitute for composed proof. Open the prototype PR as draft, complete independent review and required checks, then use the normal merge process; shared extraction remains a future work unit.
 
 ## Filled / Outlined comparison follow-up
 

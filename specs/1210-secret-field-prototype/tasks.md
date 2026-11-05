@@ -33,10 +33,12 @@ T001 → T002 → T003 → T004 → T005. T006 follows T004, T007 follows T006, 
 
 ## Prototype closeout
 
-Local source proof at `6732623e2d9294a19f8ad5493f142ea7dacf6d7b`: Secrets 73/73 (inventory 73), browser 76/76 (inventory 76; 48 theme/appearance combinations), composed 12/12 with clean owned hosts/stores, architecture 616/616 and generated-map check passed. Independent correctness/standards and isolated visual reviews passed; composed visual review is recorded on PR #3857. Shared CI/downloadable acceptance evidence remains pending while runners are queued. These tasks complete the bounded prototype and preserve that pending gate; they do not authorize a shared-component rollout or production acceptance.
+Local source proof at `6732623e2d9294a19f8ad5493f142ea7dacf6d7b`: Secrets 73/73 (inventory 73), browser 76/76 (inventory 76; 48 theme/appearance combinations), composed 12/12 with clean owned hosts/stores, architecture 616/616 and generated-map check passed. Independent correctness/standards and isolated visual reviews passed; composed visual review is recorded on PR #3857. This Filled-baseline receipt records the local proof; shared CI/downloadable evidence is required before merge. Shared-component rollout remains separate from this bounded prototype.
 
 ## Comparison extension
 
 - [x] T012 [US2] Add preview-only persistent Filled/Outlined controls, including live-dialog switching, in Studio/tests/browser/secretFieldPrototypeFixture.tsx and secretFieldPrototypeFixture.css.
-- [ ] T013 [US2] Run both presentations through the theme/state matrix and draft-preservation checks in Studio/tests/browser/secret-field-prototype.spec.ts; inspect current captures independently.
-- [ ] T014 Record comparison findings and review evidence in specs/1210-secret-field-prototype/findings.md and draft PR #3857. This preview-only extension leaves composed product code unchanged.
+- [x] T013 [US2] Run both presentations through the theme/state matrix and draft-preservation checks in Studio/tests/browser/secret-field-prototype.spec.ts; inspect current captures independently.
+- [x] T014 Record comparison findings and review evidence in specs/1210-secret-field-prototype/findings.md and draft PR #3857. This preview-only extension leaves composed product code unchanged.
+
+Comparison local proof at UI source `1becff2c915df35468996a3930b61000e378c13c`: 134/134 browser checks passed with no skips/retries, including 96 style/theme/appearance combinations and live-switch, persistence, native keyboard/focus and border-label geometry. Independent review receipts and exact-head shared CI artifacts are retained on PR #3857. Final comparison images use the unchanged UI source across the CI/documentation closeout.
