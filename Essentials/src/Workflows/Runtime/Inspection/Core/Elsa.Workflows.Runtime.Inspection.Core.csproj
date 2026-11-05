@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Request-scoped workflow inspection authorization contracts for runtime API and authorized module queries.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+  </ItemGroup>
+</Project>

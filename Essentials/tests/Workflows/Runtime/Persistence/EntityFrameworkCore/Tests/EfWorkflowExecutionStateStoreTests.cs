@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;

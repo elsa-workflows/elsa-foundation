@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: In progress — native design reviewed; provider-dependent design and actual provider access remain gated by the pending owner choice.
+**Status**: In progress — implementation checkpoint stopped under the org three-failed-check rule; provider/access also remains unresolved. No delivery acceptance.
 
 **Input**: [Feature request #3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604), activated by [owner authorization of 6 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3604#issuecomment-6671863823).
 
