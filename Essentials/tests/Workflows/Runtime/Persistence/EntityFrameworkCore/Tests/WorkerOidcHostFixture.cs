@@ -339,7 +339,10 @@ internal sealed class WorkerOidcHostProcess : IAsyncDisposable
             var line = await _process.StandardOutput.ReadLineAsync().WaitAsync(ControlTimeout);
             var reply = line is null ? null : JsonSerializer.Deserialize<WorkerOidcHostReply>(line, _jsonOptions);
             if (reply?.Status != "ok")
-                throw new InvalidOperationException($"The Worker OIDC fixture control failed ({reply?.Code ?? "no-receipt"}).");
+                throw new InvalidOperationException(
+                    $"The Worker OIDC fixture control failed ({reply?.Code ?? "no-receipt"}, " +
+                    $"{string.Join(" -> ", reply?.ExceptionTypes ?? ["unknown-exception-type"])}; " +
+                    $"schema={JsonSerializer.Serialize(new { schemaObservation = reply?.SchemaObservation, schemaRefusal = reply?.SchemaRefusal }, _jsonOptions)}).");
             return new WorkerOidcControlReceipt(
                 reply.OperationId ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation ID."),
                 reply.OperationKind ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation kind."),
@@ -424,7 +427,27 @@ internal sealed record WorkerOidcHostReply(
     string? OperationId = null,
     string? OperationKind = null,
     string? OperationCategory = null,
-    long? OperationEpoch = null);
+    long? OperationEpoch = null,
+    string[]? ExceptionTypes = null,
+    WorkerOidcSchemaObservation? SchemaObservation = null,
+    WorkerOidcSchemaRefusal? SchemaRefusal = null);
+
+internal sealed record WorkerOidcSchemaObservation(
+    string Stage,
+    bool FleetPresent,
+    bool GatePresent,
+    bool StatePresent,
+    string? WriteVersion,
+    bool? WritesRefused,
+    string? UnreadableFinalizedVersion,
+    bool ObservedRecordPresent,
+    string? FinalizedVersion);
+
+internal sealed record WorkerOidcSchemaRefusal(
+    string Code,
+    string Family,
+    string? WriteVersion,
+    string? RequiredVersion);
 
 internal sealed record WorkerOidcControlReceipt(
     string OperationId,
