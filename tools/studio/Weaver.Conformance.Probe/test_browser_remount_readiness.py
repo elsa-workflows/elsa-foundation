@@ -10,7 +10,7 @@ class BrowserRemountReadinessTests(unittest.TestCase):
         tool = Path(__file__).resolve().parent
         source = (tool / "browser.mjs").read_text()
         start = source.index('  await expect(dock()).toHaveCount(0);', source.index('async function consumedIntentRemount'))
-        end = source.index('  await page.getByLabel("Search modules", { exact: true }).fill("");', start)
+        end = source.index('  await page.getByLabel("Search Studio", { exact: true }).fill("");', start)
         actions = source[start:end]
         if old_driver:
             actions = actions.replace('  await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();\n', '')
@@ -24,9 +24,9 @@ const expect=baseExpect.configure({timeout:1500});
 const scenario=SCENARIO,oldDriver=OLD_DRIVER;
 let connect,connected,featuresRequests=0;
 const connectionSeen=new Promise(resolve=>connected=resolve);
-const html=`<!doctype html><input type="search" aria-label="Search modules"><script>
+const html=`<!doctype html><input type="search" aria-label="Search Studio"><script>
 fetch('/connection').then(()=>{
- document.body.innerHTML='<button>Weaver</button><input type="search" aria-label="Search modules"><nav aria-label="Settings"><a href="/settings">Settings</a></nav>';
+ document.body.innerHTML='<button>Weaver</button><input type="search" aria-label="Search Studio"><nav aria-label="Search results"><a href="/settings">Settings</a></nav>';
  document.querySelector('input').addEventListener('input',event=>{
   const nav=document.querySelector('nav');
   nav.innerHTML='<a href="/settings">Settings</a>';

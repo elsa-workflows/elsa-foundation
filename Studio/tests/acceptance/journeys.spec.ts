@@ -222,6 +222,18 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(navLink("Templates")).toBeVisible();
   await capture(page, info, "search");
   await search.press("Escape");
+  // Search must enter host configuration through native SPA navigation, as integrations do.
+  const documentEpoch = await page.evaluate(() => performance.timeOrigin);
+  await search.fill("Features");
+  await page.getByRole("navigation", { name: "Search results", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
+  await expect(page).toHaveURL(/\/features(?:\?|$)/);
+  await search.fill("");
+  await page.getByRole("tab", { name: "Studio", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Filter features", exact: true })).toBeVisible();
+  await expect(page.locator(".feature-management-list")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("switch").first()).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentEpoch);
+  await capture(page, info, "features-navigation");
   if (desktop) {
     await sidebar.getByRole("button", { name: "Build", exact: true }).click();
     await expect(navLink("Agents")).toBeHidden();
