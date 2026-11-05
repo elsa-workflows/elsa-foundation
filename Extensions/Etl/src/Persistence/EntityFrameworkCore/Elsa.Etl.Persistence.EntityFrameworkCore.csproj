@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>SQLite EF Core design persistence for finite ETL definitions and published artifacts.</Description>
+    <Description>EF Core persistence for ETL definitions and published artifacts (SQLite, SQL Server, PostgreSQL, MySQL) and the ETL runtime (SQLite).</Description>
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>
