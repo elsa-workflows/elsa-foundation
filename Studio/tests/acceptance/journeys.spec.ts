@@ -181,7 +181,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(navLink("Connections")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
   await capture(page, info, "groups");
-  await navLink("Workflows").click();
+  await sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
   await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: /Workflow executables/i }).first()).toBeVisible();
@@ -225,7 +225,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   // Search must enter host configuration through native SPA navigation, as integrations do.
   const documentEpoch = await page.evaluate(() => performance.timeOrigin);
   await search.fill("Features");
-  await page.getByRole("navigation", { name: "Search results", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: /^(Settings|Search results)$/ }).getByRole("link", { name: "Features", exact: true }).filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/features(?:\?|$)/);
   await search.fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();

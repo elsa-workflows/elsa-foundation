@@ -1253,6 +1253,12 @@ async function rendererUnavailable() {
   await screenshot("renderer-fallback");
 }
 
+async function navigateToWorkflows() {
+  const workflows = page.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Workflows", exact: true });
+  if (!await workflows.isVisible()) await page.getByRole("button", { name: "Build", exact: true }).click();
+  await workflows.click();
+}
+
 async function incompatibleModule() {
   const expected = config.incompatibleModule;
   need(expected?.moduleId === witness.moduleId && typeof expected.packageId === "string" && expected.packageId
@@ -1279,7 +1285,7 @@ async function incompatibleModule() {
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
   await expect(page.locator(".topbar h1")).toHaveText("Home");
   await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+  await navigateToWorkflows();
   await expect(page.locator(".topbar h1")).toContainText("Workflow");
   await expect(page.locator("main")).not.toContainText("No Studio route is registered");
   await page.getByRole("button", { name: /^Weaver/ }).click();
@@ -1358,7 +1364,7 @@ async function consumedIntentRemount() {
     realCapabilityRead: true, originalTimeOrigin, commandId: selected.commandId, providerCalls: callsFor(selected.commandId) }));
   // Native SPA navigation keeps that consumed-intent App state until Studio feature Apply retires the document.
   await page.getByLabel("Search Studio", { exact: true }).fill("Features");
-  await page.getByRole("navigation", { name: "Search results", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: /^(Settings|Search results)$/ }).getByRole("link", { name: "Features", exact: true }).filter({ visible: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search Studio", { exact: true }).fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();
@@ -1411,7 +1417,7 @@ async function consumedIntentRemount() {
   // when the connected AppContent mounts; the launcher exists only in that ready shell.
   await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
   await page.getByLabel("Search Studio", { exact: true }).fill("Features");
-  await page.getByRole("navigation", { name: "Search results", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: /^(Settings|Search results)$/ }).getByRole("link", { name: "Features", exact: true }).filter({ visible: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search Studio", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
@@ -1433,7 +1439,7 @@ async function consumedIntentRemount() {
   const featuresState = { url: diagnosticUrl(page.url()), providerStatus: await dock().getByTestId("weaver-provider-status").innerText(),
     composerDisabled: await dock().getByLabel("Ask Weaver", { exact: true }).isDisabled(), busy: await dock().getAttribute("aria-busy") };
   result.evidence.push(retain("remount-features-state", featuresState));
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+  await navigateToWorkflows();
   await expect(page).toHaveURL(studioRoute("/workflows/definitions"));
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
