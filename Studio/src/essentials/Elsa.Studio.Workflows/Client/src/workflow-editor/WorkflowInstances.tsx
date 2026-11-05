@@ -951,8 +951,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setScopeNavigation(current => current.context === browserContext && current.loading
       ? { context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." } : current);
     setActiveInspectorTab(initialInspectorTab);
-    if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
-  }, [browserContext, initialInspectorTab, openInspector]);
+    // A default Activity tab without an exact target must leave Diagram available on a phone.
+    if (initialInspectorTab === "issues" || (initialInspectorTab === "activity"
+      && Boolean(initialActivityExecutionId?.trim() || parsedInitialHistory.selection))) openInspector();
+  }, [browserContext, initialInspectorTab, initialActivityExecutionId, parsedInitialHistory.selection, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
   // it, published only once the run has loaded and withdrawn while loading, after a failed load and on unmount. The server

@@ -1227,6 +1227,12 @@ function click(button: HTMLElement | undefined | null) {
   flushSync(() => button?.click());
 }
 
+async function showActivityData() {
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("[data-tab-id='data']"));
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")?.getAttribute("aria-selected")).toBe("true"));
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -1452,6 +1458,7 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
+  await showActivityData();
   const overview = container.querySelector(".wf-activity-overview")!;
   const details = container.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
   details.open = true;
@@ -1582,6 +1589,7 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   click(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']"));
   await vi.waitFor(() => expect(window.location.search).toContain("write5"));
+  await showActivityData();
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 
   phase = "unavailable";
@@ -1602,5 +1610,6 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   // Only a new matching authoritative page may restore the selected child.
   pending.resolve(pageFor({ executableNodeId: "compiled-target", ancestorActivityExecutionId: "scope5" }));
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  await showActivityData();
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 });

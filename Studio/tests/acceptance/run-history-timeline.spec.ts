@@ -162,7 +162,8 @@ test("durable run timeline across a native task resume and owned process restart
     await search.focus(); await page.keyboard.press("Tab"); await expect(submit).toBeFocused();
     await expect(submit).toHaveCSS("outline-style", "solid"); await expect(submit).toHaveCSS("outline-width", "2px");
     expect(page.url()).toBe(urlBeforeStyle); expect(await recordedRows(timeline)).toEqual(rowsBeforeStyle);
-    await revealCaptureAnchor(timeline.locator("form").filter({ has: search }));
+    // `has` is resolved inside each form, so its locator must start at the searchbox.
+    await revealCaptureAnchor(timeline.locator("form").filter({ has: page.getByRole("searchbox", { name: "Search recorded events", exact: true }) }));
     await capture(page, info, "minimal-controls", [searchField, submit]);
   } finally {
     await page.keyboard.press("Escape"); await theme.click();
