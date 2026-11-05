@@ -33,19 +33,81 @@ test.afterEach(async ({ page }) => {
 });
 
 test.beforeEach(async ({ page }, info) => {
-  await page.addInitScript(mode => {
-    localStorage.removeItem("elsa-studio-theme");
-    localStorage.setItem("elsa-studio-workspace-style", "linen");
+  const reportedAppearance = info.title === "feature filtering and settings dialogs";
+  await page.addInitScript(({ mode, reportedAppearance }) => {
+    if (reportedAppearance) localStorage.setItem("elsa-studio-theme", "classic");
+    else localStorage.removeItem("elsa-studio-theme");
+    localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
-  }, info.project.use.colorScheme ?? "light");
+  }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
   const errors: string[] = [];
   browserErrors.set(page, errors);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
   await signIn(page);
+  if (reportedAppearance) {
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+  }
   await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
   await capture(page, info, "reference");
+});
+
+test("feature filtering and settings dialogs", async ({ page }, info) => {
+  await page.goto("/features");
+  const list = page.locator(".feature-management-list");
+  const filter = page.getByRole("searchbox", { name: "Filter features", exact: true });
+  for (const host of ["Server", "Studio"]) {
+    await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: new RegExp(`^${host}`) }).click();
+    await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await filter.fill("no-such-feature-acceptance");
+    const message = list.getByText("No features match this filter.", { exact: true });
+    await expect(message).toBeVisible();
+    await message.scrollIntoViewIfNeeded();
+    const alignment = await message.evaluate(element => {
+      const heading = document.querySelector(".feature-management-list-heading strong");
+      if (!heading) throw new Error("Feature list heading is missing.");
+      const text = document.createRange();
+      text.selectNodeContents(element);
+      return {
+        messageLeft: text.getBoundingClientRect().left,
+        headingLeft: heading.getBoundingClientRect().left
+      };
+    });
+    expect(Math.abs(alignment.messageLeft - alignment.headingLeft)).toBeLessThanOrEqual(1);
+    await capture(page, info, `features-${host.toLowerCase()}-no-matches`);
+    await filter.fill("");
+    await expect(message).toBeHidden();
+    await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await list.locator(".feature-management-card").first().scrollIntoViewIfNeeded();
+    await capture(page, info, `features-${host.toLowerCase()}-populated`);
+  }
+
+  await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
+  await filter.fill("Activities Dispatch Workflow (Runtime)");
+  await list.getByRole("button", { name: /^Activities Dispatch Workflow \(Runtime\)/ }).click();
+  const edit = page.getByRole("button", { name: "Edit settings", exact: true });
+  await edit.click();
+  const settings = page.getByRole("dialog", { name: "Activities Dispatch Workflow (Runtime)", exact: true });
+  await expect(settings).toBeVisible();
+  await capture(page, info, "feature-settings-dialog");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(settings).toBeHidden();
+  await edit.click();
+  await settings.getByLabel(/^Child-start maximum delivery attempts/).fill("5");
+  await settings.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(settings).toBeHidden();
+  await edit.click();
+  await expect(settings.getByLabel(/^Child-start maximum delivery attempts/)).toHaveValue("5");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Review changes", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "Review changes", exact: true });
+  await expect(review).toBeVisible();
+  await capture(page, info, "feature-impact-dialog");
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(review).toBeHidden();
 });
 
 test("collections and connection creation", async ({ page }, info) => {
