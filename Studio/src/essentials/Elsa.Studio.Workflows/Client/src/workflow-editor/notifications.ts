@@ -19,6 +19,10 @@ export function getNotifications(): StudioNotificationApi {
   return notifications;
 }
 
+export function notifySuccess(title: string): void {
+  notifications.notify({ level: "success", title });
+}
+
 /** Capture before awaiting an action so a late outcome cannot toast into another page/backend. */
 export function useNotificationGuard(context: object) {
   const current = useRef({ context, active: false, generation: 0 });

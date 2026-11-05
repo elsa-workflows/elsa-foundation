@@ -5,7 +5,7 @@ import { StudioButton } from "@elsa-workflows/studio-ui";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { WorkflowFolderDeletionDialog } from "./WorkflowFolderDeletionDialog";
-import { getNotifications, useNotificationGuard } from "./notifications";
+import { notifySuccess, useNotificationGuard } from "./notifications";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
 import { MoveWorkflowFolderDialog, RenameWorkflowFolderDialog } from "./WorkflowFolderMutationDialogs";
@@ -216,7 +216,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       select(survivor);
       setFocusedKey(survivorKey);
       await refreshAfterStructureChange([selectedFolder.parentId ?? null], survivor, selectedFolder.id);
-      if (canNotify()) getNotifications().notify({ level: "success", title: `Deleted folder ${selectedFolder.name}` });
+      if (canNotify()) notifySuccess(`Deleted folder ${selectedFolder.name}`);
       if (canNotify()) restoreFolderFocus(survivorKey);
     } catch (caught) {
       if (canNotify()) setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
@@ -308,7 +308,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       onRenamed={async () => {
         const canNotify = captureNotificationGuard();
         await refreshAfterStructureChange([selectedFolder.parentId ?? null]);
-        if (canNotify()) getNotifications().notify({ level: "success", title: "Folder renamed" });
+        if (canNotify()) notifySuccess("Folder renamed");
       }}
     /> : null}
     {available && mutationDialog === "move" && selectedFolder ? <MoveWorkflowFolderDialog
@@ -318,7 +318,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       onMoved={async (parentId, previousParentId) => {
         const canNotify = captureNotificationGuard();
         await refreshAfterStructureChange([previousParentId, parentId]);
-        if (canNotify()) getNotifications().notify({ level: "success", title: "Folder moved" });
+        if (canNotify()) notifySuccess("Folder moved");
       }}
     /> : null}
     {available && mutationDialog === "delete" && selectedFolder ? <WorkflowFolderDeletionDialog
@@ -335,7 +335,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         select(survivor);
         setFocusedKey(survivorKey);
         await refreshAfterStructureChange([parentId], survivor, preview.folder.id);
-        if (canNotify()) getNotifications().notify({ level: "success", title: `Deleted folder ${preview.folder.name}` });
+        if (canNotify()) notifySuccess(`Deleted folder ${preview.folder.name}`);
         restoreFolderFocus(survivorKey);
       }}
     /> : null}
