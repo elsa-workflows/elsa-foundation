@@ -1204,3 +1204,35 @@ Two component regressions fail before this correction. The full SDK/component su
 TypeScript, ESLint and module/SDK build passing (`/tmp/elsa-3579-ui-cancel-focus-{red,green,types,eslint,build}.log`).
 Backend C# and the provisioning-policy-only decision are unchanged. Fresh composed execution and independent
 visual acceptance are still required; the failed attempts have not been reclassified as passing.
+
+## Independent review round 3 and settled confirmations (6 November)
+
+At `cb373530d`, the complete composed Studio journey and all seven representative UI profiles pass, with clean
+source-bound receipts. Correctness and standards reviewers find no actionable issue. The acceptance reviewer
+opens 54 current screenshots and all eight receipts, and finds two actionable presentation/evidence defects:
+long generated usernames overflow the shared confirmation surface, and several screenshots capture its opening
+animation or the unfinished removal UI. These passing runtime assertions therefore do not establish visual
+acceptance. Downloadable current-head evidence is also still required.
+
+Correction `2dbdcca6a` gives the shared dialog body a shrinkable minimum width and wraps long message/title
+tokens. Four actual-browser regressions with generated usernames, long issuers and opaque subjects fail before
+the fix and pass afterward, covering 1440px/390px and light/dark. The host's **1,055/1,055** component tests,
+browser-spec TypeScript, affected ESLint, host asset build and reference host build pass; the latter reports
+zero warnings/errors. Logs: `/tmp/elsa-3579-dialog-{wrap-red,wrap-green,host-unit,types,eslint,host-assets,host-build}.log`.
+
+The composed runner now waits for finite dialog animations and fonts, checks horizontal dialog/message/action
+bounds before capturing all 19 confirmations, and waits for the completed lifecycle notice, enabled Refresh,
+empty selection and two baseline connection rows before its final capture. A fresh clean-source full Studio
+journey passes at `2dbdcca6a` in owned root `elsa-3579-full-studio-Yl0XEU`. All light/dark axe checks remain clear;
+saved Reader roles, guarded attachment/removal, selected cookie/access/refresh revocation, retained draft and
+explicit override lifecycle pass. Preview preserves user/link/session counts; its administrator's 13 ordinary
+token exchanges account for the 26 extra token records. The author opens the corrected long-username removal,
+preview and completed-lifecycle screenshots and confirms the clipping/transient captures are gone.
+
+The next exact-head independent round and downloadable composed evidence remain open. Hosted CI has not
+started its queued jobs. The approved narrow exception for historical GitGuardian incident 39613973 /
+occurrence 310433699 is recorded in [PR comment 6647956479](https://github.com/elsa-workflows/elsa-foundation/pull/3806#issuecomment-6647956479).
+The `2dbdcca6a` scanner check still fails for that same sole occurrence; its current fixture is byte-identical
+to removal commit `abfef8dc9` (SHA-256 `bab4f00c03c25742d715784d4dc4590f6aad30034f1b3bf04b04041ff31b38df`).
+No scanner success or protection bypass is claimed. Required checks, all other findings, final review,
+distribution/consumer evidence, merge and resulting-main qualification remain mandatory.
