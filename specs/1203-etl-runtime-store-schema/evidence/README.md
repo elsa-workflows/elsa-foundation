@@ -1,5 +1,15 @@
 # Evidence: the ETL runtime store's schema on all four EF engines (spec 1203)
 
+## Current closeout — 5 November
+
+Parent #3737 protected-merged at `db74c19a9`; schema #3803 now targets main. Ordinary merge `6ca230209` retains descendant main `5a3ad480a` and its shared Core publication-contract integration. No migration, frozen authoring/state or writer is removed.
+
+Full review7 at `d7105b668` found one P2: an invalid retained run ID could throw an argument error through the engine key seam and block a later valid delivery. Corrected at `cc4253459` by classifying that retained-data validation as `InvalidDataException` before key derivation. Client-input validation remains an argument error, and the global scanner's exception filter is not widened.
+
+[Source-bound controls and receipts](review-round7.json): the three whitespace/untrimmed/control-character cases fail **3/3 before** the correction and pass **3/3 after**, with zero skips. The whole shared SQLite runtime-store contract then passes **262/262**, zero failed/skipped; discovery also lists262 cases. These are a filtered contract run, **not** a new whole-project ETL pass. The first control attempt stopped at compilation because of a test-helper reference; it is separately recorded and is not a product bite. No test container or composed host was started for these controls.
+
+Fresh whole ETL/native-provider/architecture/generator qualification and all exact-head required checks remain pending. Historical whole-suite counts below retain their real sources. The new shared cases still need execution on all three servers; runtime registration remains guarded until spec1206. Full review8 follows on the completed candidate. Direct-parent mainCI41945105078 was cancelled; descendant CI41947341383 and fresh resulting-main host qualification remain separate pending gates. Broader recovery and Studio acceptance stay open.
+
 ## Requirements and tests
 
 | Requirement | Evidence |
