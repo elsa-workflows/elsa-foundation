@@ -25,22 +25,34 @@ public sealed class SourceRevisionSchemaFamilyTests
         Assert.Equal(MixedContext.ModuleVersion, await db.Set<DomainProbe>().Select(x => EF.Property<string>(x, EfSchemaVersion.ColumnName)).SingleAsync());
         Assert.Equal(EfSourceModel.Chain.CurrentVersion, await db.Set<SourceWorkingCopy>().Select(x => EF.Property<string>(x, EfSchemaVersion.ColumnName)).SingleAsync());
         Assert.Equal(EfSourceModel.Chain.CurrentVersion, await db.Set<SourceSnapshot>().Select(x => EF.Property<string>(x, EfSchemaVersion.ColumnName)).SingleAsync());
+        Assert.Equal(EfSourceModel.Chain.CurrentVersion, await db.Set<SourceSnapshotPin>().Select(x => EF.Property<string>(x, EfSchemaVersion.ColumnName)).SingleAsync());
+        Assert.Equal(snapshot.Key, (await db.Set<SourceSnapshotPin>().AsNoTracking().SingleAsync()).SnapshotKey);
     }
 
-    [Fact]
-    public async Task Shared_source_materialization_checks_its_family_independently_of_the_consumer_module()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Shared_source_materialization_checks_its_family_independently_of_the_consumer_module(bool corruptPin)
     {
         await using var file = new TemporarySqliteDatabase();
         await using (var seed = new PlainContext(file.ConnectionString))
         {
             await seed.Database.EnsureCreatedAsync();
-            await new EfSourceRevisions(seed, Scope).CreateAsync("agent", "draft", "Agent", "agent/1", "content");
+            var sources = new EfSourceRevisions(seed, Scope);
+            await sources.CreateAsync("agent", "draft", "Agent", "agent/1", "content");
+            await sources.CaptureAsync("agent", "draft", 0, "capture");
         }
         await using var db = new MixedContext(file.ConnectionString);
         Assert.Equal("content", (await db.Set<SourceWorkingCopy>().AsNoTracking().SingleAsync()).Content);
+        Assert.NotNull(await db.Set<SourceSnapshotPin>().AsNoTracking().SingleAsync());
         // A stamp admitted by the consumer is still foreign to the shared source family.
-        await db.Database.ExecuteSqlRawAsync("UPDATE source_copies SET SchemaVersion = '7.0.0'");
-        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => db.Set<SourceWorkingCopy>().AsNoTracking().SingleAsync());
+        if (corruptPin)
+            await db.Database.ExecuteSqlRawAsync("UPDATE source_pins SET SchemaVersion = '7.0.0'");
+        else
+            await db.Database.ExecuteSqlRawAsync("UPDATE source_copies SET SchemaVersion = '7.0.0'");
+        var skew = corruptPin
+            ? await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => db.Set<SourceSnapshotPin>().AsNoTracking().SingleAsync())
+            : await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => db.Set<SourceWorkingCopy>().AsNoTracking().SingleAsync());
         Assert.Equal(EfSourceModel.Chain.Family, skew.Family);
         Assert.Equal(MixedContext.ModuleVersion, skew.Found);
         Assert.Equal(EfSourceModel.Chain.CurrentVersion, skew.Expected);
