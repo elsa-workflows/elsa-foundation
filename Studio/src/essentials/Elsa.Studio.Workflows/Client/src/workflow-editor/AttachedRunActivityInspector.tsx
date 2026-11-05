@@ -8,12 +8,13 @@ import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDet
 import type { EditorRunCanvas } from "./useEditorRunCanvas";
 import type { AttachedExecutionSelection } from "./useAttachedExecutionSelection";
 
-export function AttachedRunActivityInspector({ context, canvas, selection, activityId, ownerId, catalog, expressionEditors, backendSession, runRelatedLinks = [], onEnter }: {
+export function AttachedRunActivityInspector({ context, canvas, selection, activityId, ownerId, catalog, expressionEditors, backendSession, runRelatedLinks = [], observationRevision, onEnter }: {
   context: StudioEndpointContext; canvas: EditorRunCanvas; selection: AttachedExecutionSelection;
   activityId: string | null; ownerId: string | null; catalog: ActivityCatalogItem[];
   expressionEditors: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  observationRevision: number;
   onEnter(execution: ActivityExecutionStateSummary): void;
 }) {
   const choiceFocus = useRef<string | null>(null);
@@ -68,7 +69,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
       }}
       renderDetails={(value, navigation, children) => <WorkflowActivityExecutionDetails
         compact context={context} backendSession={backendSession} runRelatedLinks={runRelatedLinks} activity={value} activityCatalog={catalog} executableNodeFacts={findExecutableNodeFacts(graph, value)}
-        prepared={prepared}
+        prepared={prepared?.observationRevision === observationRevision ? prepared : undefined}
         expressionEditors={expressionEditors} executionNavigation={navigation} childExecutions={children} refreshKey={canvas.refreshKey} />}
     /> : null}
     </div>
