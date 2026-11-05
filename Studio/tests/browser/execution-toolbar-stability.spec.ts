@@ -13,7 +13,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
 
     const runtime = page.getByRole("region", { name: "Test run summary", exact: true });
-    const toolbar = page.getByRole("group", { name: "Execution controls", exact: true });
+    const toolbar = runtime.getByRole("group", { name: "Execution controls", exact: true });
     const refresh = toolbar.getByRole("button", { name: "Refresh execution", exact: true });
     const elements = [
       toolbar.locator(".wf-run-live-tool"), refresh,
@@ -40,18 +40,25 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
+    const statusSlot = runtime.locator(".wf-runtime-heading");
+    const confirmedSlot = await statusSlot.boundingBox();
     await toolbar.getByRole("button", { name: "Pause live updates", exact: true }).click();
+    await expect(runtime.locator(".wf-runtime-outcome")).toContainText("observation paused");
     await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
     await expect(toolbar.getByText(/^Live updates paused/)).toBeVisible();
+    expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
     expect(await geometry(elements)).toEqual(settled);
     await toolbar.getByRole("button", { name: "Resume live updates", exact: true }).press("Enter");
+    await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(runtime.locator(".wf-status-badge")).toHaveText("Completed", { timeout: 10000 });
     await expect(refresh).toBeEnabled();
-    expect(await geometry(elements)).toEqual(settled);
+    // A changed summary can wrap within the Runtime panel; the authoring canvas stays fixed.
+    expect(await elements[5].boundingBox()).toEqual(settled[5]);
+    for (const element of elements.slice(0, 5)) await expect(element).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
     await page.screenshot({ path: test.info().outputPath("execution-toolbar.png"), fullPage: true });
   });

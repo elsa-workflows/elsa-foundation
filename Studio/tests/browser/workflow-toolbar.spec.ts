@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from "@playwright/test";
 
-const statusValues = ["Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel", ""];
+const statusValues = ["Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel", ""];
 
 for (const width of [320, 768, 1024, 1440]) {
   test(`keeps workflow actions stationary through save status changes at ${width}px`, async ({ page }) => {
@@ -34,9 +34,9 @@ for (const width of [320, 768, 1024, 1440]) {
     if (width >= 768) {
       expect(Math.abs(centerY(initialCanvasTools!) - centerY(initialSave!))).toBeLessThan(1);
     }
-    if (width >= 1024) {
+    if (width > 1100) {
       expect(Math.abs(centerY(initialTitle!) - centerY(initialSave!))).toBeLessThan(1);
-    } else if (width === 768) {
+    } else if (width >= 768) {
       expect(initialTitleRow!.y + initialTitleRow!.height).toBeLessThanOrEqual(initialSave!.y);
     }
     await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");
@@ -208,4 +208,26 @@ for (const theme of ["light", "dark"]) {
       }
     });
   }
+}
+
+for (const theme of ["light", "dark"]) for (const width of [1024, 1440, 2048]) {
+  test(`uses available toolbar space for feedback (${theme}, ${width}px)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.goto(`/?mode=workflow-toolbar&theme=${theme}&name=Compensation`);
+    // Leave room for wider fallback glyphs and enlarged feedback text.
+    await page.addStyleTag({ content: ".wf-editor-save-status { font-family: monospace; font-size: 14px; }" });
+    const toolbar = page.locator(".wf-editor-toolbar");
+    const initialButtons = await readButtonPositions(toolbar.getByRole("button"));
+    const messages = width >= 1440
+      ? ["Workflow organization updated", "Published to an unusually long publication channel"]
+      : ["Workflow organization updated"];
+    for (const message of messages) {
+      await page.getByLabel("Save status").selectOption(message);
+      const text = toolbar.locator(".wf-editor-save-status > span");
+      await expect(text).toHaveText(message);
+      expect(await text.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await readButtonPositions(toolbar.getByRole("button"))).toEqual(initialButtons);
+    }
+    await page.screenshot({ path: testInfo.outputPath("toolbar-feedback.png") });
+  });
 }

@@ -281,6 +281,7 @@ describe("execution attached to the editor canvas", () => {
     await settle();
     expect(api.instance).not.toHaveBeenCalled();
     expect(latest.nodes).toBe(nodes);
+    expect(container.querySelector("[aria-label='Execution controls']")?.textContent).toBe("");
     expect(container.querySelector('button[aria-label="Refresh execution"]')).toBeNull();
   });
 

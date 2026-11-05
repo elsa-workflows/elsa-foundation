@@ -2,7 +2,7 @@ import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, typ
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
+import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
@@ -29,10 +29,11 @@ import {
   updateActivityPresentation
 } from "../activityPresentation";
 import { buildDraftFromJson } from "../workflowSerialization";
+import { WorkflowVersionHistory } from "./WorkflowVersionHistory";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { withWorkflowStartEnabled } from "../workflowStartEditing";
 import { getWorkflowStartEnabled } from "../workflowStart";
-import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
+import { WorkflowDataView, WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
@@ -705,7 +706,7 @@ export function WorkflowEditor({
     setAutosavePaused
   });
 
-  // Properties-tab edits (variables/inputs/outputs) flow through here. Routing them through an in-place
+  // Workflow declaration edits (variables/inputs/outputs) flow through here. Routing them through an in-place
   // draft edit means autosave and undo/redo pick them up automatically — no separate save path.
   const updateDraftState = useCallback((producer: (state: WorkflowDraft["state"]) => WorkflowDraft["state"]) => {
     editDraft(({ draft: current }) => current ? { ...current, state: producer(current.state) } : null);
@@ -1391,7 +1392,11 @@ export function WorkflowEditor({
   const canvasViewTabs: WorkflowEditorPanelTab[] = [
     { id: "designer", title: "Designer", order: 0, icon: <WorkflowIcon size={14} />, render: () => null },
     { id: "code", title: "Code", order: 1, icon: <Code2 size={14} />, render: () => null },
-    { id: "properties", title: "Properties", order: 2, icon: <SlidersHorizontal size={14} />, render: () => null }
+    { id: "properties", title: "Properties", order: 2, icon: <SlidersHorizontal size={14} />, render: () => null },
+    { id: "variables", title: "Variables", order: 3, icon: <Variable size={14} />, render: () => null },
+    { id: "inputs", title: "Inputs", order: 4, icon: <LogIn size={14} />, render: () => null },
+    { id: "outputs", title: "Outputs", order: 5, icon: <LogOut size={14} />, render: () => null },
+    { id: "versions", title: "Versions", order: 6, icon: <History size={14} />, render: () => null }
   ];
 
   return (
@@ -1598,7 +1603,18 @@ export function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} versionAgent={documentAdapter ? undefined : versionAgent} /></fieldset></>
+            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
+          ) : canvasView === "versions" ? (
+            <div className="wf-properties-view">
+              <section className="wf-properties-section">
+                <h3>Versions</h3>
+                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} agent={documentAdapter ? undefined : versionAgent} />
+              </section>
+            </div>
+          ) : canvasView !== "designer" ? (
+            <fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}>
+              <WorkflowDataView section={canvasView} draft={draft} context={context} onStateChange={updateDraftState} />
+            </fieldset>
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
