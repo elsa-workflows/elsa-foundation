@@ -20,7 +20,8 @@ PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'invalid-name', 'completed'],
-    'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
+    'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
+    'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
 }
 JOURNEYS = set(CAPTURES)
 
@@ -183,7 +184,7 @@ def run(output):
                 with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     report['stage'] = 'journeys'
-                    browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
+                    browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url, ELSA_WORKBENCH_URL=backend_url,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha)
                     command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts'],
                             output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
