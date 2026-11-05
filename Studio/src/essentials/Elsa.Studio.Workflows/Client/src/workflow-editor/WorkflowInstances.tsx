@@ -1354,7 +1354,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
     beginEvidenceNavigation();
-    setHistoryLocation(value => ({ ...value, selection: null }));
+    // Peer inspector tabs retain the exact history target; entity navigation and Back change it explicitly.
     if (tab === "timeline") setHistoryLocation(value => ({ ...value, view: "timeline" }));
     setActiveInspectorTab(tab);
   };

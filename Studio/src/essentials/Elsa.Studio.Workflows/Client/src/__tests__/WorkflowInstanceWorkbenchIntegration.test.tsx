@@ -497,8 +497,8 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench("activity", "execution-target");
 
     await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow")).toBeTruthy());
-    await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledWith(
-      expect.anything(), "run-1", "execution-target", expect.anything()));
+    await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.map(call => call.slice(0, 3))).toContainEqual([
+      expect.anything(), "run-1", "execution-target"]));
     await vi.waitFor(() => expect(container.querySelector(".narrow-inspector-view") !== null).toBe(found));
     expect(container.querySelector(".narrow-canvas-view") !== null).toBe(!found);
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview") !== null).toBe(found));
