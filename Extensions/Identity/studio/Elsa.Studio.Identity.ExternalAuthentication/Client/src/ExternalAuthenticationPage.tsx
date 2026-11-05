@@ -7,6 +7,7 @@ import { connectionChanges, ExternalAuthenticationClient, ExternalAuthentication
   type ConnectionCatalog, type ConnectionCommand, type ConnectionDocument, type ConnectionPreview, type ConnectionTest, type ConnectionView, type Readiness } from "./sdk";
 import { connectionState, previewCurrent, previewDescription, readinessDescription, sourceEffect, testDescription, testSucceeded } from "./presentation";
 import { cleanPreviewUrl, preparePreviewReturn, takePreviewReturn } from "./previewReturn";
+import { useCancelledActionFocus } from "./useCancelledActionFocus";
 
 export function ExternalAuthenticationPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const client = useMemo(() => new ExternalAuthenticationClient(context.http, context.baseUrl), [context]);
@@ -19,6 +20,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   const [editorVersion, setEditorVersion] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const restoreCancelledFocus = useCancelledActionFocus(Boolean(busy), client);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
@@ -161,6 +163,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   }
   async function change(command: ConnectionCommand, title: string) {
     if (busyRef.current || !writable) return;
+    const opener = document.activeElement;
     busyRef.current = true; setBusy(title); setError(""); setNotice("");
     try {
       const assessed = await client.assess(command);
@@ -168,7 +171,10 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
       if (!assessed.canApply || !assessed.proposed) throw { status: 409, payload: { failure: assessed.failure } };
       const effect = sourceEffect(assessed.proposed, command.record.key) || "The Studio record will be removed. Deployment configuration is retained.";
       if (!await dialogs.confirm({ title, message: `${effect}\n\nApply this change?`, confirmLabel: title,
-        tone: [connectionChanges.disable, connectionChanges.archive, connectionChanges.remove, connectionChanges.promoteOverride].includes(command.change as 3 | 5 | 6 | 8) ? "danger" : "default" })) return;
+        tone: [connectionChanges.disable, connectionChanges.archive, connectionChanges.remove, connectionChanges.promoteOverride].includes(command.change as 3 | 5 | 6 | 8) ? "danger" : "default" })) {
+        if (currentClient.current === client) restoreCancelledFocus(opener);
+        return;
+      }
       if (currentClient.current !== client) return;
       const result = await client.apply(command);
       if (currentClient.current !== client) return;
@@ -200,9 +206,13 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   }
   async function previewConnection() {
     if (!selected || !liveTest || dirty || busyRef.current) return;
+    const opener = document.activeElement;
     busyRef.current = true; setBusy("Preparing preview"); setError("");
     try {
-      if (!await dialogs.confirm({ title: "Preview provider sign-in", message: "You will leave this page to sign in with the provider, then return to this saved draft. Your Elsa administrator session stays signed in. No users or role assignments will be changed.", confirmLabel: "Continue to provider" })) return;
+      if (!await dialogs.confirm({ title: "Preview provider sign-in", message: "You will leave this page to sign in with the provider, then return to this saved draft. Your Elsa administrator session stays signed in. No users or role assignments will be changed.", confirmLabel: "Continue to provider" })) {
+        if (currentClient.current === client) restoreCancelledFocus(opener);
+        return;
+      }
       if (currentClient.current !== client) return;
       const returnUrl = preparePreviewReturn(new URL(locationRef.current), context.baseUrl, selected, test, window.sessionStorage);
       const submission = await client.previewSubmission(selected, returnUrl);

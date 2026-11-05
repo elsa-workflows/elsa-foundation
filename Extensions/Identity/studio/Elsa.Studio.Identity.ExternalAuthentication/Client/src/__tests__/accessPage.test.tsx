@@ -59,6 +59,18 @@ async function draft(host: ReturnType<typeof harness>) {
 }
 
 describe("user access page", () => {
+  it("returns keyboard focus after cancelling session revocation without writing", async () => {
+    const host = harness(); await choose(host);
+    const trigger = await button(host.container, "Revoke session");
+    const modalFocus = document.createElement("button"); document.body.appendChild(modalFocus); cleanup.add(() => modalFocus.remove());
+    host.confirm.mockImplementation(async () => { modalFocus.focus(); return false; });
+    trigger.focus(); click(trigger);
+    await vi.waitFor(() => expect(host.confirm).toHaveBeenCalled());
+    await vi.waitFor(() => expect(trigger.disabled).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(host.postJson).not.toHaveBeenCalled();
+  });
+
   it.each(["filter", "page"])("preserves the attachment draft when refreshed %s results omit the selected user", async kind => {
     const paged = { ...initialUsers, items: [...initialUsers.items, ...Array.from({ length: 25 }, (_, index) => ({
       id: `user-${index + 3}`, userName: `person${index + 3}`, displayName: `Person ${index + 3}`, status: 0

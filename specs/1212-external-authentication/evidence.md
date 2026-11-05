@@ -1179,3 +1179,28 @@ the stale-observation case is a preserved guard. The full SDK/component set pass
 (`/tmp/elsa-3579-review-r2-ui-{red,green}.log`). Backend C# is unchanged from the **909/909** and packed-consumer
 checkpoint. Fresh composed captures/downloadable evidence and visual completion remain pending in the runtime
 queue; UX acceptance is **incomplete**, not passed. A fresh independent exact-head round is still required.
+
+
+## Current UI proof and cancellation correction (5 November)
+
+Under the owner's UI/demo priority, fresh composed login/provider-editor/user-access proof resumes without new
+backend scope or unrelated persistence/topology matrices. The current reference Studio builds with zero warnings
+or errors. The rebuilt probe succeeds with generated migration/nullability and existing style/audit warnings;
+those warnings are retained rather than suppressed.
+
+The first new full Studio attempt at `15f07d439` reaches the lower editor panels and passes desktop dark axe,
+then correctly fails because the runner tries to select hidden desktop colour controls after narrowing the
+viewport. Owned root `elsa-3579-full-studio-5p0fgZ` retains that failed evidence. The runner now selects colour
+mode through the actual desktop control before resizing, with no DOM theme override.
+
+The next committed attempt at `466e6e317` exposes a real cancellation defect: after cancelling Enable sign-in,
+its re-enabled action button does not regain keyboard focus. The asynchronous assessment disables and blurs the
+opener before the shared dialog captures focus. Owned root `elsa-3579-full-studio-7UQL7c` retains the failed
+Playwright focus assertion and screenshots. A local hook now restores the captured opener after re-enablement,
+only for the same backend/context and a connected element. Connection changes, provider preview and user-access
+link/session cancellations use it; confirmation still performs no mutation when cancelled.
+
+Two component regressions fail before this correction. The full SDK/component suite then passes **54/54**, with
+TypeScript, ESLint and module/SDK build passing (`/tmp/elsa-3579-ui-cancel-focus-{red,green,types,eslint,build}.log`).
+Backend C# and the provisioning-policy-only decision are unchanged. Fresh composed execution and independent
+visual acceptance are still required; the failed attempts have not been reclassified as passing.

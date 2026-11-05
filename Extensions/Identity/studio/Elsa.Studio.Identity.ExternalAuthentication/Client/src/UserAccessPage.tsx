@@ -5,6 +5,8 @@ import { CopyableIdentifier, StatusChip, StudioButton, StudioPage, StudioPageHea
 import { ExternalAuthenticationClient, identityAccessError, type IdentityLink, type IdentityLinks,
   type IdentitySession, type IdentitySessions, type IdentityUser, type IdentityUsers } from "./sdk";
 
+import { useCancelledActionFocus } from "./useCancelledActionFocus";
+
 const pageSize = 25;
 function date(value: string | null) { return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Not recorded"; }
 function status(value: number) { return value === 0 ? "Active" : value === 1 ? "Disabled" : value === 2 ? "Locked" : "Unknown status"; }
@@ -21,6 +23,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   const [linkSkip, setLinkSkip] = useState(0); const [sessionSkip, setSessionSkip] = useState(0); const [loadingAccess, setLoadingAccess] = useState(false);
   const [connection, setConnection] = useState(""); const [subject, setSubject] = useState("");
   const [busy, setBusy] = useState(""); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const restoreCancelledFocus = useCancelledActionFocus(Boolean(busy), client);
   const [needsRefresh, setNeedsRefresh] = useState(false); const [reauthenticate, setReauthenticate] = useState(false);
   const active = useRef(client); active.current = client;
   const lastClient = useRef(client); const directoryRequest = useRef(0); const panelRequest = useRef(0);
@@ -130,9 +133,13 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   async function mutate(title: string, message: string, operation: () => Promise<{ ok: boolean; failure: string | null }>, success: string,
     options: { attached?: boolean; currentSession?: boolean } = {}) {
     if (!target || locked || busyRef.current) return;
+    const opener = document.activeElement;
     const user = target; busyRef.current = true; setBusy(title); setError(""); setNotice("");
     try {
-      if (!await dialogs.confirm({ title, message, confirmLabel: title, tone: options.attached ? "default" : "danger" })) return;
+      if (!await dialogs.confirm({ title, message, confirmLabel: title, tone: options.attached ? "default" : "danger" })) {
+        if (active.current === client && selectedRef.current?.id === user.id) restoreCancelledFocus(opener);
+        return;
+      }
       if (active.current !== client || selectedRef.current?.id !== user.id) return;
       const result = await operation();
       if (active.current !== client || selectedRef.current?.id !== user.id) return;

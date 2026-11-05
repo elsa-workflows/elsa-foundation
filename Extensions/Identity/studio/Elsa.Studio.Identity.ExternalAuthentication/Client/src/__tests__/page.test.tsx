@@ -69,6 +69,20 @@ function type(input: HTMLInputElement, value: string) {
 function select(input: HTMLSelectElement, value: string) { flushSync(() => { input.value = value; input.dispatchEvent(new Event("change", { bubbles: true })); }); }
 
 describe("connection administration page", () => {
+  it("returns keyboard focus to the action after cancelling its asynchronous confirmation", async () => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    const trigger = await button(host.container, "Archive");
+    const modalFocus = document.createElement("button"); document.body.appendChild(modalFocus); cleanup.add(() => modalFocus.remove());
+    host.confirm.mockImplementation(async () => { modalFocus.focus(); return false; });
+    trigger.focus(); click(trigger);
+    await vi.waitFor(() => expect(host.confirm).toHaveBeenCalled());
+    await vi.waitFor(() => expect(trigger.disabled).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(host.postJson.mock.calls.some(([path]) => path.endsWith("/commands"))).toBe(false);
+  });
+
   it.each([false, true])("reconciles repaired readiness after a configuration test, refusing stale observations (%s)", async stale => {
     const host = harness(); const original = host.getJson.getMockImplementation()!;
     host.getJson.mockImplementation(async (path: string) => path.endsWith("/external-connections/record")
