@@ -43,7 +43,7 @@ public sealed class CoalescingSchedulerVisibilityTests
     }
 
     [Fact]
-    public async Task Competing_durable_claim_refuses_the_flush_without_overwriting_its_visibility()
+    public async Task Competing_durable_claim_discards_the_flush_release_without_overwriting_its_visibility()
     {
         await _queue.EnqueueAsync(Work("resume"));
         var session = Session();
@@ -51,10 +51,24 @@ public sealed class CoalescingSchedulerVisibilityTests
         var competing = Assert.IsType<RuntimeSchedulerWorkClaim>(await _queue.ClaimAsync(Request("other-owner")));
         Assert.True((await session.ReleaseOverlayClaimAsync(overlayClaim, _now.AddDays(2), default)).Succeeded);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => session.AdvanceInnerQueueAsync(true, default).AsTask());
+        await session.AdvanceInnerQueueAsync(true, default);
 
         var remaining = Assert.Single((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items);
         Assert.Equal(competing.VisibleAfter, remaining.VisibleAfter);
+        Assert.Empty((await session.ListOverlayAsync(new RuntimeSchedulerWorkQuery(ExecutionId), default)).Items);
+        Assert.True(session.OwnsOverlayClaim(overlayClaim));
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await session.CompleteOverlayClaimAsync(overlayClaim, default)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale,
+            (await session.RenewOverlayClaimAsync(overlayClaim, _now, TimeSpan.FromMinutes(1), default)).Status);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await session.ReleaseOverlayClaimAsync(overlayClaim, _now, default)).Status);
+
+        // New work forces a durable refresh on the next advance. It must not adopt the lost identity and delete the
+        // successor's copy as if this overlay had consumed it; both the foreign head and the new continuation survive.
+        await session.EnqueueOverlayAsync(Work("later"), default);
+        await session.AdvanceInnerQueueAsync(true, default);
+        Assert.Equal([("resume", (DateTimeOffset?)competing.VisibleAfter), ("later", null)],
+            (await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items
+            .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter)));
         Assert.True((await _queue.ReleaseClaimAsync(competing, _now)).Succeeded);
     }
 
