@@ -116,6 +116,46 @@ describe("top navigation Build overlay", () => {
     outside.remove();
   });
 
+  it.each(["absent-destination", "Reports"])("dismisses input-to-outside focus for %s without stealing later Escape", async query => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    const outside = document.createElement("button");
+    container.append(outside);
+    await act(() => search.focus());
+    setSearch(search, query);
+    const results = groupPanel()!;
+    expect(results).not.toBeNull();
+    await act(() => outside.focus());
+    expect(results.hidden).toBe(true);
+    expect(search.value).toBe(query);
+    expect(document.activeElement).toBe(outside);
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    await act(() => outside.dispatchEvent(escape));
+    expect(escape.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(outside);
+    await act(() => search.focus());
+    setSearch(search, query + " again");
+    expect(groupPanel()).not.toBeNull();
+    outside.remove();
+  });
+
+  it("keeps input/result focus transitions open in both directions", async () => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    await act(() => search.focus());
+    setSearch(search, "Reports");
+    const results = groupPanel()!;
+    const result = results.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
+    await act(() => result.focus());
+    expect(results.hidden).toBe(false);
+    await act(() => search.focus());
+    expect(results.hidden).toBe(false);
+    expect(search.value).toBe("Reports");
+    await act(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(results.hidden).toBe(true);
+    expect(document.activeElement).toBe(search);
+  });
+
   it("closes on Escape and returns focus to the Build button", async () => {
     await renderShell();
     await act(() => groupButton().click());

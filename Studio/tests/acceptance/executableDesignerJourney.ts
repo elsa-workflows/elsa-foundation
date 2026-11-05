@@ -43,6 +43,79 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     await expect(page.getByRole("region", { name: "Executable canvas", exact: true })).toBeVisible();
   }
   try {
+    // A real long draft makes internal canvas scrolling observable at every viewport.
+    const frameDraft = await api<Submitted>("/design/workflows/definitions/submit", "POST", {
+      name: `Navigation frame ${stamp}`, state: state(seq("frame-root", Array.from({ length: 16 }, (_, index) => line(`frame-${index}`, `Frame step ${index}`))))
+    });
+    definitions.push(frameDraft.definition.id);
+    const frameUrl = `/workflows/definitions?backend=legacy&definition=${frameDraft.definition.id}&version=${frameDraft.version.id}`;
+    await page.goto(frameUrl);
+    const editor = page.locator('.studio-workspace-panel:not([hidden]) > .wf-editor');
+    await expect(editor.locator(".wf-sequence-step")).toHaveCount(16);
+    const narrowFrame = (info.project.use.viewport?.width ?? 1440) < 800;
+    if (narrowFrame) {
+      await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+      await page.getByRole("button", { name: "Collapse activities panel", exact: true }).click();
+    }
+    const collapseDock = page.getByRole("button", { name: "Collapse bottom panel", exact: true });
+    if (await collapseDock.isVisible()) await collapseDock.click();
+    const assertFrame = async (name: string) => {
+      await expect(page.getByRole("navigation", { name: "Workflows views", exact: true })).toBeVisible();
+      const geometry = await editor.evaluate(node => {
+        const content = node.closest(".content")!;
+        const bounds = content.getBoundingClientRect();
+        const view = content.querySelector('.studio-workspace-panel:not([hidden]) .studio-view-navigation')!.getBoundingClientRect();
+        return {
+          viewport: { width: innerWidth, height: innerHeight },
+          content: { top: bounds.top, bottom: bounds.bottom, scrollTop: content.scrollTop }, viewBottom: view.bottom,
+          frames: [node, ...node.querySelectorAll(".wf-editor-body, .wf-canvas-shell, .wf-sequence-designer, .wf-inspector")]
+            .map(part => { const box = part.getBoundingClientRect(); return { name: part.className, top: box.top, bottom: box.bottom, height: box.height }; })
+        };
+      });
+      expect(geometry.frames[0].top).toBeGreaterThanOrEqual(geometry.viewBottom);
+      expect(Math.abs(geometry.frames[0].bottom - geometry.content.bottom), "Editor fills the remaining shell cell").toBeLessThanOrEqual(1);
+      for (const part of geometry.frames) {
+        expect(part.height, `${part.name}: positive remaining height`).toBeGreaterThan(0);
+        expect(part.top, `${part.name}: top inside content`).toBeGreaterThanOrEqual(geometry.content.top - 1);
+        expect(part.bottom, `${part.name}: lower edge inside content`).toBeLessThanOrEqual(geometry.content.bottom + 1);
+        expect(part.bottom, `${part.name}: lower edge inside viewport`).toBeLessThanOrEqual(geometry.viewport.height);
+      }
+      const scroller = editor.locator(".wf-sequence-designer");
+      expect(await scroller.evaluate(node => node.scrollHeight > node.clientHeight), "The real long draft must require internal scrolling").toBe(true);
+      await scroller.evaluate(node => { node.scrollTop = 0; });
+      const last = editor.locator('.wf-sequence-step[data-id="frame-15"]');
+      await last.scrollIntoViewIfNeeded();
+      expect(await scroller.evaluate(node => node.scrollTop), "The inner canvas actually scrolled").toBeGreaterThan(0);
+      await expect(last).toBeInViewport({ ratio: 1 });
+      expect(await last.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const canvas = node.closest(".wf-sequence-designer")!.getBoundingClientRect();
+        return rect.top >= canvas.top && rect.bottom <= canvas.bottom &&
+          node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
+      }), "The final real activity remains inside the scrollable canvas and unobscured").toBe(true);
+      expect(await page.locator(".content").evaluate(node => node.scrollTop)).toBe(geometry.content.scrollTop);
+      await info.attach(`${name}-geometry`, { body: JSON.stringify({ ...geometry, canvasScrollTop: await scroller.evaluate(node => node.scrollTop) }), contentType: "application/json" });
+      await capture(page, info, name);
+    };
+    await assertFrame("definition-frame");
+    await page.getByRole("button", { name: "Expand bottom panel", exact: true }).click();
+    await expect(collapseDock).toBeVisible();
+    await assertFrame("definition-frame-dock");
+    // Keep the same editor DOM alive through a real Alt workspace tab and return.
+    const screens = page.getByRole("tablist", { name: "Open screens", exact: true });
+    const editorTabId = await screens.getByRole("tab", { selected: true }).getAttribute("id");
+    const screenCount = await screens.getByRole("tab").count();
+    const epoch = await page.evaluate(() => performance.timeOrigin);
+    await editor.evaluate(node => { (node as HTMLElement).dataset.frameRetention = "same-editor"; });
+    await page.locator(".sidebar").getByRole("link", { name: "Home", exact: true }).click({ modifiers: ["Alt"] });
+    await expect(screens.getByRole("tab")).toHaveCount(screenCount + 1);
+    await expect(editor).toHaveCount(0);
+    await page.locator(`[id="${editorTabId}"]`).click();
+    await expect(page).toHaveURL(new URL(frameUrl, page.url()).href);
+    await expect(editor).toHaveAttribute("data-frame-retention", "same-editor");
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(epoch);
+    await assertFrame("definition-frame-retained");
+    await collapseDock.click();
     const root = seq("root", [line("first", "Pinned hello"), seq("nested", [line("inner", "Nested hello")]), line("last", "Pinned goodbye")]);
     const { submitted, published } = await publish(root, "Sequence parity");
     await page.goto(`/workflows/definitions?backend=legacy&definition=${submitted.definition.id}&version=${submitted.version.id}`);

@@ -86,6 +86,7 @@
 
 @media (pointer: coarse) {
   .studio-shell .sidebar .nav-section a,
+  html[data-nav-mode="top"] .studio-shell .sidebar .nav-section a.nav-child,
   .studio-shell .sidebar .nav-group-toggle,
   .studio-view-navigation a { min-height: 44px; }
 }

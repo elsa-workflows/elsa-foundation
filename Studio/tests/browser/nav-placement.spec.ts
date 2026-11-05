@@ -177,3 +177,75 @@ test("desktop group overlays keep layout stable and scroll nested destinations i
   await expect(page.getByRole("main").getByRole("heading", { name: "Overflow destination 24", exact: true })).toBeVisible();
   await expect(build.getByRole("button", { name: "Build", exact: true })).toHaveAttribute("aria-expanded", "false");
 });
+
+for (const appearance of ["light", "dark"]) for (const scenario of ["no-match Tab", "matching Shift+Tab"]) {
+  test(`top search dismisses ${scenario} outside the input/results region in ${appearance}`, async ({ page }) => {
+    await page.goto(`/?mode=nav-placement&navigation=top&appearance=${appearance}`);
+    const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+    const query = scenario === "no-match Tab" ? "absent-destination-keyboard" : "templates";
+    const results = page.getByRole("navigation", { name: "Search results", exact: true });
+    await search.fill(query);
+    await expect(results).toBeVisible();
+    await search.press(scenario === "no-match Tab" ? "Tab" : "Shift+Tab");
+    const outside = await page.evaluateHandle(() => document.activeElement);
+    expect(await outside.evaluate(node => node instanceof HTMLElement && node !== document.querySelector('input[aria-label="Search Studio"]') && !node.closest(".nav-search-results"))).toBe(true);
+    await expect(results).toBeHidden();
+    await expect(search).toHaveValue(query);
+    await page.keyboard.press("Escape");
+    expect(await outside.evaluate(node => node === document.activeElement)).toBe(true);
+    await outside.dispose();
+    await search.fill(query + "-changed");
+    await expect(results).toBeVisible();
+    await search.press("Escape");
+    await expect(results).toBeHidden();
+    await expect(search).toBeFocused();
+    await search.fill("templates");
+    await search.press("Tab");
+    await expect(results.getByRole("link", { name: "Templates", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(search).toBeFocused();
+    await expect(results).toBeVisible();
+  });
+}
+
+for (const appearance of ["light", "dark"] as const) for (const coarse of [false, true]) {
+  test(`actual ETL nested destinations preserve ${coarse ? "coarse 44px" : "fine 30px"} sizing in desktop ${appearance}`, async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 900 }, colorScheme: appearance, isMobile: false, hasTouch: coarse });
+    try {
+      const page = await context.newPage();
+      await page.addInitScript(() => {
+        (window as Window & { lastNavPointer?: string }).lastNavPointer = "";
+        window.addEventListener("pointerdown", event => { (window as Window & { lastNavPointer?: string }).lastNavPointer = event.pointerType; }, true);
+      });
+      await page.goto("/?mode=nav-placement&navigation=top&etlNavigation=1");
+      expect(await page.evaluate(() => ({ coarse: matchMedia("(pointer: coarse)").matches, fine: matchMedia("(pointer: fine)").matches, points: navigator.maxTouchPoints })))
+        .toEqual({ coarse, fine: !coarse, points: coarse ? 1 : 0 });
+      await page.evaluate(() => document.fonts.ready);
+      const build = page.getByRole("navigation", { name: "Build", exact: true });
+      const trigger = build.getByRole("button", { name: "Build", exact: true });
+      for (const name of ["Connector definitions", "Runs"]) {
+        await trigger.click();
+        const target = build.getByRole("link", { name, exact: true });
+        await expect(target).toHaveClass(/nav-child/);
+        await target.scrollIntoViewIfNeeded();
+        const geometry = await target.evaluate(node => {
+          const box = node.getBoundingClientRect();
+          const label = document.createRange(); label.selectNodeContents(node.querySelector(".nav-label") ?? node);
+          const rects = Array.from(label.getClientRects());
+          const panel = node.closest(".nav-group-panel")!.getBoundingClientRect();
+          return { height: box.height, minimum: parseFloat(getComputedStyle(node).minHeight),
+            visible: rects.length > 0 && rects.every(rect => rect.left >= 0 && rect.right <= innerWidth && rect.top >= panel.top && rect.bottom <= panel.bottom &&
+              node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))) };
+        });
+        expect(geometry.minimum).toBe(coarse ? 44 : 30);
+        if (coarse) expect(geometry.height).toBeGreaterThanOrEqual(44);
+        else expect(geometry.height).toBe(30);
+        expect(geometry.visible).toBe(true);
+        if (coarse) await target.tap(); else await target.click();
+        expect(await page.evaluate(() => (window as Window & { lastNavPointer?: string }).lastNavPointer)).toBe(coarse ? "touch" : "mouse");
+        await expect(page.getByRole("main").getByRole("heading", { name, exact: true })).toBeVisible();
+        await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      }
+    } finally { await context.close(); }
+  });
+}

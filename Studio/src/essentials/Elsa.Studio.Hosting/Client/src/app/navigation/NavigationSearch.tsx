@@ -41,16 +41,23 @@ export function NavigationSearch({ query, path, searchInput, children }: {
       setDismissedQuery(query);
       searchInput.current?.focus();
     };
+    const insideSearch = (target: EventTarget | null) => target instanceof Node &&
+      Boolean(results.current?.contains(target) || searchInput.current?.contains(target));
     const onPointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && (results.current?.contains(event.target) || searchInput.current?.contains(event.target))) return;
+      if (insideSearch(event.target)) return;
       setDismissedQuery(query);
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (insideSearch(event.target) && !insideSearch(event.relatedTarget)) setDismissedQuery(query);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onPointer); };
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("focusout", onFocusOut);
+    };
   }, [open, query, searchInput]);
-  return <nav ref={results} className="nav-section nav-search-results" style={{ "--studio-nav-search-top": `${searchTop}px` } as React.CSSProperties} aria-label="Search results" hidden={!open} onBlur={event => {
-    if (event.relatedTarget instanceof Node && results.current?.contains(event.relatedTarget)) return;
-    setDismissedQuery(query);
-  }}>{children}</nav>;
+  return <nav ref={results} className="nav-section nav-search-results" style={{ "--studio-nav-search-top": `${searchTop}px` } as React.CSSProperties} aria-label="Search results" hidden={!open}>{children}</nav>;
 }

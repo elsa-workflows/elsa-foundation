@@ -5,6 +5,9 @@ import { NavigationViews, findNavigationViews } from "../../src/essentials/Elsa.
 import { filterAccessibleNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/navigation/placement";
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import { createEndpointContext } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
+import { register as registerEtl } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/module";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const moduleNavigation: StudioNavigationContribution[] = [
@@ -36,7 +39,11 @@ export function NavPlacementFixture() {
     ...Array.from({ length: 24 }, (_, index) => ({ id: `overflow-${index + 1}`, label: `Overflow destination ${index + 1}`,
       path: `/navigation-overflow/${index + 1}`, parentId: "overflow-parent", order: index + 1 }))
   ] : [];
-  const navigation = filterAccessibleNavigation(getStudioNavigation([...moduleNavigation, ...overflowNavigation], { includeThemeBuilder: true }));
+  // The legacy registry makes actual ETL contributions available in this isolated UI fixture.
+  // Composed proof separately enables the real design API and its private SQLite store.
+  const registry = createStudioRegistry({ hostVersion: "1", sdkVersion: "1", ...createEndpointContext("https://backend.example/") });
+  if (params.has("etlNavigation")) registerEtl(registry);
+  const navigation = filterAccessibleNavigation(getStudioNavigation([...moduleNavigation, ...overflowNavigation, ...registry.navigation.list()], { includeThemeBuilder: true }));
   const views = findNavigationViews(path, navigation);
   const title = navigation.find(item => item.path === path && item.childDisplay !== "views")?.label ?? "Studio";
   return <ThemeProvider><ShellFrame navigation={navigation} panels={[]} path={path} title={title} backendBaseUrl="https://backend.example/" onNavigate={setPath}>

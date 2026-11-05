@@ -1154,9 +1154,25 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   width: 100%;
 }
 
+/* Local route views share the shell cell with the full-bleed editor. Allocate the
+   remaining height to the editor, including retained workspace screens and the dock. */
 .content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) {
+  display: flex;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
+}
+
+.content > .wf-editor,
+.content > .studio-workspace-panel:not([hidden]) > .wf-editor {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) .studio-view-navigation {
+  flex-shrink: 0;
 }
 
 /* Run detail is a route-owned workbench. Keep list pages on the normal padded/scrolling
