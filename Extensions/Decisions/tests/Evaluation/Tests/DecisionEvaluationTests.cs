@@ -410,6 +410,44 @@ public class DecisionEvaluationTests
         Assert.False(engine.Compile("\uFEFF\uFEFF" + xml).Success);
     }
 
+    [Fact]
+    public void Single_output_name_is_optional_and_does_not_change_scalar_executable_identity()
+    {
+        XNamespace ns = DecisionNamespace;
+        var namedXml = Table(["-"], outputTexts: ["\"Approved\""], outputType: "string");
+        var unnamedDocument = XDocument.Parse(namedXml);
+        unnamedDocument.Descendants(ns + "output").Single().Attribute("name")!.Remove();
+        var unnamedXml = unnamedDocument.ToString(SaveOptions.DisableFormatting);
+        var named = Compile(namedXml);
+        var unnamed = Compile(unnamedXml);
+        Assert.NotEqual(named.SourceHash, unnamed.SourceHash);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(unnamedXml))), unnamed.SourceHash);
+        Assert.Equal(named.ContentHash, unnamed.ContentHash);
+        var canonical = XDocument.Parse(Encoding.UTF8.GetString(named.ExecutableBytes));
+        Assert.Null(canonical.Descendants(ns + "output").Single().Attribute("name"));
+        Assert.Equal("output", canonical.Descendants(ns + "output").Single().Attribute("id")!.Value);
+        var result = engine.Evaluate(unnamed, Inputs(new("number", "1")));
+        Assert.Equal("Success", result.Status);
+        Assert.Equal("Approved", result.Result.GetProperty("value").GetString());
+        Assert.Equal("Success", engine.Evaluate(JsonSerializer.Deserialize<DecisionArtifact>(JsonSerializer.Serialize(unnamed))!, Inputs(new("number", "1"))).Status);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("result")]
+    public void Multiple_outputs_require_distinct_nonempty_names(string? secondName)
+    {
+        XNamespace ns = DecisionNamespace;
+        var doc = XDocument.Parse(Table(["-"]));
+        var output = doc.Descendants(ns + "output").Single();
+        var second = new XElement(ns + "output", new XAttribute("id", "second_output"), new XAttribute("typeRef", "number"));
+        if (secondName is not null) second.SetAttributeValue("name", secondName);
+        output.AddAfterSelf(second);
+        doc.Descendants(ns + "rule").Single().Add(new XElement(ns + "outputEntry", new XAttribute("id", "second_value"), new XElement(ns + "text", "2")));
+        Assert.Contains(engine.Compile(doc.ToString()).Diagnostics, diagnostic => diagnostic.Code == (secondName == "result" ? "DuplicateOutputName" : "InvalidOutputName"));
+    }
+
     private DecisionArtifact Compile(string xml)
     {
         var result = engine.Compile(xml);

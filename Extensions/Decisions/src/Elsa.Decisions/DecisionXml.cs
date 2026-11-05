@@ -95,7 +95,8 @@ internal sealed class DecisionXml
         var outputs = outputElements.Select(output =>
         {
             var name = (string?)output.Attribute("name") ?? "";
-            if (string.IsNullOrWhiteSpace(name) || name.Length > 256 || !DecisionScalars.ValidString(name)) Error("InvalidOutputName", output);
+            if ((outputElements.Length > 1 || output.Attribute("name") is not null) &&
+                (string.IsNullOrWhiteSpace(name) || name.Length > 256 || !DecisionScalars.ValidString(name))) Error("InvalidOutputName", output);
             return new DecisionOutput(Id(output, true), name, Type(output));
         }).ToArray();
         if (inputs.Select(i => i.Name).Distinct(StringComparer.Ordinal).Count() != inputs.Length) Error("DuplicateInputName", table);
@@ -255,7 +256,7 @@ internal sealed class DecisionXml
                 new XElement(ns + "decisionTable", new XAttribute("id", table.TableId), new XAttribute("hitPolicy", table.Policy),
                     table.Inputs.Select(input => new XElement(ns + "input", new XAttribute("id", input.Id),
                         new XElement(ns + "inputExpression", new XAttribute("id", input.ExpressionId), new XAttribute("typeRef", input.Type), Text(input.Name)))),
-                    table.Outputs.Select(output => new XElement(ns + "output", new XAttribute("id", output.Id), new XAttribute("name", output.Name), new XAttribute("typeRef", output.Type))),
+                    table.Outputs.Select(output => new XElement(ns + "output", new XAttribute("id", output.Id), table.Outputs.Length > 1 ? new XAttribute("name", output.Name) : null, new XAttribute("typeRef", output.Type))),
                     table.Rows.Select(row => new XElement(ns + "rule", new XAttribute("id", row.Id),
                         row.Tests.Select((test, i) => new XElement(ns + "inputEntry", new XAttribute("id", row.InputIds[i]), Text(test.Format()))),
                         row.Values.Select((value, i) => new XElement(ns + "outputEntry", new XAttribute("id", row.OutputIds[i]), Text(DecisionScalars.Format(value)))))))));
