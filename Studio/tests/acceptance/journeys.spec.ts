@@ -1,5 +1,7 @@
+import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { userTasksJourney } from "./userTasksJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -22,24 +24,88 @@ async function signIn(page: Page) {
 
 const browserErrors = new WeakMap<Page, string[]>();
 
+test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+
 test.afterEach(async ({ page }) => {
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
 test.beforeEach(async ({ page }, info) => {
-  await page.addInitScript(mode => {
-    localStorage.removeItem("elsa-studio-theme");
-    localStorage.setItem("elsa-studio-workspace-style", "linen");
+  const reportedAppearance = info.title === "feature filtering and settings dialogs";
+  await page.addInitScript(({ mode, reportedAppearance }) => {
+    if (reportedAppearance) localStorage.setItem("elsa-studio-theme", "classic");
+    else localStorage.removeItem("elsa-studio-theme");
+    localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
-  }, info.project.use.colorScheme ?? "light");
+  }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
   const errors: string[] = [];
   browserErrors.set(page, errors);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
   await signIn(page);
+  if (reportedAppearance) {
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+  }
   await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
   await capture(page, info, "reference");
+});
+
+test("feature filtering and settings dialogs", async ({ page }, info) => {
+  await page.goto("/features");
+  const list = page.locator(".feature-management-list");
+  const filter = page.getByRole("searchbox", { name: "Filter features", exact: true });
+  for (const host of ["Server", "Studio"]) {
+    await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: new RegExp(`^${host}`) }).click();
+    await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await filter.fill("no-such-feature-acceptance");
+    const message = list.getByText("No features match this filter.", { exact: true });
+    await expect(message).toBeVisible();
+    await message.scrollIntoViewIfNeeded();
+    const alignment = await message.evaluate(element => {
+      const heading = document.querySelector(".feature-management-list-heading strong");
+      if (!heading) throw new Error("Feature list heading is missing.");
+      const text = document.createRange();
+      text.selectNodeContents(element);
+      return {
+        messageLeft: text.getBoundingClientRect().left,
+        headingLeft: heading.getBoundingClientRect().left
+      };
+    });
+    expect(Math.abs(alignment.messageLeft - alignment.headingLeft)).toBeLessThanOrEqual(1);
+    await capture(page, info, `features-${host.toLowerCase()}-no-matches`);
+    await filter.fill("");
+    await expect(message).toBeHidden();
+    await expect(list.locator(".feature-management-card").first()).toBeVisible();
+    await list.locator(".feature-management-card").first().scrollIntoViewIfNeeded();
+    await capture(page, info, `features-${host.toLowerCase()}-populated`);
+  }
+
+  await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
+  await filter.fill("Activities Dispatch Workflow (Runtime)");
+  await list.getByRole("button", { name: /^Activities Dispatch Workflow \(Runtime\)/ }).click();
+  const edit = page.getByRole("button", { name: "Edit settings", exact: true });
+  await edit.click();
+  const settings = page.getByRole("dialog", { name: "Activities Dispatch Workflow (Runtime)", exact: true });
+  await expect(settings).toBeVisible();
+  await capture(page, info, "feature-settings-dialog");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(settings).toBeHidden();
+  await edit.click();
+  await settings.getByLabel(/^Child-start maximum delivery attempts/).fill("5");
+  await settings.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(settings).toBeHidden();
+  await edit.click();
+  await expect(settings.getByLabel(/^Child-start maximum delivery attempts/)).toHaveValue("5");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Review changes", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "Review changes", exact: true });
+  await expect(review).toBeVisible();
+  await capture(page, info, "feature-impact-dialog");
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(review).toBeHidden();
 });
 
 test("collections and connection creation", async ({ page }, info) => {
@@ -48,6 +114,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
   const search = page.getByRole("searchbox", { name: /search connections/i });
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
   await search.fill(`absent-${stamp}`);
   await search.press("Enter");
   await expect(page.getByRole("button", { name: /clear search/i })).toBeVisible();
@@ -61,12 +128,39 @@ test("collections and connection creation", async ({ page }, info) => {
   }
 
   await page.goto("/security/secrets");
+  const secretName = `DbConnectionString-${stamp}`;
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
   const secret = page.getByRole("dialog", { name: "Create secret", exact: true });
-  await secret.getByLabel("Technical name", { exact: true }).fill(`qa-${stamp}`);
+  const technicalName = secret.getByLabel("Technical name", { exact: true });
+  await technicalName.fill(` ${secretName} `);
+  await technicalName.press("Tab");
+  await expect(technicalName).toHaveValue(secretName);
+  await capture(page, info, "secret-create");
   await secret.getByLabel("Value", { exact: true }).fill("disposable-acceptance-value");
   await secret.getByRole("button", { name: "Create", exact: true }).click();
   await expect(secret).toBeHidden();
+  await page.reload();
+  const secretRow = page.getByRole("row").filter({ hasText: secretName });
+  await expect(secretRow).toBeVisible();
+  await capture(page, info, "secret-list");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
+  await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
+  await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  await expect(editor.locator("code")).toHaveText(secretName);
+  await capture(page, info, "secret-detail");
+  await editor.getByRole("button", { name: "Close editor", exact: true }).click();
+  await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
+  await technicalName.fill(secretName.toUpperCase());
+  await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
+  await secret.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(secret.getByRole("alert")).toHaveText("A secret with the same name already exists.");
+  await expect(technicalName).toHaveValue(secretName.toUpperCase());
+  await capture(page, info, "secret-duplicate");
+  await secret.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(secret).toBeHidden();
+  await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
 
   await page.goto("/security/connections");
   const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
@@ -77,7 +171,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(name).toBeFocused();
   await name.fill("invalid name");
   await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(`qa-${stamp}`);
+  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(secretName);
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await expect(name).toHaveAttribute("aria-invalid", "true");
@@ -144,6 +238,48 @@ test("agent authoring and navigation", async ({ page }, info) => {
     await view.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
     await expect(view.getByRole("textbox", { name: `${kind === "input" ? "Input" : "Output"} name`, exact: true })).toBeFocused();
     await view.getByRole("button", { name: "Cancel", exact: true }).click();
+    await view.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
+    await view.getByRole("textbox", { name: `${kind === "input" ? "Input" : "Output"} name`, exact: true }).fill(kind === "input" ? "Topic" : "Result");
+    await view.getByRole("button", { name: `Add ${kind}`, exact: true }).last().click();
+    const member = view.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
+    const settings = member.getByRole("tablist", { name: "Member settings", exact: true });
+    await expect(member.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    if (kind === "input") {
+      await member.getByRole("combobox", { name: "Default", exact: true }).selectOption("literal");
+      await member.getByRole("textbox", { name: "Value", exact: true }).fill("A retained topic");
+    }
+    await capture(page, info, `${kind}-general`);
+    await settings.getByRole("tab", { name: "General", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(settings.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+    await member.getByRole("textbox", { name: /^Display name/ }).fill(kind === "input" ? "Writing topic" : "Written result");
+    await member.getByRole("combobox", { name: /^Category/ }).fill("Writing");
+    await member.getByRole("spinbutton", { name: "Order", exact: true }).fill("2");
+    await capture(page, info, `${kind}-presentation`);
+    await settings.getByRole("tab", { name: "Advanced", exact: true }).click();
+    await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+    await expect(member.getByText("Type alias", { exact: true })).toHaveCount(0);
+    const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
+    await key.fill(`${kind}-writing`);
+    await member.getByRole("button", { name: "Apply key", exact: true }).click();
+    await expect(member.getByRole("button", { name: "Apply key", exact: true })).toBeDisabled();
+    await capture(page, info, `${kind}-advanced`);
+    await settings.getByRole("tab", { name: "General", exact: true }).click();
+    if (kind === "input") {
+      await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
+      await member.getByRole("button", { name: "Apply default", exact: true }).click();
+    }
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    await page.reload();
+    await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: kind === "input" ? "Inputs (1)" : "Outputs (1)", exact: true }).click();
+    const saved = page.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
+    if (kind === "input") await expect(saved.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
+    await saved.getByRole("tab", { name: "Presentation", exact: true }).click();
+    await expect(saved.getByRole("combobox", { name: /^Category/ })).toHaveValue("Writing");
+    await expect(saved.getByRole("spinbutton", { name: "Order", exact: true })).toHaveValue("2");
+    await saved.getByRole("tab", { name: "Advanced", exact: true }).click();
+    await expect(saved.getByRole("textbox", { name: "Stable reference key", exact: true })).toHaveValue(`${kind}-writing`);
   }
   await tabs.getByRole("tab", { name: "Outcomes (1)", exact: true }).click();
   const outcome = page.getByRole("region", { name: "Done", exact: true });
@@ -159,4 +295,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
   }
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "completed");
+});
+
+test("executable designer parity", async ({ page }, info) => {
+  await executableDesignerJourney(page, info, capture);
 });
