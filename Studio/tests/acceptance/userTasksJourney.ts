@@ -14,7 +14,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
   async function post(path: string, data: unknown) {
     const response = await request.post(`${base}${path}`, { data }); expect(response.ok(), await response.text()).toBe(true); return response.json();
   }
-  await page.goto("/user-tasks");
+  await page.goto("/user-tasks?backend=legacy");
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "User Tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
   await capture(page, info, "tasks-empty");
@@ -54,6 +54,16 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     const detail = page.getByRole("region", { name: title, exact: true });
     const note = detail.getByRole("textbox", { name: /^Note/ });
     await note.fill("Reviewed purchase request");
+    expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
+    const retainedNote = await note.elementHandle();
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    const accessRefresh = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/runtime/user-task-identity"));
+    await page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { name: new RegExp(title) }).click();
+    await (await accessRefresh).finished();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(await retainedNote!.evaluate(element => element.isConnected)).toBe(true);
+    await expect(note).toHaveValue("Reviewed purchase request");
+    await capture(page, info, "task-tab-return");
     await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
     await page.getByRole("dialog", { name: "Discard task response?", exact: true }).getByRole("button", { name: "Keep editing", exact: true }).click();
     await expect(note).toHaveValue("Reviewed purchase request");
@@ -77,8 +87,9 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveValue("Review purchase");
     await expect(row).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
     await capture(page, info, "tasks-return");
-    await page.goto(`/user-tasks/absent-${suffix}`);
+    await page.goto(`/user-tasks/absent-${suffix}?backend=legacy`);
     await expect(page.getByRole("heading", { name: "Task not found", exact: true })).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
     await capture(page, info, "task-not-found");

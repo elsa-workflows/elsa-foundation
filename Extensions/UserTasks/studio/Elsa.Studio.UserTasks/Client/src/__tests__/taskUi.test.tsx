@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React from "react";
+import React, { Activity } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +11,7 @@ import { FormsPage } from "../FormsPage";
 import { TasksPage } from "../TasksPage";
 import { TaskDetail, TaskDetailPage } from "../TaskDetailPage";
 import { read, type TaskActor, type TaskItem } from "../taskApi";
+import { readTaskBrowseLocation, replaceTaskBrowseLocation, taskCollectionPath, taskDetailPath } from "../taskNavigation";
 async function act(action: () => unknown) {
   let result: unknown;
   flushSync(() => { result = action(); });
@@ -498,4 +499,90 @@ it("restarts an expired inbox cursor after returning from a task without droppin
   expect(container.textContent).toContain("The inbox cursor expired"); await click("First page");
   expect(container.textContent).toContain("Purchase"); expect(container.textContent).not.toContain("Tasks unavailable");
   expect(new URL(location.href).searchParams.get("view")).toBe("queue"); expect(new URL(location.href).searchParams.get("search")).toBe("Purchase"); expect(new URL(location.href).searchParams.has("after")).toBe(false);
+});
+
+
+it("preserves the selected backend while qualifying task and collection browse queries", () => {
+  window.history.replaceState(null, "", "/user-tasks?backend=production&view=queue&search=Purchase&after=opaque%2B%2F%3D");
+  const browse = readTaskBrowseLocation(location.search);
+  for (const path of [taskDetailPath("opaque/id", browse), taskCollectionPath(browse, "opaque/id")]) {
+    const url = new URL(path, location.origin);
+    expect(url.searchParams.get("backend")).toBe("production"); expect(url.searchParams.get("view")).toBe("queue");
+    expect(url.searchParams.get("search")).toBe("Purchase"); expect(url.searchParams.get("after")).toBe("opaque+/=");
+    expect(path.split("?")).toHaveLength(2);
+  }
+  replaceTaskBrowseLocation({ ...browse, cursor: null });
+  expect(new URL(location.href).searchParams.get("backend")).toBe("production");
+});
+
+it.each([false, true])("retains a workspace task response and retry identity across Activity hide/show (ambiguous=%s)", async ambiguous => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  let identityReads = 0; let finishIdentity!: (who: TaskActor) => void;
+  const revalidation = new Promise<TaskActor>(resolve => { finishIdentity = resolve; });
+  const get = vi.fn(async (path: string) => { if (path.includes("identity")) { identityReads++; return identityReads === 1 ? identity : revalidation; } return withForm; });
+  const post = vi.fn().mockRejectedValue(new StudioHttpError(0, "Connection lost")); const context = api(get, post); const navigate = vi.fn();
+  const screen = (mode: "visible" | "hidden") => <Activity mode={mode}><TaskDetailPage api={context} id="task" navigate={navigate} /></Activity>;
+  await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await input(container.querySelector("input")!, "Retain this exact response");
+  if (ambiguous) await click("Approve");
+  await act(async () => root.render(screen("hidden"))); await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(identityReads).toBeGreaterThan(1));
+  try { expect(container.querySelector("input")?.value).toBe("Retain this exact response"); }
+  finally { await act(async () => finishIdentity(identity)); }
+  expect(container.querySelector("input")!.value).toBe("Retain this exact response");
+  if (ambiguous) { await click("Retry Approve"); expect(post).toHaveBeenCalledTimes(2); expect(post.mock.calls[1][1]).toEqual(post.mock.calls[0][1]); }
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
+});
+
+it("allows leaving after an accepted response while runtime delivery is still pending", async () => {
+  const closed = vi.fn(); const receipt = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(task()), vi.fn().mockResolvedValue(receipt))} id="task" identity={identity} onClose={closed} />));
+  await click("Approve"); expect(container.textContent).toContain("Your response is recorded");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
+  const back = [...container.querySelectorAll("button")].find(button => button.textContent === "Back to task list")!;
+  expect(back.disabled).toBe(false); await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+});
+
+it("releases an ambiguous attempt when refresh confirms a durable pending decision", async () => {
+  const receipt = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
+  const get = vi.fn().mockResolvedValueOnce(task()).mockResolvedValue(receipt);
+  await act(async () => root.render(<TaskDetail api={api(get, vi.fn().mockRejectedValue(new StudioHttpError(0, "Connection lost")))} id="task" identity={identity} />));
+  await click("Approve"); expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
+  await click("Refresh task"); expect(container.textContent).toContain("Your response is recorded");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
+});
+
+it("resets a task response when its backend connection scope changes", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const first = api(vi.fn(async (path: string) => path.includes("identity") ? identity : withForm));
+  const second = api(vi.fn(async (path: string) => path.includes("identity") ? identity : { ...withForm, prefill: { Note: "Other backend" } }));
+  await act(async () => root.render(<TaskDetailPage api={first} id="task" navigate={vi.fn()} />));
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull()); await input(container.querySelector("input")!, "First backend response");
+  await act(async () => root.render(<TaskDetailPage api={second} id="task" navigate={vi.fn()} />));
+  await vi.waitFor(() => expect(container.querySelector("input")?.value).toBe("Other backend"));
+});
+
+
+it("keeps an unsent workspace response through transient access revalidation failure", async () => {
+  let identityReads = 0;
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const context = api(vi.fn(async (path: string) => { if (path.includes("identity")) { if (++identityReads > 1) throw new Error("Access service temporarily unavailable"); return identity; } return withForm; }));
+  const screen = (mode: "visible" | "hidden") => <Activity mode={mode}><TaskDetailPage api={context} id="task" navigate={vi.fn()} /></Activity>;
+  await act(async () => root.render(screen("visible"))); await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await input(container.querySelector("input")!, "Keep during outage");
+  await act(async () => root.render(screen("hidden"))); await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(container.textContent).toContain("Could not refresh task access"));
+  expect(container.querySelector("input")!.value).toBe("Keep during outage");
+});
+
+it("withdraws the response view when tab-return access revalidation denies reading tasks", async () => {
+  let identityReads = 0;
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const context = api(vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canRead: ++identityReads === 1 } : withForm));
+  const screen = (mode: "visible" | "hidden") => <Activity mode={mode}><TaskDetailPage api={context} id="task" navigate={vi.fn()} /></Activity>;
+  await act(async () => root.render(screen("visible"))); await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await input(container.querySelector("input")!, "Private notes");
+  await act(async () => root.render(screen("hidden"))); await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(container.textContent).toContain("Task access unavailable")); expect(container.querySelector("input")).toBeNull();
 });

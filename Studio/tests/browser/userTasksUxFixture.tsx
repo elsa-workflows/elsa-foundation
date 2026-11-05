@@ -52,7 +52,7 @@ function Fixture() {
     const id = matched ? decodeURIComponent(matched[1]) : null;
     const query = new URLSearchParams(params);
     if (id) query.set("task", id); else query.delete("task");
-    for (const key of ["view", "search", "after", "focusTask"]) {
+    for (const key of ["view", "search", "after", "focusTask", "backend"]) {
       if (destination.searchParams.has(key)) query.set(key, destination.searchParams.get(key)!); else query.delete(key);
     }
     history.replaceState(history.state, "", `${fixturePath}?${query}`);

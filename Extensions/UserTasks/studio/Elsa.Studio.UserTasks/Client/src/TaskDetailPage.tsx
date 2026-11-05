@@ -1,31 +1,39 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import { StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import { actor, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
 import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
 
-const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes.";
+const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes. You can leave this page.";
 
 export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi; id: string; navigate(path: string): void }) {
   const location = useStudioRouteLocation();
   const backPath = taskCollectionPath(readTaskBrowseLocation(location.search), id);
-  const [identity, setIdentity] = useState<TaskActor>();
-  const [error, setError] = useState(""); const [revision, setRevision] = useState(0);
+  const scope = api.backendSession ?? api.backend;
+  const [authorization, setAuthorization] = useState<{ scope: typeof scope; identity?: TaskActor; error?: string }>();
+  const identity = authorization?.scope === scope ? authorization.identity : undefined;
+  const error = authorization?.scope === scope ? authorization.error ?? "" : "";
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
-    let current = true; setIdentity(undefined); setError("");
-    void actor(api).then(who => { if (current) setIdentity(who); }, failure => { if (current) setError(message(failure)); });
+    let current = true;
+    // Activity reconnects effects on tab return. Keep the authorized child and its response while revalidating
+    // this immutable connection; a new connection or actor must not inherit another scope's local response.
+    void actor(api).then(who => { if (current) setAuthorization({ scope, identity: who }); }, failure => {
+      if (current) setAuthorization(previous => ({ scope, identity: ![401, 403].includes(statusOf(failure)) && previous?.scope === scope ? previous.identity : undefined, error: message(failure) }));
+    });
     return () => { current = false; };
-  }, [api, revision]);
-  if (identity && (identity.canRead || identity.canManage)) return <TaskDetail key={id} api={api} id={id} identity={identity} onClose={() => navigate(backPath)} />;
+  }, [api, scope, revision]);
+  if (identity && (identity.canRead || identity.canManage)) return <TaskDetail key={JSON.stringify([id, identity.userId])} api={api} id={id} identity={identity} onClose={() => navigate(backPath)}
+    accessNotice={error ? <StudioAlert tone="danger">Could not refresh task access: {error}<StudioButton onClick={() => setRevision(value => value + 1)}>Retry access</StudioButton></StudioAlert> : undefined} />;
   return <StudioPage className="user-tasks" aria-label="User task">
     <StudioPageHeader title="User task" actions={<StudioButton variant="ghost" onClick={() => navigate(backPath)}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton>} />
     {identity ? <StudioResultState title="Task access unavailable" description="You do not have permission to view this task." /> : error ? <StudioResultState tone="danger" title="Task unavailable" description={error} actions={<StudioButton onClick={() => setRevision(value => value + 1)}>Retry</StudioButton>} /> : <p role="status">Loading task…</p>}
   </StudioPage>;
 }
 
-export function TaskDetail({ api, id, identity, onClose }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; onClose?(): void }) {
+export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; onClose?(): void; accessNotice?: React.ReactNode }) {
   const [task, setTask] = useState<TaskItem>(); const [data, setData] = useState<Record<string, unknown>>({});
   const [validationNotice, setValidationNotice] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
@@ -48,9 +56,10 @@ export function TaskDetail({ api, id, identity, onClose }: { api: ElsaStudioModu
       const next = await read(api, id); if (current !== sequence.current) return; setValidationNotice(false);
       setTask(next); setMissing(false); setStale(false);
       setNotice(next.status === "CompletionPending" ? responsePendingNotice : "");
+      if (next.decision) edited.current = false;
       if (!edited.current || next.decision) setData(next.decision?.response.data ?? next.prefill ?? {});
       // A newer unaccepted revision proves the previous conditional write cannot still win.
-      if (next.status === "Completed" || next.status === "Cancelled" ||
+      if (next.decision || next.status === "Completed" || next.status === "Cancelled" ||
           (!next.decision && attempt.current && next.revision > attempt.current.revision)) attempt.current = null;
     } catch (failure) { if (current !== sequence.current) return; setValidationNotice(false); setMissing(statusOf(failure) === 404); setNotice(message(failure)); setStale(true); }
   }, [api, id]);
@@ -71,7 +80,9 @@ export function TaskDetail({ api, id, identity, onClose }: { api: ElsaStudioModu
       if (operation === "reassign") request = { ...request, assigneeId: targetKind === "user" ? target : null, groupId: targetKind === "group" ? target : null };
       const result = await mutate(api, task, operation, request);
       setTask(result); if (result.decision) { setData(result.decision.response.data); edited.current = false; }
-      if (result.status !== "CompletionPending") attempt.current = null;
+      // A successful write confirms this request. Runtime delivery may remain pending independently.
+      attempt.current = null;
+      if (operation === "complete") edited.current = false;
       setNotice(result.status === "CompletionPending" ? responsePendingNotice : "Task updated.");
     } catch (failure) {
       const status = statusOf(failure); setNotice(status === 409 ? "This task changed. Refresh to review its current state; your entered values are preserved." : message(failure));
@@ -118,6 +129,7 @@ export function TaskDetail({ api, id, identity, onClose }: { api: ElsaStudioModu
   const Renderer = renderers.length === 1 ? renderers[0].component : null;
   return frame(<>
     <StudioPageHeader title={task.title} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<>{back}<StudioButton onClick={() => void refresh()} disabled={busy}><RefreshCw size={16} aria-hidden="true" />Refresh task</StudioButton></>}><TaskStatus status={task.status} /></StudioPageHeader>
+    {accessNotice}
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
     {task.form ? Renderer ? <Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} />
       : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}

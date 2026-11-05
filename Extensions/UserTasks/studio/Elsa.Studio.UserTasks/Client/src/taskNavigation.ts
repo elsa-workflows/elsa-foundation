@@ -16,11 +16,11 @@ function browseQuery(browse: TaskBrowseLocation) {
 export function taskCollectionPath(browse: TaskBrowseLocation, focusTask?: string) {
   const query = browseQuery(browse);
   if (focusTask) query.set("focusTask", focusTask);
-  return qualifyStudioBackendPath("/user-tasks") + (query.size ? `?${query}` : "");
+  return qualifyStudioBackendPath("/user-tasks" + (query.size ? `?${query}` : ""));
 }
 export function taskDetailPath(id: string, browse: TaskBrowseLocation) {
   const query = browseQuery(browse);
-  return qualifyStudioBackendPath(`/user-tasks/${encodeURIComponent(id)}`) + (query.size ? `?${query}` : "");
+  return qualifyStudioBackendPath(`/user-tasks/${encodeURIComponent(id)}` + (query.size ? `?${query}` : ""));
 }
 /** Keep filters in their history entry so browser Back and an explicit return restore the same collection. */
 export function replaceTaskBrowseLocation(browse: TaskBrowseLocation, focusTask?: string) {

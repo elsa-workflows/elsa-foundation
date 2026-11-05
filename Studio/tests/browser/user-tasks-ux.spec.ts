@@ -15,7 +15,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     const search = page.getByRole("searchbox", { name: "Search tasks", exact: true });
     expect((await search.boundingBox())!.width).toBeGreaterThan(200);
     await page.screenshot({ path: info.outputPath("empty.png"), fullPage: true });
-    await page.goto(`/user-tasks-ux.html?two&theme=${theme}`);
+    await page.goto(`/user-tasks-ux.html?two&theme=${theme}&backend=legacy`);
     const link = page.getByRole("link", { name: /^Review purchase request/ });
     await expect(link).toBeVisible();
     await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
@@ -25,6 +25,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await link.press("Enter");
     const detail = page.getByRole("region", { name: /^Review purchase request/ });
     await expect(detail.getByRole("heading")).toBeFocused();
+    expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
     await detail.getByRole("textbox", { name: "Note" }).fill("Reviewed with keyboard");
     await expect(detail.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
