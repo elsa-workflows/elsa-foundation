@@ -22,8 +22,30 @@ internal sealed class SpecialistActivityProvider(
     SpecialistSchemaValidator validator,
     IEnumerable<ISpecialistModelCapabilitiesSource> modelFactories,
     IActivityDefinitionAuthoringStore? authoring = null,
-    IActivityDefinitionVersionPublicationStore? publications = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    IActivityDefinitionVersionPublicationStore? publications = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityProviderDiagnosticCatalog
 {
+    private static readonly IReadOnlyList<ActivityProviderDiagnosticDescriptor> PublicDiagnostics = Array.AsReadOnly<ActivityProviderDiagnosticDescriptor>([
+        new("specialist.manifest.invalid", "The saved agent configuration cannot be read.", "Review the agent settings. If this draft was imported, recreate it using the current agent editor."),
+        new("specialist.manifest.schema", "This agent uses an unsupported configuration version.", "Update the installed Agent module or recreate the draft using its current editor."),
+        new("specialist.manifest.bounds", "The agent configuration is too large or too deeply nested.", "Shorten the instructions and simplify the input or result constraints before checking again."),
+        new("specialist.manifest.instructions", "Agent instructions are required.", "Enter instructions of 1 to 32,768 characters in Designer.", "/instructions", "Edit instructions"),
+        new("specialist.manifest.instructions-length", "Agent instructions exceed 32,768 characters.", "Shorten the instructions to at most 32,768 characters.", "/instructions", "Edit instructions"),
+        new("specialist.manifest.model", "A complete model connection has not been selected.", "In Designer, choose a model connection with a configured model or deployment. Create or update it in Connections if none is available.", "/model", "Choose model connection"),
+        new("specialist.manifest.settings", "Model settings must be a JSON object.", "Review the model settings in Designer or recreate a malformed imported draft.", "/settings", "Review model settings"),
+        new("specialist.manifest.constraints", "The agent's input or result constraints are missing.", "Restore the input and result constraint objects or recreate this imported draft using the current agent editor."),
+        new("specialist.manifest.limits", "Execution limits are missing.", "Set execution limits in Designer's Advanced settings.", "/limits", "Edit execution limits"),
+        new("specialist.manifest.model-calls", "The maximum number of model calls is outside the allowed range.", "Enter a whole number from 1 to 32 in Advanced settings.", "/limits/maximumModelCalls", "Edit model-call limit"),
+        new("specialist.manifest.timeout", "The agent timeout is outside the allowed range.", "Enter a timeout from 1 to 1,800 seconds in Advanced settings.", "/limits/timeoutMilliseconds", "Edit timeout"),
+        new("specialist.manifest.output-tokens", "The output-token limit must be a positive whole number.", "Clear the optional limit or enter a positive whole number supported by the selected model.", "/limits/maximumOutputTokens", "Edit output-token limit"),
+        new("specialist.model.provider", "The selected model provider is unavailable or registered more than once.", "Choose a connection from an available model provider. Ask an administrator to check provider registration if the problem persists.", "/model", "Choose model connection"),
+        new("specialist.model.unavailable", "The selected model connection cannot be used right now.", "Choose another authorized model connection, or check its endpoint, credentials and access policy in Connections, then check again.", "/model", "Review model connection"),
+        new("specialist.model.capability", "The selected model cannot meet this agent's result or token requirements.", "Choose a model that supports the result schema, or reduce the maximum output-token limit.", "/model", "Review model connection"),
+        new("specialist.model.settings", "The model settings do not match the selected provider's requirements.", "Review the settings supported by the selected model in Designer.", "/settings", "Review model settings"),
+        new("specialist.contract.outcome", "Agents require the single Done outcome.", "Restore the Done outcome in the activity's Outcomes tab."),
+        new("specialist.contract.reserved", "An output uses a reserved agent result name.", "Rename outputs using the reserved $ name or $result reference key in the Outputs tab."),
+        new("specialist.contract.default", "An input default does not match its type or schema.", "Use a literal default that satisfies the input's type and constraints, or remove that default.")
+    ]);
+    public IReadOnlyList<ActivityProviderDiagnosticDescriptor> DiagnosticDescriptors => PublicDiagnostics;
     private static readonly ActivityOutcomeContract Done = new("done", "Done", true);
     public string ProviderKey => SpecialistRuntimeIds.ProviderKey;
     public string CompilerFingerprint => "elsa.specialist/compiler/2.1.0";
@@ -54,7 +76,7 @@ internal sealed class SpecialistActivityProvider(
 
     public async ValueTask<ActivityTemplateCompilation> CompileAsync(ActivityTemplateCompilationRequest request, CancellationToken cancellationToken = default)
     {
-        var prepared = await PrepareAsync(request.Provider, request.Contract, new("ActivityDraft", request.DraftId, request.DefinitionId, Revision: request.Revision), cancellationToken);
+        var prepared = await PrepareAsync(request.Provider, request.Contract, new(request.SubjectKind, request.DraftId, request.DefinitionId, Revision: request.Revision), cancellationToken);
         if (prepared.Descriptor is null)
             return new(null, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], new(0, 0, 0, 0, 0, 0, 0), request.ProviderFingerprint, [], prepared.Diagnostics);
 
@@ -176,15 +198,33 @@ internal sealed class SpecialistActivityProvider(
         SpecialistManifest? manifest;
         try { manifest = source.Payload.Deserialize<SpecialistManifest>(SpecialistJson.ManifestOptions); }
         catch (JsonException) { manifest = null; }
-        if (manifest is null || string.IsNullOrWhiteSpace(manifest.Instructions) || manifest.Instructions.Length > 32_768 ||
-            manifest.Model is null || string.IsNullOrWhiteSpace(manifest.Model.ProviderKey) || string.IsNullOrWhiteSpace(manifest.Model.ConnectionName) || string.IsNullOrWhiteSpace(manifest.Model.ModelId) ||
-            manifest.Model.ProviderKey.Length > 128 || manifest.Model.ConnectionName.Length > 256 || manifest.Model.ModelId.Length > 256 ||
-            manifest.Settings.ValueKind != JsonValueKind.Object || manifest.InputConstraints is null || manifest.ResultConstraints is null || manifest.Limits is null ||
-            manifest.Limits.MaximumModelCalls is < 1 or > 32 || manifest.Limits.TimeoutMilliseconds is < 1_000 or > 1_800_000 || manifest.Limits.MaximumOutputTokens is <= 0)
+        if (manifest is null)
         {
-            diagnostics.Add(Problem("specialist.manifest.invalid", "A specialist requires bounded instructions, a logical model reference, object settings, constraints and positive execution limits.", subject));
+            diagnostics.Add(Problem("specialist.manifest.invalid", "The saved agent configuration cannot be read.", subject));
             return null;
         }
+        var invalid = false;
+        void Refuse(string code)
+        {
+            invalid = true;
+            var guidance = PublicDiagnostics.Single(x => x.Code == code);
+            diagnostics.Add(Problem(code, guidance.Message, subject, guidance.JsonPointer));
+        }
+        if (string.IsNullOrWhiteSpace(manifest.Instructions)) Refuse("specialist.manifest.instructions");
+        else if (manifest.Instructions.Length > 32_768) Refuse("specialist.manifest.instructions-length");
+        if (manifest.Model is null || string.IsNullOrWhiteSpace(manifest.Model.ProviderKey) || string.IsNullOrWhiteSpace(manifest.Model.ConnectionName) || string.IsNullOrWhiteSpace(manifest.Model.ModelId) ||
+            manifest.Model.ProviderKey.Length > 128 || manifest.Model.ConnectionName.Length > 256 || manifest.Model.ModelId.Length > 256)
+            Refuse("specialist.manifest.model");
+        if (manifest.Settings.ValueKind != JsonValueKind.Object) Refuse("specialist.manifest.settings");
+        if (manifest.InputConstraints is null || manifest.ResultConstraints is null) Refuse("specialist.manifest.constraints");
+        if (manifest.Limits is null) Refuse("specialist.manifest.limits");
+        else
+        {
+            if (manifest.Limits.MaximumModelCalls is < 1 or > 32) Refuse("specialist.manifest.model-calls");
+            if (manifest.Limits.TimeoutMilliseconds is < 1_000 or > 1_800_000) Refuse("specialist.manifest.timeout");
+            if (manifest.Limits.MaximumOutputTokens is <= 0) Refuse("specialist.manifest.output-tokens");
+        }
+        if (invalid) return null;
         return manifest;
     }
 

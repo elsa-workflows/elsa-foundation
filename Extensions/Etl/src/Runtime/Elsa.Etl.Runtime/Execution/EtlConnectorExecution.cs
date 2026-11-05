@@ -25,7 +25,9 @@ internal sealed class EtlConnectorExecution(
     EtlAttemptBudget budget,
     IServiceScopeFactory scopes,
     TimeProvider clock,
-    ILogger<EtlConnectorExecution> logger)
+    ILogger<EtlConnectorExecution> logger,
+    HostSqlBindings? sql = null,
+    HostRabbitMqBindings? rabbitMq = null)
 {
     public async ValueTask PrepareAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default)
     {
@@ -40,13 +42,32 @@ internal sealed class EtlConnectorExecution(
             if (view is not { Run.Status: EtlRunStatus.Preparing }) return;
             var pipeline = reader.Read(view.Run.Invocation.Artifact);
             permit = await budget.AcquireAsync(Charge(pipeline), token);
-            var prepared = await preparer.PrepareAsync(new(view.Run.Invocation, view.Bindings), token);
+            // A watermarked SQL source reads only rows above the last completed run's high watermark (spec 1199).
+            long? floor = pipeline.Source is EtlSqlSource { Watermark: { } column } sql
+                ? await store.FindConnectorSourceWatermarkAsync(lease.Scope,
+                    new(view.Run.Invocation.Artifact.DefinitionId, sql.Binding, view.Bindings.Source.Revision.Handle, sql.Table, column), token)
+                : null;
+            var prepared = await preparer.PrepareAsync(new(view.Run.Invocation, view.Bindings), token, floor);
+            // A RabbitMQ source's messages stay unacknowledged until the prepared run is recorded; every other way out
+            // disposes the receipt, so the broker requeues them (spec 1201).
+            await using var receipt = prepared.Receipt;
+            // A transiently unavailable source records nothing; the lapsed lease runs preparation again.
+            if (prepared.Transient)
+            {
+                logger.LogWarning("ETL run {RunId} could not read its source ({Failure}); preparation retries after its lease lapses.",
+                    lease.RunId, prepared.TransientCause?.GetType().Name);
+                return;
+            }
             if (prepared.Diagnostic is { } diagnostic)
             {
                 await SettleAsync(lease, diagnostic, token);
                 return;
             }
             var status = await store.CommitConnectorPreparationAsync(lease, prepared.Prepared!, token);
+            // The recorded run ends this preparation's lease, so its heartbeat may cancel the claim token at any moment now;
+            // the acknowledgement uses the caller's token, so only stopping the host can abandon it.
+            if (status is EtlStoreStatus.Applied or EtlStoreStatus.Replay && receipt is not null)
+                await AcknowledgeAsync(lease, receipt, cancellationToken);
             if (status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay or EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal))
                 await SettleAsync(lease, new("etl.connector-preparation-refused"), token);
         }
@@ -59,6 +80,37 @@ internal sealed class EtlConnectorExecution(
         {
             await using var retainedPermit = permit;
             await heartbeat.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Acknowledges a recorded snapshot's messages. A failed acknowledgement leaves them unacknowledged; the broker requeues them
+    /// and a later run reads them again, the at-least-once window of spec 1201, so it is logged rather than failing this run.
+    /// </summary>
+    private async ValueTask AcknowledgeAsync(EtlPreparationLease lease, IEtlRabbitMqReceipt receipt, CancellationToken token)
+    {
+        try
+        {
+            await receipt.AcknowledgeAsync(token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !token.IsCancellationRequested)
+        {
+            logger.LogWarning("ETL run {RunId} recorded its RabbitMQ snapshot but could not acknowledge its messages ({Failure}); the broker redelivers them to a later run.",
+                lease.RunId, exception.GetType().Name);
+        }
+    }
+
+    private static bool LeftPage(EtlConnectorPartitionLease before, EtlConnectorPartitionLease after) =>
+        before.Position is EtlConnectorHttpPosition left && after.Position is EtlConnectorHttpPosition current &&
+        current.PageSequence > left.PageSequence;
+
+    /// <summary>Deletion is best effort: a file left behind costs disk until a later cleanup, never correctness.</summary>
+    private async ValueTask DeleteEndedFilesAsync(Func<ValueTask> delete)
+    {
+        try { await delete(); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning("ETL connector files whose use ended were left in place after {FailureType}.", exception.GetType().Name);
         }
     }
 
@@ -82,11 +134,12 @@ internal sealed class EtlConnectorExecution(
             await using var builder = await EtlConnectorInputBatchBuilder.OpenAsync(options.SnapshotRoot,
                 admission, view.Prepared, lease.PartitionOrdinal, token);
             EtlCachedHttpPage? page = null;
+            var acquirer = new EtlHttpSourceAcquirer(store, http, transport, options.SnapshotRoot, clock);
+            var continuous = pipeline.Continuous is not null;
             if (lease.Position is EtlConnectorHttpPosition position)
             {
                 if (position.Exhausted) return;
-                var acquired = await new EtlHttpSourceAcquirer(store, http, transport, options.SnapshotRoot, clock)
-                    .AcquireAsync(admission, lease, token);
+                var acquired = await acquirer.AcquireAsync(admission, lease, token);
                 if (acquired.FailureCode is { } failure)
                 {
                     await SettleAsync(lease, new(failure), token);
@@ -98,7 +151,13 @@ internal sealed class EtlConnectorExecution(
                 if (page.Descriptor.RecordCount == 0)
                 {
                     var advanced = await store.AdvanceEmptyHttpPageAsync(lease, token);
-                    if (advanced.Lease is { } updated) Volatile.Write(ref lease, updated);
+                    if (advanced.Lease is { } updated)
+                    {
+                        var left = lease;
+                        Volatile.Write(ref lease, updated);
+                        if (continuous && LeftPage(left, updated))
+                            await DeleteEndedFilesAsync(() => acquirer.DeleteLeftPageAsync(admission, left, token));
+                    }
                     else if (advanced.Status is not (EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal or
                                  EtlStoreStatus.BudgetExceeded or EtlStoreStatus.Conflict))
                         await SettleAsync(lease, new("etl.http.empty-page-transition-refused"), token);
@@ -129,7 +188,7 @@ internal sealed class EtlConnectorExecution(
             }
             Volatile.Write(ref lease, lease with { OwedBatch = reservation });
             if (await store.RenewConnectorPartitionAsync(lease, token) is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay)) return;
-            var output = new EtlConnectorOutputProcessor(store, files, http, publishers, transport, options.SnapshotRoot);
+            var output = new EtlConnectorOutputProcessor(store, files, http, publishers, transport, options.SnapshotRoot, sql, clock, rabbitMq);
             var retained = await output.TransformAndRetainAsync(lease, admission, pipeline, input, token);
             if (retained.FailureCode is { } outputFailure)
             {
@@ -152,7 +211,22 @@ internal sealed class EtlConnectorExecution(
                 await SettleAsync(lease, new("etl.connector-acceptance-retention-limit"), token);
                 return;
             }
-            if (accepted.Lease is { } next) Volatile.Write(ref lease, next);
+            if (accepted.Lease is { } next)
+            {
+                var left = lease;
+                Volatile.Write(ref lease, next);
+                // A continuous run deletes files once the committed transition ended their use (spec 1196).
+                if (continuous)
+                {
+                    await DeleteEndedFilesAsync(() =>
+                    {
+                        output.DeleteRetainedRouteBodies(retained.Output);
+                        return ValueTask.CompletedTask;
+                    });
+                    if (LeftPage(left, next))
+                        await DeleteEndedFilesAsync(() => acquirer.DeleteLeftPageAsync(admission, left, token));
+                }
+            }
             else if (accepted.Status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay or EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal))
                 await SettleAsync(lease, new("etl.connector-batch-acceptance-conflict"), token);
         }

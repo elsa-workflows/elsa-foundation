@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -53,6 +53,7 @@ export function ActivityDefinitionPublicationReview({
   mode?: "full" | "toolbar";
 }) {
   const queryClient = useQueryClient();
+  const blockedReasonId = useId();
   const [phase, setPhase] = useState<ReviewPhase>("idle");
   const [preflight, setPreflight] = useState<ActivityPublicationPreflight | null>(null);
   const [binding, setBinding] = useState<ExactDraftBinding | null>(null);
@@ -224,7 +225,9 @@ export function ActivityDefinitionPublicationReview({
   const versionError = preflight && !isExactVersionAtLeast(version, preflight.minimumVersion)
     ? `Enter an exact semantic version at or above ${preflight.minimumVersion}.`
     : null;
-  const diagnosticSource = receipt?.diagnostics?.length ? receipt.diagnostics : preflight?.diagnostics ?? [];
+  const diagnosticSource = uniquePublicationDiagnostics(receipt?.diagnostics?.length ? receipt.diagnostics : preflight?.diagnostics ?? []);
+  const hasBlockingDiagnostics = diagnosticSource.some(item => diagnosticSeverity(item.severity) === "Error");
+  const publicationBlocked = Boolean(preflight && phase !== "success" && (!preflight.isPublishable || phase === "failed" && (receipt?.status === "Rejected" || receipt?.status === "Failed")));
   const closeAllowed = phase !== "publishing" && phase !== "unknown";
   const focusDiagnostic = async (diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement) => {
     if (mode === "toolbar") {
@@ -239,25 +242,38 @@ export function ActivityDefinitionPublicationReview({
   };
 
   const reviewDetails = preflight ? <>
-      <PublicationSummary preflight={preflight} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} compact={mode === "toolbar"} />
+      {publicationBlocked ? <div className="ad-publication-blockers" id={blockedReasonId} role="alert">
+        <h3>Resolve these issues before publishing</h3>
+        <p>{phase === "failed"
+          ? "Publication did not complete. Review the notes below, correct the draft or resolve the service problem, then check again."
+          : hasBlockingDiagnostics
+          ? "Publication is blocked by the issues below. Correct the draft, then check again."
+          : "The activity is not ready to publish. Review the readiness checks below or ask an administrator to resolve unavailable services, then check again."}</p>
+        {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} embedded disabled={phase === "publishing" || phase === "unknown"} /> : null}
+        <div className="ad-publication-blocker-actions">
+          {mode === "toolbar" ? <button type="button" onClick={() => setDialogOpen(false)}>Return to editor</button> : null}
+          <button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</button>
+        </div>
+      </div> : null}
+      <PublicationSummary preflight={preflight} blocked={publicationBlocked} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} compact={mode === "toolbar"} />
       {mode === "toolbar" && !preflight.hasBaseline ? <>
         <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
         <details className="ad-publication-technical-details"><summary>Review initial activity contents</summary>
-          <ImpactReview changes={preflight.impactFirstChanges} diagnostics={[]} compact />
+          <ImpactReview changes={preflight.impactFirstChanges} compact />
         </details>
-      </> : <ImpactReview changes={preflight.impactFirstChanges} diagnostics={preflight.diagnostics} compact={mode === "toolbar"} />}
-      {mode === "toolbar" && preflight.isPublishable ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
-        <ReadinessReview preflight={preflight} compact />
-      </details> : <ReadinessReview preflight={preflight} compact={mode === "toolbar"} />}
-      {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
-      <div className="ad-publication-version">
+      </> : <ImpactReview changes={preflight.impactFirstChanges} compact={mode === "toolbar"} />}
+      {mode === "toolbar" && (preflight.isPublishable || hasBlockingDiagnostics) ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
+        <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />
+      </details> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={mode === "toolbar"} />}
+      {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
+      {!publicationBlocked ? <div className="ad-publication-version">
         <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></label>
         <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>{mode === "toolbar" ? "Suggested version based on these changes. You can choose a higher version." : "The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version."}</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
         {versionError ? <p role="alert">{versionError}</p> : null}
-      </div>
+      </div> : null}
       <footer className="ad-publication-actions">
         <span><ShieldCheck size={16} aria-hidden /> {mode === "toolbar" ? "Existing workflows keep the activity version they already use." : "Publication is atomic and idempotent for this reviewed revision and head."}</span>
-        <button type="button" className="ad-primary-action" onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
+        <button type="button" className="ad-primary-action" aria-describedby={publicationBlocked ? blockedReasonId : undefined} onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
           {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${receipt?.outcome?.version ?? version}` : `Publish ${version || "exact version"}`}
         </button>
       </footer>
@@ -271,7 +287,7 @@ export function ActivityDefinitionPublicationReview({
       </button> : null}
       {mode === "toolbar" ? <button type="button" className="ad-publication-dialog-close" aria-label="Close publication review" onClick={() => closeAllowed && setDialogOpen(false)} disabled={!closeAllowed}><X size={18} aria-hidden /></button> : null}
     </header>
-    {mode === "toolbar" && phase !== "success" ? <div className="ad-publication-prepare-row"><button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</button></div> : null}
+    {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</button></div> : null}
     {phase === "idle" ? <p className="ad-publication-empty">No publication review is active. Preparing a review never writes an immutable version.</p> : null}
     {phase === "stale" || phase === "failed" || phase === "unknown" ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
     {phase === "success" && receipt?.outcome ? <div className="ad-publication-success" role="status">
@@ -296,7 +312,7 @@ export function ActivityDefinitionPublicationReview({
   </div>;
 }
 
-function PublicationSummary({ preflight, publishedOutcome, compact = false }: { preflight: ActivityPublicationPreflight; publishedOutcome: ActivityPublicationReceipt["outcome"]; compact?: boolean }) {
+function PublicationSummary({ preflight, publishedOutcome, compact = false, blocked = false }: { preflight: ActivityPublicationPreflight; blocked?: boolean; publishedOutcome: ActivityPublicationReceipt["outcome"]; compact?: boolean }) {
   if (!compact) return <dl className="ad-publication-summary">
     <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
     <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
@@ -306,7 +322,7 @@ function PublicationSummary({ preflight, publishedOutcome, compact = false }: { 
   return <>
     <dl className="ad-publication-summary">
       <div><dt>Version</dt><dd>{publishedOutcome?.version ?? preflight.minimumVersion}</dd></div>
-      <div><dt>Readiness</dt><dd>{preflight.isPublishable ? "Ready to publish" : "Blocked"}</dd></div>
+      <div><dt>Readiness</dt><dd>{preflight.isPublishable && !blocked ? "Ready to publish" : "Blocked"}</dd></div>
       <div><dt>Change</dt><dd>{!preflight.hasBaseline ? "First publication" : preflight.diff?.requiredBump ? `${preflight.diff.requiredBump} version change` : "No version change required"}</dd></div>
       <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "No published baseline exists"}</dd></div>
     </dl>
@@ -321,26 +337,49 @@ function PublicationSummary({ preflight, publishedOutcome, compact = false }: { 
   </>;
 }
 
-function ImpactReview({ changes, diagnostics, compact = false }: { changes: ActivityPublicationChange[]; diagnostics: StudioActivityDiagnostic[]; compact?: boolean }) {
+function ImpactReview({ changes, compact = false }: { changes: ActivityPublicationChange[]; compact?: boolean }) {
   const groups = useMemo(() => groupChanges(changes), [changes]);
-  const warnings = diagnostics.filter(item => item.severity === "Warning");
   return <section className="ad-publication-impact" aria-labelledby="activity-impact-title"><header><h3 id="activity-impact-title">{compact ? "Changes" : "Impact-first comparison"}</h3><p>{compact ? "Review what will change before publishing." : "Impact is shown before contract, provider, dependency, and presentation grouping."}</p></header>
     {!changes.length ? <p className="ad-publication-empty">No behavioral or presentation changes were reported.</p> : null}
     {groups.map(group => <section key={group.impact} className={`ad-impact-group ${impactClass(group.impact)}`}><h4>{compact && group.impact === "NonBehavioral" ? "Non-behavioral changes" : group.label}</h4>{group.areas.map(area => <div key={area.area}><h5>{area.area}</h5><ul>{area.changes.map(change => <li key={change.changeId}><strong>{safeChangeKind(change.kind)}</strong><span>{change.message}</span>{compact ? <details><summary>Show exact values</summary><small>{changeValueSummary(change)}</small></details> : <small>{changeValueSummary(change)}</small>}</li>)}</ul></div>)}</section>)}
-    {warnings.length ? <section className="ad-impact-group is-warning"><h4>Warnings</h4><ul>{warnings.map((warning, index) => <li key={`${warning.code}:${index}`}><strong>{warning.code}</strong><span>{warning.message}</span></li>)}</ul></section> : null}
+
   </section>;
 }
 
-function ReadinessReview({ preflight, compact = false }: { preflight: ActivityPublicationPreflight; compact?: boolean }) {
+function ReadinessReview({ preflight, compact = false, blocked = false, previous = false }: { preflight: ActivityPublicationPreflight; compact?: boolean; blocked?: boolean; previous?: boolean }) {
   const readiness = [preflight.provider, ...preflight.storage, ...preflight.runtime];
-  return <section className="ad-publication-readiness" aria-labelledby="activity-readiness-title"><header><h3 id="activity-readiness-title">{compact ? "Readiness" : "Dependencies &amp; Runtime readiness"}</h3><span className={preflight.isPublishable ? "is-ready" : "is-blocked"}>{preflight.isPublishable ? "Ready to publish" : "Publication blocked"}</span></header>
+  return <section className="ad-publication-readiness" aria-labelledby="activity-readiness-title"><header><h3 id="activity-readiness-title">{previous ? "Checks from the earlier review" : compact ? "Readiness" : "Dependencies &amp; Runtime readiness"}</h3><span className={preflight.isPublishable && !blocked ? "is-ready" : "is-blocked"}>{previous ? "Recheck after correcting the issues above" : preflight.isPublishable && !blocked ? "Ready to publish" : "Publication blocked"}</span></header>
     <div className="ad-readiness-grid">{readiness.map((item, index) => <article key={`${item.kind}:${item.key}:${index}`}><strong>{item.kind}</strong>{compact ? <details><summary>Technical details</summary><code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code></details> : <code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code>}<span>{item.status}</span></article>)}</div>
     {preflight.dependencies.length ? <details><summary>{preflight.dependencies.length} exact direct {preflight.dependencies.length === 1 ? "dependency" : "dependencies"}</summary><ul>{preflight.dependencies.map(item => <li key={item.occurrenceId}><strong>{item.version}</strong><code>{item.definitionId} · {item.versionId}</code></li>)}</ul></details> : <p>No direct reusable-activity dependencies were reported.</p>}
   </section>;
 }
 
-function PublicationDiagnostics({ diagnostics, onFocus, disabled = false }: { diagnostics: StudioActivityDiagnostic[]; onFocus(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>; disabled?: boolean }) {
-  return <section className="ad-publication-diagnostics" aria-labelledby="publication-diagnostics-title"><h3 id="publication-diagnostics-title">Publication diagnostics</h3><ol>{diagnostics.map((item, index) => <li key={`${item.code}:${index}`}><div><strong>{item.severity}</strong><code>{safeDiagnosticCode(item.code)}</code></div><p>{item.message}</p>{item.remediation ? <span>{item.remediation}</span> : null}<button type="button" onClick={event => void onFocus(item, event.currentTarget)} disabled={disabled}><LocateFixed size={15} aria-hidden /> Focus location</button></li>)}</ol></section>;
+function PublicationDiagnostics({ diagnostics, onFocus, disabled = false, embedded = false }: { diagnostics: StudioActivityDiagnostic[]; embedded?: boolean; onFocus(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>; disabled?: boolean }) {
+  return <section className="ad-publication-diagnostics" aria-label={embedded ? "Publication issues" : undefined} aria-labelledby={embedded ? undefined : "publication-diagnostics-title"}>{!embedded ? <h3 id="publication-diagnostics-title">{diagnostics.some(item => diagnosticSeverity(item.severity) === "Error") ? "What needs to change" : "Publication notes"}</h3> : null}<ol>{diagnostics.map((item, index) => {
+    const focusable = Boolean(item.location?.jsonPointer || item.location?.referenceKey || item.location?.nodeOrigin?.length);
+    const action = item.metadata?.actionLabel?.trim();
+    return <li key={`${item.code}:${index}`}>
+      <strong>{item.message}</strong>
+      {item.remediation ? <p>{item.remediation}</p> : null}
+      {focusable ? <button type="button" onClick={event => void onFocus(item, event.currentTarget)} disabled={disabled}><LocateFixed size={15} aria-hidden /> {action && action.length <= 80 ? action : "Go to setting"}</button> : null}
+      <details className="ad-publication-diagnostic-details"><summary>Diagnostic details</summary><span>{diagnosticSeverity(item.severity)}</span><code>{safeDiagnosticCode(item.code)}</code></details>
+    </li>;
+  })}</ol></section>;
+}
+
+function diagnosticSeverity(severity: string) {
+  const normalized = severity.toLowerCase();
+  return normalized === "warning" ? "Warning" : normalized === "info" ? "Info" : "Error";
+}
+
+function uniquePublicationDiagnostics(diagnostics: StudioActivityDiagnostic[]) {
+  const seen = new Set<string>();
+  return diagnostics.filter(item => {
+    const key = JSON.stringify([item.code, diagnosticSeverity(item.severity), item.message, item.remediation ?? null, item.subject, item.location ?? null, item.metadata?.actionLabel ?? null]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((left, right) => ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(left.severity)) - ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(right.severity)));
 }
 
 function PublicationDialog({ canClose, onClose, children }: { canClose: boolean; onClose(): void; children: ReactNode }) {
@@ -475,7 +514,7 @@ function publicationFailureMessage(error: unknown, fallback: string) {
 }
 
 function safeDiagnosticCode(code: string) {
-  return /^[a-z0-9][a-z0-9._-]{0,127}$/.test(code) ? code : "activity.publication.issue";
+  return /^[a-z0-9][a-z0-9._:-]{0,127}$/.test(code) ? code : "activity.publication.issue";
 }
 
 function createOperationKey() {

@@ -91,7 +91,8 @@ separately. ADR 0031 still holds because every write remains behind the owner's 
 | Stale owner after takeover | New owner holds the fence | Stale owner rejected; no row changes | `takeover` parent cases, 4/4, byte-for-byte unchanged |
 
 Out of scope: outbox delivery, external effects, model admission and alteration paths keep their prior anchors. This
-analysis is posted on #2584 for the owner review its acceptance requires; until that review, the criterion stays open.
+analysis is posted on #2584 for the owner review its acceptance requires; until that review, the criterion stays open (point-in-time; the owner
+accepted it on 2026-11-03 and #2584 is closed).
 
 
 ## M4 bounded pumps (#1307)

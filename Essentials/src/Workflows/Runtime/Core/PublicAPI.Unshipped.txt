@@ -1185,6 +1185,7 @@ Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException.
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Authority = 0 -> Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Policy = 1 -> Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Input = 2 -> Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerExtractionException
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerExtractionException.ArtifactId.get -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerExtractionException.ExecutableNodeId.get -> string!
@@ -4342,7 +4343,10 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.IntentKind.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.Limit.get -> int
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.Matches(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem! item) -> bool
-Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.RuntimePostCommitOutboxClaimedQuery(string! workflowExecutionId, string! intentKind, int limit) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.RuntimePostCommitOutboxClaimedQuery(string! workflowExecutionId, string! intentKind, int limit, System.DateTimeOffset? deliveredByClaimSince = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.DeliveredByClaimSince.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.ExcludedDeliveredOutboxItemIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.RuntimePostCommitOutboxClaimedQuery(string! workflowExecutionId, string! intentKind, int limit, System.DateTimeOffset? deliveredByClaimSince, System.Collections.Generic.IReadOnlyCollection<string!>! excludedDeliveredOutboxItemIds) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxDeliveryResult
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxDeliveryResult.FailureMessage.get -> string?
@@ -5065,6 +5069,7 @@ Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.ResumedCount.get -> int
 Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.Resumes.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusResumeOutcome!>!
 Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.ShedRetryAfter.get -> System.TimeSpan?
 Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.ShedStartCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.RefusedStartCount.get -> int
 Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.SkippedStartCount.get -> int
 Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.StartedCount.get -> int
 Elsa.Workflows.Runtime.Core.Models.StimulusRoutingResult.Starts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome!>!
@@ -5075,11 +5080,13 @@ Elsa.Workflows.Runtime.Core.Models.StimulusStartKeyScope.Occurrence = 1 -> Elsa.
 Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome
 Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.ArtifactId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.RetryAfter.get -> System.TimeSpan?
+Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.Reason.get -> string?
 Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.Status.get -> Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus
 Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.TriggerBindingId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.WorkflowExecutionId.get -> string?
 Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus
 Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus.Shed = 2 -> Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus
+Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus.Refused = 3 -> Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus
 Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus.SkippedDuplicate = 1 -> Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus
 Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus.Started = 0 -> Elsa.Workflows.Runtime.Core.Models.StimulusStartStatus
 Elsa.Workflows.Runtime.Core.Models.StorageDriverStatusEntry
@@ -8571,6 +8578,7 @@ static Elsa.Workflows.Runtime.Core.Models.SchedulerState.operator !=(Elsa.Workfl
 static Elsa.Workflows.Runtime.Core.Models.SchedulerState.operator ==(Elsa.Workflows.Runtime.Core.Models.SchedulerState? left, Elsa.Workflows.Runtime.Core.Models.SchedulerState? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.StimulusHashes.DistinctOrdinal(System.Collections.Generic.IEnumerable<string!>! stimulusHashes) -> System.Collections.Generic.IReadOnlyCollection<string!>!
 static Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.Shed(string! triggerBindingId, string! artifactId, System.TimeSpan? retryAfter) -> Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome!
+static Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.Refused(string! triggerBindingId, string! artifactId, string! reason) -> Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome!
 static Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.SkippedDuplicate(string! triggerBindingId, string! artifactId) -> Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome!
 static Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome.Started(string! triggerBindingId, string! artifactId, string! workflowExecutionId) -> Elsa.Workflows.Runtime.Core.Models.StimulusStartOutcome!
 static Elsa.Workflows.Runtime.Core.Models.StorageDriverStatusEntry.operator !=(Elsa.Workflows.Runtime.Core.Models.StorageDriverStatusEntry? left, Elsa.Workflows.Runtime.Core.Models.StorageDriverStatusEntry? right) -> bool
@@ -10333,3 +10341,6 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.operato
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?

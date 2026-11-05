@@ -397,6 +397,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(SecretsAttentionFeature).Assembly,
             typeof(ConnectionsFeature).Assembly,
             typeof(ConnectionsApiFeature).Assembly,
+            // Available for durable local/model connections when explicitly selected in the shell.
+            typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
             typeof(ConnectionsWorkflowsFeature).Assembly,
             // The generic human review wait for user-defined agents and its decision API.
@@ -407,9 +409,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Agent.Specialists.Api.SpecialistsApiFeature).Assembly,
             typeof(Elsa.Agent.Specialists.Anthropic.AnthropicSpecialistsFeature).Assembly,
             typeof(Elsa.Agent.Specialists.AzureOpenAI.AzureOpenAISpecialistsFeature).Assembly,
-            // The specialist runtime and its durable turn journal.
+            typeof(Elsa.Agent.Specialists.OpenAI.OpenAISpecialistsFeature).Assembly,
+            // The specialist runtime, its durable turn journal and its evidence reads.
             typeof(Elsa.Agent.Specialists.SpecialistsRuntimeFeature).Assembly,
             typeof(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature).Assembly,
             // Opt-in finite ETL authoring, native execution and independent runtime inspection.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,

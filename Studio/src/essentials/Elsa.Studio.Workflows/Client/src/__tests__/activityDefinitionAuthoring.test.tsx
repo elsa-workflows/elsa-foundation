@@ -31,6 +31,35 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it("autosaves a presentation-only provider edit with the exact revision and retained implementation", async () => {
+    const capture: { current: StudioActivityDefinitionImplementationEditorProps["onChange"] | null } = { current: null };
+    const initial = { ...fullDraft({ revision: 3, payload: { edit: 0 } }), activityPresentation: [{ nodeId: "root", displayName: "Original" }] };
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...initial, revision: 4, activityPresentation: (body as ActivityDefinitionDraftView).activityPresentation }));
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution(capture)],
+      putJson,
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    flushSync(() => capture.current!({ payload: initial.provider.payload, layout: initial.layout, activityPresentation: [{ nodeId: "root", displayName: "Renamed", description: "Context" }] }));
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    click(buttonByText(rendered.container, "Save now"));
+    await waitForText(rendered.container, "Saved revision 4");
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({
+      expectedRevision: 3,
+      activityPresentation: [{ nodeId: "root", displayName: "Renamed", description: "Context" }],
+      provider: expect.objectContaining({ payload: initial.provider.payload }),
+      layout: initial.layout
+    }));
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await rendered.unmount();
+  });
+
   it("keeps ordinary autosave quiet while retaining the navigation guard", async () => {
     let resolveSave!: (value: ActivityDefinitionDraftView) => void;
     const putJson = vi.fn(() => new Promise<ActivityDefinitionDraftView>(resolve => { resolveSave = resolve; }));
@@ -128,7 +157,7 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     expect(rendered.container.querySelector(".ad-publication-toolbar-trigger")).not.toBeNull();
     expect(rendered.container.querySelector(".ad-designer-view")?.textContent).toContain("Graph implementation editor");
-    click(buttonByText(rendered.container, "Inputs & outputs"));
+    click(rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=inputs]")!);
     expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(false);
     expect(advanced.open).toBe(false);
     await rendered.unmount();
@@ -391,9 +420,10 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Customer note");
     showContractView(rendered.container);
     const doneOutcome = selectContractMember(rendered.container, "outcome", "done");
-    expect(doneOutcome.textContent).toContain("Required by the implementation provider");
+    expect(doneOutcome.textContent).toContain("Emitted");
+    expect(doneOutcome.querySelector('input[data-contract-field="name"]')).toBeNull();
     expect([...doneOutcome.querySelectorAll("button")].some(button => button.textContent?.includes("Remove outcome"))).toBe(false);
-    expect(controlByLabel<HTMLInputElement>(doneOutcome, "Emitted by this activity").disabled).toBe(true);
+    expect(doneOutcome.querySelector('input[data-contract-field="isEmitted"]')).toBeNull();
     const customerNote = selectContractMember(rendered.container, "input", "customer-note");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Durable storage driver").value).toBe("elsa.json");
     const required = controlByLabel<HTMLInputElement>(rendered.container, "Required");
@@ -498,7 +528,7 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   }, 15_000);
 
-  it("groups contract members and opens a kind-specific creation form that selects the new member", async () => {
+  it("splits contract collections into counted tabs and opens kind-specific creation forms", async () => {
     const initial = fullDraft({ revision: 3 });
     initial.contract.inputs = [{
       referenceKey: "customer-id",
@@ -536,7 +566,8 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Saved revision 3");
     showContractView(rendered.container);
     const list = rendered.container.querySelector<HTMLElement>(".ad-contract-workbench-list")!;
-    expect([...list.querySelectorAll("h3")].map(item => item.textContent)).toEqual(["Inputs", "Outputs", "Outcomes"]);
+    expect([...list.querySelectorAll("h3")].map(item => item.textContent)).toEqual(["Inputs"]);
+    expect([...rendered.container.querySelectorAll(".ad-authoring-view-tabs button")].map(item => item.textContent)).toEqual(["Designer", "Inputs (2)", "Outputs (0)", "Outcomes (1)", "Variables"]);
     const inputAdd = categoryAddButton(rendered.container, "input");
     inputAdd.focus();
     click(inputAdd);
@@ -573,18 +604,18 @@ describe("Activity Definition authoring", () => {
     const outputAdd = categoryAddButton(rendered.container, "output");
     outputAdd.focus();
     click(outputAdd);
-    const outputGroup = outputAdd.closest<HTMLElement>(".ad-contract-workbench-group")!;
+    const outputGroup = rendered.container.querySelector<HTMLElement>(".ad-contract-workbench-group")!;
     const outputForm = outputGroup.querySelector<HTMLFormElement>("form.ad-contract-create-form")!;
     const outputName = controlByLabel<HTMLInputElement>(outputForm, "Output name");
     await waitFor(() => expect(document.activeElement).toBe(outputName));
     flushSync(() => outputName.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    await waitFor(() => expect(document.activeElement).toBe(outputAdd));
+    await waitFor(() => expect(document.activeElement).toBe(categoryAddButton(rendered.container, "output")));
 
     addContractMember(rendered.container, "output", "Result");
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
     const resultPane = contractMemberPane(rendered.container, "output", "result");
     expect(resultPane.dataset.contractSelected).toBe("true");
-    expect(resultPane.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")?.open).toBe(false);
+    expect(resultPane.querySelector<HTMLButtonElement>("[role='tab'][data-tab-id='General']")?.getAttribute("aria-selected")).toBe("true");
     await waitFor(() => expect(document.activeElement).toBe(controlByLabel<HTMLInputElement>(resultPane, "Name")));
 
     addContractMember(rendered.container, "outcome", "Rejected");
@@ -740,6 +771,14 @@ describe("Activity Definition authoring", () => {
     expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
     expect(window.location.pathname).toBe("/workflows/activity-definitions");
     expect(putJson).not.toHaveBeenCalled();
+    // Empty collection tabs must not unmount the invalid input buffer or release save guards.
+    click(rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=outputs]")!);
+    expect(quantityPane.hidden).toBe(true);
+    expect(rendered.container.querySelector(".ad-contract-workbench-empty")?.textContent).toContain("No outputs yet");
+    expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
+    showContractView(rendered.container);
+    expect(quantityPane.hidden).toBe(false);
+    expect(controlByLabel<HTMLInputElement>(quantityPane, "Value").value).toBe("-");
 
     change(controlByLabel<HTMLInputElement>(quantityPane, "Value"), "12");
     await waitFor(() => expect(contractListButton(rendered.container, "input", "quantity").textContent).toContain("Apply default"));
@@ -931,7 +970,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "Published baseline");
     showContractView(rendered.container);
-    openDetails(rendered.container.querySelector(".ad-contract-advanced")!);
+    click(buttonByText(rendered.container, "Presentation"));
     change(controlByLabel<HTMLInputElement>(rendered.container, "Display name"), "Friendly message");
     await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
     expect(rendered.container.textContent).not.toContain("Review breaking input change");
@@ -988,7 +1027,7 @@ describe("Activity Definition authoring", () => {
     showContractView(rendered.container);
     const pane = selectContractMember(rendered.container, "input", "message");
     change(controlByLabel<HTMLInputElement>(pane, "Value"), "candidate");
-    openDetails(pane.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")!);
+    click(buttonByText(pane, "Advanced"));
     change(controlByLabel<HTMLInputElement>(pane, "Stable reference key"), "message-v2");
     click(buttonByText(pane, "Apply key"));
     await waitForText(rendered.container, "Change a published reference key");
@@ -1381,7 +1420,7 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitFor(() => expect(rendered.container.querySelector(".ad-authoring-view-tabs [data-tab-id='public-interface']")).not.toBeNull());
+    await waitFor(() => expect(rendered.container.querySelector(".ad-authoring-view-tabs [data-tab-id='inputs']")).not.toBeNull());
     showContractView(rendered.container);
     openDetails(rendered.container.querySelector<HTMLDetailsElement>(".ad-interface-suggestions")!);
     await waitForText(rendered.container, "Add input Currency");
@@ -1488,6 +1527,8 @@ describe("Activity Definition authoring", () => {
     click(contractDiagnostic);
     await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
     expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
+    expect(document.activeElement?.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
+    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("Advanced");
     click(buttonByText(rendered.container, "Return to diagnostic"));
     expect(document.activeElement).toBe(contractDiagnostic);
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);
@@ -1598,7 +1639,7 @@ describe("Activity Definition authoring", () => {
       click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);
     }
     await waitFor(() => expect(document.activeElement?.classList.contains("ad-graph-outcome-mappings")).toBe(true));
-    expect(rendered.container.querySelector<HTMLElement>("[aria-label='Inputs & outputs']")?.hidden).toBe(false);
+    expect(rendered.container.querySelector<HTMLElement>("[aria-label='Outcomes']")?.hidden).toBe(false);
     await rendered.unmount();
   });
 
@@ -1783,16 +1824,20 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "activity.contract.reference");
     for (const [code, , expectedField] of pointers) {
       click(rendered.container.querySelector<HTMLButtonElement>(`[aria-label='Focus ${code}']`)!);
-      await waitFor(() => expect((document.activeElement as HTMLElement)?.dataset.contractField).toBe(expectedField));
+      await waitFor(() => {
+        expect((document.activeElement as HTMLElement)?.dataset.contractField).toBe(expectedField);
+        expect(buttonByText(rendered.container, "Return to diagnostic")).toBeTruthy();
+      });
       click(buttonByText(rendered.container, "Return to diagnostic"));
     }
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.contract.emitted']")!);
     await waitFor(() => {
       const focused = document.activeElement as HTMLElement;
-      expect(focused.tagName).toBe("LABEL");
-      expect(focused.querySelector<HTMLInputElement>("[data-contract-field='isEmitted']")?.disabled).toBe(true);
+      expect(focused.dataset.contractField).toBe("isEmitted");
+      expect(focused.textContent).toBe("Emitted");
+      expect(focused.querySelector("input")).toBeNull();
     });
-    expect(rendered.container.textContent).toContain("exact accessible context for a disabled");
+    expect(rendered.container.textContent).toContain("exact provider-neutral contract location");
     await rendered.unmount();
   });
 
@@ -2460,7 +2505,7 @@ describe("Activity Definition publication", () => {
 
 describe("Activity Definition local recovery policy", () => {
   it("is disabled by default and expires within the configured identity scope", () => {
-    const draft = fullDraft({ revision: 3, payload: { edit: 1 } });
+    const draft = { ...fullDraft({ revision: 3, payload: { edit: 1 } }), activityPresentation: [{ nodeId: "root", displayName: "Local name", description: "Local context" }] };
     expect(createActivityDefinitionRecoveryStore(undefined, { tenantId: "tenant-1", subject: "author-1" })).toBeNull();
 
     vi.useFakeTimers();
@@ -2469,6 +2514,7 @@ describe("Activity Definition local recovery policy", () => {
     const otherAuthor = createActivityDefinitionRecoveryStore({ enabled: true, ttlMinutes: 1 }, { tenantId: "tenant-1", subject: "author-2" })!;
     author.write(draft);
     expect(author.read(draft)?.payload).toEqual({ edit: 1 });
+    expect(author.read(draft)?.activityPresentation).toEqual(draft.activityPresentation);
     expect(otherAuthor.read(draft)).toBeNull();
 
     vi.setSystemTime(new Date("2026-07-17T10:01:01Z"));
@@ -2805,7 +2851,7 @@ function managementDefinition() {
 }
 
 function buttonByText(container: HTMLElement, text: string) {
-  const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent?.includes(text));
+  const button = [...container.querySelectorAll("button")].find(candidate => (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label") === text));
   if (!button) throw new Error(`Button '${text}' not found.`);
   return button;
 }
@@ -2837,18 +2883,20 @@ function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTex
 }
 
 function categoryAddButton(container: HTMLElement, kind: "input" | "output" | "outcome") {
+  click(container.querySelector<HTMLButtonElement>(`[data-tab-id="${kind}s"]`)!);
   const button = container.querySelector<HTMLButtonElement>(`.ad-contract-workbench-list button[aria-label="Add ${kind}"]`);
   if (!button) throw new Error(`Add ${kind} button not found.`);
   return button;
 }
 
 function showContractView(container: HTMLElement) {
-  const tab = container.querySelector<HTMLButtonElement>(".ad-authoring-view-tabs [data-tab-id='public-interface']");
-  if (!tab) throw new Error("Inputs & outputs tab not found.");
+  const tab = container.querySelector<HTMLButtonElement>(".ad-authoring-view-tabs [data-tab-id='inputs']");
+  if (!tab) throw new Error("Inputs tab not found.");
   click(tab);
 }
 
 function contractListButton(container: HTMLElement, kind: "input" | "output" | "outcome", referenceKey: string) {
+  click(container.querySelector<HTMLButtonElement>(`[data-tab-id="${kind}s"]`)!);
   const button = container.querySelector<HTMLButtonElement>(`.ad-contract-workbench-list button[data-member-kind="${kind}"][data-member-reference-key="${referenceKey}"]`);
   if (!button) throw new Error(`Contract list entry '${kind}:${referenceKey}' not found.`);
   return button;

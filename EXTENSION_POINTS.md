@@ -96,11 +96,13 @@ not automatic constitution violations.
 | Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Anthropic specialist connections | [`Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md) |
 | Azure OpenAI specialist connections | [`Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md) |
+| OpenAI specialist connections | [`Extensions/Agent/src/Specialists/OpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/OpenAI/EXTENSION_POINTS.md) |
 | Specialist authoring and immutable compilation | [`Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md) |
 | Specialist native execution | [`Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md) |
 | Specialist human review of agent output | [`Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md) |
 | Specialist human review API | [`Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md) |
 | Specialist authoring API | [`Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md) |
+| Specialist inspection API | [`Extensions/Agent/src/Specialists/Inspection/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Inspection/Api/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
@@ -162,7 +164,7 @@ not automatic constitution violations.
 | Activities design — CLR reconciliation source contribution | [`Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`Essentials/src/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
 | Activities design — persistence replacement (Entity Framework Core) | [`Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Activities design API — catalog and availability services | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
+| Activities design API — catalog, availability and static public provider diagnostics | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
 | Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
