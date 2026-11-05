@@ -1,6 +1,9 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
@@ -41,11 +44,16 @@ public sealed partial class StimulusRouter : IStimulusRouter
     private readonly IBookmarkResumeDispatcher _resumeDispatcher;
     private readonly TimeProvider _timeProvider;
     private readonly StimulusDeliveryServices? _delivery;
+    private readonly ILogger _logger = NullLogger.Instance;
 
     internal StimulusRouter(IWorkflowTriggerBindingStore triggerBindingStore, IGlobalBookmarkStimulusLookup globalBookmarkStimulusLookup,
         IWorkflowStartDispatcher startDispatcher, IBookmarkResumeDispatcher resumeDispatcher, TimeProvider timeProvider,
-        StimulusDeliveryServices delivery) : this(triggerBindingStore, globalBookmarkStimulusLookup, startDispatcher, resumeDispatcher, timeProvider)
-        => _delivery = delivery;
+        StimulusDeliveryServices delivery, ILogger<StimulusRouter>? logger = null)
+        : this(triggerBindingStore, globalBookmarkStimulusLookup, startDispatcher, resumeDispatcher, timeProvider)
+    {
+        _delivery = delivery;
+        _logger = logger ?? (ILogger)NullLogger.Instance;
+    }
 
     public StimulusRouter(
         IWorkflowTriggerBindingStore triggerBindingStore,
@@ -191,7 +199,13 @@ public sealed partial class StimulusRouter : IStimulusRouter
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —
             // never persisted (see StimulusDispatchRequest.DispatchOptions), dropped by construction across process
             // boundaries. Stimulus-triggered starts are published dispatches (default reference scope).
-            var result = await _startDispatcher.DispatchAsync(startRequest, dispatchOptions: request.DispatchOptions, cancellationToken: cancellationToken);
+            var (result, refused) = await TryDispatchStartAsync(startRequest, request.DispatchOptions, binding.TriggerBindingId, binding.ArtifactId, cancellationToken);
+            if (result is null)
+            {
+                outcomes.Add(refused!);
+                continue;
+            }
+
             // A shed start wrote nothing and left its key unconsumed (#2548). Reporting it as started hands every caller an
             // execution id that will never exist: an HTTP 202, a settled recurring occurrence, a delivered publish.
             outcomes.Add(result.CommandDispatch.IsShed
@@ -202,6 +216,28 @@ public sealed partial class StimulusRouter : IStimulusRouter
         }
 
         return outcomes;
+    }
+
+    // A start its workflow's input contract refuses (#3728) is that recipient's outcome, not the stimulus's: the other
+    // starts and every resume of the same delivery still run, and a retry would only be refused again.
+    private async ValueTask<(WorkflowExecutionStartDispatchResult? Result, StimulusStartOutcome? Refused)> TryDispatchStartAsync(
+        WorkflowExecutionStartDispatchRequest start,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions,
+        string triggerBindingId,
+        string artifactId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (await _startDispatcher.DispatchAsync(start, dispatchOptions: dispatchOptions, cancellationToken: cancellationToken), null);
+        }
+        catch (WorkflowExecutableStartRejectedException exception) when (exception.Category == WorkflowExecutableStartRejectionCategory.Input)
+        {
+            _logger.LogWarning(
+                "Workflow artifact {ArtifactId} did not start from trigger binding {TriggerBindingId}: {ReasonCode} {Message}",
+                artifactId, triggerBindingId, exception.ReasonCode, exception.Message);
+            return (null, StimulusStartOutcome.Refused(triggerBindingId, artifactId, exception.ReasonCode));
+        }
     }
 
     private async ValueTask<IReadOnlyList<StimulusResumeOutcome>> ResumeWaitingExecutionsAsync(

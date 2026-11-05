@@ -5,7 +5,9 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Api.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
@@ -47,7 +49,10 @@ public sealed class WorkflowDefinitionDetailsReader(
 
     public async Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken)
     {
-        var context = library is null ? null : httpContextAccessor?.HttpContext
+        // Evidence from an earlier read never survives into this one: it is recorded again only on success.
+        var request = httpContextAccessor?.HttpContext;
+        WorkflowDefinitionReadEvidence.Discard(request);
+        var context = library is null ? null : request
             ?? throw new InvalidOperationException("Workflow library details require an authenticated HTTP request context.");
         if (context is not null)
             await WorkflowLibraryAccess.RequireAsync(context, WorkflowDesignPermissions.Read,
@@ -84,7 +89,7 @@ public sealed class WorkflowDefinitionDetailsReader(
             definitionView = WorkflowLibraryProjection.WithOrganization(definitionView, organization, WorkflowLibraryAccess.OrganizationEnabled(context!));
         }
 
-        return new WorkflowDefinitionDetailsView(
+        var details = new WorkflowDefinitionDetailsView(
             definitionView.WithPublicationState(publicationSummaries, versionsById),
             draft is null
                 ? null
@@ -94,5 +99,12 @@ public sealed class WorkflowDefinitionDetailsReader(
                     metadata?.ActivityPresentation ?? []),
             versions.Select(e => new WorkflowDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt))
         );
+        // Recorded last, once every check above has passed, for the built-in authorizer's next decision in this
+        // request. With a library store the Read permission and organization checks ran through the request's
+        // permission service; without one, the read confirms existence only.
+        if (request is not null)
+            WorkflowDefinitionReadEvidence.Record(request, this, definitionStore,
+                context?.RequestServices.GetService<IPermissionAuthorizationService>(), definitionId, definition);
+        return details;
     }
 }

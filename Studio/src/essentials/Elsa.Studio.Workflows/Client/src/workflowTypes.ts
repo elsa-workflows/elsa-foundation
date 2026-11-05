@@ -231,6 +231,8 @@ export interface ActivityCatalogItem {
   // additive). Signals the client to materialize an intrinsic ActivityNode rather than a catalog activity
   // reference; older backends omit it and nothing new is shown. Absent ⇒ an ordinary catalog activity.
   intrinsic?: ActivityAuthoringIntrinsic | null;
+  /** Where the catalog row came from (the API's provenance view): `CLR` or `Json` for a source-owned activity, `ActivityDefinitionDraft` for a design-authored one. */
+  provenance?: { sourceKind?: string | null; sourceId?: string | null; featureId?: string | null } | null;
   /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
   activityDefinitionId?: string;
   activityDefinitionVersionId?: string;
@@ -565,6 +567,7 @@ export interface PublishedWorkflowResponse {
 }
 
 export interface StartWorkflowDraftTestRunRequest {
+  layout?: DesignMetadataRecord[];
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;
@@ -1059,6 +1062,7 @@ export interface ActivityExecutionLayoutConnection {
 }
 
 export interface ActivityExecutionLayout {
+  activityPresentation?: WorkflowExecutableActivityPresentation[];
   workflowExecutionId: string;
   activityExecutionId: string;
   artifactId: string;

@@ -58,7 +58,10 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.contract_changed", "The operation's current risk requires a new review.", 409));
         if (session.Policy.DeniedCapabilityIds.Contains(tool.Descriptor.Name, StringComparer.OrdinalIgnoreCase))
             return (null, new("agent.tool.denied", "Current host policy disables this tool.", 403));
-        if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken)).Allowed)
+        var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken);
+        if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
+            return (null, unavailable);
+        if (!admission.Allowed)
             return (null, new("agent.proposal.forbidden", "Current server authority denies the prepared target.", 403));
         return (tool, null);
     }

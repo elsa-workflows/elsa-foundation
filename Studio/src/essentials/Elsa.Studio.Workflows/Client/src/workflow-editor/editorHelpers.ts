@@ -1,3 +1,4 @@
+import { sha256Hex } from "../sha256";
 import type { Node } from "@xyflow/react";
 import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
@@ -554,8 +555,29 @@ export function getDraftSignature(draft: WorkflowDraft) {
   });
 }
 
+/** A fast 32-bit hash of the working state, for change detection only. It is not a binding identity. */
 export function getDraftRevision(draft: WorkflowDraft) {
   return hashString(getDraftSignature(draft));
+}
+
+// Keyed by the exact canonical signature, never by object identity, so a draft object changed in place can never be
+// answered with a stale revision. A few recent entries cover the bridge, the applier and the reducer for one change.
+const contentRevisions = new Map<string, string>();
+
+/**
+ * The collision-resistant content revision of a working state (spec 1193 FR-008): SHA-256 over the same canonical
+ * signature the change detection uses. Weaver context, batch binding, compare-and-replace and receipts use this, so two
+ * different working states can never pass a comparison by sharing a 32-bit hash.
+ */
+export function getDraftContentRevision(draft: WorkflowDraft) {
+  const signature = getDraftSignature(draft);
+  let revision = contentRevisions.get(signature);
+  if (!revision) {
+    revision = `sha256:${sha256Hex(signature)}`;
+    if (contentRevisions.size >= 8) contentRevisions.delete(contentRevisions.keys().next().value!);
+    contentRevisions.set(signature, revision);
+  }
+  return revision;
 }
 
 // Resolves a child activity's friendly name from the catalog, falling back to a short type name and
@@ -609,6 +631,36 @@ export function collectWorkflowContextActivities(
     }
   }
 
+  return result;
+}
+
+/** One activity's place in the tree as Weaver context discloses it (spec 1193 FR-014): its exact version, parent, slot and slots. */
+export interface WorkflowContextStructure {
+  activityVersionId: string;
+  parentId: string | null;
+  slot: string | null;
+  slots: Array<{ id: string; mode: ChildSlot["mode"]; cardinality: ChildSlot["cardinality"] }>;
+}
+
+/** The containment structure of every activity, keyed by node id, by the same slot resolution the designer renders. */
+export function collectWorkflowContextStructure(
+  activity: ActivityNode | null | undefined,
+  catalogByVersion: Map<string, ActivityCatalogItem>,
+  result: Map<string, WorkflowContextStructure> = new Map(),
+  parentId: string | null = null,
+  slotId: string | null = null
+) {
+  if (!activity) return result;
+  const slots = getChildSlots(activity, catalogByVersion);
+  result.set(activity.nodeId, {
+    activityVersionId: activity.activityVersionId,
+    parentId,
+    slot: slotId,
+    slots: slots.map(slot => ({ id: slot.id, mode: slot.mode, cardinality: slot.cardinality }))
+  });
+  for (const slot of slots) {
+    for (const child of slot.activities) collectWorkflowContextStructure(child, catalogByVersion, result, activity.nodeId, slot.id);
+  }
   return result;
 }
 

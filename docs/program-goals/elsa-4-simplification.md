@@ -7,3 +7,7 @@
 
 Scope, epics, child issues and metrics live on #2559; this file only points there. Runtime persistence work
 (ADR 0080 D2) is delivered under [Runtime Efficiency](runtime-efficiency.md).
+
+## Active objective
+
+- [Studio UX acceptance before delivery #3776](https://github.com/elsa-workflows/elsa-foundation/issues/3776): composed-host proof in the existing required CI aggregate, current-commit visual evidence and independent UX acceptance in the existing review loop. [Spec](../../specs/1205-studio-ux-acceptance/spec.md).

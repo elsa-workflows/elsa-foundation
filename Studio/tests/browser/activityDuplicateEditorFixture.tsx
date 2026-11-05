@@ -90,6 +90,8 @@ const denseOutcomeCatalog: ActivityCatalogItem = {
   ports: Array.from({ length: 30 }, (_, index) => ({ type: "outcome", name: `Case ${index + 1}`, displayName: `Case ${index + 1}` }))
 };
 
+const runLayoutFixture = new URLSearchParams(window.location.search).has("run-layout");
+
 const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
 const httpEndpointCatalog: ActivityCatalogItem = {
   ...writeLineCatalog,
@@ -127,6 +129,21 @@ function editorDraft(): WorkflowDraft {
     source: { nodeId: "write-one", port: "Done" },
     target: { nodeId: "write-two" }
   }];
+  if (runLayoutFixture && composition === "bpmn") {
+    root.structure!.payload = {
+      activities: [notifyBuyer],
+      // Deliberately keep element storage order different from the visual execution order.
+      elements: [
+        { elementId: "start", elementType: "startEvent" },
+        { elementId: "end", elementType: "endEvent" },
+        { elementId: "write-task", elementType: "task", childNodeId: "write-one" }
+      ],
+      sequenceFlows: [
+        { flowId: "start-write", sourceRef: "start", targetRef: "write-task" },
+        { flowId: "write-end", sourceRef: "write-task", targetRef: "end" }
+      ]
+    };
+  }
   if (adaptivePorts && !sequence) {
     if (composition === "bpmn") {
       root.structure!.payload = { activities: [notifyBuyer, leafNode("write-two")],
@@ -184,7 +201,9 @@ function editorDraft(): WorkflowDraft {
     id: "draft-1",
     definitionId: "definition-1",
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
-    layout: bpmnDecisionFixture ? [
+    layout: runLayoutFixture ? [
+      { nodeId: "start", x: 100, y: 180 }, { nodeId: "write-task", x: 360, y: 160 }, { nodeId: "end", x: 780, y: 180 }
+    ] : bpmnDecisionFixture ? [
       { nodeId: "decision-element", x: 220, y: 200 }, { nodeId: "high-end", x: 480, y: 80 }, { nodeId: "low-end", x: 480, y: 320 }
     ] : collectionSlotsFixture === "switch-ports" ? [
       { nodeId: "collection-owner", x: 120, y: 160 },
@@ -312,6 +331,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   let draft = persistFixture && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
+  const iterationFixture = new URLSearchParams(window.location.search).has("iteration-provenance");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
@@ -321,7 +341,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, ...(staleValidationsFixture ? [runEtlCatalog] : []), flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionFixtureCatalog(), ...(collectionSlotsFixture === "switch-upgrade" ? [collectionFixtureCatalog(true)] : [])] : [])];
+  const catalog = [writeLineCatalog, ...(staleValidationsFixture ? [runEtlCatalog] : []), flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture || runLayoutFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionFixtureCatalog(), ...(collectionSlotsFixture === "switch-upgrade" ? [collectionFixtureCatalog(true)] : [])] : [])];
   const validationReads: boolean[] = [];
   (window as Window & { staleValidationReads?: boolean[] }).staleValidationReads = validationReads;
   const hasEtl = () => !!draft.state.rootActivity && collectActivityNodeIds(draft.state.rootActivity, catalog).has("write-one");
@@ -330,6 +350,10 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
     activityTypeVersion: "1.0.0", inputBindings: [], structureKind: node.structure?.kind,
     childSlots: getChildSlots(node, catalog).map(slot => ({ name: `${catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey.split(".").at(-1)}.${slot.id.split(":").at(-1)!.replace(/^./, value => value.toUpperCase())}`, activities: slot.activities.map(compiled) })),
+    ...(node.structure?.kind === "elsa.bpmn.structure" ? { bpmnStructure: {
+      elements: (node.structure.payload.elements as Array<{ childNodeId?: string }>).map(element => ({ ...element, ...(element.childNodeId ? { childNodeId: `exec-${element.childNodeId}` } : {}) })),
+      sequenceFlows: node.structure.payload.sequenceFlows
+    } } : {}),
     ...(node.structure?.kind === "elsa.flowchart.structure" ? { connections: node.structure.payload.connections } : {})
   });
   const runtimeNodes: Array<{ node: ActivityNode; parent: string | null }> = [];
@@ -346,6 +370,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
     parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
+    ...(iterationFixture && node.nodeId === "write-one" ? { iterationId: `iteration-${index + 1}`,
+      provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null, iterationId: `iteration-${index + 1}` } } : {}),
     ...(motionFixture ? { outcomeNames: ["Done"], provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
       schedulingActivityExecutionId: `activity-exec-${predecessors.get(node.nodeId) ?? parent}`,
       schedulingCause: draft.state.rootActivity?.structure?.kind === "elsa.sequence.structure" ? "ActivityCompletion" : "continuation" } } : {}),
@@ -452,7 +478,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           artifactId: "editor-artifact", artifactHash: "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
           rootActivityType: draft.state.rootActivity!.activityVersionId, rootActivityVersion: "1.0.0",
           nodeCount: runtimeNodes.length, resumeTargetCount: 0, references: [], rootActivity: compiled(draft.state.rootActivity!),
-          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
+          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...((adaptivePorts || runLayoutFixture) ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           if (new URLSearchParams(window.location.search).has("evidence-latency")) await new Promise(resolve => setTimeout(resolve, 400));
@@ -462,6 +488,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
             && (!ancestor || record.parentActivityExecutionId === ancestor));
           const anchor = query.get("anchorActivityExecutionId");
           const items = filtered.map((execution, index) => ({ execution, position: index + 1,
+            ...(execution.iterationId ? { iterationPosition: index + 1 } : {}),
             ...(motionFixture ? { attempt: null } : {}), previousActivityExecutionId: filtered[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: filtered[index + 1]?.activityExecutionId ?? null }));
           return { totalCount: items.length, previousCursor: null, nextCursor: null,
             items: query.get("limit") === "1" ? [anchor ? items.find(item => item.execution.activityExecutionId === anchor) : items.at(-1)].filter(Boolean) : items };

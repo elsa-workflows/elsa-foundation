@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db,
     IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic,
-    IDistributedLockProvider? locks = null) : IWorkflowLibraryStore
+    IDistributedLockProvider? locks = null) : IWorkflowLibraryStore, IWorkflowFolderDeletionStore
 {
     private const int MaximumFolders = 10000;
     private const int MaximumTags = 10000;
@@ -40,6 +40,12 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
     private IQueryable<WorkflowDefinition> DefinitionRows => Scoped(db.Definitions);
     private static T Missing<T>(string id) => throw EntityNotFoundException.ForEntity(typeof(T), id);
     private static void Conflict(string message) => throw new WorkflowLibraryConflictException(message);
+    /// <summary>Diagnostics for tests: a keyed create that failed and is resolved by rereading its key, with the failure's type
+    /// (<c>KeyedCreateRaced</c> when the write's own key check found the key committed).</summary>
+    internal static event Action<string, string>? KeyedCreateResolved;
+    internal static string ClientKeyHashOf(string key) => ClientKeyHash(key);
+    /// <summary>Rolls a keyed create back because its key already holds a committed create; the caller rereads by the key.</summary>
+    private sealed class KeyedCreateRaced() : Exception("A concurrent create under this operation key committed first.");
     private static void CheckRevision(string? expected, string actual)
     {
         if (expected is not null && !StringComparer.Ordinal.Equals(expected, actual))
@@ -67,6 +73,14 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
         Text(actor, "Actor", 256);
         if (actor.Length > 256) throw new ArgumentException("Actor identifiers cannot exceed 256 characters.");
     }
+    /// <summary>A client operation key: 1–256 characters without control characters. Only its lookup hash is stored.</summary>
+    private static void ValidateClientKey(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        if (key.Length > 256 || key.Any(char.IsControl)) throw new ArgumentException("Operation keys must have 1–256 characters without control characters.");
+    }
+    private static string ClientKeyHash(string key) => EfDesignSupport.LookupHash("workflow-library-client-key\0" + key);
+    private static string Fingerprint(object material) => EfDesignSupport.LookupHash(JsonSerializer.Serialize(material, Json));
     private static void ValidateStoredId(string id, string prefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);

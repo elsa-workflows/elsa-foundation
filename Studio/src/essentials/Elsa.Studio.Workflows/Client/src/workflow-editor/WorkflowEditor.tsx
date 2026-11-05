@@ -123,14 +123,8 @@ import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
-import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import { isHttpEndpointType } from "./httpTestRequest";
-import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
-import {
-  applyActivityVersionChange,
-  findActivityOccurrence,
-  validateActivityVersionChangePrecondition
-} from "./activityVersionChangeModel";
+import { useWorkflowEditorSaveCommands } from "./useWorkflowEditorSaveCommands";
 import { createLazyExpressionToolingClient } from "../expression-tooling/lazyExpressionToolingClient";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 
@@ -251,11 +245,6 @@ export function WorkflowEditor({
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
-  const [versionChange, setVersionChange] = useState<{
-    occurrence: ActivityNode;
-    current: ActivityDefinitionVersionView;
-    recommendation?: RecommendedActivityDefinition | null;
-  } | null>(null);
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
   const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
@@ -268,11 +257,11 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
+  const { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, onSaveReconciled: acceptSavedDraft, setStatus, setError, lineageHold });
   const {
     details,
     setDetails,
@@ -406,6 +395,8 @@ export function WorkflowEditor({
     [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
+  const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
+  const versionAgent = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
   const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
@@ -609,7 +600,8 @@ export function WorkflowEditor({
   }, [addActivity, catalogByVersion, frames, navigateToScope, scope, scopeOwner]);
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
-  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError });
+  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
+    resourceType: documentAdapter?.agentResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -635,7 +627,8 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion });
+  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
+    agentResource: documentAdapter?.agentResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -693,6 +686,7 @@ export function WorkflowEditor({
   } = useWorkflowOperations({
     context,
     draft: editableDraft,
+    lineage: lineageHold.lineage,
     details,
     catalog,
     busy,
@@ -1090,39 +1084,10 @@ export function WorkflowEditor({
     }
   }, [backendSession, canUseBpmnInterchange, context, directBpmnRoot, draft, editDraftAndSelect, editorDoc.pinned, setError, setStatus]);
 
-  const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
-    setError("");
-    setAutosavePaused(true);
-    setVersionChange({ occurrence, current, recommendation: inspectedRecommendation });
-  }, [inspectedRecommendation, setAutosavePaused, setError]);
-
-  const cancelVersionChange = useCallback(() => {
-    setVersionChange(null);
-    setAutosavePaused(false);
-  }, [setAutosavePaused]);
-
-  const applyVersionChange = useCallback(async (request: ActivityVersionChangeApplyRequest) => {
-    if (!draft) throw new Error("No workflow draft is loaded.");
-    const staleReason = validateActivityVersionChangePrecondition(draft, request.precondition);
-    if (staleReason) throw new Error(staleReason);
-    const next = applyActivityVersionChange(
-      draft,
-      request.precondition.occurrenceId,
-      request.precondition.fromVersionId,
-      request.targetVersionId,
-      request.scope
-    );
-    if (next === draft) throw new Error("The reviewed occurrence no longer matches this version change.");
-
-    const saved = await saveDraft(next, "Activity version changed");
-    const savedOccurrence = findActivityOccurrence(saved.state.rootActivity, request.precondition.occurrenceId);
-    if (!savedOccurrence || savedOccurrence.activityVersionId !== request.targetVersionId) {
-      throw new Error("The server did not confirm the reviewed exact version change.");
-    }
-    loadDraft(saved);
-    setVersionChange(null);
-    setAutosavePaused(false);
-  }, [draft, loadDraft, saveDraft, setAutosavePaused]);
+  const { versionChange, openVersionChange, cancelVersionChange, applyVersionChange, saveFromToolbar, saveAndGoBack } = useWorkflowEditorSaveCommands({
+    draft, canEdit: editorDoc.canEdit, lineage: lineageHold.lineage, saveDraft, loadDraft, save, flushDefinitionMeta, onBack,
+    setAutosavePaused, setError, setStatus, setNavigationPending: setTemplateNavigationPending, recommendation: inspectedRecommendation
+  });
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
   // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The
@@ -1229,8 +1194,9 @@ export function WorkflowEditor({
         }
       : frame;
   });
+  // Keep raw editor text: normalizing here removes a space before the next word is typed.
   const inspectedPresentation = inspectedNode
-    ? presentationByNodeId.get(inspectedNode.nodeId)
+    ? draft.activityPresentation?.find(record => record.nodeId === inspectedNode.nodeId)
     : undefined;
   const inspectedLabel = inspectedNode
     ? (nodes.find(node => node.id === inspectedNode.nodeId)?.data.label
@@ -1439,16 +1405,12 @@ export function WorkflowEditor({
         onBack={() => {
           if (!documentAdapter || !editableDraft) { onBack(); return; }
           if (templateNavigationPending) return;
-          setTemplateNavigationPending(true);
-          setStatus("Saving…");
-          void flushDefinitionMeta().then(async saved => {
-            if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); }
-          }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
+          saveAndGoBack(editableDraft);
         }}
-        onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
+        onSave={saveFromToolbar}
         directBpmnPublication={directBpmnRoot && backendSession ? <DirectBpmnPublishAction
           key={`${backendSession.key}:${definitionId}`} onOpenProcesses={onOpenBpmnProcesses} session={backendSession} definitionId={definitionId} draft={draft}
-          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} flushMetadata={flushDefinitionMeta}
+          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} lineage={lineageHold.lineage} flushMetadata={flushDefinitionMeta}
           setPaused={setAutosavePaused} setBusy={value => setOperation(value ? "publishing" : "idle")}
           setStatus={setStatus} setError={setError} reload={reload} /> : undefined}
         publicationUnavailableReason={publicationUnavailableReason}
@@ -1646,7 +1608,7 @@ export function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
+            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} versionAgent={documentAdapter ? undefined : versionAgent} /></fieldset></>
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />

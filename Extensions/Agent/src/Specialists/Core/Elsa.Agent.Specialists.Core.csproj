@@ -3,6 +3,7 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <InternalsVisibleTo Include="Elsa.Agent.Specialists.Design" />

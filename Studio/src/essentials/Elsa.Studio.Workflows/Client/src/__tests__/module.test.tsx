@@ -21,6 +21,30 @@ import { capabilityDocument, definition, renderRegisteredRoute, response, runJav
 // Per-test teardown lives in the shared afterEach in routeRenderingHelpers.tsx.
 
 describe("workflows module", () => {
+  it("retains spaces while typing a workflow activity display name", async () => {
+    const draft = draftWithFlowchartRoot();
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities/availability/diagnostics")) return response({ items: [], sets: [] });
+      if (url.includes("/activities")) return response({ activities: [flowchartActivity()] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft, versions: [] });
+      return response({ items: [] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.runtime.workflows = { autosaveEnabledByDefault: false };
+    });
+    await waitForEditor(container);
+    await waitForButtonByText(container, "Details");
+    await click(buttonByText(container, "Details"));
+    const input = [...container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    await fill(input, "Approve ");
+    expect(input.value).toBe("Approve ");
+    await fill(input, input.value + "order");
+    expect(input.value).toBe("Approve order");
+    await unmount();
+  });
+
   for (const authoring of [false, true]) it(`adapts the executable empty-state authoring action when workflow design is ${authoring ? "available" : "absent"}`, async () => {
     const capabilities = capabilityDocument();
     if (!authoring) capabilities.capabilities = capabilities.capabilities.filter(item => item.id !== "elsa.api.workflow-design");
@@ -153,6 +177,9 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "more", parentId: undefined })
     ]);
     expect(api.routes.list()).toEqual([
+      expect.objectContaining({ id: "workflows-tags-list", path: "/workflows/tags" }),
+      expect.objectContaining({ id: "workflows-tags-create", path: "/workflows/tags/new" }),
+      expect.objectContaining({ id: "workflows-tags-edit", path: "/workflows/tags/:tagId" }),
       expect.objectContaining({ id: "workflows-templates", path: "/workflows/templates" }),
       expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
       expect.objectContaining({ id: "workflows-activity-upgrades", path: "/workflows/activity-definitions/upgrades" }),
@@ -419,7 +446,7 @@ describe("workflows module", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("publishes a saved workflow organization as a notification", async () => {
+  it("publishes a row folder move as a notification", async () => {
     const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -428,30 +455,31 @@ describe("workflows module", () => {
       }
       if (url.includes("folder-inventory?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
       if (url.endsWith("/placement/bulk") && init?.method === "POST") return new Response(null, { status: 204 });
-      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
-      return response({ items: [], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null, permissions: { canManageFolders: true } });
+      return response({ items: [], nextContinuationToken: null, permissions: { canManageFolders: true } });
     });
     vi.stubGlobal("fetch", fetchMock);
     const capabilities = capabilityDocument();
     capabilities.capabilities[0].links.push(
       { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
       { rel: "workflow-folders", href: "inventory/folder-inventory" },
+      { rel: "workflow-tags", href: "design/workflows/tags" },
       { rel: "workflow-definition-folder-move", href: "placement/bulk" },
       { rel: "workflow-organization", href: "design/workflows/organization/{definitionId}", templated: true });
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Organization"));
-    const organizationDialog = await waitForDialog(container);
-    await waitForText(organizationDialog, "Home folder");
-    await click(buttonByText(organizationDialog, "Move to folder"));
+    const menu = await openDefinitionActions(container, "Hello World");
+    await waitForText(menu, "Move to folder…");
+    await click(buttonByText(menu, "Move to folder…"));
     const moveDialog = await waitForDialog(container);
     await waitForText(moveDialog, "Operations");
     await click(moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
     await click(buttonByText(moveDialog, "Move"));
 
-    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Workflow organization updated" }));
-    expect(container.querySelector(".wf-status-line")).toBeNull();
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Moved 1 workflow definition" })));
+    // Saving starts a list refresh; its transient status is not an inline success notice.
+    await vi.waitFor(() => expect(container.querySelector(".wf-status-line")).toBeNull());
 
     await unmount();
   });
@@ -2456,7 +2484,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders the Executable Inspector with sidecar layout, ghost nodes and reference selection", async () => {
+  it("renders the Executable Inspector with the shared Sequence designer, ghost nodes and reference selection", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -2509,10 +2537,9 @@ describe("workflows module", () => {
 
     // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
     await waitForText(container, "Log greeting");
-    await waitForText(container, "Not available in this environment");
-    const ghost = container.querySelector(".wf-node-ghost");
-    expect(ghost?.textContent).toContain("SendEmail");
-    const namedNode = [...container.querySelectorAll<HTMLElement>(".react-flow__node")]
+    const ghost = container.querySelector('[aria-label="Activity unavailable in this environment"]');
+    expect(ghost?.closest(".wf-sequence-item")?.textContent).toContain("SendEmail");
+    const namedNode = [...container.querySelectorAll<HTMLElement>(".wf-sequence-step")]
       .find(node => node.textContent?.includes("Log greeting"));
     expect(namedNode).toBeTruthy();
     await click(namedNode!);
@@ -3501,6 +3528,47 @@ describe("workflows module", () => {
     await expectRunIdentity("Order fulfillment");
 
     await unmount();
+  });
+
+  it("discloses the exact Run it shows to Weaver and explains it with the context left to the page (spec 1193 FR-029)", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1"))
+        return response(workflowInstanceDetails({ instance: workflowInstance({ status: "Faulted", sourceReferenceId: "reference-pinned" }) }));
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) return response(executableDetail());
+      if (url.startsWith("https://server.example/design/activities/catalog")) return response({ activities: [] });
+      if (url.startsWith("https://server.example/design/workflows/definitions")) return response({ items: [] });
+      return response(null, 404);
+    }));
+    const dispatchPrompt = vi.fn();
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", configured => {
+      configured.agent.promptActions.add({ id: "weaver.workflows.explain-instance", label: "Explain run", placement: "selection", contextKind: "workflow-instance",
+        createPrompt: context => ({ message: "Explain", mode: "enqueue", attachments: [], context } as never) });
+      configured.agent.dispatchPrompt = dispatchPrompt;
+    });
+    const runContext = async () => {
+      const provider = api.agent.contextProviders.list().find(item => item.id === "workflows.run-inspector")!;
+      const result = await provider.collect({ surface: { route: "/workflows" }, mode: "explain" } as never);
+      return Array.isArray(result) ? result : result.attachments;
+    };
+    await vi.waitFor(async () => expect(await runContext()).toHaveLength(1));
+    const [attachment] = await runContext();
+    // One exact Workflow Instance, never "the latest run"; with nothing selected its revision is the instance identity.
+    expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.agent.clientId },
+      target: { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-run", resourceId: "wfexec-1", revision: "wfexec-1" },
+      content: { workflowExecutionId: "wfexec-1", activityExecutionId: null } });
+    const explain = [...container.querySelectorAll(".wf-toolbar button")].find(item => item.textContent?.includes("Explain"))!;
+    await click(explain);
+    expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      context: { workflowExecutionId: "wfexec-1", activityExecutionId: null, status: "Faulted", attached: true }
+    }));
+    await unmount();
+    expect(await runContext()).toEqual([]);
   });
 
   it("renders direct workflow instance details from the pinned Runtime executable", async () => {
@@ -5159,7 +5227,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Delete"));
 
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({
-      message: expect.stringContaining('Delete empty folder "Operations"'),
+      message: expect.stringContaining('Delete folder "Operations"? Only empty folders can be deleted'),
       tone: "danger"
     })));
     await waitForText(container, "Parent workflow");

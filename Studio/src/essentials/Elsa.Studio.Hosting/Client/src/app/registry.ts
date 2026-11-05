@@ -77,6 +77,7 @@ export function createStudioRegistry(
     activityEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["activityEditors"]>>>({ slot: studioSlots.activityEditors,hostPolicy }),
     propertyEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["propertyEditors"]>>>({ slot: studioSlots.propertyEditors,hostPolicy }),
     expressionEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["expressionEditors"]>>>({ slot: studioSlots.expressionEditors,hostPolicy }),
+    userTaskForms: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["userTaskForms"]>>>({ slot: studioSlots.userTaskForms, hostPolicy }),
     workflowRunInputEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunInputEditors"]>>>({ slot: studioSlots.workflowRunInputEditors,hostPolicy }),
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
@@ -145,6 +146,7 @@ function createNavigationContributions(featureArea: StudioFeatureAreaContributio
         activePathPrefix: item.path,
         order: item.order ?? (featureArea.order ?? 500) + index + 1,
         iconColor: item.iconColor ?? parent.iconColor,
+        icon: item.icon,
         parentId: item.placement ? undefined : parent.id,
         ...copyPlacementMetadata(item)
       };
@@ -166,6 +168,7 @@ function createNavigationContribution(
     activePathPrefix,
     order: nav.order ?? featureArea.order,
     iconColor: nav.iconColor,
+    icon: nav.icon,
     ...copyPlacementMetadata(nav)
   };
 }

@@ -1,12 +1,14 @@
-# Implementation Plan: Specialist agents
+# Implementation Plan: User-defined Agents
 
 **Branch**: `agent/codex/3538-specialist-design` | **Date**: 2026-10-31 | **Spec**: [spec.md](spec.md)
 
 **Input**: Owner-authorized [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519), [SDK research](../../docs/reports/elsa-agents-research.md), [publication/lifecycle research](../../docs/reports/elsa-agents-publication-research.md) and [source reconciliation](research.md).
 
+**Amendment status**: Owner agreement is recorded by merged PR #3783 (`4043cbfb1`); the owner separately authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026. This delivery implements the source-storage slice of T065/T069. It does not ratify provisional constitution sections or infer additional human approvals. W1–W8 remain open until their complete witnesses pass.
+
 ## Summary
 
-Implement specialists inside the existing `Elsa.Agent` domain, separately from Weaver. Reuse activity authoring/publication and native/BPMN execution. MAF executes admitted model turns; existing Elsa background work owns delivery; a specialist journal owns scoped conversation acceptance. Module-owned Studio routes provide discovery, playground, evaluation and inspection. This packet delivers design, not the proposed production behavior.
+Implement specialists inside the existing `Elsa.Agent` domain, separately from Weaver. Own typed Agent content over shared Workflow/Agent revision mechanics and derive read-only activity publications through the existing provider and shared publication boundaries. Reuse native/BPMN execution. MAF executes admitted model turns; existing Elsa background work owns delivery; a specialist journal owns scoped conversation acceptance. Module-owned Studio routes provide discovery, playground, evaluation and inspection. Implementation is staged; the source slice below does not deliver the later publication, Studio or runtime witnesses.
 
 ## Technical Context
 
@@ -14,7 +16,7 @@ Implement specialists inside the existing `Elsa.Agent` domain, separately from W
 
 **Primary Dependencies**: Current activity Design/Publishing/Runtime Core contracts; Connections and Secrets; MAF 1.27.0 with a reviewed normal-graph MEAI abstractions upgrade to 10.10.1; existing JsonSchema.Net 9.2.0; Studio SDK contributions. MAF is the first concrete turn implementation, not a new workflow engine.
 
-**Storage**: Existing activity stores remain sole definition/publication authority. A specialist journal owns conversations/turns/evaluations. Deliver a durable Connections repository through its existing contract. SQLite, PostgreSQL, SQL Server and MySQL are named first-party EF targets; in-memory is disposable support.
+**Storage**: Shared scoped source/working-copy/immutable-snapshot storage for Workflow and Agent typed adapters; shared publication operations reference snapshots and authoritative receipts. No separate Agent draft/candidate/version storage engine. Agent release indexes are repairable. Domain journal/conversation and Connections persistence remain distinct. No cross-store transaction is assumed. SQLite, PostgreSQL, SQL Server and MySQL remain named first-party EF targets; in-memory is disposable. Pre-GA coordinated store recreation replaces legacy migration/reader requirements.
 
 **Testing**: Risk-based behavior tests under ADR 0080 D1, using xUnit/Vitest/Playwright appropriately. No new global TDD cadence. Preserve valid tests; demonstrate red/green controls at consequential guards. Process restart, normal hosts, package consumers and authorized live models supply evidence fixtures cannot.
 
@@ -41,17 +43,17 @@ Implement specialists inside the existing `Elsa.Agent` domain, separately from W
 | Framework §2.22; Elsa §E5/§E7 | Same-unit catalogs, stable feature identities, package ranges/locks, solution filters and test tiers |
 | Draft/provisional material | §E2.8 versioning/Model X, §E2.9 and framework §2.24 retain their recorded status; this design ratifies none |
 
-No constitution exception is requested. Recheck after design and each implementation slice. Missing internal runtime capability remains a bug; domain authorization/retention gates do not excuse losing artifact interpretation.
+The proposed Agent source/bridge split keeps Core dependencies and runtime-only closures intact. Agent Core must not depend on Activities Design DTOs; adapters consume owning Core contributions. Logical record names do not pre-admit a project hierarchy. No constitution exception is requested. Recheck after design and each implementation slice. Missing internal runtime capability remains a bug; domain authorization/retention gates do not excuse losing artifact interpretation.
 
 ## Architecture decisions
 
-### D1 — Generic publication and discovery
+### D1 — Shared revisions and Agent-owned content
 
-A specialist is an activity provider manifest/public contract. Reuse drafts/revisions/review tokens/versions/templates/recommendations/lifecycle; add no specialist definition database. Fix provider membership using existing temporal draft projections: matching published head/recommendation OR active read-visible matching draft, both at the same resolved snapshot and exact owner scope, before count/paging. Do not filter client-side. Mixed-provider rows select an exact matching recommendation/head/draft or present an explicit draft choice. [Publication contract](contracts/publication.md).
+Agent owns typed content/permissions, while Workflow and Agent share scoped source identity, working-copy CAS, immutable snapshot capture, provenance/history and retention pins. Keep Workflow graph-aware diff mutation and layout separation. A candidate is an exact snapshot in a shared publication operation, not another Agent entity family. The Agent provider derives read-only activity publications; Agent discovery queries authorized sources, and the workflow picker retains one activity catalog. No generic activity write bypasses Agent authority. [Shared mapping and failed-publication recovery](contracts/revision-management.md), [Agent ownership](contracts/agent-ownership.md).
 
 ### D2 — One I/O contract
 
-Generic public-interface members own stable typed input/result keys. The provider derives JSON schemas from that interface, with validated per-field JSON constraints where needed; no second independently edited competing contract. Preview exact schemas/fingerprints and validate inputs/output before acceptance. Reserved optional invocation controls are distinct from business JSON. [Execution contract](contracts/execution.md).
+Agent source owns stable typed input/result keys, names, null/default/required behavior and compatible field constraints. The provider derives both public activity ports and model JSON schemas. Generated contracts are not independently editable; there are no two source schemas to synchronize. Schema preview and runtime fingerprints derive from the exact candidate. Reserved invocation controls remain separate from business JSON. Published contracts/bindings stay exact within a supported deployment; pre-GA schema reset need not preserve historical wire keys.
 
 ### D3 — Durable model connections
 
@@ -79,36 +81,29 @@ Separate model turns, human approval waits and protected effects into native ope
 
 ### D9 — Module-owned Studio experience
 
-Build /agents over provider-filtered generic APIs, with existing api.activityEditors contributions. Keep generic contract/save/conflict/publish ownership. Add module-owned playground/evaluation/inspection routes and a narrow occurrence-link contribution where needed; no universal resource-lens/tab framework. [Studio contract](contracts/studio.md).
+The Agent module owns `/agents` discovery, authoring/public-contract editing, source revision/conflict/history and publication-intent APIs/permissions. Reuse existing UI controls and shared publication preflight/receipt mechanics through adapters without exposing a generic activity definition as the editable source. Generic activity pages recognize read-only Agent projections and navigate to the source. Playground/evaluation/inspection use exact candidate/version identity and the existing runtime path; internal model-turn handles remain diagnostic references. No compatibility-route transfer is required. Draft controls use shared revision callbacks through the Agent adapter. [Studio contract](contracts/studio.md).
 
 ### D10 — Configuration-defined specialists
 
-Owner decision (2 Nov 2026): specialists are user-defined agents, authored in Studio or defined in host
-configuration, in the spirit of Azure AI Foundry agents. A configuration source under the Agents domain reads
-operator-versioned specialist manifests and validates each one. It contributes the valid ones through the existing
-activity reconciliation lifecycle (`ActivityVersionsReconciling`) as source-owned content. Today's source-owned
-publication (`SourceOwnedActivityVersionPublisher` → `ExecutableNodeCompiler.CompileSourceOwnedRoot`) builds a single
-root node and never calls a provider compiler. It must be extended so that provider-backed source content is
-compiled through the registered `IActivityTemplateProviderCompiler`, with the same preflight as Studio publication:
-schema, model capability, runtime and storage. That extension is generic Essentials publishing work, not a specialist
-fork. It generalizes `ActivityTemplateCompiler` and the Studio preflight beyond drafts: the review-policy subject,
-schema validation, and the candidate evaluation extracted from `ActivityDefinitionPublisher`. It reports a compile or preflight failure for that one
-version without aborting the pass. Today one invalid reconciliation entry aborts the whole pass, so per-definition
-isolation is split: the configuration source validates the manifest and version before contribution, and the
-publication bridge isolates compile and preflight failures. Versions are operator-declared; reconciliation keeps rejecting same-version content changes.
-[Publication contract](contracts/publication.md), FR-027, T061–T062.
+Configuration and Studio authoring produce the same immutable Agent candidate/public contract, with explicit source ownership. Configuration versions are operator-declared and read-only in Studio; authorized copy/fork creates a new Agent source. One invalid source entry yields a scoped actionable diagnostic while other entries reconcile. Same-version/different-content remains a conflict.
 
-Detailed meanings live in the [glossary](../../docs/glossary/elsa.md); state/support decisions live in the linked documents. Proposed public signatures stabilize only after the first independent package consumer and owning implementation review.
+The shared source-owned publication bridge must be extended beyond its current single-root compilation so provider-backed candidates use `IActivityTemplateProviderCompiler` and the same schema, capability, runtime/storage, compatibility and review checks as interactive publication. This is generic Essentials publishing work, not a second Agent publisher. Extract candidate evaluation only as required by these real consumers. Capture/pin exact shared snapshots, reserve operations before shared commit, and reconcile receipt/index loss without cross-store atomicity. Workflow and Agent adapters must exercise the common coordination; do not hide duplicate engines behind a generic interface. Proposed T064–T071 sequence this alongside the existing T061–T062 obligations. [Ownership contract](contracts/agent-ownership.md).
+
+### D11 — Focused extraction, naming and pre-GA reset
+
+Select mutable working copies plus immutable boundary snapshots, extracting a small reusable capability from current Elsa mechanics. Compare Orchard Core/Aster in [research R10](research.md#r10--shared-revision-management-orchard-core-and-aster); adopting their full content/resource model is outside this unit. Review real Workflow/Agent adapters and reusable-activity fit before API/package freeze. Reconcile owning Workflow/activity specs in the separately authorized delivery unit.
+
+Agent is canonical; keep the pinned `Elsa.Agent` root. Pre-GA implementation may rename Specialist code/API/package/schema identifiers without shims, old readers or import/backfill. Planned store recreation needs a declared scope, stopped/drained hosts, incompatible-profile rejection, clean initialization and explicit source recreation/republish. Ordinary artifact, scope, retention-pin and crash/replay guarantees remain within the admitted deployment. W1–W8 qualify the new model; this draft changes no live stores.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 - spec.md, plan.md, research.md, data-model.md, quickstart.md and tasks.md.
-- contracts/publication.md, execution.md, editorial.md, teams.md, studio.md and support.md.
+- contracts/revision-management.md, agent-ownership.md, publication.md, execution.md, editorial.md, teams.md, studio.md and support.md.
 - design/studio-wireframes.html and the requirements checklist.
 
-### Source Code (created only by owning implementation slices)
+### Source Code (baseline paths; exact clean renames reviewed in delivery)
 
 | Path | Responsibility |
 |---|---|
@@ -117,12 +112,15 @@ Detailed meanings live in the [glossary](../../docs/glossary/elsa.md); state/sup
 | Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/ | Runtime facade/worker/journal orchestration and sole concrete MAF integration |
 | Extensions/Agent/src/Specialists/Anthropic/ and AzureOpenAI/ | Actual model connection/client/capability contributors, not a new assistant harness |
 | Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/ | Real conversation/turn/evaluation persistence |
-| Extensions/Agent/src/Specialists/Api/ | Actual playground/evaluation/inspection endpoints, with deliberate authoring/runtime composition |
+| Extensions/Agent/src/Specialists/Api/ | Authoring reads, kept composable without the runtime |
+| Extensions/Agent/src/Specialists/Inspection/Api/ | Playground/evaluation/inspection evidence endpoints over the runtime and generic draft Test Runs, a separate project so authoring and runtime composition stay deliberate |
 | Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/ | Module-owned Studio surfaces |
 | Extensions/Agent/tests/Specialists/ | Behavior/provider/host/recovery tests |
 | Essentials/src/Connections/Persistence/EntityFrameworkCore/ | Existing repository's durable implementation |
 | Essentials/src/Activities/Bpmn/Core/ and Design/ | Actual runtime/authoring package separation |
 | tools/agents/conformance/ | Independent packaged qualification |
+
+Shared revision storage and coordinator placement follow the owning Core/persistence boundary demonstrated by Workflow and Agent adapters, not a new eagerly created project tree. The paths above describe current implementation inputs; Specialist naming need not survive a pre-GA clean break.
 
 No empty adapter hierarchy: extract a MAF provider package only when optional composition or another real implementation warrants it. A focused JsonSchema helper may earn a lightweight identity if Design and Runtime cannot share validation without an unlawful feature reference; name its actual consumers/dependency boundary. EF/API projects appear with real logic, not placeholders.
 
@@ -136,8 +134,39 @@ Each leaf owns code, meaningful tests, catalogs/APIs/locks, host proof and revie
 
 | Choice | Why needed | Alternative rejected |
 |---|---|---|
+| Shared revision capability | Workflow and Agent need the same CAS/snapshot/history/retention mechanics | A third independently versioned Agent subsystem |
 | Specialist Core/Design/runtime | Real package boundary and runtime-only deployment | Mixed package repeats BPMN coupling |
 | Facade + background leaf | Protected result transport and approval suspension are unsupported in one background leaf | Blocking actor or inventing another scheduler |
 | Conversation journal + native receipts | Cross-workflow CAS and accepted session/result are absent today | Process-local Weaver state or false cross-store atomicity |
 | BPMN Core + Design | Shared graph vocabulary needs independent deployment | Design coupled to concrete runtime |
 | Durable Connections provider | Metadata currently disappears on restart | Secrets EF does not retain connection documents |
+
+
+## T067 shared schema-family preparation
+
+Shared revision rows retain the source family's schema stamp even when the consumer module's own schema advances independently. The common materialization/stamping interceptor selects the source chain for shared revision rows and the consumer chain for domain rows. Disposable tests use module version `7.0.0` and shared source version `1.0.0`, including refusal of a module-valid but source-incompatible stamp.
+
+This correction changes no schema/profile version, stored source content or live store. It prepares [the pre-GA reset boundary](contracts/revision-management.md#pre-ga-reset-boundary); coordinated admission, stop/drain, fresh initialization and incompatible-binary proofs remain T067 obligations. The eventual break reuses existing module admission/finalization and contracting-migration refusal gates, with no automatic reset or second migration coordinator.
+
+## #3790 source slice: placement and transition
+
+The provider-neutral `Elsa.Persistence.Core` owns only source scope, working-copy, snapshot, pin and bounded reader/writer contracts. `Elsa.Persistence.EntityFramework` owns the single `EfSourceRevisions` implementation and composable `AddSourceRevisions` mapping. Both typed adapters use its CAS, capture, provenance and retention primitives. No EF, Activity Design DTO or runtime implementation enters the new Core project. Shared schema-family declaration covers the new document columns; physical tables remain in the composing module's migrations and finalization boundary.
+
+Workflow keeps definition metadata, its domain commands, locks, operation replay, validation and separate layout rows. Draft source content now lives once in the shared row; `StateSource` is an unmapped domain view. Existing whole-draft last-writer-wins submission semantics in spec 003 remain: the command stages CAS against the revision read under its existing lock. This does not add a client expected-revision field to Workflow editing. Capture/history use exact shared snapshots and preserve case-insensitive Workflow definition lookup. Workflow discard retires its shared copy while retaining snapshots/pins. Initial collection requires a retired copy with no pins: active-copy snapshots retain operation replay identity, and a retired copy cannot recapture a collected ID. Activity-upgrade commands stage shared source CAS in their existing atomic transaction.
+
+Agent source content/permissions remain Agent-owned. `EfAgentSources<TContext>` composes the same engine in an ordinary consumer-owned context. The `/agent/definitions` API exposes unpublished typed copies, bounded discovery/history, expected-revision save, capture, fork and discard. Trusted scope comes from the host accessor, never JSON. The initial Agent policy permits one copy per source; Workflow retains multiple copies. `AgentSourcesEntityFrameworkCore` provides authoring storage without `SpecialistsRuntime`; the existing journal persistence composition also installs the source ports.
+
+Reusable-activity authoring was assessed as the third existing consumer: its typed state, `Revision` CAS, provider authority fence and atomic Design/publication mutations fit the shared save/capture responsibilities. Replacing that store now would also replace its publication state machine and violate this leaf's T066 boundary. It therefore remains the graph-backed Activity authoring owner; generated Agent publications remain read-only through its existing provider-source guard. An independent typed test consumer exercises the new neutral ports before their surface is frozen.
+
+Temporary boundary: the existing activity-backed Agent editor/provider publication path and Workflow version/promotion rows remain until T066/T068 replace their publication/source selection together. New typed Agent source API content is unpublished and cannot be executed, tested through the old candidate API, or silently mirrored into an editable activity draft. No second Agent candidate/version engine is introduced. T066 owes source-to-provider compilation, reviewed reservation, release association and receipt reconciliation; T067 owes coordinated reset/rename deployment; T068 owes source-backed Studio; T069/T070 owe the remaining product/runtime proofs. Storage-only tests do not close W1–W8.
+
+### Breaking deployment boundary
+
+Affected stores are Workflow Design (`elsa_workflow_sources_*`, changed Workflow draft payload mapping) and Specialists (`elsa_agent_sources_*` beside unchanged turn/conversation/operation rows). Four-provider incremental migration artifacts preserve the existing chains, including #2898's retained Workflow history. Dropping the old draft payload column is intentionally breaking: no backfill or mixed-profile writer support is supplied. Do not apply this delivery to populated running stores. A coordinated T067 deployment must stop affected authoring/combined hosts, exclude old binaries, recreate the affected owned databases, initialize all composing modules, recreate source and explicitly republish before readiness. If stores share a database, inventory all modules in that database before recreation. Runtime/checkpoint/hosting/ETL schemas and #2892's lane are not changed by this slice. This delivery performs no live reset, host restart or migration execution against a demo store.
+
+
+## T066 shared Publishing contracts (independent preparation)
+
+The provider candidate compiler models, evaluator, runtime/storage readiness, catalog projection and release-choice policy are exposed through Publishing Core contracts. The endpoint-free Publishing feature supplies replaceable defaults, and existing draft/CLR/JSON publication consumes the same services. This permits typed domain adapters to depend on the Core seam without coupling their Design features to the default engine. Publication review tokens, provider diagnostics, compatibility choices and canonical commit boundaries retain their existing behavior.
+
+This slice prepares T066 under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md). It does not deliver source-operation coordination, typed adapters, changed schemas or the amended Studio journey. Those retain their [revision contract](contracts/revision-management.md) obligations. Prepared executable retention is a prerequisite owned by [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6641754588); no Runtime retention or execution infrastructure is duplicated here.

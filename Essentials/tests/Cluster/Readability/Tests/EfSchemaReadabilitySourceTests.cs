@@ -50,7 +50,8 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(RuntimeWorkflowAlterationEfModule.SchemaFamily, Runtime, [RuntimeWorkflowAlterationEfModule.SchemaVersion]),
         new(RuntimeWorkflowDispatchEfModule.SchemaFamily, Runtime, [RuntimeWorkflowDispatchEfModule.SchemaVersion]),
         new(RuntimeWorkflowExecutionEfModule.SchemaFamily, Runtime, ["1.0.0", "2.0.0"]),
-        new(RuntimeWorkflowTestScopeEfModule.SchemaFamily, Runtime, [RuntimeWorkflowTestScopeEfModule.SchemaVersion])
+        new(RuntimeWorkflowTestScopeEfModule.SchemaFamily, Runtime, [RuntimeWorkflowTestScopeEfModule.SchemaVersion]),
+        new("UserTasks", Runtime, ["1.0.0"])
     ];
 
     private readonly List<PackageLoadContext> _packages = [];

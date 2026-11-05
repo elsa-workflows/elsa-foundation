@@ -15,7 +15,7 @@ public sealed class ActivityDraftValidator(
         CancellationToken cancellationToken = default)
     {
         var subject = new ActivityDiagnosticSubject(
-            "ActivityDraft",
+            request.SubjectKind,
             request.DraftId,
             request.DefinitionId,
             Revision: request.Revision);

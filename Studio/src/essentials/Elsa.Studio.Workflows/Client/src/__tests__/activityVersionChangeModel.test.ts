@@ -6,7 +6,9 @@ import {
   analyzeActivityVersionChange,
   applyActivityVersionChange,
   createActivityVersionChangePrecondition,
+  activityVersionChangePinnedReason,
   findActivityOccurrence,
+  planActivityVersionChange,
   validateActivityVersionChangePrecondition
 } from "../workflow-editor/activityVersionChangeModel";
 
@@ -70,6 +72,19 @@ describe("activity version change model", () => {
 
     expect(validateActivityVersionChangePrecondition(draft, precondition)).toBeNull();
     expect(validateActivityVersionChangePrecondition(edited, precondition)).toContain("local work was kept");
+  });
+
+  it("plans the change for the editable draft and refuses while a pinned test-run snapshot is shown", () => {
+    const draft = makeDraft();
+    const precondition = createActivityVersionChangePrecondition(draft, findActivityOccurrence(draft.state.rootActivity, "first")!);
+    const request = { precondition, targetVersionId: "version-2", scope: "occurrence" as const };
+
+    const next = planActivityVersionChange(draft, request, true);
+    expect(findActivityOccurrence(next.state.rootActivity, "first")?.activityVersionId).toBe("version-2");
+    // Pinned: the shown snapshot is not the draft a save would write, and it has no history line of its own.
+    expect(() => planActivityVersionChange(draft, request, false)).toThrow(activityVersionChangePinnedReason);
+    const stale = { ...draft, state: { ...draft.state, strategyOptions: { changed: true } } };
+    expect(() => planActivityVersionChange(stale, request, true)).toThrow("local work was kept");
   });
 });
 

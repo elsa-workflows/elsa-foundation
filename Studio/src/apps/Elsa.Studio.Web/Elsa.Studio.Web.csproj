@@ -50,6 +50,7 @@
     <ProjectReference Include="..\..\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Diagnostics.OpenTelemetry\studio\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Diagnostics.StructuredLogs\studio\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj"/>
+    <ProjectReference Include="..\..\..\..\Extensions\UserTasks\studio\Elsa.Studio.UserTasks\Elsa.Studio.UserTasks.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Attention\studio\Elsa.Studio.Attention\Elsa.Studio.Attention.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\ExpressionEditors.JavaScript\studio\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\ExpressionEditors.Liquid\studio\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj"/>

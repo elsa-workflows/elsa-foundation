@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -60,7 +61,8 @@ public sealed class ActivityVersionReconciler(
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddActivityDefinitionVersionCommand addVersionCommand,
     IRefreshActivityDefinitionVersionCommand refreshVersionCommand,
-    IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null
+    IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null,
+    IActivityReconciliationDiagnosticStore? diagnosticStore = null
 )
     : IActivityVersionReconciler
 {
@@ -75,10 +77,17 @@ public sealed class ActivityVersionReconciler(
 
         var (definitionIndex, versionIndex) = await Prefetch(@event.Versions, cancellationToken);
 
+        var refused = new HashSet<string>(StringComparer.Ordinal);
         foreach (var version in @event.Versions)
         {
-            await ReconcileVersion(version, definitionIndex, versionIndex, cancellationToken);
+            await ReconcileVersion(version, definitionIndex, versionIndex, refused, cancellationToken);
         }
+
+        // A complete pass is the whole truth about refusals: an entry for a version this pass did not refuse (published,
+        // or no longer contributed, such as one a source replaced by a fixed next version) is no longer current.
+        if (diagnosticStore is not null && SingleSourceVersionPublisher() is not null)
+            foreach (var versionId in diagnosticStore.List().Keys.Where(id => !refused.Contains(id)))
+                diagnosticStore.Clear(versionId);
     }
 
     /// <summary>
@@ -115,6 +124,7 @@ public sealed class ActivityVersionReconciler(
         IActivityDefinitionVersion incomingVersion,
         DefinitionIndex definitionIndex,
         VersionIndex versionIndex,
+        ISet<string> refused,
         CancellationToken cancellationToken)
     {
         var sourceVersionPublisher = SingleSourceVersionPublisher();
@@ -138,8 +148,8 @@ public sealed class ActivityVersionReconciler(
                     newDefinition,
                     newVersion,
                     cancellationToken);
-            else
-                await sourceVersionPublisher.PublishAsync(newDefinition, newVersion, cancellationToken);
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, newDefinition, newVersion, cancellationToken))
+                return;
 
             // Mirror the write into the indexes so a later candidate targeting the same definition
             // observes it exactly as a per-candidate re-read would (the same-new-definition-twice case).
@@ -165,8 +175,8 @@ public sealed class ActivityVersionReconciler(
                     CreateOperationKey("append", incomingVersion),
                     appended,
                     cancellationToken);
-            else
-                await sourceVersionPublisher.PublishAsync(definition, appended, cancellationToken);
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, appended, cancellationToken))
+                return;
             versionIndex.Add(appended);
             return;
         }
@@ -199,7 +209,7 @@ public sealed class ActivityVersionReconciler(
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
-                    await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+                    await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
                 }
                 return;
             }
@@ -221,7 +231,7 @@ public sealed class ActivityVersionReconciler(
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
-            await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+            await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
         }
     }
 
@@ -245,6 +255,48 @@ public sealed class ActivityVersionReconciler(
             existingVersion.DesignFacetsSource = refresh.DesignFacetsSource;
             existingVersion.LastModifiedAt = refresh.LastModifiedAt;
         }
+    }
+
+    /// <summary>
+    /// Publishes one source-owned version and says whether it was published. A refused version is logged with each of its
+    /// diagnostics and recorded in the reconciliation diagnostic store; nothing of it was written, so the caller skips it
+    /// and the pass goes on. A version that publishes clears what an earlier pass recorded for it.
+    /// </summary>
+    private async Task<bool> PublishSourceVersionAsync(
+        IActivitySourceVersionPublisher publisher,
+        ISet<string> refused,
+        ActivityDefinition definition,
+        ActivityDefinitionVersion version,
+        CancellationToken cancellationToken)
+    {
+        var result = await publisher.PublishAsync(definition, version, cancellationToken);
+        if (result.IsPublished)
+        {
+            diagnosticStore?.Clear(version.Id);
+            return true;
+        }
+
+        // A bridge may refuse without an error saying why; the refusal still names itself, so it is logged and recorded.
+        IReadOnlyList<ActivityDiagnostic> diagnostics = result.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error)
+            ? result.Diagnostics
+            : ActivityDiagnosticOrderer.Order([.. result.Diagnostics, new(
+                "activity.source.publication-refused",
+                ActivityDiagnosticSeverity.Error,
+                "The publishing bridge refused the source-owned version without a stated reason.",
+                new("ActivitySourceVersion", version.Id, definition.Id, Revision: 0),
+                Remediation: "Check the node log for the publishing bridge, correct the source content and reconcile again.")]);
+        refused.Add(version.Id);
+        diagnosticStore?.Record(version.Id, diagnostics);
+        if (logger.IsEnabled(LogLevel.Warning))
+            foreach (var diagnostic in diagnostics)
+                logger.LogWarning(
+                    "Source-owned activity version '{DefinitionVersionId}' ({ActivityTypeKey} {Version}) was not published: {DiagnosticCode}: {DiagnosticMessage}",
+                    version.Id,
+                    definition.ActivityTypeKey,
+                    version.Version,
+                    diagnostic.Code,
+                    diagnostic.Message);
+        return false;
     }
 
     private IActivitySourceVersionPublisher? SingleSourceVersionPublisher()

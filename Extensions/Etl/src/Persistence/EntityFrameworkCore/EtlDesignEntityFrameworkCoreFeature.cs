@@ -12,12 +12,12 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "EtlDesignEntityFrameworkCore",
     DisplayName = "ETL Design EF Core Persistence",
-    Description = "SQLite persistence for ETL drafts and immutable published artifacts.",
+    Description = "EF Core persistence for ETL drafts and immutable published artifacts on SQLite, SQL Server, PostgreSQL or MySQL.",
     DependsOn = new object[] { "EtlDesign" })]
 [UsesEfModule("EtlDesign")]
 public class EtlDesignEntityFrameworkCoreFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Provider", Description = "Relational provider. This initial ETL design module supports SQLite.", Category = "Persistence")]
+    [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql or MySql.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
 
     [ManifestSetting(DisplayName = "Connection string", Description = "Optional ETL persistence connection string. If omitted, the shared Elsa connection is used.", Category = "Persistence", Secret = true)]

@@ -84,7 +84,7 @@ binds `Identity:Login` without a dependency on Studio:
       "Description": "Thoughtful automation for the work that matters.",
       "Layout": "split",
       "Palette": "linen",
-      "Artwork": "ember",
+      "Artwork": "unfolding-map",
       "FocalX": 50,
       "FocalY": 45,
       "HelpUrl": "https://help.example.com",
@@ -94,25 +94,111 @@ binds `Identity:Login` without a dependency on Studio:
 }
 ```
 
-Layout, palette and artwork are independent:
+An unconfigured identity host uses **Pocket Orchestra (P5)**: a small Elsa mark and clear credential form on
+warm white paper, beside a colored-pencil music room with instruments and floating musical phrases. Its palette stays
+light under an OS dark preference. The illustration is decorative; the real form retains the
+provider's username/password fields and supported actions.
+
+To select P5 explicitly, set `Layout` to `parcel-room`, and `Palette` and `Artwork` to
+`pocket-orchestra`. Set all three to `parcel-room` to use the earlier M2 marker illustration. Existing explicit host choices continue to win. Layout, palette and artwork are independent:
 
 | Setting | Choices |
 |---|---|
-| Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image) |
-| Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green) |
-| Artwork | `ember`, `tidal`, `daybreak`, `canopy` |
+| Layout | `parcel-room` (default; form left, full illustration right), `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
+| Palette | `pocket-orchestra` (default; warm paper and teal, light only), `parcel-room` (white and teal, light only), `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
+| Artwork | `pocket-orchestra` (default); see the choices below |
 
-The four generated photographs ship locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
+The bundled artwork directions are available independently of the selected layout and palette:
+
+| Artwork value | Direction |
+|---|---|
+| `pocket-orchestra` | Colored-pencil orchestra room with piano, cello, trumpet and a conductor’s score (default) |
+| `parcel-room` | Warm marker illustration of sorting envelopes and parcels |
+| `river-to-sea` | Aerial waterways opening into a sunlit coastline |
+| `open-architecture` | Terracotta archway and a continuing coastal path |
+| `flowing-ribbons` | Copper, cream and teal ribbons weaving through space |
+| `paper-landscape` | Layered paper hills, river and bridges |
+| `creative-studio` | Sunlit workspace with sketches and an unfinished model |
+| `botanical-growth` | Branching stems and fresh leaves in filtered sunlight |
+| `constellation` | Points of light connected across a midnight sky |
+| `miniature-world` | Handcrafted landscape with waterways, bridges and buildings |
+| `glass-and-light` | Translucent curved glass and warm refracted light |
+| `unfolding-map` | Illustrated landscape with connecting paths and settlements |
+
+The earlier `ember`, `tidal`, `daybreak` and `canopy` artwork values remain supported. Omitted,
+empty or unrecognized artwork values use `pocket-orchestra`. A valid `ImageUrl` takes precedence over
+`Artwork`; remove an existing `ImageUrl` override to activate bundled artwork.
+
+Configure the **identity backend host** using appsettings JSON as above, an environment variable such
+as `Identity__Login__Artwork=flowing-ribbons`, or a command-line setting
+`--Identity:Login:Artwork=flowing-ribbons`. Developers can override configuration after binding:
+
+```csharp
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
+
+builder.Services.PostConfigure<LoginPageOptions>(options =>
+{
+    options.Artwork = "flowing-ribbons";
+    options.ImageUrl = null;
+});
+```
+
+Artwork ships locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
 CDN dependency. Set ImageUrl to your own asset to replace the image. FocalX/FocalY are percentages
 clamped to 0–100. Use a portrait source for split/editorial and a larger landscape source for immersive;
 check the crop at desktop, tablet and 320px. Artwork is decorative (`alt=""`), so essential instructions
 belong in real text. A failed image leaves readable copy on a solid surface and a usable form.
+Parcel Room contains the complete illustration without cropping or story-copy overlays. On narrow
+screens it places the form before the artwork. Its small brand uses the standard Elsa logo unless
+`LogoUrl` overrides it; configured Help and Privacy links remain available beneath the form.
 
 Names/copy/URLs are encoded. Asset and resource URLs accept root-relative paths or HTTPS; HTTP loopback
 is available for local development. Executable/data/protocol-relative URLs are rejected. Rejected configured Studio resource links are hidden; an omitted setting keeps the default product resource link. Serve SVG only
 from a trusted deployment source. Supply your own privacy/help endpoint if you configure a local link.
-Dark appearance follows the OS and high contrast removes the artwork; the form needs no JavaScript.
+Dark appearance follows the OS except for the light-only Field Guide palette, and high contrast removes the artwork; the form needs no JavaScript.
 External OIDC login pages remain owned and themed by their identity provider.
+
+## Field Guide login theme
+
+The Field Guide presentation matches the Elsa 4 brochure: warm paper, sage/graphite ink,
+serif headings, the drawn Elsa logo, and an uncropped pencil/watercolor capability plate.
+Configure the **identity backend**, where the credential page is rendered:
+
+```json
+{
+  "Identity": {
+    "Login": {
+      "Layout": "field-guide",
+      "Palette": "field-guide",
+      "Artwork": "field-guide",
+      "Tagline": "Workflows, decisions, data, and agents.",
+      "Description": "A modular .NET foundation, built in the open."
+    }
+  }
+}
+```
+
+The equivalent environment variables are `Identity__Login__Layout=field-guide`,
+`Identity__Login__Palette=field-guide`, and `Identity__Login__Artwork=field-guide`.
+For code-based composition, configure the same properties on `LoginPageOptions`.
+Existing default copy remains configurable through `Tagline`, `Description`, and `ProductName`.
+
+The three choices stay independent. The layout places the form on the left and the complete
+illustration on the right; on mobile, the form comes first and the illustration follows it.
+The Field Guide palette stays **light**, including when the OS prefers dark appearance.
+Other palettes retain their existing OS-driven appearance. High contrast hides decorative
+artwork while retaining the form and visible controls. There is no animation or JavaScript
+requirement on the credential page.
+
+The layout's default logo is the locally embedded `field-guide-logo.png`; `LogoUrl` still
+overrides it. The `field-guide` artwork is served as `field-guide.jpg` through the existing
+anonymous login-asset endpoint. Both resources follow the request's shell prefix or proxy
+PathBase. `ImageUrl` can replace the illustration, and the Field Guide layout contains the
+whole image rather than cropping it. The original brochure art is decorative; instructions
+and labels remain real text. A missing image leaves the form usable.
+
+This is an additional login appearance. It does not select a Studio workspace theme, change
+existing login defaults, or theme an external identity provider's own login page.
 
 ## Replace login presentation
 

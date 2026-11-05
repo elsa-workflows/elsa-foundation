@@ -166,6 +166,7 @@ internal static class ActivitiesDesignProviderSmoke
         {
             Assert.Equal(expectedProviderName, context.Database.ProviderName);
             await context.Database.EnsureCreatedAsync();
+            await RunNodePresentationSmokeAsync(context, suffix);
             await RunRetentionSmokeAsync(context, suffix);
             await AssertTenantKeyIsDatabaseRequiredAsync(context, suffix);
             await RunOrdinalPagingSmokeAsync(context, suffix);
@@ -455,6 +456,30 @@ internal static class ActivitiesDesignProviderSmoke
         if (dbType is { } type)
             parameter.DbType = type;
         command.Parameters.Add(parameter);
+    }
+
+    private static async Task RunNodePresentationSmokeAsync(ActivitiesDesignDbContext context, string suffix)
+    {
+        var id = $"presentation-{suffix}";
+        var layout = Layout(id, "tenant-a", 1);
+        layout.ActivityPresentation.Add(new(" node/opaque ", "  Original name  ", "Original description"));
+        context.ActivityDefinitionDraftLayouts.Add(layout);
+        context.ActivityDefinitionVersionLayouts.Add(new()
+        {
+            Id = $"version-{id}", DefinitionVersionId = $"version-{id}", TenantId = "tenant-a",
+            ActivityPresentation = [new(" node/opaque ", "Original name", "Original description")]
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var saved = await context.ActivityDefinitionDraftLayouts.SingleAsync(item => item.DraftId == id);
+        Assert.Equal(" node/opaque ", Assert.Single(saved.ActivityPresentation).NodeId);
+        Assert.Equal("Original name", Assert.Single(saved.ActivityPresentation).DisplayName);
+        saved.ActivityPresentation.Clear();
+        saved.ActivityPresentation.Add(new(" node/opaque ", "Draft rename"));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        Assert.Equal("Draft rename", Assert.Single((await context.ActivityDefinitionDraftLayouts.SingleAsync(item => item.DraftId == id)).ActivityPresentation).DisplayName);
+        Assert.Equal("Original name", Assert.Single((await context.ActivityDefinitionVersionLayouts.SingleAsync(item => item.DefinitionVersionId == $"version-{id}")).ActivityPresentation).DisplayName);
     }
 
     private static ActivityDefinition Definition(string id, string? tenantId, string activityTypeKey) =>

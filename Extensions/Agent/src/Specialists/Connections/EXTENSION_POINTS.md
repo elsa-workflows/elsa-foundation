@@ -10,7 +10,7 @@ The shared HTTP guard invokes the supplied Core physical dispatch authority befo
 and send, retaining a conservative reservation if later authorization/transport fails. An unconfirmed
 reservation never permits a request. `SupportsPhysicalRequestReservations` defaults to false; a
 derived owner opts in only after qualifying both its SDK and primary handler. The sealed built-in
-Anthropic/Azure OpenAI owners opt in for their documented transport profiles. A custom handler that
+Anthropic/OpenAI/Azure OpenAI owners opt in for their documented transport profiles. A custom handler that
 resends below this guard needs its own reservation mechanism and qualification.
 
 `SpecialistModelConnectionTypeProvider` is the immutable singleton contribution to the existing

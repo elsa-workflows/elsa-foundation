@@ -385,7 +385,8 @@ public sealed partial class GraphActivityProviderTests
             "provider-fingerprint");
 
         var first = await _provider.CompileAsync(request);
-        var second = await _provider.CompileAsync(request);
+        // A cosmetic republish changes release provenance, not executable behavior.
+        var second = await _provider.CompileAsync(request with { CandidateVersion = "2.0.1" });
 
         Assert.Empty(first.Diagnostics);
         Assert.Equal(JsonSerializer.Serialize(first.ExecutableRoot), JsonSerializer.Serialize(second.ExecutableRoot));
@@ -400,7 +401,7 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal(WellKnownRuntimeActivityConsumers.GraphActivity, first.ExecutableRoot!.Descriptor.ConsumerKey);
         var runtimeContract = Assert.IsType<Elsa.Activities.Runtime.Core.Models.ActivityContract>(first.ExecutableRoot.ActivityContract);
         Assert.Equal("activity-type-1", runtimeContract.ActivityTypeKey);
-        Assert.Equal("2.0.0", runtimeContract.ContractVersion);
+        Assert.Equal("1", runtimeContract.ContractVersion);
         Assert.Equal(WellKnownRuntimeActivityConsumers.GraphActivity, runtimeContract.DescriptorKind);
         Assert.True(JsonElement.DeepEquals(first.ExecutableRoot.Descriptor.Payload, runtimeContract.DescriptorPayload));
         Assert.Equal([ActivityOutcomes.Done], runtimeContract.Outcomes);
@@ -419,7 +420,7 @@ public sealed partial class GraphActivityProviderTests
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("templateHash", out _));
         // Every graph compiled now is a closed value scope, so placement remaps its body.
         Assert.Equal("closed", first.ExecutableRoot.Descriptor.Payload.GetProperty("scopeModel").GetString());
-        Assert.Equal("elsa.activity-graph/compiler/3.0.0", GraphActivityProvider.Fingerprint);
+        Assert.Equal("elsa.activity-graph/compiler/4.0.0", GraphActivityProvider.Fingerprint);
         Assert.Equal(2, first.ResourceMeasurements.LocalNodeCount);
         Assert.Equal(2, first.ResourceMeasurements.MaximumObservedAuthoredDepth);
         Assert.Equal(2, first.ResourceMeasurements.DependencyCount);

@@ -5,9 +5,9 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { getActivityAuthoringCapabilities } from "./api/activityDesign";
 import type { ActivityAuthoringCapabilities } from "./activityDefinitionTypes";
-import { formatDate } from "./workflowFormatting";
 import { IncidentStrategySection } from "./IncidentStrategySection";
 import { PersistenceModeSection } from "./PersistenceModeSection";
+import { WorkflowVersionHistory, type WorkflowVersionHistoryAgent } from "./workflow-editor/WorkflowVersionHistory";
 import {
   argumentNameKeys,
   createInput,
@@ -652,12 +652,14 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
   );
 }
 
-export function WorkflowPropertiesView({ details, draft, context, onStateChange, onDefinitionMetaChange }: {
+export function WorkflowPropertiesView({ details, draft, context, onStateChange, onDefinitionMetaChange, versionAgent }: {
   details: WorkflowDefinitionDetails | null;
   draft: WorkflowDraft;
   context: StudioEndpointContext;
   onStateChange(producer: StateProducer): void;
   onDefinitionMetaChange?(patch: { name?: string; description?: string }): void;
+  /** Weaver's read-only version journey (spec 1193 story 8): a selected version is disclosed and can be explained. */
+  versionAgent?: WorkflowVersionHistoryAgent;
 }) {
   const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
   const variables = toRecords(draft.state.variables);
@@ -716,18 +718,7 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
 
       <section className="wf-properties-section">
         <h3>Versions</h3>
-        {versions.length === 0 ? (
-          <p className="wf-muted">No published versions yet.</p>
-        ) : (
-          <ul className="wf-properties-versions">
-            {versions.map(version => (
-              <li key={version.id}>
-                <span className="wf-properties-version-tag">v{version.version}</span>
-                <time>{formatDate(version.createdAt)}</time>
-              </li>
-            ))}
-          </ul>
-        )}
+        <WorkflowVersionHistory definitionId={details?.definition.id ?? draft.definitionId} versions={versions} agent={versionAgent} />
       </section>
     </div>
   );

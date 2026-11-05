@@ -49,7 +49,7 @@ see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) a
 
 ## Hosted Windows and Linux source journey
 
-`.github/workflows/backend-source-platform.yml` is a narrowly path-triggered and manually dispatchable
+The `backend-source` suite in `.github/workflows/ci.yml` is a narrowly path-selected and manually dispatchable
 check on `ubuntu-24.04` and `windows-2025`. It records the exact source revision, runner image, selected
 .NET 10.x SDK and PowerShell. Each job starts with empty job-scoped NuGet package, HTTP-cache and CLI-home
 paths, restores Workbench and the focused `WriteLineBoundInputExecutionTests` project in locked mode, then

@@ -53,12 +53,14 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.AddScoped<IWorkflowTemplateStore, EfWorkflowTemplateStore>();
         services.AddScoped<EfWorkflowLibraryStore>();
         services.AddScoped<IWorkflowLibraryStore>(provider => provider.GetRequiredService<EfWorkflowLibraryStore>());
+        services.AddScoped<IWorkflowFolderDeletionStore>(provider => provider.GetRequiredService<EfWorkflowLibraryStore>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerIndexObserver, WorkflowLibraryPublicationObserver>());
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.TryAddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>());
+        services.AddScoped<WorkflowSourceRevisions>();
         services.AddScoped<EfWorkflowDefinitionStore>(); services.AddScoped<IWorkflowDefinitionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionStore>());
         services.AddScoped<EfWorkflowDefinitionVersionStore>(); services.AddScoped<IWorkflowDefinitionVersionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionVersionStore>());
         services.AddScoped<EfWorkflowDefinitionDraftStore>(); services.AddScoped<IWorkflowDefinitionDraftStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionDraftStore>());
@@ -121,6 +123,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(WorkflowsDesignMySqlDbContext),
         typeof(IWorkflowTemplateStore),
         typeof(IWorkflowLibraryStore),
+        typeof(IWorkflowFolderDeletionStore),
         typeof(EfWorkflowLibraryStore),
         typeof(IDesignAtomicWriter),
         typeof(IWorkflowDefinitionLookup),
