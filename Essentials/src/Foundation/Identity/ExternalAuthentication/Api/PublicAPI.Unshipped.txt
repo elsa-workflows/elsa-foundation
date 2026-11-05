@@ -1,0 +1,13 @@
+#nullable enable
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApi
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature.ExternalAuthenticationApiFeature() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiOptions
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiOptions.ExternalAuthenticationApiOptions() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiOptions.LoginPath.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiOptions.LoginPath.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiRegistration
+static Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApi.MapExternalAuthenticationApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiRegistration.AddFoundationExternalAuthenticationApi(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

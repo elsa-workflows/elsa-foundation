@@ -30,7 +30,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   const visible = directory?.client === client ? directory.data : null;
   const target = visible ? selected : null;
   const dirty = connection !== "" || subject !== "";
-  const locked = Boolean(busy || loadingAccess || needsRefresh || reauthenticate);
+  const locked = Boolean(busy || loadingUsers || loadingAccess || needsRefresh || reauthenticate);
 
   const loadUsers = useCallback(async (query: string, skip: number) => {
     const request = ++directoryRequest.current; setLoadingUsers(true); setDirectoryError("");
@@ -106,8 +106,16 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   async function refresh() {
     if (busyRef.current || reauthenticate) return;
     setError(""); setNotice("");
+    const selectedId = selectedRef.current?.id;
     const next = await loadUsers(appliedSearch, userSkip);
-    if (next && selectedRef.current) await loadAccess(selectedRef.current, next, linkSkip, sessionSkip);
+    if (!next || active.current !== client || selectedRef.current?.id !== selectedId) return;
+    const fresh = next.items.find(user => user.id === selectedId);
+    const current = fresh ? { ...fresh } : null;
+    selectedRef.current = current; setSelected(current);
+    if (!current) {
+      ++panelRequest.current; setLinks(null); setSessions(null); setLoadingAccess(false);
+      setConnection(""); setSubject(""); setNeedsRefresh(false);
+    }
   }
 
   async function mutate(title: string, message: string, operation: () => Promise<{ ok: boolean; failure: string | null }>, success: string,

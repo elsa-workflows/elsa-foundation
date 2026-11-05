@@ -25,8 +25,14 @@ async function completeProviderLogin(page) {
   await page.locator("#password").fill(credentials.password);
   await page.locator("#kc-login").click();
 }
+let confirmationNumber = 0;
 async function confirmStudio(page, title, label = title) {
-  if (settings.studioUrl) await page.getByRole("dialog", { name: title, exact: true }).getByRole("button", { name: label, exact: true }).click();
+  if (settings.studioUrl) {
+    const dialog = page.getByRole("dialog", { name: title, exact: true });
+    await expect(dialog).toBeVisible();
+    await page.screenshot({ path: join(ownedRoot, `confirmation-${++confirmationNumber}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`), fullPage: false });
+    await dialog.getByRole("button", { name: label, exact: true }).click();
+  }
 }
 const server = await createServer({ configFile: false, root: clientRoot, cacheDir: join(ownedRoot, "vite-cache"),
   server: { host: "127.0.0.1", port: 0, hmr: false, fs: { allow: [repo] } },
@@ -84,6 +90,8 @@ try {
   await page.goto(componentUrl("connections"));
   await expect(page.getByRole("heading", { name: "External sign-in", level: 2, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add connection", exact: true }).click();
+  await page.getByLabel("Connection key", { exact: true }).focus(); await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Display name", { exact: true })).toBeFocused();
   await page.getByLabel("Connection key", { exact: true }).fill("studio-company"); await page.getByLabel("Display name", { exact: true }).fill("Studio company");
   await page.getByLabel("Issuer URL", { exact: true }).fill(metadata.CompanyIssuer); await page.getByLabel("Client ID", { exact: true }).fill(metadata.ClientId);
   await page.getByLabel("Client secret reference", { exact: true }).fill(metadata.CompanySecret); await page.getByLabel("Secret scope (optional)", { exact: true }).fill("identity/external");
@@ -118,13 +126,51 @@ try {
       nodes: violation.nodes.map(node => ({ target: node.target, explanation: node.failureSummary })) }));
   });
   expect(accessibility).toEqual([]);
-  await page.screenshot({ path: join(ownedRoot, "preview-light.png"), fullPage: true });
+  await page.screenshot({ path: join(ownedRoot, "preview-light.png"), fullPage: false });
+  async function captureConnectionPanels(mode, size) {
+    for (const [name, anchor] of [
+      ["provisioning", page.getByLabel("Unknown identities", { exact: true })],
+      ["callbacks", page.getByText("Preview callback URL", { exact: true })],
+      ["preview", page.getByRole("heading", { name: "Preview result", exact: true })],
+      ["actions", page.getByRole("button", { name: "Enable sign-in", exact: true })]
+    ]) {
+      await anchor.scrollIntoViewIfNeeded(); await expect(anchor).toBeVisible();
+      await page.screenshot({ path: join(ownedRoot, `connection-${name}-${mode}-${size}.png`), fullPage: false });
+    }
+  }
+  async function connectionMode(mode) {
+    if (!settings.studioUrl) return;
+    await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: mode === "dark" ? "Dark" : "Light", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", mode);
+    await page.evaluate(() => Promise.all(globalThis.document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations)).map(animation => animation.finished.catch(() => {}))));
+  }
+  await captureConnectionPanels("light", "desktop");
+  let connectionDarkAccessibility = null;
+  if (settings.studioUrl) {
+    await connectionMode("dark"); await captureConnectionPanels("dark", "desktop");
+    connectionDarkAccessibility = await page.evaluate(async () => (await globalThis.axe.run(globalThis.document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map(item => ({ id: item.id, impact: item.impact, targets: item.nodes.map(node => node.target) })));
+    expect(connectionDarkAccessibility).toEqual([]);
+    await connectionMode("light");
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth)).toBe(true);
+  await captureConnectionPanels("light", "narrow");
+  if (settings.studioUrl) {
+    await connectionMode("dark"); await captureConnectionPanels("dark", "narrow"); await connectionMode("light");
+  }
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  if (settings.studioUrl) {
+    const enable = page.getByRole("button", { name: "Enable sign-in", exact: true });
+    await enable.click();
+    await page.getByRole("dialog", { name: "Enable sign-in", exact: true }).getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(enable).toBeFocused(); await expect(page.getByLabel("Reader", { exact: true })).toBeChecked();
+  }
   await page.getByRole("button", { name: "Enable sign-in", exact: true }).click();
   await confirmStudio(page, "Enable sign-in");
   await expect(page.getByRole("button", { name: "Disable sign-in", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.window.innerWidth)).toBe(true);
-  await page.screenshot({ path: join(ownedRoot, "connection-narrow.png"), fullPage: true });
+  await page.screenshot({ path: join(ownedRoot, "connection-narrow.png"), fullPage: false });
   const user = await browser.newContext(); const signIn = await user.newPage();
   await signIn.goto(backend + "/_elsa/identity/login?returnUrl=/backend/resource");
   await signIn.getByRole("button", { name: /Studio company/ }).click();
@@ -310,7 +356,7 @@ try {
     accessibility: accessAccessibility, darkAccessibility };
   expect(errors).toEqual([]);
   const result = { passed: true, ownedRoot, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
-    accessibility, access, connectionLifecycle, provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
+    accessibility, connectionDarkAccessibility, access, connectionLifecycle, provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
     fullStudioHost: Boolean(settings.studioUrl),
     limitations: [...(settings.provider === "Keycloak" ? [] : ["not an external IdP product"]), ...(settings.studioUrl ? [] : ["not a full Studio host"]), "not server-database or separate-node qualification"] };
   writeFileSync(join(ownedRoot, "browser-receipt.json"), JSON.stringify(result, null, 2));

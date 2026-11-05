@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
   <ItemGroup>
     <None Update="nuplane.json" Pack="true" PackagePath="/" />
     <PackageReference Include="CShells.Abstractions" />

@@ -125,7 +125,7 @@ if (!Enum.TryParse<OwnershipMode>(settings.OwnershipMode, out var ownershipMode)
 services.Configure<FoundationIdentityOptions>(options => options.OwnershipMode = ownershipMode);
 if (settings.DatabaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
 if (settings.SessionStore) services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
-services.AddSingleton<ISecretValueResolver>(new ProbeSecrets(clientSecret));
+services.AddSingleton<ISecretValueResolver>(new ProbeSecrets(clientSecret, settings.SecretsAvailable));
 services.AddFoundationExternalOidc(options => options.AllowLoopbackHttpForDevelopment = true);
 services.AddFoundationExternalAuthentication(options =>
 {
@@ -255,10 +255,10 @@ static ConnectionRecord Connection(string key, string displayName, string issuer
     Secrets = new Dictionary<string, SecretReference> { ["clientSecret"] = new("client-" + key, "text", "identity/external") },
     Admission = new() { Type = provisioning ? "jit" : "reject", DefaultRoleIds = provisioning ? ["reader"] : [] }
 };
-internal sealed class ProbeSecrets(string clientSecret) : ISecretValueResolver
+internal sealed class ProbeSecrets(string clientSecret, bool available) : ISecretValueResolver
 {
     public ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(reference.Name is "client-company" or "client-partner" && reference.TypeName is null or "text" && reference.Scope is null or "identity/external"
+        ValueTask.FromResult(available && (reference.Name is "client-company" or "client-partner") && (reference.TypeName is null or "text") && (reference.Scope is null or "identity/external")
             ? ResolvedSecret.Success(clientSecret, new() { Id = reference.Name, TenantId = tenantId, Name = reference.Name, Scope = reference.Scope, Status = SecretStatus.Active, CurrentVersion = 1 })
             : ResolvedSecret.Failure(SecretResolutionFailureCode.NotFound, "Unknown owned probe reference."));
 }
@@ -280,5 +280,6 @@ internal sealed class ProbeSettings
     public string[]? AdministratorPermissions { get; init; }
     public bool SessionStore { get; init; } = true;
     public bool ManagedApi { get; init; } = true;
+    public bool SecretsAvailable { get; init; } = true;
 }
 internal sealed record ProbeSubjectChange(string Provider, string Subject);

@@ -11,7 +11,7 @@ if (git("status", "--porcelain")) throw new Error("Commit source changes before 
 const profile = process.argv[2] ?? null;
 const profiles = {
   configuration: { databaseManagement: false },
-  "provider-reader": { administratorPermissions: ["identity/providers:read", "identity/users:read", "api-capabilities:read"] },
+  "provider-reader": { secretsAvailable: false, administratorPermissions: ["identity/providers:read", "identity/users:read", "api-capabilities:read"] },
   denied: { administratorPermissions: ["identity/users:read", "api-capabilities:read"] },
   "external-owned": { ownershipMode: "ExternalOwned" }, hybrid: { ownershipMode: "Hybrid" },
   "missing-api": { managedApi: false }, "missing-sessions": { sessionStore: false }

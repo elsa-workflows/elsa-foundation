@@ -1090,3 +1090,69 @@ mode profiles after the standard composed regression suite, retaining only scree
 in `external-auth-ux-<tested SHA>-<attempt>`. Owned configurations, credentials, databases and keys are excluded.
 Independent visual acceptance remains incomplete until the reviewer opens current-head evidence; no author-written
 receipt is presented as independent approval.
+
+
+## Independent review round 1 and corrections (5 November)
+
+Three independent author subagents reviewed exact head `3261576cce3bcceaacfe1426bfd7dc8fe3b268b8` against main
+`074259b35`, without exchanging outputs. Correctness found no actionable defect. Standards and acceptance found
+six corrections, with an additional standards adjudication requiring public API tracking in all new packages.
+The acceptance reviewer opened all eight current-head screenshots plus representative historical modes. UX
+acceptance is **failed**, and current downloadable visual evidence is **incomplete** while hosted CI is queued;
+no author or agent claim substitutes for the pending refreshed visual review.
+
+Accepted fixes in the following candidate:
+
+- The API and Studio shell features are inheritable and expose virtual `ConfigureServices`. A real separate NuGet
+  consumer attempting the override against the preceding archive fails with **CS0506** before the correction
+  (`/tmp/elsa-3579-review-r1-feature-red.log`). The packed consumer now includes that derivation for the next pass.
+- `AuthenticationStoreException` provides the public artifact/session failure boundary with operation, tenant,
+  record and original `InnerException`. Cancellation and schema-version refusals propagate unchanged; duplicate
+  and CAS results retain their meaning. A wrapped failure never acknowledges a mutation or implies rollback.
+  Wrong-key protected payload failures retain their original cryptographic cause. Seven actual native EF
+  read/write/consume failure cases fail before wrapping and pass after it, including unchanged cancellation and
+  retry safety. The complete focused artifact/session set passes **22/22**, zero skips. Logs:
+  `/tmp/elsa-3579-review-r1-store-{red,green}.log`.
+- All five newly introduced packable implementation/Studio modules now enable PublicApiAnalyzers and carry
+  baselines. Core already had tracking. Studio wires the analyzer explicitly because its property imports differ
+  from the backend. Generated migration protected overrides are tracked too; the analyzer caught twelve missing
+  generated members before they were added. No analyzer or generated-source waiver was added. Probe locked
+  build and Studio module build pass with **zero warnings/errors**.
+- The connection list now reports configured enablement without claiming current sign-in availability. Selection
+  and refresh read the current detail/readiness assessment, including for provider readers, separately from the
+  prior observed provider test. Known unavailable/unchecked readiness keeps preview/enable unavailable. The
+  provider-reader actual-host profile now uses an unavailable secret and checks that assessment without granting
+  test or write permission; its refreshed run is pending.
+- Refreshing user access reconciles the selected account's current metadata and clears a disappeared selection.
+  Refreshed 401/403/404 catalog access clears protected configuration, drafts and observations. Five new UI cases
+  fail against the prior behavior. The full SDK/component set now passes **47/47**, with typecheck, ESLint and
+  module/standalone SDK build passing (`/tmp/elsa-3579-review-r1-ui-{red,green,types,eslint,build}.log`). Async tests
+  wait for the current readiness/dirty state before checking available actions and navigation guards.
+- The composed runner explicitly scrolls and captures provisioning, callbacks, preview results and actions in
+  light/dark desktop/narrow layouts, plus confirmations. It checks keyboard field traversal and confirmation
+  cancellation/focus restoration. These executable corrections have syntax/lint proof; their actual composed
+  rerun and new screenshots remain pending. Outer-document full-page images were insufficient for those panels.
+
+The preceding clean-source public package run passes **23** actual production archives and a separate exact-version
+NuGet consumer with **zero project references**, at local commit `c67407fdd`:
+`/private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-packages-9ihgqi39/report.json`.
+The first invocation correctly stopped on the runner's macOS symlink-normalization bug; the root is now resolved
+before containment checks. This preceding package result is not final proof of the review corrections.
+
+T029 is reopened for the accepted UX corrections. New broad local Workbench/Studio/profile runs are queued behind
+the immediate demo/User Tasks integration delivery paths under overnight coordination. Focused single-project
+checks and review preparation continue. Package/current required CI, refreshed independent exact-head review,
+merge and resulting-main qualification remain required. GitGuardian historical incident **39613973** still flags
+a fixed policy prefix plus 24 runtime-random bytes in an earlier fixture commit; current source removes the prefix.
+Check **126971711386** exposes no requested actions and the session has no GitGuardian incident-management
+capability. Its supported workspace false-positive disposition remains an external merge blocker. No history,
+check or branch-protection bypass has been used.
+
+
+After the corrections, the complete affected Identity project passes **909/909**, zero skips, using its freshly
+built test assembly (`/tmp/elsa-3579-review-r1-identity.log`, TRX `elsa-3579-review-r1-identity.trx`). This includes
+the integrated main login changes and seven new persistence-boundary cases. Studio module and owned probe locked
+builds pass with zero warnings/errors; SDK/component **47/47**, typecheck, ESLint, build, Node syntax and archive
+verifier self-test pass. CI workflow/document contract and evidence-size checks pass. New full composed/profile
+captures and final packed inheritance consumer remain explicitly pending; these focused results do not establish
+UX acceptance or final delivery.

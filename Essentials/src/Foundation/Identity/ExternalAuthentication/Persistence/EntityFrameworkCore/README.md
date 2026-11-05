@@ -57,3 +57,9 @@ invalidation and unrelated-session survival. Separate-process restart, cross-nod
 revocation and link/catalog races pass on native SQLite (same machine) and PostgreSQL 16.15, in managed and
 deployment-only profiles. See [runners](../../../../../../../tools/identity/ExternalAuthentication.Probe/README.md)
 and [bounded evidence](../../../../../../../specs/1212-external-authentication/evidence.md) for configuration and limits.
+
+Infrastructure failures cross the public artifact/session contracts as `AuthenticationStoreException`, with
+operation/tenant/record identifiers and the original `InnerException`. Cancellation and schema-version refusal
+retain their existing meaning. A wrapped failure does not imply rollback: an acknowledgement may have failed
+after a mutation committed. No authentication result is issued on that failure, and a consumed artifact never
+becomes reusable. Duplicate creation and stale CAS outcomes retain their explicit results.

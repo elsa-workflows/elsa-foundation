@@ -31,42 +31,63 @@ internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbConte
             (session.ConnectionKey is null ? session.ConnectionRecordId is not null || session.Issuer is not null || session.ExternalSubject is not null || session.ExternalLinkRevision is not null :
                 !Text(session.ConnectionKey, 80) || !Text(session.ConnectionRecordId, 400) || !Text(session.Issuer, 400) || !Text(session.ExternalSubject, 400) || !Text(session.ExternalLinkRevision, 128)))
             throw new ArgumentException("Invalid authentication session.", nameof(session));
-        var json = JsonSerializer.Serialize(session);
-        if (Encoding.UTF8.GetByteCount(json) > 16384) throw new ArgumentException("Oversized authentication session.", nameof(session));
-        var entity = new AuthenticationSessionEntity
+        try
         {
-            TenantKey = Hash(session.TenantId), Id = session.Id, UserKey = Hash(session.UserId),
-            CreatedAtMilliseconds = session.CreatedAt.ToUnixTimeMilliseconds(), ExpiresAtMilliseconds = session.ExpiresAt.ToUnixTimeMilliseconds(),
-            Version = NewVersion(), SchemaVersion = ExternalAuthenticationEfModule.SchemaVersion
-        };
-        entity.ProtectedPayload = Protector(entity).Protect(json);
-        await Cleanup(entity.TenantKey, entity.CreatedAtMilliseconds, cancellationToken);
-        context.Sessions.Add(entity);
-        try { await context.SaveChangesAsync(cancellationToken); return true; }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-        { context.ChangeTracker.Clear(); return false; }
-        finally { context.Entry(entity).State = EntityState.Detached; }
+            var json = JsonSerializer.Serialize(session);
+            if (Encoding.UTF8.GetByteCount(json) > 16384) throw new ArgumentException("Oversized authentication session.", nameof(session));
+            var entity = new AuthenticationSessionEntity
+            {
+                TenantKey = Hash(session.TenantId), Id = session.Id, UserKey = Hash(session.UserId),
+                CreatedAtMilliseconds = session.CreatedAt.ToUnixTimeMilliseconds(), ExpiresAtMilliseconds = session.ExpiresAt.ToUnixTimeMilliseconds(),
+                Version = NewVersion(), SchemaVersion = ExternalAuthenticationEfModule.SchemaVersion
+            };
+            entity.ProtectedPayload = Protector(entity).Protect(json);
+            await Cleanup(entity.TenantKey, entity.CreatedAtMilliseconds, cancellationToken);
+            context.Sessions.Add(entity);
+            try { await context.SaveChangesAsync(cancellationToken); return true; }
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+            { context.ChangeTracker.Clear(); return false; }
+            finally { context.Entry(entity).State = EntityState.Detached; }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not EfSchemaVersionSkewException and not AuthenticationStoreException)
+        {
+            throw new AuthenticationStoreException("create-session", session.TenantId, session.Id, exception);
+        }
     }
 
     public async ValueTask<AuthenticationSessionRecord?> FindAsync(string tenantId, string id, CancellationToken cancellationToken = default)
     {
         Prepare(tenantId, id, cancellationToken);
-        var tenant = Hash(tenantId);
-        var entity = await context.Sessions.AsNoTracking().SingleOrDefaultAsync(row => row.TenantKey == tenant && row.Id == id, cancellationToken);
-        return entity is null ? null : Read(entity, tenantId);
+        try
+        {
+            var tenant = Hash(tenantId);
+            var entity = await context.Sessions.AsNoTracking().SingleOrDefaultAsync(row => row.TenantKey == tenant && row.Id == id, cancellationToken);
+            return entity is null ? null : Read(entity, tenantId);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not EfSchemaVersionSkewException and not AuthenticationStoreException)
+        {
+            throw new AuthenticationStoreException("find-session", tenantId, id, exception);
+        }
     }
 
     public async ValueTask<IamPage<AuthenticationSessionRecord>> ListAsync(string tenantId, string userId, IamPageRequest page, CancellationToken cancellationToken = default)
     {
         Prepare(tenantId, null, cancellationToken);
         if (!Text(userId, 400) || page.Skip < 0 || page.Take is < 1 or > 100) throw new ArgumentException("Invalid authentication session page.");
-        var tenant = Hash(tenantId); var user = Hash(userId);
-        var query = context.Sessions.AsNoTracking().Where(row => row.TenantKey == tenant && row.UserKey == user);
-        var count = await query.CountAsync(cancellationToken);
-        var entities = await query.OrderByDescending(row => row.CreatedAtMilliseconds).ThenBy(row => row.Id).Skip(page.Skip).Take(page.Take).ToArrayAsync(cancellationToken);
-        var records = entities.Select(row => Read(row, tenantId)).ToArray();
-        if (records.Any(record => record.UserId != userId)) throw new InvalidOperationException("Invalid authentication session owner.");
-        return new(records, count);
+        try
+        {
+            var tenant = Hash(tenantId); var user = Hash(userId);
+            var query = context.Sessions.AsNoTracking().Where(row => row.TenantKey == tenant && row.UserKey == user);
+            var count = await query.CountAsync(cancellationToken);
+            var entities = await query.OrderByDescending(row => row.CreatedAtMilliseconds).ThenBy(row => row.Id).Skip(page.Skip).Take(page.Take).ToArrayAsync(cancellationToken);
+            var records = entities.Select(row => Read(row, tenantId)).ToArray();
+            if (records.Any(record => record.UserId != userId)) throw new InvalidOperationException("Invalid authentication session owner.");
+            return new(records, count);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not EfSchemaVersionSkewException and not AuthenticationStoreException)
+        {
+            throw new AuthenticationStoreException("list-sessions", tenantId, null, exception);
+        }
     }
 
     public async ValueTask<AuthenticationSessionRevocationStatus> RevokeAsync(string tenantId, string id, string expectedRevision,
@@ -74,16 +95,23 @@ internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbConte
     {
         Prepare(tenantId, id, cancellationToken);
         if (!Hex(expectedRevision)) throw new ArgumentException("A session revision is required.");
-        var tenant = Hash(tenantId);
-        var entity = await context.Sessions.AsNoTracking().SingleOrDefaultAsync(row => row.TenantKey == tenant && row.Id == id, cancellationToken);
-        if (entity is null) return AuthenticationSessionRevocationStatus.Missing;
-        _ = Read(entity, tenantId);
-        if (entity.RevokedAtMilliseconds is not null) return AuthenticationSessionRevocationStatus.AlreadyRevoked;
-        if (entity.Version != expectedRevision) return AuthenticationSessionRevocationStatus.Conflict;
-        var timestamp = now.ToUnixTimeMilliseconds(); var version = NewVersion();
-        var changed = await context.Sessions.Where(row => row.TenantKey == tenant && row.Id == id && row.Version == expectedRevision && row.RevokedAtMilliseconds == null)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.RevokedAtMilliseconds, timestamp).SetProperty(row => row.Version, version), cancellationToken);
-        return changed == 1 ? AuthenticationSessionRevocationStatus.Revoked : AuthenticationSessionRevocationStatus.Conflict;
+        try
+        {
+            var tenant = Hash(tenantId);
+            var entity = await context.Sessions.AsNoTracking().SingleOrDefaultAsync(row => row.TenantKey == tenant && row.Id == id, cancellationToken);
+            if (entity is null) return AuthenticationSessionRevocationStatus.Missing;
+            _ = Read(entity, tenantId);
+            if (entity.RevokedAtMilliseconds is not null) return AuthenticationSessionRevocationStatus.AlreadyRevoked;
+            if (entity.Version != expectedRevision) return AuthenticationSessionRevocationStatus.Conflict;
+            var timestamp = now.ToUnixTimeMilliseconds(); var version = NewVersion();
+            var changed = await context.Sessions.Where(row => row.TenantKey == tenant && row.Id == id && row.Version == expectedRevision && row.RevokedAtMilliseconds == null)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.RevokedAtMilliseconds, timestamp).SetProperty(row => row.Version, version), cancellationToken);
+            return changed == 1 ? AuthenticationSessionRevocationStatus.Revoked : AuthenticationSessionRevocationStatus.Conflict;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not EfSchemaVersionSkewException and not AuthenticationStoreException)
+        {
+            throw new AuthenticationStoreException("revoke-session", tenantId, id, exception);
+        }
     }
 
     private AuthenticationSessionRecord Read(AuthenticationSessionEntity entity, string tenantId)
@@ -92,7 +120,7 @@ internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbConte
         AuthenticationSessionRecord? record;
         try { record = JsonSerializer.Deserialize<AuthenticationSessionRecord>(Protector(entity).Unprotect(entity.ProtectedPayload)); }
         catch (Exception exception) when (exception is CryptographicException or JsonException)
-        { throw new InvalidOperationException("Authentication session cannot be verified."); }
+        { throw new AuthenticationStoreException("read-session", tenantId, entity.Id, exception); }
         if (record is null || record.TenantId != tenantId || record.Id != entity.Id || Hash(record.UserId) != entity.UserKey ||
             record.CreatedAt.ToUnixTimeMilliseconds() != entity.CreatedAtMilliseconds || record.ExpiresAt.ToUnixTimeMilliseconds() != entity.ExpiresAtMilliseconds ||
             record.RevokedAt is not null || record.Revision is not null)

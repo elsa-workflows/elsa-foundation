@@ -11,7 +11,7 @@ namespace Elsa.Studio.Identity.ExternalAuthentication;
 [StudioModule("external-authentication", "External sign-in", "navigation", "routes", "http", "identity")]
 [ShellFeature(name: "ExternalAuthenticationStudio", DisplayName = "External sign-in Studio module",
     Description = "Manage external sign-in connections, test configuration and preview provisioning.")]
-public sealed class ExternalAuthenticationStudioFeature : IShellFeature
+public class ExternalAuthenticationStudioFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) { }
+    public virtual void ConfigureServices(IServiceCollection services) { }
 }

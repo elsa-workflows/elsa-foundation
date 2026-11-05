@@ -59,6 +59,17 @@ async function draft(host: ReturnType<typeof harness>) {
 }
 
 describe("user access page", () => {
+  it("reconciles the selected user's current status and clears selection when it disappears", async () => {
+    const host = harness(); await choose(host);
+    host.setUsers({ ...initialUsers, items: initialUsers.items.map(user => user.id === "user-1" ? { ...user, status: 1 } : user) });
+    click(await button(host.container, "Refresh user access"));
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-detail")?.textContent).toContain("Disabled"));
+    host.setUsers({ ...initialUsers, items: [], totalCount: 0 });
+    click(await button(host.container, "Refresh user access"));
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Select a user to inspect links and sessions."));
+    expect(host.container.textContent).not.toContain("Current session");
+  });
+
   it("loads links and sessions for the selected user and attaches exact subjects using current source/user revisions", async () => {
     const host = harness(); await draft(host);
     click(await button(host.container, "Attach identity"));

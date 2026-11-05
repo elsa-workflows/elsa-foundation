@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Transactions;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
@@ -115,6 +116,51 @@ public sealed class AuthenticationArtifactPersistenceTests
         await Assert.ThrowsAnyAsync<InvalidOperationException>(() => store.TryCreateAsync(Artifact()).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.TryCreateAsync(Artifact() with { Id = "raw-state-handle" }).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.TryCreateAsync(Artifact() with { TenantId = "another", ProtectedPayload = new('x', 196609) }).AsTask());
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("consume-read")]
+    [InlineData("consume-delete")]
+    public async Task Provider_failures_cross_the_contract_as_domain_failures_and_cancellation_is_preserved(string operation)
+    {
+        using var database = new OwnedDatabase();
+        var faults = new FailureCommands();
+        await using var node = await Create(database.File, faults);
+        await using var scope = Scope(node);
+        var store = scope.ServiceProvider.GetRequiredService<IAuthenticationArtifactStore>();
+        var item = Artifact();
+        Assert.True(await store.TryCreateAsync(item));
+        faults.DeleteOnly = operation == "consume-delete";
+        var infrastructure = new OwnedProviderException(); faults.Failure = infrastructure;
+        Func<Task> call = operation == "create" ? () => store.TryCreateAsync(item).AsTask() : () => Consume(store, item).AsTask();
+        var failure = await Assert.ThrowsAsync<AuthenticationStoreException>(call);
+        Assert.Same(infrastructure, failure.InnerException);
+        Assert.Equal(operation == "create" ? "create-artifact" : "consume-artifact", failure.Operation);
+        Assert.Equal(item.TenantId, failure.TenantId); Assert.Equal(item.Id, failure.RecordId);
+        var cancellation = new OperationCanceledException(new CancellationToken(true)); faults.Failure = cancellation;
+        Assert.Same(cancellation, await Assert.ThrowsAsync<OperationCanceledException>(call));
+        faults.Failure = null;
+        Assert.Equal(item, await Consume(store, item));
+    }
+
+    private sealed class OwnedProviderException() : DbException("Owned provider failure.");
+    private sealed class FailureCommands : DbCommandInterceptor
+    {
+        public Exception? Failure;
+        public bool DeleteOnly;
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!DeleteOnly && Failure is not null) throw Failure;
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Failure is not null) throw Failure;
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());

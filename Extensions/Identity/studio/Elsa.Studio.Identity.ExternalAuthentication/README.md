@@ -4,6 +4,11 @@ Optional `ExternalAuthenticationStudio` feature. It contributes **Security → E
 
 **Security → User access** requires user-read permission on that backend. Its bounded user directory does not require provider-management access. Link and session panels independently require their dedicated read permissions; each action follows current server permissions, ownership capabilities and module availability. Link attachment selects a configured connection and its exact external subject. Removal checks remaining user and administrator recovery paths. Selected-session revocation invalidates its cookie, access and refresh credentials while preserving other sessions. These actions preserve saved Elsa roles.
 
+Configured enablement, current configuration readiness and prior test observations are shown separately.
+Selecting or refreshing a connection rechecks current structural/secret readiness through the read-permission detail
+endpoint, including for read-only operators. A revoked read permission clears the protected catalog/editor state.
+Refreshing user access reconciles the selected user with current metadata and clears a disappeared selection.
+
 Changes require confirmation and current server revisions. An uncertain or conflicting result requires a refresh before another change; the page preserves an unattached draft. Revoking the current session requires signing in again. Legacy issuer-less links, externally owned users and missing administration services display read-only guidance.
 
 Save a disabled connection draft, register the displayed sign-in and preview callbacks with the provider, test metadata, preview an actual sign-in, then enable it. A permitted deployment override starts as a complete disabled Studio draft; promotion is explicit after test/preview. Assessment shows the resulting sources before confirmation; writes carry the catalog revision. Deployment and unsupported configurations remain read-only. Archived records retain their explicit lifecycle controls.

@@ -27,8 +27,12 @@ public enum AuthenticationSessionRevocationStatus { Revoked, AlreadyRevoked, Mis
 public interface IAuthenticationSessionStore
 {
     bool IsDurable { get; }
+    /// <exception cref="AuthenticationStoreException">Persistence failed; no result is acknowledged. A mutation may have committed. Cancellation propagates unchanged.</exception>
     ValueTask<bool> TryCreateAsync(AuthenticationSessionRecord session, CancellationToken cancellationToken = default);
+    /// <exception cref="AuthenticationStoreException">Persistence failed; no result is acknowledged. A mutation may have committed. Cancellation propagates unchanged.</exception>
     ValueTask<AuthenticationSessionRecord?> FindAsync(string tenantId, string id, CancellationToken cancellationToken = default);
+    /// <exception cref="AuthenticationStoreException">Persistence failed; no result is acknowledged. A mutation may have committed. Cancellation propagates unchanged.</exception>
     ValueTask<IamPage<AuthenticationSessionRecord>> ListAsync(string tenantId, string userId, IamPageRequest page, CancellationToken cancellationToken = default);
+    /// <exception cref="AuthenticationStoreException">Persistence failed; no result is acknowledged. A mutation may have committed. Cancellation propagates unchanged.</exception>
     ValueTask<AuthenticationSessionRevocationStatus> RevokeAsync(string tenantId, string id, string expectedRevision, DateTimeOffset now, CancellationToken cancellationToken = default);
 }

@@ -102,7 +102,8 @@ public sealed class AuthenticationSessionPersistenceTests
         barrier.FailNext = true;
         Assert.True(await store.TryCreateAsync(Session() with { Id = new('b', 64) }));
         var retry = (await store.FindAsync("default", new('b', 64)))!;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RevokeAsync("default", retry.Id, retry.Revision!, Now).AsTask());
+        var refusal = await Assert.ThrowsAsync<AuthenticationStoreException>(() => store.RevokeAsync("default", retry.Id, retry.Revision!, Now).AsTask());
+        Assert.IsType<InvalidOperationException>(refusal.InnerException);
         Assert.Null((await remote.FindAsync("default", retry.Id))!.RevokedAt);
         Assert.Equal(AuthenticationSessionRevocationStatus.Revoked, await remote.RevokeAsync("default", retry.Id, retry.Revision!, Now));
     }
@@ -123,7 +124,8 @@ public sealed class AuthenticationSessionPersistenceTests
         if (scenario == "wrong-key")
         {
             await using var wrong = await Node(data, keyPurpose: "wrong-application"); await using var foreign = Scope(wrong);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => foreign.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>().FindAsync("default", new('a', 64)).AsTask());
+            var failure = await Assert.ThrowsAsync<AuthenticationStoreException>(() => foreign.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>().FindAsync("default", new('a', 64)).AsTask());
+            Assert.IsType<System.Security.Cryptography.CryptographicException>(failure.InnerException);
             return;
         }
         var sql = scenario switch
@@ -177,6 +179,55 @@ public sealed class AuthenticationSessionPersistenceTests
         await migrator.MigrateAsync();
         Assert.Equal(item, await artifacts.TryConsumeAsync("default", item.Id, item.Purpose, item.BrowserBinding, null, Now));
         Assert.True(await scope.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>().TryCreateAsync(Session()));
+    }
+
+    [Theory]
+    [InlineData("create-session")]
+    [InlineData("find-session")]
+    [InlineData("list-sessions")]
+    [InlineData("revoke-session")]
+    public async Task Provider_failures_are_localized_domain_failures_and_do_not_wrap_cancellation(string operation)
+    {
+        using var data = new OwnedData();
+        var faults = new FailureCommands();
+        await using var node = await Node(data, faults);
+        await using var scope = Scope(node);
+        var store = scope.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>();
+        var item = Session(); Assert.True(await store.TryCreateAsync(item));
+        var current = (await store.FindAsync(item.TenantId, item.Id))!;
+        var infrastructure = new OwnedProviderException(); faults.Failure = infrastructure;
+        Func<Task> call = operation switch
+        {
+            "create-session" => () => store.TryCreateAsync(item).AsTask(),
+            "find-session" => () => store.FindAsync(item.TenantId, item.Id).AsTask(),
+            "list-sessions" => () => store.ListAsync(item.TenantId, item.UserId, new(0, 25)).AsTask(),
+            _ => () => store.RevokeAsync(item.TenantId, item.Id, current.Revision!, Now).AsTask()
+        };
+        var failure = await Assert.ThrowsAsync<AuthenticationStoreException>(call);
+        Assert.Same(infrastructure, failure.InnerException); Assert.Equal(operation, failure.Operation);
+        Assert.Equal(item.TenantId, failure.TenantId); Assert.Equal(operation == "list-sessions" ? null : item.Id, failure.RecordId);
+        var cancellation = new OperationCanceledException(new CancellationToken(true)); faults.Failure = cancellation;
+        Assert.Same(cancellation, await Assert.ThrowsAsync<OperationCanceledException>(call));
+        faults.Failure = null;
+        Assert.Null((await store.FindAsync(item.TenantId, item.Id))!.RevokedAt);
+    }
+
+    private sealed class OwnedProviderException() : DbException("Owned provider failure.");
+    private sealed class FailureCommands : DbCommandInterceptor
+    {
+        public Exception? Failure;
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (Failure is not null) throw Failure;
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Failure is not null) throw Failure;
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     private static AuthenticationSessionRecord Session() => new(new('a', 64), "default", "user", "external:company", "opaque-security-version", Now, Now.AddHours(8));

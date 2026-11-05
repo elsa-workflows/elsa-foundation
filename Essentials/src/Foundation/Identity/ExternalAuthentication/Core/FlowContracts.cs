@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Core;
@@ -13,8 +14,10 @@ public sealed record AuthenticationArtifact(string Id, string TenantId, Authenti
 public interface IAuthenticationArtifactStore
 {
     bool IsDurable { get; }
+    /// <exception cref="AuthenticationStoreException">Persistence failed; a mutation may have committed. Cancellation is propagated unchanged.</exception>
     ValueTask<bool> TryCreateAsync(AuthenticationArtifact artifact, CancellationToken cancellationToken = default);
     /// <summary>Returns a matching unexpired artifact to exactly one caller; wrong bindings do not consume it.</summary>
+    /// <exception cref="AuthenticationStoreException">Persistence failed; do not issue authentication or replay a consume acknowledgement.</exception>
     ValueTask<AuthenticationArtifact?> TryConsumeAsync(string tenantId, string id, AuthenticationArtifactPurpose purpose,
         string browserBinding, string? administratorBinding, DateTimeOffset now, CancellationToken cancellationToken = default);
 }

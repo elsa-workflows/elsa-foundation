@@ -1265,3 +1265,9 @@ Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionM
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionMaterialRevision.init -> void
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRedirectUri.get -> string?
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRedirectUri.init -> void
+
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.AuthenticationStoreException(string! operation, string! tenantId, string? recordId, System.Exception! innerException) -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.Operation.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.RecordId.get -> string?

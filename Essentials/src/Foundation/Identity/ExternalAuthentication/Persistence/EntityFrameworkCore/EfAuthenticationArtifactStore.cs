@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -19,38 +20,52 @@ internal sealed class EfAuthenticationArtifactStore(ExternalAuthenticationDbCont
         if (string.IsNullOrWhiteSpace(artifact.ProtectedPayload) || artifact.ProtectedPayload.Length > 196608 ||
             artifact.ExpiresAt <= artifact.CreatedAt || artifact.ExpiresAt - artifact.CreatedAt > TimeSpan.FromMinutes(20))
             throw new ArgumentException("Invalid or oversized authentication artifact.", nameof(artifact));
-        await Cleanup(artifact.TenantId, artifact.CreatedAt, cancellationToken);
-        var entity = new AuthenticationArtifactEntity
+        try
         {
-            Id = artifact.Id, TenantKey = TenantKey(artifact.TenantId), Purpose = (int)artifact.Purpose,
-            BrowserBinding = artifact.BrowserBinding, AdministratorBinding = artifact.AdministratorBinding,
-            CreatedAtMilliseconds = artifact.CreatedAt.ToUnixTimeMilliseconds(), ExpiresAtMilliseconds = artifact.ExpiresAt.ToUnixTimeMilliseconds(),
-            ProtectedPayload = artifact.ProtectedPayload, Version = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)),
-            SchemaVersion = ExternalAuthenticationEfModule.SchemaVersion
-        };
-        context.Artifacts.Add(entity);
-        try { await context.SaveChangesAsync(cancellationToken); return true; }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-        { context.ChangeTracker.Clear(); return false; }
-        finally { context.Entry(entity).State = EntityState.Detached; }
+            await Cleanup(artifact.TenantId, artifact.CreatedAt, cancellationToken);
+            var entity = new AuthenticationArtifactEntity
+            {
+                Id = artifact.Id, TenantKey = TenantKey(artifact.TenantId), Purpose = (int)artifact.Purpose,
+                BrowserBinding = artifact.BrowserBinding, AdministratorBinding = artifact.AdministratorBinding,
+                CreatedAtMilliseconds = artifact.CreatedAt.ToUnixTimeMilliseconds(), ExpiresAtMilliseconds = artifact.ExpiresAt.ToUnixTimeMilliseconds(),
+                ProtectedPayload = artifact.ProtectedPayload, Version = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)),
+                SchemaVersion = ExternalAuthenticationEfModule.SchemaVersion
+            };
+            context.Artifacts.Add(entity);
+            try { await context.SaveChangesAsync(cancellationToken); return true; }
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+            { context.ChangeTracker.Clear(); return false; }
+            finally { context.Entry(entity).State = EntityState.Detached; }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not EfSchemaVersionSkewException and not AuthenticationStoreException)
+        {
+            throw new AuthenticationStoreException("create-artifact", artifact.TenantId, artifact.Id, exception);
+        }
     }
 
     public async ValueTask<AuthenticationArtifact?> TryConsumeAsync(string tenantId, string id, AuthenticationArtifactPurpose purpose,
         string browserBinding, string? administratorBinding, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         Prepare(tenantId, id, purpose, browserBinding, administratorBinding, cancellationToken);
-        var tenantKey = TenantKey(tenantId);
-        var milliseconds = now.ToUnixTimeMilliseconds();
-        var query = context.Artifacts.AsNoTracking().Where(row => row.Id == id && row.TenantKey == tenantKey && row.Purpose == (int)purpose &&
-            row.BrowserBinding == browserBinding && row.AdministratorBinding == administratorBinding && row.ExpiresAtMilliseconds > milliseconds);
-        var entity = await query.SingleOrDefaultAsync(cancellationToken);
-        if (entity is null) return null;
-        EfSchemaVersion.EnsureReadable(ExternalAuthenticationEfModule.Chain, entity.SchemaVersion);
-        // A concurrent consumer can read the same row, but only one conditional deletion acknowledges it.
-        // On an uncertain provider failure, throw and issue no identity/session; never replay a consume receipt.
-        if (await query.Where(row => row.Version == entity.Version).ExecuteDeleteAsync(cancellationToken) != 1) return null;
-        return new(entity.Id, tenantId, purpose, entity.BrowserBinding, entity.AdministratorBinding,
-            DateTimeOffset.FromUnixTimeMilliseconds(entity.CreatedAtMilliseconds), DateTimeOffset.FromUnixTimeMilliseconds(entity.ExpiresAtMilliseconds), entity.ProtectedPayload);
+        try
+        {
+            var tenantKey = TenantKey(tenantId);
+            var milliseconds = now.ToUnixTimeMilliseconds();
+            var query = context.Artifacts.AsNoTracking().Where(row => row.Id == id && row.TenantKey == tenantKey && row.Purpose == (int)purpose &&
+                row.BrowserBinding == browserBinding && row.AdministratorBinding == administratorBinding && row.ExpiresAtMilliseconds > milliseconds);
+            var entity = await query.SingleOrDefaultAsync(cancellationToken);
+            if (entity is null) return null;
+            EfSchemaVersion.EnsureReadable(ExternalAuthenticationEfModule.Chain, entity.SchemaVersion);
+            // A concurrent consumer can read the same row, but only one conditional deletion acknowledges it.
+            // On an uncertain provider failure, throw and issue no identity/session; never replay a consume receipt.
+            if (await query.Where(row => row.Version == entity.Version).ExecuteDeleteAsync(cancellationToken) != 1) return null;
+            return new(entity.Id, tenantId, purpose, entity.BrowserBinding, entity.AdministratorBinding,
+                DateTimeOffset.FromUnixTimeMilliseconds(entity.CreatedAtMilliseconds), DateTimeOffset.FromUnixTimeMilliseconds(entity.ExpiresAtMilliseconds), entity.ProtectedPayload);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not EfSchemaVersionSkewException and not AuthenticationStoreException)
+        {
+            throw new AuthenticationStoreException("consume-artifact", tenantId, id, exception);
+        }
     }
 
     private async Task Cleanup(string tenantId, DateTimeOffset now, CancellationToken token)

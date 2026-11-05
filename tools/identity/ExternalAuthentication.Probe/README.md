@@ -131,3 +131,8 @@ candidates with a lock file and fresh package directory, with no project referen
 OIDC/API/artifact/session registrations, implements the public pure provisioning-policy contract and checks exact
 scoped token identity values. It does not claim to repeat the full HTTP/provider journey. Reports, package hashes,
 producer sources and build/consumer logs remain in the owned directory; nothing is published.
+
+Full Studio captures explicitly scroll to provisioning, callback URLs, preview results and enablement actions in
+light/dark desktop/narrow layouts; outer-document full-page capture cannot establish those internally scrolled
+panels. Confirmation screenshots and cancellation/focus restoration are included. The provider-reader profile
+uses an unavailable secret to prove current readiness remains visible without management/test permission.

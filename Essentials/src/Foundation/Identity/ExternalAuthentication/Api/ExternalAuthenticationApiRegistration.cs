@@ -44,6 +44,6 @@ public static class ExternalAuthenticationApiRegistration
     DependsOn = new object[] { "ApiCapabilities" })]
 public class ExternalAuthenticationApiFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddFoundationExternalAuthenticationApi();
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddFoundationExternalAuthenticationApi();
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => ExternalAuthenticationApi.MapExternalAuthenticationApi(endpoints);
 }

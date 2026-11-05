@@ -52,7 +52,13 @@ try {
       }
       await page.locator(".external-auth-list .external-auth-row").filter({ has: page.getByText("Company", { exact: true }) }).click();
       await expect(page.getByLabel("Display name", { exact: true })).toBeDisabled();
+      if (profile === "provider-reader") {
+        await expect(page.getByRole("heading", { name: "Current configuration needs attention", exact: true })).toBeVisible();
+        await expect(page.getByText("The referenced secret could not be resolved. Check its name, scope, type and status.", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toHaveCount(0);
+      }
     }
+    await page.screenshot({ path: join(root, "mode-connection.png"), fullPage: false });
     await page.goto(settings.studioUrl + "/security/user-access?backend=owned");
     await expect(page.getByRole("heading", { name: "User access", level: 2, exact: true })).toBeVisible();
     await page.locator(".external-auth-list .external-auth-row").filter({ hasText: "admin" }).click();

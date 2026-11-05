@@ -130,6 +130,11 @@ if (first == second || first.CanonicalUserId is not null) throw new Exception("T
 if (!services.Any(item => item.ServiceType == typeof(IAuthenticationArtifactStore)) || !services.Any(item => item.ServiceType == typeof(IAuthenticationSessionStore))) throw new Exception("Public persistence registration failed");
 Console.WriteLine("Public NuGet consumer passed: optional module composition, custom pure provisioning policy, exact scoped token identities and artifact/session registration.");
 
+public class SpecializedExternalAuthenticationFeature : ExternalAuthenticationApiFeature
+{
+    public override void ConfigureServices(IServiceCollection services) => base.ConfigureServices(services);
+}
+
 public sealed class CompanyPolicy : IExternalProvisioningPolicy
 {
     public string Name => "company-onboarding";

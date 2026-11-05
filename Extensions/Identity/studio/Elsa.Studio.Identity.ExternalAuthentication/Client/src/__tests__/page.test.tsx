@@ -21,6 +21,8 @@ function harness(initial = fixtureCatalog) {
   const getJson = vi.fn().mockImplementation(async (path: string) => {
     if (path.includes("/antiforgery")) return { requestToken: "csrf", formFieldName: "__csrf", headerName: "RequestVerificationToken" };
     if (path.includes("/lookups/roles")) return { items: [{ id: "reader", name: "Reader", canDelegate: true }], totalCount: 1 };
+    const detail = catalog.connections.find(item => path.endsWith("/external-connections/" + encodeURIComponent(item.document.id)));
+    if (detail) return { revision: catalog.revision, connection: { ...detail, readiness: { ready: true, failure: 0, protocolFailure: 0 } } };
     if (path.includes("/results/")) { expect(window.location.search).not.toContain("externalPreviewHandle"); return preview; }
     return structuredClone(catalog);
   });
@@ -67,6 +69,38 @@ function type(input: HTMLInputElement, value: string) {
 function select(input: HTMLSelectElement, value: string) { flushSync(() => { input.value = value; input.dispatchEvent(new Event("change", { bubbles: true })); }); }
 
 describe("connection administration page", () => {
+  it("shows current secret readiness to a provider reader separately from configured enablement", async () => {
+    const host = harness({ ...fixtureCatalog, canManageConnections: false,
+      connections: [{ ...view, document: { ...connectionDocument, enabled: true } }] });
+    const original = host.getJson.getMockImplementation()!;
+    host.getJson.mockImplementation(async (path: string) => path.endsWith("/external-connections/record")
+      ? { revision: fixtureCatalog.revision, connection: { ...view, readiness: { ready: false, failure: 5, protocolFailure: 0 } } }
+      : original(path));
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(host.container.textContent).toContain("The referenced secret could not be resolved"));
+    expect(host.container.textContent).toContain("Enabled in configuration");
+    expect(host.container.textContent).not.toContain("Sign-in enabled");
+    expect(host.container.textContent).not.toContain("Test configuration");
+    expect(host.postJson).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 404])("clears protected connection configuration when refreshed access returns %s", async status => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-editor input")).not.toBeNull());
+    const original = host.getJson.getMockImplementation()!;
+    host.getJson.mockImplementation(async (path: string) => {
+      if (path.endsWith("/external-connections")) throw { status };
+      return original(path);
+    });
+    click(await button(host.container, "Refresh"));
+    await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    expect(host.container.querySelector(".external-auth-row")).toBeNull();
+    expect(host.container.querySelector(".external-auth-editor")).toBeNull();
+    expect((await button(host.container, "Add connection")).disabled).toBe(true);
+  });
+
   it("renders integrator policy names as literal options even when they match JavaScript object properties", async () => {
     const host = harness({ ...fixtureCatalog, provisioningPolicies: ["jit", "constructor", "__proto__"] });
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
@@ -133,7 +167,7 @@ describe("connection administration page", () => {
     const returned = harness();
     await vi.waitFor(() => expect(returned.container.textContent).toContain("Preview complete"));
     expect(returned.container.textContent).toContain("Would be created"); expect(window.location.search).toBe("?backend=selected");
-    const enable = await button(returned.container, "Enable sign-in"); expect(enable.disabled).toBe(false); click(enable);
+    const enable = await button(returned.container, "Enable sign-in"); await vi.waitFor(() => expect(enable.disabled).toBe(false)); click(enable);
     await vi.waitFor(() => expect(returned.postJson.mock.calls.some(([path]) => path.endsWith("/commands"))).toBe(true));
     expect(returned.postJson.mock.calls.find(([path]) => path.endsWith("/commands"))![1]).toMatchObject({ change: connectionChanges.enable, record: { id: "record", enabled: true } });
   });
@@ -168,7 +202,9 @@ describe("connection administration page", () => {
     const host = harness();
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull()); click(host.container.querySelector(".external-auth-row")!);
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-editor input")).not.toBeNull());
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Current configuration ready"));
     type(field(host.container, "Display name"), "My draft name");
+    await vi.waitFor(async () => expect((await button(host.container, "Save changes")).disabled).toBe(false));
     const probe = new CustomEvent("elsa:studio-navigation-requested", { cancelable: true, detail: { intent: "probe" } }); window.dispatchEvent(probe);
     expect(probe.defaultPrevented).toBe(true);
     host.postJson.mockRejectedValue({ status: 409, payload: { failure: "revision-conflict", detail: "never-render-secret" } });
