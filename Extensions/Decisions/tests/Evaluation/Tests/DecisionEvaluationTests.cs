@@ -29,6 +29,8 @@ public class DecisionEvaluationTests
     [InlineData("9007199254740993", "9007199254740992", false)]
     [InlineData("1234567890123456789012345678901234", "1234567890123456789012345678901234", true)]
     [InlineData("1", "1.00", true)]
+    [InlineData("1000000000000000000000000000000000", "1000000000000000000000000000000000", true)]
+    [InlineData("1000000000000000000000000000000000.0", "1000000000000000000000000000000000", true)]
     public void Exact_numeric_unary_tests(string expression, string input, bool matches)
     {
         var result = Evaluate(Table([expression]), new("number", input));
@@ -97,14 +99,15 @@ public class DecisionEvaluationTests
         var doc = XDocument.Parse(Table(["-", "-"], "RULE ORDER", ["1", "2"]));
         XNamespace ns = DecisionNamespace;
         var table = doc.Descendants(ns + "decisionTable").Single();
-        table.Elements(ns + "output").Last().AddAfterSelf(new XElement(ns + "output", new XAttribute("id", "out2"), new XAttribute("name", "category"), new XAttribute("typeRef", "string")));
+        table.Elements(ns + "output").Single().SetAttributeValue("name", "approval level");
+        table.Elements(ns + "output").Last().AddAfterSelf(new XElement(ns + "output", new XAttribute("id", "out2"), new XAttribute("name", "true"), new XAttribute("typeRef", "string")));
         var index = 0;
         foreach (var row in table.Elements(ns + "rule"))
             row.Add(new XElement(ns + "outputEntry", new XAttribute("id", "extra" + index), new XElement(ns + "text", "\"" + index++ + "\"")));
         var result = Evaluate(doc.ToString(), new("number", "1"));
         Assert.Equal("Success", result.Status);
-        Assert.Equal("1", result.Result[0].GetProperty("result").GetProperty("value").GetString());
-        Assert.Equal("1", result.Result[1].GetProperty("category").GetProperty("value").GetString());
+        Assert.Equal("1", result.Result[0].GetProperty("approval level").GetProperty("value").GetString());
+        Assert.Equal("1", result.Result[1].GetProperty("true").GetProperty("value").GetString());
     }
 
     [Fact]

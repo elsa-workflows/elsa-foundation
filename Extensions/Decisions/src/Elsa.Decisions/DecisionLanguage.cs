@@ -30,7 +30,7 @@ internal readonly record struct ExactNumber(BigInteger Coefficient, int Scale) :
         var scale = dot < 0 ? 0 : text.Length - dot - 1;
         if (digits.Length == 0) return new ExactNumber(BigInteger.Zero, 0);
         var end = digits.Length;
-        while (end > 0 && digits[end - 1] == '0') { end--; scale--; }
+        while (end > 0 && digits[end - 1] == '0' && scale > -28) { end--; scale--; }
         digits = digits[..end];
         if (digits.Length > 34 || scale is < -28 or > 28) throw new DecisionLanguageException("NumberOutOfRange");
         var coefficient = BigInteger.Parse(digits, NumberStyles.None, CultureInfo.InvariantCulture);
