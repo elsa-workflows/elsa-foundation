@@ -1525,14 +1525,14 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 
   phase = "unavailable";
-  click(buttonByText(container, "Refresh"));
+  click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeNull());
   expect(container.textContent).not.toContain("PREPARED_CHILD_VALUE");
   expect(container.textContent).not.toContain("This execution scope is unavailable");
 
   phase = "pending";
   const beforeRefresh = api.browseActivityExecutions.mock.calls.length;
-  click(buttonByText(container, "Refresh"));
+  click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
   await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.slice(beforeRefresh).some(call => childAnchor(call[2]))).toBe(true));
   expect(container.querySelector(".wf-activity-overview")).toBeNull();
   expect(container.textContent).not.toContain("PREPARED_CHILD_VALUE");
