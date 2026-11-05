@@ -81,7 +81,7 @@ public abstract partial class EtlRuntimeStoreContract
         var validOutbox = Assert.Single(rows, row => row.ScopeKey == EtlRuntimeIdentity.ScopeKey(valid.Scope));
         Assert.Equal(1, validOutbox.Attempts);
         Assert.Equal(lease.Fence, validOutbox.Fence);
-        Assert.Equal(EtlRuntimeRecordCodec.EncodeIdentity("global-worker", "worker id"), validOutbox.Owner);
+        Assert.Equal(EfRelationalIdentity.Encode("global-worker"), validOutbox.Owner);
         Assert.NotNull(validOutbox.ExpiresAtUtcTicks);
         Assert.Null(validOutbox.Disposition);
         Assert.Null(validOutbox.AcknowledgedAtUtcTicks);
