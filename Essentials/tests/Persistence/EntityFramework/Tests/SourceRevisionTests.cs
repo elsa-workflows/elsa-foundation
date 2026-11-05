@@ -26,6 +26,93 @@ public sealed class SourceRevisionTests
         await db.Database.EnsureCreatedAsync(); return db;
     }
 
+    [Fact]
+    public async Task Source_history_and_exact_reads_span_discarded_and_replacement_copies_without_latest_fallback()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Agent, singleCopyPerSource: true);
+        await store.CreateAsync("source", "old", "Original", "agent/1", "first");
+        var first = await store.CaptureAsync("source", "old", 0, "first");
+        await store.SaveAsync("source", "old", 0, "Original", "agent/1", "second");
+        var second = await store.CaptureAsync("source", "old", 1, "second");
+        await store.DiscardAsync("source", "old", 1);
+        await store.CreateAsync("source", "new", "Replacement", "agent/1", "new copy");
+        var replacement = await store.CaptureAsync("source", "new", 0, "replacement");
+        await store.CreateAsync("source ", "padded", "Padded identity", "agent/1", "padded");
+        var padded = await store.CaptureAsync("source ", "padded", 0, "padded");
+
+        var page = await store.HistorySourceAsync("source");
+        Assert.Equal(3, page.Total); Assert.Equal(3, page.Items.Count);
+        Assert.Equal(new[] { first.Key, second.Key, replacement.Key }.Order(StringComparer.Ordinal), page.Items.Select(x => x.Snapshot.Key));
+        Assert.Equal("old", (await store.FindSourceSnapshotAsync("source", first.Key))!.CopyId);
+        Assert.Equal("first", (await store.FindSourceSnapshotAsync("source", first.Key))!.Snapshot.Content);
+        Assert.Equal("new", (await store.FindSourceSnapshotAsync("source", replacement.Key))!.CopyId);
+        Assert.Null(await store.FindSourceSnapshotAsync("source", padded.Key));
+        Assert.Null(await store.FindSourceSnapshotAsync("source ", first.Key));
+        Assert.Null(await store.FindSourceSnapshotAsync("source", first.Key + " "));
+        Assert.Null(await new EfSourceRevisions(db, Agent with { Authority = "other" }).FindSourceSnapshotAsync("source", first.Key));
+        Assert.Equal(0, (await new EfSourceRevisions(db, Workflow).HistorySourceAsync("source")).Total);
+        var beyond = await store.HistorySourceAsync("source", 3, 1);
+        Assert.Equal(3, beyond.Total); Assert.Empty(beyond.Items);
+        var firstPage = await store.HistorySourceAsync("source", 0, 1);
+        var secondPage = await store.HistorySourceAsync("source", 1, 1);
+        Assert.Equal(3, firstPage.Total); Assert.Equal(3, secondPage.Total);
+        Assert.NotEqual(Assert.Single(firstPage.Items).Snapshot.Key, Assert.Single(secondPage.Items).Snapshot.Key);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Source_wide_snapshot_reads_refuse_incompatible_copy_or_snapshot_stamps(bool corruptCopy)
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Agent);
+        await store.CreateAsync("source", "draft", "Source", "agent/1", "content");
+        var snapshot = await store.CaptureAsync("source", "draft", 0, "capture");
+        if (corruptCopy)
+        {
+            var copyKey = EfSourceRevisions.CopyKey(Agent, "source", "draft");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE source_copies SET SchemaVersion={"7.0.0"} WHERE Key={copyKey}");
+        }
+        else await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE source_snapshots SET SchemaVersion={"7.0.0"} WHERE Key={snapshot.Key}");
+        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => store.FindSourceSnapshotAsync("source", snapshot.Key));
+        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => store.HistorySourceAsync("source"));
+    }
+
+    [Fact]
+    public async Task Source_directory_keeps_discarded_identity_and_prefers_the_active_copy_before_paging()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Agent, singleCopyPerSource: true);
+        await store.CreateAsync("source-a", "old", "Original searchable name", "agent/1", "old");
+        await store.DiscardAsync("source-a", "old", 0);
+        await store.CreateAsync("source-a", "current", "Current name", "agent/1", "current");
+        await store.CreateAsync("source-b", "retained", "Retained name", "agent/1", "retained");
+        await store.DiscardAsync("source-b", "retained", 0);
+        await new EfSourceRevisions(db, Agent with { Authority = "foreign" }).CreateAsync("foreign", "foreign", "Private", "agent/1", "foreign");
+
+        var page = await store.ListSourcesAsync(null, 0, 10);
+        Assert.Equal(2, page.Total);
+        Assert.Equal(2, page.Items.Count);
+        var current = Assert.Single(page.Items, x => x.SourceId == "source-a");
+        Assert.Equal("current", current.CopyId); Assert.False(current.Discarded);
+        var retained = Assert.Single(page.Items, x => x.SourceId == "source-b");
+        Assert.True(retained.Discarded); Assert.Equal("Retained name", retained.Name);
+        Assert.Null(await store.FindAsync("source-b", "retained"));
+        var search = await store.ListSourcesAsync("searchable", 0, 10);
+        Assert.Equal(1, search.Total);
+        Assert.Equal("current", Assert.Single(search.Items).CopyId);
+        var first = await store.ListSourcesAsync(null, 0, 1);
+        var second = await store.ListSourcesAsync(null, 1, 1);
+        Assert.Equal(2, first.Total); Assert.Equal(2, second.Total);
+        Assert.NotEqual(Assert.Single(first.Items).SourceId, Assert.Single(second.Items).SourceId);
+        var beyond = await store.ListSourcesAsync(null, 2, 1);
+        Assert.Equal(2, beyond.Total); Assert.Empty(beyond.Items);
+    }
+
     private sealed class LostCommitReply : DbTransactionInterceptor
     {
         public bool Armed { get; set; }

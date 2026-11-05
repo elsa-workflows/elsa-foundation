@@ -10,6 +10,8 @@ internal sealed record AgentSourceCreate(string AgentId, string DraftId, string 
 internal sealed record AgentSourceSave(string AgentId, string DraftId, long ExpectedRevision, string Name, AgentSourceContent Content);
 internal sealed record AgentSourceRead(string AgentId, string DraftId);
 internal sealed record AgentSourceRevisionRead(string AgentId, string DraftId, string SnapshotId);
+internal sealed record AgentSourceSnapshotRead(string AgentId, string SnapshotId);
+internal sealed record AgentSourceAllHistory(string AgentId, int Skip = 0, int Take = 50);
 internal sealed record AgentSourceHistory(string AgentId, string DraftId, int Skip = 0, int Take = 100);
 internal sealed record AgentSourceFork(string AgentId, string DraftId, string SnapshotId, string NewAgentId, string NewDraftId, string Name);
 internal sealed record AgentSourceList(string? Search = null, int Skip = 0, int Take = 50);
@@ -18,10 +20,28 @@ internal sealed record AgentSourceDiscard(string AgentId, string DraftId, long E
 
 [Get("/agent/definitions")]
 [RequirePermission(AgentSourcePermissions.Read)]
-internal sealed class ListAgentSources(IAgentSourceReader sources) : ApiEndpoint<AgentSourceList, AgentSourcePage>
+internal sealed class ListAgentSources(IAgentSourceReader sources) : ApiEndpoint<AgentSourceList, AgentDefinitionPage>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "AgentSourcesList";
-    public override Task<AgentSourcePage> HandleAsync(AgentSourceList request, CancellationToken cancellationToken) => sources.ListAsync(request.Search, request.Skip, request.Take, cancellationToken);
+    public override Task<AgentDefinitionPage> HandleAsync(AgentSourceList request, CancellationToken cancellationToken) => sources.ListDefinitionsAsync(request.Search, request.Skip, request.Take, cancellationToken);
+}
+
+[Get("/agent/definitions/{agentId}/revisions")]
+[RequirePermission(AgentSourcePermissions.Read)]
+internal sealed class ListAgentRevisions(IAgentSourceReader sources) : ApiEndpoint<AgentSourceAllHistory, AgentRevisionPage>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "AgentSourceRevisionsList";
+    public override Task<AgentRevisionPage> HandleAsync(AgentSourceAllHistory request, CancellationToken cancellationToken) =>
+        sources.SourceHistoryAsync(request.AgentId, request.Skip, request.Take, cancellationToken);
+}
+
+[Get("/agent/definitions/{agentId}/revisions/{snapshotId}")]
+[RequirePermission(AgentSourcePermissions.Read)]
+internal sealed class ReadAgentRevision(IAgentSourceReader sources) : ApiEndpoint<AgentSourceSnapshotRead, AgentSourceRevision>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "AgentSourceRevisionRead";
+    public override async Task<AgentSourceRevision> HandleAsync(AgentSourceSnapshotRead request, CancellationToken cancellationToken) =>
+        await sources.FindSourceRevisionAsync(request.AgentId, request.SnapshotId, cancellationToken) ?? throw new Elsa.Persistence.Core.SourceRevisionException("not-found");
 }
 
 [Get("/agent/definitions/{agentId}/drafts/{draftId}")]

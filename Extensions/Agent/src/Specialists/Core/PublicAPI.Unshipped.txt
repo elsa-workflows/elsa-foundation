@@ -873,3 +873,56 @@ Elsa.Agent.Specialists.Core.Contracts.IAgentSourceWriter.SaveAsync(string! agent
 Elsa.Agent.Specialists.Core.Contracts.IAgentSourceReader.FindRevisionAsync(string! agentId, string! draftId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Specialists.Core.Models.AgentSourceRevision?>!
 Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ConversationWorkspace.get -> string?
 Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ConversationWorkspace.init -> void
+Elsa.Agent.Specialists.Core.Contracts.IAgentSourceReader.ListDefinitionsAsync(string? search, int skip, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage!>!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.AgentDefinitionView!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Deconstruct(out string! AgentId, out string! Name, out string! SourceCopyId, out string? DraftId, out long? Revision) -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Equals(Elsa.Agent.Specialists.Core.Models.AgentDefinitionView? other) -> bool
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.AgentDefinitionView(string! AgentId, string! Name, string! SourceCopyId, string? DraftId, long? Revision) -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.AgentId.get -> string!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.AgentId.init -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Name.get -> string!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Name.init -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.SourceCopyId.get -> string!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.SourceCopyId.init -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.DraftId.get -> string?
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.DraftId.init -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Revision.get -> long?
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Revision.init -> void
+override Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.operator !=(Elsa.Agent.Specialists.Core.Models.AgentDefinitionView? left, Elsa.Agent.Specialists.Core.Models.AgentDefinitionView? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.AgentDefinitionView.operator ==(Elsa.Agent.Specialists.Core.Models.AgentDefinitionView? left, Elsa.Agent.Specialists.Core.Models.AgentDefinitionView? right) -> bool
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Deconstruct(out int Total, out System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.AgentDefinitionView!>! Items) -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Equals(Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage? other) -> bool
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.AgentDefinitionPage(int Total, System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.AgentDefinitionView!>! Items) -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Total.get -> int
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Total.init -> void
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.AgentDefinitionView!>!
+Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Items.init -> void
+override Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.operator !=(Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage? left, Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage.operator ==(Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage? left, Elsa.Agent.Specialists.Core.Models.AgentDefinitionPage? right) -> bool
+Elsa.Agent.Specialists.Core.Models.AgentSourceRevision.SourceCopyId.get -> string!
+Elsa.Agent.Specialists.Core.Models.AgentSourceRevision.SourceCopyId.init -> void
+Elsa.Agent.Specialists.Core.Contracts.IAgentSourceReader.FindSourceRevisionAsync(string! agentId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Specialists.Core.Models.AgentSourceRevision?>!
+Elsa.Agent.Specialists.Core.Contracts.IAgentSourceReader.SourceHistoryAsync(string! agentId, int skip = 0, int take = 50, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Specialists.Core.Models.AgentRevisionPage!>!
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.AgentRevisionPage!
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Deconstruct(out int Total, out System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.AgentSourceRevision!>! Items) -> void
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Equals(Elsa.Agent.Specialists.Core.Models.AgentRevisionPage? other) -> bool
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.AgentRevisionPage(int Total, System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.AgentSourceRevision!>! Items) -> void
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Total.get -> int
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Total.init -> void
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.AgentSourceRevision!>!
+Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Items.init -> void
+override Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.operator !=(Elsa.Agent.Specialists.Core.Models.AgentRevisionPage? left, Elsa.Agent.Specialists.Core.Models.AgentRevisionPage? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.AgentRevisionPage.operator ==(Elsa.Agent.Specialists.Core.Models.AgentRevisionPage? left, Elsa.Agent.Specialists.Core.Models.AgentRevisionPage? right) -> bool

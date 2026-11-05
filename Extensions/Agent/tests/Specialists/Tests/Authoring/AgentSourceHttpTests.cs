@@ -46,6 +46,55 @@ public sealed partial class SpecialistsApiHttpTests
     });
 
     [Fact]
+    public async Task Agent_source_wide_history_inspects_exact_content_after_draft_replacement()
+    {
+        const string root = "/agent/definitions";
+        const string source = root + "/copywriter";
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, SourceBody("Original instructions"), "agent/definitions:manage")).StatusCode);
+        var capture = await SendAsync(HttpMethod.Post, source + "/drafts/draft/captures", """{"expectedRevision":0,"operationId":"original"}""", "agent/definitions:manage");
+        using var captured = JsonDocument.Parse(await capture.Content.ReadAsStringAsync());
+        var snapshotId = captured.RootElement.GetProperty("id").GetString()!;
+        using var editedContent = JsonDocument.Parse(SourceBody("Edited original copy"));
+        var edit = JsonSerializer.Serialize(new { expectedRevision = 0, name = "Copywriter", content = editedContent.RootElement.GetProperty("content") });
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Put, source + "/drafts/draft", edit, "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, source + "/drafts/draft/discard", """{"expectedRevision":1}""", "agent/definitions:manage")).StatusCode);
+        var replacement = SourceBody("Replacement instructions").Replace("\"draftId\":\"draft\"", "\"draftId\":\"replacement\"", StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, replacement, "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, source + "/drafts/replacement/captures", """{"expectedRevision":0,"operationId":"replacement"}""", "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(HttpMethod.Get, source + "/revisions", null, "activities/design:read")).StatusCode);
+        var exact = await SendAsync(HttpMethod.Get, source + "/revisions/" + snapshotId, null, "agent/definitions:read");
+        Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
+        using var original = JsonDocument.Parse(await exact.Content.ReadAsStringAsync());
+        Assert.Equal("draft", original.RootElement.GetProperty("sourceCopyId").GetString());
+        Assert.Equal("Original instructions", original.RootElement.GetProperty("content").GetProperty("instructions").GetString());
+        var history = await SendAsync(HttpMethod.Get, source + "/revisions", null, "agent/definitions:read");
+        using var page = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        Assert.Equal(2, page.RootElement.GetProperty("total").GetInt32());
+        Assert.Equal(2, page.RootElement.GetProperty("items").GetArrayLength());
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, source + "/revisions/missing", null, "agent/definitions:read")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, root + "/other/revisions/" + snapshotId, null, "agent/definitions:read")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_directory_keeps_history_identity_without_exposing_discarded_content_as_an_editable_draft()
+    {
+        const string root = "/agent/definitions";
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, SourceBody(), "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/copywriter/drafts/draft/discard", """{"expectedRevision":0}""", "agent/definitions:manage")).StatusCode);
+        var listed = await SendAsync(HttpMethod.Get, root, null, "agent/definitions:read");
+        Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+        using var body = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
+        Assert.Equal(1, body.RootElement.GetProperty("total").GetInt32());
+        var item = Assert.Single(body.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal("copywriter", item.GetProperty("agentId").GetString());
+        Assert.Equal("Copywriter", item.GetProperty("name").GetString());
+        Assert.Equal("draft", item.GetProperty("sourceCopyId").GetString());
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("draftId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("revision").ValueKind);
+        Assert.False(item.TryGetProperty("content", out _));
+    }
+
+    [Fact]
     public async Task Agent_source_uses_own_permissions_and_rejects_forged_authority_fields()
     {
         const string route = "/agent/definitions";

@@ -12,5 +12,13 @@ public sealed record AgentSourceContent(string Instructions, SpecialistModelRefe
     JsonElement Settings, SpecialistTurnLimits Limits, bool AllowContinuity = false);
 
 public sealed record AgentSourceDraft(string AgentId, string DraftId, string Name, long Revision, AgentSourceContent Content);
-public sealed record AgentSourceRevision(string Id, string OperationId, long Revision, string Fingerprint, AgentSourceContent Content);
+public sealed record AgentSourceRevision(string Id, string OperationId, long Revision, string Fingerprint, AgentSourceContent Content)
+{
+    public string SourceCopyId { get; init; } = "";
+}
+public sealed record AgentRevisionPage(int Total, IReadOnlyList<AgentSourceRevision> Items);
 public sealed record AgentSourcePage(int Total, IReadOnlyList<AgentSourceDraft> Items);
+
+/// <summary>Source identity with its active draft or a retained history reference; no authored content is projected.</summary>
+public sealed record AgentDefinitionView(string AgentId, string Name, string SourceCopyId, string? DraftId, long? Revision);
+public sealed record AgentDefinitionPage(int Total, IReadOnlyList<AgentDefinitionView> Items);
