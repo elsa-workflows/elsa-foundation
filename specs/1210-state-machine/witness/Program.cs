@@ -37,8 +37,10 @@ internal static partial class Program
     {
         try
         {
-            if (args.Length == 0) throw new ArgumentException("Use run <owned-output-directory> or generation <directory> <scenario> <generation> [mutation].");
-            if (args[0] == "run") return await RunAsync(Path.GetFullPath(args[1])) ? 0 : 1;
+            if (args.Length == 0) throw new ArgumentException("Use run, scope-run or a generation command with a new owned output directory.");
+            if (args[0] == "scope-run") return await ScopeWitness.RunAsync(Path.GetFullPath(args[1])) ? 0 : 1;
+            if (args[0] == "scope-generation") await ScopeWitness.GenerationAsync(Path.GetFullPath(args[1]), args[2], int.Parse(args[3]));
+            else if (args[0] == "run") return await RunAsync(Path.GetFullPath(args[1])) ? 0 : 1;
             else if (args[0] == "generation") await GenerationAsync(Path.GetFullPath(args[1]), args[2], int.Parse(args[3]), args.ElementAtOrDefault(4));
             else throw new ArgumentException("Unknown command.");
             return 0;

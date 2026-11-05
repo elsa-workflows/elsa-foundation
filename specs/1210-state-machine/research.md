@@ -170,6 +170,12 @@ The exact authored topology needs a witness. A completed inner scope without an 
 
 Initiative #3052 governs conversion and related core value/expression decisions. This StateMachine program is not its child or a board topic. Any proposed change to a contract it governs must go through that initiative's actual agreement process. Current implementation text or a bot review cannot approve an unagreed ADR.
 
+### Next integration proof: visit frames and common causes
+
+Source inspection for the [next N9/N10 work unit](m0-witness-plan.md#next-bounded-probe-visit-frames-and-ordinary-composite-trigger-causes) identifies two constraints that the previous helper-based fixture did not establish. Runtime variable frames follow actual container activation ancestry; a private semantic visit record alone does not create an ordinary binding scope. The next probe therefore proposes real declaring container activations, ordinary Set/read bindings, child replacement under a continuing parent and parent re-entry, with cold reads and an incorrect-scope binding control.
+
+An ordinary Sequence does not automatically return its Event child's result. The next composite-trigger probe must carry the original payload through normal result bindings and an explicit typed boundary, including a later unrelated resume and restart. Existing PublishEvent has durable local/correlated source-cohort delivery; workflow-local targeting alone does not isolate a nested machine invocation, so the proposed probe also exercises correlation and an unrelated same-name wait. These source facts motivate the probe; no native production inbox, arbitrary-composite cause propagation or complete selection rule is approved by inspection. The plan and corrected N9 source have clean independent correctness, standards and acceptance reviews. N9 source is prepared but unbuilt/unexecuted; N10 source remains pending. Neither review is runtime acceptance or final design approval, and execution still requires the source-health and capacity gates.
+
 ## Readiness
 
 ### Executed M0 native witness and next comparison
