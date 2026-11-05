@@ -51,11 +51,13 @@ accept exactly `PayloadBytes: 1024` or `PayloadBytes: 65536`. Values contain onl
 payload bytes before serialization, not wire, database or allocation bytes.
 
 Literal values contain repeated `x` characters. Each workflow request instead starts with its current workflow
-execution ID and fills the remaining bytes with `x`. Every leaf verifies the entire value and current execution
-identity through the actual CLR input hydration path. The singleton fixture configuration is immutable; it does
+execution ID and fills the remaining bytes with `x`. Both payload profiles verify the entire value through actual
+CLR input hydration; `WorkflowRequest` additionally verifies the current execution ID. The singleton fixture configuration is immutable; it does
 not cache per-execution values or activity instances. Measured verification and logical-byte counters must match
 completed measured executions times activity count and payload length, alongside the existing state invariants.
-Input construction, serialization, persistence and body verification remain inside the published-start timing boundary.
+For `WorkflowRequest`, per-invocation input construction and serialization occur inside the published-start timing
+boundary, along with runtime persistence and body verification. Literal construction, serialization into its binding
+and publication happen before timed starts; runtime input hydration, persistence and body checks remain timed.
 
 Before collecting rates, compile the frozen fixture project against the intended source and prove legacy `Noop`
 parity, `DeclaredNoop`, and the four Literal/WorkflowRequest size cases. Retain a wrong/stale-request-value negative
