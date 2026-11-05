@@ -12,7 +12,7 @@ namespace Elsa.Studio.Tests;
 /// items in batches at most once per release interval, so the tests assert that a follow-up line is
 /// held until the (fake) clock advances, while buffered lines still drain together.
 /// </summary>
-public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
+public sealed class PacedConsoleLogProviderTests : IAsyncLifetime
 {
     private static readonly TimeSpan ReleaseInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan RealTimeout = TimeSpan.FromSeconds(10);
@@ -32,7 +32,9 @@ public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
         _subscription = paced.SubscribeAsync(new ConsoleLogFilter()).GetAsyncEnumerator();
     }
 
-    public async ValueTask DisposeAsync() => await _subscription.DisposeAsync();
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await _subscription.DisposeAsync();
 
     [Fact]
     public async Task ReleasesTheFirstLineWithoutDelay()

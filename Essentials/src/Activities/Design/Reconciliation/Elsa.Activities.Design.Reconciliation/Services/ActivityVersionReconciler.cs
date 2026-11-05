@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -30,13 +32,13 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 ///    with immutable provenance (including ProvisioningHash).
 /// 4. If <c>(DefinitionId, Version)</c> is already persisted, compute the incoming hash
 ///    and compare to the persisted ProvisioningHash:
-///    - Hash difference that is only input <c>Tier</c> (or another newly hashed catalog field)
-///      → refresh the stored version in place so the catalog picks up the new disclosure group.
+///    - Hash difference that is only input presentation (<c>Tier</c>, display label or help text)
+///      → refresh the stored version in place so the catalog picks up the new disclosure group or UI wording.
 ///      Pre-GA: the first upgrade after those fields enter the hash re-reconciles existing rows
 ///      rather than throwing.
 ///    - Any other hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
 ///      is broken — same logical identity, different content).
-///    - Hashes match → skip or throw per the <see cref="DuplicateHandling"/> option.
+///    - Hashes match → honor <see cref="DuplicateHandling"/>; refresh changed palette hints when skipping.
 ///
 /// No per-pass mutating state is carried by any entity in this domain. Source disappearance
 /// is intentionally not tracked. Versions are never deleted.
@@ -59,7 +61,8 @@ public sealed class ActivityVersionReconciler(
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddActivityDefinitionVersionCommand addVersionCommand,
     IRefreshActivityDefinitionVersionCommand refreshVersionCommand,
-    IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null
+    IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null,
+    IActivityReconciliationDiagnosticStore? diagnosticStore = null
 )
     : IActivityVersionReconciler
 {
@@ -74,10 +77,17 @@ public sealed class ActivityVersionReconciler(
 
         var (definitionIndex, versionIndex) = await Prefetch(@event.Versions, cancellationToken);
 
+        var refused = new HashSet<string>(StringComparer.Ordinal);
         foreach (var version in @event.Versions)
         {
-            await ReconcileVersion(version, definitionIndex, versionIndex, cancellationToken);
+            await ReconcileVersion(version, definitionIndex, versionIndex, refused, cancellationToken);
         }
+
+        // A complete pass is the whole truth about refusals: an entry for a version this pass did not refuse (published,
+        // or no longer contributed, such as one a source replaced by a fixed next version) is no longer current.
+        if (diagnosticStore is not null && SingleSourceVersionPublisher() is not null)
+            foreach (var versionId in diagnosticStore.List().Keys.Where(id => !refused.Contains(id)))
+                diagnosticStore.Clear(versionId);
     }
 
     /// <summary>
@@ -114,6 +124,7 @@ public sealed class ActivityVersionReconciler(
         IActivityDefinitionVersion incomingVersion,
         DefinitionIndex definitionIndex,
         VersionIndex versionIndex,
+        ISet<string> refused,
         CancellationToken cancellationToken)
     {
         var sourceVersionPublisher = SingleSourceVersionPublisher();
@@ -137,8 +148,8 @@ public sealed class ActivityVersionReconciler(
                     newDefinition,
                     newVersion,
                     cancellationToken);
-            else
-                await sourceVersionPublisher.PublishAsync(newDefinition, newVersion, cancellationToken);
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, newDefinition, newVersion, cancellationToken))
+                return;
 
             // Mirror the write into the indexes so a later candidate targeting the same definition
             // observes it exactly as a per-candidate re-read would (the same-new-definition-twice case).
@@ -164,8 +175,8 @@ public sealed class ActivityVersionReconciler(
                     CreateOperationKey("append", incomingVersion),
                     appended,
                     cancellationToken);
-            else
-                await sourceVersionPublisher.PublishAsync(definition, appended, cancellationToken);
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, appended, cancellationToken))
+                return;
             versionIndex.Add(appended);
             return;
         }
@@ -179,7 +190,7 @@ public sealed class ActivityVersionReconciler(
                 return;
             }
 
-            if (IsInputTierOnlyChange(definition, existingVersion, incomingVersion))
+            if (IsInputPresentationOnlyChange(definition, existingVersion, incomingVersion))
             {
                 var expectedOldHash = existingVersion.Hash;
                 var refresh = ActivityDefinitionVersion.From(incomingVersion, definition.Id);
@@ -194,10 +205,11 @@ public sealed class ActivityVersionReconciler(
                 existingVersion.Inputs = incomingVersion.Inputs.ToArray();
                 existingVersion.Hash = incomingHash;
                 existingVersion.LastModifiedAt = refresh.LastModifiedAt;
+                await RefreshPaletteHintsIfChangedAsync(definition, existingVersion, incomingVersion, cancellationToken);
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
-                    await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+                    await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
                 }
                 return;
             }
@@ -215,11 +227,76 @@ public sealed class ActivityVersionReconciler(
 
         // Hash matches → genuine duplicate.
         HandleHashMatchedDuplicate(definition, incomingVersion.Version);
+        await RefreshPaletteHintsIfChangedAsync(definition, existingVersion, incomingVersion, cancellationToken);
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
-            await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+            await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
         }
+    }
+
+    private async Task RefreshPaletteHintsIfChangedAsync(
+        ActivityDefinition definition,
+        ActivityDefinitionVersion existingVersion,
+        IActivityDefinitionVersion incomingVersion,
+        CancellationToken cancellationToken)
+    {
+        var incomingPalette = incomingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
+        var existingPalette = existingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
+        if (JsonSerializer.Serialize(incomingPalette) != JsonSerializer.Serialize(existingPalette))
+        {
+            var refresh = ActivityDefinitionVersion.From(existingVersion);
+            refresh.TenantId = existingVersion.TenantId;
+            refresh.Definition = definition;
+            refresh.DesignFacets = existingVersion.DesignFacets.Where(facet => facet.Kind != "elsa.activity-palette").Concat(incomingPalette).ToArray();
+            await refreshVersionCommand.RefreshPaletteHintsAsync(
+                CreateOperationKey("refresh-palette", incomingVersion), refresh, existingVersion.DesignFacetsSource, cancellationToken);
+            existingVersion.DesignFacets = refresh.DesignFacets;
+            existingVersion.DesignFacetsSource = refresh.DesignFacetsSource;
+            existingVersion.LastModifiedAt = refresh.LastModifiedAt;
+        }
+    }
+
+    /// <summary>
+    /// Publishes one source-owned version and says whether it was published. A refused version is logged with each of its
+    /// diagnostics and recorded in the reconciliation diagnostic store; nothing of it was written, so the caller skips it
+    /// and the pass goes on. A version that publishes clears what an earlier pass recorded for it.
+    /// </summary>
+    private async Task<bool> PublishSourceVersionAsync(
+        IActivitySourceVersionPublisher publisher,
+        ISet<string> refused,
+        ActivityDefinition definition,
+        ActivityDefinitionVersion version,
+        CancellationToken cancellationToken)
+    {
+        var result = await publisher.PublishAsync(definition, version, cancellationToken);
+        if (result.IsPublished)
+        {
+            diagnosticStore?.Clear(version.Id);
+            return true;
+        }
+
+        // A bridge may refuse without an error saying why; the refusal still names itself, so it is logged and recorded.
+        IReadOnlyList<ActivityDiagnostic> diagnostics = result.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error)
+            ? result.Diagnostics
+            : ActivityDiagnosticOrderer.Order([.. result.Diagnostics, new(
+                "activity.source.publication-refused",
+                ActivityDiagnosticSeverity.Error,
+                "The publishing bridge refused the source-owned version without a stated reason.",
+                new("ActivitySourceVersion", version.Id, definition.Id, Revision: 0),
+                Remediation: "Check the node log for the publishing bridge, correct the source content and reconcile again.")]);
+        refused.Add(version.Id);
+        diagnosticStore?.Record(version.Id, diagnostics);
+        if (logger.IsEnabled(LogLevel.Warning))
+            foreach (var diagnostic in diagnostics)
+                logger.LogWarning(
+                    "Source-owned activity version '{DefinitionVersionId}' ({ActivityTypeKey} {Version}) was not published: {DiagnosticCode}: {DiagnosticMessage}",
+                    version.Id,
+                    definition.ActivityTypeKey,
+                    version.Version,
+                    diagnostic.Code,
+                    diagnostic.Message);
+        return false;
     }
 
     private IActivitySourceVersionPublisher? SingleSourceVersionPublisher()
@@ -315,20 +392,20 @@ public sealed class ActivityVersionReconciler(
         return string.Equals(existingVersion.Hash, compatibilityHash, StringComparison.Ordinal);
     }
 
-    private bool IsInputTierOnlyChange(
+    private bool IsInputPresentationOnlyChange(
         ActivityDefinition definition,
         IActivityDefinitionVersion existingVersion,
         IActivityDefinitionVersion incomingVersion)
     {
-        var existingStripped = WithStrippedInputTiers(existingVersion, definition);
-        var incomingStripped = WithStrippedInputTiers(incomingVersion, incomingVersion.Definition);
+        var existingStripped = WithStrippedInputPresentation(existingVersion, definition);
+        var incomingStripped = WithStrippedInputPresentation(incomingVersion, incomingVersion.Definition);
         return string.Equals(
             hasher.Hash(definition, existingStripped),
             hasher.Hash(incomingVersion.Definition, incomingStripped),
             StringComparison.Ordinal);
     }
 
-    private static ActivityDefinitionVersionModel WithStrippedInputTiers(
+    private static ActivityDefinitionVersionModel WithStrippedInputPresentation(
         IActivityDefinitionVersion version,
         IActivityDefinition definition) =>
         new(
@@ -343,7 +420,7 @@ public sealed class ActivityVersionReconciler(
             SourceKind: version.SourceKind,
             SourceId: version.SourceId,
             Definition: definition,
-            Inputs: version.Inputs.Select(input => input.Tier is null ? input : input with { Tier = null }).ToArray(),
+            Inputs: version.Inputs.Select(input => input with { Tier = null, DisplayName = string.Empty, Description = null }).ToArray(),
             Outputs: version.Outputs,
             DesignFacets: version.DesignFacets,
             ExecutionType: version.ExecutionType,

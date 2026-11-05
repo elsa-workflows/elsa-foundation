@@ -227,6 +227,7 @@ public sealed class ThemeCompositionTests
 internal sealed class ThemeHost : IAsyncDisposable
 {
     private bool _started;
+    private WebApplicationBuilder? _builder;
     public string Root { get; } = Directory.CreateTempSubdirectory("studio-themes-").FullName;
     public WebApplication App { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
@@ -238,7 +239,7 @@ internal sealed class ThemeHost : IAsyncDisposable
         var host = new ThemeHost();
         try
         {
-            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
+            var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
             builder.Configuration.Sources.Clear();
@@ -268,6 +269,11 @@ internal sealed class ThemeHost : IAsyncDisposable
         {
             try { if (_started) await App.StopAsync(); }
             finally { await App.DisposeAsync(); }
+        }
+        else if (_builder is not null)
+        {
+            _builder.Configuration.Dispose();
+            (_builder.Environment.ContentRootFileProvider as IDisposable)?.Dispose();
         }
         Directory.Delete(Root, recursive: true);
     }

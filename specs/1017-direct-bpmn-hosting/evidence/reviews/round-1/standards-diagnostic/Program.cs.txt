@@ -1,0 +1,21 @@
+using System.Reflection;
+using System.Runtime.Loader;
+using System.Text.Json;
+string bin = "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0";
+AssemblyLoadContext.Default.Resolving += (_, name) => File.Exists(Path.Combine(bin, name.Name + ".dll")) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(bin, name.Name + ".dll")) : null;
+var test = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(bin, "Elsa.Activities.Bpmn.Tests.dll"));
+var implementation = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(bin, "Elsa.Activities.Bpmn.dll"));
+Console.WriteLine("Compiled BPMN: " + implementation.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+var original = test.GetType("Elsa.Activities.Bpmn.Tests.BpmnDirectExecutionTests")!.GetMethod("Material", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null)!;
+object Property(string name) => original.GetType().GetProperty(name)!.GetValue(original)!;
+using var invalid = JsonDocument.Parse("{\"formatVersion\":1,\"process\":{\"elements\":42},\"humanBindings\":[]}");
+var material = original.GetType().GetConstructors().Single().Invoke(new object[]{1,Property("Identity"),Property("Protocol"),Property("Profile"),invalid.RootElement,Property("InputContract"),Property("Outputs"),Property("Dependencies"),Property("RuntimeRequirements")});
+var optionsType = implementation.GetType("Elsa.Activities.Bpmn.BpmnModelHostingOptions")!;
+var options = optionsType.GetConstructors().Single().Invoke(new object[]{true})!;
+var driverType = implementation.GetType("Elsa.Activities.Bpmn.Internal.BpmnDirectExecutionDriver")!;
+var driver = driverType.GetConstructors().Single().Invoke(new object?[]{null,null,options,null,null,null,null});
+try { driverType.GetInterfaces().Single(i => i.Name == "IRuntimeExecutionProtocolDriver").GetMethod("ValidateMaterialAsync")!.Invoke(driver, new[]{material, (object)CancellationToken.None}); Console.WriteLine("Unexpected acceptance"); }
+catch(TargetInvocationException e) { Console.WriteLine("Exception type: " + e.InnerException!.GetType().FullName);Console.WriteLine("Message: " + e.InnerException.Message); }
+var runtime = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(bin, "Elsa.Workflows.Runtime.dll"));
+var eventType = runtime.GetType("Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionProtocolsInitializing")!;
+Console.WriteLine("Protocol event: " + eventType.FullName + ", IsPublic=" + eventType.IsPublic);

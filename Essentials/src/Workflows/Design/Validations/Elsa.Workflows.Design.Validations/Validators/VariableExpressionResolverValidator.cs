@@ -41,7 +41,7 @@ public sealed class VariableExpressionResolverValidator(
 
         foreach (var node in activityTreeWalker.Walk(state.RootActivity, maxDepth))
         {
-            foreach (var argument in node.Inputs)
+            foreach (var argument in activityTreeWalker.EffectiveInputs(node))
                 CheckArgument(errors, node.NodeId, "inputs", argument, visibility);
 
             foreach (var argument in node.Outputs)

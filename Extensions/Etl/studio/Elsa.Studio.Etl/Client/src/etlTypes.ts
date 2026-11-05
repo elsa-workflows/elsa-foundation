@@ -85,9 +85,28 @@ export interface EtlPipelineV2 {
   filters: EtlFilter[];
   limits: EtlConnectorLimits;
   http: EtlHttpPolicy;
+  /** Omitted for a finite pipeline; present when the HTTP shards poll until completion or cancellation. */
+  continuous?: EtlContinuousRunPolicy;
 }
 
-export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource;
+export interface EtlContinuousRunPolicy {
+  pollIntervalSeconds: number;
+}
+
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource | EtlSqlSource | EtlRabbitMqSource;
+
+/**
+ * A host-approved RabbitMQ queue drained up to `maxMessages` when a run prepares; its messages are acknowledged once the
+ * snapshot of their JSON bodies is recorded, and each body is read with the declared JSON fields.
+ */
+export interface EtlRabbitMqSource {
+  kind: "rabbitmq";
+  binding: string;
+  queue: string;
+  fields: EtlJsonField[];
+  /** 1 to 100,000. */
+  maxMessages: number;
+}
 
 export interface EtlCsvSource {
   kind: "csv";
@@ -101,6 +120,29 @@ export interface EtlHttpJsonSource {
   recordsPointer: string;
   fields: EtlJsonField[];
   pagination: EtlHttpPagination;
+}
+
+/** A host-approved JSON Lines file: one JSON object per line, with fields selected by JSON Pointer. */
+export interface EtlJsonlSource {
+  kind: "jsonl";
+  binding: string;
+  fields: EtlJsonField[];
+}
+
+/**
+ * A host-approved PostgreSQL or SQL Server table, read once as of one point in time when the run is prepared and then
+ * processed like a JSON Lines file (finite runs only).
+ */
+export interface EtlSqlSource {
+  kind: "sql";
+  binding: string;
+  /** `name` or `schema.name`. */
+  table: string;
+  columns: EtlColumn[];
+  /** One to eight required columns ordering the snapshot. */
+  key: string[];
+  /** A required int64 column; each run then reads only rows above the last completed run's high watermark. */
+  watermark?: string;
 }
 
 export interface EtlJsonField {
@@ -127,7 +169,7 @@ export interface EtlRoutes {
   errors: EtlDestination;
 }
 
-export type EtlDestination = EtlJsonlDestination | EtlHttpDestination;
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination | EtlSqlDestination | EtlRabbitMqDestination;
 
 export interface EtlJsonlDestination {
   kind: "jsonl";
@@ -137,6 +179,37 @@ export interface EtlJsonlDestination {
 export interface EtlHttpDestination {
   kind: "http";
   binding: string;
+}
+
+/** A host-approved output folder receiving one RFC 4180 CSV file, with a header row, per published batch. */
+export interface EtlCsvDestination {
+  kind: "csv";
+  binding: string;
+}
+
+/**
+ * A host-approved PostgreSQL or SQL Server table upserted by key, one transaction per batch with an effect ledger that
+ * applies each batch once (main route only). Its columns are the output field names.
+ */
+export interface EtlSqlDestination {
+  kind: "sql";
+  binding: string;
+  /** `name` or `schema.name`. */
+  table: string;
+  /** One to eight output fields mapped from required source fields. */
+  key: string[];
+}
+
+/**
+ * A host-approved RabbitMQ exchange receiving one persistent JSON message per record, recorded once the broker confirmed
+ * every message of the batch; delivery is at least once with stable message ids (main route only).
+ */
+export interface EtlRabbitMqDestination {
+  kind: "rabbitmq";
+  binding: string;
+  /** The exchange, or empty for the default exchange. */
+  exchange: string;
+  routingKey: string;
 }
 
 export interface EtlConnectorLimits {
@@ -211,7 +284,7 @@ export interface EtlBindingSummary {
 
 /** A current v2 connector alias without endpoint, storage, or credential details. */
 export interface EtlConnectorBindingSummary extends EtlBindingSummary {
-  kind: "csv" | "http" | "jsonl";
+  kind: "csv" | "http" | "jsonl" | "sql" | "rabbitMq";
 }
 
 export interface EtlDefinitionSummaryView {
@@ -338,6 +411,9 @@ export interface EtlRunConnectorView {
   errorKind: string;
   acceptedMainEffects: number;
   acceptedErrorEffects: number;
+  /** Absent on hosts that predate continuous runs, which only run finitely. */
+  mode?: "finite" | "continuous";
+  completionRequestedAt?: string | null;
 }
 
 export interface EtlRunDetailView extends EtlRunSummaryView {
@@ -377,6 +453,8 @@ export interface EtlRunConnectorPartitionView {
   owedBatch: EtlRunConnectorOwedView | null;
   acceptedMainEffects: number;
   acceptedErrorEffects: number;
+  /** A caught-up continuous shard's next poll; null or absent for retry waits and finite runs. */
+  nextPollAt?: string | null;
 }
 
 export interface EtlRunFileProgressView {
@@ -419,6 +497,10 @@ export interface EtlRunEffectView {
 export interface EtlRunCancellationView {
   cancellationAccepted: boolean;
   terminalResult: EtlRunTerminalResultView;
+}
+
+export interface EtlRunCompletionView {
+  result: "accepted" | "alreadyRequested" | "terminal" | "notContinuous";
 }
 
 export type EtlRunPageRequest = EtlPageRequest;

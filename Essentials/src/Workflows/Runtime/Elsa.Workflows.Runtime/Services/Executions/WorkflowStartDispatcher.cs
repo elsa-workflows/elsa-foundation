@@ -26,6 +26,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
     private readonly StimulusDeliveryRequestProjector _stimulusRequests;
+    private readonly IWorkflowExecutableInputValidator? _inputValidator;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -120,6 +121,24 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IRuntimePersistenceModeResolver? persistenceModeResolver,
         IStimulusDeliveryStore? stimulusDeliveryStore,
         IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore,
+            stimulusIntentAdapters, null) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
+        IWorkflowExecutableInputValidator? inputValidator)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -140,6 +159,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _persistenceModeResolver = persistenceModeResolver;
         _stimulusDeliveryStore = stimulusDeliveryStore;
         _stimulusRequests = new(stimulusIntentAdapters);
+        _inputValidator = inputValidator;
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -168,6 +188,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
         var resolved = saved is not null
             ? ResolveStimulusExecutable(saved, executable)
+            : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.ModelWork
+            ? await ResolveModelWorkAsync(request, executable, cancellationToken)
             : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency
             ? await ResolveRetainedDependencyAsync(request, executable, cancellationToken)
             : await ResolvePinnedExecutableAsync(request, executable, requiredScope, cancellationToken);
@@ -187,10 +209,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
+        var inputs = ApplyInputContract(executable, request.Inputs);
         await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
+            inputs,
             resolved.Identity,
             resolved.Source,
             resolved.Dispatch,
@@ -219,6 +243,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var existing = await _workflowExecutionStateStore.FindAsync(keyed.WorkflowExecutionId, cancellationToken);
         if (existing is null)
             return null;
+        if (request.StartAuthority?.ModelWork is { } modelWork &&
+            (!modelWork.IsEquivalentTo(existing.ModelWorkOrigin) || existing.TenantId != request.TenantId ||
+             existing.Partition != request.Partition || existing.Authority is null || request.Authority is null ||
+             !WorkflowExecutionAuthoritySnapshot.Matches(existing.Authority, request.Authority.SystemIdentity,
+                 request.Authority.RootInitiator, request.Authority.Metadata)))
+            throw AuthorityRejected("model-work-duplicate-mismatch", "The existing native worker differs from its exact model invocation.");
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery &&
             (saved is null || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(existing.PinnedExecutable, saved.Executable)))
             throw AuthorityRejected("stimulus-delivery-duplicate-pin-mismatch", "The existing keyed start differs from the complete saved executable pin.");
@@ -288,6 +318,25 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(executable.Identity, saved.Executable))
             throw AuthorityRejected("stimulus-delivery-pin-mismatch", "The retained executable differs from the complete saved pin.");
         return new(saved.Executable, saved.SourceProvenance, null);
+    }
+
+    private async ValueTask<ResolvedPinnedExecutable> ResolveModelWorkAsync(WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutable child, CancellationToken cancellationToken)
+    {
+        var origin = request.StartAuthority!.ModelWork!;
+        if (request.ParentWorkflowExecutionId is not null || request.Authority is null || request.SourceSelection is not null ||
+            request.WorkflowExecutionId != origin.WorkerExecutionId || request.Partition?.Value != origin.Scope.Value ||
+            request.RunKind != WorkflowRunKind.PublishedRun || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(child.Identity, origin.WorkerExecutable))
+            throw AuthorityRejected("model-work-context-mismatch", "Native work requires its exact model-owned root worker context.");
+        var parent = await _executableStore.FindMaterialAsync(origin.Executable.ArtifactId, cancellationToken);
+        if (parent?.Model is not { } model || parent.IncarnationId != origin.MaterialIncarnationId || model.Protocol != origin.Protocol ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(parent.Identity, origin.Executable) ||
+            !model.Dependencies.Any(dependency => dependency.BindingId == origin.BindingId &&
+                WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dependency.Executable, origin.WorkerExecutable)))
+            throw AuthorityRejected("model-work-dependency-mismatch", "The model does not retain this exact native worker dependency.");
+        // Current work eligibility and committed source authority are checked again by the model's checkpoint
+        // enricher; its physical model compare is atomic with the worker's initial state and root-work outbox.
+        return new(child.Identity, null, null);
     }
 
     private async ValueTask<ResolvedPinnedExecutable> ResolveRetainedDependencyAsync(
@@ -410,8 +459,30 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         new(executable.Identity, await _startSourceResolver.ResolveAsync(request.ArtifactId, request.SourceSelection,
             request.ProvenanceRequirement, requiredScope, cancellationToken), null);
 
+    // Every start applies its executable's input contract before the command is enqueued (#3728): declared defaults fill
+    // omitted inputs, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start. A
+    // legacy artifact without a contract, or a dispatcher composed without a validator, keeps the supplied inputs.
+    private IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
+    {
+        var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
+        if (executable.InputContract is not { } contract || _inputValidator is null)
+            return supplied;
+
+        var validation = _inputValidator.Validate(contract, supplied);
+        if (!validation.IsValid)
+        {
+            throw new WorkflowExecutableStartRejectedException(
+                WorkflowExecutableStartRejectionCategory.Input,
+                validation.Findings.First().ReasonCode,
+                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+        }
+
+        return validation.NormalizedInputs;
+    }
+
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
+        IReadOnlyDictionary<string, JsonElement> inputs,
         WorkflowExecutableIdentity pinnedIdentity,
         WorkflowExecutableSourceProvenance? pinnedSource,
         WorkflowDispatchRecord? retainedDispatch,
@@ -430,7 +501,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
             variables: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Variables),
-            inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs),
+            inputs: inputs,
             stimulusInput: request.StimulusInput,
             triggerNodeId: request.TriggerNodeId,
             runKind: request.RunKind,

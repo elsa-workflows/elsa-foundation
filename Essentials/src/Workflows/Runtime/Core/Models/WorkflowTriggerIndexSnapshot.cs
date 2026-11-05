@@ -25,4 +25,11 @@ public sealed record WorkflowTriggerIndexSnapshot(
     /// artifact itself being reindexed (for example, an empty candidate can retire an HTTP-owning publication).
     /// </summary>
     public bool RequiresProjectionRefresh { get; init; }
+
+    /// <summary>
+    /// The logical definition whose serving authority changed. It is supplied by the activation
+    /// coordinator even when the artifact has no triggers or is shared by several definitions.
+    /// Ordinary indexing snapshots may omit it because they do not change serving authority.
+    /// </summary>
+    public string? DefinitionId { get; init; }
 }

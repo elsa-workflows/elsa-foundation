@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowTestRun, getWorkflowTestRunWaits } from "../api/publishing";
 import type { WorkflowInstanceDetails, WorkflowTestRunView, WorkflowTestRunWait } from "../workflowTypes";
+import { isRejectedTestRun } from "./editorHelpers";
 import type { WorkflowTestRunState } from "./editorTypes";
 import { ExecutionObservationIdentityError, isTerminalExecution, readObservedExecution, useExecutionObservation } from "./useExecutionObservation";
 export { isTerminalExecution } from "./useExecutionObservation";
@@ -29,7 +30,7 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   const waitsRevision = useRef(0);
   const observation = useExecutionObservation<TestRunEvidence>({ context,
     identity: JSON.stringify(["test-run", view?.testRunId, view?.artifactId, view?.workflowExecutionId]),
-    enabled: enabled && !!view && (!testRun?.endpointContext || testRun.endpointContext === context),
+    enabled: enabled && !!view && !isRejectedTestRun(view) && (!testRun?.endpointContext || testRun.endpointContext === context),
     read: async scope => {
       manualWaits.current?.abort();
       if (view?.expiresAt && Date.parse(view.expiresAt) <= Date.now()) return { value: null, expired: true, terminal: true };

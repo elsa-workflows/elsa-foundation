@@ -15,7 +15,14 @@ public sealed record ActivityTemplateCompilationRequest(
     Elsa.Activities.Design.Core.Models.ActivityContract Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityResolvedDependency> ResolvedDirectDependencies,
-    string ProviderFingerprint);
+    string ProviderFingerprint)
+{
+    /// <summary>
+    /// What <see cref="DraftId"/> names, for the diagnostic subject: <c>ActivityDraft</c> for a Studio draft revision, or the
+    /// kind of other saved content compiled the same way (such as <c>ActivitySourceVersion</c>, whose id is the version id).
+    /// </summary>
+    public string SubjectKind { get; init; } = "ActivityDraft";
+}
 
 public sealed record ActivityTemplateCompilation(
     ExecutableNode? ExecutableRoot,
@@ -42,13 +49,21 @@ public sealed record ActivityTemplateOccurrenceCompilation(
     JsonElement InputBindings,
     ActivityNodeStructure? Structure,
     // Authored output captures of a closed-scope graph body node; null when it captures nothing.
-    JsonElement? OutputBindings = null);
+    JsonElement? OutputBindings = null)
+{
+    /// <summary>Optional Design-only declaration, lowered to runtime contracts by the publishing coordinator.</summary>
+    public ActivityStructureInputProjection? StructureInputs { get; init; }
+}
 
 public sealed record ActivityTemplateDependencyDiscoveryRequest(
     string DefinitionId,
     string DraftId,
     long Revision,
-    ActivityProviderManifest Provider);
+    ActivityProviderManifest Provider)
+{
+    /// <summary>What <see cref="DraftId"/> names, for the diagnostic subject; see <see cref="ActivityTemplateCompilationRequest.SubjectKind"/>.</summary>
+    public string SubjectKind { get; init; } = "ActivityDraft";
+}
 
 public sealed record ActivityTemplateDependencyDeclaration(
     string DefinitionVersionId,

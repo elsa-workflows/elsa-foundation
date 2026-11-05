@@ -45,15 +45,20 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
       {run.diagnostic.field !== null && <p>Field: {run.diagnostic.field}</p>}
     </section>}
     <InputIdentity title="Source input" alias={run.bindingAliases?.source} identity={run.sourceInput}
-      emptyMessage={run.connector?.sourceKind === "http" ? "Source progress is tracked by page." : undefined} />
+      emptyMessage={run.connector?.sourceKind === "http" ? "Source progress is tracked by page." : undefined}
+      // A SQL table has no digest at admission: the run reads it once, when it is prepared.
+      missingDigest={run.connector?.sourceKind === "sql" ? "None; the table is read at preparation"
+        : run.connector?.sourceKind === "rabbitMq" ? "None; the queue is read at preparation" : undefined} />
     <InputIdentity title="Lookup input" alias={run.bindingAliases?.lookup} identity={run.lookupInput}
       emptyMessage={run.connector && run.bindingAliases?.lookup === null ? "No lookup configured." : undefined} />
     {run.connector ? <section aria-label="Connector output progress">
       <h3>Connector output progress</h3>
       <dl className="etl-facts">
+        <dt>Run mode</dt><dd>{run.connector.mode === "continuous" ? "Continuous" : "Finite"}</dd>
+        {run.connector.completionRequestedAt ? <><dt>Completion requested</dt><dd><time dateTime={run.connector.completionRequestedAt}>{run.connector.completionRequestedAt}</time></dd></> : null}
         <dt>Source type</dt><dd>{kindLabel(run.connector.sourceKind)}</dd>
-        <dt>Main output type</dt><dd>{kindLabel(run.connector.mainKind)}</dd>
-        <dt>Error output type</dt><dd>{kindLabel(run.connector.errorKind)}</dd>
+        <dt>Main output type</dt><dd>{outputKindLabel(run.connector.mainKind)}</dd>
+        <dt>Error output type</dt><dd>{outputKindLabel(run.connector.errorKind)}</dd>
         <dt>Main route bodies accepted</dt><dd>{run.connector.acceptedMainEffects}</dd>
         <dt>Error route bodies accepted</dt><dd>{run.connector.acceptedErrorEffects}</dd>
       </dl>
@@ -63,8 +68,8 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
   </section>;
 }
 
-function InputIdentity({ title, alias, identity, emptyMessage }: {
-  title: string; alias?: string | null; identity?: EtlRunInputIdentityView | null; emptyMessage?: string;
+function InputIdentity({ title, alias, identity, emptyMessage, missingDigest }: {
+  title: string; alias?: string | null; identity?: EtlRunInputIdentityView | null; emptyMessage?: string; missingDigest?: string;
 }) {
   return <section aria-label={title}>
     <h3>{title}</h3>
@@ -72,7 +77,7 @@ function InputIdentity({ title, alias, identity, emptyMessage }: {
     {identity ? <>
       <dl className="etl-facts">
         <dt>Binding revision</dt><dd>{identity.bindingRevision}</dd>
-        <dt>Expected SHA-256</dt><dd><code>{identity.expectedSha256 ?? "Not available"}</code></dd>
+        <dt>Expected SHA-256</dt><dd><code>{identity.expectedSha256 ?? missingDigest ?? "Not available"}</code></dd>
         <dt>Prepared snapshot SHA-256</dt><dd><code>{identity.snapshotSha256 ?? "Not yet prepared"}</code></dd>
         <dt>Prepared snapshot bytes</dt><dd>{identity.snapshotByteLength ?? "Not yet prepared"}</dd>
       </dl>
@@ -92,8 +97,13 @@ function isHttpKind(kind: string) {
   return kind === "http";
 }
 
+/** An output's kind; a CSV output is a file, while a CSV source keeps the plain "CSV" label. */
+function outputKindLabel(kind: string) {
+  return kind === "csv" ? "CSV file" : kind === "sql" ? "SQL table" : kind === "rabbitMq" ? "RabbitMQ exchange" : kindLabel(kind);
+}
+
 function kindLabel(kind: string) {
-  return ({ http: "HTTP JSON", csv: "CSV", jsonl: "JSON Lines" } as Record<string, string>)[kind] ?? kind;
+  return ({ http: "HTTP JSON", csv: "CSV", jsonl: "JSON Lines", sql: "SQL table snapshot", rabbitMq: "RabbitMQ queue" } as Record<string, string>)[kind] ?? kind;
 }
 
 export function EtlPartitionTable({ partitions, now = Date.now() }: {
@@ -101,8 +111,8 @@ export function EtlPartitionTable({ partitions, now = Date.now() }: {
 }) {
   if (!partitions.length) return <p role="status">No partitions on this page. Preparation may still be pending.</p>;
   return <section aria-label="Partition progress">
-    <div className="etl-table-scroll" tabIndex={0} role="region" aria-label="Partition progress table">
-      <table>
+    <div className="studio-table-container etl-table-scroll" tabIndex={0} role="region" aria-label="Partition progress table">
+      <table className="studio-table">
         <caption>Durable partition progress</caption>
         <thead><tr><th scope="col">Partition</th><th scope="col">Range</th><th scope="col">Next record</th>
           <th scope="col">Claim</th><th scope="col">Owed batch</th></tr></thead>
@@ -129,8 +139,8 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
 }) {
   if (!partitions.length) return <p role="status">No connector partitions on this page.</p>;
   return <section aria-label="Connector partition progress">
-    <div className="etl-table-scroll" tabIndex={0} role="region" aria-label="Connector partition progress table">
-      <table>
+    <div className="studio-table-container etl-table-scroll" tabIndex={0} role="region" aria-label="Connector partition progress table">
+      <table className="studio-table">
         <caption>Connector partition progress</caption>
         <thead><tr><th scope="col">Partition</th><th scope="col">Source position</th><th scope="col">Claim</th>
           <th scope="col">Fetch state</th><th scope="col">Owed output</th><th scope="col">Settled route bodies</th></tr></thead>
@@ -146,7 +156,9 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
               : `HTTP page ${partition.http!.pageSequence}, next item ${partition.http!.nextItem} of ${partition.http!.pageRecordCount ?? "unknown count"}; ${partition.http!.exhausted ? "source exhausted" : "not yet exhausted"}`;
           return <tr key={partition.partitionOrdinal}>
             <th scope="row">{partition.partitionOrdinal}</th>
-            <td>{sourcePosition}{partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
+            <td>{sourcePosition}{partition.nextPollAt
+              ? <><br />Next poll at <time dateTime={partition.nextPollAt}>{partition.nextPollAt}</time></>
+              : partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
             <td>{claim}{partition.claimExpiresAt ? <><br /><time dateTime={partition.claimExpiresAt}>{partition.claimExpiresAt}</time></> : null}</td>
             <td>{partition.http?.fetch ? <RetryProgress retry={partition.http.fetch} /> : "No fetch retry scheduled"}</td>
             <td>{partition.owedBatch ? <OwedOutput owed={partition.owedBatch} /> : "None"}</td>
@@ -170,7 +182,7 @@ function OwedOutput({ owed }: { owed: NonNullable<EtlRunConnectorPartitionView["
 
 function EffectProgress({ label, effect }: { label: string; effect: EtlRunEffectView }) {
   return <div>
-    <strong>{label} ({kindLabel(effect.kind)})</strong>
+    <strong>{label} ({outputKindLabel(effect.kind)})</strong>
     <p>{effect.recordCount} records; {effectStateLabel(effect.state)}.</p>
     {effect.retry ? <RetryProgress retry={effect.retry} /> : null}
   </div>;

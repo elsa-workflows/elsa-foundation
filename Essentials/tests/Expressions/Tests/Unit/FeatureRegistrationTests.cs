@@ -14,6 +14,16 @@ namespace Elsa.Expressions.Tests.Unit;
 /// </summary>
 public sealed class FeatureRegistrationTests
 {
+    [Fact]
+    public void Json_descriptor_seeds_both_json_and_nullable_json_resolution()
+    {
+        var registry = TestRegistry.SeededWithPrimitives();
+        Assert.True(registry.TryGetType("System.Text.Json.JsonElement", out var json));
+        Assert.Equal(typeof(System.Text.Json.JsonElement), json);
+        Assert.True(registry.TryGetType("System.Text.Json.JsonElement?", out var nullable));
+        Assert.Equal(typeof(System.Text.Json.JsonElement?), nullable);
+    }
+
     private static ServiceCollection MinimalServices()
     {
         var services = new ServiceCollection();

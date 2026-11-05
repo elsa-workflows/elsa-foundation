@@ -1,0 +1,78 @@
+{
+  "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+  "base": "e82833f35a1cc7300250400a0e83a656e949066e",
+  "bpmn": {
+    "passed": 513,
+    "failed": 0,
+    "skipped": 0
+  },
+  "interchange": {
+    "passed": 132,
+    "failed": 0,
+    "skipped": 0
+  },
+  "actualHosts": {
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0,
+    "authenticatedDirectStartWaitRestartResumeCompletePassed": true
+  },
+  "studio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false,
+    "negativeControls": {
+      "tests": 13,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "organizationBrowser": {
+    "passed": 23,
+    "failed": 0,
+    "skipped": 0
+  },
+  "organizationMenuDiagnostic": {
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "retries": 0,
+    "oneCaseRepeated": true,
+    "doesNotTurnMainCiGreen": true
+  },
+  "frozenOriginals": {
+    "kind": "frozen-original-byte-verification",
+    "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "assets": 104,
+    "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+    "allByteIdentical": true
+  },
+  "priorQualifiedRuntimeSource": "f12385fcbe829e6f7cc0bb29347ec6c2e1d27dbf",
+  "runtimeAndEtlSourcesUnchanged": true,
+  "publicApiDeclarationsUnchanged": true,
+  "sourceArchive": {
+    "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "ref": "refs/codex/verification/2898-main-e828-9d422",
+    "prerequisite": "588da3eb01d0949ba3c9721b61c09fbc2334a335",
+    "bytes": 2103448,
+    "sha256": "d9e8b42fec8b8fdb2e12309de6c1052cc6a79cd85dd1de6ba9a8dd4197ebb966",
+    "publication": "uploaded and verified",
+    "coldRestoreCandidateInitiallyAbsent": true,
+    "coldRestoreMatchesSource": true,
+    "assetId": 697015074,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-source-9d4221e87.bundle",
+    "uploader": "elsa-workflows-codex[bot]",
+    "reDownloadedAndHashVerified": true,
+    "releasePublishedAtUnchanged": true
+  },
+  "limits": "Not a clean full review, green current-head CI, protected delivery, resulting-main or broader production/ETL/direct-model Studio acceptance. Original main-CI browser failure is retained despite local23+20 passing; version job rejected stale67 after main advanced. Full review15 remains next under16 bound. Owner history-route decision and existing changes request remain."
+}

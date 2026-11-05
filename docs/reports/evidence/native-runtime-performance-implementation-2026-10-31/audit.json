@@ -1,0 +1,9 @@
+{
+  "acceptedProcesses": 20,
+  "rejectedProcesses": 9,
+  "measuredCompletions": 19997,
+  "allCorrect": true,
+  "expectedCheckpointAndTransactionCounts": true,
+  "binaryDllCount": 55,
+  "changedDllCount": 3
+}

@@ -26,6 +26,70 @@ internal sealed partial class EfEtlRuntimeStore
             ? new(EtlStoreStatus.Conflict, null, null)
             : EtlHttpSourceFetchTransitions.Capture(fetch, attempt, page, responseReceivedAtUtc, now, policy), cancellationToken);
 
+    public async ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease,
+        EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        ArgumentNullException.ThrowIfNull(attempt);
+        db.ChangeTracker.Clear();
+        var key = RunKey(lease.Scope, lease.RunId);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var run = await FindRunRowAsync(lease.Scope, lease.RunId, cancellationToken);
+        if (run is null) return new(EtlStoreStatus.NotFound, false);
+        if (run.Status >= (int)EtlRunStatus.Succeeded) return new(EtlStoreStatus.Terminal, false);
+        var connector = await ConnectorRowAsync(key, cancellationToken);
+        if (connector is null) return new(EtlStoreStatus.Invalid, false);
+        var partition = await db.ConnectorPartitions.SingleOrDefaultAsync(row => row.ScopeKey == key.ScopeKey &&
+            row.RunKey == key.RunKey && row.PartitionOrdinal == lease.PartitionOrdinal, cancellationToken);
+        if (partition is null) return new(EtlStoreStatus.NotFound, false);
+        if (run.Status != (int)EtlRunStatus.Running || !HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks()))
+            return new(EtlStoreStatus.LeaseLost, false);
+        var invocation = EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson);
+        var state = await ReadConnectorStateAsync(invocation, connector, cancellationToken);
+        if (state.Pipeline.Continuous is not { } continuous) return new(EtlStoreStatus.Invalid, false);
+        var position = await ReadConnectorPositionAsync(partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
+        if (position != lease.Position || position is not EtlConnectorHttpPosition { Exhausted: false, Page: null } current ||
+            partition.OwedBatchId is not null)
+            return new(EtlStoreStatus.Conflict, false);
+        var request = await HttpRequestForUpdateAsync(partition, current.PageSequence, cancellationToken);
+        if (ReadConnectorHttpSource(request, state.Pipeline.Http) is not { } fetch) return new(EtlStoreStatus.Conflict, false);
+        var now = NowTicks();
+        var status = EtlHttpSourceFetchTransitions.CaughtUp(fetch, attempt, responseReceivedAtUtc, lease.Fence,
+            EtlRuntimeRecordCodec.ReadUtc(now), state.Pipeline.Http);
+        if (status != EtlStoreStatus.Applied) return new(status, false);
+        // A request made at or before the attempt started covers this response: the caller retains it as the final page.
+        if (connector.CompletionRequestedAtUtcTicks is { } requested && requested <= attempt.StartedAt.UtcTicks)
+            return new(EtlStoreStatus.Applied, true);
+
+        // The request returns to its never-fetched state: nothing about an empty, unmoved response needs retaining.
+        var metadataRelease = checked(request.FetchMetadataBytes + request.SourceMetadataReserveBytes);
+        var inputRelease = request.InputReservationBytes;
+        request.FetchJson = null;
+        request.FetchDigest = null;
+        request.FetchMetadataBytes = 0;
+        request.SourceMetadataReserveBytes = 0;
+        request.InputReservationBytes = 0;
+        request.MetadataBytes = checked(request.MetadataBytes - metadataRelease);
+        partition.MetadataBytes = checked(partition.MetadataBytes - metadataRelease);
+        partition.SourceInputReservedBytes = checked(partition.SourceInputReservedBytes - inputRelease);
+        // The next poll publishes under a new page-cache key, so this poll's stalled attempts can never collide with it.
+        partition.PollGeneration = checked(partition.PollGeneration + 1);
+        // Completion requested after this attempt started: poll again at once so later records are not missed.
+        partition.NotBeforeUtcTicks = connector.CompletionRequestedAtUtcTicks is null
+            ? checked(now + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks)
+            : null;
+        partition.Revision = checked(partition.Revision + 1);
+        connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes - metadataRelease);
+        connector.SourceInputReservedBytes = checked(connector.SourceInputReservedBytes - inputRelease);
+        connector.Revision = checked(connector.Revision + 1);
+        run.UpdatedAtUtcTicks = now;
+        run.Revision = checked(run.Revision + 1);
+        await db.SaveChangesAsync(cancellationToken);
+        if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return new(EtlStoreStatus.LeaseLost, false);
+        await tx.CommitAsync(cancellationToken);
+        return new(EtlStoreStatus.Applied, false);
+    }
+
     private async ValueTask<EtlConnectorHttpSourceFetchResult> MutateConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         Func<EtlConnectorHttpSourceFetch?, EtlConnectorHttpPosition, EtlHttpPolicy, DateTimeOffset, EtlConnectorHttpSourceFetchResult> transition,
         CancellationToken cancellationToken)

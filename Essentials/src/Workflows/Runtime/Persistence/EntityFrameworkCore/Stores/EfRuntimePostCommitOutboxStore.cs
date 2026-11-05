@@ -26,6 +26,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     IStimulusDeliveryStore
 {
     private readonly RuntimeDbContext context;
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
     private readonly IPersistenceAccessContextAccessor accessContextAccessor;
     private readonly TimeProvider timeProvider;
     private readonly WorkflowExecutableStartSourceResolver? retentionSources;
@@ -177,6 +179,53 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         cancellationToken.ThrowIfCancellationRequested();
         EnsureCommittedSourceBoundary();
         return FindAsync(outboxItemId, cancellationToken);
+    }
+
+    public async ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId,
+        IReadOnlyCollection<string> excludedIntentKinds, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(excludedIntentKinds);
+        var excludedKinds = new HashSet<string>(excludedIntentKinds, StringComparer.Ordinal);
+        foreach (var kind in excludedKinds) ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureCommittedSourceBoundary();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        try
+        {
+            var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+            var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+            var executionKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
+            var executionHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+            string? after = null;
+            while (true)
+            {
+                // Either identity projection can reveal a corrupt owned row. Do not filter on status or
+                // kind projections before checking their payload: a damaged projection cannot prove absence.
+                var query = context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
+                    (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) &&
+                    (row.WorkflowExecutionIdHash == executionHash || row.WorkflowExecutionId == executionKey));
+                if (after is not null) query = query.Where(row => row.Id.CompareTo(after) > 0);
+                var page = await query.OrderBy(row => row.Id).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
+                foreach (var row in page)
+                {
+                    var source = ReadChecked(row, scope);
+                    if (source.Intent.WorkflowExecutionId != workflowExecutionId)
+                        throw new InvalidDataException("The durable source differs from its exact execution query.");
+                    if (!excludedKinds.Contains(source.Intent.Kind) && source.Status != RuntimePostCommitOutboxStatus.Delivered)
+                        return source;
+                }
+                if (page.Length < ProviderPageSize) return null;
+                after = page[^1].Id;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException ||
+            EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.outbox-state-unavailable",
+                $"Prior outbox responsibility could not be read in persistence scope '{scope}' for execution '{workflowExecutionId}'.", exception);
+        }
     }
 
     private void EnsureCommittedSourceBoundary()
@@ -557,14 +606,25 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         const int delivering = (int)RuntimePostCommitOutboxStatus.Delivering;
         const int failedRetryable = (int)RuntimePostCommitOutboxStatus.FailedRetryable;
+        const int delivered = (int)RuntimePostCommitOutboxStatus.Delivered;
         // Untracked (Rows), so a poll reads the row as it is now rather than a snapshot this context tracked when it claimed.
-        return await ReadPageAsync(
-            scope,
-            Rows(scope, query.WorkflowExecutionId, query.IntentKind)
-                .Where(row => row.Status == delivering || row.Status == failedRetryable)
-                .OrderBy(row => row.ClaimableAtUtcTicks),
-            query.Limit,
-            cancellationToken);
+        var rows = Rows(scope, query.WorkflowExecutionId, query.IntentKind);
+        // The claim deliveries ride in the same statement. A delivered row's claimable time is the maximum, so they come last.
+        if (query.DeliveredByClaimSince is { } since)
+        {
+            var sinceTicks = since.UtcTicks;
+            rows = rows.Where(row => row.Status == delivering || row.Status == failedRetryable ||
+                                     row.Status == delivered && row.ClaimDeliveredAtUtcTicks >= sinceTicks);
+            if (query.ExcludedDeliveredOutboxItemIds.Count > 0)
+            {
+                // Base64 identity text can compare equal under a provider's collation; the full ordinal projection cannot.
+                var excluded = query.ExcludedDeliveredOutboxItemIds.Select(OutboxOrderKey).ToArray();
+                rows = rows.Where(row => row.Status != delivered || !excluded.Contains(row.OutboxItemIdOrderKey));
+            }
+        }
+        else
+            rows = rows.Where(row => row.Status == delivering || row.Status == failedRetryable);
+        return await ReadPageAsync(scope, rows.OrderBy(row => row.ClaimableAtUtcTicks), query.Limit, cancellationToken);
     }
 
     public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
@@ -955,6 +1015,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             DeliverableAtUtcTicks = Ticks(DeliverableAt(item)),
             ClaimableAtUtcTicks = ClaimableAt(item).UtcTicks,
             ClaimableIsEligible = IsClaimable(item),
+            ClaimDeliveredAtUtcTicks = Ticks(ClaimDeliveredAt(item)),
             ContentJson = RuntimeArtifactJson.Serialize(item),
             SchemaVersion = writeVersion,
             Revision = revision
@@ -984,6 +1045,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         row.DeliverableAtUtcTicks = replacement.DeliverableAtUtcTicks;
         row.ClaimableAtUtcTicks = replacement.ClaimableAtUtcTicks;
         row.ClaimableIsEligible = replacement.ClaimableIsEligible;
+        row.ClaimDeliveredAtUtcTicks = replacement.ClaimDeliveredAtUtcTicks;
         row.ContentJson = replacement.ContentJson;
         row.SchemaVersion = replacement.SchemaVersion;
         row.Revision = revision;
@@ -1058,7 +1120,9 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             row.RecordedAtUtcTicks != item.RecordedAt.UtcTicks ||
             row.DeliverableAtUtcTicks != Ticks(DeliverableAt(item)) ||
             row.ClaimableAtUtcTicks != ClaimableAt(item).UtcTicks ||
-            row.ClaimableIsEligible != IsClaimable(item))
+            row.ClaimableIsEligible != IsClaimable(item) ||
+            // Null on a row written before the projection existed; the listing then simply does not return it.
+            row.ClaimDeliveredAtUtcTicks is { } claimDeliveredAt && claimDeliveredAt != Ticks(ClaimDeliveredAt(item)))
         {
             throw new InvalidDataException("The post-commit outbox identity or delivery projection does not match its content.");
         }
@@ -1091,6 +1155,9 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         item.Status == RuntimePostCommitOutboxStatus.Delivering
             ? item.DeliveryVisibleAfter is not null
             : DeliverableAt(item) is not null;
+
+    private static DateTimeOffset? ClaimDeliveredAt(RuntimePostCommitOutboxItem item) =>
+        item.Status == RuntimePostCommitOutboxStatus.Delivered && item.DeliveryFencingToken > 0 ? item.DeliveredAt : null;
 
     private static long? Ticks(DateTimeOffset? value) => value?.UtcTicks;
 

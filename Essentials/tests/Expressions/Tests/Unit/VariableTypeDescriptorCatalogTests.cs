@@ -8,6 +8,20 @@ namespace Elsa.Expressions.Tests.Unit;
 
 public sealed class VariableTypeDescriptorCatalogTests
 {
+    [Fact]
+    public void Json_is_a_durable_selectable_type_with_a_json_editor_and_the_existing_contract_alias()
+    {
+        var catalog = new VariableTypeDescriptorCatalog([new DefaultVariableTypeDescriptorProvider()]);
+        var descriptor = Assert.Single(catalog.GetDescriptors(), x => x.Alias == "System.Text.Json.JsonElement");
+
+        Assert.Equal(typeof(System.Text.Json.JsonElement), descriptor.ClrType);
+        Assert.Equal("JSON", descriptor.DisplayName);
+        Assert.Equal("json", descriptor.DefaultEditor);
+        Assert.True(descriptor.SupportsNull);
+        Assert.True(descriptor.SupportsDurability);
+        Assert.Contains("elsa.json", descriptor.CompatibleStorageDriverKeys);
+    }
+
     private sealed class StubProvider(params TypeDescriptor[] descriptors) : IVariableTypeDescriptorProvider
     {
         public IEnumerable<TypeDescriptor> GetDescriptors() => descriptors;

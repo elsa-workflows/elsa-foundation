@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { moveWorkflowDefinitions } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
@@ -10,7 +11,7 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
   context: StudioEndpointContext;
   definitionIds: string[];
   onClose(): void;
-  onMoved(): Promise<void> | void;
+  onMoved(folderId: string | null): Promise<void> | void;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -49,7 +50,7 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
     setMoveError(null);
     try {
       await moveWorkflowDefinitions(context, { definitionIds, folderId: destinationId });
-      await onMoved();
+      await onMoved(destinationId);
       onClose();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The server couldn't complete the move.";
@@ -124,10 +125,13 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
             </div>
           </fieldset>
         </div>
-        <div className="wf-dialog-actions">
-          <button type="button" onClick={onClose} disabled={moving}>Cancel</button>
-          <button type="submit" disabled={moving}>{moving ? "Moving…" : "Move"}</button>
-        </div>
+        <StudioDialogFooter
+          className="wf-dialog-actions"
+          onCancel={onClose}
+          cancelDisabled={moving}
+          confirmLabel={moving ? "Moving…" : "Move"}
+          confirmDisabled={moving}
+        />
       </form>
     </section>
   </div>;

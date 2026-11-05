@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Cable, CheckCircle2, Plus, RefreshCw, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Plus, RefreshCw, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioSearchInput , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar} from "@elsa-workflows/studio-ui";
 import { deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
 import { ConnectionCreateDialog } from "./ConnectionCreateDialog";
@@ -26,13 +26,14 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const loadRequestRef = useRef(0);
   const operationRef = useRef<object | null>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
+  const focusAfterCreate = useRef(false);
   currentContextRef.current = context;
   const contextIsLoaded = loadedContext === context;
   const visibleItems = contextIsLoaded ? items : [];
   const visibleDescriptors = contextIsLoaded ? descriptors : null;
   const selected = visibleItems.find(item => item.name === selectedName) ?? null;
 
-  const load = useCallback(async (query: string, preferredName?: string) => {
+  const load = useCallback(async (query: string) => {
     const requestContext = context;
     const requestId = ++loadRequestRef.current;
     setLoading(true);
@@ -46,7 +47,7 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
       setDescriptors(descriptorResponse);
       setAppliedSearch(query.trim());
       setSelectedName(current => {
-        const candidate = preferredName ?? current;
+        const candidate = current;
         return list.items.some(item => item.name === candidate) ? candidate : null;
       });
     } catch (cause) {
@@ -78,6 +79,16 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     void load("");
     return invalidateRequests;
   }, [load, invalidateRequests]);
+
+  useEffect(() => {
+    if (!creating && focusAfterCreate.current) {
+      focusAfterCreate.current = false;
+      // Dialog cleanup can restore its opener before React removes the empty result.
+      // Restore to the stable search field after that commit, without refocusing on later loads.
+      if (!document.activeElement || document.activeElement === document.body)
+        searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    }
+  }, [creating]);
 
   async function runAction(action: ConnectionAction, connection: ConnectionMetadata) {
     if (operationRef.current) return;
@@ -115,28 +126,23 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     <button type="button" className="connections-icon-button" aria-label="Dismiss notification" onClick={() => setNotice(null)}><X size={14} aria-hidden="true" /></button>
   </div> : null;
 
-  return <section className="connections-shell" aria-label="Connections management">
-    <header className="connections-header">
-      <div className="connections-header-copy"><span className="connections-kicker">Service access</span><h2><Cable size={20} aria-hidden="true" />Connections</h2><p>Connect your services once, then reuse them in your workflows.</p></div>
-      <div className="connections-header-actions">
-        {!loading && contextIsLoaded && !loadError ? <span className="connections-count">{visibleItems.length} shown</span> : null}
-        <div className="connections-page-actions" role="group" aria-label="Connection page actions">
+  return <StudioPage className="connections-shell" aria-label="Connections management">
+    <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows." actions={        <div className="studio-page-actions" role="group" aria-label="Connection page actions">
           <StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />Create connection</StudioButton>
           <StudioButton size="md" onClick={() => void load(appliedSearch)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Refresh</StudioButton>
-        </div>
-      </div>
-    </header>
-    <div className="connections-toolbar">
+        </div>} />
+    <StudioCollectionToolbar>
       <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => { event.preventDefault(); void load(search); }}>
         <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => setSearch(event.target.value)} />
         <StudioButton type="submit" size="md" disabled={loading}>Search</StudioButton>
       </form>
-    </div>
+    </StudioCollectionToolbar>
     {!selected ? notification : null}
     {loadError && contextIsLoaded ? <p className="connections-load-error">{loadError}</p> : null}
-    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onOpen={name => { setNotice(null); setSelectedName(name); }} />
+    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onCreate={visibleDescriptors ? () => { setNotice(null); setCreating(true); } : undefined} onOpen={name => { setNotice(null); setSelectedName(name); }} />
+    {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setSearch(appliedSearch); void load(appliedSearch, created.name); }} /> : null}
-  </section>;
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { focusAfterCreate.current = true; setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
+  </StudioPage>;
 }

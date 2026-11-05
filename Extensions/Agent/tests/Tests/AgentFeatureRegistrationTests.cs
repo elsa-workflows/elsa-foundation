@@ -1,11 +1,10 @@
 using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.Core.Extensions;
+using Elsa.Agent.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.GitHubCopilot.Services;
 using Elsa.Agent.Workflows;
-using Elsa.Agent.Workflows.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Tests;
@@ -15,12 +14,9 @@ public sealed class AgentFeatureRegistrationTests
     [Fact]
     public async Task Github_copilot_feature_registers_provider_facade()
     {
-        var services = new ServiceCollection();
-
-        new GitHubCopilotAgentFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        var agentProvider = Assert.Single(provider.GetServices<IAgentProvider>());
+        using var provider = AgentTestServices.Create(services => new GitHubCopilotAgentFeature().ConfigureServices(services));
+        using var scope = provider.CreateScope();
+        var agentProvider = Assert.Single(scope.ServiceProvider.GetServices<IAgentProvider>());
         Assert.IsType<GitHubCopilotAgentProvider>(agentProvider);
         var diagnostics = await agentProvider.GetDiagnosticsAsync();
         Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
@@ -33,12 +29,10 @@ public sealed class AgentFeatureRegistrationTests
     [Fact]
     public void Workflow_agent_feature_registers_capabilities_and_context()
     {
-        var services = new ServiceCollection();
+        using var root = AgentTestServices.Create(services => new FoundationWorkflowsAgentFeature().ConfigureServices(services));
+        using var scope = root.CreateScope();
+        var provider = scope.ServiceProvider;
 
-        new FoundationWorkflowsAgentFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetRequiredService<IWorkflowChangeProposalService>());
         Assert.Contains(provider.GetServices<IAgentCapabilityProvider>(), x => x.GetCapabilitiesAsync().AsTask().Result.Any(c => c.Id == "workflow.explain"));
         Assert.Contains(provider.GetServices<IAgentContextProvider>(), x => x.ScopeKind == "workflow");
     }
@@ -80,11 +74,15 @@ public sealed class AgentFeatureRegistrationTests
     [Fact]
     public async Task Orchestrator_sends_latest_user_message_and_context_to_provider()
     {
-        var services = new ServiceCollection();
-        services.AddFoundationAgentAbstractions();
         var provider = new CapturingAgentProvider();
-        services.AddSingleton<IAgentProvider>(provider);
-        using var sp = services.BuildServiceProvider();
+        var source = new AgentTestContextSource("feature.fixture.context", "feature.fixture",
+            [new("ctx-1", "feature.fixture", "resource-1", "Selected resource", "test.context", AgentContextSensitivity.Internal,
+                "selection", "Selected resource summary.", null, new Dictionary<string, string>()) { ModuleId = "feature.fixture" }]);
+        using var sp = AgentTestServices.Create(services =>
+        {
+            services.AddSingleton<IAgentProvider>(provider);
+            services.AddSingleton<IAgentContextProvider>(source);
+        });
         using var scope = sp.CreateScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
         var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
@@ -97,13 +95,17 @@ public sealed class AgentFeatureRegistrationTests
             "Test session",
             AgentPolicy.Default,
             new Dictionary<string, string>()));
+        var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
+            new(session.Id, source.ScopeKind, new Dictionary<string, string>()));
+        Assert.True(collected.Succeeded, collected.Error?.Message);
+        var context = collected.Value!.Attachments;
         await sessions.AddMessageAsync(session.Id, new(
             AgentRole.User,
             "Explain this workflow.",
             AgentMessageStatus.Pending,
             "workflow.explain",
-            ["ctx-1"],
-            [new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition", AgentContextSensitivity.Internal, "selection", "Workflow summary.", null, new Dictionary<string, string>())]));
+            context.Select(item => item.Id).ToArray(),
+            context));
 
         await foreach (var _ in streaming.StreamAsync(session.Id))
         {

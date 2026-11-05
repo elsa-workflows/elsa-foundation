@@ -129,6 +129,16 @@ public sealed record ExecutableActivityTemplateOccurrenceOverlay
         OutputBindings = outputBindings?.Clone();
     }
 
+    private IReadOnlyList<ActivityInputContract>? _inputContracts;
+
+    /// <summary>Effective occurrence inputs when the structure adds or consumes ordinary inputs.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityInputContract>? InputContracts
+    {
+        get => _inputContracts;
+        init => _inputContracts = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+
     public string SchemaVersion { get; }
     public JsonElement InputBindings { get; }
     public ExecutableActivityStructure? Structure { get; }
@@ -394,7 +404,10 @@ public sealed record ActivityExecutionLayout(
     string TemplateHash,
     IReadOnlyList<ExecutableActivityLayoutRecord> Nodes,
     IReadOnlyList<ActivityExecutionLayoutConnection> Connections,
-    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries);
+    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries)
+{
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public enum ActivityExecutionLayoutSelection
 {

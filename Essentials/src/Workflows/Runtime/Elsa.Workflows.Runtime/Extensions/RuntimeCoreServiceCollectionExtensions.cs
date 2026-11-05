@@ -67,6 +67,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.ClaimWorkflowAlterationProvider(typeof(InMemoryWorkflowAlterationStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
+        Elsa.Workflows.Runtime.UserTasks.UserTaskRegistration.AddUserTasks(services);
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
@@ -314,7 +315,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IPersistenceAccessContextAccessor>(),
-                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>()));
+                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+                serviceProvider.GetService<IRuntimeAdmissionLoadSignal>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -340,6 +342,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
+        services.TryAddSingleton<DrainControlContext>();
 
         // Live dispatch admission control (RB1, #1235). All three are singletons: the load reading, the limit, and the
         // counters are host-wide facts, and a per-scope controller would see one command at a time and never bound
@@ -361,7 +364,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
         // live-drain accessor and the persistence-mode resolver are wired in every configuration (C1, #1227).
         services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>
-            WorkflowDrainOrchestrator.CreateScoped(
+        {
+            var orchestrator = WorkflowDrainOrchestrator.CreateScoped(
                 serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
                 serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
@@ -377,7 +381,10 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
-                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>()));
+                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>());
+            orchestrator.DrainControls = serviceProvider.GetService<DrainControlContext>();
+            return orchestrator;
+        });
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
@@ -433,7 +440,11 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
-                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>()));
+                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
+            { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
+                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>(),
+                HasResumptionRedriver = serviceProvider.GetServices<IWorkflowDispatchDurabilityEvidence>().Any(evidence =>
+                    string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();
@@ -505,11 +516,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
         // Explicit factory (not greedy ctor selection) so the eviction options are wired in and the provider owns its
         // self-instrumentation meter; the container disposes the singleton (and its meter) on shutdown.
-        services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider =>
-            new InProcessWorkflowExecutionActorProvider(
-                serviceProvider.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
-                serviceProvider.GetRequiredService<RuntimeActorEvictionOptions>()));
-        services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
+        // Keep the configured concrete mailbox provider available to distributed placement too.
+        services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
+        services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider => serviceProvider.GetRequiredService<InProcessWorkflowExecutionActorProvider>());
+        services.TryAddSingleton<IRuntimeExecutionIdGenerator, RuntimeExecutionIdGenerator>();
         services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
         {
             var policies = serviceProvider.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
@@ -531,7 +541,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IWorkflowExecutionStateStore>(),
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
-                serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>());
+                serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

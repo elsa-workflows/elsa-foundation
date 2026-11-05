@@ -23,13 +23,37 @@ Every PR carries this evidence. It is what a reviewer checks, not permission to 
 - A diff review is done, and a revert or mutation bite-proof shows red then green wherever a behavioral change is claimed.
 - The evidence is posted as a PR comment, because that comment is the notification of record.
 
+Visible Studio changes also carry the [UX acceptance receipt](studio-ux-acceptance.md#independent-ux-acceptance-review): exact head, goal/reference, actual states inspected, downloadable composed evidence, independent reviewer, findings/retest and unverified states. Machine proof success is separate from visual approval. Failed or incomplete UX acceptance is not delivery acceptance, including under a standing self-merge exception.
+
 ## CI tiers
 
 CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/test-tiers.json) assigns every test project to one of them and groups the projects into shards that run in parallel.
 
-- **PR tier, on every commit.** The required check `Build & test` is the aggregate of `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards` and `Core-only build & test`. Each shard builds the whole solution and runs its projects, or its share of a long project split by test class.
-- **Full tier, once the PR is not a draft.** The required check `Full tier` (workflow `CI full tier`) runs the integration-tier projects and every EF container suite with its required-provider mode, plus the Secrets EF composition proof. It runs when a PR is opened as ready, reopened, marked ready, and on every push while it is ready.
+- **PR tier, on every commit.** The required check `Build & test` is the aggregate of `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards` and `Core-only build & test`, plus selected Studio frontend/browser/.NET and composed UX acceptance jobs. Selected Studio proof failures or skips fail the aggregate before any docs-only return. Each shard builds the whole solution and runs its projects, or its share of a long project split by test class.
+- **Full tier, once the PR is not a draft.** The required check `Full tier` (workflow `CI`) runs the integration-tier projects and every EF container suite with its required-provider mode, plus the Secrets EF composition proof. It runs when a PR is opened as ready, reopened, marked ready, and on every push while it is ready.
 - **The tier rule.** A test project that reaches Testcontainers, directly or through a referenced test project, is integration tier. So is one that launches a child host (a Workbench host, a child host process, a worker, a probe or the `dotnet-elsa` CLI) and takes 2 minutes or more. Every other project is PR tier. A new test project needs an entry in the manifest; `Generated maps fresh` fails until it has one. Check locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
+
+Focused source proofs also run as jobs in `CI`: Studio frontend/browser/.NET validation, the
+Ubuntu/Windows backend source journeys, Weaver package conformance, and the pinned published-image
+pair. `tools/ci/workflow-paths.json` retains their path scopes. Workflows unit-order checks run in
+the nightly CI run and when the validation routing changes. Select an individual suite without
+starting the backend tiers:
+
+```bash
+gh workflow run ci.yml --ref <branch> -f suite=studio
+```
+
+Other suite values are `backend-source`, `weaver`, `published-images`, and `studio-order`.
+The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready starts a
+complete ready run: the PR tier, full tier, generated maps and affected focused proofs report
+together. It supersedes an in-progress draft run. This avoids
+the protected-merge failure where splitting successful required contexts across draft and ready
+suites still leaves GitHub expecting `Build & test` and `Generated maps fresh` (#3708). A later
+push supersedes that ready run through the same PR concurrency group.
+
+Trusted flake recording, CodeQL scanning, daily stale processing and the weekly branch sweep share the
+`Repository maintenance` workflow. Flake artifacts remain data read by default-branch code with
+a separate issue-write token; ordinary PR jobs still have read-only tokens.
 
 **The draft rule.** A PR stays a draft until its own review is done.
 
@@ -76,6 +100,7 @@ These steps restate [Issue Bus Lite][org-agents-review] for convenience; the org
 - After 6 rounds with blocking findings left, comment `blocked: review loop exhausted` and add `needs:decision`; that escalates to Sipke.
 - Owner exception: an explicit instruction from Sipke in an agent session counts for that one action only. Record it in the PR, for example `merged on Sipke's instruction`.
 - Fallback: while Code Review is unavailable, Sipke may approve and merge manually; agents wait, and no author merges its own PR.
+- An ADR or spec approval/amendment PR in an initiative's scope follows the [initiative boundary and scope rules](initiatives.md#two-planning-systems-and-one-way-of-working), including PRs linked through descendant issues or issues they close; a missing link does not exempt a topic on the board. It stays a draft until the [agreement rule](initiatives.md#how-work-flows) is met on its final text and approval plan: every designated human non-author approver has approved the current head, or an earlier commit whose changed files are identical to it, and any designated human author has recorded agreement without self-approving. Code Review does not approve or merge it before then. Bot review never counts as architectural agreement, and a manual merge follows the same rule. A substantive change (any change to the files the PR changes) or a changed approval plan requires fresh agreement; a merge of `main` that leaves those files identical does not. A delivery PR that only advances an already agreed spec's lifecycle status follows the normal merge path without reopening its architectural agreement.
 - When a stop condition in the org file applies, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing) and unassign yourself. Red checks on the base branch count only when they are required checks.
 
 ## Post-merge gates

@@ -1,0 +1,11 @@
+{
+  "pendingParentRecoveries": 6,
+  "nativeParentOutcomesApplied": 4,
+  "terminalDispositionsWithoutParentConsumption": 2,
+  "retainedNativeTerminals": 12,
+  "wholeStoresVerified": 8,
+  "frozenAuthoringPreserved": true,
+  "sourceRevision": "5618ed377594d6cd8428fdd3ff37cca357004722",
+  "allLegacyFamiliesRecovered": false,
+  "studioAcceptanceProved": false
+}

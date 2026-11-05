@@ -52,6 +52,11 @@ html:not([data-theme-material]) .wf-activity-icon[data-tone] {
   color: var(--studio-accent);
 }
 
+.wf-node-context-action[aria-pressed="true"] {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
 .wf-node-context-action-delete:hover {
   background: color-mix(in srgb, var(--studio-danger) 12%, transparent);
   color: var(--studio-danger-fg);

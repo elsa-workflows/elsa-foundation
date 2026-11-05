@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "privateInvalidCallbackPinRefused": true,
+  "mutatedPrivateSnapshotSha256": "28bdf7ae130ee707b02ddead3b3152436bc9217707ad38ebf39537778411832f",
+  "originalUnchanged": true,
+  "weakerReaderAlsoRefused": true,
+  "guardRemovalProved": false,
+  "upgradedHostRecoveryProved": false
+}

@@ -22,6 +22,210 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
             // SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.
 
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("WorkingCopyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("WorkingCopyKey", "Revision", "Key");
+
+                    b.ToTable("elsa_workflow_sources_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("SnapshotKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SnapshotKey");
+
+                    b.ToTable("elsa_workflow_sources_pins", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Authority")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CopyId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<bool>("Discarded")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("Fence")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("NameSearchKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Partition")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SourceIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SourceIdentity")
+                        .IsUnique()
+                        .HasFilter("[SourceIdentity] IS NOT NULL");
+
+                    b.HasIndex("ScopeKey", "Discarded", "Key");
+
+                    b.ToTable("elsa_workflow_sources_copies", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
@@ -144,6 +348,9 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsConcurrencyToken()
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<long>("LibraryModifiedTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -170,6 +377,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "Id");
+
+                    b.HasIndex("ScopeKey", "LibraryModifiedTicks", "IdLookupHash");
 
                     b.HasIndex("ScopeKey", "Name", "Id");
 
@@ -199,18 +408,33 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<long>("LibraryCreatedTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LibraryIdentitySortKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(512)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<long>("LibraryModifiedTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)")
                         .UseCollation("Latin1_General_100_BIN2");
-
-                    b.Property<string>("StateSource")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -233,7 +457,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.HasIndex("SchemaVersion");
 
+                    b.HasIndex("SourceKey");
+
                     b.HasIndex("ScopeKey", "WorkflowDefinitionIdLookupHash", "LastModifiedAt", "IdLookupHash");
+
+                    b.HasIndex("ScopeKey", "WorkflowDefinitionIdLookupHash", "LibraryModifiedTicks", "LibraryCreatedTicks", "LibraryIdentitySortKey");
 
                     b.ToTable("elsa_workflow_definition_drafts", (string)null);
                 });
@@ -510,13 +738,704 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.ToTable("elsa_design_operations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFavoriteEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DefinitionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SubjectHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SubjectId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "DefinitionHash");
+
+                    b.HasIndex("ScopeKey", "SubjectHash", "DefinitionHash")
+                        .IsUnique();
+
+                    b.ToTable("elsa_workflow_favorites", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Depth")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("NameHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ParentId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ParentKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(641)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(641)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "ParentId");
+
+                    b.HasIndex("ScopeKey", "Path");
+
+                    b.HasIndex("ScopeKey", "ParentKey", "NameHash")
+                        .IsUnique();
+
+                    b.ToTable("elsa_workflow_folders", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowLibraryAuditEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "TargetId");
+
+                    b.ToTable("elsa_workflow_library_audit", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowLibraryFenceEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_library_fence", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowLibraryViewEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("OperationFingerprint")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("OwnerHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<bool>("Shared")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "OwnerHash");
+
+                    b.HasIndex("ScopeKey", "Shared");
+
+                    b.HasIndex("ScopeKey", "OwnerHash", "OperationKey")
+                        .IsUnique()
+                        .HasFilter("[OperationKey] IS NOT NULL");
+
+                    b.ToTable("elsa_workflow_library_views", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowOrganizationEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DefinitionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("DefinitionId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("FolderId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("Published")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "DefinitionHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "FolderId");
+
+                    b.HasIndex("ScopeKey", "Published", "DefinitionHash");
+
+                    b.ToTable("elsa_workflow_organization", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagAssignmentEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DefinitionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TagId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ValueKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "DefinitionHash", "TagId", "ValueKey")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "TagId", "ValueKey", "DefinitionHash");
+
+                    b.ToTable("elsa_workflow_tag_assignments", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Cardinality")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("Deprecated")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<bool>("EverAssigned")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("NameHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("OperationFingerprint")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ValuesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "NameHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "OperationKey")
+                        .IsUnique()
+                        .HasFilter("[OperationKey] IS NOT NULL");
+
+                    b.ToTable("elsa_workflow_tags", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTemplateEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_templates", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Elsa.Persistence.Core.SourceWorkingCopy", null)
+                        .WithMany()
+                        .HasForeignKey("WorkingCopyKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", b =>
                 {
+                    b.HasOne("Elsa.Persistence.Core.SourceWorkingCopy", "Source")
+                        .WithMany()
+                        .HasForeignKey("SourceKey")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", "WorkflowDefinition")
                         .WithMany()
                         .HasForeignKey("ScopeKey", "WorkflowDefinitionIdLookupHash")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Source");
 
                     b.Navigation("WorkflowDefinition");
                 });
@@ -552,6 +1471,52 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired();
 
                     b.Navigation("WorkflowDefinitionVersion");
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFavoriteEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "DefinitionHash")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowOrganizationEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "DefinitionHash")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "FolderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagAssignmentEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "DefinitionHash")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "TagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

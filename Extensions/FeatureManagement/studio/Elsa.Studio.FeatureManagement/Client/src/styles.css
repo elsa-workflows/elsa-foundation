@@ -15,13 +15,8 @@
   --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 14px;
   container-type: inline-size;
   container-name: feature-management;
-}
-
-.feature-management-header {
-  align-items: center;
 }
 
 .feature-management-inspector-heading button,
@@ -370,6 +365,10 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+.feature-management-list > .feature-management-muted {
+  padding-inline: 13px;
 }
 
 .feature-management-card {
@@ -915,7 +914,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--studio-surface, var(--card));
-  box-shadow: 0 24px 70px var(--fm-overlay-strong);
+  box-shadow: var(--studio-shadow-sm);
   overflow: hidden;
 }
 

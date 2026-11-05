@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Acme.Home.Weaver</PackageId>
+    <AssemblyName>Acme.Home.Weaver</AssemblyName>
+    <Version>__FIXTURE_VERSION__</Version>
+    <Description>Independent personal Home widget Weaver contribution witness.</Description>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Elsa.Agent.Core" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="Elsa.Foundation.Identity.Core" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="Elsa.Studio.Preferences.Core" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" Version="__CSHELLS_VERSION__" />
+    <InternalsVisibleTo Include="Acme.Home.Weaver.Tests" />
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

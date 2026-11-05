@@ -132,37 +132,48 @@ test("a repeated scope picks its occurrence by keyboard, and names a Compensate 
 
 // Spec 260: operator actions on a waiting recovery.
 
-test("retries a failed handler by keyboard: the dialog names target and effect, then the row shows submitted, Applying… and the result", async ({ page }) => {
-  await page.goto("/?mode=compensation-scope&view=actions&theme=light");
+for (const frameDelay of [0, 900]) {
+  test(`retries a failed handler by keyboard: the dialog names target and effect, then the row shows submitted, Applying… and the result${frameDelay ? " with delayed animation frames" : ""}`, async ({ page }) => {
+    if (frameDelay) {
+      await page.addInitScript(delay => {
+        const requestFrame = window.requestAnimationFrame.bind(window);
+        window.requestAnimationFrame = callback => requestFrame(time => window.setTimeout(() => callback(time), delay));
+      }, frameDelay);
+    }
+    await page.goto("/?mode=compensation-scope&view=actions&theme=light");
 
-  await expect(page.locator(".wf-compensation-source")).toHaveText("From the scope's journal.");
-  await expect(page.locator(".wf-compensation-cause")).toContainText("(message withheld)");
-  await expect(page.locator(".wf-compensation-remaining")).toContainText("Still to undo, in this order: Reserve delivery, Reserve inventory.");
+    await expect(page.locator(".wf-compensation-source")).toHaveText("From the scope's journal.");
+    await expect(page.locator(".wf-compensation-cause")).toContainText("(message withheld)");
+    await expect(page.locator(".wf-compensation-remaining")).toContainText("Still to undo, in this order: Reserve delivery, Reserve inventory.");
 
-  const retry = page.getByRole("button", { name: "Retry the compensation of Reserve delivery", exact: true });
-  await retry.focus();
-  await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: 'Retry the compensation of "Reserve delivery"?' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('Scope "Order" › step "Reserve delivery" › compensation "Cancel delivery"');
-  await expect(dialog).toContainText("Attempt 4 (limit 3 reached) · incident inc-5 · run wf-42");
-  await expect(dialog).toContainText('Runs "Cancel delivery" again with the same operation key (ae-scope/step/1/compensate).');
-  await expect(dialog).toContainText('If it succeeds, recovery continues with "Release inventory", the compensation of "Reserve inventory".');
-  const reason = dialog.getByRole("textbox", { name: "Reason (optional)", exact: true });
-  await expect(reason).toBeFocused();
-  await expect(reason).toHaveAccessibleDescription(/Visible to everyone who can view this run\. Do not include secrets\./);
-  await reason.fill("Delivery service restored");
-  await dialog.getByRole("button", { name: "Retry", exact: true }).press("Enter");
+    const retry = page.getByRole("button", { name: "Retry the compensation of Reserve delivery", exact: true });
+    await retry.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: 'Retry the compensation of "Reserve delivery"?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Scope "Order" › step "Reserve delivery" › compensation "Cancel delivery"');
+    await expect(dialog).toContainText("Attempt 4 (limit 3 reached) · incident inc-5 · run wf-42");
+    await expect(dialog).toContainText('Runs "Cancel delivery" again with the same operation key (ae-scope/step/1/compensate).');
+    await expect(dialog).toContainText('If it succeeds, recovery continues with "Release inventory", the compensation of "Reserve inventory".');
+    const reason = dialog.getByRole("textbox", { name: "Reason (optional)", exact: true });
+    await expect(reason).toBeFocused();
+    await expect(reason).toHaveAccessibleDescription(/Visible to everyone who can view this run\. Do not include secrets\./);
+    await reason.fill("Delivery service restored");
+    await dialog.getByRole("button", { name: "Retry", exact: true }).press("Enter");
 
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("status")).toHaveText("Retry submitted");
-  await expect(page.getByLabel("Recovery: Retry submitted")).toBeVisible();
-  // The Retry button is gone while the action is followed, so focus is on the row's state chip.
-  await expect(page.getByRole("button", { name: "Recovery: Needs action (1st) · Attempt 3 of 3. Show this occurrence", exact: true })).toBeFocused();
-  await expect(page.getByRole("status")).toHaveText("Retry applied.", { timeout: 10_000 });
-  await expect(page.getByLabel(/^Recovery: Resolved: effect absent/)).toBeVisible();
-  await expect(page.getByTestId("fixture-submissions")).toHaveText(/^studio-[0-9a-f-]+$/);
-});
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("status")).toHaveText("Retry submitted");
+    await expect(page.getByLabel("Recovery: Retry submitted")).toBeVisible();
+    // Follow the same recovery control through completion: delayed frames can restore focus after its label changes.
+    const deliveryRow = page.getByRole("listitem", { name: "Step 2, Reserve delivery, compensated by Cancel delivery", exact: true });
+    const recoveryChip = deliveryRow.getByRole("button", { name: /^Recovery:.*Show this occurrence$/ });
+    await expect(recoveryChip).toBeFocused();
+    await expect(page.getByRole("status")).toHaveText("Retry applied.", { timeout: 10_000 });
+    await expect(page.getByLabel(/^Recovery: Resolved: effect absent/)).toBeVisible();
+    await expect(recoveryChip).toBeFocused();
+    await expect(page.getByTestId("fixture-submissions")).toHaveText(/^studio-[0-9a-f-]+$/);
+  });
+}
 
 test("resolves only after an outcome and a reason, and abandons with a danger confirmation that lists what stays not undone", async ({ page }) => {
   await page.goto("/?mode=compensation-scope&view=actions&theme=light");

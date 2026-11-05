@@ -11,8 +11,8 @@ internal sealed class StagingPausePublisherFactory(IFileChunkPublisherFactory in
 
     private int PrefixLength(EtlFileChunkFormat format, int count)
     {
-        var selected = pause == EtlWorkerWritePause.SourceSnapshot && format == EtlFileChunkFormat.Csv ||
-                       pause == EtlWorkerWritePause.OutputChunk && format == EtlFileChunkFormat.Jsonl;
+        var selected = pause == EtlWorkerWritePause.SourceSnapshot && format is EtlFileChunkFormat.Csv or EtlFileChunkFormat.JsonlSnapshot ||
+                       pause == EtlWorkerWritePause.OutputChunk && format is EtlFileChunkFormat.Jsonl or EtlFileChunkFormat.CsvOutput;
         return selected && count > 1 && Interlocked.CompareExchange(ref _paused, 1, 0) == 0 ? count / 2 : 0;
     }
 
@@ -21,9 +21,9 @@ internal sealed class StagingPausePublisherFactory(IFileChunkPublisherFactory in
     {
         var extension = format switch
         {
-            EtlFileChunkFormat.Csv => ".csv",
+            EtlFileChunkFormat.Csv or EtlFileChunkFormat.CsvOutput => ".csv",
             EtlFileChunkFormat.Index => ".index",
-            EtlFileChunkFormat.Jsonl => ".jsonl",
+            EtlFileChunkFormat.Jsonl or EtlFileChunkFormat.JsonlSnapshot => ".jsonl",
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
         await EtlWorkerProtocol.WriteStagingAsync(root, role,
@@ -42,6 +42,10 @@ internal sealed class StagingPausePublisherFactory(IFileChunkPublisherFactory in
                 using var wrapper = new HeldWriteStream(destination, owner, format, outputRoot, effectIdentity);
                 await write(wrapper, token);
             }, cancellationToken);
+
+        public ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
+            CancellationToken cancellationToken = default) =>
+            inner.FindAsync(outputRoot, effectIdentity, maxBytes, cancellationToken);
     }
 
     private sealed class HeldWriteStream(Stream destination, StagingPausePublisherFactory owner,

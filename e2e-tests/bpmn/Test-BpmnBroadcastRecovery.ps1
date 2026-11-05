@@ -13,6 +13,7 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
+    [string] $RetainedSnapshotDirectory,
     [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit', 'renewed-claim', 'republished-cohort', 'same-artifact-shed', 'local-scope', 'correlation-scope', 'collected-proposal')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
@@ -72,6 +73,13 @@ $settingsPath = Join-Path $root 'shells.json'
 $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json -AsHashtable
 $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirectory = $control }
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
+if ($RetainedSnapshotDirectory) {
+    # Keep authentication material out of whole-store upgrade inputs at creation time.
+    # Never sanitize an already-written positive runtime checkpoint.
+    foreach ($feature in @('IdentityIamEntityFrameworkCore', 'IdentityProviderConfigurationEntityFrameworkCore', 'FoundationIdentityAspNetCoreIdentityEntityFrameworkCore', 'SecretsEntityFrameworkCore')) {
+        $settings.CShells.Shells.default.Features[$feature]['ConnectionString'] = 'Data Source=private-identity.db'
+    }
+}
 if ($republishedCohort -or $collectionWins) {
     $settings.CShells.Shells.default.Features.WorkflowsRuntimeReferenceGarbageCollection = @{
         SweepIntervalMinutes = 0.02; MaxBackoffIntervalMinutes = 0.1; ArtifactCreationGracePeriodMinutes = 0
@@ -142,6 +150,10 @@ function Observe([string] $Name, [string[]] $ExtraIds, [string] $Marker = $marke
     if ($sameArtifactShed -and $receipt.loadWorkflowId) { $ExtraIds = @($ExtraIds) + @($receipt.loadWorkflowId) }
     if ($scopedEligibility) { $ExtraIds = @($ExtraIds) + @($receipt.excludedWorkflowIds) }
     $arguments = @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $Marker, '--output', $path)
+    if ($Name -eq 'stopped' -and $RetainedSnapshotDirectory) {
+        $null = New-Item -ItemType Directory -Force $RetainedSnapshotDirectory
+        $arguments += @('--retain-snapshot', (Join-Path $RetainedSnapshotDirectory "$caseId-stopped.sqlite"))
+    }
     foreach ($id in $ExtraIds) { $arguments += @('--extra-workflow', $id) }
     & $Python @arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "The checked $Name observation failed." }

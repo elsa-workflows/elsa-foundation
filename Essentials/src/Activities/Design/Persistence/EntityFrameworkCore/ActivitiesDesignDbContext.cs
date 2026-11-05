@@ -74,6 +74,8 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
         ConfigureEntity<ActivityDraftValidationState>(modelBuilder, "elsa_activity_draft_validations");
         ConfigureEntity<ActivityDefinitionVersionPublication>(modelBuilder, "elsa_activity_version_publications");
         ConfigureEntity<ActivityDefinitionVersionLayout>(modelBuilder, "elsa_activity_version_layouts");
+        modelBuilder.Entity<ActivityDefinitionDraftLayout>().Property(x => x.ActivityPresentation).HasDefaultValueSql("('[]')");
+        modelBuilder.Entity<ActivityDefinitionVersionLayout>().Property(x => x.ActivityPresentation).HasDefaultValueSql("('[]')");
         ConfigureEntity<ActivityDependencyEdge>(modelBuilder, "elsa_activity_dependency_edges");
         ConfigureEntity<ActivityDependencyProjectionState>(modelBuilder, "elsa_activity_dependency_projection");
         ConfigureEntity<ActivityForkCandidate>(modelBuilder, "elsa_activity_fork_candidates");
@@ -426,9 +428,11 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     private static void ConfigureImmutableProperties(ModelBuilder modelBuilder)
     {
         // Hash and InputsSource are write-once after insert (PropertySaveBehavior.Throw on SaveChanges).
-        // The single sanctioned exception is IRefreshActivityDefinitionVersionCommand: a tier-only
+        // The single sanctioned exception is IRefreshActivityDefinitionVersionCommand: an input-presentation
         // catalog refresh, which uses ExecuteUpdateAsync with a hash compare-and-swap so it never
-        // goes through this guard. No other caller may rewrite those columns.
+        // goes through this guard. That command also permits a palette-facet-only refresh using the
+        // executable hash AND previous serialized facets as its compare-and-swap condition.
+        // No other caller may rewrite those columns.
         var immutable = new[]
         {
             (typeof(ActivityDefinition), "ActivityTypeKey"),

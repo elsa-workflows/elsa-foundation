@@ -24,16 +24,75 @@ The owner contributes `activities/design:read`, `activities/design:manage`, `act
 
 These are single-owner seams. Replace them through DI; do not register competing implementations and rely on resolution order.
 
+### `IActivityAuthoringCatalog` *(Contract — `Elsa.Activities.Design.Core`)*
+
+| Contract | Default | Purpose |
+|---|---|---|
+| `IActivityAuthoringCatalog` | `HttpActivityAuthoringCatalog` (`internal sealed`) | The actor-gated authoring catalog for consumers that may couple only to `.Core` contracts, such as Weaver's workflow context (spec 1193, FR-003). |
+
+- **Signature:** [`IActivityAuthoringCatalog`](../Core/Contracts/IActivityAuthoringCatalog.cs):
+  `CanReadAsync(): ValueTask<bool>` and `ListAsync(): ValueTask<ActivityAuthoringCatalogResult>`, with the
+  [Core models](../Core/Models/ActivityAuthoringCatalogEntry.cs) `ActivityAuthoringCatalogResult`,
+  `ActivityAuthoringCatalogEntry` and `ActivityAuthoringCatalogInput`, and `ActivityAuthoringCatalogUnavailableException`.
+- **When to override:** a host whose activity authority is not the request principal's `activities/design:read` grant, or
+  whose designer catalog is not `IActivityAuthoringCatalogReader`, replaces it so `.Core` consumers see the same catalog
+  and gate the designer applies. Replacing only the catalog reader is usually enough, because the default reads through it.
+
+`ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
+gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
+`IPermissionAuthorizationService` with the current request (`HttpContext`) as the resource, as the catalog route's
+policy handler has: the same principal and tenant. During a Weaver turn the current request is the agent's own (for
+example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the agent request,
+not the catalog route. A missing request, an unnormalized
+principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
+designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
+addable or not, with `Available`, `AvailabilityReason`, activity type and exact version identity, display data and
+declared inputs with `IsRequired`, `IsSensitive`, `IsCredential` and the optional `UiHint` (spec 1193 slice D; Minor,
+additive), and the computed `IsMasked`: sensitive, a credential or hinted `password`, which is exactly what the designer
+masks. `UiHint` is part of the record's value equality, so two inputs that differ only in their hint are not equal. No
+default value or authored binding is carried. The
+catalog is not narrowed per actor, because the designer offers no per-actor narrowing; tenant scoping is the stores'.
+`CanReadAsync` is the gate alone and reads no entries.
+
+Infrastructure failures, including a cancellation the caller did not request, become
+`ActivityAuthoringCatalogUnavailableException` (Core), with a fixed message, the stable code
+`activities.catalog.unavailable` and the original cause as `InnerException`. Only the caller's own cancellation propagates.
+
+It is a replacement contract with one implementation per shell, declared in the contract's documentation, as
+`IWorkflowDefinitionAuthorizer` is. `EnsureReplacementContract` is not used because its marker attribute lives in
+Foundation Identity Core, which this `.Core` does not reference. Duplicates are detected in two places:
+
+- `ActivitiesDesignApiFeature.ConfigureServices` throws when the collection already holds more than one registration,
+  so this holds with or without the Tasks feature;
+- `ActivityAuthoringCatalogStartupTask` fails startup when a registration added after the feature makes a second one. It
+  runs only where the Tasks feature is composed (the feature does not depend on Tasks, because several composed hosts
+  omit it). It owns only the configuring collection, so a copied child shell checks its own registrations, and repeated
+  configuration keeps one validator. `IWorkflowDefinitionAuthorizer`'s startup validator has the same Tasks condition.
+
+Consumers that resolve `IEnumerable<IActivityAuthoringCatalog>` must fail closed on zero or several implementations, as
+the Agent workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
+is the accepted exception that `IWorkflowDefinitionAuthorizer` also uses, so a duplicate added after the Tasks-less
+configuration still cannot select an implementation; the Agent-wide gap for existing contracts is #3633. Adding the
+contract is **Minor**, additive.
+
 ## Provider contributors
 
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
-| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
+| `IActivityProviderDiagnosticCatalog.DiagnosticDescriptors : IReadOnlyList<ActivityProviderDiagnosticDescriptor>` | Optional interface on a registered provider, template compiler or dependency discoverer. Declare at most 128 static public code/message/remediation entries, with optional fixed JSON pointer and action label. Each registry snapshots declarations at registration; no extra DI registration is needed. | `ActivityProviderRegistry`, `ActivityTemplateProviderCompilerRegistry` and `ActivityTemplateDependencyDiscovererRegistry` project recognized codes through the shared sanitizer. | `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
 | `IActivityProviderReferenceRewriter` | Enumerable, provider/schema-aware contributor. Opaque manifests are never rewritten by universal JSON guessing. | Publishing upgrade-plan persistence invokes the matching provider rewriter for exact occurrence replacements. | `GraphActivityProviderReferenceRewriter` *(cross-domain — Activities Graph Design)* |
 | `IBuiltInAuthoringDescriptorProvider` | Enumerable. Contributes code-owned authoring-catalog descriptors that have no persisted CLR/JSON catalog row. The catalog handler always appends them and never gates them by availability policy. | `ListActivityAuthoringCatalog` merges the contributed descriptors into the available-activity list. | `IntrinsicAuthoringDescriptorProvider` — surfaces the Set Variable and Set Output engine intrinsics (ADR 0045) so the palette can author variable and output assignment. |
 
 Provider packages own these implementations and their feature registrations. The Activity Graph contribution is
 documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_POINTS.md).
+
+Public diagnostic declarations must never derive from authored content, credentials, exceptions or runtime
+diagnostic text. The sanitizer uses only the registered explanation/location/action for a recognized code;
+runtime subjects, paths, remediation and metadata are discarded. Invalid, ambiguous or undeclared entries
+use a plain safe fallback with the technical code retained separately. Messages and remediation are bounded
+to 512 characters, pointers to 256 and action labels to 80. The contribution does not grant authorization,
+change validation severity or make an invalid draft publishable.
 
 Each authorable manifest schema declares its supported migration sources. The legacy schema-version list applies only
 to that same provider; cross-provider migrations must declare exact provider-key and schema-version pairs. Capability
