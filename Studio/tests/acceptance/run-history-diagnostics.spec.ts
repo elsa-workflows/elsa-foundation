@@ -168,20 +168,25 @@ test("diagnose exact executions, long history, retention and restricted access",
   const loadingResponse = page.waitForResponse(response => {
     const url = new URL(response.url());
     return response.ok() && url.pathname.endsWith(`/runtime/workflows/instances/${run}/history`)
-      && !url.searchParams.has("cursor") && !url.searchParams.has("activityExecutionId");
-  }, { timeout: 60_000 });
+      && url.searchParams.get("category") === "WorkflowLifecycle" && !url.searchParams.has("cursor") && !url.searchParams.has("activityExecutionId");
+  }, { timeout: 60_000 }).then(response => ({ ok: true as const, response }), error => ({ ok: false as const, error }));
   try {
     await transport.send("Network.enable");
     await transport.send("Network.emulateNetworkConditions", { offline: false, latency: 3000, downloadThroughput: -1, uploadThroughput: -1 });
-    await page.goto(`/workflows/instances/${run}?selected=${encodeURIComponent(firstOwner)}&historyDetail=all`);
+    // Change a real server query on the mounted workbench; shell-module bootstrap is outside this capture.
+    await timelineOf(page).getByRole("combobox", { name: "History category", exact: true }).selectOption("WorkflowLifecycle");
     const loading = timelineOf(page).getByText("Loading recorded history…", { exact: true });
     await expect(loading).toBeVisible({ timeout: 60_000 }); await expect(timelineOf(page)).toHaveAttribute("aria-busy", "true");
     await loading.scrollIntoViewIfNeeded(); await capture(page, info, "loading-history");
+    const received = await loadingResponse;
+    if (!received.ok) throw received.error;
+    const loaded = await received.response.json() as RuntimeHistoryPage;
+    expect(loaded.items.length).toBeGreaterThan(0); expect(loaded.items.every(event => event.category === "WorkflowLifecycle")).toBe(true);
+    await expect(timelineOf(page).locator("[data-history-event-id]").first()).toBeVisible();
   } finally {
     await transport.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }); await transport.detach();
   }
-  const loaded = await (await loadingResponse).json() as RuntimeHistoryPage;
-  expect(loaded.items.length).toBeGreaterThan(0); await expect(timelineOf(page).locator("[data-history-event-id]").first()).toBeVisible();
+  await timelineOf(page).getByRole("combobox", { name: "History category", exact: true }).selectOption("");
 
   // A stock structural activity genuinely resolves a child fault; no closed incident is seeded.
   const recovered = await execute(await publish(node("absorbing-scope", types.compensation, { faultAfterCompensation: false }, {
