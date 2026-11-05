@@ -17,9 +17,10 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   useEffect(() => { if (editing) editor.current?.querySelector<HTMLInputElement>("input")?.focus(); }, [editing]);
   const closeEditor = () => {
     const focused = document.activeElement;
+    const restoreFocus = focused === document.body || Boolean(editor.current?.contains(focused));
     setFormError(""); setEditing(false); setForm(initial());
     requestAnimationFrame(() => {
-      if (document.activeElement === document.body || document.activeElement === focused) createButton.current?.focus();
+      if (restoreFocus && (document.activeElement === document.body || document.activeElement === focused)) createButton.current?.focus();
     });
   };
   const [form, setForm] = useState(initial); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [busy, setBusy] = useState(false);
@@ -56,7 +57,7 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   };
   const valid = form.id.trim() && form.version.trim() && form.name.trim() && form.fields.every(item => item.key.trim() && item.label.trim()) && new Set(form.fields.map(item => item.key)).size === form.fields.length;
   return <StudioPage className="user-tasks" aria-label="Reusable task forms management"><StudioPageHeader title={editing ? "New form version" : opened ? opened.form.name : "Reusable task forms"} description="Manage published task forms. Selecting a form in a workflow pins its current version automatically." actions={<>
-      {!editing && !opened && identity?.canManageForms && <StudioButton ref={createButton} variant="primary" onClick={() => { setFormError(""); setNotice(""); setForm(initial()); setEditing(true); }}>Create form version</StudioButton>}
+      {!editing && !opened && identity?.canManageForms && <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={() => { setFormError(""); setNotice(""); setForm(initial()); setEditing(true); }}>Create form version</StudioButton>}
       <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a></>} />
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}
     {formError && editing ? <StudioAlert tone="danger">{formError}{versionConflict && <StudioButton disabled={busy} onClick={() => void recoverVersion()}>Use next available version</StudioButton>}</StudioAlert> : null}
@@ -65,10 +66,10 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
       <StudioTableContainer role="region" aria-label="Reusable form versions" tabIndex={0}>
         {loading ? <SkeletonRows rows={3} label="Loading form versions" /> : versions.length ? <table className="studio-table user-task-forms-table" aria-label="Reusable task forms">
           <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Version</th>{identity?.canManageForms && <th scope="col">Actions</th>}</tr></thead>
-          <tbody>{versions.map(version => <tr key={`${version.form.id}/${version.form.version}`}><td><button type="button" className="user-task-link" ref={node => { if (returnKey.current === `${version.form.id}/${version.form.version}`) returnButton.current = node; }} onClick={() => { returnKey.current = `${version.form.id}/${version.form.version}`; setOpened(version); }}>{version.form.name}</button></td><td>{version.form.id}</td><td>{version.form.version}</td>
+          <tbody>{versions.map(version => <tr key={`${version.form.id}/${version.form.version}`}><td><button type="button" className="user-task-link" disabled={busy} ref={node => { if (returnKey.current === `${version.form.id}/${version.form.version}`) returnButton.current = node; }} onClick={() => { returnKey.current = `${version.form.id}/${version.form.version}`; setOpened(version); }}>{version.form.name}</button></td><td>{version.form.id}</td><td>{version.form.version}</td>
             {identity?.canManageForms && <td>{version.form.provider === basicProvider && <StudioButton disabled={busy} onClick={() => void nextVersion(version)}>Create next version</StudioButton>}</td>}</tr>)}</tbody>
         </table> : !error && <StudioResultState title="No reusable forms yet" description="Reusable forms define the fields people fill in when responding to a task."
-          actions={identity?.canManageForms ? <StudioButton variant="primary" onClick={() => { setFormError(""); setNotice(""); setForm(initial()); setEditing(true); }}>Create form version</StudioButton> : undefined} />}
+          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={() => { setFormError(""); setNotice(""); setForm(initial()); setEditing(true); }}>Create form version</StudioButton> : undefined} />}
       </StudioTableContainer>
       {!loading && !error && <StudioCollectionFooter><span>{versions.length} form {versions.length === 1 ? "version" : "versions"} shown</span>
         {nextPage && <StudioButton disabled={busy} onClick={() => { setBusy(true); void forms(api, nextPage).then(page => { setVersions(previous => [...previous, ...page.items]); setNextPage(page.next ?? null); }, failure => setError(message(failure))).finally(() => setBusy(false)); }}>More form versions</StudioButton>}
@@ -78,7 +79,7 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
       <div className="user-task-detail-header"><div><h2 ref={previewHeading} tabIndex={-1}>Published version {opened.form.version}</h2><p>{opened.form.id}</p></div>
         <div className="user-task-actions">
           {identity?.canManageForms && opened.form.provider === basicProvider && <StudioButton variant="primary" disabled={busy} onClick={() => void nextVersion(opened)}>Create next version</StudioButton>}
-          <StudioButton onClick={() => { setOpened(null); requestAnimationFrame(() => returnButton.current?.focus()); }}>Back to forms</StudioButton>
+          <StudioButton disabled={busy} onClick={() => { setOpened(null); requestAnimationFrame(() => returnButton.current?.focus()); }}>Back to forms</StudioButton>
         </div>
       </div>
       <p>This published form is immutable. Create a new version to change its fields. Open tasks keep this version.</p>

@@ -341,3 +341,34 @@ it("does not steal a form row's keyboard focus when publication restores the lis
     expect(document.activeElement).toBe(row);
   } finally { frame.mockRestore(); }
 });
+
+it("keeps focus moved outside the editor while publication is pending", async () => {
+  const frames: FrameRequestCallback[] = [];
+  const frame = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length; });
+  let release!: () => void; const pending = new Promise<void>(resolve => { release = resolve; });
+  try {
+    let form = { id: "purchase", version: "1", name: "Purchase", provider: "elsa.basic-forms/1", fields: [] };
+    const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [{ form, createdAt: "2026-11-02T10:00:00Z" }] });
+    const post = vi.fn(async (_path: string, value: typeof form) => { await pending; form = value; return {}; });
+    await act(async () => root.render(<FormsPage api={api(get, post)} />));
+    await click("Create next version"); await click("Publish form version");
+    const inbox = container.querySelector<HTMLAnchorElement>("a")!; inbox.focus();
+    await act(async () => release()); await vi.waitFor(() => expect(frames.length).toBeGreaterThan(0));
+    frames.splice(0).forEach(callback => callback(0)); expect(document.activeElement).toBe(inbox);
+  } finally { release(); frame.mockRestore(); }
+});
+
+it.each([false, true])("prevents competing local navigation while resolving the next version (preview=%s)", async preview => {
+  const form = { id: "purchase", version: "1", name: "Purchase", provider: "elsa.basic-forms/1", fields: [] };
+  const page = { items: [{ form, createdAt: "2026-11-02T10:00:00Z" }] };
+  let release!: (value: typeof page) => void; const pending = new Promise<typeof page>(resolve => { release = resolve; }); let waiting = false;
+  const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : waiting ? pending : page);
+  await act(async () => root.render(<FormsPage api={api(get)} />));
+  if (preview) await click("Purchase");
+  waiting = true; await click("Create next version");
+  try {
+    const competing = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === (preview ? "Back to forms" : "Create form version"))!;
+    expect(competing.disabled).toBe(true);
+    if (!preview) expect(container.querySelector<HTMLButtonElement>("tbody button.user-task-link")!.disabled).toBe(true);
+  } finally { await act(async () => release(page)); }
+});
