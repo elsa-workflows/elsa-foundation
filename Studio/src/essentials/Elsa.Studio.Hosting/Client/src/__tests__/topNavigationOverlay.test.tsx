@@ -130,6 +130,63 @@ describe("top navigation Build overlay", () => {
     expect(document.activeElement).toBe(groupButton());
   });
 
+  it("keeps top no-match feedback inside the dismissible results surface", async () => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    setSearch(search, "absent-destination");
+    const results = groupPanel()!;
+    expect(results.querySelector('[role="status"]')?.textContent).toBe('No destinations match "absent-destination".');
+    expect(container.querySelectorAll('.sidebar-search-empty')).toHaveLength(1);
+    search.focus();
+
+    await act(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+
+    expect(groupPanel()).toBeNull();
+    expect(results.hidden).toBe(true);
+    expect(document.activeElement).toBe(search);
+    expect(search.value).toBe("absent-destination");
+    setSearch(search, "absent-destination-again");
+    expect(groupPanel()?.querySelector('[role="status"]')?.textContent).toContain("absent-destination-again");
+    await act(() => container.querySelector("#page-content")!.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(groupPanel()).toBeNull();
+    expect(search.value).toBe("absent-destination-again");
+  });
+
+  it("returns focus from a search result to Search Studio on Escape", async () => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    setSearch(search, "Reports");
+    const results = groupPanel()!;
+    const result = results.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
+    await act(() => result.focus());
+    expect(document.activeElement).toBe(result);
+
+    await act(() => result.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+
+    expect(results.hidden).toBe(true);
+    expect(groupPanel()).toBeNull();
+    expect(document.activeElement).toBe(search);
+    expect(search.value).toBe("Reports");
+  });
+
+  it("preserves inline no-match feedback and Escape clearing in left navigation", async () => {
+    localStorage.setItem(navModeStorageKey, "left");
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    setSearch(search, "absent-destination");
+    const status = container.querySelector('.sidebar-search-empty')!;
+    expect(status.textContent).toBe('No destinations match "absent-destination".');
+    expect(status.closest('.nav-search-results')).toBeNull();
+    expect(container.querySelector('.nav-search-results')).toBeNull();
+    search.focus();
+
+    await act(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+
+    expect(search.value).toBe("");
+    expect(container.querySelector('.sidebar-search-empty')).toBeNull();
+    expect(document.activeElement).toBe(search);
+  });
+
   it("dismisses query-opened results outside the panel and reopens when the query changes", async () => {
     await renderShell();
     const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;

@@ -459,6 +459,31 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(topResults).toBeHidden();
   await expect(topSearch).toBeFocused();
   await topSearch.fill("");
+  const headerHeight = await sidebar.evaluate(node => node.getBoundingClientRect().height);
+  const absentDestination = "no-such-navigation-acceptance-long-unbroken-destination";
+  await topSearch.fill(absentDestination);
+  const topNoMatch = topResults.getByRole("status");
+  await expect(topNoMatch).toHaveText(`No destinations match "${absentDestination}".`);
+  await expect(topResults).toBeVisible();
+  await expect(topNoMatch).toBeInViewport({ ratio: 1 });
+  expect(await topNoMatch.evaluate(node => {
+    const range = document.createRange(); range.selectNodeContents(node);
+    const surface = node.closest(".nav-search-results")!.getBoundingClientRect();
+    return Array.from(range.getClientRects()).every(rect => rect.left >= 0 && rect.right <= innerWidth &&
+      rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= surface.left && rect.right <= surface.right &&
+      rect.top >= surface.top && rect.bottom <= surface.bottom &&
+      node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))) &&
+      node.scrollWidth <= node.clientWidth + 1;
+  }), "The complete no-match message must wrap inside the visible search surface").toBe(true);
+  expect(Math.abs(await sidebar.evaluate(node => node.getBoundingClientRect().height) - headerHeight), "No-match feedback must not enlarge the navigation strip").toBeLessThanOrEqual(1);
+  await capture(page, info, "top-search-no-match");
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topNoMatch).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await expect(topSearch).toHaveValue(absentDestination);
+  await capture(page, info, "top-search-no-match-dismissed");
+  await topSearch.fill("");
   await sidebar.getByRole("button", { name: "Build", exact: true }).click();
   await sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Library", exact: true }).click();
   await expect(page.getByRole("table", { name: "Activity Definitions", exact: true })).toBeVisible();

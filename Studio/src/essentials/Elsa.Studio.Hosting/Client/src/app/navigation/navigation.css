@@ -102,6 +102,13 @@ html[data-nav-mode="top"] .sidebar .nav-search-results {
   box-shadow: var(--studio-shadow-sm);
 }
 
+html[data-nav-mode="top"] .sidebar .nav-search-results .sidebar-search-empty {
+  min-width: 0;
+  margin: 4px 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 html[data-nav-mode="top"] .sidebar .nav-search-results .nav-item-group { display: block; }
 html[data-nav-mode="top"] .sidebar .nav-search-results a { color: var(--foreground); }
 

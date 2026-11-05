@@ -843,7 +843,7 @@ export function ShellFrame({
           />
         </label>
 
-        {query && !hasNavResults ? (
+        {query && !hasNavResults && !topSearch ? (
           <p className="sidebar-search-empty" role="status">No destinations match "{navQuery.trim()}".</p>
         ) : null}
 
@@ -864,6 +864,7 @@ export function ShellFrame({
         ) : null}
 
         {topSearch ? <NavigationSearch query={query} path={path} searchInput={searchInput}>
+          {!hasNavResults ? <p className="sidebar-search-empty" role="status">No destinations match "{navQuery.trim()}".</p> : null}
           {topSearchItems.map(item =>
             <NavItemGroup key={item.id} item={item} childItems={[]} items={visibleNavigation} path={path} collapsed={false} onNavigate={navigateFromMainNavigation} />)}
         </NavigationSearch> : groupedItems.map(group => (
