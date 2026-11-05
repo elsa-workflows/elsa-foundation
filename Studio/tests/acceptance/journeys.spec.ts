@@ -207,8 +207,16 @@ test("workflow template metadata defaults", async ({ page }, info) => {
       await collapseInspector.click();
     }
     await properties.click();
-    await expect(page.getByRole("textbox", { name: "Workflow name", exact: true })).toHaveValue(expectedName);
-    await expect(page.getByRole("textbox", { name: "Workflow description", exact: true })).toHaveValue(expectedDescription);
+    if ((page.viewportSize()?.width ?? 1440) < 700) {
+      const collapseActivities = page.getByRole("button", { name: "Collapse activities panel", exact: true });
+      if (await collapseActivities.isVisible()) await collapseActivities.click();
+    }
+    const savedName = page.getByRole("textbox", { name: "Workflow name", exact: true });
+    const savedDescription = page.getByRole("textbox", { name: "Workflow description", exact: true });
+    await expect(savedName).toHaveValue(expectedName);
+    await expect(savedDescription).toHaveValue(expectedDescription);
+    await expect(savedName).toBeInViewport();
+    await expect(savedDescription).toBeInViewport();
   };
 
   await page.goto("/workflows/definitions");
