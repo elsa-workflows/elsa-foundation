@@ -38,11 +38,28 @@ def run(output):
             url = f'http://localhost:{owned.free_port()}'
             node_env = dict(os.environ, DECISIONS_OWNED_HOSTS='1', ELSA_WORKBENCH_URL=url,
                             DECISIONS_EXECUTION_OUT=str(output), DECISIONS_SOURCE_SHA=sha)
-            report['binaries'] = {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in host_directory.glob('Elsa.Decisions*.dll')}
+            report['binaries'] = {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in host_directory.glob('*.dll')
+                                  if file.name.startswith(('Elsa.Decisions', 'Elsa.Foundation.Identity', 'Elsa.Workbench'))}
+            node_env.update(DECISIONS_REPOSITORY=str(ROOT),
+                            DECISIONS_QUALIFICATION_TEMPLATES=str(ROOT / 'specs/1195-business-decisions/evidence/identity-qualification'),
+                            DECISIONS_PERMISSION_OUT=str(data / 'permissions'), DECISIONS_OWNED_STORE_ROOT=str(data),
+                            DECISIONS_IAM_DATABASE=str(host_directory / 'elsa.db'), DECISIONS_HOST_DIRECTORY=str(host_directory))
+            def permission(phase):
+                try:
+                    owned.command(['node', str(ROOT / 'tools/decisions/qualify-permissions.cjs')],
+                                  output / ('permissions-' + phase + '.log'), env=dict(node_env, DECISIONS_PERMISSION_PHASE=phase))
+                finally:
+                    # Only public receipts leave the disposable root. Credentials and requests stay private.
+                    for name in ['permissions.json', 'provisioner-build.log', 'provisioner-failure.log']:
+                        receipt = data / 'permissions' / name
+                        if receipt.exists(): (output / name).write_bytes(receipt.read_bytes())
             report['stage'] = 'prepare'
             with owned.host(host_directory, 'Elsa.Workbench.dll', url, '/health/ready', output / 'before-restart.log', env) as process:
                 report['firstPid'] = process.pid
+                permission('provision')
                 owned.command(['node', str(ROOT / 'tools/decisions/qualify-execution.cjs')], output / 'prepare.log', env=dict(node_env, DECISIONS_PHASE='prepare'))
+                permission('prepare')
+                permission('revoke')
             witness = json.loads((output / 'execution.json').read_text())
             if witness['status'] != 'waiting-for-owned-restart':
                 raise ValueError('The initial phase did not reach its persisted wait')
@@ -63,6 +80,9 @@ def run(output):
                 if report['firstPid'] == process.pid:
                     raise ValueError('The process was not restarted')
                 owned.command(['node', str(ROOT / 'tools/decisions/qualify-execution.cjs')], output / 'resume.log', env=dict(node_env, DECISIONS_PHASE='resume'))
+                permission('verify')
+            if json.loads((output / 'permissions.json').read_text())['status'] != 'passed':
+                raise ValueError('Real IAM permission assertions did not pass')
             if json.loads((output / 'execution.json').read_text())['status'] != 'passed':
                 raise ValueError('Restart assertions did not pass')
         if subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip() != sha or subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip():

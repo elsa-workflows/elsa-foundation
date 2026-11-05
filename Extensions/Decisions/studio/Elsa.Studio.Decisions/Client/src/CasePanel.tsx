@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StudioAlert, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { can, deleteCase, deleteRun, failureMessage, getRun, history, listCases, runCases, saveCase, type DecisionAsset, type DecisionCase, type DecisionValue, type DecisionVersion, type Scalar, type TestRun } from "./decisionsApi";
@@ -25,6 +25,16 @@ export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChang
   const [editing, setEditing] = useState<DecisionCase | "new" | null>(null), [name, setName] = useState(""), [inputs, setInputs] = useState<Record<string, Scalar>>({});
   const [expected, setExpected] = useState<Record<string, Scalar>[]>([]), [status, setStatus] = useState("Success"), [sensitive, setSensitive] = useState(false);
   const form = useRef<HTMLFormElement>(null), opener = useRef<HTMLButtonElement | null>(null), baseline = useRef("");
+  const restoreOpener = useRef(false);
+  useLayoutEffect(() => {
+    if (editing !== null) form.current?.querySelector<HTMLInputElement>("input")?.focus();
+  }, [editing]);
+  useLayoutEffect(() => {
+    if (editing === null && !busy && restoreOpener.current) {
+      restoreOpener.current = false;
+      opener.current?.focus();
+    }
+  }, [editing, busy]);
   const caseChanged = editing !== null && baseline.current !== JSON.stringify({ name, inputs, expected, status, sensitive });
   useEffect(() => { onDraftStateChange?.(caseChanged, busy); }, [caseChanged, busy, onDraftStateChange]);
   useEffect(() => () => onDraftStateChange?.(false, false), [onDraftStateChange]);
@@ -35,16 +45,15 @@ export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChang
     return () => { current = false; };
   }, [api, asset.id]);
   const work = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); setError(""); try { await action(); } catch (failure) { if (alive.current) setError(failureMessage(failure)); } finally { if (alive.current) setBusy(false); } };
-  const close = () => { setEditing(null); requestAnimationFrame(() => opener.current?.focus()); };
+  const close = () => { restoreOpener.current = true; setEditing(null); };
   const edit = (item: DecisionCase | "new", button: HTMLButtonElement) => {
-    if (!table) return; opener.current = button;
+    if (!table) return; restoreOpener.current = false; opener.current = button;
     const nextName = item === "new" ? "" : item.name, nextStatus = item === "new" ? "Success" : item.expectedStatus, nextSensitive = item === "new" ? asset.isSensitive : item.isSensitive ?? false;
     const nextInputs = item === "new" ? Object.fromEntries(table.inputs.map(clause => [clause.name, initial(clause.type)])) : item.inputs ?? {};
     const values: DecisionValue[] = item === "new" || item.expectedResult === null ? [] : Array.isArray(item.expectedResult) ? item.expectedResult : [item.expectedResult];
     const nextExpected = values.length ? values.map(value => Object.fromEntries(table!.outputs.map(clause => [clause.name, scalar(value) ? value : (value as Record<string, Scalar>)[clause.name] ?? initial(clause.type)]))) : [Object.fromEntries(table.outputs.map(clause => [clause.name, initial(clause.type)]))];
     baseline.current = JSON.stringify({ name: nextName, inputs: nextInputs, expected: nextExpected, status: nextStatus, sensitive: nextSensitive });
     setEditing(item); setName(nextName); setStatus(nextStatus); setSensitive(nextSensitive); setInputs(nextInputs); setExpected(nextExpected);
-    requestAnimationFrame(() => form.current?.querySelector<HTMLInputElement>("input")?.focus());
   };
   const submit = (event: React.FormEvent) => { event.preventDefault(); if (!table || !editing) return; void work(async () => {
     const resultRows = expected.map(row => table.outputs.length === 1 ? row[table.outputs[0].name] : row);

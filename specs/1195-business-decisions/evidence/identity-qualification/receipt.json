@@ -1,0 +1,336 @@
+{
+  "status": "passed",
+  "sourceSha": "62d6ee5f27db2b6f5c588be4d06bb2dec55ccd37",
+  "cases": [
+    {
+      "label": "Anonymous Decisions inventory is401 without login redirect",
+      "expectedStatus": 401,
+      "actualStatus": 401,
+      "location": null
+    },
+    {
+      "label": "Anonymous Decisions evaluation is401 without login redirect",
+      "expectedStatus": 401,
+      "actualStatus": 401,
+      "location": null
+    },
+    {
+      "label": "Read grants metadata",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "Read does not grant Evaluate",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fevaluate"
+    },
+    {
+      "label": "Read does not grant Source",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fexport"
+    },
+    {
+      "label": "Read does not grant History",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fruns"
+    },
+    {
+      "label": "Evaluate does not need Read or Source",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "Evaluate does not grant Read",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae"
+    },
+    {
+      "label": "Evaluate does not grant Source",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fexport"
+    },
+    {
+      "label": "Evaluate does not grant History",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fruns"
+    },
+    {
+      "label": "Source with Read exports exact published XML",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "Source does not grant Evaluate",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fevaluate"
+    },
+    {
+      "label": "Source does not grant History",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fruns"
+    },
+    {
+      "label": "History with Read retrieves completed summary receipt",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "History with Read lists receipts",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "History does not grant Source",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fexport"
+    },
+    {
+      "label": "Real foreign tenant cannot read asset",
+      "expectedStatus": 404,
+      "actualStatus": 404,
+      "location": null
+    },
+    {
+      "label": "Real foreign tenant cannot evaluate version",
+      "expectedStatus": 404,
+      "actualStatus": 404,
+      "location": null
+    },
+    {
+      "label": "Real foreign tenant inventory is empty",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "Source without SensitiveValues cannot export protected literals",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": null
+    },
+    {
+      "label": "Evaluate without SensitiveValues cannot disclose protected output",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": null
+    },
+    {
+      "label": "native workflow-only value read is redacted",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "native domain Read discloses output",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "native decision activity structure readable",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "native workflow-only source export denied",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": null
+    },
+    {
+      "label": "native domain Source permits exact closure export",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "bpmn workflow-only value read is redacted",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "bpmn domain Read discloses output",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "bpmn decision activity structure readable",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "bpmn workflow-only source export denied",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": null
+    },
+    {
+      "label": "bpmn domain Source permits exact closure export",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "Current persisted Evaluate revocation refuses resumed run",
+      "expectedLifecycle": "Faulted",
+      "actualLifecycle": "Faulted"
+    }
+  ],
+  "limitations": [
+    "native decision activity result has no captured resolvable evidence; workflow output disclosure is covered.",
+    "bpmn decision activity result has no captured resolvable evidence; workflow output disclosure is covered.",
+    "No hosted-model BPMN execution supplied; native BPMN activity disclosure is covered, hosted-model HTTP not claimed.",
+    "External provider identity unsupported handling remains covered by integration tests; no external provider is configured in this owned host."
+  ],
+  "actors": [
+    {
+      "key": "workflow",
+      "tenantId": "default",
+      "userId": "e205a390-6ae2-4555-9ab3-d78fbfa537f1",
+      "roleId": "241c753ab53c4f6d90526ccf10e8f4d3",
+      "grants": [
+        "workflows/runtime:read",
+        "workflows/activity-executions:inspect",
+        "workflows/activity-executions:inspect-values",
+        "workflows/activity-executions:resolve-value-payloads",
+        "workflows/publishing:read",
+        "bpmn:read"
+      ]
+    },
+    {
+      "key": "reader",
+      "tenantId": "default",
+      "userId": "448059ab-2d8a-4f27-ace9-12db4df80989",
+      "roleId": "da4ce7dea7d948b9a63611c69c3c6faf",
+      "grants": [
+        "workflows/runtime:read",
+        "workflows/activity-executions:inspect",
+        "workflows/activity-executions:inspect-values",
+        "workflows/activity-executions:resolve-value-payloads",
+        "workflows/publishing:read",
+        "bpmn:read",
+        "decisions:read"
+      ]
+    },
+    {
+      "key": "source",
+      "tenantId": "default",
+      "userId": "75aff627-ca85-4e76-8701-9fbe5b5eaa89",
+      "roleId": "496e9e494f584a179f37126347f0b676",
+      "grants": [
+        "workflows/runtime:read",
+        "workflows/activity-executions:inspect",
+        "workflows/activity-executions:inspect-values",
+        "workflows/activity-executions:resolve-value-payloads",
+        "workflows/publishing:read",
+        "bpmn:read",
+        "decisions:read",
+        "decisions:source"
+      ]
+    },
+    {
+      "key": "evaluator",
+      "tenantId": "default",
+      "userId": "a1938cea-e107-47bd-8f07-bbc1c36c4cd5",
+      "roleId": "387a0ad9df564a51a0618dcc760dca22",
+      "grants": [
+        "decisions:evaluate"
+      ]
+    },
+    {
+      "key": "history",
+      "tenantId": "default",
+      "userId": "731db2f4-66bb-4c10-a04b-69b2b6239f5a",
+      "roleId": "5d42457b149e48789eaae80082f52f06",
+      "grants": [
+        "decisions:read",
+        "decisions:history"
+      ]
+    },
+    {
+      "key": "foreign",
+      "tenantId": "decisions-iam-1fa3a96d-be45-497b-8524-f6a107ccf518",
+      "userId": "b26c446a-e856-4a6a-89df-86487a20f91d",
+      "roleId": "2c57a046fced411f895421a4a2d1a1bd",
+      "grants": [
+        "decisions:read",
+        "decisions:manage",
+        "decisions:publish",
+        "decisions:evaluate",
+        "decisions:test",
+        "decisions:history",
+        "decisions:source",
+        "decisions:sensitive-values"
+      ]
+    },
+    {
+      "key": "revocable",
+      "tenantId": "default",
+      "userId": "e4109175-368b-4092-8714-a4d061e1a1bd",
+      "roleId": "9ed2b96dd6044c24a0eb71b2c43ac95c",
+      "grants": [
+        "workflows/runtime:read",
+        "workflows/activity-executions:inspect",
+        "workflows/activity-executions:inspect-values",
+        "workflows/activity-executions:resolve-value-payloads",
+        "workflows/publishing:read",
+        "bpmn:read",
+        "workflows/runtime:execute",
+        "decisions:read",
+        "decisions:evaluate"
+      ]
+    }
+  ],
+  "revocationRun": {
+    "workflowExecutionId": "01a1ae014e93799aafc420084a0732f4",
+    "artifactId": "artifact-618a127d14ed",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:618a127d14ed75225d9ed38be2c2ca00e6a03447f446ea3ca2788a6be13b6b1a",
+    "commandDispatchStatus": "Accepted",
+    "envelopeId": "01a1ae014e93738b96f9b974103eaaad",
+    "agentId": "inprocess:01a1ae014e93799aafc420084a0732f4:5",
+    "agentProviderName": "InProcessWorkflowExecutionActorProvider",
+    "reason": null,
+    "sourceReferenceId": "activation-ref:publication-14wxeD9r510",
+    "publicationId": "publication-14wxeD9r510",
+    "slotId": "activation-slot:11:14wxeD7gSbC:7:default",
+    "shed": false,
+    "retryAfterSeconds": null
+  },
+  "revocation": [
+    {
+      "key": "revocable",
+      "tenantId": "default",
+      "userId": "e4109175-368b-4092-8714-a4d061e1a1bd",
+      "roleId": "9ed2b96dd6044c24a0eb71b2c43ac95c",
+      "grants": [
+        "bpmn:read",
+        "decisions:read",
+        "workflows/activity-executions:inspect",
+        "workflows/activity-executions:inspect-values",
+        "workflows/activity-executions:resolve-value-payloads",
+        "workflows/publishing:read",
+        "workflows/runtime:execute",
+        "workflows/runtime:read"
+      ]
+    }
+  ]
+}

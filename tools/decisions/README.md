@@ -19,3 +19,5 @@ python3 tools/ux-acceptance/run.py --journey 'business decisions authoring and e
 ```
 
 Omitting `--journey` still requires every registered product journey. Scoped qualification never substitutes for the full CI acceptance job.
+
+The execution runner also provisions seven restricted users across two tenants through the normal Identity provider ports. It verifies cookie401/403 behavior, separate domain grants, protected reads and current-grant revocation after restart. Private credentials never leave the disposable store root; CI retains only public receipts and safe logs. See [identity qualification](../../specs/1195-business-decisions/evidence/identity-qualification/README.md).

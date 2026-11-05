@@ -143,6 +143,28 @@ describe("Decisions Studio journeys", () => {
     window.dispatchEvent(new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "navigate" } }));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/workflows")); expect(api.dialogs.confirm).toHaveBeenCalledTimes(1);
   });
+  it("keeps later case input focus when a delayed frame runs", async () => {
+    const frames: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length; });
+    try {
+      const api = stubApi(), { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
+      await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet"));
+      click(button(host, "Add case"));
+      const form = host.querySelector<HTMLFormElement>("form")!, name = form.querySelector<HTMLInputElement>("input")!;
+      type(name, "Exact boundary");
+      const amount = form.querySelector<HTMLInputElement>('[aria-label="Case input amount"]')!;
+      amount.focus(); type(amount, "10000.01");
+      frames.splice(0).forEach(callback => callback(performance.now()));
+      expect(document.activeElement).toBe(amount);
+      type(document.activeElement as HTMLInputElement, "9007199254740993");
+      api.backend.http.postJson.mockResolvedValue({ id: "saved", revision: "case-r1" } as never);
+      click(button(host, "Save case"));
+      await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalled());
+      expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/cases", expect.objectContaining({
+        name: "Exact boundary", inputs: { amount: { kind: "number", value: "9007199254740993" } }
+      }));
+    } finally { frame.mockRestore(); }
+  });
   it("cancels case editing with Escape and restores its opener focus", async () => {
     const api = stubApi(), { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
     await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet")); const add = button(host, "Add case"); click(add);
