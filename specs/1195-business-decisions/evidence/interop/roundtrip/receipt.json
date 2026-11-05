@@ -1,0 +1,36 @@
+{
+  "forwardWarnings": [],
+  "reverseWarnings": [],
+  "externalInitialWarnings": [],
+  "forwardRows": 3,
+  "reverseRows": 4,
+  "forwardIdsPreserved": true,
+  "reverseIdsPreserved": true,
+  "externalReimportIdsAndDiagramPreserved": true,
+  "diagramAndDocumentationPreserved": true,
+  "opaqueNativeSubtreePreserved": true,
+  "opaqueExternalSubtreePreserved": true,
+  "opaqueExternalWarnings": [],
+  "reverseOutput": "\"Studio approved\"",
+  "remainingModelers": 0,
+  "studioSourceSha256": "04e8176ef4643ab25defceb704e2d2d438434ba4015142455177b63eea878406",
+  "bundleSha256": "31fea84e392508ada9efed5628bdf81eb8f350f579d43804839045d34ea6bb47",
+  "browserVersion": "149.0.7827.55",
+  "tools": {
+    "dmn-js": "18.0.1",
+    "dmn-moddle": "12.2.1",
+    "playwright": "1.56.1",
+    "esbuild": "0.25.11"
+  },
+  "files": {
+    "product.dmn": "ff75466541c7b3800704e11050a00abdcbf4c13357c70d5b72d1bcd4b47c5cce",
+    "forward.dmn": "e978ef2ec765a77daa73a535574c0fec678868661fd55b90fc61828a25a577ab",
+    "external.dmn": "8cc87b91cc562048a2d1b3ca62d36390e8ec25e8eb42cabbe3a53beb52767709",
+    "externalEdited.dmn": "67a6e5f8f22e337e1a3092d2142c26d24f09dbe124f6a844eab770ecba0b8f77",
+    "nativeEdited.dmn": "c79c0d0e3c296420c05b1887cfc97ac10f71b1b1949aeacb35c5610d6a70d7b2",
+    "reverse.dmn": "179f522f59eb42e6d54d26c913b22a6927671012604e705b34b08dd5c19465e6",
+    "opaque.dmn": "00f444ef328d407630ee714d16405d35ec4eaaf449ed4d8391153adc2e14a7b4",
+    "opaqueEdited.dmn": "da64247a87659533a520c2995c256b123942a6116a27d29da9d9c8e2d2672ff7",
+    "opaqueExternal.dmn": "e7094702529074153432759a5b0d80a6c77bfbce8349e87972fecfc5996b7b73"
+  }
+}

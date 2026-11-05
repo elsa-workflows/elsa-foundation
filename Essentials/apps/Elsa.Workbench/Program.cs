@@ -402,6 +402,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature).Assembly,
             typeof(ConnectionsApiFeature).Assembly,
             // Available for durable local/model connections when explicitly selected in the shell.
             typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,

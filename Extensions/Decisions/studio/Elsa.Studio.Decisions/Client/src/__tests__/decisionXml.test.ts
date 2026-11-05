@@ -55,4 +55,29 @@ describe("targeted decision XML authoring", () => {
     const xml = newDecisionXml().replace("<text>amount</text>", '<text><opaque xmlns="urn:other" />amount</text>'), table = parseTable(xml);
     expect(() => editTable(xml, { kind: "clause", id: table.inputs[0].id, output: false, name: "newAmount", type: "number" })).toThrow("cannot be safely replaced");
   });
+  it("authors an unnamed single output using its label and retains omission on unrelated edits", () => {
+    const xml = newDecisionXml(), table = parseTable(xml);
+    expect(table.outputs[0].name).toBe("result");
+    const changed = editTable(xml, { kind: "cell", ruleId: table.rules[0].id, output: false, column: 0, text: "> 1000" });
+    const output = new DOMParser().parseFromString(changed, "application/xml").getElementsByTagNameNS(dmnNamespace, "output")[0];
+    expect(output.hasAttribute("name")).toBe(false); expect(output.getAttribute("label")).toBe("result");
+    const labeled = editTable(changed, { kind: "clause", id: table.outputs[0].id, output: true, name: "Approval level", type: "string" });
+    const node = new DOMParser().parseFromString(labeled, "application/xml").getElementsByTagNameNS(dmnNamespace, "output")[0];
+    expect(node.getAttribute("label")).toBe("Approval level"); expect(node.hasAttribute("name")).toBe(false);
+  });
+  it("gives multiple outputs distinct names and returns to an unnamed scalar output when one is removed", () => {
+    let xml = newDecisionXml(); const table = parseTable(xml);
+    xml = editTable(xml, { kind: "clause", id: table.outputs[0].id, output: true, name: "result2", type: "string" });
+    xml = editTable(xml, { kind: "add-clause", output: true });
+    expect(parseTable(xml).outputs.map(output => output.name)).toEqual(["result2", "result3"]);
+    xml = editTable(xml, { kind: "delete-clause", id: parseTable(xml).outputs[1].id, output: true });
+    const output = new DOMParser().parseFromString(xml, "application/xml").getElementsByTagNameNS(dmnNamespace, "output")[0];
+    expect(output.hasAttribute("name")).toBe(false); expect(parseTable(xml).outputs[0].name).toBe("result2");
+  });
+  it("preserves the commonly named single-output form without changing it during other edits", () => {
+    const xml = newDecisionXml().replace('label="result"', 'name="result"'), table = parseTable(xml);
+    const changed = editTable(xml, { kind: "cell", ruleId: table.rules[0].id, output: true, column: 0, text: '"Manager"' });
+    const output = new DOMParser().parseFromString(changed, "application/xml").getElementsByTagNameNS(dmnNamespace, "output")[0];
+    expect(output.getAttribute("name")).toBe("result"); expect(output.hasAttribute("label")).toBe(false);
+  });
 });

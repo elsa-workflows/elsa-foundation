@@ -5,7 +5,7 @@ import { CasePanel } from "../CasePanel";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { EvaluationPanel } from "../EvaluationPanel";
 import { studioNavigationRequestedEvent } from "@elsa-workflows/studio-sdk";
-import { newDecisionXml } from "../decisionXml";
+import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
@@ -69,7 +69,7 @@ describe("Decisions Studio journeys", () => {
     await new Promise(resolve => setTimeout(resolve, 0)); expect(host.textContent).not.toContain("Tenant A private policy");
   });
   it("sends 34-digit case inputs and outputs as exact tagged text", async () => {
-    const api = stubApi(), xml = newDecisionXml().replace('name="result" typeRef="string"', 'name="result" typeRef="number"');
+    const api = stubApi(), xml = newDecisionXml().replace('label="result" typeRef="string"', 'label="result" typeRef="number"');
     api.backend.http.getJson.mockResolvedValue({ items: [] } as never); api.backend.http.postJson.mockResolvedValue({} as never);
     const { host } = mount(<CasePanel api={api} asset={{ ...asset, xml }} xml={xml} dirty={false} />);
     await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet")); click(button(host, "Add case"));
@@ -99,12 +99,20 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("Version 1")); select(host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!, "v1"); expect(onChange).toHaveBeenLastCalledWith("approval@v1");
   });
   it("renders actual matched and selected rules for exact published evaluation", async () => {
-    const api = stubApi(); api.backend.http.postJson.mockResolvedValue({ status: "Success", decisionId: "approval", contentHash: "exact-content", result: { kind: "string", value: "Automatic" }, diagnostics: [], trace: [{ ruleId: "rule1", matched: true, selected: true, cells: [{ inputId: "amount", truth: "True" }] }, { ruleId: "rule2", matched: true, selected: false, cells: [{ inputId: "amount", truth: "True" }] }] } as never);
-    const { host } = mount(<EvaluationPanel api={api} id={asset.id} versionId="v1" xml={asset.xml!} />);
+    const xml = editTable(asset.xml!, { kind: "add-rule" }), table = parseTable(xml);
+    const api = stubApi(); api.backend.http.postJson.mockResolvedValue({ status: "Success", decisionId: "approval", contentHash: "exact-content", result: { kind: "string", value: "Automatic" }, diagnostics: [], trace: [{ ruleId: table.rules[0].id, matched: true, selected: true, cells: [{ inputId: table.inputs[0].id, truth: "True" }] }, { ruleId: table.rules[1].id, matched: true, selected: false, cells: [{ inputId: table.inputs[0].id, truth: "True" }] }] } as never);
+    const { host } = mount(<EvaluationPanel api={api} id={asset.id} versionId="v1" xml={xml} />);
     type(host.querySelector<HTMLInputElement>('[aria-label="Evaluate input amount"]')!, "9007199254740993"); click(button(host, "Evaluate decision"));
     await vi.waitFor(() => expect(host.textContent).toContain("Automatic"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/evaluate", { versionId: "v1", inputs: { amount: { kind: "number", value: "9007199254740993" } } });
-    const rows = host.querySelectorAll("tbody tr"); expect(rows[0].textContent).toContain("rule1YesYes"); expect(rows[1].textContent).toContain("rule2YesNo"); expect(host.textContent).toContain("exact-content");
+    const rows = host.querySelectorAll("tbody tr"); expect(rows[0].querySelector('th')?.textContent).toContain("Rule 1"); expect(rows[1].querySelector('th')?.textContent).toContain("Rule 2"); expect(rows[0].querySelectorAll('td')[0].textContent).toBe("Yes"); expect(rows[1].querySelectorAll('td')[1].textContent).toBe("No"); expect(rows[0].textContent).toContain("amount: True"); expect(host.textContent).toContain("exact-content"); expect(host.querySelector('details[open]')).toBeNull();
+  });
+  it("identifies historical results from another published candidate without relabeling its rules", async () => {
+    const api = stubApi(), old = { id: "old-run", candidateId: "v1", candidateHash: "old-content", passed: true, hasDetailedPayload: false, comparisons: [], completedAt: asset.createdAt, evaluatedAt: asset.createdAt };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/runs") ? { items: [old] } : path.endsWith("/runs/old-run") ? old : { items: [] });
+    const { host } = mount(<CasePanel api={api} asset={asset} candidate={{ id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: asset.xml, sourceHash: "new-content", publishedAt: asset.createdAt }} xml={asset.xml!} dirty={false} />);
+    click(button(host, "Load test history")); await vi.waitFor(() => expect(host.textContent).toContain("Inspect run old-run")); click(button(host, "Inspect run old-run"));
+    await vi.waitFor(() => expect(host.textContent).toContain("These results belong to a different saved candidate.")); expect(host.textContent).toContain("old-content");
   });
   it("blocks dirty navigation probes without showing a dialog and confirms an actual leave", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
@@ -121,5 +129,24 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector("form")).not.toBeNull());
     host.querySelector("form")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await vi.waitFor(() => expect(host.querySelector("form")).toBeNull()); await vi.waitFor(() => expect(document.activeElement).toBe(add)); expect(api.backend.http.postJson).not.toHaveBeenCalled();
+  });
+  it("guards unsaved case edits against navigation and publication without treating them as table changes", async () => {
+    const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet")); click(button(host, "Add case"));
+    type(host.querySelector<HTMLFormElement>("form")!.querySelector<HTMLInputElement>("input")!, "Unsaved boundary");
+    await vi.waitFor(() => expect(button(host, "Publish").disabled).toBe(true)); expect(button(host, "Save decision").disabled).toBe(true);
+    const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
+    api.dialogs.confirm.mockResolvedValue(false);
+    window.dispatchEvent(new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval", toPath: "/workflows", intent: "navigate" } }));
+    await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled()); expect(navigate).not.toHaveBeenCalled(); expect(host.querySelector<HTMLFormElement>("form")!.querySelector<HTMLInputElement>("input")!.value).toBe("Unsaved boundary");
+    click(button(host, "Cancel")); await vi.waitFor(() => expect(button(host, "Publish").disabled).toBe(false));
+    const released = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(released); expect(released.defaultPrevented).toBe(false);
+  });
+  it("keeps a dirty workspace tab open on close intent without navigating to another screen", async () => {
+    const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    type(host.querySelector<HTMLInputElement>('[aria-label="Rule 1, input amount"]')!, "<= 1000");
+    const close = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "close" } }); window.dispatchEvent(close);
+    expect(close.defaultPrevented).toBe(true); await new Promise(resolve => setTimeout(resolve, 0)); expect(navigate).not.toHaveBeenCalled(); expect(api.dialogs.confirm).not.toHaveBeenCalled();
   });
 });

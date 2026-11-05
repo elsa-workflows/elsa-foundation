@@ -11,6 +11,46 @@ namespace Elsa.Decisions.Design.Tests;
 
 public sealed class DecisionLifecycleTests
 {
+    [Theory]
+    [InlineData("value")]
+    [InlineData("other")]
+    public async Task Multi_output_kind_names_are_records_in_saved_cases_and_comparisons(string secondName)
+    {
+        await using var fixture = await Fixture.Create();
+        var xml = $"""
+            <definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="definitions" name="Named outputs" namespace="urn:test">
+              <decision id="named"><decisionTable id="table"><input id="input"><inputExpression id="expression" typeRef="number"><text>amount</text></inputExpression></input>
+                <output id="kind-column" name="kind" typeRef="number"/><output id="second-column" name="{secondName}" typeRef="string"/>
+                <rule id="rule"><inputEntry id="test"><text>-</text></inputEntry><outputEntry id="kind-result"><text>1</text></outputEntry><outputEntry id="second-result"><text>"Automatic"</text></outputEntry></rule>
+              </decisionTable></decision>
+            </definitions>
+            """;
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Named outputs", xml));
+        JsonElement Expected(string number) => JsonSerializer.SerializeToElement(new Dictionary<string, DecisionValue>
+            { ["kind"] = new("number", number), [secondName] = new("string", "Automatic") }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var passed = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null, new("case-pass", "Pass", Fixture.Input("1"), "Success", Expected("1.00")));
+        var failed = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null, new("case-fail", "Fail", Fixture.Input("1"), "Success", Expected("2")));
+        var run = await fixture.Service.TestAsync(fixture.Caller, asset.Id, new("test", asset.SourceHash, [new(passed.Id, passed.Revision), new(failed.Id, failed.Revision)], asset.Revision));
+        Assert.False(run.Passed); Assert.Null(run.Comparisons[0].FailurePath); Assert.Equal("$.kind", run.Comparisons[1].FailurePath);
+    }
+
+    [Fact]
+    public async Task One_leading_xml_bom_roundtrips_exact_source_hash_while_double_bom_is_refused()
+    {
+        await using var fixture = await Fixture.Create();
+        var xml = "\uFEFF" + Fixture.Xml;
+        var expectedHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(xml)));
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("bom", "BOM import", xml));
+        Assert.Equal(xml, asset.Xml); Assert.Equal(expectedHash, asset.SourceHash);
+        var version = await fixture.Service.PublishAsync(fixture.Caller, asset.Id, new("publish", asset.Revision));
+        Assert.Equal(expectedHash, version.SourceHash);
+        Assert.Equal(xml, await fixture.Service.ExportAsync(fixture.Caller, asset.Id, version.Id));
+        var result = await fixture.Service.EvaluateAsync(fixture.Caller, asset.Id, new(version.Id, Fixture.Input("950")));
+        Assert.Equal("Success", result.Status); Assert.Equal("Automatic", result.Result.GetProperty("value").GetString());
+        var error = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.SaveAsync(fixture.Caller, null, new("double-bom", "Malformed import", "\uFEFF" + xml)));
+        Assert.Equal("invalid", error.Code); Assert.Single(await fixture.Reader.ListAssetsAsync(fixture.Caller.TenantId));
+    }
+
     [Fact]
     public async Task Publish_freezes_content_and_direct_evaluation_ignores_later_draft()
     {
@@ -301,6 +341,48 @@ public sealed class DecisionLifecycleTests
         var retained = await verification.Set<DecisionRecord>().SingleAsync(x => x.Kind == "asset");
         Assert.Equal("99.0.0", retained.SchemaVersion); Assert.Equal("future incompatible content", retained.Json);
         Assert.Null(await fixture.Reader.FindOperationAsync(new(fixture.Caller.TenantId, fixture.Caller.SubjectId, "old-host-write")));
+    }
+
+    [Fact]
+    public async Task Stored_payload_identity_cannot_alias_another_asset()
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Approval", Fixture.Xml));
+        await using (var database = fixture.Factory.CreateDbContext())
+        {
+            var row = await database.Set<DecisionRecord>().SingleAsync(x => x.Kind == "asset");
+            row.Json = row.Json.Replace(asset.Id, "decision-different"); await database.SaveChangesAsync();
+        }
+        var error = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Equal("corrupt", error.Code);
+    }
+
+    [Fact]
+    public async Task Built_in_factory_discovers_module_and_runs_its_own_additive_migration()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "elsa-decisions-module-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+        try
+        {
+            var binding = Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(DecisionsDbContext));
+            Assert.Equal(DecisionsEfModule.HistoryTableName, binding.HistoryTableName);
+            var services = new ServiceCollection(); services.AddLogging();
+            services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new DecisionsEntityFrameworkCoreFeature { Provider = "Sqlite", ConnectionString = "Data Source=" + Path.Combine(directory, "database.db") + ";Pooling=False" }.ConfigureServices(services);
+            await using var provider = services.BuildServiceProvider();
+            await using var scope = provider.CreateAsyncScope();
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<DecisionsDbContext>>();
+            await using var database = await factory.CreateDbContextAsync();
+            Assert.Single(database.Database.GetMigrations());
+            await database.Database.MigrateAsync();
+            Assert.Single(await database.Database.GetAppliedMigrationsAsync());
+            var engine = new DecisionEngine(); var artifact = engine.Compile(Fixture.Xml).Artifact!;
+            var writer = scope.ServiceProvider.GetRequiredService<IDecisionWriter>();
+            var confirmation = await writer.SaveAssetAsync(new("tenant-a", "user-a", "create"), new(null, null, "Normal module", null, Fixture.Xml, artifact.SourceHash, false));
+            var reader = scope.ServiceProvider.GetRequiredService<IDecisionReader>();
+            Assert.Equal("Normal module", (await reader.FindAssetAsync("tenant-a", confirmation.Id))!.Name);
+            Assert.Equal(DecisionsEfModule.SchemaVersion, (await database.Set<DecisionRecord>().SingleAsync(x => x.Kind == "asset")).SchemaVersion);
+        }
+        finally { Directory.Delete(directory, true); }
     }
 
     [Fact]

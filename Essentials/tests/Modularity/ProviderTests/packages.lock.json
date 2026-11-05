@@ -1586,6 +1586,17 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "elsa.decisions.workflows.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Decisions.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.decisions.workflows.design": {
         "type": "Project",
         "dependencies": {
@@ -2372,6 +2383,7 @@
           "Elsa.Decisions.Api": "[4.0.0-dev, )",
           "Elsa.Decisions.Design": "[4.0.0-dev, )",
           "Elsa.Decisions.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Decisions.Workflows.Api": "[4.0.0-dev, )",
           "Elsa.Decisions.Workflows.Design": "[4.0.0-dev, )",
           "Elsa.Decisions.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Diagnostics.ConsoleLogStreaming": "[4.0.0-dev, )",

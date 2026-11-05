@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="decision_3481ded697484b41884d7d8a1394cdaa_definitions" name="Decision" namespace="urn:elsa:decisions">
+  <decision id="decision_3481ded697484b41884d7d8a1394cdaa" name="Decision">
+    <decisionTable id="decision_3481ded697484b41884d7d8a1394cdaa_table">
+      <input id="decision_3481ded697484b41884d7d8a1394cdaa_input">
+        <inputExpression id="decision_3481ded697484b41884d7d8a1394cdaa_expression" typeRef="number">
+          <text>amount</text>
+        </inputExpression>
+      </input>
+      <output id="decision_3481ded697484b41884d7d8a1394cdaa_output" label="result" typeRef="string" />
+      <rule id="decision_3481ded697484b41884d7d8a1394cdaa_rule">
+        <inputEntry id="decision_3481ded697484b41884d7d8a1394cdaa_condition">
+          <text>&lt;= 1000</text>
+        </inputEntry>
+        <outputEntry id="decision_3481ded697484b41884d7d8a1394cdaa_result">
+          <text>"Externally approved"</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+</definitions>

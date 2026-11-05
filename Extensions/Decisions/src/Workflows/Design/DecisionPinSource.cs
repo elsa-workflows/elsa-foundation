@@ -38,12 +38,14 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
                 versionId = (await decisions.FindAssetAsync(tenant, assetId, cancellationToken))?.PublishedVersionId ?? throw Invalid();
             var version = await decisions.FindVersionAsync(tenant, assetId, versionId, cancellationToken) ?? throw Invalid();
             if (version.AssetId != assetId || version.Id != versionId || version.IsSensitive ||
-                node.InputBindings.GetValueOrDefault(nameof(EvaluateDecision.Inputs))?.EffectivePolicy.HidesValue() == true)
+                node.InputBindings.Values.Any(input => input.EffectivePolicy.HidesValue()))
                 throw new DecisionInvocationException("protected-binding-unsupported", "This decision binding cannot preserve the required workflow source or value protection.");
             var compiled = compiler.Compile(version.Xml, cancellationToken);
             if (!compiled.Success || compiled.Artifact is not { } artifact || artifact.ContentHash != version.Artifact.ContentHash ||
-                artifact.SourceHash != version.SourceHash || artifact.ProfileId != version.Artifact.ProfileId ||
-                artifact.SemanticsId != version.Artifact.SemanticsId) throw Invalid();
+                artifact.SourceHash != version.SourceHash || artifact.SourceHash != version.Artifact.SourceHash ||
+                artifact.DecisionId != version.Artifact.DecisionId || artifact.ProfileId != version.Artifact.ProfileId ||
+                artifact.SemanticsId != version.Artifact.SemanticsId ||
+                !artifact.ExecutableBytes.SequenceEqual(version.Artifact.ExecutableBytes)) throw Invalid();
             var pin = new DecisionWorkflowPin(selection, tenant, assetId, versionId, artifact);
             claims.Add(new(node.ExecutableNodeId, DecisionWorkflowPin.MetadataKey, pin.Serialize()));
         }

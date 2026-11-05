@@ -2,7 +2,7 @@
 Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision
 Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Decision.get -> string!
 Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Decision.set -> void
-Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.EvaluateDecision(Elsa.Decisions.Core.IDecisionEvaluator! evaluator, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Decisions.Workflows.Runtime.IDecisionWorkflowAuthorizer! authorization) -> void
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.EvaluateDecision(Elsa.Decisions.Core.IDecisionEvaluator! evaluator, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Decisions.Workflows.Runtime.IDecisionWorkflowAuthorizer! authorization, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities) -> void
 Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Inputs.get -> System.Collections.Generic.Dictionary<string!, Elsa.Decisions.Core.DecisionValue!>!
 Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Inputs.set -> void
 Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.OperationBudget.get -> int

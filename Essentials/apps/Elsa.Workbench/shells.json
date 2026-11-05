@@ -185,6 +185,7 @@
           "DecisionsEntityFrameworkCore": {},
           "DecisionsWorkflowsDesign": {},
           "DecisionsWorkflowsRuntime": {},
+          "DecisionsWorkflowsApi": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
           "ConnectionsWorkflows": {},

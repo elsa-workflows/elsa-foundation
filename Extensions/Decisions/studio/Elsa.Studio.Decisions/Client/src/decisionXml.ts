@@ -39,7 +39,8 @@ export function parseTable(xml: string): Table {
     const expression = required(input, "inputExpression");
     return { id: input.id, name: required(expression, "text").textContent ?? "", type: expression.getAttribute("typeRef") ?? "" };
   });
-  const outputs = children(table, "output").map(output => ({ id: output.id, name: output.getAttribute("name") ?? "", type: output.getAttribute("typeRef") ?? "" }));
+  const outputElements = children(table, "output");
+  const outputs = outputElements.map(output => ({ id: output.id, name: outputElements.length === 1 ? output.getAttribute("label") ?? output.getAttribute("name") ?? "result" : output.getAttribute("name") ?? "", type: output.getAttribute("typeRef") ?? "" }));
   const rules = children(table, "rule").map(rule => ({ id: rule.id, inputs: children(rule, "inputEntry").map(entry => required(entry, "text").textContent ?? ""), outputs: children(rule, "outputEntry").map(entry => required(entry, "text").textContent ?? ""), annotation: children(rule, "description")[0]?.textContent ?? "" }));
   if (!inputs.length || !outputs.length || rules.some(rule => rule.inputs.length !== inputs.length || rule.outputs.length !== outputs.length)) throw new Error("The table has missing or mismatched columns. Inspect the compatibility report before editing.");
   return { id: decision.id, name: decision.getAttribute("name") ?? "", hitPolicy: table.getAttribute("hitPolicy") ?? "UNIQUE", inputs, outputs, rules };
@@ -75,7 +76,7 @@ export function editTable(xml: string, edit: TableEdit): string {
   else if (edit.kind === "clause") {
     const clause = children(table, edit.output ? "output" : "input").find(item => item.id === edit.id);
     if (!clause) throw new Error("The selected column no longer exists.");
-    if (edit.output) { clause.setAttribute("name", edit.name); clause.setAttribute("typeRef", edit.type); }
+    if (edit.output) { clause.setAttribute(children(table, "output").length === 1 ? "label" : "name", edit.name); clause.setAttribute("typeRef", edit.type); }
     else { const expression = required(clause, "inputExpression"); setPlainText(required(expression, "text"), edit.name); expression.setAttribute("typeRef", edit.type); }
   } else if (edit.kind === "annotation") {
     const rule = rules.find(item => item.id === edit.ruleId);
@@ -98,7 +99,12 @@ export function editTable(xml: string, edit: TableEdit): string {
     const columns = children(table, edit.output ? "output" : "input");
     if (columns.length >= (edit.output ? 16 : 32)) throw new Error("The table has reached its column limit.");
     const clause = doc.createElementNS(dmnNamespace, edit.output ? "output" : "input"); const id = `clause_${crypto.randomUUID().replaceAll("-", "")}`; clause.setAttribute("id", id);
-    if (edit.output) { clause.setAttribute("name", `result${columns.length + 1}`); clause.setAttribute("typeRef", "string"); }
+    if (edit.output) {
+      if (columns.length === 1 && !columns[0].getAttribute("name")) columns[0].setAttribute("name", columns[0].getAttribute("label")?.trim() || "result1");
+      const existingNames = new Set(columns.map(column => column.getAttribute("name")));
+      let suffix = columns.length + 1; while (existingNames.has(`result${suffix}`)) suffix++;
+      clause.setAttribute("name", `result${suffix}`); clause.setAttribute("typeRef", "string");
+    }
     else { const expression = doc.createElementNS(dmnNamespace, "inputExpression"); expression.setAttribute("id", `${id}_expression`); expression.setAttribute("typeRef", "string"); expression.append(textElement(doc, "text", `input${columns.length + 1}`)); clause.append(expression); }
     const anchor = edit.output ? rules[0] : children(table, "output")[0] ?? rules[0]; table.insertBefore(clause, anchor ?? null);
     rules.forEach(rule => { const cell = entry(doc, edit.output, edit.output ? '""' : "-"); rule.insertBefore(cell, edit.output ? null : children(rule, "outputEntry")[0] ?? null); });
@@ -107,11 +113,17 @@ export function editTable(xml: string, edit: TableEdit): string {
     if (columns.length <= 1) throw new Error("Keep at least one input and output column.");
     const index = columns.findIndex(item => item.id === edit.id);
     if (index < 0) throw new Error("The selected column no longer exists.");
-    columns[index].remove(); rules.forEach(rule => children(rule, edit.output ? "outputEntry" : "inputEntry")[index]?.remove());
+    columns[index].remove();
+    if (edit.output && columns.length === 2) {
+      const remaining = columns[index === 0 ? 1 : 0];
+      if (!remaining.hasAttribute("label")) remaining.setAttribute("label", remaining.getAttribute("name") ?? "result");
+      remaining.removeAttribute("name");
+    }
+    rules.forEach(rule => children(rule, edit.output ? "outputEntry" : "inputEntry")[index]?.remove());
   }
   return new XMLSerializer().serializeToString(doc);
 }
 export function newDecisionXml() {
   const id = `decision_${crypto.randomUUID().replaceAll("-", "")}`;
-  return `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="${dmnNamespace}" id="${id}_definitions" name="Decision" namespace="urn:elsa:decisions"><decision id="${id}" name="Decision"><decisionTable id="${id}_table" hitPolicy="UNIQUE"><input id="${id}_input"><inputExpression id="${id}_expression" typeRef="number"><text>amount</text></inputExpression></input><output id="${id}_output" name="result" typeRef="string"/><rule id="${id}_rule"><inputEntry id="${id}_condition"><text>-</text></inputEntry><outputEntry id="${id}_result"><text>"Approved"</text></outputEntry></rule></decisionTable></decision></definitions>`;
+  return `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="${dmnNamespace}" id="${id}_definitions" name="Decision" namespace="urn:elsa:decisions"><decision id="${id}" name="Decision"><decisionTable id="${id}_table" hitPolicy="UNIQUE"><input id="${id}_input"><inputExpression id="${id}_expression" typeRef="number"><text>amount</text></inputExpression></input><output id="${id}_output" label="result" typeRef="string"/><rule id="${id}_rule"><inputEntry id="${id}_condition"><text>-</text></inputEntry><outputEntry id="${id}_result"><text>"Approved"</text></outputEntry></rule></decisionTable></decision></definitions>`;
 }

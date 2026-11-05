@@ -34,7 +34,7 @@ public sealed record DecisionWorkflowPin(string Selection, string TenantId, stri
     }
 }
 
-public sealed class DecisionInvocationException(string code, string message, Exception? innerException = null) : Exception(message, innerException)
+public sealed class DecisionInvocationException(string code, string message, Exception? innerException = null) : InvalidOperationException(message, innerException)
 {
     public string Code { get; } = code;
 }

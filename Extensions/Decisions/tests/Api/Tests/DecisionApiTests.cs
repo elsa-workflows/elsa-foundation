@@ -24,6 +24,29 @@ namespace Elsa.Decisions.Api.Tests;
 public sealed class DecisionApiTests
 {
     [Fact]
+    public async Task Bom_xml_import_keeps_original_signature_through_publish_export_and_evaluation()
+    {
+        await using var fixture = await ApiFixture.Create(); var xml = "\uFEFF" + ApiFixture.Xml;
+        var expectedHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(xml)));
+        using var save = await fixture.Send(HttpMethod.Post, "/decisions", new SaveDecisionRequest("bom", "BOM import", xml));
+        Assert.Equal(HttpStatusCode.OK, save.StatusCode);
+        var asset = (await save.Content.ReadFromJsonAsync<DecisionAssetView>())!;
+        Assert.Equal(xml, asset.Xml); Assert.Equal(expectedHash, asset.SourceHash);
+        using var publish = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/publish", new PublishDecisionRequest("publish", asset.Revision));
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+        var version = (await publish.Content.ReadFromJsonAsync<DecisionVersionView>())!; Assert.Equal(expectedHash, version.SourceHash);
+        using var export = await fixture.Send(HttpMethod.Get, $"/decisions/{asset.Id}/export?versionId={version.Id}");
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode); Assert.Equal(System.Text.Encoding.UTF8.GetBytes(xml), await export.Content.ReadAsByteArrayAsync());
+        using var evaluate = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/evaluate", new EvaluateDecisionRequest(version.Id, ApiFixture.Input("950")));
+        Assert.Equal(HttpStatusCode.OK, evaluate.StatusCode);
+        using var body = JsonDocument.Parse(await evaluate.Content.ReadAsStringAsync());
+        Assert.Equal("Success", body.RootElement.GetProperty("status").GetString());
+        Assert.Equal("Automatic", body.RootElement.GetProperty("result").GetProperty("value").GetString());
+        using var doubled = await fixture.Send(HttpMethod.Post, "/decisions", new SaveDecisionRequest("double-bom", "Malformed", "\uFEFF" + xml));
+        Assert.Equal(HttpStatusCode.BadRequest, doubled.StatusCode);
+    }
+
+    [Fact]
     public async Task Normal_endpoints_authenticate_authorize_and_isolate_two_tenants()
     {
         await using var fixture = await ApiFixture.Create();

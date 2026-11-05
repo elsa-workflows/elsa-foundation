@@ -247,7 +247,8 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         if (string.IsNullOrWhiteSpace(xml) || Encoding.UTF8.GetByteCount(xml) > 1024 * 1024) throw new DecisionDesignException("invalid", "The decision source exceeds its supported bound.");
         try
         {
-            using var reader = XmlReader.Create(new StringReader(xml), new() { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 1024 * 1024 });
+            var parserXml = xml.Length > 0 && xml[0] == '\uFEFF' ? xml[1..] : xml;
+            using var reader = XmlReader.Create(new StringReader(parserXml), new() { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 1024 * 1024 });
             var count = 0;
             while (reader.Read()) { ct.ThrowIfCancellationRequested(); if (reader.Depth > 64 || ++count > 100000) throw new DecisionDesignException("invalid", "The decision source exceeds its supported structural bound."); }
         }
@@ -272,8 +273,8 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         if (expected.ValueKind != actual.ValueKind) return path;
         if (expected.ValueKind == JsonValueKind.Object)
         {
-            if (expected.TryGetProperty("kind", out var kind) && kind.GetString() == "number" && expected.TryGetProperty("value", out var number) &&
-                actual.TryGetProperty("kind", out var actualKind) && actualKind.GetString() == "number" && actual.TryGetProperty("value", out var actualNumber))
+            if (expected.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.GetString() == "number" && expected.TryGetProperty("value", out var number) &&
+                actual.TryGetProperty("kind", out var actualKind) && actualKind.ValueKind == JsonValueKind.String && actualKind.GetString() == "number" && actual.TryGetProperty("value", out var actualNumber))
                 return NormalizeNumber(number.GetString()!) == NormalizeNumber(actualNumber.GetString()!) ? null : path;
             var left = expected.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal).ToArray();
             var right = actual.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal).ToArray();
@@ -299,9 +300,10 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
             return;
         }
         if (value.ValueKind != JsonValueKind.Object) throw new DecisionDesignException("invalid", "Expected results use exact tagged decision values.");
-        if (value.TryGetProperty("kind", out var kind) && value.TryGetProperty("value", out var scalar) && value.EnumerateObject().Count() == 2)
+        if (value.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String &&
+            (kind.GetString() is "null" or "boolean" or "string" or "number") &&
+            value.TryGetProperty("value", out var scalar) && value.EnumerateObject().Count() == 2)
         {
-            if (kind.ValueKind != JsonValueKind.String) throw new DecisionDesignException("invalid", "An expected scalar has an invalid tag.");
             var name = kind.GetString();
             var valid = name switch
             {

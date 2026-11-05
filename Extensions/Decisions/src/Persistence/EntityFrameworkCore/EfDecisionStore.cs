@@ -200,8 +200,21 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
     private static T Read<T>(DecisionRecord row)
     {
         var content = DecisionsEfModule.Chain.Upcast<DecisionRecord>(row.SchemaVersion, (nameof(DecisionRecord.Json), row.Json));
-        return JsonSerializer.Deserialize<T>(content[nameof(DecisionRecord.Json)]!, Json)
+        var value = JsonSerializer.Deserialize<T>(content[nameof(DecisionRecord.Json)]!, Json)
             ?? throw new DecisionDesignException("corrupt", "The retained decision record is invalid.");
+        var consistent = value switch
+        {
+            DecisionAsset asset => row.Kind == "asset" && asset.Id == row.Id && asset.Revision == row.Revision && Hash(asset.Xml) == asset.SourceHash,
+            DecisionVersion version => row.Kind == "version" && version.Id == row.Id && version.AssetId == row.OwnerId &&
+                Hash(version.Xml) == version.SourceHash && version.Artifact.SourceHash == version.SourceHash,
+            DecisionCase item => row.Kind == "case" && item.Id == row.Id && item.AssetId == row.OwnerId && item.Revision == row.Revision,
+            DecisionTestReceipt run => row.Kind == "run" && run.Id == row.Id && run.AssetId == row.OwnerId,
+            DecisionOperationReceipt operation => row.Kind == "operation" && operation.Fingerprint is { Length: 64 } && operation.Confirmation is not null &&
+                operation.Kind is "save" or "publish" or "case.save" or "case.delete" or "test" or "run.delete",
+            _ => false
+        };
+        if (!consistent) throw new DecisionDesignException("corrupt", "The retained decision content does not match its physical identity.");
+        return value;
     }
     private static string Revision() => Guid.NewGuid().ToString("N");
     private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

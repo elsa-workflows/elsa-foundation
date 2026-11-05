@@ -78,7 +78,7 @@ public static class DecisionsApi
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { throw; }
         catch (DecisionDesignException ex)
         {
-            context.Response.StatusCode = ex.Code switch { "unauthenticated" => 401, "forbidden" => 403, "not-found" => 404, "conflict" => 409, "unavailable" => 503, _ => 400 };
+            context.Response.StatusCode = ex.Code switch { "unauthenticated" => 401, "forbidden" => 403, "not-found" => 404, "conflict" => 409, "unavailable" or "corrupt" => 503, _ => 400 };
             await context.Response.WriteAsJsonAsync(new DecisionProblem(ex.Code, ex.Message), Json, context.RequestAborted);
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException or BadHttpRequestException)
