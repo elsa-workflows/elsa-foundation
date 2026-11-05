@@ -20,7 +20,10 @@ export interface OperationTracker {
 
 export function useOperationTracker(notifications: StudioNotificationApi | undefined, context: object, selection: string): OperationTracker {
   const [busyCounts, setBusyCounts] = useState<Partial<Record<OperationScope, number>>>({});
-  const visit = useMemo(() => ({ context, selection, notifications, active: false, generation: 0 }), [context, selection, notifications]);
+  const owner = useMemo(() => ({ context, selection }), [context, selection]);
+  const currentOwner = useRef(owner);
+  currentOwner.current = owner;
+  const visit = useMemo(() => ({ owner, notifications, active: false, generation: 0 }), [owner, notifications]);
   const currentVisit = useRef(visit);
   currentVisit.current = visit;
   useLayoutEffect(() => {
@@ -47,20 +50,24 @@ export function useOperationTracker(notifications: StudioNotificationApi | undef
     setError(null);
     try {
       const result = await operation();
-      if (!isCurrent()) return null;
-      const title = typeof success === "function" ? success(result) : success;
-      if (title) notifications?.notify({ level: "success", title });
+      // Retained tabs retire confirmations when hidden, but accepted work still belongs to
+      // the same backend/selection and must reconcile its build, file or runtime state.
+      if (currentOwner.current !== owner) return null;
+      if (isCurrent()) {
+        const title = typeof success === "function" ? success(result) : success;
+        if (title) notifications?.notify({ level: "success", title });
+      }
       return result;
     } catch (e) {
       // Every scoped operation error goes through the shared Extension Builder formatter so bridge infrastructure
       // failures name the backend-management state (with the bridge's detail — e.g. a relay timeout's "may still have
       // completed") and Studio 403s name the missing permission, instead of a generic message.
-      if (isCurrent()) setError(describeExtensionBuilderError(e));
+      if (currentOwner.current === owner) setError(describeExtensionBuilderError(e));
       return null;
     } finally {
       adjust(scope, -1);
     }
-  }, [adjust, notifications, visit]);
+  }, [adjust, notifications, owner, visit]);
 
   const isBusy = useCallback((scope: OperationScope) => (busyCounts[scope] ?? 0) > 0, [busyCounts]);
   const anyBusy = Object.keys(busyCounts).length > 0;

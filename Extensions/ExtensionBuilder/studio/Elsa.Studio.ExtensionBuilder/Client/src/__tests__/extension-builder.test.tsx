@@ -9,7 +9,7 @@ import { StudioHttpError, type ElsaStudioModuleApi } from "@elsa-workflows/studi
 const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 describe("extension builder page", () => {
   afterEach(() => {
-  notifications.notify.mockClear();
+    notifications.notify.mockClear();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -1399,6 +1399,41 @@ describe("extension builder page", () => {
     await simple.unmount();
   });
 
+  it.each(["hidden", "visible"] as const)("tracks an accepted build that completes while its retained tab is %s", async completionMode => {
+    const submitted = deferred<ReturnType<typeof runningBuild>>();
+    const running = runningBuild();
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? submitted.promise : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => url.endsWith("/builds/build-running") ? running : defaultGetJson(url));
+    const fetchLog = mockFetch();
+    const page = await renderExtensionBuilderPage(stubApi({ getJson, postJson }), { retained: true });
+    try {
+      await openSolution(page.container);
+      await waitForText(page.container, "Activities/HelloActivity.cs");
+      await clickButton(page.container, "Build");
+      expect(postJson.mock.calls.filter(([url]) => url.endsWith("/builds"))).toHaveLength(1);
+      expect(getJson.mock.calls.some(([url]) => url.endsWith("/builds/build-running"))).toBe(false);
+      notifications.notify.mockClear();
+
+      page.setVisible(false);
+      await flushPromises();
+      if (completionMode === "visible") {
+        page.setVisible(true);
+        await flushPromises();
+      }
+      submitted.resolve(running);
+      await flushPromises();
+      page.setVisible(true);
+      await waitForText(page.container, "Building…");
+
+      expect(buttonContaining(page.container, "Building…")?.disabled).toBe(true);
+      await vi.waitFor(() => expect(getJson.mock.calls.filter(([url]) => url.endsWith("/builds/build-running")).length).toBeGreaterThanOrEqual(2), { timeout: 3000 });
+      expect(fetchLog.mock.calls.some(([url]) => String(url).includes("build-running/log"))).toBe(true);
+      expect(notifications.notify).not.toHaveBeenCalled();
+    } finally {
+      await page.unmount();
+    }
+  });
+
   it("scopes busy state per operation so an in-flight source action does not disable the build action", async () => {
     // Regression for the single global operationBusy flag that disabled every action at once. A
     // slow source-control stage must not disable the unrelated Build/Pack headline action.
@@ -1592,7 +1627,7 @@ const ADVANCED_PREFERENCE_KEY = "elsa.extensionBuilder.advanced";
 
 // Most of this suite exercises the full (advanced) workbench. Default render to advanced mode so
 // those surfaces are present; simple-mode tests opt out with { advanced: false }.
-async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { advanced?: boolean }) {
+async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { advanced?: boolean; retained?: boolean }) {
   if (options?.advanced === false) {
     window.localStorage?.removeItem(ADVANCED_PREFERENCE_KEY);
   } else {
@@ -1603,12 +1638,16 @@ async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { 
   document.body.appendChild(container);
   const root = createRoot(container);
 
-  flushSync(() => {
-    root.render(<ExtensionBuilderPage api={{ ...api, notifications }} />);
+  const moduleApi = { ...api, notifications };
+  const render = (visible: boolean) => flushSync(() => {
+    const page = <ExtensionBuilderPage api={moduleApi} />;
+    root.render(options?.retained ? <React.Activity mode={visible ? "visible" : "hidden"}>{page}</React.Activity> : page);
   });
+  render(true);
 
   return {
     container,
+    setVisible: render,
     unmount: async () => {
       flushSync(() => root.unmount());
       container.remove();
