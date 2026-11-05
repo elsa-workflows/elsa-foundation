@@ -1,8 +1,11 @@
 using System.Text.Json;
+using Elsa.Agent.Api;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Extensions;
 using Elsa.Agent.Services;
+using Elsa.Api.AspNetCore;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -10,6 +13,46 @@ namespace Elsa.Agent.Tests;
 
 public sealed class AgentPerformedTests
 {
+    [Fact]
+    public async Task Mapped_HTTP_and_retained_SSE_models_keep_performed_owner_evidence_without_a_second_execution()
+    {
+        var tool = new PerformingTool();
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+        {
+            new FoundationAgentEffectsFeature().ConfigureServices(services);
+            services.AddRouting().AddElsaEndpoints();
+        });
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+
+        var response = await AgentApiExecutionOutcomeTests.ExecuteAsync(fixture, proposal, proposal.BaseRevision);
+
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        var data = response.Body.GetProperty("data");
+        Assert.Equal("performed", data.GetProperty("status").GetString());
+        Assert.True(data.GetProperty("executed").GetBoolean());
+        var receipt = data.GetProperty("toolResult").GetProperty("receipt");
+        Assert.Equal("noPersistedEffect", receipt.GetProperty("scope").GetString());
+        Assert.Equal("revision-1", receipt.GetProperty("before").GetProperty("revision").GetString());
+        Assert.Equal("revision-1", receipt.GetProperty("after").GetProperty("revision").GetString());
+        Assert.Equal(1, receipt.GetProperty("evidence").GetProperty("data").GetProperty("ran").GetInt32());
+        Assert.False(receipt.GetProperty("evidence").GetProperty("data").GetProperty("verdict").GetBoolean());
+
+        var duplicate = await AgentApiExecutionOutcomeTests.ExecuteAsync(fixture, proposal, proposal.BaseRevision);
+        Assert.Equal(StatusCodes.Status200OK, duplicate.Status);
+        Assert.Equal(data.GetRawText(), duplicate.Body.GetProperty("data").GetRawText());
+        var retained = (await fixture.Proposals.FindAsync(proposal.Id))!;
+        using var sseProposal = JsonDocument.Parse(JsonSerializer.Serialize(retained, AgentSseJsonContext.Default.AgentActionProposal));
+        Assert.Equal("performed", sseProposal.RootElement.GetProperty("status").GetString());
+        var retainedExecution = await fixture.ExecuteAsync(proposal);
+        using var sseResult = JsonDocument.Parse(JsonSerializer.Serialize(retainedExecution.Value!.ToolResult!, AgentSseJsonContext.Default.AgentToolResult));
+        Assert.Equal("noPersistedEffect", sseResult.RootElement.GetProperty("receipt").GetProperty("scope").GetString());
+        Assert.Equal(1, sseResult.RootElement.GetProperty("receipt").GetProperty("evidence").GetProperty("data").GetProperty("ran").GetInt32());
+        Assert.Equal(1, tool.RanCalls);
+        Assert.Equal("initial", tool.NativeValue);
+        Assert.Equal("revision-1", tool.NativeRevision);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
