@@ -514,7 +514,7 @@ function publicationFailureMessage(error: unknown, fallback: string) {
 }
 
 function safeDiagnosticCode(code: string) {
-  return /^[a-z0-9][a-z0-9._-]{0,127}$/.test(code) ? code : "activity.publication.issue";
+  return /^[a-z0-9][a-z0-9._:-]{0,127}$/.test(code) ? code : "activity.publication.issue";
 }
 
 function createOperationKey() {

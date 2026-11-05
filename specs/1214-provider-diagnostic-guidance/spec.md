@@ -1,6 +1,6 @@
 # Actionable provider diagnostics
 
-**Status**: In progress
+**Status**: Implemented — effective when PR #3869 merges; acceptance remains gated by its evidence.
 
 Issue: #3775, extended by the owner's publication screenshot on 5 November 2026. Program: Elsa 4 Simplification (#2559).
 

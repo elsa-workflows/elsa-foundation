@@ -56,6 +56,22 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it("retains a legal provider code in technical details without inventing a correction target", async () => {
+    const code = "acme:model.unavailable";
+    const message = "The activity provider reported an issue.";
+    const harness = renderReview({ postJson: async () => ({ ...publicationPreflight(), isPublishable: false, diagnostics: [{
+      code, severity: "Error", message, remediation: "Ask an administrator to review the diagnostic details and activity provider logs.",
+      subject: { kind: "ActivityDefinition", id: "acme" }, location: { providerKey: "acme" }, metadata: {}
+    }] }) });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    const issue = harness.container.querySelector(".ad-publication-diagnostics li")!;
+    expect(issue.querySelector("strong")?.textContent).toBe(message);
+    expect(issue.querySelector("code")?.textContent).toBe(code);
+    expect(issue.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
+    expect(issue.querySelector("button")).toBeNull();
+  });
+
   it.each(["Rejected", "Failed"])("keeps earlier readiness distinct after a %s receipt", async status => {
     const harness = renderReview({ postJson: async (url, body) => url.endsWith("/publication-preflight")
       ? publicationPreflight()

@@ -1,7 +1,9 @@
 # Tasks
 
-- [ ] Add bounded static public guidance declarations and guarded projection across all provider paths.
-- [ ] Emit specific Specialist configuration diagnostics and implement exact editor focus targets.
-- [ ] Lead publication review with deduplicated blockers, useful actions and accessible disabled reasons.
-- [ ] Verify correction/review recovery, safety and composed UX; obtain independent reviews.
-- [ ] Publish PR/evidence and complete exact-head/main qualification.
+- [x] Add bounded static public guidance declarations and guarded projection across all provider paths.
+- [x] Emit specific Specialist configuration diagnostics and implement editor focus targets.
+- [x] Lead publication review with deduplicated blockers, useful actions and accessible disabled reasons.
+- [x] Add and run focused safety, correction/review, browser and composed journeys; independently inspect the changed experience.
+- [x] Open the linked PR and record failure, fix and retest evidence.
+
+Final exact-head checks, downloaded artifact acceptance, merge and main qualification are gates tracked on PR #3869. Completion is established by those receipts, not these implementation checkboxes.
