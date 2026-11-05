@@ -95,13 +95,15 @@ for (const workspace of ["linen", "minimal", "quiet", "focus", "open"]) test(`${
     const input = element as HTMLInputElement;
     const style = getComputedStyle(input);
     const label = input.labels![0].getBoundingClientRect();
-    return { labelBottom: label.bottom - input.getBoundingClientRect().top, valueTop: parseFloat(style.paddingTop), labelSize: parseFloat(getComputedStyle(input.labels![0]).fontSize) };
+    return { labelBottom: label.bottom, valueTop: input.getBoundingClientRect().top + parseFloat(style.paddingTop), labelSize: parseFloat(getComputedStyle(input.labels![0]).fontSize) };
   });
   expect(separation.labelSize).toBeGreaterThanOrEqual(before * 1.8);
   expect(separation.labelBottom).toBeLessThanOrEqual(separation.valueTop);
   await dialog.getByLabel("Description", { exact: true }).fill("A long description\n".repeat(15));
   await dialog.getByLabel("Scope", { exact: true }).selectOption({ label: "Custom…" });
   await dialog.getByLabel("Custom scope value", { exact: true }).fill("Team:Billing");
+  const clipped = await dialog.locator(".secrets-compact-control > label").evaluateAll(labels => labels.filter(label => label.scrollWidth > label.clientWidth + 1).map(label => label.textContent));
+  expect(clipped).toEqual([]);
   await dialog.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded();
   await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
   await capture(page, info, "narrow-enlarged");
@@ -124,7 +126,17 @@ test("password, multiline and configuration sources preserve labels and draft re
   await dialog.getByLabel("Type", { exact: true }).selectOption("rsa-key");
   await expect(dialog.getByLabel("Value", { exact: true })).toHaveJSProperty("tagName", "TEXTAREA");
   await dialog.getByLabel("Value", { exact: true }).fill("DEMONSTRATION KEY\n".repeat(12));
+  const multiline = dialog.getByLabel("Value", { exact: true });
+  await multiline.locator("..").scrollIntoViewIfNeeded();
+  const labelCover = await multiline.evaluate(element => {
+    const textarea = element as HTMLTextAreaElement;
+    textarea.scrollTop = textarea.scrollHeight;
+    return { labelTop: textarea.labels![0].getBoundingClientRect().top - textarea.getBoundingClientRect().top, scrollTop: textarea.scrollTop };
+  });
+  expect(labelCover.scrollTop).toBeGreaterThan(0);
+  expect(labelCover.labelTop).toBeLessThanOrEqual(2);
   await capture(page, info, "multiline");
+  await dialog.locator(".secrets-create-content").evaluate(element => { element.scrollTop = 0; });
   await dialog.getByLabel("Type", { exact: true }).selectOption("text");
   await dialog.getByLabel("Store", { exact: true }).selectOption("configuration");
   await dialog.getByLabel("Configuration key", { exact: true }).fill("Billing:ApiKey");

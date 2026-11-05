@@ -2,6 +2,10 @@ import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 async function capture(page: Page, info: TestInfo, name: string) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined)));
+  });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
   await page.screenshot({ path: screenshot, fullPage: true });
@@ -166,6 +170,7 @@ test("compact Secret create journey", async ({ page }, info) => {
   const name = `compact-${info.project.name}-${Date.now()}`;
   await page.goto("/security/secrets");
   const open = page.getByRole("button", { name: "Create secret", exact: true }).first();
+  await expect(open).toBeEnabled();
   await open.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
   const technicalName = dialog.getByLabel("Technical name", { exact: true });

@@ -4,7 +4,7 @@
 
 The Create secret prototype uses one filled native-control surface with persistent inset labels. Ordinary text/password labels float on focus, content and native autofill; select/date/multiline labels remain raised. Secret value guidance, validation, Store help and Scope help sit with their controls. More options retains existing optional-value counting and recovery behavior. Editing is disabled during pending creation and restored after failure.
 
-At the same 1280×800 Classic Dark preview, the original collapsed dialog measured 625px high with a 488px scroll body; the first compact capture measured 528px. Final captures and geometry are retained with the validation run. The reduction includes relocating optional guidance; label nesting alone does not account for the saving.
+At the same 1280×800 Classic Dark preview, the original collapsed dialog measured 625px high with a 488px scroll body; the final compact Classic Dark capture measured 521px. Final captures and geometry are retained with the validation run. The reduction includes relocating optional guidance; label nesting alone does not account for the saving.
 
 ## Findings fixed during review
 
@@ -12,7 +12,7 @@ At the same 1280×800 Classic Dark preview, the original collapsed dialog measur
 - Scope refresh/retry actions use StudioButton in compact mode rather than browser-default small buttons.
 - Root-only font enlargement did not change pixel-based form text. The proof now doubles the actual field typography tokens, asserts computed enlargement and verifies label/value separation before checking narrow scrolling and actions. Field metrics scale with text.
 - Theme transitions must settle before contrast inspection. After settling, small error text in some Dim palettes still needed stronger contrast; the prototype mixes the existing danger foreground with primary text. The Create action similarly retains the accent hue with stronger foreground separation. These adjustments remain local to the prototype.
-- Long labels use a wrapping, permanently raised layout rather than truncating the field name. Multiline labels use their own painted strip so scrolled content does not pass behind the name.
+- Long labels and fields in narrow dialogs use a wrapping, permanently raised layout rather than truncating the field name. Multiline labels use a flush painted strip so scrolled content does not appear above the name; the browser proof explicitly scrolls the writing area and inspects the covering band. Narrow dialogs keep labels in normal flow so they can wrap, and fields do not shrink when content grows.
 
 ## Candidate shared component contract
 
