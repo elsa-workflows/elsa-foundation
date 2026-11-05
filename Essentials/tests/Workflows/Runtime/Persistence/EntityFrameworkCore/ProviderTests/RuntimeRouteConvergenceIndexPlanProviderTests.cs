@@ -8,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 
@@ -30,7 +31,7 @@ public sealed class RuntimeRouteConvergenceIndexPlanSqliteTests : IAsyncDisposab
 }
 
 [Collection(RuntimeBookmarksPostgreSqlFixture.CollectionName)]
-public sealed class RuntimeRouteConvergenceIndexPlanPostgreSqlTests(RuntimeBookmarksPostgreSqlFixture fixture)
+public sealed class RuntimeRouteConvergenceIndexPlanPostgreSqlTests(RuntimeBookmarksPostgreSqlFixture fixture, ITestOutputHelper output)
 {
     [SkippableFact]
     public Task PostgreSql_convergence_projections_are_index_only_scans_of_their_covering_indexes()
@@ -40,7 +41,11 @@ public sealed class RuntimeRouteConvergenceIndexPlanPostgreSqlTests(RuntimeBookm
             interceptor => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>()
                 .UseNpgsql(fixture.ConnectionString).AddInterceptors(interceptor).Options),
             RuntimeRouteConvergenceIndexPlans.PostgreSqlPlanAsync,
-            (plan, index) => Assert.Contains($"Index Only Scan using \"{index}\"", plan));
+            (plan, index) =>
+            {
+                output.WriteLine($"Convergence projection plan for {index}:{Environment.NewLine}{plan}");
+                Assert.Contains($"Index Only Scan using \"{index}\"", plan);
+            });
     }
 }
 
