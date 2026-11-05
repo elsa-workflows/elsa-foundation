@@ -185,7 +185,9 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
   await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: /Workflow executables/i }).first()).toBeVisible();
+  await expect(page).toHaveURL(/\/workflows\/executables(?:\?|$)/);
+  await expect(page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Executables", level: 2, exact: true })).toBeVisible();
   await navLink("Library").click();
   const libraryViews = page.getByRole("navigation", { name: "Library views" });
   await libraryViews.getByRole("link", { name: "Templates", exact: true }).click();
