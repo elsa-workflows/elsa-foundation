@@ -6,6 +6,8 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { workflowExecutableExportRelation } from "../api/executableArtifactExport";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import { setNotifications } from "../workflow-editor/notifications";
+import type { WorkflowEditorOperation } from "../workflow-editor/editorTypes";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
 import {
   selectPublishedExecutable,
@@ -20,12 +22,14 @@ type Operations = ReturnType<typeof useWorkflowOperations>;
 
 let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;
 let downloads: { name: string; blob: Blob }[] = [];
+const notify = vi.fn(() => ({ id: "export-confirmation", update() {}, dismiss() {} }));
 const objectUrlApi = URL as unknown as {
   createObjectURL?: (blob: Blob) => string;
   revokeObjectURL?: (url: string) => void;
 };
 
 beforeEach(() => {
+  notify.mockClear(); setNotifications({ notify, track: work => work });
   downloads = [];
   const blobsByUrl = new Map<string, Blob>();
   // jsdom defines no object-URL API at all, so it is installed rather than spied on.
@@ -41,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setNotifications(undefined);
   vi.restoreAllMocks();
   delete objectUrlApi.createObjectURL;
   delete objectUrlApi.revokeObjectURL;
@@ -116,6 +121,46 @@ describe("executable artifact export availability", () => {
   });
 });
 
+describe("manual editor export confirmation lifecycle", () => {
+  it("downloads design JSON through the shared notifier without replacing editing status", async () => {
+    const fixture = renderOperations(); fixture.writeStatus("Autosaved");
+    fixture.current().exportJson();
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].name).toBe("Orders.json");
+    expect(JSON.parse(await readBlobText(downloads[0].blob))).toMatchObject({ name: "Orders", definitionId: "definition-1", state: { rootActivity: { nodeId: "root", activityVersionId: "root-v1" } }, layout: [] });
+    expect(notify).toHaveBeenCalledWith({ level: "success", title: "Exported workflow as JSON." });
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Autosaved");
+  });
+
+  it.each(["scope", "retained visit"] as const)("finishes accepted artifact download but suppresses retired %s feedback and clears only owned progress", async change => {
+    let finish!: (value: typeof closurePayload) => void;
+    const deferred = new Promise<typeof closurePayload>(resolve => { finish = resolve; });
+    const fixture = renderOperations({ deferred, retained: change === "retained visit" });
+    const work = fixture.current().exportExecutableArtifact();
+    await vi.waitFor(() => expect(fixture.getJson.mock.calls.some(([url]) => url.includes("/executable-export"))).toBe(true));
+    if (change === "scope") fixture.render({ next: true });
+    else { fixture.render(undefined, "hidden"); fixture.render(); }
+    finish(closurePayload); await work;
+    expect(downloads).toHaveLength(1); expect(notify).not.toHaveBeenCalled();
+    if (change === "retained visit") {
+      expect(fixture.setOperation).toHaveBeenLastCalledWith("idle");
+      expect(fixture.setStatus).toHaveBeenLastCalledWith("");
+    }
+  });
+
+  it("preserves newer editing status and operation while an accepted artifact export finishes", async () => {
+    let finish!: (value: typeof closurePayload) => void;
+    const fixture = renderOperations({ deferred: new Promise(resolve => { finish = resolve; }) });
+    const work = fixture.current().exportExecutableArtifact();
+    await vi.waitFor(() => expect(fixture.getJson.mock.calls.some(([url]) => url.includes("/executable-export"))).toBe(true));
+    fixture.writeStatus("Autosaved"); fixture.writeOperation("saving");
+    finish(closurePayload); await work;
+    expect(downloads).toHaveLength(1);
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Autosaved");
+    expect(fixture.setOperation).toHaveBeenLastCalledWith("saving");
+  });
+});
+
 describe("executable artifact export operation", () => {
   it("downloads the server closure verbatim under the endpoint's file name", async () => {
     const fixture = renderOperations();
@@ -130,7 +175,8 @@ describe("executable artifact export operation", () => {
     expect(downloads).toHaveLength(1);
     expect(downloads[0].name).toBe("definition-1-1.0.0-closure.json");
     expect(JSON.parse(await readBlobText(downloads[0].blob))).toEqual(closurePayload);
-    expect(fixture.setStatus).toHaveBeenLastCalledWith("Exported executable artifact as definition-1-1.0.0-closure.json.");
+    expect(notify).toHaveBeenCalledWith({ level: "success", title: "Exported executable artifact as definition-1-1.0.0-closure.json." });
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("");
     expect(fixture.setError.mock.calls.map(([value]) => value)).toEqual([""]);
     // Nothing is saved, promoted, or published by an export.
     expect(fixture.saveDraft).not.toHaveBeenCalled();
@@ -161,6 +207,7 @@ describe("executable artifact export operation", () => {
 
     expect(downloads[0].name).toBe("workflow-unversioned-closure.json");
     expect(fixture.setStatus.mock.calls.at(-1)?.[0]).toContain("carried no definition id or version");
+    expect(notify).toHaveBeenCalledWith({ level: "success", title: "Exported executable artifact as workflow-unversioned-closure.json." });
   });
 
   it("asks for a publish instead of calling the endpoint when nothing is published", async () => {
@@ -192,6 +239,7 @@ describe("executable artifact export operation", () => {
     expect(error).toMatchObject({ status: 409, message: expect.stringContaining("Publish this workflow before exporting") });
     expect(error.detail).toContain("no Published source reference");
     expect(fixture.setStatus).toHaveBeenLastCalledWith("");
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("surfaces every missing dependency artifact id for an incomplete closure", async () => {
@@ -375,7 +423,7 @@ function renderArtifactDownload(options: {
           payload: options.failWith
         });
       }
-      return closurePayload;
+      return options.deferred ? await options.deferred : closurePayload;
     }
     throw new Error(`Unexpected GET ${url}`);
   });
@@ -500,6 +548,8 @@ function renderOperations(options: {
   contentDisposition?: string;
   publishedExecutable?: { versionId: string; definitionId: string; artifactVersion: string | null; artifactId: string | null } | null;
   failWith?: Record<string, unknown>;
+  deferred?: Promise<typeof closurePayload>;
+  retained?: boolean;
 } = {}) {
   const getJson = vi.fn(async (url: string) => {
     if (url === "/capabilities") return capabilities(true);
@@ -542,6 +592,11 @@ function renderOperations(options: {
   };
 
   let current: Operations | null = null;
+  let notificationScope: object = context;
+  let currentStatus = "";
+  let currentOperation: WorkflowEditorOperation = "idle";
+  const writeStatus = (update: React.SetStateAction<string>) => { currentStatus = typeof update === "function" ? update(currentStatus) : update; callbacks.setStatus(currentStatus); };
+  const writeOperation: Parameters<typeof useWorkflowOperations>[0]["setOperation"] = update => { currentOperation = typeof update === "function" ? update(currentOperation) : update; callbacks.setOperation(currentOperation); };
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -549,6 +604,7 @@ function renderOperations(options: {
   const Harness = () => {
     current = useWorkflowOperations({
       context,
+      notificationScope,
       draft: draft(),
       details: details(),
       catalog: [],
@@ -562,12 +618,18 @@ function renderOperations(options: {
         }
         : options.publishedExecutable,
       saveDraft,
-      ...callbacks
+      ...callbacks,
+      setStatus: writeStatus,
+      setOperation: writeOperation
     });
     return null;
   };
-  flushSync(() => root.render(<Harness />));
-  return { current: () => current!, getJson, saveDraft, ...callbacks };
+  const render = (scope = notificationScope, mode: "visible" | "hidden" = "visible") => {
+    notificationScope = scope;
+    flushSync(() => root.render(options.retained ? <React.Activity mode={mode}><Harness /></React.Activity> : <Harness />));
+  };
+  render();
+  return { current: () => current!, getJson, saveDraft, ...callbacks, render, writeStatus, writeOperation };
 }
 
 function draft(): WorkflowDraft {

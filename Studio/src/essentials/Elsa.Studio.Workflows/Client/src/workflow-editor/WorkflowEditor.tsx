@@ -688,6 +688,7 @@ export function WorkflowEditor({
     updateTestDriveResult
   } = useWorkflowOperations({
     context,
+    notificationScope,
     draft: editableDraft,
     lineage: lineageHold.lineage,
     details,
