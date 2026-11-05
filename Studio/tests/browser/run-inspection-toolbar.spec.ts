@@ -150,3 +150,35 @@ test("keeps configuration input focus when editing makes the attached run stale"
   await expect(field).toBeFocused();
   await expect(field).toHaveValue("Edited activity");
 });
+
+test("binds the Explain menu to the occurrence shown in execution details", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&host=instance&run-canvas=repeated&toolbar-explain");
+  await page.getByRole("region", { name: "Workflow run canvas", exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
+  const panel = page.getByLabel("Run details panel", { exact: true });
+  const chooser = panel.locator(".wf-execution-choice");
+  await chooser.press("Enter");
+  await panel.getByRole("list", { name: "Recorded activity executions", exact: true }).getByRole("button", { name: /^Execution 1 (Completed|Running)/ }).press("Enter");
+  const technical = panel.locator(".wf-activity-execution-details");
+  await technical.locator("summary").press("Enter");
+  const selectedExecutionId = technical.locator(".wf-activity-meta-item")
+    .filter({ has: page.locator("dt").filter({ hasText: /^Activity Execution ID$/ }) }).locator("dd code");
+  await expect(selectedExecutionId).toBeVisible();
+  await expect(selectedExecutionId).toHaveText("activity-exec-write-one-1");
+  await expect(selectedExecutionId).not.toHaveText("activity-exec-write-one-4");
+  // The old probe predicates cannot establish readiness on the current, intentionally redesigned UI.
+  await expect(page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true })).toHaveCount(0);
+  await test.info().attach("legacy-explain-readiness-control", {
+    body: JSON.stringify({ directExplainButtons: await page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true }).count(), legacySelectionMarkers: await page.locator(".wf-toolbar [data-run-selection]").count() }),
+    contentType: "application/json"
+  });
+  await chooser.press("Enter");
+  await panel.getByRole("list", { name: "Recorded activity executions", exact: true }).getByRole("button", { name: /^Execution 4 (Completed|Running)/ }).press("Enter");
+  if (await technical.getAttribute("open") === null) await technical.locator("summary").press("Enter");
+  await expect(selectedExecutionId).toBeVisible();
+  await expect(selectedExecutionId).toHaveText("activity-exec-write-one-4");
+  await page.getByRole("button", { name: "More run actions", exact: true }).press("Enter");
+  await expect(page.getByRole("menu", { name: "More run actions", exact: true }).getByRole("menuitem", { name: "Explain", exact: true })).toBeFocused();
+  await expect(selectedExecutionId).toHaveText("activity-exec-write-one-4");
+  await page.screenshot({ path: test.info().outputPath("exact-occurrence-explain-menu.png"), fullPage: true });
+});

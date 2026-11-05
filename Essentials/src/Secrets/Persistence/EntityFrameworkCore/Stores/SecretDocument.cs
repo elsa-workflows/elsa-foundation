@@ -26,7 +26,7 @@ public sealed record SecretDocument(
             .ToArray();
         return new SecretDocument(
             secret.TenantId,
-            secret.Name,
+            secret.Name.ToLowerInvariant(),
             SecretsSearchKeys.SearchKey(secret.Name),
             SecretsSearchKeys.SearchKey(secret.DisplayName),
             SecretsSearchKeys.LookupKey(secret.TypeName),
