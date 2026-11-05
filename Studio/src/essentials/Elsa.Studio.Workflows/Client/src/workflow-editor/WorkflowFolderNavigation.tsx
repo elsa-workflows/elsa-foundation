@@ -210,14 +210,14 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     setError(null);
     try {
       await deleteEmptyWorkflowFolder(context, selectedFolder.id, selectedFolder.revision);
-      if (!canNotify()) return;
+      // The accepted delete still reconciles its owning tab while hidden; only transient feedback is visit-bound.
       const survivor: WorkflowFolderSelection = selectedFolder.parentId ? { id: selectedFolder.parentId } : "all";
       const survivorKey = selectedFolder.parentId ? `folder:${selectedFolder.parentId}` : "all";
       select(survivor);
       setFocusedKey(survivorKey);
       await refreshAfterStructureChange([selectedFolder.parentId ?? null], survivor, selectedFolder.id);
       if (canNotify()) getNotifications().notify({ level: "success", title: `Deleted folder ${selectedFolder.name}` });
-      restoreFolderFocus(survivorKey);
+      if (canNotify()) restoreFolderFocus(survivorKey);
     } catch (caught) {
       if (canNotify()) setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
     }
