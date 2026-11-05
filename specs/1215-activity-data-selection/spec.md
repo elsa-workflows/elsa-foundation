@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft — provisional while M1 resulting-main qualification is pending; no production contract is approved by this draft.
+**Status**: Approved — effective on M2 PR merge; production dispatch requires resulting-main qualification.
 
 **Input**: Authors want to select an earlier activity's output or nested field at a consuming input without declaring a variable or writing an expression. The owner approved the input-centered direction and instructed: "Set a goal to deliver all milestones".
 
@@ -261,8 +261,9 @@ composition, a reusable public output and an activity-bearing BPMN node.
 - Accepted [ADR 0045](../../docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
   governs value roles and causal occurrences. This specification does not adopt draft ambient activity-name
   syntax or the broader proposed coercion model, and does not invent Initiative membership.
-- The provisional consumer-owned selection direction will receive explicit contract/architecture review
-  before production work. Formal M2 approval remains behind M1 qualification/closeout.
+- Consumer-owned selection has completed independent contract/architecture review. M1 closed through its
+  precise-failing-seam research exit; [plan readiness](plan.md#readiness-and-qualification) records the exact
+  qualified source and remaining M2 merge/qualification gates. Research closure does not accept product behavior.
 - Declared metadata is sufficient to start mapping. Authorized runtime examples are a later separately
   scheduled increment; general schema inference, guessed mapping, a new language/editor, blanket output
   retention, automatic iteration, releases and deployment remain outside this scope.

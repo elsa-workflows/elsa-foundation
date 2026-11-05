@@ -2,8 +2,8 @@
 
 **Input:** [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [binding](contracts/binding-contract.md) and [authoring](contracts/authoring-contract.md) contracts.
-**Status:** Provisional M2 task proposal. All boxes are unexecuted. M1 qualification/closeout, independent
-M2 review, merge and resulting-main qualification precede production dispatch. No pending CI is a pass.
+**Status:** Reviewed M2 task plan; approval takes effect on M2 merge. All boxes are unexecuted. M1 research
+is closed; M2 merge and resulting-main qualification precede production dispatch. No pending CI is a pass.
 
 Use existing projects and separate worker worktrees. Paths below are repository-relative; named new files
 are proposed locations within the plan's fixed package ownership. Coordinate shared files serially.

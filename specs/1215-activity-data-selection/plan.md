@@ -3,8 +3,8 @@
 **Branch:** `agent/codex/3885-data-selection-contracts` | **Date:** 2026-11-05
 **Spec:** [spec.md](spec.md) | **Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882)
 **M2 task:** [#3885](https://github.com/elsa-workflows/elsa-foundation/issues/3885)
-**Status:** Provisional production plan. M1 qualification/closeout and independent M2 review remain
-prerequisites for approval, production dispatch and merge. Research results are not product acceptance.
+**Status:** Reviewed production plan; approval takes effect on M2 PR merge. Production dispatch requires
+resulting-main qualification. Research results are not product acceptance.
 **Inspected baseline:** `e8476790d6f9d146c04ff5e02af266566e0b9d24`; requirements reviewed at `46b1a830d`.
 
 ## Summary
@@ -19,6 +19,27 @@ request, scoped-variable/current-item and activity-result sources. Basic selecti
 language dependency. [Research](research.md) explains decisions; [data model](data-model.md),
 [binding contract](contracts/binding-contract.md) and [authoring contract](contracts/authoring-contract.md)
 own details. [Quickstart](quickstart.md) defines the finite production verification inventory.
+
+## Readiness and qualification
+
+[M1 closed](https://github.com/elsa-workflows/elsa-foundation/issues/3884#issuecomment-6670165196)
+through its precise-failing-seam research exit. Both [backend/full CI42086549189](https://github.com/elsa-workflows/elsa-foundation/actions/runs/42086549189)
+and [Studio CI42086827962](https://github.com/elsa-workflows/elsa-foundation/actions/runs/42086827962)
+completed successfully at post-report descendant `e8476790d6f9d146c04ff5e02af266566e0b9d24`.
+The [closeout receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3893#issuecomment-6670164301)
+preserves the failed/not-run product criteria. No research code or fixture is adopted.
+
+Product, technical and cross-artifact reviews completed sequentially, with all findings fixed/rechecked.
+The 25 functional requirements and eight success criteria map to 51 tasks across five stories. M2's
+approval/status transition takes effect when its normal exact-head review/CI and merge complete; it is
+approval of this plan and its semantic contracts, not an implemented API or passed production journey.
+
+The branch includes newer main `6337982e5b24f20a684c8adbef763405c2779daa`. Its
+[separate CI42103010890](https://github.com/elsa-workflows/elsa-foundation/actions/runs/42103010890)
+was unfinished at M1 closeout and is not qualified by the older runs. The audited template-toast and
+shared-source-row family deltas leave M1 findings and these contracts intact. M2 must pass its own
+required CI/review on the final current-main head; M3 starts only after M2's resulting-main qualification.
+Check live run/tracker state rather than treating this dated receipt as current health.
 
 ## Technical Context
 
@@ -163,8 +184,8 @@ sources remain inspectable and repairable. Include structure-projected inputs an
 
 ## Delivery order and parallel work
 
-1. Close M1 after actual qualification; complete independent M2 spec→plan→tasks review and resulting-main
-   qualification. No production worker starts from this provisional draft.
+1. M1 research is closed at its qualified fixed source. Complete normal M2 spec→plan→tasks approval,
+   merge and resulting-main qualification before any production worker starts.
 2. Establish shared contracts/authority and the whole-output wire/input path. Reuse #3094 for its bounded
    slice; retain nested-runtime/final qualification obligations in their actual leaves.
 3. Once shared contracts merge and qualify, runtime/member work and Studio picker/member integration may
@@ -174,7 +195,7 @@ sources remain inspectable and repairable. Include structure-projected inputs an
 5. Run M5 against the integrated exact commit, complete customer guidance, review/merge and qualify
    resulting main. Native child/dependency records and program transitions follow actual leaves.
 
-Generate [tasks.md](tasks.md) after independent plan/contract review, with file ownership, dependencies,
+[Tasks.md](tasks.md) follows independent plan/contract review and records ownership, dependencies,
 acceptance and finite verification. Create only the next executable leaves after M2 approval. Workers
 claim issues, use separate worktrees and open one reviewable PR per issue. Check open `main is red: CI`
 trackers and exact prerequisite heads before dependent work; a mock endpoint is not product acceptance.

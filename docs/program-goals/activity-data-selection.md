@@ -64,12 +64,16 @@ The active delivery objective includes M1–M5, review/merge and resulting-main 
 existing scope. M0 merged and its initial resulting main qualified. The
 [M1 research report](../reports/activity-data-selection-m1.md) merged: supporting persisted runtime
 controls work, while the requested no-expression UI journey fails at identified binding/source seams.
-Post-report resulting-main qualification remains pending in the owning task; cancelled runs are not passes.
+M1 [closed as bounded research](https://github.com/elsa-workflows/elsa-foundation/issues/3884#issuecomment-6670165196)
+after backend/full and Studio qualification passed at post-report descendant `e8476790`. Its
+[receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3893#issuecomment-6670164301) preserves
+failed/not-run product criteria and the newer-main qualification limit; cancelled runs are not passes.
 
-[Spec 1215](../../specs/1215-activity-data-selection/spec.md) is provisional M2 preparation while that
-prerequisite runs. Specification, plan/contracts and tasks receive sequential independent review before
-approval or production dispatch. The experiment adopts no production contract/code. Parallel workers
-start only from committed qualified shared contracts. A separate Project board is optional.
+[Spec 1215](../../specs/1215-activity-data-selection/spec.md), its plan/contracts and 51 tasks completed
+sequential independent review. M2 approval takes effect on [PR #3897](https://github.com/elsa-workflows/elsa-foundation/pull/3897)
+merge after its exact-head review/checks. The [readiness receipt](../../specs/1215-activity-data-selection/plan.md#readiness-and-qualification)
+distinguishes fixed M1 evidence from newer-main CI. Production workers start only after M2 resulting-main
+qualification; the experiment adopts no production code. A separate Project board is optional.
 
 ## Completion
 

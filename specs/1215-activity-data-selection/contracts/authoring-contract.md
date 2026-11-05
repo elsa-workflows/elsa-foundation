@@ -1,7 +1,7 @@
 # Activity data selection: authoring contract
 
-**Status:** Provisional M2 contract. M1 resulting-main qualification and independent M2 review remain
-prerequisites for approval; this document neither adopts the research implementation nor proves product acceptance.
+**Status:** Reviewed M2 authoring contract; approval takes effect on M2 merge. Research code is not adopted;
+implementation and actual product acceptance remain required under [plan readiness](../plan.md#readiness-and-qualification).
 
 This contract implements [spec.md](../spec.md). [binding-contract.md](binding-contract.md) owns the
 authored/compiled payloads, member plans, capability/version admission, conversion and runtime failure rules.

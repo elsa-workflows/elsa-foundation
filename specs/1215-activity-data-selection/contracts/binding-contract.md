@@ -1,7 +1,7 @@
 # Activity Data Selection: binding contract
 
-**Status:** Provisional M2 contract for review. No payload, package surface or implementation is approved
-until M1 qualification/closeout and the normal M2 contract/architecture review pass.
+**Status:** Reviewed M2 binding contract; semantic wire approval takes effect on M2 merge. Package API
+declarations, implementation and production acceptance remain future delivery work.
 **Baseline:** shared spec commit `46b1a830dfb9c218e8388252d2a81baba53ef070`.
 
 This contract implements [the product requirements](../spec.md), uses the [data model](../data-model.md)
@@ -20,7 +20,7 @@ is forbidden because older compilers/readers can silently ignore such a field.
 | `VariableMember` | `referenceKey`, `declaringScopeId`, `memberPath` |
 | `ActivityResultMember` | `producerNodeId`, `projectionKey`, `producerScopeId`, `memberPath`; existing producer `isOptional` defaults to false |
 
-Illustrative new authored input, not an approved API until review:
+Authored input example under this contract, effective on M2 approval/merge:
 
 ```json
 {
@@ -219,8 +219,8 @@ Use a deterministic framed/structured plan fingerprint so member names containin
 collide. Source labels, editor generation, authorization receipts and diagnostic examples are excluded.
 Fingerprint the same selection data in prepared-input caches and template identity calculations.
 
-Declare the provisional engine requirement `elsa.runtime.input-member-selection` schema `1` whenever a
-compiled selection exists. This key/version is proposed for review, not a second activity descriptor.
+Declare the engine requirement `elsa.runtime.input-member-selection` schema `1` whenever a
+compiled selection exists. This key/version is the reviewed engine-support marker, not a second activity descriptor.
 Advertise it through the existing `IRuntimeActivityConsumerCapability` registry beside the implementation,
 as the intrinsic engine capability already does. Propagate it through template closure, placement,
 retained dependencies, export/import and runnable requirement checks. Old artifacts without a selection
@@ -286,5 +286,5 @@ Before adopting implementation, require behavioral evidence for:
 - Reusable template placement and pair/consumer-only copy remapping, causal loop/branch isolation and
   persistent restart without producer rerun.
 
-These are future implementation/qualification obligations. This provisional document claims no new
-test result, approved wire, merged implementation or product acceptance.
+These are future implementation/qualification obligations. Wire approval on M2 merge does not claim a
+new test result, implemented package API, merged production behavior or product acceptance.

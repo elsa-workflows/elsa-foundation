@@ -1,6 +1,6 @@
 # Specification Quality Checklist: Activity Data Selection
 
-**Purpose**: Check the provisional product specification before technical planning.
+**Purpose**: Record product, technical and coverage readiness for M2 approval.
 **Created**: 2026-11-05
 **Feature**: [spec.md](../spec.md)
 
@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [x] No unresolved product clarification marker remains; provisional contract choices and approval gates are explicit.
+- [x] No unresolved product clarification marker remains; reviewed contract choices and remaining merge/qualification gates are explicit.
 - [x] Functional requirements are testable and have scenario or finite inventory coverage.
 - [x] Success criteria are measurable outcomes without timing benchmarks or implementation quotas.
 - [x] Edge cases include absent/null, serialized naming, collections, graph edits, stale sources and unavailable modules.
@@ -23,16 +23,16 @@
 
 ## Feature Readiness
 
-- [x] Core, transformation, graph edit, causal/restart and equivalent-surface stories have independent test outcomes.
+- [x] Core, transformation, graph edit, causal/restart and equivalent-surface stories specify independent test criteria.
 - [x] Meaningful publication and runtime proof is required rather than component rendering alone.
 - [x] Read-only/protected/minimal-host, keyboard/narrow/theme and independent visual evidence are included.
 - [x] Independent product-specification review is complete; the static/deferred validation finding was fixed and independently rechecked.
 - [x] Independent technical plan/contracts review is complete; Publishing composition, runtime DTO effects and effective path nullability/presence findings were fixed and rechecked.
 - [x] Cross-artifact analysis covers all 25 functional requirements, 8 success criteria and 5 stories with 51 tasks; the shared-reference dependency finding was fixed and rechecked.
-- [ ] M1 qualification/closeout permits formal M2 approval.
+- [x] M1 qualification/closeout permits formal M2 approval; both fixed-source runs passed at e8476790 and #3884 closed with explicit product-failure/current-main limits.
 
 ## Notes
 
-Content, technical and coverage review pass as a provisional draft. The remaining unchecked prerequisite
-is a milestone/approval gate, not permission for production implementation. Exact-head PR review/checks
-and M2 merge/resulting-main qualification remain required. No product acceptance is claimed here.
+Content, technical and coverage review pass, and M1 research closeout is complete. The approval/status
+transition takes effect on M2 merge. Exact-head PR review/checks and resulting-main qualification remain
+required before production dispatch. No product acceptance is claimed here.

@@ -1,8 +1,8 @@
 # Activity data selection: production verification
 
-**Status:** Provisional M2 instructions, pending M1 qualification and independent specification/contract
-review. These are acceptance instructions for the production implementation, not a claim that the
-feature or any journey already passes. M1's failed product criteria remain historical failures until retested.
+**Status:** Reviewed M2 verification instructions, effective on M2 approval/merge. These are future
+production acceptance instructions; no feature or journey is claimed passed. M1's failed product
+criteria remain historical failures until explicitly retested.
 
 Use [spec.md](spec.md), [authoring-contract.md](contracts/authoring-contract.md) and
 [binding-contract.md](contracts/binding-contract.md). The [program plan](../../docs/plans/activity-data-selection.md)

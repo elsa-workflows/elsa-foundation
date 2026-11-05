@@ -1,6 +1,6 @@
 # Activity Data Selection: program and delivery plan
 
-**Status:** Owner-authorized delivery plan, 5 November 2026; production contracts/specification follow the bounded proof.
+**Status:** Owner-authorized delivery plan, 5 November 2026; reviewed production artifacts are in [spec 1215](../../specs/1215-activity-data-selection/spec.md).
 **Date:** 2026-11-05
 **Planning baseline:** `origin/main` at `8e2acfd4d85a937e888ad378fdb7c6a742a80bda`.
 **Establishment refresh:** `697e9a342998282a08a598ad7137b2e90c9435c2`; source gaps and existing issue ownership rechecked.
@@ -158,6 +158,10 @@ adopted only through the reviewed production spec and normal delivery process.
 Follow [specification → plan → tasks](../contributing/task-paths.md#feature-development), reviewing each
 artifact before the next. Allocate the next [spec number](../reference/spec-lifecycle.md) against the tree,
 archives and open PR allocations when this phase starts.
+
+The reviewed [spec 1215 package](../../specs/1215-activity-data-selection/plan.md) records the qualified
+M1 research exit, contract choices, 51 tasks and remaining exact-head review/merge/resulting-main gates.
+Approval takes effect on M2 merge; product acceptance remains M3–M5 work.
 
 Specify the source tree, target eligibility, member/path identity, source labels, types, nullability,
 cardinality, host capability, canonical binding and compatibility diagnostics. Define current-revision

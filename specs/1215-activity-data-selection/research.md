@@ -1,11 +1,12 @@
 # Activity Data Selection: design research
 
-**Status:** Provisional M2 decisions for independent review; M1 qualification/closeout remains a gate.
+**Status:** Reviewed M2 design rationale; adoption takes effect on M2 merge. M1 research is closed;
+[plan readiness](plan.md#readiness-and-qualification) records exact qualification and remaining delivery gates.
 **Date:** 2026-11-05. Inspected baseline `e8476790`; requirements reviewed at `46b1a830d`.
 
 The merged [M1 report](../../docs/reports/activity-data-selection-m1.md) owns actual experiment outcomes.
 Supporting persisted expression runs succeeded; the requested no-expression selection journey failed.
-This document proposes production choices, not a passing feature or adopted research code. Product
+This document records reviewed production choices, not a passing feature or adopted research code. Product
 comparisons/references remain in the [program plan](../../docs/plans/activity-data-selection.md).
 
 ## Decisions
@@ -69,6 +70,6 @@ editor, ambient activity API or runtime schema inference. Runtime previews remai
 No ADR 0046/0089 amendment is needed for this proposal; route any later required semantic amendment through
 its actual governance before adoption.
 
-[Plan](plan.md) fixes proposed package/port ownership, [binding contract](contracts/binding-contract.md)
-fixes behavior, and [quickstart](quickstart.md) fixes evidence. These are ready for independent M2 review;
-they are neither approval nor a waiver of prerequisite qualification.
+[Plan](plan.md) fixes package/port ownership, [binding contract](contracts/binding-contract.md) fixes
+behavior, and [quickstart](quickstart.md) fixes evidence. Independent M2 artifact review is complete;
+normal exact-head checks/review, merge and resulting-main qualification remain delivery gates.

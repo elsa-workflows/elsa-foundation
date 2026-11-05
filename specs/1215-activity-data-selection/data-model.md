@@ -1,7 +1,7 @@
 # Activity Data Selection: data model
 
-**Status:** Provisional M2 design for review. M1 resulting-main qualification and M2 contract/architecture
-review remain gates; this document approves no production API or implementation.
+**Status:** Reviewed M2 design; approval takes effect on M2 merge. The semantic model is specified here;
+API declarations and implementation still require normal code review and production acceptance.
 **Baseline:** `46b1a830dfb9c218e8388252d2a81baba53ef070`; source findings carried from `e8476790` and
 the merged [M1 report](../../docs/reports/activity-data-selection-m1.md).
 
@@ -117,8 +117,8 @@ behavior is not executed to populate discovery.
 
 ## Compiled read selection
 
-The proposed logical name is `RuntimeReadSelection`, owned by Workflows Runtime Core as fixed in the
-technical plan. Its semantic fields are fixed here; M2 reviews their concrete API before production:
+The logical name is `RuntimeReadSelection`, owned by Workflows Runtime Core as fixed in the technical
+plan. Its semantic fields are fixed here; the concrete API declaration receives normal code review:
 
 | Field | Meaning |
 |---|---|
