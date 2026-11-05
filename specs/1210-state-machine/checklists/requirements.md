@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD47 are separated from proposals and open choices.
+- [x] Accepted OD1–OD48 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD47 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD48 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -52,7 +52,7 @@ OD28 allows independent regional work to progress concurrently within each phase
 
 OD29 preserves completed sibling work during normal recovery from a regional Action failure and adds no automatic sibling cancellation. Normal incident policy controls pending work; phase advancement and later chart events remain blocked until required work succeeds. Other fault paths and exact integration remain Q2.
 
-OD30 adds authored completion-triggered transitions for completed compound/parallel states, keeps nested completion local and completes the machine at its own top-level final state. Final-entry timing follows OD31; remaining completion conflicts and exact completion lifetime/representation remain Q1.
+OD30 adds authored completion-triggered transitions for completed compound/parallel states, keeps nested completion local and completes the machine at its own top-level final state. Final-entry timing follows OD31; remaining completion conflicts and exact completion identity/representation and durable consumption remain Q1.
 
 OD31 allows ordinary entry work in final states and requires success before completion propagates. Normal waiting, fault/recovery and restart behavior apply; remaining completion conflicts and exact integration remain open.
 
@@ -87,5 +87,7 @@ OD45 explicitly maps machine-level final states to declared normal activity outc
 OD46 defers history destinations initially while retaining explicit authored re-entry, durable restoration of active configuration/waits, accepted descendant-target modes and hierarchy/parallel scope. Exact validation and source/Studio qualification remain open; no later history delivery is promised.
 
 OD47 requires an initial-release qualified saga-style composition example through Studio and a real durable run/restart, using existing explicit native compensation/recovery without a Saga type/engine. Exact topology and lifetime/fault/uncertainty/reusable-boundary behavior must be agreed in M0 and proved; existing compensation evidence is not StateMachine proof.
+
+OD48 offers completion once per visit and consumes it when no transition is eligible, without revival after later value changes. A new visit can complete again; ongoing rules use automatic conditions/new triggers. Exact completion identity/representation and durable consumption/recovery remain open.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.
