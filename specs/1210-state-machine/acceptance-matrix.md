@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A45 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A46 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -53,6 +53,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD43 — collapsible nested chart and synchronized outline | FR-054 | A43 |
 | OD44 — integrated workflow execution inspection | FR-055 | A44 |
 | OD45 — explicit final-state to activity-outcome mapping | FR-056 | A45 |
+| OD46 — defer history destinations; retain durable recovery | FR-057 | A46 |
 
 ## Witness definitions
 
@@ -103,6 +104,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A43 | Navigate nested chart and outline | Expand/collapse retains parent context; hierarchy outline and chart remain synchronized for keyboard/non-canvas navigation; activity drill-in remains normal and navigation does not alter startup/priority semantics | Actual Studio navigation/selection controls for root/nested hierarchy and parallel regions with authored-rule checks; view-state persistence, accessible/read-only/responsive details and editor integration remain Q3 |
 | A44 | Inspect the machine in its workflow execution | Exact-version root/nested chart/outline, configuration, pending phases and linked event/transition history lead to ordinary activity evidence, receipts/outcomes and normal recovery tools; surrounding workflow context and permissions remain intact | Actual Studio/host inspection with newer published-definition negative control, durable phase/recovery/event evidence and recorded causal-order controls; projection/integration/retention/availability and detailed Studio qualification remain open |
 | A45 | Complete a nested machine through normal outcomes | Explicit machine-level final-state mapping emits its declared normal activity outcome after successful final entry, enabling the enclosing Flowchart branch; state renaming does not implicitly rename outcomes and nested completion/data outputs follow existing contracts | Actual Studio mapping/save/reload/publish and parent-machine host execution witnesses with renamed-state, final-entry wait and nested-completion controls; mapping validation/defaults and source integration remain open |
+| A46 | Authored re-entry differs from durable restart | Initial-release re-entry uses explicit targets/initial states without history destinations; explicit descendant targeting/visit modes remain valid, while restart restores the existing active configuration and waits | Definition/Studio scope validation and actual hierarchy/parallel host witnesses contrasting deliberate exit/re-entry with restart of a non-initial active configuration; no later history feature or runtime pass is claimed |
 
 ## Qualification rules
 

@@ -11,7 +11,7 @@
 - [x] User-facing specification describes outcomes and constraints without choosing an internal implementation.
 - [x] Generic infrastructure is separated from sample approval-domain concepts.
 - [x] Mandatory user scenarios, requirements, entities, success criteria and assumptions are present.
-- [x] Accepted OD1–OD45 are separated from proposals and open choices.
+- [x] Accepted OD1–OD46 are separated from proposals and open choices.
 
 ## Requirement Completeness
 
@@ -32,7 +32,7 @@
 
 ## Validation notes
 
-Current draft validation: accepted OD1–OD45 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
+Current draft validation: accepted OD1–OD46 are traced to requirements/scenarios/witnesses. The complete execution, delivery/recovery and Studio contracts intentionally remain open in Q1–Q3; no checklist box substitutes for agreement.
 
 Initial independent review found that non-pre-emption alone did not forbid premature evaluation against an old configuration. FR-015 and its scenario now explicitly require selected work to finish before later event evaluation, matching OD10.
 
@@ -83,5 +83,7 @@ OD43 chooses collapsible state/region chart containers with a synchronized hiera
 OD44 integrates root/nested machine inspection into normal workflow execution inspection against the exact executed version, linking chart/configuration/phases/history with activity details, receipts/outcomes and normal recovery tools. Causal projection, integration, retention/availability and detailed Studio qualification remain open.
 
 OD45 explicitly maps machine-level final states to declared normal activity outcomes, preserving normal data-output contracts and avoiding names inferred from states. Mapping representation/validation/defaults and source/Studio proof remain open; pending core architecture decisions are not approved by this feature choice.
+
+OD46 defers history destinations initially while retaining explicit authored re-entry, durable restoration of active configuration/waits, accepted descendant-target modes and hierarchy/parallel scope. Exact validation and source/Studio qualification remain open; no later history delivery is promised.
 
 The next step is clarification and design review. No implementation readiness or approved specification is claimed.

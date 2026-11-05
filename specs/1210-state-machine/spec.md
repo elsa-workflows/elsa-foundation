@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD45 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD46 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -55,6 +55,7 @@ An author places substates inside a containing state and defines shared behavior
 7. **Given** a transition exits or enters multiple nested states, **when** their authored work runs, **then** exited children finish Exit before their exited parents, and entered parents finish Entry before their entered children. All applicable exits finish before transition Action and Action finishes before entries, including across durable waits.
 8. **Given** a compound state reaches its final child, **when** an authored completion-triggered transition is eligible, **then** that transition can define what follows the nested lifecycle. Nested completion does not by itself complete the whole machine; reaching its own top-level final state completes the StateMachine activity. Final-entry timing follows FR-042 and automatic/completion precedence follows FR-043; remaining completion conflicts and lifetime/representation remain Q1.
 9. **Given** a transition defined on a compound parent with one active child targets a descendant, **when** the author chooses its parent-visit behavior, **then** preserving the visit changes the child without resetting parent-owned waits/deadlines, while deliberate re-entry runs parent exit/entry work and starts a fresh parent visit. The choice survives normal definition editing/publication and follows accepted phase, hierarchy and recovery rules.
+10. **Given** an authored exit followed by re-entry, **when** the state is entered again, **then** explicit targets and initial-state rules determine its configuration without an initial-release history destination. A durable restart of an existing active invocation instead restores its current configuration and waits; hierarchy, parallel regions and explicit parent-to-descendant modes remain supported.
 
 ### User Story 3 — Model independent parallel regions (Priority: P1)
 
@@ -229,6 +230,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-054**: Studio MUST show nested states and parallel regions as expandable/collapsible chart containers paired with a synchronized hierarchy outline for keyboard and non-canvas navigation. Authors MUST be able to retain parent context while collapsing detail, and ordinary activity work MUST retain the normal-editor navigation agreed in FR-035. Navigation and expand/collapse MUST NOT change execution semantics, including initial selections and transition priority. Detailed interactions, view-state persistence under existing owners and accessible/read-only/responsive journeys remain Q3.
 - **FR-055**: Normal workflow execution inspection MUST integrate the StateMachine chart and outline, active configuration, pending phases and linked event/transition history with ordinary activity details, receipts/outcomes and normal incident/recovery tools. This MUST support root and nested machines against the exact executed version, connected to their surrounding workflow/activities under existing identity, permission, inspection and recovery authorities. Accepted observable admission/selection order MUST use recorded causal evidence rather than timestamp ordering alone. Exact projection/integration, retention/availability and detailed Studio journeys remain open.
 - **FR-056**: Machine-level final states MUST support explicit mappings to declared ordinary Elsa activity outcomes so the enclosing workflow/Flowchart can branch on StateMachine completion. State names MUST NOT implicitly become outcome names, and data outputs MUST follow normal Elsa rules. Existing outcome, binding, definition/publication and exact-version contracts, successful final-entry completion and local nested completion MUST remain authoritative. Mapping representation, validation, default/unmapped behavior and source/Studio integration remain open; this requirement MUST NOT silently approve pending core architecture decisions or introduce a new outcome authority.
+- **FR-057**: History destinations MUST be deferred from the initial release. Authored re-entry MUST follow explicit targets and initial-state rules, preserving accepted parent-to-descendant visit choices. Normal durable restart MUST still restore the current active configuration and waits of the existing invocation. This boundary MUST NOT reduce hierarchy/parallel first-release acceptance or imply later history delivery; exact validation and qualification remain open.
 
 ### Platform constraints and design obligations
 
@@ -270,7 +272,8 @@ These are conceptual specification terms, not approved public types or a committ
 
 - The existing workflow/activity definition and publication lifecycle is the accepted ownership model (OD16); internal execution placement remains unchosen.
 - The completed Elsa 3.8 program, WF4 and SCXML are references, not automatic Elsa 4 compatibility requirements. Departures must be justified in M0.
-- Scope does not imply full SCXML interchange/conformance, history states, shared-trigger object identity, Elsa 3 import/migration, a new saga engine or compensation of external effects.
+- History destinations are explicitly deferred from the initial release (OD46); this does not defer durable restart recovery, hierarchy or parallel regions.
+- Scope does not imply full SCXML interchange/conformance, shared-trigger object identity, Elsa 3 import/migration, a new saga engine or compensation of external effects.
 - Existing native compensation/saga work retains its ownership. Any integration proposal identifies the actual contract and evidence needed rather than merging programs by terminology.
 - No arbitrary throughput/latency target, wall-clock CI gate, release or deployment is introduced by this draft.
 - Complete scoped completion, hierarchical phase/transition ordering, delivery/recovery and Studio contracts remain provisional until Q1–Q3 are resolved. Production implementation must wait for the applicable approved design/spec artifacts.
@@ -321,7 +324,7 @@ OD29 requires completed sibling work to be preserved when a regional Action fail
 
 [NEEDS CLARIFICATION: Agree the concrete graph/outline/navigation, slots/conditions, diagnostics/inspection and accessibility/responsive journeys; classify remaining advanced capabilities and data/outcome/reuse details without silently expanding first-release scope.]
 
-The accepted chart/editor/navigation and inspection directions below still need concrete interaction, projection and qualification details. History-state destinations, full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
+The accepted chart/editor/navigation and inspection directions below still need concrete interaction, projection and qualification details. History-state destinations are deferred initially under OD46; full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
 
 OD24 settles the focused chart, activity summaries and drill-in normal activity editing with breadcrumbs and preserved chart context (FR-035). OD43 chooses expandable/collapsible state/region containers with a synchronized hierarchy outline for keyboard and non-canvas navigation, preserving parent context without changing execution semantics (FR-054). Detailed interactions, view-state persistence, accessibility/read-only and responsive journeys remain open.
 
@@ -332,3 +335,5 @@ OD44 places root/nested StateMachine inspection in normal workflow execution ins
 OD21 chooses machine-wide and state-visit-local value scopes (FR-032). Their concrete authoring/visibility/binding integration and outcome details remain to be specified against the existing platform contracts.
 
 OD45 explicitly maps machine-level final states to declared normal activity outcomes without deriving names from states, preserving normal data-output and existing platform contracts (FR-056). Mapping representation, validation, default/unmapped behavior and source/Studio integration remain open; pending core architecture decisions retain their actual agreement boundaries.
+
+OD46 defers history destinations initially, retaining explicit authored targets/initial-state entry and normal durable restart recovery without reducing hierarchy/parallel scope (FR-057). Exact validation and source/Studio qualification remain open.
