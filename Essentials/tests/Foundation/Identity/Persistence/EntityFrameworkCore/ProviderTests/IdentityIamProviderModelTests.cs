@@ -19,10 +19,14 @@ public sealed class IdentityIamProviderModelTests
         using var context = CreateContext(provider, provider);
         Assert.False(context.Database.HasPendingModelChanges());
         var migrations = context.Database.GetMigrations().ToArray();
-        Assert.Equal(2, migrations.Length);
-        var script = context.GetService<IMigrator>().GenerateScript(migrations[0], migrations[1]);
+        Assert.Collection(migrations,
+            migration => Assert.EndsWith("_Initial", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_IssuerQualifiedExternalLogins", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_QualifiedLinkSessionBinding", migration, StringComparison.Ordinal));
+        var script = context.GetService<IMigrator>().GenerateScript(migrations[0], migrations[^1]);
         Assert.Contains("identity_external_logins", script, StringComparison.Ordinal);
         Assert.Contains("Issuer", script, StringComparison.Ordinal);
+        Assert.Contains(migrations[^1], script, StringComparison.Ordinal);
         var entity = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(Entities.ExternalIdentityEntity))!;
         var issuer = entity.FindProperty(nameof(Entities.ExternalIdentityEntity.Issuer))!;
         Assert.True(issuer.IsNullable);
