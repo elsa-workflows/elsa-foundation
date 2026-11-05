@@ -312,6 +312,53 @@ activated through the keyboard. Frame orders reuse the pinned read order (`expla
 order (`batch_journeys.REFUSED_FRAMES`). `require_workflow_inspection` refuses a missing, failed, duplicated or changed
 record; `witness_manifest()` counts the four cases.
 
+### Workflow Runs (spec 1193 T045)
+
+Then `run_journeys.py` runs two cases, `{copilot,anthropic}-workflow-run`. Each case seeds, through the design, publishing
+and runtime APIs' own relations (`owner_resources.seed_faulted_run`), two Runs in the packaged consumer: one that faults (a
+Write Line whose text, a fresh private canary, is authored sensitive, then a Fault with one blocking incident) and one still
+in progress (an Event that does not start the workflow: the runtime keeps the Run `Running` and suspends the Event's activity
+execution on its bookmark, `Suspended`/`BookmarkWaiting`, which is the waiting signal the seed settles on, `run_waiting`). The runtime's default capture
+policy never captures a sensitive payload, so the case first selects the test-only host seam `QualificationRunCapture`
+(`fixtures/BackendConsumer/QualificationRunCapture.cs`), which captures sensitive activity inputs as full payloads; the
+driver requires the run API to report the canary input `payloadCaptured` (and sensitive), and confirms with one admin
+payload-API resolve (only its status and digest are retained) that the captured payload is the canary, before it checks
+that Weaver withholds it,
+so a regression that released a captured sensitive value would leak natively. Every design read that holds the authored
+canary is retained by digest only; every retained read is checked to hold no canary. The caller sends only the run
+page's reference (`workflows.run`: the Workflow Instance id and the selected activity execution id); the admitted context,
+read from `data.message.context` and repeated in every admission, must be the server's own read of exactly that Run and
+selection, equal to the run API's (an in-progress Run's admissions differ only by `readAt`). The Run actor (principal 10:
+`workflows/runtime:read` and `workflows/activity-executions:inspect`, no value inspection) is appended to the principals.
+
+- `explain-fault` and `explain-activity`: `workflow_read_run` returns the instance, Executable, incidents and activity
+  executions of `GET runtime/workflows/instances/{id}` and the selected execution's incidents and value evidence of its
+  activity execution read; each value's disclosure follows its evidence (`expected_disclosure`), a released value equals the
+  payload API's answer, and the Write Line's captured sensitive text is disclosed only as `withheld`, never as a value, and
+  its state view is withheld too (`canaryCaptured` is recorded);
+- `in-progress`: the waiting Run is read as in progress, attributed to its read time, with its bookmarks;
+- `not-permitted`: the Run actor reads incident messages as the run API's redaction, listed as not permitted, and no value;
+- `controls-refused`: a build-mode, full-auto turn asking to retry, cancel and delete with only the Run in context: the adapter
+  is offered the read and no mutating workflow tool or run control; the read completes and the Run reads back byte-equal;
+- refused at admission with the module's own text: an unknown Run, an activity execution the Run does not hold, and an actor
+  without `workflows/runtime:read`;
+- deployment shape: with `FoundationWorkflowsRuntimeAgent` deselected a Run reference is `agent.context.kind_unsupported`;
+  the feature is selected again afterwards. The deselection reloads the shell, which empties the consumer's in-memory run
+  stores, so this control runs last, after the browser journey; the seam is deselected after it.
+
+The packaged consumer cannot prune activity evidence and composes activity execution inspection as part of
+`WorkflowsRuntimeApi`, so a pruned execution and a backend without activity execution inspection are proven by the Runtime
+API and `Elsa.Agent.Workflows.Runtime.Tests` unit tests (that limit is recorded in the plan's Slice G deviation and in each
+case record's `native` controls, which hold no pruned or unsupported-backend control); natively the Fault's state view is
+reported unavailable by reason. The Write Line writes its text to the backend console (the host's own process log, not part of the
+case evidence). The packaged Studio journey `workflow-run` opens the run page with the Write Line's activity execution (the captured canary)
+selected,
+waits until the page discloses that selection (`data-run-selection` on its Explain action), opens Weaver and uses Explain
+(the restored `weaver.workflows.explain-instance` prompt names `workflow_read_run`), checks the accepted message admitted the
+server's read of exactly that Run and selection, and searches, raw and in page, every agent request, non-stream response and
+stream byte for the canary. The case's final canary search reads every retained evidence file. `require_workflow_run`
+refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two cases.
+
 ### Restart inventory over the packaged durable store (#3441 T031)
 
 After the autonomy matrix, the same complete witness appends the

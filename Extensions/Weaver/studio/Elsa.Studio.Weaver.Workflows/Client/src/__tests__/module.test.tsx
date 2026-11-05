@@ -32,8 +32,20 @@ describe("weaver workflows module", () => {
     expect(prompt.message).toContain("workflow_read_executable");
     expect(prompt.message).toContain("current draft");
     expect(prompt.message).not.toContain("get-executable-detail");
-    // Instance state, incidents and bookmarks have no context or tool until the Run journey (slice G).
-    expect(api.agent.promptActions.list().map(item => item.id)).not.toContain("weaver.workflows.explain-instance");
+  });
+
+  it("restores the explain-instance prompt against the registered Run read, read-only and never retargeted (spec 1193 slice G)", () => {
+    const api = testApi(); register(api);
+    const run = api.agent.promptActions.list().find(item => item.id === "weaver.workflows.explain-instance")!;
+    expect(run).toMatchObject({ placement: "selection", contextKind: "workflow-instance", moduleId: "Elsa.Studio.Weaver.Workflows" });
+    const prompt = run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: "act-1", attached: true });
+    expect(prompt.message).toContain("workflow_read_run");
+    expect(prompt.message).toContain("act-1");
+    expect(prompt.message).toContain("retry, cancel, delete or dispatch");
+    expect(prompt.message).toContain("run page's own controls");
+    expect(prompt.message).toContain("in progress");
+    expect(prompt.message).toContain("never guess");
+    expect(prompt.attachments).toEqual([]);
   });
 
   it("asks for one reviewed Operation Batch, never a direct update, and grounds risk findings in the designer's diagnostics", () => {
