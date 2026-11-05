@@ -68,6 +68,12 @@ public static class RuntimeCheckpointCommitFingerprint
             Append(pair.Key);
             Append(pair.Value);
         }
+        if (intent.HistoryCausation is { } cause)
+        {
+            Append("elsa.post-commit.intent.history.v1");
+            Append(cause.HistoryEventId); Append(cause.WorkflowExecutionId); Append(cause.DeliveryId);
+            Append(cause.CommandId); Append(cause.SchedulerWorkItemId);
+        }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
 
         void Append(string? value)

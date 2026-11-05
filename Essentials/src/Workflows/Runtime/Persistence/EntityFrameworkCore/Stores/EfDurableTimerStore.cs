@@ -20,8 +20,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed partial class EfDurableTimerStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IDurableTimerHistoryStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider = null) : IDurableTimerHistoryStore
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string CursorPurpose = "ef-runtime-durable-timers-v1";
     private const int MaxDeadlineCandidates = 16;
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
@@ -194,7 +196,7 @@ public sealed partial class EfDurableTimerStore(
             {
                 if (timer.HistoryResponsibility.Retired) return;
                 var original = row.Revision;
-                StageRetirementOrDeletion(context, row, timer, DurableTimerHistoryFacts.CreateCancelled(timer, DateTimeOffset.UtcNow));
+                StageRetirementOrDeletion(context, row, timer, DurableTimerHistoryFacts.CreateCancelled(timer, _timeProvider.GetUtcNow()));
                 if (context.Entry(row).State != EntityState.Deleted) AttachForUpdate(row, original);
             }
             else AttachForDelete(row);

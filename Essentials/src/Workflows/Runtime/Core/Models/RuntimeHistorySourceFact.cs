@@ -8,9 +8,9 @@ public enum RuntimeHistorySourceFactKind
     ActivityContinuationCompleted,
     ActivityContinuationFaulted,
     ActivityContinuationCancelled,
-    ChildWorkflowDispatched,
+    ChildWorkflowDispatchRequested,
     ChildWorkflowSettled,
-    StimulusPublished,
+    StimulusPublicationCommitted,
     ChildControlAccepted,
     ChildControlApplied,
     IncidentResolutionApplied,
@@ -27,7 +27,13 @@ public enum RuntimeHistorySourceFactKind
     CompensationResolved,
     CompensationCompleted,
     TimerCancellationRequested,
-    ActivityContinuationReturned
+    ActivityContinuationReturned,
+    IncidentCreated,
+    IncidentResolved,
+    IncidentStrategyEvaluated,
+    IncidentProjectionReconciled,
+    IncidentSuppressed,
+    IncidentDecisionApplied
 }
 
 /// <summary>Safe source data, never a payload, exception, capability or inferred snapshot transition.</summary>

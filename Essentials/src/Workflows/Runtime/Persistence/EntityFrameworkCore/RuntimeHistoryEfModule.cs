@@ -6,7 +6,7 @@ internal static class RuntimeHistoryEfModule
 {
     internal const string SchemaFamily = "RuntimeHistory";
     internal const string SchemaVersion = "1.0.0";
-    internal static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeHistoryEfModule).Assembly, SchemaFamily);
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeHistoryEfModule).Assembly, SchemaFamily);
     internal const string HeadTable = "elsa_runtime_history_head";
     internal const string EventTable = "elsa_runtime_history_event";
     internal const string BookmarkTable = "elsa_runtime_history_bookmark";

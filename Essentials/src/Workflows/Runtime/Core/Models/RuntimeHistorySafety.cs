@@ -50,7 +50,7 @@ public static class RuntimeHistorySafety
     private static readonly HashSet<string> SafeMetadata = new(StringComparer.Ordinal)
     {
         "history.status", "history.reasonCode", "history.outcomeNames", "history.stimulusType", "history.resumeTargetId",
-        "history.selectedBookmarkId", "history.childWorkflowId", "history.timerId", "history.scheduledAt", "history.controlKind",
+        "history.selectedBookmarkId", "history.childWorkflowId", "history.relatedWorkflowExecutionId", "history.timerId", "history.scheduledAt", "history.controlKind",
         "history.valueEvidenceIds", "history.incidentFailureType", "history.originalCheckpoint", "history.capturePolicyId"
         , "history.relatedActivityExecutionId", "history.compensationEntryId", "history.valuePhase", "history.valueEvaluationId", "history.durableStateAddress", "history.operation", "history.lifecycle", "history.storage", "history.sourceCapturedAt"
     };

@@ -60,10 +60,11 @@ public sealed class ActivityFaultIncidentRecorder
         var checkpointId = $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}";
         var inspection = _inspectionAccumulator is null
             ? null
-            : await _inspectionAccumulator.BuildProjectionAsync(
+            : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                 faultedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureSource.FromWorkItem(request.WorkItem),
                 incidents: [ActivityExecutionIncidentSummary.From(incident)],
                 valueSnapshots: request.ValueSnapshots,
                 metadata: metadata,
@@ -110,7 +111,10 @@ public sealed class ActivityFaultIncidentRecorder
                             Metadata: metadata)
                     ]),
             PostCommitIntents: activationFailure is null ? NewPostCommitIntents(request, occurredAt) : [],
-            Metadata: metadata) { HistorySourceFacts = request.HistorySourceFacts };
+            Metadata: metadata);
+        commit = await request.CheckpointCommitter.AddHistorySourceFactsAsync(commit,
+            () => (request.HistorySourceFacts ?? []).Append(RuntimeHistoryIncidentFacts.Created(incident,
+                new(CommandId: request.WorkItem.CommandId, SchedulerWorkItemId: request.WorkItem.WorkItemId))), cancellationToken);
 
         await request.CheckpointCommitter.CommitAsync(request.ChildControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }

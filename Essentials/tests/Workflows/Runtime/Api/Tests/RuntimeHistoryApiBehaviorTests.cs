@@ -148,8 +148,13 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
     public async Task Promised_timer_source_responsibility_remains_pending_with_readable_committed_rows()
     {
         var source = new HistorySource { CapturePolicy = new("test-source", 2, true, ["FutureActivityKind", "TimerScheduled"]) };
+        var sourceState = new InMemoryRuntimeCheckpointStoreState();
+        var sourceLiveness = new InMemoryExecutionLivenessStateStore();
+        var sourceExecutions = new InMemoryWorkflowExecutionStateStore(sourceState, sourceLiveness);
+        await sourceLiveness.SaveAsync(new(RuntimeExecutionOwnershipStateId.For("wf-1"), "wf-1",
+            new("lease", "wf-1", "owner", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddDays(1), 1), null, null, null));
         var timers = new InMemoryDurableTimerStore(new InMemoryDurableTimerStoreState(), new HistoryNativeAccess(),
-            new FakeTimeProvider(DateTimeOffset.UnixEpoch));
+            new FakeTimeProvider(DateTimeOffset.UnixEpoch), sourceState, sourceExecutions, sourceLiveness);
         var timer = new DurableTimer("timer", "wf-1", "elapsed", "hash", DateTimeOffset.UnixEpoch.AddMinutes(1), DateTimeOffset.UnixEpoch);
         var scheduled = DurableTimerHistoryFacts.CreateScheduled(timer, source.CapturePolicy)!;
         await timers.SaveAsync(timer with { HistoryResponsibility = new(source.CapturePolicy, [scheduled.Event], false) });
@@ -219,7 +224,7 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
     {
         var now = DateTimeOffset.UnixEpoch;
         var metadata = new Dictionary<string, string>();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v1", 1, true,
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
             ["WorkflowStarted", "ActivitySuspended", "BookmarkCreated", "ActivityFaulted", "IncidentRecorded"]);
         var workflow = new WorkflowExecutionState("wf-1", new("artifact", "definition", "version", "1", "hash"),
             WorkflowExecutionStatus.Running, null, now, now, now, null, null, null, "tenant-a", metadata)
@@ -240,6 +245,7 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         services.AddSingleton<IWorkflowExecutionStateStore>(workflows);
         services.AddSingleton<IRuntimeRecoveryContinuationCodec>(new HmacRuntimeRecoveryContinuationCodec(
             Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "native-history-api-signing-key-at-least-32-bytes" })));
+        services.AddSingleton(new RuntimeHistorySourceSupport([RuntimeHistorySourceFactKind.IncidentCreated]));
         services.AddRuntimeHistory();
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -297,7 +303,8 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
                 new(runState is null ? null : new("wf-1", RuntimeStateChangeOperation.Upsert, runState, metadata), null,
                     activity is null ? [] : [new(activity.InvocationId, RuntimeStateChangeOperation.Upsert, activity, metadata)],
                     handle is null ? [] : [new(handle.BookmarkId, RuntimeStateChangeOperation.Upsert, handle, metadata)], [],
-                    incident is null ? [] : [new(incident.IncidentId, RuntimeStateChangeOperation.Upsert, incident, metadata)], []), [], metadata);
+                    incident is null ? [] : [new(incident.IncidentId, RuntimeStateChangeOperation.Upsert, incident, metadata)], []), [], metadata)
+                { HistorySourceFacts = incident is null ? null : RuntimeHistorySourceFacts.ForPolicy(policy, [RuntimeHistoryIncidentFacts.Created(incident)]) };
             var captured = await capture.EnrichAsync(source);
             await capture.ValidateFinalAsync(captured);
             await writer.CommitAsync(captured, new(RuntimeCheckpointPersistenceMode.Immediate));

@@ -34,7 +34,7 @@ public sealed class RuntimeHistoryMigrationTests
         Assert.Contains(indexes, index => index.Table == "elsa_runtime_history_event" && index.IsUnique && index.Columns.SequenceEqual(new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "Sequence" }));
         Assert.Contains(indexes, index => index.Table == "elsa_runtime_history_event" && index.Columns.Contains("NameHash") && index.Columns[^1] == "Sequence");
         Assert.Contains(indexes, index => index.Table == "elsa_runtime_history_event" && index.Columns.Contains("Category") && index.Columns[^1] == "Sequence");
-        Assert.Contains(indexes, index => index.Table == "elsa_runtime_durable_timer" && index.Columns.SequenceEqual(new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending" }));
+        Assert.Contains(indexes, index => index.Table == "elsa_runtime_durable_timer" && index.Columns.SequenceEqual(new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending", "HistoryRetired", "TimerIdHash" }));
         var script = context.GetService<IMigrator>().GenerateScript(chain[^2], chain[^1]);
         Assert.Contains("elsa_runtime_history_head", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);

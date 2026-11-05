@@ -8,6 +8,38 @@ public static class RuntimeHistoryDeliveryFacts
         "DeliveryReceived", "DeliveryDispatched", "DeliveryDuplicate", "DeliveryUnmatched", "DeliveryRejected", "DeliveryDeferred", "DeliveryFaulted"
     });
 
+    public static IReadOnlyList<string> OwnerObservationKinds { get; } = Array.AsReadOnly(new[]
+    {
+        "ChildStartAttemptObserved", "ChildStartDispositionObserved", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved"
+    });
+    private static readonly HashSet<string> OwnerReasons = new(StringComparer.Ordinal)
+    {
+        "handler-invocation-observed", "routing-source-unavailable-observed", "routing-failure-observed", "routing-capacity-shed-observed",
+        "saved-cohort-routing-acknowledged-observed", "source-terminal-or-retired-observed", "committed-child-outcome-observed",
+        "durable-start-forwarding-observed", "existing-child-start-observed", "child-start-accepted-faulted-observed",
+        "child-start-queue-acceptance-observed", "child-start-failure-observed"
+    };
+
+    public static RuntimeHistoryObservation CreateOwnerObservation(RuntimeHistoryCapturePolicy policy, string workflowExecutionId, string receiptId,
+        string name, DateTimeOffset occurredAt, RuntimeHistoryCausation cause, string? activityExecutionId = null,
+        string? relatedWorkflowExecutionId = null, string? reasonCode = null, string? attemptId = null)
+    {
+        ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(cause);
+        ArgumentException.ThrowIfNullOrWhiteSpace(receiptId);
+        if (!OwnerObservationKinds.Contains(name, StringComparer.Ordinal)) throw new ArgumentOutOfRangeException(nameof(name));
+        if (receiptId.Length > 1024 || relatedWorkflowExecutionId is not null && (string.IsNullOrWhiteSpace(relatedWorkflowExecutionId) || relatedWorkflowExecutionId.Length > 1024) || cause.WorkflowExecutionId != workflowExecutionId || string.IsNullOrWhiteSpace(cause.HistoryEventId) ||
+            string.IsNullOrWhiteSpace(cause.DeliveryId) || reasonCode is not null && !OwnerReasons.Contains(reasonCode))
+            throw new ArgumentException("Owner observations require exact source causation and a closed disposition.");
+        var metadata = new Dictionary<string, string>();
+        if (relatedWorkflowExecutionId is not null) metadata["history.relatedWorkflowExecutionId"] = relatedWorkflowExecutionId;
+        if (reasonCode is not null) metadata["history.reasonCode"] = reasonCode;
+        var e = new RuntimeHistoryEvent("source-history:" + RuntimeHistoryIdentity.CreateBinding([workflowExecutionId, receiptId, name]),
+            workflowExecutionId, 0, RuntimeHistoryEventCategory.DeliveryObservation, name, occurredAt, activityExecutionId, metadata: metadata)
+        { Authority = RuntimeHistoryAuthority.DeliveryObservation, Causation = cause, AttemptId = attemptId };
+        RuntimeHistorySafety.ValidateMetadata(e);
+        return new(policy, e);
+    }
+
     public static RuntimeHistoryObservation Create(RuntimeHistoryCapturePolicy policy, string workflowExecutionId, string receiptId,
         string name, DateTimeOffset occurredAt, string stimulusType, string? bookmarkId = null, string? activityExecutionId = null,
         string? executableNodeId = null, RuntimeHistoryCausation? cause = null, string? reasonCode = null)

@@ -34,6 +34,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<(string Scope, string Run, string Bookmark), List<RuntimeHistoryEvent>> HistoryBookmarkEvents { get; } = new();
 
     internal HashSet<(string Scope, string Run)> HistoryDeletedRuns { get; } = new();
+    internal HashSet<(string Scope, string Run)> NoRecordTimerCompletionRuns { get; } = new();
     internal Dictionary<(string Scope, string Run), HashSet<string>> HistoryReceiptIds { get; } = new();
     internal Dictionary<(string Scope, string Run), HashSet<string>> HistoryActivityIds { get; } = new();
     internal Dictionary<(string Scope, string Run, string Name), List<RuntimeHistoryEvent>> HistoryNameEvents { get; } = new();
@@ -41,6 +42,8 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<(string Scope, string Run), HashSet<string>> HistoryNames { get; } = new();
     internal Dictionary<(string Scope, string Run), HashSet<RuntimeHistoryEventCategory>> HistoryCategories { get; } = new();
     internal Dictionary<(string Scope, string Run), long> HistoryActiveBookmarks { get; } = new();
+    internal Dictionary<(string Scope, string Run), HashSet<string>> HistoryCommitIds { get; } = new();
+    internal Dictionary<string, string> OriginalHistoryCommitFingerprints { get; } = new(StringComparer.Ordinal);
     internal Dictionary<(string Scope, string Run, string Activity), long> HistoryActivityActiveBookmarks { get; } = new();
 
     internal void PublishHistoryEvent(string scope, RuntimeHistoryEvent e, string fingerprint)
@@ -111,6 +114,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
             HistoryHeads.Remove(owner);
             HistoryEvents.Remove(owner);
             HistoryActiveBookmarks.Remove(owner);
+            if (HistoryCommitIds.Remove(owner, out var commits)) foreach (var id in commits) ScrubHistoryCommitContent(id);
             if (HistoryReceiptIds.Remove(owner, out var receipts))
                 foreach (var id in receipts) { HistoryEventsById.Remove((scope, run, id)); HistoryCandidateFingerprints.Remove((scope, run, id)); HistoryReceiptPositions.Remove((scope, run, id)); }
             if (HistoryActivityIds.Remove(owner, out var activities))
@@ -130,6 +134,12 @@ public sealed class InMemoryRuntimeCheckpointStoreState
                         HistoryBookmarkEvents.Remove((scope, run, bookmark));
                     }
         }
+    }
+
+    internal void ScrubHistoryCommitContent(string commitId)
+    {
+        if (Commits.TryGetValue(commitId, out var retained) && OriginalHistoryCommitFingerprints.ContainsKey(commitId))
+            Commits[commitId] = retained with { Commit = retained.Commit with { HistoryBatches = null, HistorySourceFacts = null } };
     }
 
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
@@ -307,25 +317,25 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             foreach (var change in commit.StateChanges.PostCommitOutbox)
                 EnsureOutboxSourceScope(change.State);
             var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+            RuntimeCheckpointCommitRecord? existing;
+            string? originalHistoryFingerprint;
             lock (_state.SyncRoot)
             {
-                if (_state.Commits.TryGetValue(commit.CommitId, out var existing))
-                {
-                    if (!StringComparer.Ordinal.Equals(
-                            RuntimeCheckpointCommitFingerprint.Compute(existing.Commit),
-                            fingerprint))
-                    {
-                        throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
-                    }
-                    return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds)
-                    {
-                        ConsumedSchedulerWorkItemIds = existing.ConsumedSchedulerWorkItemIds
-                    };
-                }
+                _state.Commits.TryGetValue(commit.CommitId, out existing);
+                originalHistoryFingerprint = _state.OriginalHistoryCommitFingerprints.GetValueOrDefault(commit.CommitId);
+            }
+            if (existing is not null)
+            {
+                if (originalHistoryFingerprint is not null || existing.Commit.HistoryBatches is { Count: > 0 })
+                    await ValidateHistoryReplayOriginAsync(existing.Commit, ct);
+                if (!StringComparer.Ordinal.Equals(originalHistoryFingerprint ?? RuntimeCheckpointCommitFingerprint.Compute(existing.Commit), fingerprint))
+                    throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
+                return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds)
+                { ConsumedSchedulerWorkItemIds = existing.ConsumedSchedulerWorkItemIds };
             }
 
             if (commit.ExpectedFence is null)
-                return await CommitNewAsync(commit, decision, ct);
+                return await CommitNewAsync(commit, decision, fingerprint, ct);
 
             if (_operationalStateStore is not InMemoryExecutionLivenessStateStore inMemoryOperationalStateStore)
             {
@@ -334,9 +344,26 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             }
 
             return await inMemoryOperationalStateStore.ExecuteOwnershipAtomicAsync(
-                token => CommitNewAsync(commit, decision, token),
+                token => CommitNewAsync(commit, decision, fingerprint, token),
                 ct);
         }, cancellationToken);
+    }
+
+    private async ValueTask ValidateHistoryReplayOriginAsync(RuntimeCheckpointCommit original, CancellationToken cancellationToken)
+    {
+        var access = _persistenceAccessContextAccessor?.Current ??
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Captured checkpoint receipts require their scoped native provider.");
+        var scope = access.RequireScope().Value;
+        if (ExactResumeExecutions is not { } native || !ReferenceEquals(native.CheckpointState, _state))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Captured checkpoint receipts require their exact native backing provider.");
+        lock (_state.SyncRoot)
+            if (!_state.HistoryCommitIds.TryGetValue((scope, original.WorkflowExecutionId), out var owned) || !owned.Contains(original.CommitId))
+                throw new InvalidOperationException("A captured checkpoint receipt belongs to a different or deleted history scope.");
+        var execution = await native.FindAsync(original.WorkflowExecutionId, cancellationToken) ??
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The captured checkpoint's native owner is unavailable.");
+        access.EnsureTenantScope(execution.TenantId);
+        if (_persistenceAccessContextAccessor!.Current != access)
+            throw new InvalidOperationException("Persistence access changed during captured checkpoint replay.");
     }
 
     private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
@@ -427,6 +454,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
+        string fingerprint,
         CancellationToken cancellationToken)
     {
         await ValidateExactBookmarkResumeAsync(commit, cancellationToken);
@@ -508,6 +536,13 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                         decision,
                         pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
                         consumedSchedulerWorkItemIds));
+                    if (commit.HistoryBatches is { Count: > 0 })
+                    {
+                        _state.OriginalHistoryCommitFingerprints[commit.CommitId] = fingerprint;
+                        var owner = (_persistenceAccessContextAccessor!.Current.RequireScope().Value, commit.WorkflowExecutionId);
+                        if (!_state.HistoryCommitIds.TryGetValue(owner, out var ids)) _state.HistoryCommitIds[owner] = ids = new(StringComparer.Ordinal);
+                        ids.Add(commit.CommitId);
+                    }
                 }
             }
             catch (Exception exception) when (exception is not RuntimeSchedulerWorkConsumeConflictException)

@@ -85,10 +85,11 @@ internal static class EfRuntimeHistoryCheckpoint
         await ValidateCleanupSourcesAsync(context, commit, scope, candidates.Values.Select(entry => entry.Candidate).ToArray(), retainedEvents, cancellationToken);
         var sequence = head?.LastSequence ?? 0;
         var newCount = candidates.Values.Count(entry => !retainedEvents.ContainsKey(entry.Candidate.Event.HistoryEventId));
+        var hasGaps = head?.HasGaps ?? await HasUnrecordedSourceGapAsync(context, scope, run, policy, cancellationToken);
         var next = new RuntimeHistoryHead(run,
             head is { FirstSequence: > 0 } ? head.FirstSequence : newCount == 0 ? 0 : checked(sequence + 1),
             checked(sequence + newCount), commit.CommitId, recordedAt, policy,
-            head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart), head?.HasGaps ?? false, head?.PurgedThroughSequence ?? 0);
+            head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart), hasGaps, head?.PurgedThroughSequence ?? 0);
         // Reserve the complete group before inserting any event. InnoDB may still expose an older consistent
         // snapshot after waiting for the native root lock; this current-write revision CAS detects it here, rather
         // than accidentally failing an event sequence unique key after participants have been staged.
@@ -131,6 +132,23 @@ internal static class EfRuntimeHistoryCheckpoint
         }
         await StageAncestryAsync(context, scope, run, candidates.Values.Select(x => x.Candidate.Event), cancellationToken);
         await StageCountsAsync(context, scope, run, counts, cancellationToken);
+    }
+
+    internal static async ValueTask<bool> HasUnrecordedSourceGapAsync(RuntimeDbContext context, string scope, string run,
+        RuntimeHistoryCapturePolicy policy, CancellationToken cancellationToken)
+    {
+        var sh = Hash(scope); var sk = Encode(scope); var rh = Hash(run); var rk = Encode(run);
+        // This first-head lookup uses the exact source-receipt equality keys. Ordinary source ACK requires an
+        // acknowledged native/head, so an earlier retired empty source here must carry explicit discard proof.
+        var row = await context.DurableTimers.AsNoTracking().Where(x => x.ScopeKeyHash == sh && x.ScopeKey == sk &&
+            x.WorkflowExecutionIdHash == rh && x.WorkflowExecutionId == rk && !x.HistoryPending && x.HistoryRetired).OrderBy(x => x.TimerIdHash).FirstOrDefaultAsync(cancellationToken);
+        if (row is null) return false;
+        var timer = EfDurableTimerStore.ReadChecked(row, scope, run);
+        if (timer.HistoryResponsibility is not { Retired: true, PendingEvents.Count: 0, NoRecordCompletion: not null } history ||
+            !policy.IsEquivalentTo(history.Policy))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
+                "An earlier timer source has no provable unrecorded completion; history coverage cannot be established.");
+        return true;
     }
 
     private static async ValueTask ValidateCleanupSourcesAsync(RuntimeDbContext context, RuntimeCheckpointCommit commit, string scope,

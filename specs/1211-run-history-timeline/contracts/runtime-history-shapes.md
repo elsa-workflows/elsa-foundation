@@ -69,3 +69,17 @@ When the pinned profile promises timer-source observations, an indexed exact-run
 ## Admission/replay policy
 
 Pin profile on actual new admitted start payload and run state before durable admission. Legacy absent profile remains uncaptured on replay after upgrade. Host options apply to new admissions only. A retained Required profile makes a later new checkpoint without its batch refuse, including after module removal. An explicit supported quiescent policy change has its own new boundary; do not reinterpret old queued logical commits. Unsupported active changes remain explicit.
+
+## Final admitted profile3 source contribution
+
+New admissions use runtime-history-v3/version3. Existing main absent-policy bytes and native markers remain unchanged. Private unmerged v1/v2 event rows remain readable; their future capture support is reported honestly rather than retrofitted.
+
+ActivityExecutionInspectionProjection.CheckpointValueCapture is an optional immutable RuntimeCheckpointValueCapture with exact CheckpointId, actual nullable SchedulerWorkItemId and ordered unique EvidenceIds. A known-empty contribution records reprojection. A truly empty raw ValueSnapshots list can omit it; a nonempty list requires the exact bound contribution. Actual source owners stamp invocation/resume/evaluation provenance before merge. History consumes this raw contribution and never queries a later projection to choose an earlier delta.
+
+RuntimeHistoryIncidentFacts and the closed SourceFact catalog distinguish initial creation, evaluated strategy/decision, terminal resolution/suppression and reconciliation. Arbitrary incident upsert does not imply another fault or resolution. Lazy factories do not run on absent/older-policy paths and are resolved before raw checkpoint delivery.
+
+RuntimePostCommitIntent.HistoryCausation is null-omitted and source-owned. Its origin history event/run/outbox identity is fingerprinted only when present. A stamped intent requires the actual persisted source even when a legacy handler declaration did not require one. Missing capture/source support is infrastructure unavailability before new effects or acknowledgement; ordinary unstamped delivery keeps its existing protocol.
+
+Optional modules contribute through Core's `IRuntimeHistorySourceContributor`, without referencing the default Runtime implementation. Its policy-aware factory preserves absent and older pinned source identities. A producer stamps causation only when the original policy includes its committed source kind and both promised owner-observation kinds. Installing or replacing a module later cannot retrofit already queued raw work.
+
+Owner-observation support is bound to an exact post-commit intent kind. The selected `IRuntimePostCommitIntentDispatcher.CanRecordHistory` must qualify the actual selected receiver and writer/read pairing; its default is false. A declaration alone does not qualify an old constructor, custom dispatcher or replacement receiver. Stamped delivery rechecks that boundary before effects. Source policy-read IO, timeout or unavailable-provider failures remain infrastructure unavailability; malformed policy, conflicting facts and actual effect failures keep their distinct behavior.

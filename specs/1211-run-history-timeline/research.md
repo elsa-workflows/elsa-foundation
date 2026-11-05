@@ -106,3 +106,23 @@ The same CI run found eager writer/reader qualification while constructing Workf
 Runtime-owned policy/provenance and closed typed source contributions are write inputs, not diagnostic read-model authority. The capture module converts those inputs into the checkpoint sidecar. Required capture refusal is limited to runs that pinned that contract; optional/disabled ordinary execution cannot acquire a dependency on querying history. A temporary module or store outage does not authorize an unsafe callback replay or replace existing poison/uncertain-effect handling.
 
 Status: corrective implementation and independent source review in progress. Published failing checks remain recorded; no passing rerun is claimed here.
+
+## R12 — Immutable owner deltas for raw replay
+
+Actual358 composed evidence found repeated IncidentRecorded labels when the strategy checkpoint merely updated an existing incident. Source review also found ValueCaptured delta classification read the current inspection projection. A fresh process re-enriching the same original raw queued checkpoint after a landed write can then choose a different delta and fingerprint. Retaining an already-enriched in-memory object is insufficient proof.
+
+Use the final admitted runtime-history-v3 profile with immutable typed value delta/provenance on the existing raw checkpoint inspection contribution. The accumulator knows its explicit added snapshots: bind their evidence IDs to LastCheckpointId, including a known-empty delta for reprojection. Actual invocation/resume/output/structural owners supply closed work/phase/evaluation provenance before merging. Capture validates and consumes that immutable list without querying the prior inspection state. Actual incident owners contribute Created, Evaluated and terminal Resolved facts; generic upsert does not invent a new fault or resolution.
+
+Do not add a native marker-payload/restore port to preserve private, unmerged intermediate profiles. The existing EF native marker has IDs, time, the full fingerprint and work receipts, not original source/batches. Duplicating full history content there would add retention/reconstruction complexity. Existing main no-history raw wire/fingerprint and markers must remain exact. Private v1/v2 rows remain readable; unavailable future capture support is disclosed, without claiming an intermediate production rollout. Final raw-payload/new-capture replay, purge, changed-source and coalescing controls remain required before acceptance.
+
+Decision made as routine implementation under delegated delivery authority, consistent with ADR0080's pre-GA cleanup and smaller footprint. No execution authority moves to history/query records and no existing invariant is weakened.
+
+## R13 — No-record timer source completion
+
+An actual successful Ephemeral no-record completion may have created then retired a timer before any native head existed. At the existing proven discard branch, a narrow optional method on the timer-owner port validates the exact Completed decision, scope/tenant and current fence, then proves native/head absence. Reject every active captured timer before clearing any bounded retired prefix. Keep compact first-wins timer receipts with the actual completion checkpoint/time, no payload/meta; advance the queue only after all owed source responsibility is discharged. Unknown/failing discharge leaves the original work owed and creates no native checkpoint/history append.
+
+Source creation and discharge serialize on the same exact native liveness owner before their first consistent reads, including MySQL's default repeatable-read behavior. Existing deterministic timer IDs retain first-winner replay. Under native/head absence, an explicit completed no-record receipt refuses a new captured timer ID; absence alone is not completion proof. Once real native authority exists, its current status, policy and fence govern later sources, including legitimate recovered nonterminal work. Source receipts are not permanent execution authority.
+
+Extend the new pending-run index with the retired equality key for bounded active refusal/receipt discovery. First native history after a partial discharge uses explicit source completion proof to retain HasGaps, including a fault before timer reexecution. Later coverage keeps that gap. There is no additional table, generic queue or arbitrary TTL. Successful no-record runs have no native deletion candidate; compact timer receipts remain source-owned until explicit owned cleanup/store lifecycle. No public orphan-purge feature is implied.
+
+Status: source implementation and controls in progress; normal compilation/provider/race/migration qualification is pending.

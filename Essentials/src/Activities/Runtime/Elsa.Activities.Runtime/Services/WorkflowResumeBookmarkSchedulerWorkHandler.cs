@@ -254,6 +254,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var historyFacts = new List<RuntimeHistorySourceFact>();
         void RecordContinuation(RuntimeHistorySourceFactKind kind, IReadOnlyList<string>? outcomes = null, string? reasonCode = null)
         {
+            if (!RuntimeHistorySourceFacts.IsFinalProfile(historyPolicy)) return;
             var fact = new RuntimeHistorySourceFact(kind, RuntimeHistoryIdentity.CreateBinding([workItem.WorkItemId, historyAttempt?.AttemptId, kind.ToString()]),
                 _timeProvider.GetUtcNow(), resumePayload.ActivityExecutionId, historyAttempt?.AttemptId,
                 resumePayload.HistoryCausation is { } sourceCause ? sourceCause with { CommandId = workItem.CommandId, SchedulerWorkItemId = workItem.WorkItemId } :

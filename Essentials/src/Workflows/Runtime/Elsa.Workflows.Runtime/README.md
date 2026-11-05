@@ -30,6 +30,26 @@ retains [its own executing sources](../../../../../specs/1017-direct-bpmn-hostin
 These receipts do not establish non-SQLite upgraded-host recovery, clustered placement or first-class direct-model
 Studio acceptance under #2907. Final integration review and required CI remain delivery gates.
 
+## Run history and Timeline inspection
+
+Compose the optional `WorkflowsRuntimeHistory` server feature alongside Runtime API:
+
+```json
+{
+  "WorkflowsRuntimeHistory": { "Enabled": true }
+}
+```
+
+Place this under the shell's `Features`. Workbench's normal/base and Docker configurations enable it. Code-only Runtime hosts can call `services.AddRuntimeHistory()` without Studio or Design. The Runtime EF module provides durable history in its native transaction and additive migration chain; the default in-memory provider is process-local. Custom providers must qualify one atomic boundary. See the [storage/contribution catalog](EXTENSION_POINTS.md#run-history).
+
+Policy is pinned at actual admission. `Enabled: false` affects new runs; retained required runs keep capture and readable history. Removing required support refuses a new acknowledgement rather than silently losing history. Pre-feature absent-policy work stays uncaptured and keeps its replay identity. History preserves Durable/Balanced/Ephemeral cadence and the never-persisted no-record completion exception. Value capture remains separate.
+
+Studio's Run workspace offers Timeline and Diagram. Run chronology, a concrete execution's Journal and historical Bookmarks share immutable event identities/order. Current eligibility is observed separately from recorded creation/consumption/removal. Consumption does not prove successful continuation. Diagram shows the latest observed execution context; selecting an event does not rewind it. Exact event/value/related-run navigation preserves existing structure/value authorization and command permissions.
+
+Bounded snapshot/catch-up reads expose capture/retention boundaries and pending source obligations. A settled prefix or terminal workflow does not establish that independent sources have closed. Unknown kinds retain safe common metadata; uncaptured, disabled, partial, stale, invalid and unavailable states remain explicit. Retention follows the retained run by default. Explicit purge retains compact identity/sequence receipts and its visible boundary; owned run deletion removes history atomically. Reading history does not grant payload access or resume/replay work.
+
+[Spec1211](../../../../../specs/1211-run-history-timeline/spec.md) and [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849) track implementation and acceptance. Until the remaining native, semantic and review gates pass, this documents the in-progress contract.
+
 ## Activation channels
 
 An activation slot belongs to one `(definitionId, slotName)` pair. A declared channel gives the same slot name

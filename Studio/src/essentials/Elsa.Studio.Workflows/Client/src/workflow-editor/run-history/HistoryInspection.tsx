@@ -5,7 +5,7 @@ import { getWorkflowHistoryBookmark, getWorkflowHistoryEvent, listWorkflowHistor
 import type { RunHistorySelection, RuntimeHistoryBookmark, RuntimeHistoryBookmarkPage } from "../../runtimeHistoryTypes";
 import { formatDuration, humanizeTypeName } from "../../workflowFormatting";
 import { CopyValueButton } from "../executableShared";
-import { HistoryCoverage, HistoryEventList, historyAuthorityLabel, historyEventLabel, historyInstant, isKnownHistoryEvent } from "./historyPresentation";
+import { HistoryCoverage, HistoryEventList, historyAuthorityLabel, historyEventExplanation, historyEventLabel, historyInstant, isKnownHistoryEvent } from "./historyPresentation";
 import { ActivityHistoryJournal } from "./RunHistoryTimeline";
 import { useHistoryResource } from "./useHistoryResource";
 import { useRunHistory } from "./useRunHistory";
@@ -38,7 +38,9 @@ const metadataLabels: Record<string, string> = {
   "history.scheduledAt": "Scheduled instant", "history.controlKind": "Control kind", "history.incidentFailureType": "Failure type",
   "history.relatedActivityExecutionId": "Related execution", "history.compensationEntryId": "Compensation entry",
   "history.valuePhase": "Value phase", "history.valueEvaluationId": "Value evaluation",
-  "history.originalCheckpoint": "Original checkpoint", "history.capturePolicyId": "Capture policy"
+  "history.originalCheckpoint": "Original checkpoint", "history.capturePolicyId": "Capture policy",
+  "history.durableStateAddress": "Durable state address", "history.operation": "Recorded operation", "history.lifecycle": "State lifecycle",
+  "history.storage": "State storage policy", "history.sourceCapturedAt": "Source captured instant"
 };
 
 function HistoryEventInspection({ context, workflowExecutionId, historyEventId, onSelect, onBack, onActivity, onFocusTimeline, onIncident, navigate }: {
@@ -59,7 +61,8 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
   };
   let valueIds: string[] = [];
   try { const parsed: unknown = JSON.parse(event?.metadata["history.valueEvidenceIds"] ?? "[]"); if (Array.isArray(parsed)) valueIds = [...new Set(parsed.filter((item): item is string => typeof item === "string" && !!item))]; } catch { /* Unknown metadata remains unavailable, never an inline payload. */ }
-  const child = event?.metadata["history.childWorkflowId"];
+  const relatedRun = event?.metadata["history.relatedWorkflowExecutionId"] || event?.metadata["history.childWorkflowId"];
+  const explanation = event ? historyEventExplanation(event) : null;
   return <section className="wf-history-inspection" aria-label="History event details">
     <button type="button" className="wf-history-back" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> Back to activity inspection</button>
     <p className="wf-history-eyebrow">Recorded event</p><h3 data-history-heading tabIndex={-1}>{event ? historyEventLabel(event) : "History event"}</h3>
@@ -68,35 +71,42 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
       <p className="wf-history-note">{historyAuthorityLabel(event.authority)}</p>
       {!isKnownHistoryEvent(event) ? <p className="wf-history-note">This event kind is unrecognized. Its safe common recorded fields remain inspectable.</p> : null}
       {event.schemaVersion !== 1 ? <p className="wf-history-note">This event uses an unrecognized schema version. Only its safe common recorded fields are available here.</p> : null}
-      {event.name === "ActivityContinuationReturned" ? <p>The continuation returned a result. Its committed completion, further waiting or fault is recorded separately.</p> : null}
-      {["StimulusPublished", "ChildWorkflowDispatched", "DeliveryDispatched", "TimerDispatched"].includes(event.name) ? <p>A source dispatch or publication does not establish recipient execution or its outcome. Inspect its recorded disposition and related continuation facts.</p> : null}
-      {event.name === "BookmarkConsumed" ? <p>The handle was consumed at this committed transition. Continuation and its outcome are separate recorded facts.</p> : null}
-      <dl className="wf-history-facts"><HistoryFact label="Event ID" value={event.historyEventId} /><HistoryFact label="Recorded position" value={event.sequence} />
-        <HistoryFact label="Occurred" value={historyInstant(event.occurredAt)} /><HistoryFact label="Recorded" value={historyInstant(event.recordedAt)} />
+      {explanation ? <p>{explanation}</p> : null}
+      <dl className="wf-history-facts"><HistoryFact label="Recorded position" value={event.sequence} />
+        <HistoryFact label="Occurred" value={historyInstant(event.occurredAt)} />
+        {event.metadata["history.status"] ? <HistoryFact label="Recorded status" value={event.metadata["history.status"]} /> : null}
+        {event.executableNodeId ? <HistoryFact label="Activity node" value={event.executableNodeId} /> : null}
+        {event.metadata["history.valuePhase"] ? <HistoryFact label="Value phase" value={event.metadata["history.valuePhase"]} /> : null}
+      </dl>
+      <div className="wf-history-lifecycle-links">
+        {event.activityExecutionId && onActivity ? <button type="button" onClick={() => onActivity(event.activityExecutionId!)}>Inspect owning execution →</button> : null}
+        {event.bookmarkId ? <button type="button" onClick={() => onSelect({ kind: "bookmark", id: event.bookmarkId! })}>Inspect bookmark →</button> : null}
+        {event.incidentId && onIncident ? <button type="button" onClick={() => onIncident(event.incidentId!)}>Inspect incident →</button> : null}
+        {event.causation?.historyEventId ? <button type="button" onClick={showCause} disabled={!!event.causation.workflowExecutionId && event.causation.workflowExecutionId !== workflowExecutionId && !navigate}>Inspect causal event →</button> : null}
+      </div>
+      <details className="wf-history-technical"><summary>Technical details</summary><dl className="wf-history-facts">
+        <HistoryFact label="Event ID" value={event.historyEventId} /><HistoryFact label="Recorded" value={historyInstant(event.recordedAt)} />
         <HistoryFact label="Kind" value={`${event.name} · schema ${event.schemaVersion}`} />
         <HistoryFact label="Category" value={event.category} /><HistoryFact label="Authority" value={event.authority} />
-        {event.metadata["history.status"] ? <HistoryFact label="Recorded status" value={event.metadata["history.status"]} /> : null}
-        {event.activityExecutionId ? <><dt>Activity execution</dt><dd>{onActivity ? <button type="button" onClick={() => onActivity(event.activityExecutionId!)}>{event.activityExecutionId} →</button> : event.activityExecutionId}</dd></> : null}
-        {event.bookmarkId ? <><dt>Bookmark</dt><dd><button type="button" onClick={() => onSelect({ kind: "bookmark", id: event.bookmarkId! })}>{event.bookmarkId} →</button></dd></> : null}
-        <HistoryFact label="Executable node" value={event.executableNodeId} />
-        {event.incidentId ? <><dt>Incident</dt><dd>{onIncident ? <button type="button" onClick={() => onIncident(event.incidentId!)}>{event.incidentId} →</button> : event.incidentId}</dd></> : null}
+        {event.activityExecutionId ? <HistoryFact label="Activity execution" value={event.activityExecutionId} /> : null}
+        {event.bookmarkId ? <HistoryFact label="Bookmark ID" value={event.bookmarkId} /> : null}
+        {event.incidentId ? <HistoryFact label="Incident ID" value={event.incidentId} /> : null}
         {event.parentActivityExecutionId ? <HistoryFact label="Parent execution" value={event.parentActivityExecutionId} /> : null}
         {event.executionScopeId ? <HistoryFact label="Execution scope" value={event.executionScopeId} /> : null}
         <HistoryFact label="Logical checkpoint" value={event.checkpointId} /><HistoryFact label="Checkpoint ordinal" value={event.checkpointOrdinal} />
         <HistoryFact label="Atomic commit group" value={event.physicalCommitId} />
         {event.attemptId ? <HistoryFact label="Attempt" value={event.attemptId} /> : null}
         {event.iterationId ? <HistoryFact label="Iteration" value={event.iterationId} /> : null}
+        {relatedRun ? <HistoryFact label="Related run" value={relatedRun} /> : null}
         {event.causation?.deliveryId ? <HistoryFact label="Delivery" value={event.causation.deliveryId} /> : null}
         {event.causation?.commandId ? <HistoryFact label="Command" value={event.causation.commandId} /> : null}
         {event.causation?.schedulerWorkItemId ? <HistoryFact label="Scheduled work" value={event.causation.schedulerWorkItemId} /> : null}
-      </dl>
+      </dl>{event.physicalCommitId ? <p className="wf-history-note">Events in one atomic group became durable together. Their local ordinal does not imply separately committed intermediate states.</p> : null}</details>
       {Object.entries(event.metadata).some(([key]) => metadataLabels[key]) ? <details><summary>Recorded metadata</summary><dl className="wf-history-facts">{Object.entries(event.metadata).filter(([key]) => metadataLabels[key]).map(([key, value]) => <HistoryFact key={key} label={metadataLabels[key]} value={value} />)}</dl></details> : null}
       {event.metadata["history.selectedBookmarkId"] ? <p><button type="button" onClick={() => onSelect({ kind: "bookmark", id: event.metadata["history.selectedBookmarkId"] })}>Inspect selected bookmark →</button></p> : null}
-      {event.physicalCommitId ? <p className="wf-history-note">Events in one atomic group became durable together. Their local ordinal does not imply separately committed intermediate states.</p> : null}
-      {event.causation?.historyEventId ? <p><button type="button" onClick={showCause} disabled={!!event.causation.workflowExecutionId && event.causation.workflowExecutionId !== workflowExecutionId && !navigate}>Inspect causal event →</button></p> : null}
       <p><button type="button" aria-expanded={showSuccessors} onClick={() => setShowSuccessors(value => !value)}>Find causal successors in this run</button></p>
       {showSuccessors ? <CausalSuccessors context={context} workflowExecutionId={workflowExecutionId} historyEventId={event.historyEventId} onSelect={onSelect} /> : null}
-      {child && navigate ? <p><button type="button" onClick={() => navigate(`/workflows/instances/${encodeURIComponent(child)}?view=timeline`)}>Open related run {child} →</button></p> : null}
+      {relatedRun && navigate ? <p><button type="button" onClick={() => navigate(`/workflows/instances/${encodeURIComponent(relatedRun)}?view=timeline`)}>Open related run {relatedRun} →</button></p> : null}
       {valueIds.length ? <div><p>{valueIds.length} phase-specific value reference{valueIds.length === 1 ? "" : "s"}. Values load only when requested through their existing inspection policy.</p>
         <ul>{valueIds.map(id => <li key={id}><code>{id}</code>{event.activityExecutionId ? <button ref={element => { if (element) valueTriggers.current.set(id, element); else valueTriggers.current.delete(id); }} type="button" aria-expanded={valueTarget === id} onClick={() => setValueTarget(valueTarget === id ? null : id)}>Inspect recorded value →</button> : <span> Owning execution unavailable.</span>}</li>)}</ul>
       </div> : null}

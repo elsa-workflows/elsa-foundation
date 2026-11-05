@@ -28,7 +28,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeHistoryCaptureTests
 {
     private static readonly DateTimeOffset At = new(2026, 11, 5, 9, 0, 0, TimeSpan.Zero);
-    private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v1", 1, true, RuntimeHistoryCapture.Kinds);
+    private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, RuntimeHistoryCapture.Kinds);
     private static readonly WorkflowExecutableIdentity Executable = new("artifact", "definition", "revision", "1.0.0", "hash");
 
     [Fact]
@@ -290,32 +290,82 @@ public sealed class RuntimeHistoryCaptureTests
     }
 
     [Fact]
-    public async Task Value_links_use_explicit_new_evidence_even_when_the_clock_advances_before_checkpoint()
+    public async Task Immutable_value_and_incident_deltas_survive_fresh_capture_raw_replay_and_purge_without_prior_queries()
     {
         var fixture = new Fixture();
         await fixture.Executions.SaveAsync(Workflow());
-        var inspections = new InMemoryActivityExecutionInspectionStore();
-        var capture = new RuntimeHistoryCapture(fixture.Executions, inspections);
-        var value = new ActivityExecutionInspectionValueSnapshot("input", ActivityExecutionInspectionValueSubject.ActivityInput,
-            default, null, At.AddSeconds(-2), null, "metadata-only", false, new Dictionary<string, string>(), EvidenceId: "evidence");
-        var projection = ActivityExecutionInspectionProjection.FromState(Activity(ActivityExecutionStatus.Running), "checkpoint-value", At, valueSnapshots: [value]);
-        RuntimeCheckpointCommit Source(string id) => Commit(id, "values") with { StateChanges = new(null, null, [], [], [], [], [],
-            activityExecutionInspections: [new("activity", RuntimeStateChangeOperation.Upsert, projection, new Dictionary<string, string>())]) };
+        var value = new ActivityExecutionInspectionValueSnapshot("private-input", ActivityExecutionInspectionValueSubject.ActivityInput,
+            default, null, At.AddSeconds(-2), JsonSerializer.SerializeToElement("payload-sentinel"), "metadata-only", true,
+            new Dictionary<string, string>(), EvidenceId: "evidence", Phase: "Resume", EvaluationId: "evaluation");
+        var projection = ActivityExecutionInspectionProjection.FromState(Activity(ActivityExecutionStatus.Faulted), "checkpoint-value", At, valueSnapshots: [value])
+            with { CheckpointValueCapture = new("checkpoint-value", null, ["evidence"]) };
+        var incident = new IncidentState("incident", "run", "activity", "node", IncidentSeverity.Error, IncidentStatus.Blocking,
+            null, "test", "private-exception-sentinel", At, null);
+        var raw = Commit("value", RuntimeCheckpointNames.IncidentRecorded, activity: Activity(ActivityExecutionStatus.Faulted)) with
+        {
+            StateChanges = new(new("run", RuntimeStateChangeOperation.Upsert, Workflow(), new Dictionary<string, string>()), null, [], [], [], [new("incident", RuntimeStateChangeOperation.Upsert, incident, new Dictionary<string, string>())], [],
+                activityExecutionInspections: [new("activity", RuntimeStateChangeOperation.Upsert, projection, new Dictionary<string, string>())]),
+            HistorySourceFacts = [RuntimeHistoryIncidentFacts.Created(incident)]
+        };
+        var rawJson = JsonSerializer.Serialize(raw);
+        await fixture.Committer(new RuntimeHistoryCapture(fixture.Executions)).CommitAsync(raw);
+        var page = await fixture.Reader.ReadPageAsync(new("run"));
+        Assert.Equal(["ValueCaptured", "IncidentRecorded"], page.Items.Select(e => e.Name));
+        Assert.Equal(value.CapturedAt, page.Items[0].OccurredAt);
+        Assert.Equal("Resume", page.Items[0].Metadata["history.valuePhase"]);
+        Assert.DoesNotContain("payload-sentinel", JsonSerializer.Serialize(page));
+        Assert.DoesNotContain("private-exception-sentinel", JsonSerializer.Serialize(page));
+        var fromRaw = ReadRawCheckpoint(rawJson);
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(raw), RuntimeCheckpointCommitFingerprint.Compute(fromRaw));
+        Assert.Null(fromRaw.HistoryBatches);
+        await fixture.Committer(new RuntimeHistoryCapture(fixture.Executions)).CommitAsync(fromRaw);
+        Assert.Equal(2, (await fixture.Reader.FindHeadAsync("run"))!.LastSequence);
+        var writer = new InMemoryRuntimeHistoryWriter(fixture.State, fixture.Access, fixture.Executions, new FakeTimeProvider(At));
+        await writer.PurgeThroughAsync("run", 1);
+        var marker = fixture.State.Commits["value"].Commit;
+        Assert.Null(marker.HistoryBatches); Assert.Null(marker.HistorySourceFacts);
+        Assert.Equal("IncidentRecorded", Assert.Single((await fixture.Reader.ReadPageAsync(new("run"))).Items).Name);
+        await fixture.Committer(new RuntimeHistoryCapture(fixture.Executions)).CommitAsync(ReadRawCheckpoint(rawJson));
+        Assert.Equal(2, (await fixture.Reader.FindHeadAsync("run"))!.LastSequence);
+        Assert.Null(await fixture.Reader.FindEventAsync("run", page.Items[0].HistoryEventId));
+        var changedProjection = projection with { ValueSnapshots = [value with { EvidenceId = "earlier-new-evidence", CapturedAt = At.AddSeconds(-3) }],
+            CheckpointValueCapture = new("checkpoint-value", null, ["earlier-new-evidence"]) };
+        var changed = raw with { StateChanges = new(raw.StateChanges.WorkflowExecution, null, [], [], [], raw.StateChanges.Incidents, [],
+            activityExecutionInspections: [new("activity", RuntimeStateChangeOperation.Upsert, changedProjection, new Dictionary<string, string>())]) };
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Committer(new RuntimeHistoryCapture(fixture.Executions)).CommitAsync(changed).AsTask());
+        var enriched = await new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(raw);
+        var alteredAfterCapture = enriched with { StateChanges = changed.StateChanges };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new RuntimeHistoryCapture(fixture.Executions).ValidateFinalAsync(alteredAfterCapture).AsTask());
+        var reprojected = raw with { CommitId = "reproject", Checkpoint = raw.Checkpoint with { CheckpointId = "checkpoint-reproject" },
+            StateChanges = new(null, null, [], [], [], [], [], activityExecutionInspections:
+                [new("activity", RuntimeStateChangeOperation.Upsert, projection with { LastCheckpointId = "checkpoint-reproject", CheckpointValueCapture = new("checkpoint-reproject", null, []) }, new Dictionary<string, string>())]),
+            HistorySourceFacts = null };
+        Assert.Empty((await new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(reprojected)).HistoryBatches!.Single().Candidates);
+        fixture.State.DeleteHistoryForRun("scope-a", "run");
+        Assert.Null(fixture.State.Commits["value"].Commit.HistoryBatches);
+        Assert.Empty(fixture.State.HistoryCommitIds);
 
-        var original = await capture.EnrichAsync(Source("value"));
-        var e = Assert.Single(original.HistoryBatches!.Single().Candidates).Event;
-        Assert.Equal("ValueCaptured", e.Name);
-        Assert.Equal(At.AddSeconds(-2), e.OccurredAt);
-        Assert.Null(e.Payload);
-        await inspections.SaveAsync(projection);
-        await capture.ValidateFinalAsync(original);
-        var changedProjection = projection with { ValueSnapshots = [value, value with { EvidenceId = "late-evidence", CapturedAt = At.AddSeconds(-3) }] };
-        var changedSource = original with { StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
-            activityExecutionInspections: [new("activity", RuntimeStateChangeOperation.Upsert, changedProjection, new Dictionary<string, string>())])
-            };
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await capture.ValidateFinalAsync(changedSource));
-        var reprojected = await capture.EnrichAsync(Source("reproject"));
-        Assert.Empty(reprojected.HistoryBatches!.Single().Candidates);
+        static RuntimeCheckpointCommit ReadRawCheckpoint(string json)
+        {
+            // This checkpoint envelope is an in-process type, not a general JSON protocol. Decode only this
+            // exact source shape using typed member contracts, proving no enriched sidecar is reused.
+            using var document = JsonDocument.Parse(json); var root = document.RootElement;
+            var changes = root.GetProperty("StateChanges");
+            foreach (var name in new[] { "ActivityExecutions", "Bookmarks", "DurableValues", "Operational", "ActivityScopeCleanups",
+                         "WorkflowDispatches", "WorkflowDispatchCancellations", "ConsumedSchedulerWorkItems", "PostCommitOutbox" })
+                Assert.Empty(changes.GetProperty(name).EnumerateArray());
+            foreach (var name in new[] { "Admissions", "Acceptances", "Cancellations" })
+                Assert.Empty(changes.GetProperty("BackgroundActivityWork").GetProperty(name).EnumerateArray());
+            Assert.Equal(JsonValueKind.Null, changes.GetProperty("Scheduler").ValueKind);
+            Assert.Equal(JsonValueKind.Null, changes.GetProperty("AlterationJobTerminalChange").ValueKind);
+            Assert.Empty(root.GetProperty("PostCommitIntents").EnumerateArray()); Assert.False(root.TryGetProperty("HistoryBatches", out _));
+            return new(root.GetProperty("CommitId").GetString()!, root.GetProperty("Checkpoint").Deserialize<RuntimeCheckpoint>()!,
+                new(changes.GetProperty("WorkflowExecution").Deserialize<RuntimeStateChange<WorkflowExecutionState>>(), null, [], [], [],
+                    changes.GetProperty("Incidents").Deserialize<RuntimeStateChange<IncidentState>[]>()!, [],
+                    activityExecutionInspections: changes.GetProperty("ActivityExecutionInspections").Deserialize<RuntimeStateChange<ActivityExecutionInspectionProjection>[]>()!),
+                [], root.GetProperty("Metadata").Deserialize<Dictionary<string, string>>()!)
+            { HistorySourceFacts = root.GetProperty("HistorySourceFacts").Deserialize<RuntimeHistorySourceFact[]>() };
+        }
     }
 
     [Fact]
@@ -345,7 +395,7 @@ public sealed class RuntimeHistoryCaptureTests
     public async Task Bookmark_only_events_keep_unknown_parent_distinct_from_a_known_root()
     {
         var fixture = new Fixture();
-        var owner = Workflow() with { HistoryCapturePolicy = new("runtime-history-v2", 2, true, Policy.SupportedKinds) };
+        var owner = Workflow() with { HistoryCapturePolicy = new("runtime-history-v3", 3, true, Policy.SupportedKinds) };
         await fixture.Executions.SaveAsync(owner);
         var source = Commit("bookmark-only", "test", workflow: owner,
             bookmarks: [new("bookmark", RuntimeStateChangeOperation.Upsert, Bookmark("bookmark"), new Dictionary<string, string>())]);
@@ -414,7 +464,7 @@ public sealed class RuntimeHistoryCaptureTests
     {
         var fixture = new Fixture();
         var kinds = Policy.SupportedKinds.Concat(new[] { "ActivityContinuationStarted", "ActivityContinuationReturned", "ActivityContinuationCompleted" }).ToArray();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true, kinds);
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, kinds);
         var owner = Workflow() with { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = true };
         await fixture.Executions.SaveAsync(owner);
         var values = new[]
@@ -427,7 +477,8 @@ public sealed class RuntimeHistoryCaptureTests
                 EvaluationId: "evaluation-out", Phase: "output", EvidenceId: "output-evidence")
         };
         var activity = Activity(ActivityExecutionStatus.Completed);
-        var projection = ActivityExecutionInspectionProjection.FromState(activity, "checkpoint-owner", At, valueSnapshots: values);
+        var projection = ActivityExecutionInspectionProjection.FromState(activity, "checkpoint-owner", At, valueSnapshots: values)
+            with { CheckpointValueCapture = new("checkpoint-owner", null, ["input-evidence", "output-evidence"]) };
         var source = Commit("owner", RuntimeCheckpointNames.ActivityCompleted, owner, activity) with
         {
             StateChanges = new(new("run", RuntimeStateChangeOperation.Upsert, owner, new Dictionary<string, string>()), null,
@@ -438,7 +489,7 @@ public sealed class RuntimeHistoryCaptureTests
                 new(RuntimeHistorySourceFactKind.ActivityContinuationReturned, "returned", At.AddSeconds(clockShift), "activity", "attempt", reasonCode: "Complete"),
                 new(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, "done", At.AddSeconds(clockShift * 2), "activity", "attempt")]
         };
-        var capture = new RuntimeHistoryCapture(fixture.Executions, new InMemoryActivityExecutionInspectionStore());
+        var capture = new RuntimeHistoryCapture(fixture.Executions);
         var result = await capture.EnrichAsync(source);
         await capture.ValidateFinalAsync(result);
         var events = result.HistoryBatches!.Single().Candidates.Select(candidate => candidate.Event).ToArray();
@@ -451,25 +502,27 @@ public sealed class RuntimeHistoryCaptureTests
         Assert.DoesNotContain("private-input-name", serialized);
     }
 
-    [Fact]
-    public async Task Pinned_v1_replay_does_not_gain_new_source_facts_or_ancestry_fields()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Private_intermediate_profile_is_readable_but_not_silently_reinterpreted_for_future_capture(int version)
     {
-        var fixture = new Fixture(); await fixture.Executions.SaveAsync(Workflow());
+        var fixture = new Fixture();
+        var legacyPrivate = Workflow() with { HistoryCapturePolicy = new("runtime-history-v" + version, version, true, ["ActivityStarted"]) };
+        await fixture.Executions.SaveAsync(legacyPrivate);
         var capture = new RuntimeHistoryCapture(fixture.Executions);
-        var source = Commit("v1", RuntimeCheckpointNames.ActivityStarted, activity: Activity(ActivityExecutionStatus.Running));
-        var original = await capture.EnrichAsync(source);
-        var replay = await capture.EnrichAsync(source with { HistorySourceFacts =
-            [new(RuntimeHistorySourceFactKind.ActivityContinuationStarted, "new-source", At, "activity")] });
-        Assert.Null(Assert.Single(original.HistoryBatches!.Single().Candidates).Event.ActivityAncestryKnown);
-        Assert.Null(replay.HistorySourceFacts);
-        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(original), RuntimeCheckpointCommitFingerprint.Compute(replay));
+        var source = Commit("private-profile", RuntimeCheckpointNames.ActivityStarted, activity: Activity(ActivityExecutionStatus.Running));
+        Assert.False(capture.CanCapture(legacyPrivate.HistoryCapturePolicy!));
+        var refusal = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => capture.EnrichAsync(source).AsTask());
+        Assert.Equal("runtime.history.capture-unavailable", refusal.Code);
+        Assert.Empty(fixture.Store.ListCommits());
     }
 
     [Fact]
     public async Task Missing_pinned_source_support_refuses_as_infrastructure_before_any_commit_or_business_fault()
     {
         var fixture = new Fixture();
-        var owner = Workflow() with { HistoryCapturePolicy = new("runtime-history-v2", 2, true,
+        var owner = Workflow() with { HistoryCapturePolicy = new("runtime-history-v3", 3, true,
             Policy.SupportedKinds.Concat(["ActivityContinuationStarted"]).ToArray()) };
         await fixture.Executions.SaveAsync(owner);
         var capture = new RuntimeHistoryCapture(fixture.Executions, sourceSupport: []);
@@ -486,7 +539,7 @@ public sealed class RuntimeHistoryCaptureTests
     public async Task Owner_observation_ack_loss_and_purge_replay_keep_durable_receipt_without_resurrection()
     {
         var fixture = new Fixture();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true, Policy.SupportedKinds.Concat(RuntimeHistoryDeliveryFacts.Kinds).ToArray());
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, Policy.SupportedKinds.Concat(RuntimeHistoryDeliveryFacts.Kinds).ToArray());
         var owner = Workflow() with { HistoryCapturePolicy = policy };
         await fixture.Executions.SaveAsync(owner);
         var initial = await new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(Commit("admitted", RuntimeCheckpointNames.WorkflowStarted, owner));
@@ -514,7 +567,7 @@ public sealed class RuntimeHistoryCaptureTests
     public async Task Refused_first_checkpoint_retains_admitted_capture_without_inventing_workflow_started(string? parent)
     {
         var fixture = new Fixture();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true, RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).ToArray());
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).ToArray());
         var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId,
             variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.PublishedRun,
             pinnedSource: null, parentWorkflowExecutionId: parent, correlationId: null, tenantId: "scope-a",
@@ -546,7 +599,7 @@ public sealed class RuntimeHistoryCaptureTests
     public async Task Durable_state_metadata_never_copies_values_names_schema_or_external_locators()
     {
         var fixture = new Fixture();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true, RuntimeHistoryCapture.Version2Kinds);
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, RuntimeHistoryCapture.Version2Kinds);
         await fixture.Executions.SaveAsync(Workflow() with { HistoryCapturePolicy = policy });
         const string sentinel = "sensitive-durable-sentinel";
         var raw = JsonSerializer.SerializeToElement(new { secret = sentinel });
@@ -574,10 +627,10 @@ public sealed class RuntimeHistoryCaptureTests
     public async Task Timer_append_ack_loss_and_metadata_ack_preserve_claim_and_do_not_resurrect_retired_source()
     {
         var fixture = new Fixture();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true,
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
             RuntimeHistoryCapture.Kinds.Concat(DurableTimerHistoryFacts.Kinds).ToArray());
         await fixture.Executions.SaveAsync(Workflow() with { HistoryCapturePolicy = policy });
-        var timers = new InMemoryDurableTimerStore(new InMemoryDurableTimerStoreState(), fixture.Access, new FakeTimeProvider(At));
+        var timers = new InMemoryDurableTimerStore(new InMemoryDurableTimerStoreState(), fixture.Access, new FakeTimeProvider(At), fixture.State, fixture.Executions, null);
         var timer = new DurableTimer("timer", "run", "timer-stimulus", "capability-sentinel", At, At, ActivityExecutionId: "activity");
         var scheduled = DurableTimerHistoryFacts.CreateScheduled(timer, policy)!;
         timer = timer with { HistoryResponsibility = new(policy, [scheduled.Event], false) };
@@ -614,7 +667,7 @@ public sealed class RuntimeHistoryCaptureTests
     public async Task Actual_scope_inventory_retires_bookmark_and_preserves_supersession_successor(bool superseded)
     {
         var fixture = new Fixture();
-        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true,
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
             RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).ToArray());
         await fixture.Executions.SaveAsync(Workflow() with { HistoryCapturePolicy = policy });
         var capture = new RuntimeHistoryCapture(fixture.Executions);
@@ -642,6 +695,203 @@ public sealed class RuntimeHistoryCaptureTests
         Assert.DoesNotContain(journal.Items, item => item.Name == "BookmarkConsumed");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Owner_observation_profile_qualifies_the_actual_keyed_receiver_and_refuses_stamped_effects_when_missing(bool qualified)
+    {
+        var fixture = new Fixture();
+        var writer = new InMemoryRuntimeHistoryWriter(fixture.State, fixture.Access, fixture.Executions, new FakeTimeProvider(At));
+        var receiver = new ObservationReceiver(qualified ? writer : null, qualified ? fixture.Reader : null);
+        var services = new ServiceCollection(); services.AddSingleton(receiver);
+        services.AddSingleton<IRuntimeHistoryObservationWriter>(writer); services.AddSingleton<IRuntimeHistoryStore>(fixture.Reader);
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher>(provider => new RuntimePostCommitIntentDispatcher([new("owned-kind", typeof(ObservationReceiver))], provider));
+        using var provider = services.BuildServiceProvider();
+        var dispatcher = provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>();
+        var owner = RuntimeHistorySourceSupport.ForOwnerObservations("owned-kind", ["ChildStartAttemptObserved", "ChildStartDispositionObserved"]);
+        var availability = new RuntimeHistorySourceAvailability(provider);
+        Assert.Equal(qualified, dispatcher.CanRecordHistory("owned-kind", writer, fixture.Reader));
+        Assert.False(dispatcher.CanRecordHistory("another-kind", writer, fixture.Reader));
+        Assert.Equal(qualified, availability.OwnerObservations(owner));
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, owner.ObservationKinds);
+        Assert.Equal(qualified, new RuntimeHistoryCapture(fixture.Executions, [owner], availability).CanCapture(policy));
+        var intent = new RuntimePostCommitIntent("intent", "run", "owned-kind", At, null, null, null)
+        { HistoryCausation = new("source-event", "run", "source:intent") };
+        var item = new RuntimePostCommitOutboxItem("source:intent", intent, RuntimePostCommitOutboxStatus.Delivering, At, At,
+            null, 1, "owner", At, null, null, null, 1, At.AddMinutes(1), null, new("scope-a"), null);
+        var source = new PostCommitDeliveryContext(new(item, "owner", 1, At, At.AddMinutes(1)), new("scope-a"));
+        if (qualified) await dispatcher.DispatchAsync(source);
+        else
+        {
+            var unavailable = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => dispatcher.DispatchAsync(source).AsTask());
+            Assert.True(unavailable.IsUnavailable);
+        }
+        Assert.Equal(qualified ? 1 : 0, receiver.SourceCalls);
+        await dispatcher.DispatchAsync(new RuntimePostCommitIntent("legacy", "run", "owned-kind", At, null, null, null));
+        Assert.Equal(1, receiver.LegacyCalls); // Unstamped old forwarding remains available.
+    }
+
+    [Fact]
+    public void Legacy_dispatcher_replacement_does_not_inherit_an_owner_declaration_or_writer_capability()
+    {
+        var fixture = new Fixture(); var services = new ServiceCollection();
+        var writer = new InMemoryRuntimeHistoryWriter(fixture.State, fixture.Access, fixture.Executions, new FakeTimeProvider(At));
+        services.AddSingleton<IRuntimeHistoryObservationWriter>(writer); services.AddSingleton<IRuntimeHistoryStore>(fixture.Reader);
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher>(new LegacyHistoryDispatcher());
+        using var provider = services.BuildServiceProvider();
+        Assert.False(new RuntimeHistorySourceAvailability(provider).OwnerObservations(
+            RuntimeHistorySourceSupport.ForOwnerObservations("owned-kind", ["ChildStartAttemptObserved", "ChildStartDispositionObserved"])));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Source_policy_read_outage_is_infrastructure_before_the_owner_factory_and_malformed_content_stays_hard(bool timeout)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowExecutionStateStore>(new FailingPolicyRead(timeout ? new TimeoutException("unavailable") : new IOException("unavailable")));
+        using var provider = services.BuildServiceProvider(); var source = new RuntimeHistorySourceAvailability(provider);
+        var calls = 0;
+        var unavailable = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => source.AddFactsAsync(Commit("read-outage", "source"),
+            _ => { calls++; return []; }).AsTask());
+        Assert.Equal("runtime.history.capture-unavailable", unavailable.Code); Assert.Equal(0, calls);
+        var malformed = new ServiceCollection(); malformed.AddSingleton<IWorkflowExecutionStateStore>(new FailingPolicyRead(new InvalidDataException("malformed policy")));
+        using var badProvider = malformed.BuildServiceProvider();
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RuntimeHistorySourceAvailability(badProvider).AddFactsAsync(Commit("bad-policy", "source"),
+            _ => { calls++; return []; }).AsTask());
+        Assert.Equal(0, calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Captured_native_receipts_require_origin_scope_and_native_provider_even_after_purge(bool purge)
+    {
+        var fixture = new Fixture();
+        var raw = Commit("origin-commit", RuntimeCheckpointNames.WorkflowStarted, Workflow()) with
+        { PostCommitIntents = [new("private-origin-receipt", "run", "test-history-receipt", At, null, "key", null)] };
+        await fixture.Committer(new RuntimeHistoryCapture(fixture.Executions)).CommitAsync(raw);
+        var original = fixture.State.Commits[raw.CommitId].Commit;
+        if (purge) await new InMemoryRuntimeHistoryWriter(fixture.State, fixture.Access, fixture.Executions, new FakeTimeProvider(At)).PurgeThroughAsync("run", long.MaxValue);
+        var replay = original with { ExpectedFence = new("obsolete-lease", "obsolete-owner", 1) };
+        var accepted = await fixture.Store.CommitAsync(replay, new(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.Equal(["origin-commit:private-origin-receipt"], accepted.PendingPostCommitWorkIds);
+        var wrongScope = new InMemoryRuntimeCheckpointCommitStore(workflowExecutionStateStore: fixture.Executions, state: fixture.State,
+            persistenceAccessContextAccessor: new Access("scope-b"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => wrongScope.CommitAsync(replay, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        var noAccess = new InMemoryRuntimeCheckpointCommitStore(workflowExecutionStateStore: fixture.Executions, state: fixture.State);
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => noAccess.CommitAsync(replay, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        var noNative = new InMemoryRuntimeCheckpointCommitStore(state: fixture.State, persistenceAccessContextAccessor: fixture.Access);
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => noNative.CommitAsync(replay, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        var foreignNative = new InMemoryRuntimeCheckpointCommitStore(workflowExecutionStateStore: new InMemoryWorkflowExecutionStateStore(), state: fixture.State,
+            persistenceAccessContextAccessor: fixture.Access);
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => foreignNative.CommitAsync(replay, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        Assert.Single(fixture.State.Commits);
+        Assert.Equal(purge ? 0 : 1, (await fixture.Reader.ReadPageAsync(new("run"))).Items.Count);
+    }
+
+    [Fact]
+    public async Task Naked_main_checkpoint_replay_keeps_existing_receipt_behavior_without_history_scope()
+    {
+        var fixture = new Fixture();
+        var legacy = Commit("naked-marker", "test") with { PostCommitIntents = [new("receipt", "run", "test", At, null, null, null)] };
+        await fixture.Committer(new RuntimeHistoryCapture(fixture.Executions)).CommitAsync(legacy);
+        var unqualified = new InMemoryRuntimeCheckpointCommitStore(state: fixture.State);
+        var replay = await unqualified.CommitAsync(fixture.State.Commits[legacy.CommitId].Commit with { ExpectedFence = new("old", "owner", 1) }, new(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.Equal(["naked-marker:receipt"], replay.PendingPostCommitWorkIds);
+    }
+
+    [Fact]
+    public void Source_intent_causation_is_optional_immutable_and_bound_to_the_exact_raw_outbox()
+    {
+        var intent = new RuntimePostCommitIntent("intent", "run", "test", At, "activity", "key", JsonSerializer.SerializeToElement(new { value = 1 }));
+        var raw = Commit("source-commit", "source") with { PostCommitIntents = [intent] };
+        var before = RuntimeCheckpointCommitFingerprint.ComputeIntent(intent);
+        Assert.DoesNotContain("HistoryCausation", JsonSerializer.Serialize(intent));
+        var cause = new RuntimeHistoryCausation("source-event", "run", "source-commit:intent");
+        var stamped = RuntimePostCommitOutboxItems.WithHistoryCausation(raw, _ => cause, new("scope-a"));
+        var captured = Assert.Single(stamped.PostCommitIntents);
+        Assert.False(intent.IsEquivalentTo(captured)); Assert.NotEqual(before, RuntimeCheckpointCommitFingerprint.ComputeIntent(captured));
+        var rehydrated = JsonSerializer.Deserialize<RuntimePostCommitIntent>(JsonSerializer.Serialize(captured))!;
+        Assert.True(captured.IsEquivalentTo(rehydrated)); Assert.Equal(RuntimeCheckpointCommitFingerprint.ComputeIntent(captured), RuntimeCheckpointCommitFingerprint.ComputeIntent(rehydrated));
+        Assert.Same(stamped, RuntimePostCommitOutboxItems.WithHistoryCausation(stamped, _ => cause, new("scope-a")));
+        Assert.Throws<InvalidOperationException>(() => RuntimePostCommitOutboxItems.WithHistoryCausation(stamped, _ => cause with { HistoryEventId = "different" }, new("scope-a")));
+        Assert.Throws<InvalidOperationException>(() => RuntimePostCommitOutboxItems.WithHistoryCausation(raw, _ => cause with { DeliveryId = "another-physical-source" }, new("scope-a")));
+        Assert.Equal(before, RuntimeCheckpointCommitFingerprint.ComputeIntent(intent));
+    }
+
+    [Fact]
+    public async Task Optional_owner_fact_and_value_factories_are_never_evaluated_for_main_legacy_or_disabled_admissions()
+    {
+        var fixture = new Fixture();
+        var legacy = Workflow() with { HistoryCapturePolicy = null, HistoryCaptureEnabledAtAdmission = false };
+        await fixture.Executions.SaveAsync(legacy);
+        var raw = Commit("uncaptured-source", "test");
+        using var absent = new ServiceCollection().BuildServiceProvider();
+        Assert.Same(raw, await RuntimeCheckpointCommitter.AddHistorySourceFactsAsync(absent, raw,
+            () => throw new InvalidOperationException("Optional owner factory must remain untouched.")));
+        var present = new ServiceCollection(); present.AddSingleton<IWorkflowExecutionStateStore>(fixture.Executions);
+        using var provider = present.BuildServiceProvider();
+        Assert.Same(raw, await new RuntimeHistorySourceAvailability(provider).AddFactsAsync(raw,
+            () => throw new InvalidOperationException("Disabled source factory must remain untouched."), default));
+        Assert.Null(RuntimeHistorySourceFacts.ForPolicy(null, () => throw new InvalidOperationException("No policy.")));
+        var values = new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore(), fixture.Executions, new RuntimeHistoryOptions());
+        var projection = await values.BuildProjectionWithSourceAsync(Activity(ActivityExecutionStatus.Running), "legacy", At,
+            () => throw new InvalidOperationException("Legacy source classification must remain untouched."), valueSnapshots:
+                [new("input", ActivityExecutionInspectionValueSubject.ActivityInput, default, null, At, null, "test", false, new Dictionary<string, string>())]);
+        Assert.Null(projection.CheckpointValueCapture);
+        Assert.Null(Assert.Single(projection.ValueSnapshots).Phase);
+    }
+
+    [Fact]
+    public async Task Actual_value_owner_keeps_equal_clock_invoke_resume_and_resume_outputs_distinct_and_payloads_addressable()
+    {
+        var fixture = new Fixture(); await fixture.Executions.SaveAsync(Workflow());
+        var inspections = new InMemoryActivityExecutionInspectionStore();
+        var values = new RuntimeActivityExecutionInspectionAccumulator(inspections, fixture.Executions, new RuntimeHistoryOptions());
+        var input = new ActivityExecutionInspectionValueSnapshot("same-input", ActivityExecutionInspectionValueSubject.ActivityInput, default,
+            null, At, JsonSerializer.SerializeToElement("invoke-payload"), "test", false, new Dictionary<string, string>());
+        var first = await values.BuildProjectionWithSourceAsync(Activity(ActivityExecutionStatus.Running), "invoke-checkpoint", At,
+            () => new("run", "invoke-work", ActivityValueCapturePhase.Invoke), valueSnapshots: [input]);
+        await inspections.SaveAsync(first);
+        var output = input with { Subject = ActivityExecutionInspectionValueSubject.ActivityOutput, Payload = JsonSerializer.SerializeToElement("resume-output") };
+        var resumed = await values.BuildProjectionWithSourceAsync(Activity(ActivityExecutionStatus.Completed), "resume-checkpoint", At,
+            () => new("run", "resume-work", ActivityValueCapturePhase.Resume), valueSnapshots: [input with { Payload = JsonSerializer.SerializeToElement("resume-payload") }, output]);
+        Assert.Equal(3, resumed.ValueSnapshots.Count);
+        Assert.Equal(3, resumed.ValueSnapshots.Select(value => value.EvidenceId).Distinct(StringComparer.Ordinal).Count());
+        var exact = resumed.CheckpointValueCapture!;
+        Assert.Equal("resume-work", exact.SchedulerWorkItemId); Assert.Equal(2, exact.EvidenceIds.Count);
+        Assert.All(exact.EvidenceIds, id =>
+        {
+            var snapshot = Assert.Single(resumed.ValueSnapshots, value => value.EvidenceId == id);
+            Assert.Equal("Resume", snapshot.Phase); Assert.NotNull(snapshot.EvaluationId); Assert.NotNull(snapshot.Payload);
+        });
+        Assert.Equal("Invoke", Assert.Single(resumed.ValueSnapshots, value => !exact.EvidenceIds.Contains(value.EvidenceId!)).Phase);
+        Assert.Contains(resumed.ValueSnapshots, value => value.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput && value.Payload!.Value.GetString() == "resume-output");
+    }
+
+    [Fact]
+    public async Task Incident_strategy_upsert_emits_decision_without_a_second_fault_or_unproven_resolution()
+    {
+        var fixture = new Fixture(); await fixture.Executions.SaveAsync(Workflow());
+        var at = At.AddSeconds(5);
+        var decision = new IncidentState("incident", "run", "activity", "node", IncidentSeverity.Error, IncidentStatus.Blocking,
+            new IncidentResolutionOutcome(IncidentResolutionActionKinds.WaitForIntervention, at, null, "test-owner"), "failure", "private-message", At, null);
+        var policy = Policy with { };
+        policy = new(policy.PolicyId, policy.Version, true, policy.SupportedKinds.Concat(["IncidentStrategyEvaluated"]).ToArray());
+        await fixture.Executions.SaveAsync(Workflow() with { HistoryCapturePolicy = policy });
+        var raw = Commit("strategy", RuntimeCheckpointNames.IncidentResolutionBatchApplied) with
+        { StateChanges = new(null, null, [], [], [], [new("incident", RuntimeStateChangeOperation.Upsert, decision, new Dictionary<string, string>())], []),
+            HistorySourceFacts = [RuntimeHistoryIncidentFacts.StrategyEvaluated(decision)] };
+        var captured = await new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(raw);
+        var events = captured.HistoryBatches!.Single().Candidates.Select(candidate => candidate.Event).ToArray();
+        Assert.Contains(events, e => e.Name == "IncidentStrategyEvaluated");
+        Assert.DoesNotContain(events, e => e.Name is "IncidentRecorded" or "IncidentResolved");
+        Assert.All(events, e => Assert.Null(e.Payload));
+        var missing = raw with { HistorySourceFacts = null };
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(missing).AsTask());
+    }
+
     private static WorkflowExecutionState Workflow() => new("run", Executable, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null,
         "scope-a", new Dictionary<string, string>()) { HistoryCapturePolicy = Policy };
     private static ActivityExecutionState Activity(ActivityExecutionStatus status) => new(new("activity", "run", "node", "authored", "Test", "1"), status, null,
@@ -657,6 +907,27 @@ public sealed class RuntimeHistoryCaptureTests
                 activity is null ? [] : [new(activity.InvocationId, RuntimeStateChangeOperation.Upsert, activity, metadata)], bookmarks ?? [], [], [], []), [], metadata);
     }
     private static HmacRuntimeRecoveryContinuationCodec Codec() => new(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "history-capture-tests-signing-key-at-least-32-bytes" }));
+    private sealed class ObservationReceiver(IRuntimeHistoryObservationWriter? writer = null, IRuntimeHistoryStore? reader = null)
+        : IRuntimePostCommitDurableSourceIntentHandler, IRuntimeHistoryDeliverySource
+    {
+        internal int SourceCalls { get; private set; }
+        internal int LegacyCalls { get; private set; }
+        public bool CanRecordHistory(IRuntimeHistoryObservationWriter selectedWriter, IRuntimeHistoryStore selectedReader) =>
+            ReferenceEquals(writer, selectedWriter) && ReferenceEquals(reader, selectedReader);
+        public ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default) { SourceCalls++; return ValueTask.CompletedTask; }
+        public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) { LegacyCalls++; return ValueTask.CompletedTask; }
+    }
+    private sealed class LegacyHistoryDispatcher : IRuntimePostCommitIntentDispatcher
+    { public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) => ValueTask.CompletedTask; }
+    private sealed class FailingPolicyRead(Exception failure) : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState?> FindAsync(string id, CancellationToken cancellationToken = default) => ValueTask.FromException<WorkflowExecutionState?>(failure);
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected mutation.");
+        public ValueTask<bool> DeleteAsync(string id, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected mutation.");
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected scan.");
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected scan.");
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected scan.");
+    }
     private sealed class Access(string scope = "scope-a") : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(scope)); }
     private sealed class Lease : IWorkflowExecutableRootWriteLeaseManager
     {

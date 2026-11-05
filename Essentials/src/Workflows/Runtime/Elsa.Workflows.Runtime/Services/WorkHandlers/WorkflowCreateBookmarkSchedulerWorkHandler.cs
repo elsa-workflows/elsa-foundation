@@ -238,10 +238,11 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         });
         var inspection = _inspectionAccumulator is null
             ? null
-            : await _inspectionAccumulator.BuildProjectionAsync(
+            : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                 suspendedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureSource.FromWorkItem(workItem),
                 bookmarks: [ActivityExecutionBookmarkSummary.From(bookmark)],
                 valueSnapshots: payload.ValueSnapshots,
                 metadata: metadata,

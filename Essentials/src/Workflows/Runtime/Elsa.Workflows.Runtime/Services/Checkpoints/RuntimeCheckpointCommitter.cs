@@ -14,6 +14,25 @@ public sealed class RuntimeCheckpointCommitter
 {
     internal IRuntimeHistoryStore? HistoryStore { get; init; }
     internal Func<IRuntimeHistoryStore?>? HistoryStoreResolver { get; init; }
+    internal Func<RuntimeCheckpointCommit, Func<IEnumerable<RuntimeHistorySourceFact>>, CancellationToken, ValueTask<RuntimeCheckpointCommit>>? HistoryFactContributor { get; init; }
+
+    /// <summary>Lets existing cross-assembly semantic owners contribute closed facts before serialization/coalescing.
+    /// Without the optional module this returns the same source and never invokes its factory.</summary>
+    public ValueTask<RuntimeCheckpointCommit> AddHistorySourceFactsAsync(RuntimeCheckpointCommit commit,
+        Func<IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commit); ArgumentNullException.ThrowIfNull(facts);
+        return HistoryFactContributor is { } contribute ? contribute(commit, facts, cancellationToken) : ValueTask.FromResult(commit);
+    }
+
+    /// <summary>Infrastructure-enricher form, avoiding a committer/enricher construction cycle.</summary>
+    public static ValueTask<RuntimeCheckpointCommit> AddHistorySourceFactsAsync(IServiceProvider services, RuntimeCheckpointCommit commit,
+        Func<IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(services); ArgumentNullException.ThrowIfNull(commit); ArgumentNullException.ThrowIfNull(facts);
+        return Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IRuntimeHistorySourceContributor>(services) is { } history
+            ? history.AddFactsAsync(commit, _ => facts(), cancellationToken) : ValueTask.FromResult(commit);
+    }
 
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
@@ -289,7 +308,7 @@ public sealed class RuntimeCheckpointCommitter
 
     private PersistenceScope? RequiredSourceScope(RuntimeCheckpointCommit commit)
     {
-        var required = commit.PostCommitIntents.FirstOrDefault(intent => _intentHandlerContributions.Any(contribution =>
+        var required = commit.PostCommitIntents.FirstOrDefault(intent => intent.HistoryCausation is not null || _intentHandlerContributions.Any(contribution =>
             contribution.RequiresDurableSource && contribution.IntentKind == intent.Kind));
         if (required is null) return null;
         try

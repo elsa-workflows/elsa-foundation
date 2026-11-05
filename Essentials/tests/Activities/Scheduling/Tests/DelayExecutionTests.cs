@@ -5,6 +5,8 @@ using Elsa.Activities.Testing;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -75,6 +77,49 @@ public sealed class DelayExecutionTests
         Assert.NotNull(timer);
         Assert.Equal(timer!.CreatedAt, timer.DueTime);
     }
+
+    [Fact]
+    public async Task History_preserves_real_Delay_Ephemeral_mandatory_boundary_cadence_when_completion_records_are_disabled()
+    {
+        async Task<string[]> DriveAsync(bool history)
+        {
+            await using var harness = WorkflowExecutionHarness.Create()
+                .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+                .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
+                .WithFeature(services => new Workflows.Runtime.Scheduling.WorkflowsRuntimeSchedulingFeature().ConfigureServices(services))
+                .WithPersistenceMode(PersistenceMode.Ephemeral, recordCompletion: false)
+                .ConfigureServices(services =>
+                {
+                    services.AddSingleton<IPersistenceAccessContextAccessor>(new HistoryAccess());
+                    services.AddRuntimeHistory(options => options.Enabled = history);
+                    services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "delay-history-cadence-signing-key-at-least32");
+                }).Build(DelayTestExecutable.ActivityExecutionId);
+            var reference = await harness.PublishAsync(DelayTestExecutable.Create(TimeSpan.FromMinutes(1), Now), "delay-publication");
+            await harness.StartPublishedAsync(reference, WorkflowExecutionHarness.WorkflowExecutionId);
+
+            var workflow = (await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionHarness.WorkflowExecutionId))!;
+            Assert.NotEqual(WorkflowExecutionStatus.Completed, workflow.Status);
+            Assert.Equal(history, workflow.HistoryCaptureEnabledAtAdmission);
+            var bookmark = await harness.Services.GetRequiredService<IBookmarkStateStore>().FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, DelayTestExecutable.BookmarkId);
+            Assert.NotNull(bookmark);
+            var timer = (await harness.Services.GetRequiredService<IDurableTimerStore>().FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, DelayTestExecutable.TimerId))!;
+            Assert.NotNull(timer);
+            Assert.Equal(history, timer.HistoryResponsibility is not null);
+            var commits = harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits();
+            Assert.NotEmpty(commits);
+            if (history)
+            {
+                var head = await harness.Services.GetRequiredService<IRuntimeHistoryStore>().FindHeadAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+                Assert.NotNull(head);
+                Assert.True(await ((IDurableTimerHistoryStore)harness.Services.GetRequiredService<IDurableTimerStore>()).HasPendingHistoryAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+            }
+            return commits.Select(item => item.Commit.Checkpoint.Name).ToArray();
+        }
+        Assert.Equal(await DriveAsync(false), await DriveAsync(true));
+    }
+
+    private sealed class HistoryAccess : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(WorkflowExecutionHarness.Partition.Value)); }
 
     private static WorkflowExecutionHarness NewHarness() =>
         WorkflowExecutionHarness.Create()

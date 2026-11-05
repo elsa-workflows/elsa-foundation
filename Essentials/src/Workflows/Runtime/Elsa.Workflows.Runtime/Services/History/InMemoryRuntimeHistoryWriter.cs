@@ -22,7 +22,7 @@ internal sealed class InMemoryRuntimeHistoryWriter(InMemoryRuntimeCheckpointStor
         if (e.Authority != RuntimeHistoryAuthority.DeliveryObservation || e.Sequence != 0 || e.PhysicalCommitId is not null ||
             e.RecordedAt is not null || e.CheckpointOrdinal is not null || e.CheckpointId is not null ||
             !observation.Policy.SupportedKinds.Contains(e.Name, StringComparer.Ordinal) ||
-            !RuntimeHistoryDeliveryFacts.Kinds.Concat(DurableTimerHistoryFacts.Kinds).Contains(e.Name, StringComparer.Ordinal))
+            !RuntimeHistoryDeliveryFacts.Kinds.Concat(RuntimeHistoryDeliveryFacts.OwnerObservationKinds).Concat(DurableTimerHistoryFacts.Kinds).Contains(e.Name, StringComparer.Ordinal))
             throw new InvalidOperationException("Owner observations must be safe, unpositioned, independently attributed and admitted by the pinned policy.");
         var fingerprint = "observation:" + RuntimeHistoryIdentity.Compute(e);
         return state.ExecuteWriteGateAsync(async token =>
@@ -78,7 +78,11 @@ internal sealed class InMemoryRuntimeHistoryWriter(InMemoryRuntimeCheckpointStor
                 var removed = 0;
                 if (state.HistoryEvents.TryGetValue(key, out var events))
                 {
-                    foreach (var e in events.TakeWhile(e => e.Sequence <= through)) state.HistoryEventsById.Remove((scope, workflowExecutionId, e.HistoryEventId));
+                    foreach (var e in events.TakeWhile(e => e.Sequence <= through))
+                    {
+                        state.HistoryEventsById.Remove((scope, workflowExecutionId, e.HistoryEventId));
+                        if (e.PhysicalCommitId is { } commitId) state.ScrubHistoryCommitContent(commitId);
+                    }
                     removed = events.RemoveAll(e => e.Sequence <= through);
                 }
                 if (state.HistoryActivityIds.TryGetValue(key, out var activities))

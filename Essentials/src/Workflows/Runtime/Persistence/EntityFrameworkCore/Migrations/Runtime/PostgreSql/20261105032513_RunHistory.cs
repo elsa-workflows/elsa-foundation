@@ -167,7 +167,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
             migrationBuilder.CreateIndex(
                 name: "IX_runtime_timer_run_history_pending",
                 table: "elsa_runtime_durable_timer",
-                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending" });
+                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending", "HistoryRetired", "TimerIdHash" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_runtime_history_activity_SchemaVersion",

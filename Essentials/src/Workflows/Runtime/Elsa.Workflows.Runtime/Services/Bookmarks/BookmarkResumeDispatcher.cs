@@ -128,11 +128,11 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
             receiptId = Guid.NewGuid().ToString("N");
             var logicalDelivery = saved?.Source.SourceOutboxItemId ?? (request.IdempotencyKey is { } key
                 ? RuntimeHistoryIdentity.CreateBinding([request.WorkflowExecutionId, key]) : receiptId);
-            cause = new RuntimeHistoryCausation(WorkflowExecutionId: saved?.Source.Intent.WorkflowExecutionId,
+            cause = saved?.Source.Intent.HistoryCausation ?? request.HistoryCausation ?? new RuntimeHistoryCausation(WorkflowExecutionId: saved?.Source.Intent.WorkflowExecutionId,
                 DeliveryId: logicalDelivery);
             var receipt = RuntimeHistoryDeliveryFacts.Create(policy, request.WorkflowExecutionId, receiptId, "DeliveryReceived", receivedAt,
                 request.StimulusType, saved?.Bookmark.BookmarkId, saved?.Bookmark.ActivityExecutionId, saved?.Bookmark.ExecutableNodeId, cause);
-            if (!(await _history.RecordAsync(receipt, cancellationToken)).Recorded)
+            if (!(await RecordHistoryAsync(receipt, cancellationToken)).Recorded)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Delivery history is waiting for its retained execution head.");
             receiptEventId = receipt.Event.HistoryEventId;
         }
@@ -143,7 +143,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             if (receiptId is not null)
-                await _history!.RecordAsync(RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, "DeliveryFaulted",
+                await RecordHistoryAsync(RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, "DeliveryFaulted",
                     _timeProvider.GetUtcNow(), request.StimulusType, cause: cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId },
                     reasonCode: exception is RuntimeSchedulerWorkUnavailableException ? "runtime-unavailable" : "dispatch-threw"), cancellationToken);
             throw;
@@ -161,11 +161,18 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         var disposition = RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, name, _timeProvider.GetUtcNow(),
             request.StimulusType, result.Bookmark?.BookmarkId, result.Bookmark?.ActivityExecutionId, result.Bookmark?.ExecutableNodeId,
             responseCause, result.CommandDispatch?.Status.ToString() ?? result.Status.ToString());
-        var recorded = await _history!.RecordAsync(disposition, cancellationToken);
+        var recorded = await RecordHistoryAsync(disposition, cancellationToken);
         if (!recorded.Recorded) return result;
         return new BookmarkResumeDispatchResult(result.Status, result.WorkflowExecutionId, result.Bookmark, result.Resolution,
             result.CommandDispatch, result.Agent, result.Reason, result.Lookup)
         { HistoryCausation = responseCause with { HistoryEventId = disposition.Event.HistoryEventId } };
+    }
+
+    private async ValueTask<RuntimeHistoryObservationResult> RecordHistoryAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken)
+    {
+        try { return await _history!.RecordAsync(observation, cancellationToken); }
+        catch (Exception exception) when (exception is IOException or TimeoutException)
+        { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Delivery history could not acknowledge its observation.", exception); }
     }
 
     private async ValueTask<BookmarkResumeDispatchResult> DispatchCoreAsync(BookmarkResumeDispatchRequest request,

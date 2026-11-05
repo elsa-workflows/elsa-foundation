@@ -71,6 +71,13 @@ internal static class StartCommandExecution
         };
     }
 
+    internal static RuntimeHistoryCausation? ReadHistoryCausation(WorkflowExecutionCommandEnvelope? envelope)
+    {
+        if (envelope?.Command is not { Kind: WorkflowExecutionCommandKind.Start, Payload: { } payload }) return null;
+        try { return payload.Deserialize<WorkflowExecutionStartCommandPayload>()?.HistoryCausation; }
+        catch (Exception exception) when (exception is not OperationCanceledException) { return null; }
+    }
+
     // Preserve the same bounded system facts as the first start checkpoint, even if start faults before that commit.
     private static Dictionary<string, string> SystemMetadataOf(WorkflowExecutionCommand command)
     {

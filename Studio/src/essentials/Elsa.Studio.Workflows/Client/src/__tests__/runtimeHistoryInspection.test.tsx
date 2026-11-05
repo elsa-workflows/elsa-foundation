@@ -62,6 +62,69 @@ it("shows safe unknown-schema event details and exact causal navigation without 
   expect(container.textContent).toContain("Unrecognized recorded authority (99)"); expect(container.textContent).toContain("1 phase-specific value reference");
   expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled(); click("Inspect causal event"); expect(select).toHaveBeenCalledWith({ kind: "event", id: "cause" });
 });
+it("keeps event meaning and exact navigation ahead of collapsed technical identities without losing copyable provenance", async () => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(2, { name: "BookmarkConsumed", bookmarkId: "bookmark-1", physicalCommitId: "commit-1" }), readAt: "now" });
+  const select = vi.fn(), activity = vi.fn();
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-2" }} onSelect={select} onBack={vi.fn()} onActivity={activity} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Continuation and its outcome are separate recorded facts"));
+  const technical = container.querySelector<HTMLDetailsElement>(".wf-history-technical")!;
+  expect(technical.open).toBe(false);
+  expect(technical.textContent).toContain("Atomic commit groupcommit-1");
+  expect(technical.querySelector('[aria-label="Copy event id"]')).toBeTruthy();
+  const bookmark = [...container.querySelectorAll("button")].find(button => button.textContent === "Inspect bookmark →")!;
+  expect(technical.contains(bookmark)).toBe(false); flushSync(() => bookmark.click());
+  expect(select).toHaveBeenLastCalledWith({ kind: "bookmark", id: "bookmark-1" });
+  click("Inspect owning execution"); expect(activity).toHaveBeenLastCalledWith("activity-1");
+  expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled();
+});
+it("labels committed responsibilities, source observations, settlement and incident decisions as distinct recorded events", () => {
+  const labels = [
+    ["ChildWorkflowDispatchRequested", "Child run dispatch requested"], ["StimulusPublicationCommitted", "Stimulus publication committed"],
+    ["ChildWorkflowSettled", "Child run settled"], ["ChildStartAttemptObserved", "Child start attempt observed"],
+    ["ChildStartDispositionObserved", "Child start disposition observed"], ["StimulusRoutingAttemptObserved", "Stimulus routing attempt observed"],
+    ["StimulusRoutingDispositionObserved", "Stimulus routing disposition observed"], ["IncidentStrategyEvaluated", "Incident strategy evaluated"],
+    ["IncidentProjectionReconciled", "Incident projection reconciled"], ["IncidentSuppressed", "Incident suppressed"],
+    ["IncidentDecisionApplied", "Incident decision applied"], ["IncidentResolutionBatchApplied", "Incident strategy decisions applied"]
+  ];
+  const events = labels.map(([name], index) => historyEvent(index + 1, { name, authority: name.endsWith("Observed") ? "DeliveryObservation" : "CommittedTransition" }));
+  render(<HistoryEventList items={events} onSelect={vi.fn()} />);
+  expect([...container.querySelectorAll(".wf-history-event strong")].map(item => item.textContent)).toEqual(labels.map(([, label]) => label));
+  expect(container.querySelectorAll(".wf-history-event small").length).toBeGreaterThan(0);
+  expect(container.textContent?.match(/Recorded source observation/g)).toHaveLength(4);
+});
+it.each([
+  ["ChildWorkflowDispatchRequested", "Child admission, execution and outcome are separate recorded facts"],
+  ["StimulusPublicationCommitted", "Routing, recipient admission and execution are separate recorded facts"],
+  ["ChildWorkflowSettled", "Parent continuation and its result are recorded separately"],
+  ["ChildStartAttemptObserved", "does not establish that a child run started or executed"],
+  ["ChildStartDispositionObserved", "the related run's history for actual execution"],
+  ["StimulusRoutingAttemptObserved", "does not establish recipient admission or execution"],
+  ["StimulusRoutingDispositionObserved", "Recipient execution and continuation outcomes require their own recorded facts"],
+  ["IncidentStrategyEvaluated", "any separate resolution event show whether it was resolved"],
+  ["IncidentProjectionReconciled", "does not by itself resolve the incident"],
+  ["IncidentDecisionApplied", "separate lifecycle events show whether it was resolved"],
+  ["IncidentResolutionBatchApplied", "does not mean every incident was resolved"]
+])("explains %s without inferring recipient execution or incident resolution", async (name, explanation) => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { name }), readAt: "now" });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain(explanation));
+  expect(container.textContent).not.toContain("event kind is unrecognized");
+  expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled();
+  expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled();
+});
+it.each([
+  [{ "history.relatedWorkflowExecutionId": "parent/run?exact", "history.childWorkflowId": "older-child" }, "parent/run?exact"],
+  [{ "history.childWorkflowId": "legacy-child" }, "legacy-child"]
+])("opens the exact generic related run through normal authorized navigation", async (metadata, target) => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { name: "ChildWorkflowSettled", metadata }), readAt: "now" });
+  const navigate = vi.fn();
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} navigate={navigate} />);
+  await vi.waitFor(() => expect(container.textContent).toContain(`Open related run ${target}`));
+  expect(navigate).not.toHaveBeenCalled(); click(`Open related run ${target}`);
+  expect(navigate).toHaveBeenCalledWith(`/workflows/instances/${encodeURIComponent(target)}?view=timeline`);
+  expect(container.querySelector('[aria-label="Copy related run"]')).toBeTruthy();
+  expect(api.getWorkflowHistoryEvent).toHaveBeenCalledTimes(1);
+});
 it("keeps recorded sequence when clocks regress and labels every date transition and unloaded middle range", () => {
   const items = [historyEvent(1, { occurredAt: "2026-11-05T09:00:00Z" }), historyEvent(4, { occurredAt: "2026-11-04T09:00:00Z", authority: "DeliveryObservation" })];
   render(<HistoryEventList items={items} unloadedAfterSequence={3} onSelect={vi.fn()} />);
@@ -80,7 +143,7 @@ it("discloses long open handles as waits for a stimulus and separates elapsed fr
   const item = historyBookmark({ eligibility: "eligible", bookmark: { ...historyBookmark().bookmark, createdAt: "2026-11-03T09:00:00Z" } });
   api.listWorkflowHistoryBookmarks.mockResolvedValue(bookmarkPage({ items: [item] }));
   render(<RunHistorySummary context={context} instance={{ workflowExecutionId: "run", status: "Suspended", startedAt: "2026-11-03T09:00:00Z" } as WorkflowInstanceSummary} name="Approval" activities={[{ activityExecutionId: "activity-1", status: "Suspended", activityType: "Elsa.CreateUserTask" } as ActivityExecutionStateSummary]} activitiesLimited={false} onBookmark={vi.fn()} enabled />);
-  await vi.waitFor(() => expect(container.textContent).toContain("Currently waiting for"));
+  await vi.waitFor(() => expect(container.textContent).toContain("Waiting at last observation"));
   expect(container.textContent).toContain("User Task Completed"); expect(container.textContent).toContain("Handle open for"); expect(container.textContent).toContain("Elapsed includes waiting");
 });
 

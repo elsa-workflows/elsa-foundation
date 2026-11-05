@@ -314,6 +314,10 @@
   gap: 6px;
 }
 
+.wf-history-technical {
+  margin: 16px 0;
+}
+
 .wf-history-facts {
   display: grid;
   grid-template-columns: minmax(80px, 0.45fr) minmax(0, 1fr);

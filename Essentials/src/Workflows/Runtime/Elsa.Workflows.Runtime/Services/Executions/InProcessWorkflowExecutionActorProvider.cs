@@ -412,6 +412,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             }
             try
             {
+                // Acquisition can win a concurrent cancellation; reject it before invoking the executor.
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope workflow execution ID does not match this agent.");
 

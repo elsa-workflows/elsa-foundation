@@ -37,6 +37,14 @@ retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's 
 publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
 post-commit intent kind through it.
 
+When Run history is enabled, `StimulusPublicationCommitted` records this validated durable publication
+responsibility. Routing happens afterward and has separate attempt and disposition observations for each
+actual handler invocation, linked to the original source event and exact outbox item. A routing observation
+describes the saved cohort's routing acknowledgement; recipient delivery and activity execution remain
+separate facts. Multiple matching bookmarks in one recipient run retain their own delivery identities.
+Observation acknowledgement loss keeps the source owed, and replay retains the original saved cohort and
+idempotent recipient keys. User payloads and exception details are excluded from these history records.
+
 For Workflow Test Runs, this feature also contributes the scoped `Elsa.Event`
 start driver (`event` mode) and active-wait driver (`event` mode). These
 single-Test-Run paths share the event payload contract but remain distinct from

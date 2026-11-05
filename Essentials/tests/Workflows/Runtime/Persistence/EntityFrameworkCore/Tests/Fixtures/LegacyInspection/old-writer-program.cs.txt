@@ -1,0 +1,40 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.EntityFrameworkCore;
+var destination = Path.GetFullPath(args[0]); Directory.CreateDirectory(destination);
+var at = new DateTimeOffset(2026, 11, 4, 0, 0, 0, TimeSpan.Zero);
+var value = new ActivityExecutionInspectionValueSnapshot("Amount", ActivityExecutionInspectionValueSubject.ActivityInput, RuntimePayloadCaptureMode.Payload, null, at,
+    JsonSerializer.SerializeToElement(42), "deterministic-old-writer-fixture", false, new Dictionary<string,string>(), InputKey: "amount", EvaluationId: "old-evaluation", Phase: "invoke", Sequence: 1, EvidenceId: "old-evidence");
+var projection = new ActivityExecutionInspectionProjection("old-activity", "old-workflow", "old-node", "old-authored", "Legacy.Test", "1", ActivityExecutionStatus.Completed,
+    null, 1, at, at, at, "old-inspection-checkpoint", "old-inspection-checkpoint", at,
+    ActivitySchedulingProvenance.From("old-workflow", null, null, null, null, null, "old-scope", "fixture"), ["Done"], [], [], [value], new Dictionary<string,string>(), "old-scope");
+var workflow = new WorkflowExecutionState("old-workflow", new("old-artifact", "old-definition", "old-version", "1", "old-hash"), WorkflowExecutionStatus.Running,
+    null, at, at, at, null, null, null, "old-tenant", new Dictionary<string,string>());
+var checkpoint = new RuntimeCheckpoint("old-inspection-checkpoint", "ActivityCompleted", "old-workflow", at, [], new Dictionary<string,string>());
+var commit = new RuntimeCheckpointCommit("old-inspection-physical", checkpoint,
+    new(new("old-workflow", RuntimeStateChangeOperation.Upsert, workflow, new Dictionary<string,string>()), null, [], [], [], [], [], null,
+        [new("old-activity", RuntimeStateChangeOperation.Upsert, projection, new Dictionary<string,string>())], null, null, null), [], new Dictionary<string,string>());
+var json = JsonSerializer.Serialize(commit, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+await File.WriteAllTextAsync(Path.Combine(destination, "checkpoint.json"), json + "\n");
+var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite("Data Source="+Path.Combine(destination,"runtime.sqlite")+";Pooling=False").Options;
+await using(var context = new RuntimeSqliteDbContext(options)) {
+    await context.Database.MigrateAsync();
+    await new EfRuntimeCheckpointCommitStore(context, new Access(), rootWriteLeaseManager: new Lease()).CommitAsync(commit, new(RuntimeCheckpointPersistenceMode.Immediate));
+    var marker = await context.RuntimeCheckpointCommits.AsNoTracking().SingleAsync();
+    await File.WriteAllTextAsync(Path.Combine(destination,"marker.json"), marker.ContentJson+"\n");
+    await File.WriteAllTextAsync(Path.Combine(destination,"fingerprint.txt"), marker.Fingerprint+"\n");
+    if (marker.Fingerprint != RuntimeCheckpointCommitFingerprint.Compute(commit)) throw new Exception("old writer disagrees with own retained marker");
+    if ((await context.ActivityExecutionInspections.AsNoTracking().SingleAsync()).ContentJson.Length == 0) throw new Exception("inspection not written");
+}
+var assembly=typeof(EfRuntimeCheckpointCommitStore).Assembly.Location;
+var coreAssembly = typeof(RuntimeCheckpointCommitFingerprint).Assembly.Location;
+var provenance = new { SourceCommit = "074259b3565e046701acbce69613120d7bed5f64", AssemblySha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(assembly))), CoreAssemblySha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(coreAssembly))) };
+await File.WriteAllTextAsync(Path.Combine(destination,"old-binary.json"), JsonSerializer.Serialize(provenance, new JsonSerializerOptions { WriteIndented = true })+"\n");
+Console.WriteLine("old-writer export complete");
+sealed class Access : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current {get;}=PersistenceAccessContext.Scoped(new("old-tenant")); }
+sealed class Lease : IWorkflowExecutableRootWriteLeaseManager { public ValueTask ExecuteAsync(string artifactId,string leaseId,Func<CancellationToken,ValueTask> write,CancellationToken cancellationToken=default)=>write(cancellationToken); }

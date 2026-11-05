@@ -706,9 +706,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "HistoryRetired", "ClaimOrderKey")
                         .HasDatabaseName("IX_runtime_timer_live_claim");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending")
-                        .HasDatabaseName("IX_runtime_timer_run_history_pending");
-
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdHash")
                         .IsUnique();
 
@@ -720,6 +717,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "HistoryRetired", "DueTimeUtcTicks", "TimerIdOrderKey")
                         .HasDatabaseName("IX_runtime_timer_live_due");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending", "HistoryRetired", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_run_history_pending");
 
                     b.ToTable("elsa_runtime_durable_timer", (string)null);
                 });

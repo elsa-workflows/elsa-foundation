@@ -90,6 +90,11 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCancellationEnricher>());
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCompletionEnricher>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchHistoryEnricher>());
+        services.AddSingleton(new RuntimeHistorySourceSupport([
+            RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested, RuntimeHistorySourceFactKind.ChildWorkflowSettled]));
+        services.AddSingleton(RuntimeHistorySourceSupport.ForOwnerObservations(DispatchWorkflowConstants.StartChildIntentKind, [
+            ChildStartHistoryObservations.AttemptKind, ChildStartHistoryObservations.DispositionKind]));
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowControlProducerEnricher>());
         services.TryAddEnumerable(

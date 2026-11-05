@@ -336,8 +336,8 @@ internal static class StructuralParentEvaluationSupport
                 new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                     StateId: activityExecutionId,
                     Operation: RuntimeStateChangeOperation.Upsert,
-                    State: await inspectionAccumulator.BuildProjectionAsync(
-                        parentState, checkpointId, occurredAt, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken),
+                    State: await inspectionAccumulator.BuildProjectionWithSourceAsync(
+                        parentState, checkpointId, occurredAt, () => ActivityValueCaptureSource.FromWorkItem(workItem), valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken),
                     Metadata: metadata)
             ];
         var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
@@ -402,6 +402,9 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
+        commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            CancellationIncidentFacts(subtreeCancellations)
+                .Concat((incidentChanges ?? []).Select(incident => RuntimeHistoryIncidentFacts.DecisionApplied(incident))), cancellationToken);
         await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
@@ -467,8 +470,8 @@ internal static class StructuralParentEvaluationSupport
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:parent-activity-completed:{activityExecutionId}";
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
-                completedParentState, checkpointId, occurredAt, outcomeNames: outcomeNames, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken);
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
+                completedParentState, checkpointId, occurredAt, () => ActivityValueCaptureSource.FromWorkItem(workItem), outcomeNames: outcomeNames, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken);
         var completionWorkItem = SchedulerWorkItems.NewCompletionWorkItem(
             timeProvider, workItem, source.Payload.PinnedExecutable, source.Payload.ExecutableNodeId, activityExecutionId, completedParentState, commandMetadata: source.DerivedCommandMetadata);
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
@@ -523,8 +526,19 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
+        commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () => CancellationIncidentFacts(subtreeCancellations), cancellationToken);
         await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
+
+    // The cancellation planner owns these exact suppressions; fault absorption explicitly substitutes a resolution.
+    // Facts are created lazily only for the final admitted profile and travel in the original raw checkpoint.
+    private static IEnumerable<RuntimeHistorySourceFact> CancellationIncidentFacts(IEnumerable<ActivitySubtreeCancellationPlan> plans) =>
+        plans.SelectMany(plan => plan.IncidentChanges).Select(incident => incident.Status switch
+        {
+            IncidentStatus.Suppressed => RuntimeHistoryIncidentFacts.Suppressed(incident),
+            IncidentStatus.Resolved => RuntimeHistoryIncidentFacts.Resolved(incident),
+            _ => throw new InvalidOperationException("A cancellation plan must identify its actual incident disposition.")
+        });
 
     internal sealed record SubtreeCancellationCommitChanges(
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions,

@@ -54,6 +54,10 @@ namespace Elsa.Workflows.Runtime.Extensions;
 [RuntimeDefaultRegistration]
 public static class RuntimeCoreServiceCollectionExtensions
 {
+    private static readonly RuntimeHistorySourceSupport CoreHistorySources = new([
+        RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
+        RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
+        RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied]);
     /// <summary>
     /// Registers the host-agnostic workflow runtime composition root. Idempotent (all registrations use <c>TryAdd</c>),
     /// so a host may register durable-provider overrides before or after calling this. Runs drain only once
@@ -63,6 +67,7 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreHistorySources))) services.AddSingleton(CoreHistorySources);
         var hadExplicitActivityExecutionContracts = RuntimeActivityExecutionStoreBackend.HasRegisteredContract(services);
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.ClaimWorkflowAlterationProvider(typeof(InMemoryWorkflowAlterationStore), isInMemoryDefault: true);
@@ -321,7 +326,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<InMemoryDurableTimerStoreState>();
         services.TryAddScoped<IDurableTimerStore>(provider => new InMemoryDurableTimerStore(
-            provider.GetRequiredService<InMemoryDurableTimerStoreState>(), provider.GetService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<TimeProvider>()));
+            provider.GetRequiredService<InMemoryDurableTimerStoreState>(), provider.GetService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
+            provider.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value ?? provider.GetService<IWorkflowExecutionStateStore>(),
+            provider.GetService<IExecutionLivenessStateStore>()));
         services.TryAddScoped<IWorkflowExecutionDeletionStore>(serviceProvider =>
             new InMemoryWorkflowExecutionDeletionStore(
                 serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
@@ -479,7 +487,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
                 serviceProvider.GetService<IPersistenceAccessContextAccessor>())
-            { HistoryStoreResolver = () => serviceProvider.GetService<IRuntimeHistoryStore>() });
+            { HistoryStoreResolver = () => serviceProvider.GetService<IRuntimeHistoryStore>(),
+                HistoryFactContributor = (commit, facts, token) => RuntimeCheckpointCommitter.AddHistorySourceFactsAsync(serviceProvider, commit, facts, token) });
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();

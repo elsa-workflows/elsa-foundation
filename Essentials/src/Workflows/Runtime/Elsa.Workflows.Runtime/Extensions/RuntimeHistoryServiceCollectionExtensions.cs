@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -17,6 +18,7 @@ public static class RuntimeHistoryServiceCollectionExtensions
         services.TryAddSingleton(options);
         services.TryAddScoped<IRuntimeHistoryStore, InMemoryRuntimeHistoryStore>();
         services.TryAddScoped<RuntimeHistorySourceAvailability>();
+        services.TryAddScoped<IRuntimeHistorySourceContributor>(provider => provider.GetRequiredService<RuntimeHistorySourceAvailability>());
         services.TryAddScoped<IRuntimeHistoryObservationWriter, InMemoryRuntimeHistoryWriter>();
         services.TryAddScoped<IRuntimeHistoryRetentionStore, InMemoryRuntimeHistoryWriter>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
@@ -30,14 +32,29 @@ internal static class RuntimeHistoryRegistration
     {
         var options = provider.GetService<RuntimeHistoryOptions>();
         if (options?.Enabled != true) return null;
+        try { return ResolveQualifiedPolicy(provider, options); }
+        catch (Exception exception) when (exception is not (OperationCanceledException or ArgumentException or InvalidDataException or RuntimeSchedulerWorkUnavailableException) &&
+            exception is IOException or InvalidOperationException or NotSupportedException)
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The current runtime history provider is unavailable for admission.", exception);
+        }
+    }
+
+    private static RuntimeHistoryCapturePolicy? ResolveQualifiedPolicy(IServiceProvider provider, RuntimeHistoryOptions options)
+    {
         var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         var reader = provider.GetRequiredService<IRuntimeHistoryStore>();
         if (!writer.SupportsHistory || !writer.CanCommitHistory(reader))
-            throw new NotSupportedException("The selected checkpoint writer and history reader do not share one qualified atomic history boundary.");
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The selected runtime history providers cannot acknowledge one atomic checkpoint.");
+        if (provider.GetService<IRuntimeActivityExecutionInspectionAccumulator>()?.SupportsCheckpointValueCapture != true)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The selected value owner cannot supply immutable checkpoint evidence contributions.");
         var owners = provider.GetServices<RuntimeHistorySourceSupport>().ToArray();
-        var kinds = owners.SelectMany(owner => owner.Kinds).Select(kind => kind.ToString()).ToList();
+        var kinds = owners.SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName).ToList();
         if (provider.GetService<IRuntimeHistoryObservationWriter>() is { } observations && observations.CanRecordHistory(reader))
         {
+            foreach (var owner in owners.Where(owner => owner.ObservationIntentKind is { } kind &&
+                         provider.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(kind, observations, reader) == true))
+                kinds.AddRange(owner.ObservationKinds);
             if (provider.GetService<IBookmarkResumeDispatcher>() is IRuntimeHistoryDeliverySource delivery && delivery.CanRecordHistory(observations, reader))
                 kinds.AddRange(RuntimeHistoryDeliveryFacts.Kinds);
             if (owners.Any(owner => owner.TimerOwner) && provider.GetService<IDurableTimerStore>() is IDurableTimerHistoryStore { SupportsHistoryResponsibility: true } timers &&

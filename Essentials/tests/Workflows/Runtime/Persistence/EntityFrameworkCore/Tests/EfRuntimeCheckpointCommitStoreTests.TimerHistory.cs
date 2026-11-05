@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfRuntimeCheckpointCommitStoreTests
 {
     private static readonly RuntimeHistoryCapturePolicy TimerHistoryPolicy = new("test-timer-history", 1, true,
-        ["WorkflowStarted", "TimerScheduled", "TimerDispatched", "TimerRetired"]);
+        ["WorkflowStarted", "WorkflowCompleted", "WorkflowFaulted", "TimerScheduled", "TimerDispatched", "TimerRetired"]);
 
     [Fact]
     [Trait("Feature", "RunHistory")]
@@ -22,12 +22,15 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         DurableTimer admitted;
         await using (var context = db.Open("tenant-a"))
         {
+            await SeedNoRecordOwnerAsync(context);
             var store = TimerHistoryStore(context);
             admitted = await store.SaveAsync(HistoryTimer("timer-a"));
             Assert.True(store.SupportsHistoryResponsibility);
             Assert.Single((await store.ListPendingHistoryAsync(new())).Items);
             claim = Assert.Single(await store.ClaimDueAsync(new("owner", OccurredAt.AddMinutes(1), TimeSpan.FromMinutes(5), 1)));
             var scheduled = admitted.HistoryResponsibility!.PendingEvents.Single();
+            await RecordTimerHistoryOwnerAsync(context);
+            Assert.True((await HistoryStore(context, new FixedAccessor("tenant-a")).RecordAsync(new(TimerHistoryPolicy, scheduled))).Recorded);
             Assert.True(await store.AcknowledgeHistoryAsync("workflow-a", "timer-a", scheduled.HistoryEventId));
             var persisted = await context.DurableTimers.AsNoTracking().SingleAsync();
             Assert.Equal(claim.Revision, persisted.Revision);
@@ -44,6 +47,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.True(pending.HistoryResponsibility!.Retired);
         var terminal = Assert.Single(pending.HistoryResponsibility.PendingEvents);
         Assert.Equal("TimerDispatched", terminal.Name);
+        Assert.True((await HistoryStore(restarted, new FixedAccessor("tenant-a")).RecordAsync(new(TimerHistoryPolicy, terminal))).Recorded);
         Assert.True(await reopened.AcknowledgeHistoryAsync("workflow-a", "timer-a", terminal.HistoryEventId));
         Assert.Empty((await reopened.ListPendingHistoryAsync(new())).Items);
         // A late replay returns the retired first winner and cannot create a new fireable deadline.
@@ -61,6 +65,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         await using var db = await TestDatabase.CreateAsync();
         var failure = new FailMarkerInsertInterceptor();
         await using var context = db.Open("tenant-a", failure);
+        await SeedNoRecordOwnerAsync(context);
         var timers = TimerHistoryStore(context);
         var timer = await timers.SaveAsync(HistoryTimer("timer-cleanup"));
         var commit = WithScopeCleanup("timer-cleanup");
@@ -84,6 +89,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     {
         await using var db = await TestDatabase.CreateAsync();
         await using var context = db.Open("tenant-a");
+        await SeedNoRecordOwnerAsync(context);
         var timers = TimerHistoryStore(context);
         var legacy = HistoryTimer("legacy") with { HistoryResponsibility = null };
         await timers.SaveAsync(legacy);
@@ -98,8 +104,21 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         await Assert.ThrowsAsync<ArgumentException>(() => timers.ListPendingHistoryAsync(new(2, first.NextContinuationToken)).AsTask());
     }
 
+    private static async Task RecordTimerHistoryOwnerAsync(RuntimeDbContext context)
+    {
+        var state = Execution("workflow-a", "tenant-a") with { HistoryCapturePolicy = TimerHistoryPolicy, HistoryCaptureEnabledAtAdmission = true };
+        context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a", EfWorkflowExecutionStateStore.CreateId("tenant-a", "workflow-a"), 1));
+        await context.SaveChangesAsync(); context.ChangeTracker.Clear();
+        var checkpoint = new RuntimeCheckpoint("timer-owner-start", "WorkflowStarted", "workflow-a", OccurredAt, [], new Dictionary<string, string>());
+        var e = new RuntimeHistoryEvent("timer-owner-start-event", "workflow-a", 0, RuntimeHistoryEventCategory.WorkflowLifecycle, "WorkflowStarted", OccurredAt, checkpointId: checkpoint.CheckpointId)
+        { Authority = RuntimeHistoryAuthority.CommittedTransition };
+        var commit = new RuntimeCheckpointCommit("timer-owner-start-physical", checkpoint, new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())
+        { HistoryBatches = [new(TimerHistoryPolicy, checkpoint.CheckpointId, OccurredAt, true, [new(e, 0)])] };
+        await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision());
+    }
+
     private static EfDurableTimerStore TimerHistoryStore(RuntimeDbContext context, string scope = "tenant-a") => new(context, new FixedAccessor(scope),
-        new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "run-history-tests-exact-signing-key-32" })));
+        new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "run-history-tests-exact-signing-key-32" })), new FixedTimeProvider(OccurredAt));
     private static DurableTimer HistoryTimer(string id)
     {
         var timer = new DurableTimer(id, "workflow-a", "safe-type", "safe-hash", OccurredAt.AddSeconds(1), OccurredAt, ActivityExecutionId: "activity-a", ExecutionScopeId: "scope-a");

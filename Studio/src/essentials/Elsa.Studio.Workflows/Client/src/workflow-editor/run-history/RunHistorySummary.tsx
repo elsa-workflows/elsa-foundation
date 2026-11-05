@@ -23,7 +23,7 @@ export function RunHistorySummary({ context, instance, name, activities, activit
   return <header className="wf-history-run-summary" aria-label="Run history summary">
     <div><h2>{name}</h2><span className="wf-history-badge">{instance.status}</span></div>
     <p>{elapsed ? <>Elapsed {elapsed}{!instance.completedAt ? " at last observation" : ""}. </> : null}Elapsed includes waiting. Active execution time is not recorded.</p>
-    {current.length ? <><h3>Currently waiting for</h3><ul className="wf-history-waits">{current.slice(0, showAll ? undefined : 3).map(item => {
+    {current.length ? <><h3>Waiting at last observation</h3><ul className="wf-history-waits">{current.slice(0, showAll ? undefined : 3).map(item => {
       const bookmark = item.bookmark;
       const owner = activities.find(activity => activity.activityExecutionId === bookmark.identity.activityExecutionId);
       const age = item.priorState !== "Unknown" ? formatDuration(bookmark.createdAt, item.eligibilityObservedAt) : "";

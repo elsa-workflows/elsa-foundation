@@ -1,0 +1,131 @@
+{
+  "commitId": "old-inspection-physical",
+  "checkpoint": {
+    "checkpointId": "old-inspection-checkpoint",
+    "name": "ActivityCompleted",
+    "workflowExecutionId": "old-workflow",
+    "occurredAt": "2026-11-04T00:00:00+00:00",
+    "activityExecutionIds": [],
+    "metadata": {}
+  },
+  "stateChanges": {
+    "workflowExecution": {
+      "stateId": "old-workflow",
+      "operation": 0,
+      "state": {
+        "workflowExecutionId": "old-workflow",
+        "pinnedExecutable": {
+          "artifactId": "old-artifact",
+          "definitionId": "old-definition",
+          "definitionVersionId": "old-version",
+          "artifactVersion": "1",
+          "artifactHash": "old-hash"
+        },
+        "status": 1,
+        "subStatus": null,
+        "createdAt": "2026-11-04T00:00:00+00:00",
+        "startedAt": "2026-11-04T00:00:00+00:00",
+        "updatedAt": "2026-11-04T00:00:00+00:00",
+        "completedAt": null,
+        "correlationId": null,
+        "parentWorkflowExecutionId": null,
+        "tenantId": "old-tenant",
+        "systemMetadata": {},
+        "runKind": 0,
+        "pinnedSource": null,
+        "dispatchNestingDepth": 0,
+        "rootVariableFrame": null
+      },
+      "metadata": {}
+    },
+    "scheduler": null,
+    "activityExecutions": [],
+    "activityExecutionInspections": [
+      {
+        "stateId": "old-activity",
+        "operation": 0,
+        "state": {
+          "activityExecutionId": "old-activity",
+          "workflowExecutionId": "old-workflow",
+          "executableNodeId": "old-node",
+          "authoredActivityId": "old-authored",
+          "activityType": "Legacy.Test",
+          "activityTypeVersion": "1",
+          "status": 4,
+          "subStatus": null,
+          "executionSequence": 1,
+          "scheduledAt": "2026-11-04T00:00:00+00:00",
+          "startedAt": "2026-11-04T00:00:00+00:00",
+          "completedAt": "2026-11-04T00:00:00+00:00",
+          "firstCheckpointId": "old-inspection-checkpoint",
+          "lastCheckpointId": "old-inspection-checkpoint",
+          "lastCommittedAt": "2026-11-04T00:00:00+00:00",
+          "provenance": {
+            "parentActivityExecutionId": null,
+            "schedulingActivityExecutionId": null,
+            "schedulingWorkflowExecutionId": "old-workflow",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": null,
+            "executionScopeId": "old-scope",
+            "schedulingCause": "fixture",
+            "metadata": {},
+            "attempt": null
+          },
+          "outcomeNames": [
+            "Done"
+          ],
+          "bookmarks": [],
+          "incidents": [],
+          "valueSnapshots": [
+            {
+              "name": "Amount",
+              "subject": 0,
+              "captureMode": 3,
+              "type": null,
+              "capturedAt": "2026-11-04T00:00:00+00:00",
+              "payload": 42,
+              "captureReason": "deterministic-old-writer-fixture",
+              "isSensitive": false,
+              "metadata": {},
+              "inputKey": "amount",
+              "evaluationId": "old-evaluation",
+              "phase": "invoke",
+              "sequence": 1,
+              "failure": null,
+              "evidenceId": "old-evidence"
+            }
+          ],
+          "metadata": {},
+          "executionScopeId": "old-scope",
+          "attempt": null,
+          "supersededByActivityExecutionId": null,
+          "supersededAt": null,
+          "enclosingExecutionScopeId": null
+        },
+        "metadata": {}
+      }
+    ],
+    "bookmarks": [],
+    "durableValues": [],
+    "incidents": [],
+    "operational": [],
+    "activityScopeCleanups": [],
+    "workflowDispatches": [],
+    "workflowDispatchCancellations": [],
+    "consumedSchedulerWorkItems": [],
+    "alterationJobTerminalChange": null,
+    "backgroundActivityWork": {
+      "admissions": [],
+      "acceptances": [],
+      "cancellations": [],
+      "isEmpty": true
+    },
+    "postCommitOutbox": []
+  },
+  "postCommitIntents": [],
+  "metadata": {},
+  "workflowExecutionId": "old-workflow",
+  "expectedFence": null,
+  "retainSchedulerWork": false
+}

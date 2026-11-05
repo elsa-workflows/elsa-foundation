@@ -4,6 +4,8 @@
 
 **Authority**: End-to-end owner instruction recorded on [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6645438505). Continue draft #3850, not a second delivery PR.
 
+Review/merge follows the current organization [standing self-merge protocol](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#standing-self-merge-codex-and-claude), verified at AGENTS blob f1a8cd800abdee9adc012637143222df912cfe50. Separate independent correctness, repository-standards and acceptance lenses review the exact head without seeing each other's output; record numbered rounds, fix in additive commits and repeat until clean (maximum six rounds). Required exact-head checks, independent actual UI inspection and all holds/protections remain gates. The owner's delegated instruction confirms this path; Code Review app availability and personal approval are not an additional wait. No paused program scope changes.
+
 ## Summary
 
 Deliver the selected Timeline workspace with one Runtime-owned, production history queried at run, execution and bookmark scope. Capture typed immutable candidates before coalescing into a RuntimeCheckpointCommit write sidecar, outside continuation state, and persist queryable history, its sequence head and bookmark lifecycle projections inside the existing checkpoint transaction. Do not use the volatile QA collector, ordinary per-step outbox intents, latest-state inference or another domain. Preserve persistence modes and current command/value authority.

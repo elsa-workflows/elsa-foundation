@@ -1,9 +1,12 @@
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -164,6 +167,67 @@ internal static class RuntimeHistoryProviderContract
             var reader = new EfRuntimeHistoryStore(verify, access, Codec());
             Assert.Null(await reader.FindHeadAsync(run)); Assert.Empty((await reader.ReadPageAsync(new(run))).Items);
         }
+        await SourceDischargeRaceAsync(sourceFirst: true);
+        await SourceDischargeRaceAsync(sourceFirst: false);
+
+        async Task SourceDischargeRaceAsync(bool sourceFirst)
+        {
+            var sourceRun = run + (sourceFirst ? "-source-first" : "-completion-first");
+            var timerPolicy = new RuntimeHistoryCapturePolicy("provider-timer-history", 1, true, ["WorkflowCompleted", "WorkflowFaulted", "TimerScheduled", "TimerRetired"]);
+            var lease = new RuntimeExecutionLease("lease-" + sourceRun, sourceRun, "owner", At.AddMinutes(-1), At.AddHours(1), 1);
+            DurableTimer MakeTimer(string timerId)
+            {
+                var timer = new DurableTimer(timerId, sourceRun, "type", "hash", At.AddMinutes(1), At, ActivityExecutionId: "activity");
+                return timer with { HistoryResponsibility = new(timerPolicy, [DurableTimerHistoryFacts.CreateScheduled(timer, timerPolicy)!.Event], false) };
+            }
+            await using (var seed = open(fixture.ConnectionString))
+            {
+                seed.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(new(RuntimeExecutionOwnershipStateId.For(sourceRun), sourceRun, lease, null, null, null), scope, 1));
+                await seed.SaveChangesAsync(); seed.ChangeTracker.Clear();
+                var store = new EfDurableTimerStore(seed, access, Codec(), new Clock()); var timer = await store.SaveAsync(MakeTimer("retired"));
+                await store.RetireWithHistoryAsync(sourceRun, timer.TimerId, DurableTimerHistoryFacts.CreateCancelled(timer, At)!);
+            }
+            var completed = new WorkflowExecutionState(sourceRun, new("artifact-source", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Completed,
+                null, At, At, At, At, null, null, scope, new Dictionary<string, string>())
+            { HistoryCapturePolicy = timerPolicy, HistoryCaptureEnabledAtAdmission = true, SystemMetadata = new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = nameof(PersistenceMode.Ephemeral) } };
+            var checkpoint = new RuntimeCheckpoint("completion-" + sourceRun, "WorkflowCompleted", sourceRun, At, [], new Dictionary<string, string>());
+            var completion = new RuntimeCheckpointCommit("discard-" + sourceRun, checkpoint, new(new(sourceRun, RuntimeStateChangeOperation.Upsert, completed, new Dictionary<string, string>()), null, [], [], [], [], []), [], new Dictionary<string, string>()) { ExpectedFence = lease.ToFence() };
+            var hold = new SourceOwnershipBarrier(holdAfterLock: true); var attempting = new SourceOwnershipBarrier(holdAfterLock: false);
+            await using var firstContext = intercepted(fixture.ConnectionString, hold);
+            await using var secondContext = intercepted(fixture.ConnectionString, attempting);
+            var firstStore = new EfDurableTimerStore(firstContext, access, Codec(), new Clock());
+            var secondStore = new EfDurableTimerStore(secondContext, access, Codec(), new Clock());
+            var firstOperation = sourceFirst ? firstStore.SaveAsync(MakeTimer("new-active")).AsTask() : FirstCompletionAsync();
+            async Task<DurableTimer> FirstCompletionAsync() { Assert.True(await firstStore.DischargeUnrecordedCompletionAsync(completion, 1)); return MakeTimer("unused"); }
+            await hold.Acquired.Task.WaitAsync(TimeSpan.FromSeconds(60));
+            var secondOperation = sourceFirst ? SecondCompletionAsync() : SecondSourceAsync();
+            async Task SecondCompletionAsync() => await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => secondStore.DischargeUnrecordedCompletionAsync(completion, 1).AsTask());
+            async Task SecondSourceAsync() => await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => secondStore.SaveAsync(MakeTimer("new-active")).AsTask());
+            try { await attempting.Attempted.Task.WaitAsync(TimeSpan.FromSeconds(60)); }
+            finally { hold.Release.TrySetResult(); }
+            await firstOperation; await secondOperation;
+            await using var verify = open(fixture.ConnectionString);
+            var owner = new EfDurableTimerStore(verify, access, Codec(), new Clock());
+            var pending = await owner.ListPendingHistoryAsync(new());
+            if (sourceFirst)
+            {
+                Assert.Contains(pending.Items, timer => timer.WorkflowExecutionId == sourceRun && timer.TimerId == "retired" && timer.HistoryResponsibility!.NoRecordCompletion is null);
+                Assert.NotNull(await owner.FindAsync(sourceRun, "new-active"));
+            }
+            else
+            {
+                Assert.DoesNotContain(pending.Items, timer => timer.WorkflowExecutionId == sourceRun);
+                Assert.Null(await owner.FindAsync(sourceRun, "new-active"));
+                var old = await owner.SaveAsync(MakeTimer("retired")); Assert.NotNull(old.HistoryResponsibility!.NoRecordCompletion);
+                var fault = new RuntimeCheckpoint("first-fault-" + sourceRun, "WorkflowFaulted", sourceRun, At, [], new Dictionary<string, string>()) { HistoryStartsAtAdmission = true };
+                var e = new RuntimeHistoryEvent("first-fault-event-" + sourceRun, sourceRun, 0, RuntimeHistoryEventCategory.WorkflowLifecycle, "WorkflowFaulted", At, checkpointId: fault.CheckpointId) { Authority = RuntimeHistoryAuthority.CommittedTransition };
+                var faulted = completed with { Status = WorkflowExecutionStatus.Faulted, CompletedAt = null };
+                var commit = new RuntimeCheckpointCommit("fault-physical-" + sourceRun, fault, new(new(sourceRun, RuntimeStateChangeOperation.Upsert, faulted, new Dictionary<string, string>()), null, [], [], [], [], []), [], new Dictionary<string, string>())
+                { ExpectedFence = lease.ToFence(), HistoryBatches = [new(timerPolicy, fault.CheckpointId, At, true, [new(e, 0)])] };
+                await new EfRuntimeCheckpointCommitStore(verify, access, new Clock(), new RootLease()).CommitAsync(commit, Decision);
+                Assert.True((await new EfRuntimeHistoryStore(verify, access, Codec()).FindHeadAsync(sourceRun))!.HasGaps);
+            }
+        }
 
         async Task InterleavedAppendAsync(RuntimeCheckpointCommit firstCommit, RuntimeCheckpointCommit waitingCommit)
         {
@@ -216,6 +280,25 @@ internal static class RuntimeHistoryProviderContract
     }
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new(scope)); }
+    private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => At; }
+    private sealed class RootLease : IWorkflowExecutableRootWriteLeaseManager
+    { public ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default) => write(cancellationToken); }
+    private sealed class SourceOwnershipBarrier(bool holdAfterLock) : DbCommandInterceptor
+    {
+        private int entered;
+        public TaskCompletionSource Attempted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Acquired { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private static bool IsOwnerLock(DbCommand command) => command.CommandText.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && command.CommandText.Contains("elsa_runtime_execution_liveness_state", StringComparison.Ordinal);
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        { if (IsOwnerLock(command)) Attempted.TrySetResult(); return ValueTask.FromResult(result); }
+        public override async ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData, int result, CancellationToken cancellationToken = default)
+        {
+            if (holdAfterLock && IsOwnerLock(command) && Interlocked.Exchange(ref entered, 1) == 0)
+            { Acquired.TrySetResult(); await Release.Task.WaitAsync(cancellationToken); }
+            return result;
+        }
+    }
     private sealed class BeforeRootHistorySnapshot(string scope, string run) : DbCommandInterceptor
     {
         private int entered;

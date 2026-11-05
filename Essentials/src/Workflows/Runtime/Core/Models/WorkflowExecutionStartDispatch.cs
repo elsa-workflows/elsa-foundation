@@ -5,6 +5,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,
         string requestedBy,
@@ -491,6 +493,8 @@ public sealed record WorkflowExecutableSourceSelection
 
 public sealed class WorkflowExecutionStartCommandPayload
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
 

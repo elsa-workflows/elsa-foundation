@@ -519,7 +519,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata) { HistoryCapturePolicy = history.Item1, HistoryCaptureEnabledAtAdmission = history.Item2 });
+            triggerMetadata: request.TriggerMetadata) { HistoryCapturePolicy = history.Item1, HistoryCaptureEnabledAtAdmission = history.Item2, HistoryCausation = request.HistoryCausation });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 

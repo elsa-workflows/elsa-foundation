@@ -9,7 +9,9 @@ const names: Record<string, string> = {
   ActivityCompleted: "Activity completed", ActivitySuspended: "Activity waiting", ActivityCancelled: "Activity cancelled", ActivityRecovered: "Activity recovered",
   ActivityFaulted: "Activity faulted", BookmarkCreated: "Bookmark created", BookmarkConsumed: "Bookmark consumed",
   BookmarkRetired: "Competing bookmark retired", BookmarkRemoved: "Bookmark removed", BookmarkStaleRemoved: "Stale bookmark removed",
-  IncidentRecorded: "Incident recorded", IncidentResolved: "Incident resolved", IncidentResolutionBatchApplied: "Incident resolution applied",
+  IncidentRecorded: "Incident recorded", IncidentResolved: "Incident resolved", IncidentResolutionBatchApplied: "Incident strategy decisions applied",
+  IncidentStrategyEvaluated: "Incident strategy evaluated", IncidentProjectionReconciled: "Incident projection reconciled",
+  IncidentSuppressed: "Incident suppressed", IncidentDecisionApplied: "Incident decision applied",
   WorkflowDispatchChanged: "Workflow dispatch updated", ValueCaptured: "Value observation recorded", RuntimeAlterationJob: "Run alteration recorded",
   StimulusReceived: "Stimulus received", StimulusAccepted: "Stimulus accepted", StimulusRejected: "Stimulus rejected",
   DeliveryReceived: "Delivery received", DeliveryAccepted: "Delivery accepted", DeliveryRejected: "Delivery rejected",
@@ -18,16 +20,40 @@ const names: Record<string, string> = {
   ActivityContinuationStarted: "Continuation started", ActivityContinuationReturned: "Continuation returned a result",
   ActivityContinuationSuspended: "Continuation waiting again", ActivityContinuationCompleted: "Continuation completed",
   ActivityContinuationFaulted: "Continuation faulted", ActivityContinuationCancelled: "Continuation cancelled",
-  ChildWorkflowDispatched: "Child run dispatch recorded", ChildWorkflowSettled: "Child run settled", StimulusPublished: "Stimulus publication recorded",
+  ChildWorkflowDispatched: "Child run dispatch recorded", ChildWorkflowDispatchRequested: "Child run dispatch requested",
+  ChildWorkflowSettled: "Child run settled", StimulusPublished: "Stimulus publication recorded", StimulusPublicationCommitted: "Stimulus publication committed",
+  ChildStartAttemptObserved: "Child start attempt observed", ChildStartDispositionObserved: "Child start disposition observed",
+  StimulusRoutingAttemptObserved: "Stimulus routing attempt observed", StimulusRoutingDispositionObserved: "Stimulus routing disposition observed",
   ChildControlAccepted: "Child control accepted", ChildControlApplied: "Child control applied", IncidentResolutionApplied: "Incident resolution applied",
   ActivityRetryScheduled: "Activity retry scheduled", RecoveryRequested: "Recovery requested", ControlApplied: "Control applied", AlterationApplied: "Run alteration applied",
   CompensationRegistered: "Compensation registered", CompensationStarted: "Compensation started", CompensationHandlerScheduled: "Compensation handler scheduled",
   CompensationHandlerCompleted: "Compensation handler completed", CompensationHandlerFaulted: "Compensation handler faulted", CompensationConfirmed: "Compensation confirmed",
   CompensationResolved: "Compensation resolved", CompensationCompleted: "Compensation completed", BookmarkSuperseded: "Bookmark superseded",
+  DurableStateRecorded: "Durable state recorded", DurableStateRemoved: "Durable state removed",
   DeliveryDuplicate: "Duplicate delivery observed", BookmarkResumeReceived: "Bookmark resume received", BookmarkResumeDispatched: "Bookmark resume dispatched"
 };
 export function isKnownHistoryEvent(event: Pick<RuntimeHistoryEvent, "name">) { return !!names[event.name]; }
 export function historyEventLabel(event: Pick<RuntimeHistoryEvent, "name">) { return names[event.name] ?? (humanizeTypeName(event.name) || event.name); }
+export function historyEventExplanation(event: Pick<RuntimeHistoryEvent, "name">) {
+  switch (event.name) {
+    case "ActivityContinuationReturned": return "The continuation returned a result. Its committed completion, further waiting or fault is recorded separately.";
+    case "BookmarkConsumed": return "The handle was consumed at this committed transition. Continuation and its outcome are separate recorded facts.";
+    case "ChildWorkflowDispatchRequested": return "A child-start responsibility was committed. Child admission, execution and outcome are separate recorded facts.";
+    case "StimulusPublicationCommitted": return "The publication responsibility was committed. Routing, recipient admission and execution are separate recorded facts.";
+    case "ChildWorkflowSettled": return "The child run reached a committed terminal outcome. Parent continuation and its result are recorded separately.";
+    case "ChildStartAttemptObserved": return "The child-start handler was invoked at the source. This observation does not establish that a child run started or executed.";
+    case "ChildStartDispositionObserved": return "The source recorded the child-start attempt's disposition. Inspect its reason and the related run's history for actual execution.";
+    case "StimulusRoutingAttemptObserved": return "The source routing handler was invoked. This observation does not establish recipient admission or execution.";
+    case "StimulusRoutingDispositionObserved": return "The source recorded a routing attempt's disposition. Recipient execution and continuation outcomes require their own recorded facts.";
+    case "IncidentResolutionBatchApplied": return "Incident strategy decisions were applied. This event alone does not mean every incident was resolved.";
+    case "IncidentStrategyEvaluated": return "An incident strategy decision was recorded. The incident's status and any separate resolution event show whether it was resolved.";
+    case "IncidentProjectionReconciled": return "The incident's recorded projection was reconciled. This does not by itself resolve the incident.";
+    case "IncidentDecisionApplied": return "An incident decision was applied. The incident's status and separate lifecycle events show whether it was resolved.";
+    case "StimulusPublished": case "ChildWorkflowDispatched": case "DeliveryDispatched": case "TimerDispatched":
+      return "A source dispatch or publication does not establish recipient execution or its outcome. Inspect its recorded disposition and related continuation facts.";
+    default: return null;
+  }
+}
 export function isHistoryHighlight(event: RuntimeHistoryEvent) { return !["ActivityScheduled", "ActivityAttemptClaimed", "ValueCaptured"].includes(event.name); }
 export function historyAuthorityLabel(value: string) {
   return value === "CommittedTransition" ? "Committed runtime transition" : value === "DeliveryObservation" ? "Recorded source observation"

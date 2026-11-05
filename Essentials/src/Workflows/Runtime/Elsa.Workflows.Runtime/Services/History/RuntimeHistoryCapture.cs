@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Services.Coalescing;
 namespace Elsa.Workflows.Runtime.Services.History;
 
 /// <summary>Captures immutable semantic candidates before coalescing; it never writes a store.</summary>
-internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executions, IActivityExecutionInspectionStore? inspections = null,
+internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executions,
     IEnumerable<RuntimeHistorySourceSupport>? sourceSupport = null, RuntimeHistorySourceAvailability? sourceAvailability = null)
     : IRuntimeCheckpointCommitEnricher, IRuntimeHistoryCaptureSupport
 {
@@ -28,14 +28,17 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     public bool CanCapture(RuntimeHistoryCapturePolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
-        if (!(policy.PolicyId == "runtime-history-v1" && policy.Version == 1 || policy.PolicyId == "runtime-history-v2" && policy.Version == 2)) return false;
+        if (!RuntimeHistorySourceFacts.IsFinalProfile(policy)) return false;
+        if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && sourceAvailability?.Values() != true) return false;
         var available = Kinds.ToHashSet(StringComparer.Ordinal);
         var owners = (sourceSupport ?? []).ToArray();
-        if (policy.Version >= 2) { available.UnionWith(Version2Kinds); available.UnionWith(owners.SelectMany(owner => owner.Kinds).Select(kind => kind.ToString())); }
+        if (policy.Version >= 2) { available.UnionWith(Version2Kinds); available.UnionWith(owners.SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName)); }
         if (policy.SupportedKinds.Intersect(RuntimeHistoryDeliveryFacts.Kinds, StringComparer.Ordinal).Any() && sourceAvailability?.Delivery() == true)
             available.UnionWith(RuntimeHistoryDeliveryFacts.Kinds);
         if (owners.Any(owner => owner.TimerOwner) && policy.SupportedKinds.Intersect(DurableTimerHistoryFacts.Kinds, StringComparer.Ordinal).Any() && sourceAvailability?.Timer() == true)
             available.UnionWith(DurableTimerHistoryFacts.Kinds);
+        foreach (var owner in owners.Where(owner => owner.ObservationKinds.Count > 0 && sourceAvailability?.OwnerObservations(owner) == true))
+            available.UnionWith(owner.ObservationKinds);
         return policy.SupportedKinds.All(available.Contains);
     }
 
@@ -45,19 +48,9 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         if (commit.HistoryBatches is { Count: > 0 } || IsFlush(commit)) return commit;
         var policy = await PolicyAsync(commit, cancellationToken);
         if (policy is null) return commit.HistorySourceFacts is null ? commit : commit with { HistorySourceFacts = null };
+        if (!RuntimeHistorySourceFacts.IsFinalProfile(policy)) throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "This private capture profile is unavailable for future checkpoints.");
         if (sourceSupport is not null && !CanCapture(policy)) throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The current runtime cannot capture the retained history profile.");
-        if (policy.PolicyId == "runtime-history-v1" && policy.Version == 1 && commit.HistorySourceFacts is not null)
-            commit = commit with { HistorySourceFacts = null };
-        var previousEvidence = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var change in commit.StateChanges.ActivityExecutionInspections)
-        {
-            if (change.State.ValueSnapshots.Count == 0) continue;
-            if (inspections is null) throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History capture requires its activity inspection dependency.");
-            var prior = await ReadAsync(() => inspections.FindAsync(commit.WorkflowExecutionId, change.StateId, cancellationToken));
-            previousEvidence[change.StateId] = (prior?.ValueSnapshots ?? []).Where(value => value.EvidenceId is not null)
-                .Select(value => value.EvidenceId!).ToHashSet(StringComparer.Ordinal);
-        }
-        var batch = Build(commit, policy, (activity, value) => !previousEvidence.TryGetValue(activity, out var recorded) || !recorded.Contains(value));
+        var batch = Build(commit, policy);
         return commit with { HistoryBatches = [batch] };
     }
 
@@ -71,11 +64,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         var policy = await PolicyAsync(commit, cancellationToken);
         if (policy is null || batches.Count != 1 || !policy.IsEquivalentTo(batches[0].Policy))
             throw new InvalidOperationException("History must retain the actual admitted execution's capture policy.");
-        // A replay must retain its original delta even after its values became the current inspection projection.
-        // Revalidate each retained link against the actual typed source evidence rather than inventing a new delta.
-        var retainedValues = batches[0].Candidates.Where(candidate => candidate.Event.Name == "ValueCaptured")
-            .Select(candidate => candidate.Event.HistoryEventId).ToHashSet(StringComparer.Ordinal);
-        var expected = Build(commit, policy, (_, value) => retainedValues.Contains(RuntimeHistoryIdentity.CreateId(commit.Checkpoint.CheckpointId, "ValueCaptured", value)));
+        var expected = Build(commit, policy);
         if (!expected.Candidates.Select(RuntimeHistoryIdentity.Compute)
                 .SequenceEqual(batches[0].Candidates.Select(RuntimeHistoryIdentity.Compute), StringComparer.Ordinal))
             throw new InvalidOperationException("The final checkpoint no longer agrees with its semantic history candidates.");
@@ -98,7 +87,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
 
     private static bool IsFlush(RuntimeCheckpointCommit commit) => commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
 
-    private static RuntimeHistoryBatch Build(RuntimeCheckpointCommit commit, RuntimeHistoryCapturePolicy policy, Func<string, string, bool> includeValue)
+    private static RuntimeHistoryBatch Build(RuntimeCheckpointCommit commit, RuntimeHistoryCapturePolicy policy)
     {
         var result = new List<RuntimeHistoryCandidate>();
         var checkpoint = commit.Checkpoint;
@@ -110,8 +99,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         var selectedActivity = Read(RuntimeMetadataKeys.ActivityExecutionId);
         var cause = checkpoint.HistoryCausation ?? new RuntimeHistoryCausation(CommandId: Read(RuntimeMetadataKeys.CommandId), SchedulerWorkItemId: Read(RuntimeMetadataKeys.SchedulerWorkItemId));
 
-        var orderedContinuation = policy.Version >= 2 && (commit.HistorySourceFacts ?? []).Any(fact => fact.Kind is
-            RuntimeHistorySourceFactKind.ActivityContinuationStarted or RuntimeHistorySourceFactKind.ActivityContinuationReturned);
+        var orderedContinuation = RuntimeHistorySourceFacts.IsFinalProfile(policy);
         if (orderedContinuation)
         {
             EmitValues(false);
@@ -193,13 +181,10 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 }
         }
 
-        foreach (var change in commit.StateChanges.Incidents.OrderBy(change => change.StateId, StringComparer.Ordinal))
-        {
-            activities.TryGetValue(change.State.ActivityExecutionId ?? "", out var activity);
-            Add(change.State.ResolvedAt is null ? "IncidentRecorded" : "IncidentResolved", RuntimeHistoryEventCategory.IncidentLifecycle,
-                change.StateId, activity, incidentId: change.StateId, owner: change.State.ActivityExecutionId,
-                node: change.State.ExecutableNodeId);
-        }
+        foreach (var change in commit.StateChanges.Incidents)
+            if (!(commit.HistorySourceFacts ?? []).Any(fact => fact.IncidentId == change.StateId && IsIncidentFact(fact.Kind)))
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The incident owner did not supply an explicit lifecycle or decision contribution.");
+        EmitFacts(null, incidentPhase: true);
         foreach (var change in commit.StateChanges.WorkflowDispatches.OrderBy(change => change.StateId, StringComparer.Ordinal))
             Add("WorkflowDispatchChanged", RuntimeHistoryEventCategory.SchedulerLifecycle, change.StateId,
                 metadata: new Dictionary<string, string> { ["history.status"] = change.State.Status.ToString() });
@@ -231,12 +216,26 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
 
         static bool IsBeforeOutput(RuntimeHistorySourceFact fact) => fact.Kind is
             RuntimeHistorySourceFactKind.ActivityContinuationStarted or RuntimeHistorySourceFactKind.ActivityContinuationReturned;
+        static bool IsIncidentFact(RuntimeHistorySourceFactKind kind) => kind is RuntimeHistorySourceFactKind.IncidentCreated or
+            RuntimeHistorySourceFactKind.IncidentResolved or RuntimeHistorySourceFactKind.IncidentStrategyEvaluated or RuntimeHistorySourceFactKind.IncidentProjectionReconciled or
+            RuntimeHistorySourceFactKind.IncidentSuppressed or RuntimeHistorySourceFactKind.IncidentDecisionApplied;
         void EmitValues(bool? outputsOnly)
         {
         foreach (var change in commit.StateChanges.ActivityExecutionInspections.OrderBy(change => change.StateId, StringComparer.Ordinal))
         {
             activities.TryGetValue(change.StateId, out var activity);
-            foreach (var value in change.State.ValueSnapshots.Where(value => !string.IsNullOrWhiteSpace(value.EvidenceId) && includeValue(change.StateId, value.EvidenceId!) && (outputsOnly is null || (value.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput) == outputsOnly)).OrderBy(value => policy.Version >= 2 ? value.Sequence ?? long.MaxValue : 0).ThenBy(value => value.EvidenceId, StringComparer.Ordinal))
+            var projection = change.State;
+            var contribution = projection.CheckpointValueCapture;
+            if (projection.WorkflowExecutionId != commit.WorkflowExecutionId || projection.ActivityExecutionId != change.StateId)
+                throw new InvalidOperationException("Inspection history must retain its exact typed owner.");
+            if (contribution is null && projection.ValueSnapshots.Count == 0) continue;
+            if (contribution is null || contribution.CheckpointId != checkpoint.CheckpointId || projection.LastCheckpointId != checkpoint.CheckpointId ||
+                contribution.SchedulerWorkItemId is { } actualWork && actualWork != Read(RuntimeMetadataKeys.SchedulerWorkItemId) && actualWork != checkpoint.HistoryCausation?.SchedulerWorkItemId)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The inspection owner did not supply its exact checkpoint value contribution.");
+            var contributed = contribution.EvidenceIds.Select(id =>
+                projection.ValueSnapshots.SingleOrDefault(value => value.EvidenceId == id)
+                ?? throw new InvalidOperationException("A checkpoint value contribution references unavailable exact evidence.")).ToArray();
+            foreach (var value in contributed.Where(value => outputsOnly is null || (value.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput) == outputsOnly).OrderBy(value => value.Sequence ?? long.MaxValue).ThenBy(value => value.EvidenceId, StringComparer.Ordinal))
             {
                 var metadata = new Dictionary<string, string> { ["history.valueEvidenceIds"] = JsonSerializer.Serialize(new[] { value.EvidenceId }) };
                 if (policy.Version >= 2)
@@ -249,26 +248,42 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             }
         }
         }
-        void EmitFacts(bool? beforeOutput)
+        void EmitFacts(bool? beforeOutput, bool incidentPhase = false)
         {
-        foreach (var fact in (commit.HistorySourceFacts ?? []).Where(fact => beforeOutput is null || IsBeforeOutput(fact) == beforeOutput))
+        foreach (var fact in (commit.HistorySourceFacts ?? []).Where(fact => IsIncidentFact(fact.Kind) == incidentPhase &&
+                     (beforeOutput is null || IsBeforeOutput(fact) == beforeOutput)))
         {
             activities.TryGetValue(fact.ActivityExecutionId ?? "", out var activity);
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (fact.RelatedWorkflowExecutionId is { } relatedRun) metadata["history.childWorkflowId"] = relatedRun;
+            if (fact.RelatedWorkflowExecutionId is { } relatedRun) metadata["history.relatedWorkflowExecutionId"] = relatedRun;
             if (fact.RelatedActivityExecutionId is { } relatedActivity) metadata["history.relatedActivityExecutionId"] = relatedActivity;
             if (fact.TimerId is { } timer) metadata["history.timerId"] = timer;
             if (fact.CompensationEntryId is { } entry) metadata["history.compensationEntryId"] = entry;
             if (fact.ReasonCode is { } reason) metadata["history.reasonCode"] = reason;
             if (fact.OutcomeNames.Count > 0) metadata["history.outcomeNames"] = JsonSerializer.Serialize(fact.OutcomeNames);
+            if (IsIncidentFact(fact.Kind))
+            {
+                var incident = commit.StateChanges.Incidents.SingleOrDefault(change => change.StateId == fact.IncidentId)?.State;
+                if (fact.SubjectId != fact.IncidentId || incident is null && fact.Kind != RuntimeHistorySourceFactKind.IncidentProjectionReconciled || incident is not null &&
+                    (incident.WorkflowExecutionId != commit.WorkflowExecutionId || incident.ActivityExecutionId != fact.ActivityExecutionId ||
+                     fact.Kind == RuntimeHistorySourceFactKind.IncidentCreated && fact.OccurredAt != incident.CreatedAt ||
+                     fact.Kind == RuntimeHistorySourceFactKind.IncidentResolved && (incident.Status != IncidentStatus.Resolved || incident.ResolvedAt is null || fact.OccurredAt != incident.ResolvedAt) ||
+                     fact.Kind == RuntimeHistorySourceFactKind.IncidentSuppressed && (incident.Status != IncidentStatus.Suppressed || incident.ResolvedAt is null || fact.OccurredAt != incident.ResolvedAt) ||
+                     (fact.Kind is RuntimeHistorySourceFactKind.IncidentStrategyEvaluated or RuntimeHistorySourceFactKind.IncidentDecisionApplied) && (incident.ResolutionOutcome is null ||
+                         fact.OccurredAt != incident.ResolutionOutcome.AppliedAt || fact.ReasonCode != incident.ResolutionOutcome.ActionKind)))
+                    throw new InvalidOperationException("Incident source facts disagree with their actual typed lifecycle or decision.");
+                if (incident is not null) metadata["history.status"] = incident.Status.ToString();
+            }
             var category = fact.Kind switch
             {
                 RuntimeHistorySourceFactKind.ActivityContinuationStarted or RuntimeHistorySourceFactKind.ActivityContinuationSuspended or
                     RuntimeHistorySourceFactKind.ActivityContinuationCompleted or RuntimeHistorySourceFactKind.ActivityContinuationFaulted or
                     RuntimeHistorySourceFactKind.ActivityContinuationCancelled or RuntimeHistorySourceFactKind.ActivityContinuationReturned or RuntimeHistorySourceFactKind.ActivityRetryScheduled => RuntimeHistoryEventCategory.ActivityLifecycle,
-                RuntimeHistorySourceFactKind.ChildWorkflowDispatched or RuntimeHistorySourceFactKind.ChildWorkflowSettled or
-                    RuntimeHistorySourceFactKind.StimulusPublished or RuntimeHistorySourceFactKind.TimerCancellationRequested => RuntimeHistoryEventCategory.SchedulerLifecycle,
-                RuntimeHistorySourceFactKind.IncidentResolutionApplied => RuntimeHistoryEventCategory.IncidentLifecycle,
+                RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested or RuntimeHistorySourceFactKind.ChildWorkflowSettled or
+                    RuntimeHistorySourceFactKind.StimulusPublicationCommitted or RuntimeHistorySourceFactKind.TimerCancellationRequested => RuntimeHistoryEventCategory.SchedulerLifecycle,
+                RuntimeHistorySourceFactKind.IncidentResolutionApplied or RuntimeHistorySourceFactKind.IncidentCreated or
+                    RuntimeHistorySourceFactKind.IncidentResolved or RuntimeHistorySourceFactKind.IncidentStrategyEvaluated or RuntimeHistorySourceFactKind.IncidentProjectionReconciled or
+                    RuntimeHistorySourceFactKind.IncidentSuppressed or RuntimeHistorySourceFactKind.IncidentDecisionApplied => RuntimeHistoryEventCategory.IncidentLifecycle,
                 RuntimeHistorySourceFactKind.ChildControlAccepted or RuntimeHistorySourceFactKind.ChildControlApplied or RuntimeHistorySourceFactKind.RecoveryRequested or
                     RuntimeHistorySourceFactKind.ControlApplied or RuntimeHistorySourceFactKind.AlterationApplied or
                     RuntimeHistorySourceFactKind.CompensationRegistered or RuntimeHistorySourceFactKind.CompensationStarted or
@@ -277,7 +292,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                     RuntimeHistorySourceFactKind.CompensationResolved or RuntimeHistorySourceFactKind.CompensationCompleted => RuntimeHistoryEventCategory.OperationalLifecycle,
                 _ => throw new InvalidOperationException("History has no semantic catalogue entry for this source fact.")
             };
-            Add(fact.Kind.ToString(), category, fact.SubjectId, activity, metadata: metadata, owner: fact.ActivityExecutionId,
+            Add(RuntimeHistorySourceFacts.EventName(fact.Kind), category, fact.SubjectId, activity, metadata: metadata, owner: fact.ActivityExecutionId,
                 incidentId: fact.IncidentId, occurredAt: fact.OccurredAt, sourceAttempt: fact.AttemptId, sourceCause: fact.Causation);
         }
         }

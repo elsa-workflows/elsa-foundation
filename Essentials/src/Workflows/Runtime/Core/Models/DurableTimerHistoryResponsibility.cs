@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Constants;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>At most the original schedule and terminal owner facts, retained on their existing timer source until acknowledged.</summary>
@@ -20,6 +23,48 @@ public sealed record DurableTimerHistoryResponsibility
     public RuntimeHistoryCapturePolicy Policy { get; }
     public IReadOnlyList<RuntimeHistoryEvent> PendingEvents { get; }
     public bool Retired { get; }
+    private readonly DurableTimerNoRecordCompletion? _noRecordCompletion;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DurableTimerNoRecordCompletion? NoRecordCompletion
+    {
+        get => _noRecordCompletion;
+        init
+        {
+            if (value is not null && (!Retired || PendingEvents.Count != 0))
+                throw new ArgumentException("A no-record receipt requires a retired timer without remaining event responsibility.");
+            _noRecordCompletion = value;
+        }
+    }
+}
+
+/// <summary>Compact timer-owner idempotency proof; it carries no retained event content or user data.</summary>
+public sealed record DurableTimerNoRecordCompletion
+{
+    [JsonConstructor]
+    public DurableTimerNoRecordCompletion(string checkpointId, DateTimeOffset completedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId);
+        if (checkpointId.Length > 1024) throw new ArgumentException("Completion identity exceeds its bound.", nameof(checkpointId));
+        CheckpointId = checkpointId; CompletedAt = completedAt;
+    }
+    public string CheckpointId { get; }
+    public DateTimeOffset CompletedAt { get; }
+}
+
+/// <summary>Shared shape check. The owning provider separately fences and checks native/head absence atomically.</summary>
+public static class RuntimeHistoryNoRecordCompletion
+{
+    public static WorkflowExecutionState Validate(RuntimeCheckpointCommit completion)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        if (completion.ExpectedFence is null || completion.RetainSchedulerWork || completion.Checkpoint.Name != RuntimeCheckpointNames.WorkflowCompleted ||
+            completion.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert, State.Status: WorkflowExecutionStatus.Completed } workflow ||
+            workflow.State.WorkflowExecutionId != completion.WorkflowExecutionId || workflow.State.CompletedAt is null ||
+            workflow.State.HistoryCapturePolicy is null ||
+            workflow.State.SystemMetadata.GetValueOrDefault(RuntimeMetadataKeys.PersistenceMode) != nameof(PersistenceMode.Ephemeral))
+            throw new InvalidOperationException("Source discharge requires the actual fenced completed Ephemeral workflow decision.");
+        return workflow.State;
+    }
 }
 
 public sealed record DurableTimerHistoryQuery : RuntimeStorePageRequest

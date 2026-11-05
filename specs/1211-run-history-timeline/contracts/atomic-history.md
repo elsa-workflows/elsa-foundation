@@ -32,7 +32,7 @@ The head retains pinned Required capture policy: a new checkpoint missing its re
 
 Common versioned events include workflow/activity lifecycle, bookmark creation/selected consumption/sibling retirement/stale cleanup/removal, incidents and resolution, dispatch/child and timer relationships, actual delivery/admission/disposition, retry/recovery/control/alteration, compensation and metadata-only value changes supported by their owners.
 
-An event is derived from actual typed mutations/semantic source data. The catalog declares coverage; an unavailable owner/source is not replaced by guessed generic events. Use known actor/source provenance only. Value evidence is referenced under existing policy, not copied wholesale.
+For the final admitted profile3, value capture uses a raw immutable checkpoint/work-bound delta and actual owner phase/evaluation provenance; it never queries a later inspection projection to classify an earlier value. Incident creation/evaluation/resolution also requires actual closed owner contributions, not arbitrary upsert inference. An event is derived from actual typed mutations/semantic source data. The catalog declares coverage; an unavailable owner/source is not replaced by guessed generic events. Use known actor/source provenance only. Value evidence is referenced under existing policy, not copied wholesale.
 
 InitialTriggerClaim named ActivityAttemptClaimed is selected consumption plus sibling retirement. RedeliveryClaim is an attempt without another consumption. BookmarkConsumed for terminal cleanup does not imply a new continuation. Passive expiry emits no event. Tests must exercise all four distinctions.
 

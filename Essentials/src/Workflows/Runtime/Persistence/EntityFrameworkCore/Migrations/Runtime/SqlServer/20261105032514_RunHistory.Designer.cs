@@ -2,15 +2,16 @@
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.MySql
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.SqlServer
 {
-    [DbContext(typeof(RuntimeMySqlDbContext))]
-    [Migration("20261105020450_RunHistory")]
+    [DbContext(typeof(RuntimeSqlServerDbContext))]
+    [Migration("20261105032514_RunHistory")]
     partial class RunHistory
     {
         /// <inheritdoc />
@@ -19,7 +20,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            // SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.
 
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
@@ -29,12 +32,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("Id");
 
@@ -47,35 +50,35 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -84,7 +87,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("Family");
 
@@ -97,50 +100,50 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("varchar(655)");
+                        .HasColumnType("nvarchar(655)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ExecutionScopeId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ExecutionScopeIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("ExecutionSequence")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsScopeRoot")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("ParentActivityExecutionId")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ParentActivityExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -149,26 +152,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -176,8 +179,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionSequence");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionScopeIdHash", "IsScopeRoot", "ExecutionSequence")
-                        .HasDatabaseName("IX_elsa_runtime_activity_execution_hierarchy_ScopeKeyHash_Work~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionScopeIdHash", "IsScopeRoot", "ExecutionSequence");
 
                     b.ToTable("elsa_runtime_activity_execution_hierarchy", (string)null);
                 });
@@ -186,34 +188,34 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("varchar(655)");
+                        .HasColumnType("nvarchar(655)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ExecutionScopeId")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ExecutionScopeIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -222,21 +224,21 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<long>("SummaryExecutionSequence")
                         .HasColumnType("bigint");
@@ -250,12 +252,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -270,45 +272,45 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("varchar(655)");
+                        .HasColumnType("nvarchar(655)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ExecutionScopeId")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ExecutionScopeIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("ExecutionSequence")
                         .HasColumnType("bigint");
 
                     b.Property<string>("ParentActivityExecutionId")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ParentActivityExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -323,31 +325,31 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -355,8 +357,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_activity_execution_state_ScopeKeyHash_Workflow~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash");
 
                     b.ToTable("elsa_runtime_activity_execution_state", (string)null);
                 });
@@ -365,27 +366,27 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("ClaimableAtUtcTicks")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("ClaimableIsEligible")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("RecordedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -397,17 +398,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -418,22 +419,22 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("WorkId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("WorkIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -446,8 +447,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "ClaimableIsEligible", "ClaimableAtUtcTicks", "RecordedAtUtcTicks");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "Status", "UpdatedAtUtcTicks")
-                        .HasDatabaseName("IX_elsa_runtime_background_activity_work_ScopeKeyHash_Workflow~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "Status", "UpdatedAtUtcTicks");
 
                     b.ToTable("elsa_runtime_background_activity_work", (string)null);
                 });
@@ -456,31 +456,31 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("BookmarkId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("BookmarkIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("BookmarkIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(645)
-                        .HasColumnType("varchar(645)");
+                        .HasColumnType("nvarchar(645)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -491,7 +491,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("ExecutableNodeId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<int?>("ExpiresAtOffsetMinutes")
                         .HasColumnType("int");
@@ -501,15 +501,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("MetadataJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PayloadJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ResumeTargetId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -518,51 +518,51 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("StimulusLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("StimulusTypeLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(645)
-                        .HasColumnType("varchar(645)");
+                        .HasColumnType("nvarchar(645)");
 
                     b.HasKey("Id");
 
@@ -574,8 +574,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks", "StimulusLookupKey", "StimulusHash")
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks")
                         .HasDatabaseName("IX_elsa_runtime_bookmark_state_route_convergence");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks").HasAnnotation("SqlServer:Include", new[] { "StimulusLookupKey", "StimulusHash" });
 
                     b.ToTable("elsa_runtime_bookmark_state", (string)null);
                 });
@@ -584,16 +586,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ClaimOrderKey")
                         .IsRequired()
                         .HasMaxLength(84)
-                        .HasColumnType("varchar(84)");
+                        .HasColumnType("nvarchar(84)");
 
                     b.Property<string>("ClaimOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("ClaimToken")
                         .HasColumnType("bigint");
@@ -606,7 +608,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -624,10 +626,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("int");
 
                     b.Property<bool>("HistoryPending")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<bool>("HistoryRetired")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<long>("HistoryRevision")
                         .IsConcurrencyToken()
@@ -640,42 +642,42 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TimerId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("TimerIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TimerIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<int?>("VisibleAfterOffsetMinutes")
                         .HasColumnType("int");
@@ -686,17 +688,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -709,20 +711,19 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "HistoryRetired", "ClaimOrderKey")
                         .HasDatabaseName("IX_runtime_timer_live_claim");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending")
-                        .HasDatabaseName("IX_runtime_timer_run_history_pending");
-
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_durable_timer_ScopeKeyHash_WorkflowExecutionId~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "HistoryPending", "WorkflowExecutionIdHash", "TimerIdHash")
                         .HasDatabaseName("IX_runtime_timer_history_pending");
 
                     b.HasIndex("ScopeKeyHash", "HistoryRetired", "DueTimeUtcTicks", "TimerIdOrderKey")
                         .HasDatabaseName("IX_runtime_timer_live_due");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending", "HistoryRetired", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_run_history_pending");
 
                     b.ToTable("elsa_runtime_durable_timer", (string)null);
                 });
@@ -731,26 +732,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DurableValueId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("DurableValueIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DurableValueIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -759,32 +760,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -802,17 +803,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -821,41 +822,41 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TemplateHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("TemplateHashHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TemplateId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("TemplateIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TemplateIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("varchar(655)");
+                        .HasColumnType("nvarchar(655)");
 
                     b.HasKey("Id");
 
@@ -864,8 +865,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "TemplateHashHash", "TemplateHash");
 
                     b.HasIndex("ScopeKeyHash", "TemplateIdHash", "TemplateId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_elsa_runtime_executable_activity_template_ScopeKeyHash_Temp~1");
+                        .IsUnique();
 
                     b.ToTable("elsa_runtime_executable_activity_template", (string)null);
                 });
@@ -874,17 +874,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -893,31 +893,31 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TemplateHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("TemplateHashHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TemplateId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.HasKey("Id");
 
@@ -933,18 +933,18 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("HasOperationalOwner")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("HeartbeatOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<long?>("HeartbeatRecordedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -963,22 +963,22 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("LeaseOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("OperationalStateId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("OperationalStateIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("OperationalStateIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -987,32 +987,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -1021,8 +1021,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "OperationalStateIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "OperationalStateIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_execution_liveness_state_ScopeKeyHash_Workflow~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "OperationalStateIdHash");
 
                     b.HasIndex("ScopeKeyHash", "HeartbeatRecordedAtUtcTicks", "WorkflowExecutionIdOrderKey", "OperationalStateIdHash");
 
@@ -1039,11 +1038,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("CreatedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -1051,17 +1050,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("IncidentId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("IncidentIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("IncidentIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<long?>("ResolvedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -1073,17 +1072,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Severity")
                         .HasColumnType("int");
@@ -1094,17 +1093,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -1113,8 +1112,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "IncidentIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "IncidentIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_incident_state_ScopeKeyHash_WorkflowExecutionI~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "IncidentIdHash");
 
                     b.HasIndex("ScopeKeyHash", "Status", "CreatedAtUtcTicks", "WorkflowExecutionIdOrderKey", "IncidentIdHash");
 
@@ -1125,38 +1123,38 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ActivationId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActivationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ClaimOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<long>("ClaimToken")
                         .HasColumnType("bigint");
@@ -1169,7 +1167,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -1179,17 +1177,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("ExecutableNodeId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Expression")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("FailureCount")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<int>("Kind")
                         .HasColumnType("int");
@@ -1207,43 +1205,43 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("ScheduleId")
                         .IsRequired()
                         .HasMaxLength(4104)
-                        .HasColumnType("varchar(4104)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScheduleIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ScheduleIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(6160)
-                        .HasColumnType("varchar(6160)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SlotId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("VisibleAfterOffsetMinutes")
                         .HasColumnType("int");
@@ -1271,46 +1269,46 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ActivationId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ActivationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ArtifactId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ArtifactIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("ProjectionFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -1321,26 +1319,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("ScheduleFingerprintsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScheduleIdsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1349,8 +1347,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "ActivationId")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ActivationIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_recurring_schedule_projection_state_ScopeKeyHa~1");
+                    b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ActivationIdHash");
 
                     b.ToTable("elsa_runtime_recurring_schedule_projection_state", (string)null);
                 });
@@ -1359,37 +1356,37 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("CommitId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("varchar(1200)");
+                        .HasColumnType("nvarchar(1200)");
 
                     b.Property<string>("CommitIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ConsumedSchedulerWorkItemIdsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Fingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("OccurredAtUtcTicks")
                         .HasColumnType("bigint");
 
                     b.Property<string>("PendingPostCommitWorkIdsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -1398,32 +1395,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -1441,23 +1438,23 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ParentActivityExecutionId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -1466,25 +1463,25 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1501,22 +1498,22 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("ActiveCount")
                         .HasColumnType("bigint");
 
                     b.Property<string>("ActivityExecutionId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -1525,28 +1522,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("TotalCount")
                         .HasColumnType("bigint");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1563,29 +1560,29 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("BookmarkId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("BookmarkIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("FirstRecordedSequence")
                         .HasColumnType("bigint");
@@ -1597,28 +1594,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1642,54 +1639,54 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivityExecutionId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("BookmarkId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("BookmarkIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("CandidateFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Category")
                         .HasColumnType("int");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HistoryEventId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HistoryEventIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("IsPurged")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NameHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -1698,28 +1695,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1752,11 +1749,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("FirstSequence")
                         .HasColumnType("bigint");
@@ -1774,25 +1771,25 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1809,31 +1806,31 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<int>("Lifecycle")
                         .HasColumnType("int");
@@ -1845,17 +1842,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1875,31 +1872,31 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("InputId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("InputIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -1908,17 +1905,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -1934,17 +1931,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(320)
-                        .HasColumnType("varchar(320)");
+                        .HasColumnType("nvarchar(320)");
 
                     b.Property<long>("ClaimableAtUtcTicks")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("ClaimableIsEligible")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long?>("DeliverableAtUtcTicks")
                         .HasColumnType("bigint");
@@ -1952,25 +1949,25 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("IntentKind")
                         .IsRequired()
                         .HasMaxLength(230)
-                        .HasColumnType("varchar(230)");
+                        .HasColumnType("nvarchar(230)");
 
                     b.Property<string>("IntentKindHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("OutboxItemId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("OutboxItemIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("OutboxItemIdOrderKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("RecordedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -1982,34 +1979,34 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("varchar(196)");
+                        .HasColumnType("nvarchar(196)");
 
                     b.HasKey("Id");
 
@@ -2032,16 +2029,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Collection")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2050,32 +2047,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -2084,8 +2081,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkflowExecutionId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_state_ScopeKeyHash_WorkflowExecution~1");
+                        .IsUnique();
 
                     b.ToTable("elsa_runtime_scheduler_state", (string)null);
                 });
@@ -2094,10 +2090,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ClaimOwnerId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("ClaimToken")
                         .HasColumnType("bigint");
@@ -2110,7 +2106,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("EnqueuedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -2131,17 +2127,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("VisibleAfterOffsetMinutes")
                         .HasColumnType("int");
@@ -2151,32 +2147,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("WorkItemId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkItemIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkOrderKey")
                         .IsRequired()
                         .HasMaxLength(170)
-                        .HasColumnType("varchar(170)");
+                        .HasColumnType("nvarchar(170)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -2185,14 +2181,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkItemIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_work_item_ScopeKeyHash_WorkflowExecu~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkOrderKey");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "WorkflowExecutionIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_work_item_ScopeKeyHash_WorkflowExecu~2");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "WorkflowExecutionIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "VisibleAfterUtcTicks", "WorkOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_work_item_ScopeKeyHash_WorkflowExecu~3");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "VisibleAfterUtcTicks", "WorkOrderKey");
 
                     b.ToTable("elsa_runtime_scheduler_work_item", (string)null);
                 });
@@ -2201,45 +2194,45 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("AssigneeHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("AssigneeKey")
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("ClaimantHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ClaimantKey")
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ExecutionHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ExecutionKey")
                         .IsRequired()
                         .HasMaxLength(4096)
-                        .HasColumnType("varchar(4096)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("GroupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("GroupKey")
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2248,22 +2241,22 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("ScopeHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("SearchTitle")
                         .IsRequired()
                         .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -2271,17 +2264,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("TaskId")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TenantHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TenantKey")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.HasKey("Id");
 
@@ -2305,46 +2298,46 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FormKey")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("ScopeHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("TenantHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TenantKey")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("VersionKey")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.HasKey("Id");
 
@@ -2359,28 +2352,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ActiveActivationId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActiveActivationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActiveActivationIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ActiveActivationUniquenessKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2389,55 +2382,55 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SlotId")
                         .IsRequired()
                         .HasMaxLength(752)
-                        .HasColumnType("varchar(752)");
+                        .HasColumnType("nvarchar(752)");
 
                     b.Property<string>("SlotIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SlotIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(1128)
-                        .HasColumnType("varchar(1128)");
+                        .HasColumnType("nvarchar(1128)");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("SlotNameHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SlotNameOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("SourceId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SourceKind")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("UpdatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -2448,17 +2441,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowDefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowDefinitionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -2479,50 +2472,50 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<long>("CaptureOrdinal")
                         .HasColumnType("bigint");
 
                     b.Property<string>("CheckpointCommitId")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("CheckpointCommitIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long?>("ClaimableAtUtcTicks")
                         .HasColumnType("bigint");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("JobId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("JobIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("JobIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("varchar(536)");
+                        .HasColumnType("nvarchar(536)");
 
                     b.Property<string>("PlanId")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("PlanIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2531,17 +2524,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -2549,27 +2542,27 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("TenantPartition")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("TenantPartitionHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("varchar(536)");
+                        .HasColumnType("nvarchar(536)");
 
                     b.HasKey("Id");
 
@@ -2582,8 +2575,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "CaptureOrdinal", "JobIdOrderKey");
 
-                    b.HasIndex("ScopeKeyHash", "PlanIdHash", "Status", "ClaimableAtUtcTicks", "JobIdOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_alteration_job_ScopeKeyHash_PlanIdHas~1");
+                    b.HasIndex("ScopeKeyHash", "PlanIdHash", "Status", "ClaimableAtUtcTicks", "JobIdOrderKey");
 
                     b.ToTable("elsa_runtime_workflow_alteration_job", (string)null);
                 });
@@ -2592,13 +2584,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ActiveOrderKey")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("varchar(536)");
+                        .HasColumnType("nvarchar(536)");
 
                     b.Property<long?>("CleanupCompletedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -2607,14 +2599,14 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("bigint");
 
                     b.Property<string>("CleanupSafeFailureJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("CleanupTerminalStatus")
                         .HasColumnType("int");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("CreatedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -2622,17 +2614,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("PlanId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("PlanIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("PlanIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("varchar(536)");
+                        .HasColumnType("nvarchar(536)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2641,17 +2633,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -2659,12 +2651,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("TenantIdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("TenantIdempotencyKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -2685,87 +2677,87 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ChildArtifactId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ChildArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ChildArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("varchar(196)");
+                        .HasColumnType("nvarchar(196)");
 
                     b.Property<string>("ChildWorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ChildWorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ChildWorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("varchar(196)");
+                        .HasColumnType("nvarchar(196)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("CreatedAtUtcTicks")
                         .HasColumnType("bigint");
 
                     b.Property<string>("DispatchId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DispatchIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DispatchIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(1800)
-                        .HasColumnType("varchar(1800)");
+                        .HasColumnType("nvarchar(1800)");
 
                     b.Property<int>("Mode")
                         .HasColumnType("int");
 
                     b.Property<string>("ParentActivityExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ParentActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ParentActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("varchar(196)");
+                        .HasColumnType("nvarchar(196)");
 
                     b.Property<string>("ParentWorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ParentWorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ParentWorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("varchar(196)");
+                        .HasColumnType("nvarchar(196)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2774,38 +2766,38 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TestScopeId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TestScopeIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TestScopeIdOrderKey")
                         .HasMaxLength(196)
-                        .HasColumnType("varchar(196)");
+                        .HasColumnType("nvarchar(196)");
 
                     b.Property<long>("UpdatedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -2832,27 +2824,27 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2861,16 +2853,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -2886,56 +2878,56 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("varchar(655)");
+                        .HasColumnType("nvarchar(655)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("IsModelMaterial")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
+                        .HasColumnType("bit")
                         .HasDefaultValue(false);
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -2951,17 +2943,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("ExpiresAtUtcTicks")
                         .HasColumnType("bigint");
@@ -2969,11 +2961,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("IncarnationId")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("LeaseId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -2982,21 +2974,21 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Token")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -3011,41 +3003,41 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("DefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("DefinitionVersionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long?>("ExpiresAtUtcTicks")
                         .HasColumnType("bigint");
@@ -3054,10 +3046,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("IsRetired")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -3066,40 +3058,40 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ScopeKeyOrderKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SourceReferenceId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("SourceReferenceIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SourceReferenceIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("varchar(655)");
+                        .HasColumnType("nvarchar(655)");
 
                     b.HasKey("Id");
 
@@ -3107,18 +3099,14 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ArtifactId");
 
-                    b.HasIndex("ScopeKeyHash", "DefinitionIdHash", "DefinitionId")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKeyH~1");
+                    b.HasIndex("ScopeKeyHash", "DefinitionIdHash", "DefinitionId");
 
-                    b.HasIndex("ScopeKeyHash", "DefinitionVersionIdHash", "DefinitionVersionId")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKeyH~2");
+                    b.HasIndex("ScopeKeyHash", "DefinitionVersionIdHash", "DefinitionVersionId");
 
-                    b.HasIndex("ScopeKeyHash", "IsRetired", "ExpiresAtUtcTicks")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKeyH~3");
+                    b.HasIndex("ScopeKeyHash", "IsRetired", "ExpiresAtUtcTicks");
 
                     b.HasIndex("ScopeKeyHash", "SourceReferenceIdHash", "SourceReferenceId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKeyH~4");
+                        .IsUnique();
 
                     b.ToTable("elsa_runtime_workflow_executable_source_reference", (string)null);
                 });
@@ -3127,48 +3115,48 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("AuthorityPartitionKey")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("CorrelationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("DefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -3180,17 +3168,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("SortTimestampUtcTicks")
                         .HasColumnType("bigint");
@@ -3200,26 +3188,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("TenantIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -3243,26 +3231,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ControlPlaneStateId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ControlPlaneStateIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ControlPlaneStateIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -3271,29 +3259,29 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -3302,8 +3290,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_hold_state_ScopeKeyHash_ControlPlaneS~1");
+                    b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkflowExecutionIdOrderKey");
 
@@ -3314,26 +3301,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("DefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DefinitionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<long>("IncidentBearingCount")
                         .HasColumnType("bigint");
@@ -3351,17 +3338,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("StartedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -3375,17 +3362,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -3409,11 +3396,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("FirstFailedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -3428,47 +3415,47 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkItemId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("varchar(1200)");
+                        .HasColumnType("nvarchar(1200)");
 
                     b.Property<string>("WorkItemIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkItemIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -3477,8 +3464,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkItemIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstFailedAtUtcTicks", "LastFailedAtUtcTicks", "WorkItemIdOrderKey", "WorkItemIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_poison_ScopeKeyHash_WorkflowExecutio~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstFailedAtUtcTicks", "LastFailedAtUtcTicks", "WorkItemIdOrderKey", "WorkItemIdHash");
 
                     b.ToTable("elsa_runtime_scheduler_poison", (string)null);
                 });
@@ -3487,21 +3473,21 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("AccessScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("AccessScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("ExpiresAtUtcTicks")
                         .HasColumnType("bigint");
@@ -3509,17 +3495,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("Partition")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("PartitionHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("PartitionOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -3528,33 +3514,33 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("varchar(16)");
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("ScopeId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ScopeIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ScopeIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<int>("State")
                         .HasColumnType("int");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(684)
-                        .HasColumnType("varchar(684)");
+                        .HasColumnType("nvarchar(684)");
 
                     b.Property<string>("TenantIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -3572,55 +3558,55 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ActivationId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ActivationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ArtifactHash")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("ArtifactVersion")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<int>("Cardinality")
                         .HasColumnType("int");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CorrelationScope")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -3631,15 +3617,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ExecutableNodeId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -3648,56 +3634,56 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SlotId")
                         .HasMaxLength(344)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("StimulusLookupKey")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasMaxLength(640)
-                        .HasColumnType("varchar(640)");
+                        .HasColumnType("nvarchar(640)");
 
                     b.Property<string>("StimulusTypeLookupKey")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("TriggerBindingId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("TriggerBindingIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TriggerBindingIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.HasKey("Id");
 
@@ -3706,6 +3692,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "TriggerBindingIdHash");
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "TriggerBindingIdHash");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive")
+                        .HasDatabaseName("IX_elsa_runtime_trigger_binding_route_convergence");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive").HasAnnotation("SqlServer:Include", new[] { "StimulusLookupKey", "StimulusHash" });
 
                     b.HasIndex("ScopeKeyHash", "TriggerBindingIdHash", "TriggerBindingId")
                         .IsUnique();
@@ -3721,37 +3712,37 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("varchar(264)");
+                        .HasColumnType("nvarchar(264)");
 
                     b.Property<string>("ActivationId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)");
+                        .HasColumnType("nvarchar(344)");
 
                     b.Property<string>("ActivationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("varchar(516)");
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<int>("BindingCount")
                         .HasColumnType("int");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("ProjectionFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -3760,17 +3751,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 

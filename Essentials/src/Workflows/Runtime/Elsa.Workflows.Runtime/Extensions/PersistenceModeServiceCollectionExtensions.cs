@@ -62,7 +62,8 @@ public static class PersistenceModeServiceCollectionExtensions
 
         // Decorate the durable stores the coalescing session overlays. Each decorator passes through byte-for-byte when
         // no session is active; only an active session (established by the drain scope) redirects to the working set.
-        decorations.Add(services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>());
+        decorations.Add(services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>(
+            (provider, decorator) => decorator.NoRecordTimerSource = () => provider.GetService<IDurableTimerStore>()));
         decorations.Add(services.DecorateWithCoalescing<IWorkflowSchedulerWorkQueue, CoalescingWorkflowSchedulerWorkQueue>());
         decorations.Add(services.DecorateWithCoalescing<IRuntimePostCommitOutboxStore, CoalescingRuntimePostCommitOutboxStore>());
         decorations.Add(services.DecorateWithCoalescing<IPostCommitOutboxLookupStore, CoalescingPostCommitOutboxLookupStore>());
@@ -135,7 +136,8 @@ public static class PersistenceModeServiceCollectionExtensions
     // Captures the currently-registered (durable) implementation of TService as CoalescingInner<TService> and replaces
     // the TService registration with TDecorator. The decorator and the session reach the inner store via
     // CoalescingInner<TService> so resolving TService inside the decorator does not recurse.
-    private static RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration DecorateWithCoalescing<TService, TDecorator>(this IServiceCollection services)
+    private static RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration DecorateWithCoalescing<TService, TDecorator>(this IServiceCollection services,
+        Action<IServiceProvider, TDecorator>? configure = null)
         where TService : class
         where TDecorator : class, TService
     {
@@ -155,7 +157,12 @@ public static class PersistenceModeServiceCollectionExtensions
 
         var wrapperDescriptor = new ServiceDescriptor(
             typeof(TService),
-            serviceProvider => ActivatorUtilities.CreateInstance<TDecorator>(serviceProvider),
+            serviceProvider =>
+            {
+                var decorator = ActivatorUtilities.CreateInstance<TDecorator>(serviceProvider);
+                configure?.Invoke(serviceProvider, decorator);
+                return decorator;
+            },
             descriptor.Lifetime);
         services.Add(wrapperDescriptor);
         return new(descriptor, innerDescriptor, wrapperDescriptor);

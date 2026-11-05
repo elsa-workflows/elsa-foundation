@@ -65,6 +65,8 @@ public sealed class BookmarkResumeDispatchRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedRecipient { get; init; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }

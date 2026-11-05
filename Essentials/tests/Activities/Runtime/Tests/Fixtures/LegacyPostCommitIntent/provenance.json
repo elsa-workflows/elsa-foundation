@@ -1,0 +1,18 @@
+{
+  "oldSourceCommit": "074259b3565e046701acbce69613120d7bed5f64",
+  "oldWorktreeTrackedDiff": [],
+  "command": "dotnet run --project tools/RunHistoryLegacyWitness/RunHistoryLegacyWitness.csproj --no-restore -c Release -- <owned-export> intent",
+  "purpose": "Actual old nonempty unstamped intent ComputeIntent and physically committed normalized native checkpoint marker, not current-serializer goldens",
+  "intentFingerprint": "44c0234baf32015b97f0a8d3296f28e6d63403f8e43f9abe74e491bf0b5d6eda",
+  "nativeFingerprint": "9207521aed77ae32584f9c5dc132c378e29e11eb13ebd7f31b3b57aab3eb1013",
+  "files": {
+    "checkpoint.json": "d89c9ffaf4d7b25a9963414f93a09f596d871ed8d1ca27795b2113868298d1df",
+    "fingerprint.txt": "ba5e2e51298be096f389d3117b57fd08be285364592a1b01a670b37270e107e5",
+    "intent-fingerprint.txt": "0a0fde8f89f322f34bd971ba13cef99161fef89f7e4a85984a0fb655874067f0",
+    "intent.json": "02a03084b2c527f76fa1d3e39b6e7c9d3fd4c125a669c0db31934477538bd062",
+    "marker.json": "d9069d6d91925793a4f74ec6f70a158c2789815e18350da5fe35b388790fab47",
+    "old-binary.json": "a50484928636f7e0a0ac0674d663bca95b0beef15b5c293db5f66ca9d4880994",
+    "old-writer-program.cs.txt": "c672989c75fd775321b8db143469a0873c0f7e6c8dad04d54c4cdd90fd1132dc",
+    "runtime.sqlite.gz": "7ff6013d5310797f132b16ba99079fd647a9d3e491d183f7855f498b68d812b2"
+  }
+}

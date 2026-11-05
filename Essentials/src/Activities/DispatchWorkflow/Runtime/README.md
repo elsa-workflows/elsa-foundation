@@ -26,4 +26,15 @@ The runtime feature registers the default allow start policy. Hosts may replace 
 
 TestRun behavior and distributed two-node delivery remain owned by #682 and #683 respectively.
 
+With Run history enabled, `ChildWorkflowDispatchRequested` records the validated start responsibility in
+the parent's activity checkpoint. `ChildWorkflowSettled` belongs to the child's actual terminal checkpoint,
+including detached children, and links its parent without assigning the parent's activity to the child.
+Each actual child-start handler invocation has separate attempt and disposition observations. Their reasons
+distinguish queue acceptance, an existing child, durable forwarding, retirement and failure; observing one of
+these results does not claim that a child activity executed. The source outbox remains owed until required
+observations are acknowledged. Retrying an observation write keeps its immutable identity and timestamp;
+a later handler invocation is a new observation and reconciles the existing child before acknowledging delivery.
+The parent's ordinary resume receipt carries the independently captured child's terminal source when available.
+Absent capture policies retain the existing intent and checkpoint shapes.
+
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the feature specifications under `specs/096-dispatch-workflow-fire-and-forget/` through `specs/101-dispatch-delivery-recovery/`.

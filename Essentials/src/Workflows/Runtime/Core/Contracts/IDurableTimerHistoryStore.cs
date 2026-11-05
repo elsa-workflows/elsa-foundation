@@ -12,4 +12,8 @@ public interface IDurableTimerHistoryStore : IDurableTimerStore
     ValueTask<RuntimeDurableTimerClaimTransitionResult> CompleteClaimWithHistoryAsync(RuntimeDurableTimerClaim claim,
         RuntimeHistoryObservation observation, CancellationToken cancellationToken = default);
     ValueTask RetireWithHistoryAsync(string workflowExecutionId, string timerId, RuntimeHistoryObservation observation, CancellationToken cancellationToken = default);
+    /// <summary>Discharges a bounded retired-source prefix only after the engine proves successful Ephemeral completion
+    /// without a native record. True permits queue advancement; false leaves that advancement owed.</summary>
+    ValueTask<bool> DischargeUnrecordedCompletionAsync(RuntimeCheckpointCommit completion, int limit = 256, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("This timer owner cannot discharge unrecorded completion responsibility."));
 }

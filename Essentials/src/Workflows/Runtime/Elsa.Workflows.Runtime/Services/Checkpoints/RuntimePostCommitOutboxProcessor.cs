@@ -145,7 +145,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     }
 
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
-        item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
+        item.Intent.HistoryCausation is not null || item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
         _requiredSourceKinds.Contains(item.Intent.Kind) || _intentDispatcher.RequiresDurableSource(item.Intent.Kind);
 
     public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(

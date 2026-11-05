@@ -23,7 +23,7 @@ CAPTURES = {
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }
 HISTORY_JOURNEY = 'durable run timeline across a native task resume and owned process restart'
-CAPTURES[HISTORY_JOURNEY] = ['reference', 'bookmark-waiting', 'after-restart', 'retained-bookmark-consumed', 'resumed-event', 'bookmark-consumed', 'activity-journal', 'no-matches', 'faulted-timeline', 'diagram']
+CAPTURES[HISTORY_JOURNEY] = ['reference', 'bookmark-waiting', 'after-restart', 'retained-bookmark-consumed', 'resumed-event', 'bookmark-consumed', 'activity-journal', 'causal-delivery', 'causal-successors', 'recording-coverage', 'atomic-group', 'activity-data', 'recorded-value', 'no-matches', 'faulted-timeline', 'diagram', 'stale-history', 'reconnected-history']
 JOURNEYS = set(CAPTURES)
 EXPECTED_JOURNEYS = {(project, journey) for project in PROJECTS for journey in JOURNEYS - {HISTORY_JOURNEY}}
 EXPECTED_JOURNEYS |= {(project, HISTORY_JOURNEY) for project in ('desktop-light', 'desktop-dark', 'timeline-320-light', 'timeline-320-dark')}
@@ -228,6 +228,10 @@ def run(output):
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
+            from diagnostics import build_fixture_tool, run_diagnostics
+            diagnostics_output = output / 'diagnostics'
+            diagnostics_output.mkdir()
+            fixture_tool = build_fixture_tool(ROOT, backend_project.parent / 'bin/Debug/net10.0', data / 'fixture-tool', diagnostics_output, command)
             backend, studio = data / 'workbench', data / 'studio'
             prepare_host(backend_project, backend)
             prepare_host(studio_project, studio)
@@ -255,6 +259,12 @@ def run(output):
                     command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts'],
                             output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env, supervise=restarts.supervise)
                     report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output)
+            # Keep the primary inventory/guard intact. All its hosts are closed before diagnostics.
+            report.update(stage='diagnostics', primaryExecuted=report['executed'],
+                          phaseReports={'primary': 'playwright.json', 'diagnostics': 'diagnostics/playwright.json'})
+            report['diagnosticsExecuted'] = run_diagnostics(diagnostics_output, source_root=ROOT, source_sha=sha, tool=fixture_tool,
+                command=command, host=host, prepare_host=prepare_host, clean_environment=clean_environment, free_port=free_port)
+            report['executed'] += report['diagnosticsExecuted']
         end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         end_dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
         if sha != end_sha or dirty != end_dirty:

@@ -92,7 +92,7 @@ internal static class MemoryHistoryCheckpoint
         var nextHead = new RuntimeHistoryHead(commit.WorkflowExecutionId,
             head is { FirstSequence: > 0 } ? head.FirstSequence : events.Count == 0 ? 0 : events[0].Sequence, sequence,
             commit.CommitId, recordedAt, policy,
-            head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart), head?.HasGaps ?? false, head?.PurgedThroughSequence ?? 0);
+            head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart), head?.HasGaps ?? state.NoRecordTimerCompletionRuns.Contains(key), head?.PurgedThroughSequence ?? 0);
         return () =>
         {
             state.HistoryHeads[key] = nextHead;

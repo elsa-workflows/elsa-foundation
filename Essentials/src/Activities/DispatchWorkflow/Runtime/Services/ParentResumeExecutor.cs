@@ -4,6 +4,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,12 +17,34 @@ public sealed class ParentResumeExecutor(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IBookmarkStateStore bookmarkStateStore,
-    ILogger<ParentResumeExecutor>? logger = null) : IRuntimePostCommitIntentHandler
+    ILogger<ParentResumeExecutor>? logger = null) : IRuntimePostCommitDurableSourceIntentHandler, IRuntimeHistoryDeliverySource
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ILogger<ParentResumeExecutor> _logger = logger ?? NullLogger<ParentResumeExecutor>.Instance;
 
-    public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    bool IRuntimeHistoryDeliverySource.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        bookmarkResumeDispatcher is IRuntimeHistoryDeliverySource source && source.CanRecordHistory(writer, reader);
+
+    public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (intent.HistoryCausation is not null) return ValueTask.FromException(new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
+            new InvalidOperationException("A history-stamped parent resume requires its verified durable source."), false));
+        return HandleCoreAsync(intent, null, cancellationToken);
+    }
+
+    public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.Intent.HistoryCausation is { } cause && cause.DeliveryId != source.SourceOutboxItemId)
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                new InvalidOperationException("The parent resume differs from its exact child source."), false);
+        try { await HandleCoreAsync(source.Intent, source.Intent.HistoryCausation, cancellationToken); }
+        catch (RuntimeSchedulerWorkUnavailableException exception) when (exception.Code == "runtime.history.capture-unavailable")
+        { throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, true); }
+    }
+
+    private async ValueTask HandleCoreAsync(RuntimePostCommitIntent intent, RuntimeHistoryCausation? sourceCause, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(intent);
         if (!StringComparer.Ordinal.Equals(intent.Kind, DispatchWorkflowConstants.ResumeParentIntentKind) ||
@@ -36,6 +59,8 @@ public sealed class ParentResumeExecutor(
             payload.ParentWorkflowExecutionId,
             payload.ParentActivityExecutionId);
         ValidateIntent(intent, payload, identity);
+        if (sourceCause is not null && sourceCause.WorkflowExecutionId != payload.ChildWorkflowExecutionId)
+            throw new InvalidOperationException("Parent resume history must retain its actual child origin.");
 
         var result = await bookmarkResumeDispatcher.DispatchAsync(
             new BookmarkResumeDispatchRequest(
@@ -53,7 +78,7 @@ public sealed class ParentResumeExecutor(
                 payloadType: new ValueTypeDescriptor(
                     TypeAliasConvention.CanonicalAlias(typeof(WorkflowDispatchParentResumePayload)),
                     schemaVersion: 1),
-                providerId: DispatchWorkflowConstants.ParentResumeProviderId),
+                providerId: DispatchWorkflowConstants.ParentResumeProviderId) { HistoryCausation = sourceCause },
             cancellationToken: cancellationToken);
 
         if (result.Bookmark is { } resolvedBookmark)

@@ -23,7 +23,7 @@ public sealed class ModulePayloadColumnTests
     {
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
-            ["ContentJson"] = 35, // Includes model execution, accepted input, User Tasks and immutable task forms.
+            ["ContentJson"] = 40, // Includes the five Runtime history head/event/bookmark/count/ancestry payloads.
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
             ["CleanupSafeFailureJson"] = 1
