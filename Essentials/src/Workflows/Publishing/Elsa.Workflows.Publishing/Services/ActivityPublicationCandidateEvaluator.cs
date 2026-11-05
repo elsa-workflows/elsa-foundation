@@ -1,21 +1,16 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
-
-/// <summary>A compiled candidate with its ordered diagnostics and whether publication may proceed.</summary>
-internal sealed record EvaluatedPublicationCandidate(
-    ActivityTemplateCompilerResult Compilation,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics,
-    bool IsPublishable);
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// The one publication verdict for a candidate, whatever saved it: compile it through the registered provider compiler,
 /// add storage and runtime readiness against the candidate's own subject, and refuse it when validation refused it or any
 /// error remains. Studio drafts and source-owned versions are judged by the same rules.
 /// </summary>
-internal sealed class ActivityPublicationCandidateEvaluator(IActivityTemplateCompiler compiler, ActivityPublicationReviewPolicy reviewPolicy)
+public sealed class ActivityPublicationCandidateEvaluator(IActivityTemplateCompiler compiler, IActivityPublicationReadiness reviewPolicy) : IActivityPublicationCandidateEvaluator
 {
     public async Task<EvaluatedPublicationCandidate> EvaluateAsync(
         ActivityTemplateCompilerRequest request,
@@ -27,7 +22,7 @@ internal sealed class ActivityPublicationCandidateEvaluator(IActivityTemplateCom
             Revision: request.Candidate.Revision);
         var diagnostics = ActivityDiagnosticOrderer.Order(validation.Diagnostics
             .Concat(compilation.Diagnostics)
-            .Concat(reviewPolicy.ReadinessDiagnostics(subject, compilation.Template)));
+            .Concat(reviewPolicy.ReadinessDiagnostics(subject, compilation.Template?.RuntimeRequirements ?? [], compilation.Template?.StorageDriverRequirements ?? [])));
         // The validator's own verdict counts even without an error-severity diagnostic, so a candidate validation refused
         // is never publishable.
         var isPublishable =

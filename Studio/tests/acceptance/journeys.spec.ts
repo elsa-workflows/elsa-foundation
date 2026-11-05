@@ -1,3 +1,4 @@
+import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -186,4 +187,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
   }
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "completed");
+});
+
+test("executable designer parity", async ({ page }, info) => {
+  await executableDesignerJourney(page, info, capture);
 });
