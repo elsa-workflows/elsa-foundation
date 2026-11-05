@@ -9,8 +9,8 @@ public sealed class InMemorySecretRepository : ISecretRepository
 
     // The secret holding each tenant's name, and beside it every secret deleted under that name, by id. A soft delete
     // moves a secret from the first to the second, which frees the name while the deleted secret keeps its history.
-    private readonly Dictionary<string, Secret> _secrets = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, Dictionary<string, Secret>> _deleted = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Secret> _secrets = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, Secret>> _deleted = new(StringComparer.Ordinal);
 
     public ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default)
     {
@@ -75,7 +75,7 @@ public sealed class InMemorySecretRepository : ISecretRepository
         }
 
         var ordered = filtered
-            .OrderBy(secret => secret.Name, StringComparer.Ordinal)
+            .OrderBy(secret => secret.Name.ToLowerInvariant(), StringComparer.Ordinal)
             .ThenBy(secret => secret.Status == SecretStatus.Deleted)
             .ThenBy(secret => secret.Id, StringComparer.Ordinal)
             .ToArray();
@@ -126,7 +126,7 @@ public sealed class InMemorySecretRepository : ISecretRepository
         return deleted;
     }
 
-    private static string Key(string tenantId, string name) => $"{tenantId.Length}:{tenantId}{name}";
+    private static string Key(string tenantId, string name) => $"{tenantId.Length}:{tenantId}{name.ToLowerInvariant()}";
 
     private static void ValidateIdentity(Secret secret)
     {

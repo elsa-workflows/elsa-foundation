@@ -894,8 +894,12 @@ function focusContractDiagnostic(
     : null;
   const target = exact ?? member ?? editor.querySelector<HTMLElement>("[data-contract-schema]");
   if (!target) return unsupportedDiagnosticFocus();
+  const memberPanel = target.closest<HTMLElement>(".ad-member-settings > [role='tabpanel']");
+  if (memberPanel?.hidden && member) {
+    const tab = [...member.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(button => button.getAttribute("aria-controls") === memberPanel.id);
+    flushSync(() => tab?.click());
+  }
   target.closest("details")?.setAttribute("open", "");
-  member?.querySelector("details")?.setAttribute("open", "");
   const disabledContext = target.matches(":disabled")
     ? target.closest<HTMLElement>("label") ?? member
     : null;
