@@ -728,6 +728,21 @@
       "project": "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     }
   ],
   "splits": {

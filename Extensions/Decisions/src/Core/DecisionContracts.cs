@@ -17,7 +17,7 @@ public interface IDecisionEvaluator
 }
 
 /// <summary>A tagged scalar. Numbers are exact invariant decimal text; booleans are lowercase text.</summary>
-public sealed record DecisionValue(string Kind, string? Value);
+public sealed record DecisionValue([property: JsonPropertyName("kind")] string Kind, [property: JsonPropertyName("value")] string? Value);
 
 /// <summary>Safe diagnostics contain structural locations and codes, never business-value fragments.</summary>
 public sealed record DecisionDiagnostic(string Code, string Message, string? DecisionId = null, string? RuleId = null, string? ClauseId = null);

@@ -30,6 +30,20 @@ public sealed class DecisionWorkflowTests
         """;
 
     [Fact]
+    public void Tagged_inputs_preserve_exact_values_under_the_runtime_object_materializer_serializer()
+    {
+        // Runtime Object expressions use the default CLR serializer rather than API Web options.
+        const string json = """{"amount":{"kind":"number","value":"9007199254740993"}}""";
+        var inputs = JsonSerializer.Deserialize<Dictionary<string, DecisionValue>>(json)!;
+        Assert.Equal("number", inputs["amount"].Kind);
+        Assert.Equal("9007199254740993", inputs["amount"].Value);
+        var evaluated = new DecisionEngine().Evaluate(new DecisionEngine().Compile(Xml).Artifact!, inputs);
+        Assert.Equal("Success", evaluated.Status);
+        Assert.Equal("Manager", evaluated.Result.GetProperty("value").GetString());
+        Assert.Equal(json, JsonSerializer.Serialize(inputs));
+    }
+
+    [Fact]
     public async Task Publication_freezes_latest_and_runtime_needs_no_decision_reader()
     {
         var fixture = new Fixture();
