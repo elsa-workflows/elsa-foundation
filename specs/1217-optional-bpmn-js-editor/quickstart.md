@@ -1,0 +1,18 @@
+# Validation Guide — Optional bpmn-js editor
+
+**Status**: planned prototype validation; commands below are not execution receipts.
+
+Use this worktree and an owned disposable host/store. Follow [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) and existing [backend source setup](../../docs/contributing/backend-source-quickstart.md). Do not attach to shared/personal hosts.
+
+1. Install locked Studio dependencies: `pnpm --dir Studio install --frozen-lockfile`.
+2. Run the bridge and adapter regression suites through the Workflows package: `pnpm --dir Studio --filter @elsa-workflows/studio-workflows test -- src/__tests__/bpmnJsBridge.test.ts src/__tests__/bpmnAdapter.test.ts`.
+3. Run affected Workflows typechecking/build and browser editor journeys. Isolated fixture hosts establish frontend regressions only; record them separately from composed-host acceptance.
+4. Commit the prototype before source acceptance. Build/run owned Workbench and Studio through the established acceptance runner or feature-specific equivalent that retains source identity, isolated stores, logs, screenshots and traces.
+
+   The feature-specific source runner is `python3 tools/ux-acceptance/run-bpmn-js-prototype.py /tmp/elsa-bpmn-js-<unique-run>`. It builds this checkout and owns fresh Studio/Workbench content roots/stores and process groups. Its first configuration executes both starting directions on desktop Light; other states remain unproved until separately added and executed.
+5. In each starting editor direction: author a bound Decision with an outcome expression, a task binding with inputs/outputs/references, and a configured listener or nested body. Change routing/defaults and a supported binding, switch twice, Undo/Redo, save/reload and verify exact identity/configuration/layout.
+6. Publish the same saved process/version through ordinary native publication. Execute inputs selecting both paths, assert real bound results and inspect actual activity occurrences. Download XML and compare supported routing/DI while recording visible public-export limitations.
+7. Repeat relevant direct human/service, reusable/nested, unavailable catalog, unsupported constructs, read-only/source-owned, absent module/backend, failure recovery and dirty/history cases. Test themes/narrow/keyboard/focus and visible/unobstructed attribution. Capture actual optional network/assets in the composed host.
+8. Record passed/failed/unsupported/not-run/unavailable rows with exact source commit. Retain downloadable current-commit screenshots/traces and get independent UX acceptance before claiming feasibility or production completion.
+
+Production additionally requires complete affected suites, meaningful red/green controls, optional consumer packaging/assets/notices, architecture/maps/current-head CI/review/merge and resulting-main qualification. The feature remains open until these gates are satisfied.

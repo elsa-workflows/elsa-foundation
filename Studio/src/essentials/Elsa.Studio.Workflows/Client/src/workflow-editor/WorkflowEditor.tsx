@@ -2,6 +2,7 @@ import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, typ
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
@@ -39,6 +40,7 @@ import { weaverUnavailableTitle } from "./constants";
 
 const AttachedRunActivityInspector = React.lazy(async () => ({ default: (await import("./AttachedRunActivityInspector")).AttachedRunActivityInspector }));
 const WorkflowOrganizationButton = React.lazy(async () => ({ default: (await import("./WorkflowOrganizationButton")).WorkflowOrganizationButton }));
+const BpmnJsCanvas = React.lazy(async () => ({ default: (await import("../bpmn/BpmnJsCanvas")).BpmnJsCanvas }));
 
 void loadActivityIconRegistry().catch(() => undefined);
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
@@ -115,6 +117,8 @@ import {
   type ActivityInspectorTabId
 } from "./InspectorPanel";
 import { BpmnElementInspector, BpmnElementConfiguration } from "../bpmn/BpmnElementInspector";
+import "../bpmn/bpmnEditorChoice.css";
+import { applyBpmnJsCanvasChange, type BpmnJsCanvasChange } from "../bpmn/bpmnJsAuthoring";
 import { bpmnPaletteElements, directHumanBpmnElement } from "../bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
@@ -245,6 +249,8 @@ export function WorkflowEditor({
   const [inspectorView, setInspectorView] = useState<"configuration" | "run-data">("configuration");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
+  const [bpmnEditor, setBpmnEditor] = useState<"integrated" | "bpmn-js">("integrated");
+  const [bpmnCanvasState, setBpmnCanvasState] = useState<{ status: "loading" | "ready" | "refused" | "failed"; message?: string }>({ status: "loading" });
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
@@ -313,6 +319,25 @@ export function WorkflowEditor({
     canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
   const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
+  const useBpmnJsCanvas = isBpmnDesigner && bpmnEditor === "bpmn-js" && canvasView === "designer";
+  const bpmnCanvasPending = useBpmnJsCanvas && bpmnCanvasState.status !== "ready";
+  const applyBpmnJsChange = useCallback((next: BpmnJsCanvasChange) => {
+    if (!editorDoc.canEdit() || !scopeOwner) return false;
+    const ownerId = scopeOwner.nodeId;
+    // Canvas changes are synchronous. Resolve the scope again inside the ordinary authoring recipe so a
+    // late event from an old canvas can never replace another process or resurrect a departed scope.
+    let accepted = false;
+    flushSync(() => editDraft(({ draft: current, frames: currentFrames }) => {
+      const root = current?.state.rootActivity;
+      if (!current || !root) return current;
+      if (next.owner.nodeId !== ownerId) return current;
+      const applied = applyBpmnJsCanvasChange(current, currentFrames, next, catalogByVersion);
+      if (!applied) return current;
+      accepted = true;
+      return applied;
+    }));
+    return accepted;
+  }, [catalogByVersion, editDraft, editorDoc, scopeOwner]);
   const directBpmnRoot = directPublisherAvailable && !documentAdapter && frames.length === 0
     && draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
   const elements = useMemo(() => isBpmnDesigner
@@ -362,7 +387,7 @@ export function WorkflowEditor({
       (activity.description ?? "").toLowerCase().includes(term));
     return groupActivityPalette(matches);
   }, [paletteCatalog, paletteSearch, paletteGroups]);
-  const busy = operation !== "idle" || editorDoc.pinned;
+  const busy = operation !== "idle" || editorDoc.pinned || bpmnCanvasPending;
   const canRunTest = !!draft?.state.rootActivity && !busy && operations?.testRuns.state !== "unavailable";
 
   // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
@@ -726,6 +751,9 @@ export function WorkflowEditor({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (templateNavigationPending || canvasView !== "designer" || editorDoc.pinned) return;
+      // The alternate canvas owns its local focus and delegates its shortcuts to this same host
+      // history; do not also run React Flow clipboard/Undo handlers for its SVG/input targets.
+      if (event.target instanceof Element && event.target.closest("[data-bpmn-js-canvas]")) return;
       if (!(event.metaKey || event.ctrlKey)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
@@ -1416,15 +1444,15 @@ export function WorkflowEditor({
           if (templateNavigationPending) return;
           saveAndGoBack(editableDraft);
         }}
-        onSave={saveFromToolbar}
+        onSave={() => { if (!bpmnCanvasPending) saveFromToolbar(); }}
         directBpmnPublication={directBpmnRoot && backendSession ? <DirectBpmnPublishAction
           key={`${backendSession.key}:${definitionId}`} onOpenProcesses={onOpenBpmnProcesses} session={backendSession} definitionId={definitionId} draft={draft}
           busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} lineage={lineageHold.lineage} flushMetadata={flushDefinitionMeta}
           setPaused={setAutosavePaused} setBusy={value => setOperation(value ? "publishing" : "idle")}
           setStatus={setStatus} setError={setError} reload={reload} /> : undefined}
         publicationUnavailableReason={publicationUnavailableReason}
-        onPublish={mode => { if (operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
-        onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
+        onPublish={mode => { if (!bpmnCanvasPending && operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
+        onRun={() => { if (!bpmnCanvasPending && operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
         runTitle={operations?.testRuns.state === "unavailable" ? operations.testRuns.reason ?? "Test runs are unavailable on this backend." : draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
         runStatus={!renderedTestRun && restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
@@ -1620,7 +1648,25 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
+          {isBpmnDesigner ? <label className="wf-bpmn-editor-choice">
+            BPMN editor
+            <select aria-label="BPMN editor" value={bpmnEditor} onChange={event => {
+              flushPendingHistory();
+              setBpmnCanvasState({ status: "loading" });
+              setBpmnEditor(event.target.value === "bpmn-js" ? "bpmn-js" : "integrated");
+            }}>
+              <option value="integrated">Elsa</option>
+              <option value="bpmn-js">bpmn-js</option>
+            </select>
+          </label> : null}
+          {useBpmnJsCanvas && scopeOwner ? (
+            <React.Suspense fallback={<p role="status">Loading BPMN editor…</p>}>
+              <BpmnJsCanvas key={`${draft.id}:${scopeOwner.nodeId}`} owner={scopeOwner} layout={draft.layout}
+                selectedElementId={selectedNodeId} readOnly={editorDoc.pinned}
+                onChange={applyBpmnJsChange} onSelect={selectEditorNode} onStateChange={setBpmnCanvasState}
+                onUndo={() => { if (!editorDoc.pinned) undo(); }} onRedo={() => { if (!editorDoc.pinned) redo(); }} />
+            </React.Suspense>
+          ) : isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
             <CompensationScopeDesigner
               owner={scopeOwner}
               nodes={nodes}
