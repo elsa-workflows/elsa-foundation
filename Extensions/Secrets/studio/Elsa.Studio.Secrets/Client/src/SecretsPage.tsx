@@ -295,9 +295,9 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
                   <td className="secrets-name-cell">
                     <div className="secrets-name-heading">
                       <button type="button" className="secrets-row-link" data-secret-open={secret.name} onClick={() => setDialog({ kind: "edit", name: secret.name })}><strong>{secret.displayName || secret.name}</strong></button>
-                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} notifications={notifications} /> : null}
+                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /> : null}
                     </div>
-                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} /></div> : null}
+                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /></div> : null}
                   </td>
                   <td>{labelType(descriptors, secret.typeName)}</td>
                   <td>{labelStore(descriptors, secret.storeName)}</td>
@@ -325,6 +325,7 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
         </StudioTableContainer>
 
         {dialog?.kind === "edit" && dialogSecret ? <SecretDetail
+          copyScope={context}
           notifications={notifications}
           key={dialogSecret.name}
           secret={dialogSecret}

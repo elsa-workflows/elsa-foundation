@@ -87,7 +87,7 @@ it("selects an immutable service publication through the real picker, undo, redo
   flushSync(() => { publications.value = "slot-1"; publications.dispatchEvent(new Event("change", { bubbles: true })); });
   flushSync(() => [...view.container.querySelectorAll("button")].find(button => button.textContent === "Use this service publication")!.click());
   await vi.waitFor(() => expect(view.container.querySelector<HTMLSelectElement>("[aria-label='Task execution']")?.value).toBe("service"));
-  expect(view.container.querySelector(".react-flow__node[data-id='keep']")?.textContent).toContain("Native service");
+  await vi.waitFor(() => expect(view.container.querySelector(".react-flow__node[data-id='keep']")?.textContent).toContain("Native service"));
   flushSync(() => view.container.querySelector<HTMLButtonElement>("[aria-label='Undo']")!.click());
   flushSync(() => view.container.querySelector<HTMLElement>(".react-flow__node[data-id='keep']")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await vi.waitFor(() => expect(view.container.querySelector<HTMLSelectElement>("[aria-label='Task execution']")?.value).toBe("unbound"));

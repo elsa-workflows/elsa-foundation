@@ -39,7 +39,7 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 it("selects latest and exact neighbors for an arbitrary activity", async () => {
   navigator({ selectedActivityExecutionId: undefined });
   await vi.waitFor(() => expect(container.textContent).toContain("Execution 10 of 10"));
-  expect(onResolve).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-10" }));
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-10" })));
   click("Previous activity execution");
   expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" }));
   expect(button("Next activity execution").disabled).toBe(true);

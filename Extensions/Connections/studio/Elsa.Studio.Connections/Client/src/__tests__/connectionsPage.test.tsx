@@ -110,6 +110,22 @@ describe("Connections page", () => {
     expect(host.querySelector(".connections-notice")).toBeNull();
   });
 
+  it.each(["leave", "switch backend"])("does not announce a delayed create after %s", async action => {
+    const pending = deferred<ConnectionMetadata>();
+    const { context, http } = endpointContext({ postJson: () => pending.promise });
+    const view = renderPage(context);
+    await waitFor(() => detailsButton(view.host) !== null);
+    await createConnection(view.host, "delayed-api");
+    expect(http.postJson).toHaveBeenCalledTimes(1);
+    if (action === "leave") view.leave();
+    else view.changeContext(endpointContext().context);
+
+    pending.resolve({ ...connection, name: "delayed-api" });
+    // Observe after the HTTP promise and its create callback have had a turn to settle.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
   it("shows a list error and retries the current search", async () => {
     const listQueries: string[] = [];
     let listCalls = 0;
@@ -258,7 +274,11 @@ function renderPage(context: StudioEndpointContext, dialogs = createDialogs()) {
     flushSync(() => root.unmount());
     host.remove();
   });
-  return { host };
+  return {
+    host,
+    leave: () => flushSync(() => root.render(<p>Another page</p>)),
+    changeContext: (next: StudioEndpointContext) => flushSync(() => root.render(<ConnectionsPage context={next} dialogs={dialogs} notifications={notifications} />))
+  };
 }
 
 function detailsButton(host: HTMLElement) {

@@ -596,11 +596,11 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
               <div className="wf-artifact-card-values">
                 <span className="wf-cell-line">
                   <code title={artifact.artifactId}>{artifact.artifactId}</code>
-                  <CopyValueButton value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
                 <span className="wf-cell-line wf-cell-line-muted">
                   <code title={artifact.artifactHash}>{artifact.artifactHash}</code>
-                  <CopyValueButton value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
               </div>
               <dl>

@@ -83,7 +83,7 @@ describe("Activity Definition authoring", () => {
     expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
     resolveSave(fullDraft({ revision: 4, payload: { edit: 1 } }));
     await waitForText(rendered.container, "Saved revision 4");
-    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await waitFor(() => expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true));
     await rendered.unmount();
   });
   it("creates with the sole authorable provider and enters the exact initial draft", async () => {

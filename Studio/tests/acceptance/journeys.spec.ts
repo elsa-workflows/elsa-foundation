@@ -48,6 +48,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
   const search = page.getByRole("searchbox", { name: /search connections/i });
+  // The heading precedes the initial list/descriptor response; Enter cannot submit while Search is disabled.
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
   await search.fill(`absent-${stamp}`);
   await search.press("Enter");
   await expect(page.getByRole("button", { name: /clear search/i })).toBeVisible();
@@ -102,6 +104,20 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
   await capture(page, info, "completed");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  const confirmation = page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` });
+  await expect(page.locator('.studio-toast-live[aria-live="polite"]')).toContainText(`Connection 'qa-${stamp}' created.`);
+  await confirmation.getByRole("button", { name: "Dismiss notification", exact: true }).press("Enter");
+  await expect(confirmation).toHaveCount(0);
+  await page.getByRole("button", { name: /^Notifications, \d+ unread$/ }).press("Enter");
+  const history = page.getByRole("dialog", { name: "Notifications", exact: true });
+  await expect(history).toBeVisible();
+  await expect(history).toContainText("Secret created.");
+  await expect(history).toContainText(`Connection 'qa-${stamp}' created.`);
+  await expect(page.locator(".studio-toast")).toHaveCount(0);
+  await capture(page, info, "notification-history");
+  await history.press("Escape");
+  await expect(history).toBeHidden();
+  await expect(page.getByRole("button", { name: /^Notifications, \d+ unread$/ })).toBeFocused();
 });
 
 test("agent authoring and navigation", async ({ page }, info) => {

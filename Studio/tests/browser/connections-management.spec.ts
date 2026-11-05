@@ -48,6 +48,38 @@ for (const width of [320, 768, 1024, 1440]) {
   });
 }
 
+test("search waits for initial collection readiness and then accepts Enter", async ({ page }) => {
+  const queries: string[] = [];
+  let releaseDescriptors!: () => void;
+  const descriptorsReady = new Promise<void>(resolve => { releaseDescriptors = resolve; });
+  await page.route("**/connections?*", route => {
+    const query = new URL(route.request().url()).searchParams.get("search") ?? "";
+    queries.push(query);
+    return route.fulfill({ json: { items: query ? [] : [connection] } });
+  });
+  await page.route("**/connections/descriptors", async route => {
+    await descriptorsReady;
+    await route.fulfill({ json: descriptors });
+  });
+  try {
+    await page.goto("/?mode=connections");
+    const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
+    const submit = page.getByRole("button", { name: "Search", exact: true });
+    await expect(submit).toBeDisabled();
+    await expect.poll(() => queries).toEqual([""]);
+    await search.fill("absent");
+    await search.press("Enter");
+    expect(queries).toEqual([""]);
+    releaseDescriptors();
+    await expect(submit).toBeEnabled();
+    await search.press("Enter");
+    await expect(page.getByRole("button", { name: "Clear search", exact: true })).toBeVisible();
+    expect(queries).toEqual(["", "absent"]);
+  } finally {
+    releaseDescriptors();
+  }
+});
+
 test("creating a Connection preserves the accepted search and leaves absent results unselected", async ({ page }) => {
   const listQueries: string[] = [];
   const created = { ...connection, name: "billing-api", displayName: "Billing API" };

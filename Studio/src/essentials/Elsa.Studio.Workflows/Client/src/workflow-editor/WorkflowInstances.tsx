@@ -2803,6 +2803,7 @@ export function WorkflowIncidentList({
                 ) : null}
                 <button type="button" className="wf-incident-open-details" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</button>
                 <CopyValueButton
+                  scope={context}
                   value={formatIncidentForClipboard(incident)}
                   ariaLabel={`Copy incident ${incident.failureType}`}
                   copiedLabel="incident"
@@ -2994,6 +2995,7 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
         <div className="wf-incident-details-body">
           <div className="wf-incident-details-actions">
             <CopyValueButton
+              scope={context}
               value={formatIncidentForClipboard(incident)}
               ariaLabel={`Copy incident ${incident.failureType}`}
               copiedLabel="incident"

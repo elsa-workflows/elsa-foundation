@@ -10,6 +10,7 @@ export function SecretDetail({
   secret,
   descriptors,
   notifications,
+  copyScope,
   busy = false,
   onSave,
   onClose
@@ -18,6 +19,7 @@ export function SecretDetail({
   descriptors: SecretDescriptorsResponse | null;
   busy?: boolean;
   notifications?: StudioNotificationApi;
+  copyScope?: object;
   onSave(name: string, request: { displayName: string; description?: string }): Promise<void>;
   onClose(): void;
 }) {
@@ -85,7 +87,7 @@ export function SecretDetail({
           <div>
             <span className="secrets-kicker">Secret editor</span>
             <h3 id={titleId}>Edit secret</h3>
-            <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton key={secret.name} name={secret.name} notifications={notifications} /></p>
+            <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton key={secret.name} name={secret.name} notifications={notifications} scope={copyScope} /></p>
           </div>
           <div className="secrets-editor-header-actions">
             <span className={`secrets-badge ${secret.status.toLowerCase()}`}>{secret.status}</span>

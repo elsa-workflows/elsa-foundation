@@ -29,7 +29,7 @@ import {
   writeDictionaryEditorSession,
   type DictionaryEditorTab
 } from "./dictionaryEditorSession";
-import { getNotifications } from "./workflow-editor/notifications";
+import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import { copyTextToClipboard } from "./workflow-editor/editorHelpers";
 
 const jsonAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
@@ -109,6 +109,9 @@ export function DictionaryValueEditor({
   const effectiveTab: DictionaryEditorTab = variant === "inline" ? "table" : activeTab;
   const emittedSignature = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const copyScope = useMemo(() => ({ sessionKey, externalSignature, jsonDraft }), [sessionKey, externalSignature, jsonDraft]);
+  const captureNotificationGuard = useNotificationGuard(copyScope);
+  useEffect(() => setCopyError(""), [copyScope]);
   const mountedRef = useRef(false);
   const keyRefs = useRef(new Map<string, HTMLInputElement>());
   const tableValidation = useMemo(
@@ -269,12 +272,13 @@ export function DictionaryValueEditor({
   };
 
   const copyJson = async () => {
+    const canNotify = captureNotificationGuard();
     setCopyError("");
     try {
       await copyTextToClipboard(jsonDraft);
-      getNotifications().notify({ level: "success", title: "JSON copied" });
+      if (canNotify()) getNotifications().notify({ level: "success", title: "JSON copied" });
     } catch {
-      setCopyError("Could not copy JSON.");
+      if (canNotify()) setCopyError("Could not copy JSON.");
     }
   };
 
