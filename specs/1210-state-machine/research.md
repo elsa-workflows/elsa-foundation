@@ -61,7 +61,7 @@ The existing [WorkflowInstanceTimeline](../../Studio/src/essentials/Elsa.Studio.
 
 ### Parent-to-descendant modes are chosen; full boundaries remain open
 
-The [SCXML transition reference](https://www.w3.org/TR/scxml/#transition) distinguishes whether a transition targeting a descendant exits its source state. OD41 explicitly chooses both parent-visit preservation and re-entry for a compound parent with one active child targeting a descendant, extending OD15's earlier same-state distinction. This reference does not select an Elsa schema, default, implementation or parallel-parent behavior. Full boundary calculation, validation and source/Studio proof remain open, and OD39 still excludes direct cross-region edges initially.
+The [SCXML transition reference](https://www.w3.org/TR/scxml/#transition) distinguishes whether a transition targeting a descendant exits its source state. OD41 explicitly chooses both parent-visit preservation and re-entry for a compound parent with one active child targeting a descendant, extending OD15's earlier same-state distinction. OD49 initially requires explicit whole-parent re-entry for parallel-parent-to-descendant transitions, following the target in its region and initial states in others. These choices do not select an Elsa schema, default or implementation. Full boundary calculation, validation and source/Studio proof remain open, and OD39 still excludes direct cross-region edges initially.
 
 ### Concurrent durable activity work is an explicit adaptation
 

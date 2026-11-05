@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A48 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A49 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -56,6 +56,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD46 — defer history destinations; retain durable recovery | FR-057 | A46 |
 | OD47 — qualify explicit native saga-style composition | FR-058 | A47 |
 | OD48 — once-per-visit completion opportunity | FR-059 | A48 |
+| OD49 — explicit parallel-parent whole re-entry | FR-060 | A49 |
 
 ## Witness definitions
 
@@ -109,6 +110,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A46 | Authored re-entry differs from durable restart | Initial-release re-entry uses explicit targets/initial states without history destinations; explicit descendant targeting/visit modes remain valid, while restart restores the existing active configuration and waits | Definition/Studio scope validation and actual hierarchy/parallel host witnesses contrasting deliberate exit/re-entry with restart of a non-initial active configuration; no later history feature or runtime pass is claimed |
 | A47 | Saga-style composition through existing mechanisms | The agreed authored lifecycle uses StateMachine and explicit native compensation/recovery with separate responsibilities and no Saga type/engine; its declared journal lifetime, fault/uncertainty handling and reusable boundaries hold through restart; transitions/cancellation do not imply undo | Actual Studio author/save/reload/publish and controlled participant/host/store run-recovery-restart witness with occurrence/operation-key/journal evidence and boundary/cancellation controls; exact topology must be agreed in M0 and no StateMachine composition proof exists yet |
 | A48 | Consume ineligible completion without later revival | A valid completion evaluation with no eligible transition consumes the opportunity for that visit; later value changes do not revive it, while a new visit can complete again; errors are not treated as false and processing precedence remains intact | Semantic and actual host/persistence/restart witness around consumption, later value changes and explicit re-entry, with ongoing-rule and condition-error controls; exact completion identity/representation and recovery integration remain unproved |
+| A49 | Parallel parent targets a descendant through whole re-entry | Explicit re-entry exits/resets parent and all old regions, follows the target in its region and initial states in others; unsupported parent-preserving mode is diagnosed, old completions cannot affect new visits and machine-invocation event guarantees remain intact | Actual Studio validation/save/reload/publish plus host/timer/phase/restart witnesses, stale-completion and queued-business-event controls, and valid local-region alternatives; exact boundaries and source/Studio integration remain unproved |
 
 ## Qualification rules
 
