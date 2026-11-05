@@ -140,6 +140,19 @@ internal static class SourceRevisionNativeWitness
             Assert.Null(await shared.FindSourceSnapshotAsync("writer", original.Id + " "));
             var beyondHistory = await agents.SourceHistoryAsync("writer", history.Total, 1);
             Assert.Equal(history.Total, beyondHistory.Total); Assert.Empty(beyondHistory.Items);
+
+            // Authority is deliberately outside ScopeHash; foreign ownership must be
+            // excluded in SQL before counts/pages, including SQL Server padded equality.
+            var foreign = new EfSourceRevisions(check, scope with { Authority = scope.Authority + " " });
+            await foreign.CreateAsync("writer", "foreign-authority", "Private writer", "foreign/1", "private instructions");
+            var foreignSnapshot = await foreign.CaptureAsync("writer", "foreign-authority", 0, "foreign-review");
+            Assert.Null(await agents.FindSourceRevisionAsync("writer", foreignSnapshot.Key));
+            Assert.Equal(history.Total, (await agents.SourceHistoryAsync("writer", 0, 1)).Total);
+            Assert.Equal(history.Total, (await agents.SourceHistoryAsync("writer", history.Total, 1)).Total);
+            var ownDirectory = await agents.ListDefinitionsAsync(null, 0, 10);
+            Assert.Equal(5, ownDirectory.Total);
+            Assert.DoesNotContain(ownDirectory.Items, x => x.Name == "Private writer");
+            Assert.Equal(0, (await agents.ListDefinitionsAsync("Private writer", 0, 10)).Total);
         }
 
         async Task<SourceRevisionException?> Compete(bool retain)

@@ -24,7 +24,9 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maximum) throw new ArgumentException("Invalid source revision identity.");
     }
-    private IQueryable<SourceWorkingCopy> Copies => db.Set<SourceWorkingCopy>().Where(x => x.ScopeKey == ScopeKey && x.Partition == scope.Partition && x.TenantId == scope.TenantId && x.Kind == scope.Kind && x.Authority == scope.Authority);
+    // SQL Server pads equality even under BIN2. Authority is ownership, not part of
+    // ScopeHash, so compare its exact text before a query counts or pages rows.
+    private IQueryable<SourceWorkingCopy> Copies => db.Set<SourceWorkingCopy>().Where(x => x.ScopeKey == ScopeKey && x.Partition == scope.Partition && x.TenantId == scope.TenantId && x.Kind == scope.Kind && x.Authority + "|" == scope.Authority + "|");
     public static void ValidateCopy(SourceWorkingCopy copy, SourceScope scope, string sourceId, string copyId)
     {
         if (copy.ScopeKey != ScopeHash(scope) || copy.Partition != scope.Partition || copy.TenantId != scope.TenantId ||
