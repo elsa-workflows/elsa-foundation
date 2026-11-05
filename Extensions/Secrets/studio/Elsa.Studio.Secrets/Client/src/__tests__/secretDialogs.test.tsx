@@ -152,6 +152,26 @@ describe("Create dialog regression contract", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ typeName: "text", storeName: "encrypted", value: "authored-value" }));
   });
 
+  it("recovers a retained store replaced by a sole compatible descriptor without losing entered material", () => {
+    const { container, render, onSave } = renderDialog("create");
+    change(fieldControl(container, "Value"), "retained-material");
+    const replacement: SecretDescriptorsResponse = { types: [{ name: "text", displayName: "Text", supportedStoreNames: ["configuration"] }], stores: [{ name: "configuration", displayName: "Configuration", isReadOnly: true }] };
+    render("create", { descriptors: replacement });
+    flushSync(() => editorTab(container, "Storage & lifetime").click());
+    const store = fieldControl<HTMLSelectElement>(container, "Store");
+    expect(store.value).toBe("encrypted");
+    expect(store.selectedOptions[0].textContent).toContain("unavailable");
+    selectOption(store, "Configuration"); submit(container);
+    expect(onSave).not.toHaveBeenCalled();
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    change(fieldControl(container, "Configuration key"), "Config:Primary");
+    render("create", { descriptors });
+    selectOption(fieldControl(container, "Store"), "Encrypted");
+    expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("retained-material");
+    submit(container);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ value: "retained-material", configurationKey: undefined, storeName: "encrypted" }));
+  });
+
   it("validates Configuration key in Secret and sends no hidden Value", () => {
     const { container, onSave } = renderDialog("create", { descriptors: configurableDescriptors });
     expect(fieldControl<HTMLSelectElement>(container, "Store").value).toBe("configuration");
@@ -488,16 +508,6 @@ function revealFieldIfHidden(container: HTMLElement, field: HTMLElement) {
   const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.getAttribute("aria-controls") === body.id);
   if (!button) throw new Error("Hidden field has no disclosure control.");
   flushSync(() => button.click());
-}
-
-function textNodeOutside(container: HTMLElement, text: string, excluded: HTMLElement) {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const parent = node.parentElement;
-    if (parent && parent.textContent?.trim() === text && !excluded.contains(parent) && !parent.closest("select, option")) return parent;
-  }
-  return null;
 }
 
 function selectOption(select: HTMLSelectElement, label: string) {

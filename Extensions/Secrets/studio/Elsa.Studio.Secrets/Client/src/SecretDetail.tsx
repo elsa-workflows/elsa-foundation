@@ -22,7 +22,8 @@ function SecretDetailDialog(props: SecretDetailProps) {
   const ref = useRef<HTMLElement>(null);
   const [busy, setBusy] = useState(false);
   useDialogFocus(ref, busy ? null : props.onClose);
-  const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); props.onStateChange?.(state); }, [props.onStateChange]);
+  const { onStateChange } = props;
+  const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
   return <div className="secrets-editor-backdrop" role="presentation"><section ref={ref} className="secrets-editor-dialog" role="dialog" aria-modal="true" aria-label="Edit secret" tabIndex={-1}>
     <header><h3>Edit secret</h3><StudioButton aria-label="Close editor" onClick={props.onClose} disabled={busy}>Close</StudioButton></header>
     <SecretMetadataForm {...props} onStateChange={report} />

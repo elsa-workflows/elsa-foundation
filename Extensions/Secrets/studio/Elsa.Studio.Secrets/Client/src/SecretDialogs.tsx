@@ -24,7 +24,8 @@ export function CreateSecretDialog(props: CreateSecretFormProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const [busy, setBusy] = useState(false);
   useDialogFocus(dialogRef, busy ? null : props.onCancel);
-  const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); props.onStateChange?.(state); }, [props.onStateChange]);
+  const { onStateChange } = props;
+  const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
   return <div className="secrets-modal secrets-create-backdrop"><section ref={dialogRef} className="secrets-create-dialog" role="dialog" aria-modal="true" aria-label="Create secret" tabIndex={-1}>
     <header className="secrets-create-header"><h3>Create secret</h3></header>
     <CreateSecretForm {...props} onStateChange={report} />
@@ -102,7 +103,8 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
         <div className="secrets-editor-grid"><Field label="Display name" value={displayName} onChange={setDisplayName} /><Field label="Tags" value={tags} onChange={setTags} placeholder="comma-separated" /></div>
         <div className="secrets-description-field"><label htmlFor={descriptionInputId}>Description</label><textarea id={descriptionInputId} value={description} onChange={event => setDescription(event.target.value)} rows={3} /></div>
       </>, storage: <>
-        {supportedStores.length > 1 ? <label>Store<select data-secret-field="store" value={storeName} onChange={event => setStoreName(event.target.value)} disabled={submitting}>
+        {supportedStores.length > 0 && (supportedStores.length > 1 || !compatible) ? <label>Store<select data-secret-field="store" value={storeName} onChange={event => setStoreName(event.target.value)} disabled={submitting}>
+          {!compatible ? <option value={storeName} disabled>{storeName || "Selected store"} (unavailable)</option> : null}
           {supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}
         </select></label> : null}
         {!compatible ? <p data-secret-field="store" tabIndex={-1} className="secrets-field-error" role="alert">No compatible secret store is available for this type.</p> : null}

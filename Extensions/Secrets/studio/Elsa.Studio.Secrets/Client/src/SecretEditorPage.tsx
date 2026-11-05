@@ -27,7 +27,7 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
   const whenActive = useStudioWorkspaceWhenActive();
   const data = loaded?.scope === scope ? loaded : undefined;
   useStudioWorkspaceTitle(name ? data?.secret?.displayName || data?.secret?.name || "Edit secret" : "Create secret");
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; lifetime.current++; }; }, []);
+  useEffect(() => { const generation = lifetime; mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
   useEffect(() => {
     if (identity.current.scope !== scope || identity.current.name !== name) {
       identity.current = { scope, name }; phase.current = { dirty: false, busy: false, accepted: false }; setFormState({ dirty: false, busy: false });
@@ -74,8 +74,8 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
     return () => { window.removeEventListener(studioNavigationRequestedEvent, guard); window.removeEventListener("beforeunload", guard); };
   }, []);
   useEffect(() => { if (!formState.dirty && !formState.busy) notifyStudioNavigationGuardReleased(); }, [formState]);
-  const accepted = () => { phase.current.accepted = true; phase.current.dirty = false; notifyStudioNavigationGuardReleased(); window.dispatchEvent(new CustomEvent("studio-secrets-changed", { detail: { context: api.backend } })); };
-  return <StudioPage className="secrets-shell secrets-editor-page" aria-label={name ? "Edit secret" : "Create secret"}>
+  const accepted = () => { phase.current.accepted = true; phase.current.dirty = false; notifyStudioNavigationGuardReleased(); };
+  return <StudioPage role="region" className="secrets-shell secrets-editor-page" aria-label={name ? "Edit secret" : "Create secret"}>
     <StudioPageHeader title={name ? "Edit secret" : "Create secret"} actions={<StudioButton variant="ghost" disabled={formState.busy} onClick={() => void leave()}><ArrowLeft size={16} aria-hidden />Back to secrets</StudioButton>} />
     {error ? <StudioAlert tone="danger">{error}<StudioButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Retry secret options</StudioButton></StudioAlert> : null}
     {!data ? loading ? <p role="status">Loading secret editor…</p> : <StudioResultState title="Secret editor unavailable" description={error} />
