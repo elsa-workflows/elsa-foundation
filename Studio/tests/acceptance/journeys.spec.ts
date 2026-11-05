@@ -66,12 +66,39 @@ test("collections and connection creation", async ({ page }, info) => {
   }
 
   await page.goto("/security/secrets");
+  const secretName = `DbConnectionString-${stamp}`;
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
   const secret = page.getByRole("dialog", { name: "Create secret", exact: true });
-  await secret.getByLabel("Technical name", { exact: true }).fill(`qa-${stamp}`);
+  const technicalName = secret.getByLabel("Technical name", { exact: true });
+  await technicalName.fill(` ${secretName} `);
+  await technicalName.press("Tab");
+  await expect(technicalName).toHaveValue(secretName);
+  await capture(page, info, "secret-create");
   await secret.getByLabel("Value", { exact: true }).fill("disposable-acceptance-value");
   await secret.getByRole("button", { name: "Create", exact: true }).click();
   await expect(secret).toBeHidden();
+  await page.reload();
+  const secretRow = page.getByRole("row").filter({ hasText: secretName });
+  await expect(secretRow).toBeVisible();
+  await capture(page, info, "secret-list");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
+  await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
+  await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  await expect(editor.locator("code")).toHaveText(secretName);
+  await capture(page, info, "secret-detail");
+  await editor.getByRole("button", { name: "Close editor", exact: true }).click();
+  await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
+  await technicalName.fill(secretName.toUpperCase());
+  await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
+  await secret.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(secret.getByRole("alert")).toHaveText("A secret with the same name already exists.");
+  await expect(technicalName).toHaveValue(secretName.toUpperCase());
+  await capture(page, info, "secret-duplicate");
+  await secret.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(secret).toBeHidden();
+  await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
 
   await page.goto("/security/connections");
   const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
@@ -82,7 +109,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(name).toBeFocused();
   await name.fill("invalid name");
   await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(`qa-${stamp}`);
+  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(secretName);
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await expect(name).toHaveAttribute("aria-invalid", "true");
