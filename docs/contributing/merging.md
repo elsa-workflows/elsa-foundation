@@ -44,9 +44,12 @@ gh workflow run ci.yml --ref <branch> -f suite=studio
 ```
 
 Other suite values are `backend-source`, `weaver`, `published-images`, and `studio-order`.
-The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready runs the
-full tier and affected Weaver proof without replacing its existing `Build & test` and
-`Generated maps fresh` results or cancelling an in-progress PR-tier run.
+The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready starts a
+complete ready run: the PR tier, full tier, generated maps and affected focused proofs report
+together. It supersedes an in-progress draft run. This avoids
+the protected-merge failure where splitting successful required contexts across draft and ready
+suites still leaves GitHub expecting `Build & test` and `Generated maps fresh` (#3708). A later
+push supersedes that ready run through the same PR concurrency group.
 
 Trusted flake recording, CodeQL scanning, daily stale processing and the weekly branch sweep share the
 `Repository maintenance` workflow. Flake artifacts remain data read by default-branch code with

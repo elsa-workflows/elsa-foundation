@@ -2487,7 +2487,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders the Executable Inspector with sidecar layout, ghost nodes and reference selection", async () => {
+  it("renders the Executable Inspector with the shared Sequence designer, ghost nodes and reference selection", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -2540,10 +2540,9 @@ describe("workflows module", () => {
 
     // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
     await waitForText(container, "Log greeting");
-    await waitForText(container, "Not available in this environment");
-    const ghost = container.querySelector(".wf-node-ghost");
-    expect(ghost?.textContent).toContain("SendEmail");
-    const namedNode = [...container.querySelectorAll<HTMLElement>(".react-flow__node")]
+    const ghost = container.querySelector('[aria-label="Activity unavailable in this environment"]');
+    expect(ghost?.closest(".wf-sequence-item")?.textContent).toContain("SendEmail");
+    const namedNode = [...container.querySelectorAll<HTMLElement>(".wf-sequence-step")]
       .find(node => node.textContent?.includes("Log greeting"));
     expect(namedNode).toBeTruthy();
     await click(namedNode!);
