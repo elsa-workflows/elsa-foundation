@@ -9,7 +9,7 @@ namespace Elsa.Agent.Handlers;
 
 /// <summary>The single Sequential context aggregator; modules register sources rather than event handlers.</summary>
 internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sources, IOptions<AgentContextOptions> options,
-    TimeProvider timeProvider) : IEventHandler<AgentContextCollecting>
+    TimeProvider timeProvider, Services.AgentEffectsAdmission effects, IAgentToolRegistry tools) : IEventHandler<AgentContextCollecting>
 {
     private sealed record RegisteredSource(IAgentContextProvider Provider, AgentContextProviderDescriptor Descriptor);
 
@@ -127,6 +127,22 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
     private async Task<AgentContextContribution?> CollectSourceAsync(IAgentContextProvider source, AgentContextProviderDescriptor descriptor, AgentContextRequest request,
         ICollection<AgentContributionDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
+        var needsEffects = descriptor.ModuleCodes is not null;
+        if (request.Disclosure is { Results.Count: > 0 } retainedDisclosure)
+        {
+            // New retained results need current feature admission even when their disclosure source is legacy.
+            // Installed metadata is not execution authority; only the shared feature check is performed here.
+            var installed = (await tools.ListAsync(cancellationToken)).Select(tool => tool.Descriptor).ToArray();
+            needsEffects |= retainedDisclosure.Results.Any(result => result.Receipt is { ModuleCode: not null }
+                or { Scope: AgentEffectScope.NoPersistedEffect }
+                || installed.Any(tool => tool.Name == result.ToolName
+                    && tool.ModuleId == result.Access?.ModuleId && Services.AgentEffectsAdmission.UsesNewContract(tool)));
+        }
+        if (needsEffects && await effects.CheckAsync(cancellationToken) is { } unavailable)
+        {
+            diagnostics.Add(new(descriptor.Id, unavailable.Code, unavailable.Message, request.Disclosure is not null || descriptor.Required));
+            return null;
+        }
         using var deadline = new CancellationTokenSource(options.Value.SourceTimeout, timeProvider);
         using var sourceCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         Task<AgentContextContribution>? pending = null;
@@ -137,6 +153,12 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
                 : source.CollectAsync(request, sourceCancellation.Token).AsTask();
             var contribution = await pending.WaitAsync(sourceCancellation.Token);
             sourceCancellation.Token.ThrowIfCancellationRequested();
+            // A source may await I/O while the shared observation changes. Its returned payload is not yet admitted.
+            if (needsEffects && await effects.CheckAsync(cancellationToken) is { } changed)
+            {
+                diagnostics.Add(new(descriptor.Id, changed.Code, changed.Message, request.Disclosure is not null || descriptor.Required));
+                return null;
+            }
             return contribution;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
