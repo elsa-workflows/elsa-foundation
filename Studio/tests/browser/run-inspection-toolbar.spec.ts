@@ -84,6 +84,43 @@ for (const theme of ["light", "dark"]) test(`retains expanded evidence through R
 
 test.describe("touch targets", () => {
   test.use({ hasTouch: true });
+  for (const theme of ["light", "dark"]) test(`keeps previous Test Run controls reachable on a narrow touch screen (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(`/?mode=activity-duplicate-editor&run-canvas=unique&theme=${theme}`);
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Test run summary", exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage).some(key => key.startsWith("elsa.editor.test-run:")))).toBe(true);
+    await page.reload();
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
+    const previous = page.getByRole("group", { name: "Previous Test Run", exact: true });
+    await expect(previous).toBeVisible();
+    const labels = ["Restore Test Run", "Open run", "Dismiss"];
+    const boxes = await Promise.all(labels.map(async name => {
+      const button = previous.getByRole("button", { name, exact: true });
+      await expect(button).toBeEnabled();
+      await button.scrollIntoViewIfNeeded();
+      return { name, box: (await button.boundingBox())! };
+    }));
+    await test.info().attach("restoration-targets", { body: JSON.stringify(boxes), contentType: "application/json" });
+    await page.screenshot({ path: test.info().outputPath("restoration-controls.png"), fullPage: true });
+    for (const { box } of boxes) {
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(321);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);
+    const restore = previous.getByRole("button", { name: "Restore Test Run", exact: true });
+    await restore.focus();
+    await page.keyboard.press("Tab");
+    await expect(previous.getByRole("button", { name: "Open run", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    const dismiss = previous.getByRole("button", { name: "Dismiss", exact: true });
+    await expect(dismiss).toBeFocused();
+    await dismiss.press("Enter");
+    await expect(previous).toBeHidden();
+  });
   test("keeps compact run tools easy to tap", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/?mode=activity-duplicate-editor&host=instance&run-canvas=unique&toolbar-explain");
