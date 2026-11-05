@@ -39,6 +39,17 @@ public sealed class SecretsNameSchemaTests
         var document = SecretDocument.Parse(legacy.Payload);
         // The preceding reader's projection identity invariant is preserved while v1 can still be written.
         Assert.Equal(document.Secret.Name, document.NormalizedName);
+        // post-migrate constructs a bare context: repairing projections must not upgrade its payload stamp.
+        var bareOptions = new DbContextOptionsBuilder<SecretsSqliteDbContext>().UseSqlite(connection).Options;
+        await using (var bare = new SecretsSqliteDbContext(bareOptions))
+        {
+            var stale = await bare.Secrets.SingleAsync();
+            stale.NameSearchKey = "stale";
+            await bare.SaveChangesAsync();
+            bare.ChangeTracker.Clear();
+            Assert.Equal(1, await SecretsProjectionContract.ReindexAsync(bare));
+            Assert.Equal("1.0.0", (await bare.Secrets.AsNoTracking().SingleAsync()).SchemaVersion);
+        }
         await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(async () =>
             await repository.TryAddAsync(new Secret { TenantId = "tenant", Name = "DbConnectionString" }));
         Assert.Equal(1, await context.Secrets.CountAsync());

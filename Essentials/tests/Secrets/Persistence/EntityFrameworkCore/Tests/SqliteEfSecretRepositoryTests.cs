@@ -418,7 +418,7 @@ public sealed class SqliteEfSecretRepositoryTests
         var row = await fixture.Context.Secrets.SingleAsync();
         Assert.Equal(SecretsEfModule.SchemaVersion, row.SchemaVersion);
 
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.Payload = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, _ => row.SchemaVersion = "3.0.0", v => row.Payload = v);
 
         Func<Task>[] operations =
         [
@@ -432,7 +432,9 @@ public sealed class SqliteEfSecretRepositoryTests
         foreach (var operation in operations)
         {
             var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation);
-            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "Secrets", SecretsEfModule.SchemaVersion);
+            Assert.Equal("Secrets", skew.Family);
+            Assert.Equal("3.0.0", skew.Found);
+            Assert.Equal(SecretsEfModule.SchemaVersion, skew.Expected);
             fixture.Context.ChangeTracker.Clear();
         }
     }
@@ -452,7 +454,7 @@ public sealed class SqliteEfSecretRepositoryTests
         await database.Migrator.MigrateAsync();
 
         var context = database.Context;
-        Assert.Equal(SecretsEfModule.SchemaVersion, (await context.Secrets.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal("1.0.0", (await context.Secrets.AsNoTracking().SingleAsync()).SchemaVersion);
         Assert.Equal("alpha", (await new EfSecretRepository(context).FindAsync("tenant-a", "payments.api"))!.LatestActiveVersion!.Payload.Value);
         Assert.False(await new SecretsProjectionReindex().AuditAsync(context));
     }

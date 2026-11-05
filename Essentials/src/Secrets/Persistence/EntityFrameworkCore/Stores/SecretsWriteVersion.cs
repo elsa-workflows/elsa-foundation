@@ -23,7 +23,8 @@ internal static class SecretsWriteVersion
         var minimum = secret.Name == secret.Name.ToLowerInvariant() ? "1.0.0" : SecretsEfModule.SchemaVersion;
         if (storedVersion is not null && Version.Parse(storedVersion) > Version.Parse(minimum))
             minimum = storedVersion;
-        var version = state?.WriteVersion ?? SecretsEfModule.SchemaVersion;
+        // Ungated operator projection repair retains the row's format; it cannot finalize a family.
+        var version = state?.WriteVersion ?? storedVersion ?? SecretsEfModule.SchemaVersion;
         if (Version.Parse(version) < Version.Parse(minimum))
             throw new EfSchemaWriteRefusedException(SecretsEfModule.SchemaFamily, version, minimum);
         return version;
