@@ -108,6 +108,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<WorkflowExecutionStartService>();
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
         services.TryAddScoped<ActivityExecutionInspectionService>();
+        services.TryAddScoped<RuntimeHistoryInspectionService>();
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
         services.TryAddScoped<WorkflowInstanceDeletionService>();
         services.TryAddScoped<WorkflowInstanceDetailsService>();
@@ -152,6 +153,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeActivityExecutionBrowsingCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeHistoryCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();

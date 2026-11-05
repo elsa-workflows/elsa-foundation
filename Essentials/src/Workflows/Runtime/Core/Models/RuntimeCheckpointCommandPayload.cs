@@ -8,6 +8,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class RuntimeCheckpointCommandPayload
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
+
     public const string WorkflowStartReason = "WorkflowStart";
     public const string ActivityCompletionPropagationReason = "ActivityCompletionPropagation";
 

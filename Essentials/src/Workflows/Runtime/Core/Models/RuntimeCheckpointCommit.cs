@@ -251,6 +251,22 @@ public sealed class RuntimeCheckpointStateChangeSet
     /// <summary>Terminal alteration-job evidence committed in the same atomic unit as the workflow mutation.</summary>
     public WorkflowAlterationJobTerminalChange? AlterationJobTerminalChange { get; }
 
+    /// <summary>Optional ordered logical history groups. Null preserves legacy replay/wire shapes.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RuntimeHistoryBatch>? HistoryBatches
+    {
+        get => _historyBatches;
+        init => _historyBatches = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+    private readonly IReadOnlyList<RuntimeHistoryBatch>? _historyBatches;
+
+    /// <summary>Returns a copy preserving all runtime participants with the supplied ordered history groups.</summary>
+    public RuntimeCheckpointStateChangeSet WithHistoryBatches(IReadOnlyList<RuntimeHistoryBatch>? historyBatches) =>
+        new(WorkflowExecution, Scheduler, ActivityExecutions, Bookmarks, DurableValues, Incidents, Operational,
+            WorkflowDispatches, ActivityExecutionInspections, PostCommitOutbox, ActivityScopeCleanups,
+            WorkflowDispatchCancellations, ConsumedSchedulerWorkItems, AlterationJobTerminalChange, BackgroundActivityWork)
+        { HistoryBatches = historyBatches?.ToArray() };
+
     /// <summary>Admission, acceptance, and cancellation are atomic participants of this checkpoint.</summary>
     public BackgroundActivityWorkCheckpointChanges BackgroundActivityWork { get; }
 
@@ -280,7 +296,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
             AlterationJobTerminalChange,
-            BackgroundActivityWork);
+            BackgroundActivityWork) { HistoryBatches = HistoryBatches };
 
     /// <summary>Returns a copy with the supplied activity projections, preserving every other atomic participant.</summary>
     public RuntimeCheckpointStateChangeSet WithActivityExecutions(
@@ -300,7 +316,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
             AlterationJobTerminalChange,
-            BackgroundActivityWork);
+            BackgroundActivityWork) { HistoryBatches = HistoryBatches };
 
     /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
@@ -320,7 +336,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
             AlterationJobTerminalChange,
-            BackgroundActivityWork);
+            BackgroundActivityWork) { HistoryBatches = HistoryBatches };
 
     /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
@@ -340,7 +356,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             workflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
             AlterationJobTerminalChange,
-            BackgroundActivityWork);
+            BackgroundActivityWork) { HistoryBatches = HistoryBatches };
 
     /// <summary>Returns a copy with the supplied claimed scheduler work items folded in for atomic consumption.</summary>
     public RuntimeCheckpointStateChangeSet WithConsumedSchedulerWorkItems(
@@ -360,7 +376,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatchCancellations,
             consumedSchedulerWorkItems,
             AlterationJobTerminalChange,
-            BackgroundActivityWork);
+            BackgroundActivityWork) { HistoryBatches = HistoryBatches };
 
     /// <summary>Returns a copy with checkpoint-integrated terminal alteration evidence.</summary>
     public RuntimeCheckpointStateChangeSet WithAlterationJobTerminalChange(
@@ -380,7 +396,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
             alterationJobTerminalChange,
-            BackgroundActivityWork);
+            BackgroundActivityWork) { HistoryBatches = HistoryBatches };
 
     /// <summary>Returns a copy with background-work admission, acceptance, and cancellation participants.</summary>
     public RuntimeCheckpointStateChangeSet WithBackgroundActivityWork(
@@ -400,7 +416,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
             AlterationJobTerminalChange,
-            backgroundActivityWork ?? throw new ArgumentNullException(nameof(backgroundActivityWork)));
+            backgroundActivityWork ?? throw new ArgumentNullException(nameof(backgroundActivityWork))) { HistoryBatches = HistoryBatches };
 
     private static WorkflowAlterationJobTerminalChange? NormalizeAlterationJobTerminalChange(WorkflowAlterationJobTerminalChange? change) =>
         change is null

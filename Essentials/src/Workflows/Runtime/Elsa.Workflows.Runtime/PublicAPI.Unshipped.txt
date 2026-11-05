@@ -1889,3 +1889,11 @@ static Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions
 Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointCommitStore.FindUndeliveredDurableAsync(string! workflowExecutionId, System.Collections.Generic.IReadOnlyCollection<string!>! excludedIntentKinds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
 
 Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimePostCommitOutboxStore.FindUndeliveredDurableAsync(string! workflowExecutionId, System.Collections.Generic.IReadOnlyCollection<string!>! excludedIntentKinds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
+Elsa.Workflows.Runtime.Extensions.RuntimeHistoryServiceCollectionExtensions
+Elsa.Workflows.Runtime.Services.History.RuntimeHistoryOptions
+Elsa.Workflows.Runtime.Services.History.RuntimeHistoryOptions.RuntimeHistoryOptions() -> void
+static Elsa.Workflows.Runtime.Extensions.RuntimeHistoryServiceCollectionExtensions.AddRuntimeHistory(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Workflows.Runtime.Services.History.RuntimeHistoryOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Workflows.Runtime.Services.History.RuntimeHistoryOptions.Enabled.get -> bool
+Elsa.Workflows.Runtime.Services.History.RuntimeHistoryOptions.Enabled.set -> void
+Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointCommitStore.CanCommitHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! selectedStore) -> bool
+Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointCommitStore.SupportsHistory.get -> bool

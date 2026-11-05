@@ -12,6 +12,8 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
 public sealed class RuntimeCheckpointCommitter
 {
+    internal IRuntimeHistoryStore? HistoryStore { get; init; }
+
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
@@ -92,6 +94,13 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
+
+        if (commit.StateChanges.HistoryBatches is { Count: > 0 } history)
+        {
+            if (HistoryStore is null || !_checkpointCommitStore.SupportsHistory || !_checkpointCommitStore.CanCommitHistory(HistoryStore))
+                throw new NotSupportedException("History capture requires the selected writer and reader to share one atomic boundary.");
+            foreach (var batch in history) RuntimeHistorySafety.Validate(batch, commit.WorkflowExecutionId);
+        }
 
         // The checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace

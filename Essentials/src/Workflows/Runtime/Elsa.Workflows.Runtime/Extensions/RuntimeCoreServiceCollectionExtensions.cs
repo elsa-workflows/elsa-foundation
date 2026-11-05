@@ -338,7 +338,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 ResolveUnderlyingStore<IWorkflowSchedulerWorkQueue>(serviceProvider, typeof(CoalescingWorkflowSchedulerWorkQueue)),
                 serviceProvider.GetRequiredService<IIncidentStateStore>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
-                serviceProvider.GetRequiredService<IWorkflowHoldStateStore>()));
+                serviceProvider.GetRequiredService<IWorkflowHoldStateStore>())
+            { HistoryAccess = serviceProvider.GetService<IPersistenceAccessContextAccessor>() });
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
@@ -475,7 +476,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
-                serviceProvider.GetService<IPersistenceAccessContextAccessor>()));
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>())
+            { HistoryStore = serviceProvider.GetService<IRuntimeHistoryStore>() });
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
@@ -542,7 +544,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
+            { HistoryCapturePolicy = RuntimeHistoryRegistration.ResolvePolicy(serviceProvider) };
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

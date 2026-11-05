@@ -14,11 +14,11 @@
 
 **Goal**: One stable provider-independent participant/query boundary with working atomic in-memory behavior. Complete before production story integration.
 
-- [ ] T004 Compatibly extend RuntimeHistoryEvent and add policy/batch/candidate/head/bookmark/query contracts and public API records in Essentials/src/Workflows/Runtime/Core/Models/RuntimeHistoryEvent.cs, Models/RuntimeHistory.cs, Contracts/IRuntimeHistoryStore.cs and PublicAPI.Unshipped.txt.
-- [ ] T005 Add an optional ordered history participant, preserve it through every clone/fold, and conditionally fingerprint it without changing history-free replay shapes in Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs, RuntimeCheckpointCommitFingerprint.cs and Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCheckpointFold.cs.
-- [ ] T006 Pin capture policy at actual new admission/start and carry it through run/queued work/retry in Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionState.cs and the existing start/dispatch payload and admission handlers; keep legacy absent-policy replays uncaptured.
-- [ ] T007 Add exact history writer/read-store qualification and decorator forwarding in Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs and Elsa.Workflows.Runtime/Services/{Checkpoints,Coalescing}; required-policy capture must fail closed without forcing extra persistence boundaries.
-- [ ] T008 Implement deterministic safe capture, explicit composition and atomic in-memory head/events/bookmark staging in Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/History/, Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs and existing Runtime registration/options; add focused contracts/coalescing/replay/registration tests in Essentials/tests/Workflows/Runtime/Tests/.
+- [x] T004 Compatibly extend RuntimeHistoryEvent and add policy/batch/candidate/head/bookmark/query contracts and public API records in Essentials/src/Workflows/Runtime/Core/Models/RuntimeHistoryEvent.cs, Models/RuntimeHistory.cs, Contracts/IRuntimeHistoryStore.cs and PublicAPI.Unshipped.txt.
+- [x] T005 Add an optional ordered history participant, preserve it through every clone/fold, and conditionally fingerprint it without changing history-free replay shapes in Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs, RuntimeCheckpointCommitFingerprint.cs and Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCheckpointFold.cs.
+- [x] T006 Pin capture policy at actual new admission/start and carry it through run/queued work/retry in Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionState.cs and the existing start/dispatch payload and admission handlers; keep legacy absent-policy replays uncaptured.
+- [x] T007 Add exact history writer/read-store qualification and decorator forwarding in Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs and Elsa.Workflows.Runtime/Services/{Checkpoints,Coalescing}; required-policy capture must fail closed without forcing extra persistence boundaries.
+- [x] T008 Implement deterministic safe capture, explicit composition and atomic in-memory head/events/bookmark staging in Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/History/, Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs and existing Runtime registration/options; add focused contracts/coalescing/replay/registration tests in Essentials/tests/Workflows/Runtime/Tests/.
 
 **Checkpoint**: Source-bound tests prove intermediate transitions survive folding, old fingerprints stay compatible, no phantom facts survive rollback, unsupported/wrong readers refuse and Ephemeral no-record cadence remains unchanged.
 
@@ -26,7 +26,7 @@
 
 **Independent test**: Real approval wait/resume shows linked chronological milestones in Timeline and preserves exact selection when switching Diagram.
 
-- [ ] T009 [US1] Add authorized history page/exact-event handlers, requests/views/endpoints and optional capability relations in Essentials/src/Workflows/Runtime/Api/{Handlers,Requests,Models,Endpoints,Capabilities} using existing structure authority and missing/denied behavior.
+- [x] T009 [US1] Add authorized history page/exact-event handlers, requests/views/endpoints and optional capability relations in Essentials/src/Workflows/Runtime/Api/{Handlers,Requests,Models,Endpoints,Capabilities} using existing structure authority and missing/denied behavior.
 - [ ] T010 [US1] Add source-bound run/wait/incident history API behavior tests in Essentials/tests/Workflows/Runtime/Api/Tests/ including unknown kinds and explicit uncaptured/disabled coverage.
 - [ ] T011 [P] [US1] Add capability-aware client contracts and bounded stale-preserving history observation in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/, workflowTypes.ts and workflow-editor/run-history/.
 - [ ] T012 [US1] Integrate primary Timeline/Diagram, explicit scope/filter/search and event/causation inspection in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx and workflow-editor/run-history/ with public Studio tokens.

@@ -28,6 +28,8 @@ RuntimeHistoryHead retains exact run, first/last sequence, last covered physical
 
 ## Provider boundary
 
+The production enricher also retains a null-omitted `SourceFingerprint` on each logical batch. It identifies that logical contribution without its history participant. Final enrichment validation compares the source proof, then validates retained value-evidence links. This preserves original deltas on replay while refusing a later enricher that adds or changes source evidence after capture. Providers retain the full candidate fingerprint (event, logical ordinal and typed bookmark mutation) per event; an event-only fingerprint cannot prove bookmark mutation equivalence after the projection has advanced.
+
 IRuntimeCheckpointCommitStore.SupportsHistory defaults false. CanCommitHistory(IRuntimeHistoryStore selectedStore) qualifies actual selected state/backend/context/scope ownership, not just two booleans; coalescing forwards the real pairing.
 
 IRuntimeHistoryStore exposes separate read methods:
@@ -49,6 +51,16 @@ RuntimeHistoryQuery uses existing request limits but its own scanned-window resu
 Bookmark inventory has its own query/page using first-recorded position plus identity; creation evidence can be absent. Exact identifiers/kinds take indexed paths. Free text has bounded safe-field windows and explicit searched-through coverage; no unbounded filtered total. Descendant resolution uses existing authorized execution hierarchy and remains bounded.
 
 All public continuations are purpose-separated authenticated payloads bound to actual scope/run/query/limit/watermark, tenant/audit subject and authorization profile. Every read reauthorizes; tokens are not authority.
+
+## API view baseline
+
+Runtime capability relations are `workflow-history-page`, `workflow-history-event`, `workflow-history-bookmarks` and `workflow-history-bookmark`. They resolve beneath the exact run's `history` resource; clients use capability templates. Query continuations use `cursor`, alongside `limit`, exact activity/descendant/bookmark/category/kind-name/search filters. Enum query values use their string names. Exact response shapes are `{coverage,event,readAt}` and `{coverage,bookmark,readAt}`.
+
+Coverage fields are `state`, `limitation`, `policyId`, `policyVersion`, `supportedKinds`, `capturedFromStart`, `hasGaps`, `firstSequence`, `lastSequence`, `settledSequence`, `purgedThroughSequence`, `lastPhysicalCommitId` and `lastCommittedAt`. States are `captured`, `partial`, `pending`, `uncaptured`, `unsupported` and `invalid`; an absent historical policy must not be classified as historically disabled from today's host options. A settled sequence describes an acknowledged prefix, not source closure.
+
+Bookmark views contain the existing safe structural summary under `bookmark`, lifecycle fields and prior-state evidence, plus `eligibility` and `eligibilityObservedAt`. Eligibility values are `eligible`, `expired`, `not-active`, `unavailable` and `unknown`. Active/unknown historical entries consult the current native handle under the same authorized run scope. Missing native state means unavailable eligibility, never an invented consumption event. Expiry is passive and produces no inspection-side event. Page/entry observation times come from the server. Nullable counts stay unknown.
+
+Event views omit the legacy payload slot and arbitrary metadata. The reserved `history.valueEvidenceIds` metadata value is a JSON array of existing evidence identifiers; navigation uses the existing Data/value-policy boundary without implicit payload resolution. Unknown event kinds/versions retain their safe common envelope.
 
 ## Admission/replay policy
 

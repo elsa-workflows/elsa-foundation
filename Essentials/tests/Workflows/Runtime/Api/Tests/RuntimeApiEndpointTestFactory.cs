@@ -16,6 +16,10 @@ internal static class RuntimeApiEndpointTestFactory
     private static readonly IReadOnlyDictionary<(string Method, string Route), RuntimeEndpointDescriptor> Endpoints =
         new Dictionary<(string Method, string Route), RuntimeEndpointDescriptor>
         {
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/history")] = Endpoint<GetRuntimeHistory, RuntimeHistoryPageView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/history/events/{historyEventId}")] = Endpoint<GetRuntimeHistoryEvent, RuntimeHistoryEventDetailsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/history/bookmarks")] = Endpoint<GetRuntimeHistoryBookmarks, RuntimeHistoryBookmarkPageView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/history/bookmarks/{bookmarkId}")] = Endpoint<GetRuntimeHistoryBookmark, RuntimeHistoryBookmarkDetailsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
             [("GET", "runtime/workflows/instances/{workflowExecutionId}")] = Endpoint<GetWorkflowInstance, WorkflowInstanceDetailsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
             [("GET", "runtime/workflows/instances")] = Endpoint<ListWorkflowInstances, IReadOnlyCollection<WorkflowInstanceSummaryView>>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
             [("GET", "runtime/workflows/instances/page")] = Endpoint<ListWorkflowInstances, WorkflowInstanceListView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),

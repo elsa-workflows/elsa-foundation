@@ -92,6 +92,20 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_PinsCapturePolicyOnlyForNewAdmission()
+    {
+        await ActivateAsync();
+        var policy = new RuntimeHistoryCapturePolicy("admitted-policy", 1, true, ["WorkflowStarted"]);
+        var dispatcher = new WorkflowStartDispatcher(_store, _references, _agentProvider,
+            new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now)) { HistoryCapturePolicy = policy };
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
+
+        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.True(policy.IsEquivalentTo(payload.HistoryCapturePolicy));
+    }
+
+    [Fact]
     public async Task DispatchAsync_PinsExecutableIdentityInStartPayload()
     {
         await ActivateAsync();
@@ -106,6 +120,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal("version-1", payload.PinnedExecutable.DefinitionVersionId);
         Assert.Equal("1.0.0", payload.PinnedExecutable.ArtifactVersion);
         Assert.Equal("sha256:test", payload.PinnedExecutable.ArtifactHash);
+        Assert.Null(payload.HistoryCapturePolicy);
     }
 
     [Theory]
