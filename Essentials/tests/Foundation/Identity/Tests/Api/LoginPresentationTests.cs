@@ -69,14 +69,14 @@ public sealed class LoginPresentationTests
     }
 
     [Fact]
-    public async Task Default_login_uses_coordinated_parcel_room()
+    public async Task Default_login_uses_pocket_orchestra_with_the_existing_form_first_layout()
     {
         await using var fixture = await TokenEndpointFixture.StartAsync();
         var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
         Assert.Contains("data-layout=\"parcel-room\"", html);
-        Assert.Contains("data-palette=\"parcel-room\"", html);
-        Assert.Contains("src=\"/_elsa/identity/login-assets/parcel-room.jpg\"", html);
-        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/parcel-room.jpg");
+        Assert.Contains("data-palette=\"pocket-orchestra\"", html);
+        Assert.Contains("src=\"/_elsa/identity/login-assets/pocket-orchestra.jpg\"", html);
+        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/pocket-orchestra.jpg");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -92,6 +92,7 @@ public sealed class LoginPresentationTests
     [InlineData("glass-and-light")]
     [InlineData("unfolding-map")]
     [InlineData("parcel-room")]
+    [InlineData("pocket-orchestra")]
     public async Task Configured_artwork_is_rendered_and_served_under_route_prefix(string artwork)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(services =>
