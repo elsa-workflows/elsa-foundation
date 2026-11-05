@@ -53,6 +53,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
   const search = page.getByRole("searchbox", { name: /search connections/i });
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
   await search.fill(`absent-${stamp}`);
   await search.press("Enter");
   await expect(page.getByRole("button", { name: /clear search/i })).toBeVisible();
