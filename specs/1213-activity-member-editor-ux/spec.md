@@ -1,5 +1,7 @@
 # Activity Definition member editor UX
 
+**Status**: Implemented — effective when PR #3861 merges; acceptance remains gated by its evidence.
+
 Issue: #3860. Program: Elsa 4 Simplification (#2559). Owner request: annotated editor screenshot, 5 November 2026.
 
 Authors edit activity inputs/outputs in focused General, Presentation and Advanced tabs. General owns name, type, description, required and default. Presentation owns display name, category, order and UI hint. Advanced owns nullability, collection, storage and stable identity. Tab switches preserve local default text; diagnostics reveal the correct tab and exact field. Outcomes retain their simpler editor.
