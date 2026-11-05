@@ -44,6 +44,11 @@ for (const theme of builtInThemeDefinitions) for (const mode of getSupportedThem
     await expect(page.getByLabel("Disabled field", { exact: true })).toBeDisabled();
     await expect(page.getByLabel("Read-only field", { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Invalid field", { exact: true })).toHaveAttribute("aria-invalid", "true");
+    const heights = await page.getByRole("region", { name: "Representative field states" }).evaluate(element => ["Populated field", "Invalid field", "Disabled field"].map(name => {
+      const label = [...element.querySelectorAll("label")].find(item => item.textContent === name)!;
+      return label.parentElement!.getBoundingClientRect().height;
+    }));
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(2);
     await namesAndContrast(page, ".secret-prototype-states");
     await capture(page, info, "field-states");
     await page.getByRole("button", { name: "Open Create secret", exact: true }).click();
@@ -139,14 +144,18 @@ test("password, multiline and configuration sources preserve labels and draft re
   await expect(dialog.getByLabel("Value", { exact: true })).toHaveJSProperty("tagName", "TEXTAREA");
   await dialog.getByLabel("Value", { exact: true }).fill("DEMONSTRATION KEY\n".repeat(12));
   const multiline = dialog.getByLabel("Value", { exact: true });
-  await multiline.locator("..").scrollIntoViewIfNeeded();
+  await multiline.locator("..").locator("..").scrollIntoViewIfNeeded();
   const labelCover = await multiline.evaluate(element => {
     const textarea = element as HTMLTextAreaElement;
     textarea.scrollTop = textarea.scrollHeight;
-    return { labelTop: textarea.labels![0].getBoundingClientRect().top - textarea.getBoundingClientRect().top, scrollTop: textarea.scrollTop };
+    const label = textarea.labels![0].getBoundingClientRect();
+    const viewport = textarea.closest(".secrets-create-content")!.getBoundingClientRect();
+    return { labelTop: label.top - textarea.getBoundingClientRect().top, absoluteTop: label.top, absoluteBottom: label.bottom, viewportTop: viewport.top, viewportBottom: viewport.bottom, scrollTop: textarea.scrollTop };
   });
   expect(labelCover.scrollTop).toBeGreaterThan(0);
   expect(labelCover.labelTop).toBeLessThanOrEqual(2);
+  expect(labelCover.absoluteTop).toBeGreaterThanOrEqual(labelCover.viewportTop);
+  expect(labelCover.absoluteBottom).toBeLessThanOrEqual(labelCover.viewportBottom);
   await capture(page, info, "multiline");
   await dialog.locator(".secrets-create-content").evaluate(element => { element.scrollTop = 0; });
   await dialog.getByLabel("Type", { exact: true }).selectOption("text");
@@ -234,4 +243,30 @@ test("field style switches live without resetting values and persists across app
   await page.evaluate(() => { history.replaceState(null, "", "/secret-field-prototype.html?view=states"); });
   await page.reload();
   await expect(toolbar.getByRole("radio", { name: "Outlined", exact: true })).toBeChecked();
+});
+
+
+test("Outlined keyboard scrolling keeps the border label inside the dialog viewport", async ({ page }, info) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto("/secret-field-prototype.html?open=1&field-style=outlined");
+  const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
+  await dialog.getByLabel("Type", { exact: true }).selectOption("rsa-key");
+  await dialog.getByLabel("Value", { exact: true }).fill("DEMONSTRATION KEY\n".repeat(12));
+  await dialog.getByRole("button", { name: /^More options/ }).click();
+  await dialog.getByLabel("Display name", { exact: true }).focus();
+  const value = dialog.getByLabel("Value", { exact: true });
+  // Native date/time editors can expose multiple internal tab stops.
+  for (let step = 0; step < 16 && !(await value.evaluate(element => element === document.activeElement)); step++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  }
+  await expect(value).toBeFocused();
+  const bounds = await value.evaluate(element => {
+    const label = (element as HTMLTextAreaElement).labels![0].getBoundingClientRect();
+    const viewport = element.closest(".secrets-create-content")!.getBoundingClientRect();
+    return { labelTop: label.top, labelBottom: label.bottom, viewportTop: viewport.top, viewportBottom: viewport.bottom };
+  });
+  expect(bounds.labelTop).toBeGreaterThanOrEqual(bounds.viewportTop);
+  expect(bounds.labelBottom).toBeLessThanOrEqual(bounds.viewportBottom);
+  await capture(page, info, "outlined-keyboard-scroll");
 });

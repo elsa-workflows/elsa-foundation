@@ -89,7 +89,10 @@ function Prototype() {
   useEffect(() => {
     setDialogHeader(open ? mainRef.current?.querySelector<HTMLElement>(".secrets-create-header") ?? null : null);
   }, [open]);
-  return <main ref={mainRef} className="secret-prototype" data-field-style={fieldStyle}>
+  return <main ref={mainRef} className="secret-prototype" data-field-style={fieldStyle} onFocusCapture={event => {
+    // Native focus scrolls the control; include its border label and help in the preview.
+    if (fieldStyle === "outlined") (event.target as HTMLElement).closest(".secrets-compact-field")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }}>
     <header><h1>Compact Secret fields</h1><p>Interactive component prototype · demonstration data</p></header>
     <div className="secret-prototype-toolbar">
       <FieldStyleSwitch value={fieldStyle} onChange={setFieldStyle} />
