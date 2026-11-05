@@ -1,30 +1,35 @@
-# Implementation checkpoint — 5 November 2026
+# Implementation and qualification receipt — 6 November 2026
 
-This is an intermediate delivery receipt for #3602, not final acceptance. The current draft PR remains [#3689](https://github.com/elsa-workflows/elsa-foundation/pull/3689).
+The product implementation for #3602 is complete on [PR #3689](https://github.com/elsa-workflows/elsa-foundation/pull/3689). Local qualification below passed; independent final acceptance, downloadable exact Actions evidence, required exact-head CI and resulting-main verification remain delivery gates on that PR. This document does not claim they have passed.
 
-## Completed focused evidence
+## Observed evidence
 
-| Slice | Observed result | Limit |
+| Slice | Result | Identity and boundary |
 | --- | --- | --- |
-| Pure evaluator | 91 discovered/executed, 91 passed, zero skipped | Includes leading XML signature, unnamed single-output and tagged input transport corrections |
-| Cold computed-version package consumer | 46 assertions passed at `d9238f05e206dc0cda76afe2dbda0cdb7cad833b` | Actual calculator and cold PackageReference restore; no Workflow/EF/ASP.NET/Studio closure |
-| Workflow adapter | 32 discovered/executed/passed | Focused contracts; actual-host restart is separately required |
-| Authenticated start subject capture | Runtime 3355 passed; Publishing API 940 passed; BPMN 581 passed; zero skipped | Discovery placeholders Runtime3344/Publishing919 expand MemberData at execution; BPMN581 discovered |
-| Decisions Design | 28 passed | Actual SQLite, including future-schema refusal; more provider/final integration checks pending |
-| Decisions API | 15 passed | Includes signature-preserving lifecycle and exact exported bytes |
-| Studio module | 29 passed; TypeScript, build, ESLint and stylelint passed | Final normal-host UX captures remain required |
-| Normal Workbench startup | Fresh owned SQLite migration application and readiness passed | Preliminary dirty source, not exact committed final acceptance |
-| Normal Studio journey | Author, five cases, regress/repair, publish, evaluate, reload, clone, concurrent409, exact import/export passed | Preliminary dirty source; final four-project screenshots/traces and independent visual review pending |
+| Complete Decisions suites | Evaluation 96, Design 48, API 15, workflow adapters 32, workflow disclosure 11; 202 discovered/executed/passed, zero skipped | Review-fix product source `2c8925a2a`; discovery logs and TRX retained |
+| Cold computed-version packages |46 assertions,96 evaluator tests passed | [Receipt](standalone-package/receipt.json), source `0718297e0`; Core/default source unchanged through `2c8925a2a`; nine package-only dependencies, no Workflow/EF/ASP.NET/Studio closure |
+| External editor/reference evaluator |56 Elsa expectations;27 reference equivalents,29 differences/outside-profile cases | [Pinned fixture](interop/README.md), both actual edited round-trip directions; explicit profile/precision/null/result-shape limits, no full-DMN claim |
+| Composed Studio |4/4 projects, zero skips/retries;68 logical PNGs plus ARIA/traces | Clean source `2c8925a2a`; desktop/narrow light/dark; seven cases including exact 34-digit and NoMatch, deliberate regression/repair, publish/evaluate/reload/clone, conflict preservation, exact import/export |
+| Direct/native/BPMN/restart | Passed | [Receipt](execution-receipt.json), clean `2c8925a2a`; Sequence, Flowchart, public dynamic input and ordinary BPMN bound task return identical result/trace; suspended caller resumes original pin after process restart with Decisions API/Design/EF/workflow-design disabled |
+| Real Identity authority/disclosure |37 checks passed across seven users/two tenants | [Receipt](identity-qualification/receipt.json), clean `2c8925a2a`; independent grants,401/403/404, source/output protection and persisted Evaluate revocation before resume |
+| Studio module |36/36; module/acceptance TypeScript, root-configured ESLint/stylelint and real production frontend build passed | Corrected unsaved-case/new-metadata guards, focus mount/restore, exact tagged transport and readable narrow explanation headers |
+| Architecture and composition |617/617 passed, zero skipped; locked normal Release and isolated Debug graphs, locked server solution restore, generated filters and tier checks passed | Repeated after merging main `abea6ae86`; 138 test projects each assigned one tier/shard |
+| Shared authenticated-start paths | Prior whole Runtime 3355, Publishing API 940, BPMN 581 passed, zero skipped | Their discovery placeholders expand data rows at execution; final current-source repeat and CI results are recorded on the PR |
 
-Private raw receipts, logs, TRX, package computation/consumer, browser traces, screenshots and ARIA snapshots are retained under the task's `decision-qualification` output directory. Final PR evidence will link downloadable CI artifacts. Behavioral negative controls prove numeric normalization, null wildcard semantics, canonical bytes, ANY conflicts, CAS, source privacy, identity ambiguity, history retention/disclosure, source hash integrity and source-preserving XML edits by a genuine red followed by restoration to green.
+The normal host applied its own fresh SQLite migrations. Actual SQLite suites cover CAS, concurrent publication, immutable identity, tenant isolation, completed-receipt response loss/replay, precommit interruption, summary-only/opt-in history and the final-slot history race. Migration SQL was generated for SQLite/PostgreSQL/SQL Server/MySQL; only SQLite database behavior is qualified by these local runs. No other provider's existing migration history was reset.
 
-## Integration findings corrected
+The host matrix does not claim resolvable captured decision-activity result payloads, hosted-model BPMN HTTP execution or external-provider identity. Workflow output disclosure is exercised for Sequence/Flowchart/BPMN; focused disclosure/authority suites additionally cover exact model dependency traversal, payload authorization and explicit unsupported-identity refusal. Protected workflow bindings/materialized envelopes fail closed rather than claiming arbitrary downstream sensitivity propagation.
 
-The ordinary host exposed missing EF module registration and schema stamps; these were corrected and all four initial provider migration sets regenerated before shipping. A real native workflow exposed default Object-expression deserialization losing lowercase tagged value fields; explicit JSON property names now preserve the portable input contract and an execution-materializer serializer regression test passes. Neither preliminary run was reported as final acceptance.
+## Corrections and causal controls
 
-## Still required
+Real-host qualification exposed missing EF module/schema registration, tagged Object input deserialization and cookie API redirects; these were corrected with whole-suite and wire-level evidence. The earlier unsuccessful UX attempts remain preserved: selector error, expected-outcome locator failure and the actual narrow-dark focus race. They were not converted into passing acceptance. Owner-authorized continuation fixed the race using mount-time focus and opener restoration; a queued-frame negative control failed before correction and passed after it.
 
-- Exact final committed browser/runtime/restart evidence and current-grant/disclosure matrix.
-- Pinned external-editor/reference-engine both-direction round trips with explicit disagreements.
-- Final current package consumer, locked restores, architecture/maps/tier gates and affected whole suites.
-- Independent correctness, standards and acceptance reviews; exact-head required CI and resulting-main verification.
+Formal review round 1 at `7553f504b` found retained-history overflow, unsaved-case replacement, late replacement ambiguity, new-form metadata dirty state and narrow rule-label compression. All are corrected in `2c8925a2a`. The refreshed four-project browser run passed; independent visual retest is a separate gate.
+
+[Retained causal receipt](review-causal-controls.json): removing the history admission bound fails its boundary test, then the whole Design 48 passes after restoration. Disabling final registration validation fails 13 rejection cases, then the whole Design 48 passes. Restoring the pre-fix case/page controls while retaining new tests produces 4 failures, then the whole Studio 36 passes after restoring product code. These controls ran in a private detached clone without changing the primary checkout. Prior engine/XML/authority/disclosure controls also exercised normalization, null wildcard, canonical bytes, ANY conflicts, CAS, source privacy/hash, identity ambiguity and retention.
+
+## Evidence access and final gate
+
+Local raw receipts/logs/TRX/package artifacts/browser traces are retained in the task qualification directory. The committed runners reproduce the host evidence from clean source; CI uploads composed artifacts for 14 days. The final PR evidence comment must name the exact head/tested source, downloadable Actions artifact, independent correctness/standards/acceptance reviewers, actual screenshots opened, findings/retest and unverified states. Machine success is not independent visual approval.
+
+The existing broad host build reports transitive NU1902/NU1903 advisories for System.Security.Cryptography.Pkcs 9.0.13 and MySqlConnector 2.3.5, plus existing compiler/analyzer warnings; these runs are not zero-warning claims. No package or release was published. Changes to the shared execution foundation only capture trusted authenticated start subjects and apply the normal publication/export authority boundary; Decisions adds no scheduler, pending ledger or execution coordinator.

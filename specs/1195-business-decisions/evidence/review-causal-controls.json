@@ -1,0 +1,48 @@
+{
+  "productSource": "2c8925a2ac808db26c6cb1b051e534b3736afbfd",
+  "isolation": "Private detached clone; product files restored before complete green suites; primary checkout untouched.",
+  "controls": [
+    {
+      "name": "history",
+      "mutation": "Remove retained-run admission bound; completed history exceeds readable inventory.",
+      "failedAssertions": 1,
+      "restoredWholeSuitePassed": 48,
+      "logs": {
+        "history-red.log": {
+          "sha256": "0cb155ee02dc9090652f38db8828417901d714a415118576b376fd05738cb5cd"
+        },
+        "history-green.log": {
+          "sha256": "4912490e9b862e7ea859f83bfd076c02c9aa77a7f7cfe621cd327841d746dae8"
+        }
+      }
+    },
+    {
+      "name": "composition",
+      "mutation": "Disable final descriptor-count validation; duplicate/removed registrations silently compose.",
+      "failedAssertions": 13,
+      "restoredWholeSuitePassed": 48,
+      "logs": {
+        "composition-red.log": {
+          "sha256": "a32890d44ae519d876646256065a71c74c9711947301072341d8b4afc9c791c4"
+        },
+        "composition-green.log": {
+          "sha256": "ca89ad90c47e18ed22a858a0ed83e2323cbe31cc82db63bd308fe1653c8c78dc"
+        }
+      }
+    },
+    {
+      "name": "unsaved-edits",
+      "mutation": "Use7553f504b CasePanel and DecisionsPage with corrected tests retained; unsaved case/new metadata can be replaced or lost.",
+      "failedAssertions": 4,
+      "restoredWholeSuitePassed": 36,
+      "logs": {
+        "unsaved-edits-red.log": {
+          "sha256": "7508d1533beb7df5155a5ed346e6497a5d33a1b94b77bf7c62233af650ec8bbf"
+        },
+        "unsaved-edits-green.log": {
+          "sha256": "59b77914f03278b7cd0ecb31177fd04155bcbb81dcdf05621e5d0f7650026f0f"
+        }
+      }
+    }
+  ]
+}

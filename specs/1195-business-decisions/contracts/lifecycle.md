@@ -1,6 +1,6 @@
 # Lifecycle and authority contract
 
-Proposed under [the plan](../plan.md). URI spelling is chosen in implementation; capability relations describe operation identity and are discovered by Studio.
+Implemented under [the plan](../plan.md). The API maps `/decisions`; capability relations describe operation identity and are discovered by Studio.
 
 ## Core
 

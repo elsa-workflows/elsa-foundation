@@ -16,7 +16,7 @@ pnpm --dir Studio --filter @elsa-workflows/studio-decisions typecheck
 pnpm --dir Studio --filter @elsa-workflows/studio-decisions test
 ```
 
-The [UX acceptance record](UX-ACCEPTANCE.md) defines the user goal, references and actual composed-host evidence still required. Unit/browser fixtures do not qualify the normal product journey.
+The [UX acceptance record](UX-ACCEPTANCE.md) defines the user goal, references, composed-host evidence and remaining review gates. Unit/browser fixtures do not qualify the normal product journey.
 
 ## Cross-domain contributions
 

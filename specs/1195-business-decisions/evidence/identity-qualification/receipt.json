@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "sourceSha": "62d6ee5f27db2b6f5c588be4d06bb2dec55ccd37",
+  "sourceSha": "2c8925a2ac808db26c6cb1b051e534b3736afbfd",
   "cases": [
     {
       "label": "Anonymous Decisions inventory is401 without login redirect",
@@ -24,19 +24,19 @@
       "label": "Read does not grant Evaluate",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fevaluate"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fevaluate"
     },
     {
       "label": "Read does not grant Source",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fexport"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fexport"
     },
     {
       "label": "Read does not grant History",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fruns"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fruns"
     },
     {
       "label": "Evaluate does not need Read or Source",
@@ -48,19 +48,19 @@
       "label": "Evaluate does not grant Read",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7"
     },
     {
       "label": "Evaluate does not grant Source",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fexport"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fexport"
     },
     {
       "label": "Evaluate does not grant History",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fruns"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fruns"
     },
     {
       "label": "Source with Read exports exact published XML",
@@ -72,13 +72,13 @@
       "label": "Source does not grant Evaluate",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fevaluate"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fevaluate"
     },
     {
       "label": "Source does not grant History",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fruns"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fruns"
     },
     {
       "label": "History with Read retrieves completed summary receipt",
@@ -96,7 +96,7 @@
       "label": "History does not grant Source",
       "expectedStatus": 403,
       "actualStatus": 403,
-      "location": "http://localhost:54295/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-cbec8ae6c62149aba1e457134c817fae%2Fexport"
+      "location": "http://localhost:50036/Account/AccessDenied?ReturnUrl=%2Fdecisions%2Fdecision-013998b25f1c4ecfb6639810cfd1e3b7%2Fexport"
     },
     {
       "label": "Real foreign tenant cannot read asset",
@@ -159,6 +159,36 @@
       "location": null
     },
     {
+      "label": "flowchart workflow-only value read is redacted",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "flowchart domain Read discloses output",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "flowchart decision activity structure readable",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
+      "label": "flowchart workflow-only source export denied",
+      "expectedStatus": 403,
+      "actualStatus": 403,
+      "location": null
+    },
+    {
+      "label": "flowchart domain Source permits exact closure export",
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "location": null
+    },
+    {
       "label": "bpmn workflow-only value read is redacted",
       "expectedStatus": 200,
       "actualStatus": 200,
@@ -196,6 +226,7 @@
   ],
   "limitations": [
     "native decision activity result has no captured resolvable evidence; workflow output disclosure is covered.",
+    "flowchart decision activity result has no captured resolvable evidence; workflow output disclosure is covered.",
     "bpmn decision activity result has no captured resolvable evidence; workflow output disclosure is covered.",
     "No hosted-model BPMN execution supplied; native BPMN activity disclosure is covered, hosted-model HTTP not claimed.",
     "External provider identity unsupported handling remains covered by integration tests; no external provider is configured in this owned host."
@@ -204,8 +235,8 @@
     {
       "key": "workflow",
       "tenantId": "default",
-      "userId": "e205a390-6ae2-4555-9ab3-d78fbfa537f1",
-      "roleId": "241c753ab53c4f6d90526ccf10e8f4d3",
+      "userId": "1a9e5073-c171-4701-84d3-f4c4be5fdbed",
+      "roleId": "f99f963f61e343f18c2311187c1c9ddc",
       "grants": [
         "workflows/runtime:read",
         "workflows/activity-executions:inspect",
@@ -218,8 +249,8 @@
     {
       "key": "reader",
       "tenantId": "default",
-      "userId": "448059ab-2d8a-4f27-ace9-12db4df80989",
-      "roleId": "da4ce7dea7d948b9a63611c69c3c6faf",
+      "userId": "0c42bfa0-0bf2-44cc-8be2-80d0ee90aba5",
+      "roleId": "539ccde579244cc9883774ab1fe12d69",
       "grants": [
         "workflows/runtime:read",
         "workflows/activity-executions:inspect",
@@ -233,8 +264,8 @@
     {
       "key": "source",
       "tenantId": "default",
-      "userId": "75aff627-ca85-4e76-8701-9fbe5b5eaa89",
-      "roleId": "496e9e494f584a179f37126347f0b676",
+      "userId": "3d8e0d55-92b5-4661-8fcf-c91e2b626761",
+      "roleId": "9c3f2a84a8814cf68791acee6ff0343b",
       "grants": [
         "workflows/runtime:read",
         "workflows/activity-executions:inspect",
@@ -249,8 +280,8 @@
     {
       "key": "evaluator",
       "tenantId": "default",
-      "userId": "a1938cea-e107-47bd-8f07-bbc1c36c4cd5",
-      "roleId": "387a0ad9df564a51a0618dcc760dca22",
+      "userId": "00415c43-d855-452e-b831-7dfaa015b6a5",
+      "roleId": "12ad8cbfe3a044b98733cf8f72a40215",
       "grants": [
         "decisions:evaluate"
       ]
@@ -258,8 +289,8 @@
     {
       "key": "history",
       "tenantId": "default",
-      "userId": "731db2f4-66bb-4c10-a04b-69b2b6239f5a",
-      "roleId": "5d42457b149e48789eaae80082f52f06",
+      "userId": "c22048c7-5a47-4532-bea9-37f69742ddae",
+      "roleId": "a7651232d00947b9978b71e53c6fbe0c",
       "grants": [
         "decisions:read",
         "decisions:history"
@@ -267,9 +298,9 @@
     },
     {
       "key": "foreign",
-      "tenantId": "decisions-iam-1fa3a96d-be45-497b-8524-f6a107ccf518",
-      "userId": "b26c446a-e856-4a6a-89df-86487a20f91d",
-      "roleId": "2c57a046fced411f895421a4a2d1a1bd",
+      "tenantId": "decisions-iam-4dda18a9-e9f3-43f9-aac8-2eb05920b1fb",
+      "userId": "66be881a-2a1e-4bde-9327-9233c0e67444",
+      "roleId": "0a7f05ce49b4452c87b441ea1446b5bc",
       "grants": [
         "decisions:read",
         "decisions:manage",
@@ -284,8 +315,8 @@
     {
       "key": "revocable",
       "tenantId": "default",
-      "userId": "e4109175-368b-4092-8714-a4d061e1a1bd",
-      "roleId": "9ed2b96dd6044c24a0eb71b2c43ac95c",
+      "userId": "83aab57b-8b79-4b6e-bef4-fee254959fe1",
+      "roleId": "6524ce6d9209492fbc8f39b562058c7d",
       "grants": [
         "workflows/runtime:read",
         "workflows/activity-executions:inspect",
@@ -300,18 +331,18 @@
     }
   ],
   "revocationRun": {
-    "workflowExecutionId": "01a1ae014e93799aafc420084a0732f4",
-    "artifactId": "artifact-618a127d14ed",
+    "workflowExecutionId": "01a1ae1d396b7c40819980c7aae2e057",
+    "artifactId": "artifact-a3a8261e0be8",
     "artifactVersion": "1.0.0",
-    "artifactHash": "sha256:618a127d14ed75225d9ed38be2c2ca00e6a03447f446ea3ca2788a6be13b6b1a",
+    "artifactHash": "sha256:a3a8261e0be8494372ca02c0ddbd34cb56f66d613d78b980dbf5f89d35075f83",
     "commandDispatchStatus": "Accepted",
-    "envelopeId": "01a1ae014e93738b96f9b974103eaaad",
-    "agentId": "inprocess:01a1ae014e93799aafc420084a0732f4:5",
+    "envelopeId": "01a1ae1d396b7273ab14eef5ccfbfef3",
+    "agentId": "inprocess:01a1ae1d396b7c40819980c7aae2e057:6",
     "agentProviderName": "InProcessWorkflowExecutionActorProvider",
     "reason": null,
-    "sourceReferenceId": "activation-ref:publication-14wxeD9r510",
-    "publicationId": "publication-14wxeD9r510",
-    "slotId": "activation-slot:11:14wxeD7gSbC:7:default",
+    "sourceReferenceId": "activation-ref:publication-14wzpJTqD0R",
+    "publicationId": "publication-14wzpJTqD0R",
+    "slotId": "activation-slot:11:14wzpJQSsCb:7:default",
     "shed": false,
     "retryAfterSeconds": null
   },
@@ -319,8 +350,8 @@
     {
       "key": "revocable",
       "tenantId": "default",
-      "userId": "e4109175-368b-4092-8714-a4d061e1a1bd",
-      "roleId": "9ed2b96dd6044c24a0eb71b2c43ac95c",
+      "userId": "83aab57b-8b79-4b6e-bef4-fee254959fe1",
+      "roleId": "6524ce6d9209492fbc8f39b562058c7d",
       "grants": [
         "bpmn:read",
         "decisions:read",

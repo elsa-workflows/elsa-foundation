@@ -1,27 +1,45 @@
-# Business decisions qualification plan
+# Business decisions qualification
 
-These are required future acceptance scenarios, not commands/results for an implemented product. Exact project/host/API commands will be added with implementation. Keep expected outcomes here and actual evidence on #3602/its single PR.
+Run from the repository root with .NET 10, Node/pnpm and Playwright Chromium installed. Use the normal build-slot wrapper. All host witnesses own temporary processes, home directories and SQLite stores; they do not use a running developer host.
 
-1. Build the affected projects and run their complete suites, comparing discovered/executed counts. Validate profile parser/evaluator truth tables, hit policies, bounds, cancellation, actual trace and deterministic identity. Causal controls remove a guard or alter matching/selection and must turn its meaningful test red, then green on restoration.
-2. Pack actual computed-version Core/evaluator artifacts into an isolated feed/cache. An ordinary PackageReference application evaluates the approval table with no EF/ASP.NET/workflow/Studio dependencies. Verify the transitive envelope and direct-result/explanation matrix.
-3. Start owned temporary Workbench/Studio hosts with fresh disposable Decisions storage and real identity. Preserve unrelated hosts/stores. Exercise two tenants and read/manage/publish/evaluate/test/history/source/sensitive grants across every API, including export and validation failures.
-4. In normal Studio, create the approval decision with amount/category and four rules; save/reload, validate, save cases, deliberately regress a threshold, inspect failed expectation, repair, publish/reload and clone-to-draft. Exercise actual keyboard navigation, 320px table scrolling, light/dark, dirty-navigation, concurrent-save conflict and stale-response protection.
-5. On real provider connections, race draft/case saves and publication against edits. Prove CAS, immutable version/pointer atomicity, duplicate completed-receipt replay, divergent-key conflict and tenant isolation. Interrupt a synchronous test before receipt commit, mutate/delete its case, and verify retry conflicts rather than selecting newer content. Lose a response after receipt commit, change the case, and verify the existing exact receipt replays before mutable reads. Verify default summary-only persistence and explicit unavailable detailed payload; repeat with opt-in protected history retention. Record providers actually run; do not extrapolate SQLite to four engines.
-6. Pin external editor and evaluator references. Test supported XML in Elsa→external→Elsa and external→Elsa→external directions. Compare exact supported configuration and results against standard-derived cases; preserve covered diagrams/extensions. Unsupported constructs must be retained safely or refused, never made runnable by silent omission. Tool disagreements remain visible.
-7. Author normal native Sequence/Flowchart and BPMN bound-task callers for the same decision. Publish with specific/latest-at-publication selection and compare the direct/native/BPMN matrix. Suspend, publish a newer decision, restart/retry with Design storage unavailable, and prove the original artifact/semantics remain selected.
-8. Verify explanations report actual matched versus selected rules and safe policy violations, without protected cell/input/output content leaking through normal trace, comparisons, errors, logs or history. Invocation permission alone must not grant protected output exposure. Include exact tagged numbers above 2^53 and 34-digit values across Studio/case/history/direct/native/BPMN boundaries.
-9. Run architecture guard (`bash tools/architecture/restore-ci-project-graph.sh`, then the complete architecture test project), generated maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- check`), tier check and locked solution restore after reference changes. Use build-slot queue and check machine load for timing failures.
-10. Independently review correctness, standards and acceptance on exact final diff. Post PR evidence with counts/causal controls. Mark ready, require exact-head CI, merge under current org authorization, then verify resulting-main CI/Studio/security as applicable. Mark spec Implemented in the completing PR and close #3602 only after every acceptance row is evidenced.
+```sh
+pnpm --dir Studio install --frozen-lockfile
+pnpm --dir Studio exec playwright install chromium
+pnpm --dir Studio --filter @elsa-workflows/studio-decisions test
+pnpm --dir Studio --filter @elsa-workflows/studio-decisions typecheck
+python3 tools/ux-acceptance/run.py --journey 'business decisions authoring and explanations' --output /tmp/decisions-studio-new-run
+python3 tools/decisions/qualify-execution.py --output /tmp/decisions-execution-new-run
+```
+
+Both host runners require committed clean source and a new output directory. The Studio runner rebuilds both hosts and the real frontend, executes all four desktop/narrow light/dark projects once, and retains PNGs, accessibility snapshots, traces and source identities. Machine success is separate from independent visual acceptance. CI runs the complete composed journey inventory and uploads `studio-ux-<tested SHA>-<attempt>`; its nested `decision-execution` directory contains the execution/permission witness. Exact run/artifact links and independent review are recorded on [PR #3689](https://github.com/elsa-workflows/elsa-foundation/pull/3689).
+
+The execution runner compares direct, Sequence, Flowchart, public dynamic-input and ordinary BPMN bound-task results and actual rule traces. It publishes changed rules while another caller waits, stops the owned process, disables Decisions API/Design/EF/workflow-design features, and resumes with the original frozen artifact. It also provisions seven real restricted users across two tenants, exercises independent grants and output/source disclosure, revokes Evaluate through the persisted Identity role store, and proves refusal after restart. Private credentials are deleted with its disposable directory; only public receipts leave it.
+
+Run each complete Decisions test project under `Extensions/Decisions/tests/` with `dotnet test <project> -c Release -p:RestoreLockedMode=true -m:1 /nr:false`, and compare `--list-tests` with executed counts. The suites cover all five selected policies, typed results, null/no-match, exact 34-digit values, bounds/cancellation, actual trace, unsupported dormant cells, CAS/publication/replay/retention, final service cardinality, authority, protected dynamic inputs and workflow disclosure. Causal red/green controls and counts are summarized in the [implementation receipt](evidence/implementation-checkpoint.md).
+
+The [cold package witness](evidence/standalone-package/README.md) records the actual computed-version package consumer and dependency closure. The [pinned interchange fixture](evidence/interop/README.md) provides its own runnable external-editor/reference-engine reproduction, finite normative cases and explicit disagreements. Neither source-project references nor an XML rendering alone establish those outcomes.
+
+After reference changes, run locked solution restore, the complete architecture project and generated-filter/tier checks:
+
+```sh
+dotnet restore Elsa.Server.slnx --locked-mode -m:1 /nr:false
+bash tools/architecture/restore-ci-project-graph.sh -p:RestoreLockedMode=true -m:1 /nr:false -v quiet
+dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -m:1 /nr:false
+dotnet run --project tools/maps/Elsa.Maps.Generator -- check
+dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
+```
 
 ## Acceptance map
 
-| Issue success criterion | Required witness | State |
-| --- | --- | --- |
-| Studio create/edit/validate/test/publish/reuse | 3–4, 7 | Pending |
-| DMN round-trip/result equivalence and explicit unsupported cases | 1, 6 | Pending |
-| Same direct/native/BPMN decision and explanations | 2, 7 | Pending |
-| Data/explanation only, effects with caller | 1–2, 7–8 | Pending |
-| Saved-case deliberate regression | 4 | Pending |
-| Version/concurrency/input/policy/error/dependency/bounds | 1, 5, 7 | Pending |
-| Tenant/permissions/sensitivity | 3, 8 | Pending |
-| Packaged/normal-host/conformance qualification | 2–10 | Pending |
+| Issue success criterion | Witness |
+| --- | --- |
+| Studio create/edit/validate/test/publish/reuse | Four-project real-host journey; workflow version picker component suite; normal publication/execution witness |
+| DMN round-trip/result equivalence and explicit unsupported cases | Pinned dmn-js/dmn-moddle edited round trips; 56 finite evaluator expectations, 27 reference equivalents and 29 visible differences/outside-profile cases |
+| Same direct/native/BPMN decision and explanations | Cold package consumer; Sequence/Flowchart/dynamic-input/BPMN host matrix and process-restart receipt |
+| Data/explanation only, effects with caller | Core dependency envelope and evaluator suite; ordinary caller owns subsequent SetOutput/activity execution |
+| Saved-case deliberate regression | Seven saved cases, exact expected results, threshold regression/repair and frozen-candidate comparison in the composed journey |
+| Version/concurrency/input/policy/error/dependency/bounds | Complete engine/lifecycle/API/adapter suites, real SQLite races, publication refusal and runtime-only recovery |
+| Tenant/permissions/sensitivity | Real 37-check Identity matrix; API/adapter/disclosure suites for unsupported identities, protected inputs and retained model dependency traversal |
+| Packaged/normal-host/conformance qualification | Linked receipts above plus exact-head required CI and resulting-main verification on PR #3689 |
+
+Qualification is bounded: SQLite behavior and all four generated migration SQL scripts were exercised; PostgreSQL/SQL Server/MySQL database behavior is not inferred. The default-host matrix has no resolvable captured decision-activity result payload, hosted-model BPMN HTTP execution or external-provider identity; those paths remain explicitly outside that host witness, with relevant fail-closed contracts covered by focused suites. The supported profile does not claim full DMN/FEEL or automatic vendor decisionRef bindings. Delivery remains gated on independent acceptance, exact-head required CI and resulting-main verification.

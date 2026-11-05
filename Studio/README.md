@@ -64,7 +64,7 @@ Features ship in:
 | Feature name | Library | Contract |
 |---|---|---|
 | `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
-| `DecisionsStudio` | `Elsa.Studio.Decisions` | `IWebShellFeature` |
+| `DecisionsStudio` | `Elsa.Studio.Decisions` | `IShellFeature` |
 | `ConsoleStream` | `Elsa.Studio.ConsoleStream` | `IWebShellFeature` |
 | `DashboardStudio` | `Elsa.Studio.Dashboard` | `IShellFeature` |
 | `AttentionStudio` | `Elsa.Studio.Attention` | `IShellFeature` |

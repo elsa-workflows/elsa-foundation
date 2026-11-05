@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3602-business-decisions`
 **Created**: 2026-11-02
-**Status**: In progress
+**Status**: Implemented
 **Input**: [#3602](https://github.com/elsa-workflows/elsa-foundation/issues/3602), including the 1 November interview and the owner's 2 November autonomous delivery request.
 **Program-goal state**: `none/free-flow`. This feature does not widen Unified Execution #2892 or activate a new program.
 

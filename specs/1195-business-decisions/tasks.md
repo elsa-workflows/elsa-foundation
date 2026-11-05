@@ -1,7 +1,7 @@
 # Tasks: Business decisions
 
 **Input**: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](data-model.md), [contracts](contracts/) and [qualification](quickstart.md).
-**State**: Implementation and qualification in progress. Checked implementation tasks identify completed code slices, not issue acceptance. Exact composed-host, restart, interoperability, disclosure and final review gates remain below. Domain admission was approved by Sipke on 5 November 2026; delivery continues autonomously under that decision.
+**State**: Product implementation and local composed qualification completed; final review, CI and resulting-main gates remain. Checked tasks identify the bounded evidence in `evidence/implementation-checkpoint.md`, not an issue-level acceptance claim. Domain admission was approved by Sipke on 5 November 2026; delivery continues autonomously under that decision.
 **Cadence**: Risk-based behavior tests under ADR 0080 D1 and framework §2.23. No mandatory test-first cadence is inferred. Required causal red/green controls prove meaningful new safeguards. One issue/branch/draft PR; no new tracking issues or program.
 
 ## Phase 1 — Admission and setup
@@ -20,7 +20,7 @@
 - [x] T007 [US2] Implement five hit policies, typed scalar/record/list result shape, actual matched/selected/cell trace, no-match/null distinction, operation limits and cancellation in `Extensions/Decisions/src/Elsa.Decisions/`.
 - [x] T008 [US2] Add scoped feature registration and duplicate/unsupported contract diagnostics in `Extensions/Decisions/src/Elsa.Decisions/`; document registrations and extension ports in its `README.md` / `EXTENSION_POINTS.md` and root `EXTENSION_POINTS.md`.
 - [x] T009 [US2] Add complete risk-based parser/evaluator/registration suites in `Extensions/Decisions/tests/Evaluation/Tests/`, including all hit policies, nullable truth tables, strings/escapes/reserved names, exact 34-digit values, limits, cancellation, unsupported dormant cells and genuine explanations. Record causal guard/matching/selection red-green controls in `specs/1195-business-decisions/evidence/`.
-- [ ] T010 [US2] Pack actual computed-version Core/evaluator packages and run an isolated PackageReference consumer; retain dependency envelope and direct approval-matrix evidence under `specs/1195-business-decisions/evidence/`. Source references alone do not complete this task.
+- [x] T010 [US2] Pack actual computed-version Core/evaluator packages and run an isolated PackageReference consumer; retain dependency envelope and direct approval-matrix evidence under `specs/1195-business-decisions/evidence/`. Source references alone do not complete this task.
 
 ## Phase 3 — US1: reusable assets and publication
 
@@ -30,7 +30,7 @@
 - [x] T012 [US1] Implement Decisions-owned EF records/mappings/queries and authoritative CAS/atomic publication/idempotency in `Extensions/Decisions/src/Persistence/EntityFrameworkCore/`; use shared persistence policy, exact EF closure admissions and consumer-owned context support.
 - [x] T013 [US1] Implement validate/publish orchestration in `Extensions/Decisions/src/Design/`, freezing expected draft content and refusing raced revisions or unsupported semantics; queries remain separate from persistence mutations.
 - [x] T014 [US1] Add authenticated capability-discovered authoring/version/clone-to-draft/import/export APIs and permission contributions in `Extensions/Decisions/src/Api/`, using trusted tenant/principal and safe problem translation. Implement exact-published-version `decisions.evaluate` with Evaluate authorization, protected-output checks and structured outcomes; add HTTP/direct parity and denial tests.
-- [ ] T015 [US1] Add real-provider concurrent save/publication/replay and tenant isolation tests under `Extensions/Decisions/tests/`; prove fresh installs and preserve existing provider migration histories. Record each provider actually exercised; qualify only that support.
+- [x] T015 [US1] Add real-provider concurrent save/publication/replay and tenant isolation tests under `Extensions/Decisions/tests/`; prove fresh installs and preserve existing provider migration histories. Record each provider actually exercised; qualify only that support. Actual behavior: SQLite; four-engine migration SQL generation is recorded separately.
 
 ## Phase 4 — US3: saved cases and completed receipts
 
@@ -46,8 +46,8 @@
 **Independent outcome**: Supported tables preserve meaning/configuration through both external-tool round-trip directions, and unsupported content remains explicit.
 
 - [x] T020 [US4] Implement original-XML retention and targeted supported mutations in `Extensions/Decisions/src/Design/`, preserving covered IDs/namespaces/diagrams/extensions and refusing edits that cannot preserve content safely; classify view/edit/execute/publish separately.
-- [ ] T021 [US4] Add a pinned external-editor and reference-evaluator fixture under `specs/1195-business-decisions/evidence/`, with dependency/license notices and a finite supported/unsupported differential matrix. Record normative expectations and actual tool disagreements rather than treating one engine as the standard.
-- [ ] T022 [US4] Run both round-trip directions with actual editing/reimport and evaluator checks; prove numeric/string/null/policy/result behavior and covered opaque/diagram preservation. Retain bounded raw evidence and exact tool versions in `specs/1195-business-decisions/evidence/`; no full-DMN claim.
+- [x] T021 [US4] Add a pinned external-editor and reference-evaluator fixture under `specs/1195-business-decisions/evidence/`, with dependency/license notices and a finite supported/unsupported differential matrix. Record normative expectations and actual tool disagreements rather than treating one engine as the standard.
+- [x] T022 [US4] Run both round-trip directions with actual editing/reimport and evaluator checks; prove numeric/string/null/policy/result behavior and covered opaque/diagram preservation. Retain bounded raw evidence and exact tool versions in `specs/1195-business-decisions/evidence/`; no full-DMN claim.
 
 ## Phase 6 — US1/US3/US4: Studio authoring
 
@@ -58,7 +58,7 @@
 - [x] T025 [US3] Implement exact-candidate input/case editing, tagged decimal transport, test comparison and safe history in `Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/`; label results for a changed draft accurately.
 - [x] T026 [US4] Implement import compatibility report, safe export and located validation/explanation views in `Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/`; viewability never claims execution readiness.
 - [x] T027 [US1] Add meaningful mounted-component/browser tests for identity changes, stale requests, conflicts, keyboard cells/errors, 320px scrolling, light/dark and permission/unavailability in the Studio module's client tests; no assertions on source text.
-- [ ] T028 [US1] Rebuild owned actual Workbench/Studio and exercise complete author/test/regress/repair/publish/reload/clone-to-draft/export journeys with real identity/storage. Inspect screenshots and retain exact product/harness identities under `specs/1195-business-decisions/evidence/`.
+- [x] T028 [US1] Rebuild owned actual Workbench/Studio and exercise complete author/test/regress/repair/publish/reload/clone-to-draft/export journeys with real identity/storage. Inspect screenshots and retain exact product/harness identities under `specs/1195-business-decisions/evidence/`.
 
 ## Phase 7 — US5: normal native/BPMN reuse
 
@@ -67,7 +67,7 @@
 - [x] T029 [US5] Implement `IExecutableCompilationSource` contribution in `Extensions/Decisions/src/Workflows/Design/`, selecting specific/latest-at-workflow-publication once and embedding immutable artifact/profile/semantics/protection metadata; reject invalid/unavailable/unauthorized publication.
 - [x] T030 [US5] Implement ordinary `EvaluateDecision` activity in `Extensions/Decisions/src/Workflows/Runtime/` using frozen material and Core evaluator. Reuse the existing execution authority/checkpoint/input/retry lifecycle; no Design-store reference or new execution coordinator.
 - [x] T031 [US5] Contribute normal decision-version selection/property authoring and result metadata through the SDK/owning activity contracts in the Decisions integration modules. Bind the activity under ordinary native/BPMN tasks; preserve existing gateway/interchange semantics and explicitly refuse unsupported vendor decisionRef binding.
-- [ ] T032 [US5] Add whole publication/runtime/native/BPMN suites and actual owned-host restart witnesses under `Extensions/Decisions/tests/` and `specs/1195-business-decisions/evidence/`: newer decision published while waiting, original content after restart, missing/corrupt material refusal, and runtime-only recovery with Design unavailable.
+- [x] T032 [US5] Add whole publication/runtime/native/BPMN suites and actual owned-host restart witnesses under `Extensions/Decisions/tests/` and `specs/1195-business-decisions/evidence/`: newer decision published while waiting, original content after restart, missing/corrupt material refusal, and runtime-only recovery with Design unavailable.
 
 ## Phase 8 — US6: authority and sensitive values
 
@@ -75,13 +75,13 @@
 
 - [x] T033 [US6] Implement Decisions-owned operation/source/sensitive grants and asset policy enforcement through `Extensions/Decisions/src/Design/` / `Extensions/Decisions/src/Api/`, with no raw values in routine diagnostics, traces or default history.
 - [x] T034 [US6] Bind current workflow execution subjects through supported host policy and `ICurrentSubjectPermissionAuthorizer` in `Extensions/Decisions/src/Workflows/Runtime/`; use trusted authority and current grants, never audit metadata/browser principal/allow-all fallback.
-- [ ] T035 [US6] Carry sensitivity through existing result/projection/ValueEnvelope policies and Decisions-specific resource-denial contributions in the integration modules; protect embedded source/executable reads and outputs/evidence. Refuse combinations whose protection cannot be preserved.
-- [ ] T036 [US6] Execute full two-tenant/API/native/BPMN permission and revocation matrix, including workflow-only grants, protected outputs/source, service/unsupported identities, test/export/error/history leakage and value propagation. Add meaningful tests under `Extensions/Decisions/tests/` and actual-host evidence under `specs/1195-business-decisions/evidence/`.
+- [x] T035 [US6] Carry sensitivity through existing result/projection/ValueEnvelope policies and Decisions-specific resource-denial contributions in the integration modules; protect embedded source/executable reads and outputs/evidence. Refuse combinations whose protection cannot be preserved.
+- [x] T036 [US6] Execute full two-tenant/API/native/BPMN permission and revocation matrix, including workflow-only grants, protected outputs/source, service/unsupported identities, test/export/error/history leakage and value propagation. Add meaningful tests under `Extensions/Decisions/tests/` and actual-host evidence under `specs/1195-business-decisions/evidence/`.
 
 ## Phase 9 — Integrated delivery
 
-- [ ] T037 Complete module/API/hosting/profile documentation and all domain/cross-domain catalogs in `Extensions/Decisions/` and root `EXTENSION_POINTS.md`; reconcile `specs/1195-business-decisions/quickstart.md` with runnable commands and actual acceptance receipts. Do not duplicate glossary meanings or commit generated maps.
-- [ ] T038 Run whole affected suites with discovered/executed counts, locked solution restore after reference changes, architecture guards, generated maps and tier checks. Record actual commands/counts/causal controls and all evidence limits on the single draft PR and under `specs/1195-business-decisions/evidence/`.
+- [x] T037 Complete module/API/hosting/profile documentation and all domain/cross-domain catalogs in `Extensions/Decisions/` and root `EXTENSION_POINTS.md`; reconcile `specs/1195-business-decisions/quickstart.md` with runnable commands and actual acceptance receipts. Do not duplicate glossary meanings or commit generated maps.
+- [x] T038 Run whole affected suites with discovered/executed counts, locked solution restore after reference changes, architecture guards, generated maps and tier checks. Record actual commands/counts/causal controls and all evidence limits on the single draft PR and under `specs/1195-business-decisions/evidence/`.
 - [ ] T039 Independently review the exact final diff for correctness, standards and acceptance; resolve findings in normal commits, rerun affected checks, post PR evidence, mark ready and obtain green exact-head required CI. Follow current org review/merge authorization and record the result on #3602.
 - [ ] T040 Set `specs/1195-business-decisions/spec.md` to Implemented in the completing PR; after authorized merge verify resulting-main applicable CI/Studio/security and all acceptance rows before closing #3602/releasing the exact claim. Do not label research or draft status as product completion.
 

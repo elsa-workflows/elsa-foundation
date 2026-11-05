@@ -1,6 +1,6 @@
 # Normal identity-provider qualification
 
-The normal Workbench at `62d6ee5f27db2b6f5c588be4d06bb2dec55ccd37` passed the 32 assertions in `receipt.json`. Seven restricted cookie-authenticated users across two tenants exercised independent decision grants, protected source/results, native/BPMN workflow-only redaction, exact source exports and Evaluate revocation after a real process restart. The earlier denied request redirected to the access-denied page; endpoint-specific cookie redirect suppression corrected the observed wire behavior to401/403.
+The normal Workbench at `2c8925a2ac808db26c6cb1b051e534b3736afbfd` passed the 37 assertions in `receipt.json`. Seven restricted cookie-authenticated users across two tenants exercised independent decision grants, protected source/results, Sequence/Flowchart/BPMN workflow-only redaction, exact source exports and Evaluate revocation after a real process restart. The earlier denied request redirected to the access-denied page; endpoint-specific cookie redirect suppression corrected the observed wire behavior to401/403.
 
 Reproduce from a clean checkout with Studio dependencies installed:
 
