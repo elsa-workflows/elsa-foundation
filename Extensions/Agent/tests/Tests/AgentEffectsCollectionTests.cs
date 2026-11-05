@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Extensions;
@@ -200,6 +201,80 @@ public sealed class AgentEffectsCollectionTests
         Assert.Equal(0, tool.PrepareCalls);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Observer_refresh_failures_keep_optional_and_required_context_exception_boundaries(bool retained, bool required)
+    {
+        var failure = new IOException(Guid.NewGuid().ToString("N"));
+        var source = new Source("failing-observation", [], required);
+        var legacy = new Source("legacy", null);
+        using var root = Build("available", new() { Failure = failure }, services =>
+        {
+            services.AddSingleton<IAgentContextProvider>(source);
+            services.AddSingleton<IAgentContextProvider>(legacy);
+        });
+        using var scope = root.CreateScope();
+        var request = new AgentContextRequest("session", "*", new Dictionary<string, string>())
+            { Disclosure = retained ? new("session", [source.Attachment()], [], false) : null };
+        var collector = scope.ServiceProvider.GetRequiredService<IAgentContextCollector>();
+        if (retained || required)
+        {
+            var error = await Assert.ThrowsAsync<AgentContributionException>(() => collector.CollectAsync(AgentPolicy.Default, request));
+            Assert.Same(failure, error.InnerException);
+            Assert.Contains(source.Descriptor.Id, error.Message);
+            Assert.DoesNotContain(failure.Message, error.Message);
+        }
+        else
+        {
+            var result = await collector.CollectAsync(AgentPolicy.Default, request);
+            Assert.True(result.Succeeded);
+            Assert.Equal(1, legacy.Calls);
+            Assert.Single(result.Value!.Attachments);
+            var diagnostic = Assert.Single(result.Value.Diagnostics);
+            Assert.Equal("agent.context.source_failed", diagnostic.Code);
+            Assert.False(diagnostic.OwnerUnavailable);
+            Assert.DoesNotContain(failure.Message, JsonSerializer.Serialize(result));
+        }
+        Assert.Equal(0, source.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Caller_cancellation_during_observation_remains_cancellation_and_never_calls_the_source(bool retained)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var source = new Source("cancelled-observation", [], false);
+        using var root = Build("available", new() { OnEvaluate = cancellation.Cancel }, services => services.AddSingleton<IAgentContextProvider>(source));
+        using var scope = root.CreateScope();
+        var request = new AgentContextRequest("session", "*", new Dictionary<string, string>())
+            { Disclosure = retained ? new("session", [source.Attachment()], [], false) : null };
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default, request, cancellation.Token));
+        Assert.Equal(cancellation.Token, error.CancellationToken);
+        Assert.Equal(0, source.Calls);
+    }
+
+    [Fact]
+    public async Task A_refresh_failure_for_new_retained_results_uses_the_legacy_sources_required_exception_boundary()
+    {
+        var failure = new IOException(Guid.NewGuid().ToString("N"));
+        var source = new Source("legacy-result-owner", null, false);
+        using var root = Build("available", new() { Failure = failure }, services => services.AddSingleton<IAgentContextProvider>(source));
+        using var scope = root.CreateScope();
+        var error = await Assert.ThrowsAsync<AgentContributionException>(() =>
+            scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+                new("session", "*", new Dictionary<string, string>())
+                    { Disclosure = new("session", [], [source.Result("performed")], false) }));
+        Assert.Same(failure, error.InnerException);
+        Assert.Contains(source.Descriptor.Id, error.Message);
+        Assert.DoesNotContain(failure.Message, error.Message);
+        Assert.Equal(0, source.Calls);
+    }
+
     private static ServiceProvider Build(string composition, Observation observation, Action<IServiceCollection> configure)
         => AgentTestServices.Create(services =>
         {
@@ -292,10 +367,18 @@ public sealed class AgentEffectsCollectionTests
     private sealed class Observation : ISchemaDormancyCheck
     {
         internal bool Available { get; set; }
+        internal Exception? Failure { get; init; }
+        internal Action? OnEvaluate { get; init; }
         public SchemaAvailability Evaluate(IEnumerable<SchemaVersionRequirement> requirements) => SchemaDormancyRule.Evaluate(requirements,
             family => new(family, null, ["0.0.0", "1.0.0"], Available ? "1.0.0" : "0.0.0", Available ? "1.0.0" : "0.0.0", false, null, [], null, DateTimeOffset.UnixEpoch));
-        public ValueTask<SchemaAvailability> EvaluateAsync(IEnumerable<SchemaVersionRequirement> requirements, CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(Evaluate(requirements));
+        public async ValueTask<SchemaAvailability> EvaluateAsync(IEnumerable<SchemaVersionRequirement> requirements, CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            OnEvaluate?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Failure is { } error) throw error;
+            return Evaluate(requirements);
+        }
         public ValueTask EnsureAvailableAsync(IEnumerable<SchemaVersionRequirement> requirements, string? featureId = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public IReadOnlyList<SchemaFamilyObservation> Observe() => [];
