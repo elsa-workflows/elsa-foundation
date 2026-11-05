@@ -1,4 +1,5 @@
 import { executableDesignerJourney } from "./executableDesignerJourney";
+import { compactInputsJourney } from "./compactInputsJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -164,4 +165,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
 
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture);
+});
+
+test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
+  await compactInputsJourney(page, info, capture);
 });

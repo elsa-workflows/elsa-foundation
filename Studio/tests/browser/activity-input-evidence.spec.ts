@@ -143,7 +143,7 @@ for (const theme of ["light", "dark"]) {
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`input values lead and source details disclose with the keyboard in ${theme} mode`, async ({ page }) => {
+  test(`compact input values lead and technical details work with the keyboard in ${theme} mode`, async ({ page }) => {
     await mockInputEvidence(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/?mode=input-evidence&theme=${theme}`);
@@ -160,12 +160,23 @@ for (const theme of ["light", "dark"]) {
     await page.locator(".wf-input-inspection-value .wf-runtime-snapshot-node > summary").click();
     await expect(page.getByText("Alex Morgan", { exact: true })).toBeVisible();
     await page.locator(".wf-input-inspection-value .wf-runtime-snapshot-node > summary").click();
-    const disclosure = policy.locator(".wf-input-inspection-summary");
+    const disclosure = policy.getByRole("button", { name: "Technical details for Policy reference", exact: true });
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByText("Source & diagnostics", { exact: true })).toHaveCount(0);
     await disclosure.focus();
     await page.keyboard.press("Enter");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
     await expect(policy.getByRole("heading", { name: "Authored source" })).toBeVisible();
     await expect(policy.getByText("Diagnostic Snapshot", { exact: true })).toBeVisible();
     await expect(policy.locator(".wf-input-inspection-value")).toHaveText("POL-1042");
+    await page.keyboard.press("Tab");
+    await expect(policy.locator(".wf-input-inspection-source details > summary")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(disclosure).toBeFocused();
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(policy.getByRole("heading", { name: "Authored source" })).toBeHidden();
+    await page.keyboard.press("Space");
+    await expect(policy.getByRole("heading", { name: "Authored source" })).toBeVisible();
     await page.keyboard.press("Space");
     await expect(policy.getByRole("heading", { name: "Authored source" })).toBeHidden();
   });
@@ -173,14 +184,22 @@ for (const theme of ["light", "dark"]) {
 
 test("input evidence wraps within narrow inspectors without horizontal scrolling", async ({ page }) => {
   await mockInputEvidence(page);
-  for (const width of [360, 700, 1200]) {
+  for (const width of [320, 390, 700, 1200]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/?mode=input-evidence");
     if (width < 1000) await page.getByRole("button", { name: "Select activity" }).click();
     const inspector = page.getByRole("complementary", { name: "Run details" });
     await expect(inspector).toBeVisible();
     await expect(page.locator(".wf-input-inspection-value").filter({ hasText: "POL-1042" })).toBeVisible();
-    const source = page.locator(".wf-input-inspection-row").filter({ hasText: "Premium" }).locator(".wf-input-inspection-summary");
+    const row = page.locator(".wf-input-inspection-row").filter({ hasText: "Premium" });
+    const source = row.getByRole("button", { name: "Technical details for Premium", exact: true });
+    const bounds = await source.boundingBox();
+    const rowBounds = await row.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(rowBounds).not.toBeNull();
+    expect(bounds!.width).toBeGreaterThanOrEqual(24);
+    expect(bounds!.x).toBeGreaterThanOrEqual(rowBounds!.x);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width);
     await source.click();
     await expect(page.getByText("variables.annualPremium * 1.05", { exact: true })).toBeVisible();
     expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);

@@ -34,6 +34,14 @@ class VerdictTests(unittest.TestCase):
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.EXPECTED_JOURNEYS), acceptance.verdict(self.report, self.root))
 
+    def test_compact_inputs_preserve_inherited_named_journeys(self):
+        required = {'collections and connection creation', 'agent authoring and navigation',
+                    'executable designer parity', acceptance.HISTORY_JOURNEY,
+                    'compact runtime Inputs retain exact captured values and accessible technical details'}
+        self.assertTrue(required <= acceptance.JOURNEYS)
+        self.assertEqual(['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed'],
+                         acceptance.CAPTURES['compact runtime Inputs retain exact captured values and accessible technical details'])
+
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
         for change in ('missing', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
             with self.subTest(change=change):

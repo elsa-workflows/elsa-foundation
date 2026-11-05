@@ -389,7 +389,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .find(section => section.querySelector("h4")?.textContent?.includes("Inputs"));
     expect(inputSection?.querySelectorAll("[role=listitem]")).toHaveLength(1);
     expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
-    expect(inputSection?.querySelector(".wf-input-inspection-caption")?.textContent).toBe("Evaluated at runtime");
+    expect(inputSection?.querySelector(".wf-input-inspection-caption")?.textContent).toBe("Runtime values");
     expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
   });
 
@@ -743,7 +743,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("Not evaluated");
   });
 
-  it("retains native input disclosures with distinct controlled regions for punctuation-containing keys", async () => {
+  it("keeps compact input details independently controlled for punctuation-containing keys", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const pairedCatalog: ActivityCatalogItem[] = [{
       ...catalog[0]!,
@@ -755,21 +755,39 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} />);
     await waitFor(() => expect(container.textContent).toContain("No runtime output snapshots were recorded"));
 
-    const summaries = [...container.querySelectorAll<HTMLElement>(".wf-input-inspection-summary")];
-    const ids = summaries.map(summary => summary.getAttribute("aria-controls"));
-    expect(summaries).toHaveLength(2);
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>(".wf-input-inspection-info")];
+    const ids = buttons.map(button => button.getAttribute("aria-controls"));
+    expect(buttons).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
-    for (const summary of summaries) {
-      const disclosure = summary.parentElement!;
-      expect(disclosure.tagName).toBe("DETAILS");
-      expect(disclosure.hasAttribute("role")).toBe(false);
-      expect(disclosure.closest("[role=listitem]")).not.toBe(disclosure);
-      const region = document.getElementById(summary.getAttribute("aria-controls")!);
-      const rowName = summary.closest("[role=listitem]")?.querySelector("strong")?.textContent;
+    expect(container.textContent).not.toContain("Source & diagnostics");
+    for (const button of buttons) {
+      const region = document.getElementById(button.getAttribute("aria-controls")!)!;
+      const rowName = button.closest("[role=listitem]")?.querySelector("strong")?.textContent;
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.getAttribute("aria-label")).toBe(`Technical details for ${rowName}`);
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      expect(region.hidden).toBe(true);
+      expect(region.getAttribute("role")).toBe("region");
       expect(region?.querySelector("section")?.getAttribute("aria-label"))
         .toBe(`${rowName} authored source`);
-      expect(disclosure.hasAttribute("open")).toBe(false);
+      expect(region.querySelector("dd")?.textContent).toBe("System.String");
+      expect(region.textContent).toContain("No runtime evaluation was recorded.");
     }
+
+    flushSync(() => buttons[0]!.click());
+    expect(buttons[0]!.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(ids[0]!)?.hidden).toBe(false);
+    expect(document.getElementById(ids[1]!)?.hidden).toBe(true);
+    buttons[0]!.focus();
+    flushSync(() => buttons[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(buttons[0]!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById(ids[0]!)?.hidden).toBe(true);
+    expect(document.activeElement).toBe(buttons[0]);
+
+    rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
+    await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
+    expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
 
   it("shows the capture reason when input values were omitted by policy", async () => {
@@ -858,7 +876,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     );
 
     await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
-    expect(container.textContent).toContain("Evaluated at runtime");
+    expect(container.textContent).toContain("Runtime values");
     expect(container.textContent).toContain("JavaScript source: variables.message");
     expect(container.textContent).toContain("Compiled binding (Expression)");
     expect(container.textContent).not.toContain("legacy summary must not render");
