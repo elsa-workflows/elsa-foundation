@@ -43,9 +43,12 @@ differs from the host id refuses the shell.
   claimed by another member, is not taken back. A member that no longer satisfies an execution's requirement hands it
   off instead of renewing.
 - **Draining.** A member that is draining claims nothing and hands off every execution it holds: it passivates the
-  local actor, which waits for an in-flight drain to finish its turn, releases the placement lease, and makes its
-  unacknowledged transport items visible. When the pump stops because the host stops or its shell is removed, it hands
-  off whatever it still holds. A shell reload is not such a stop: CShells activates the new generation before it drains
+  local actor, releases the placement lease, and makes its unacknowledged transport items visible. Passivation makes
+  an in-flight drain yield at its next step, as a waiting Cancel does, so even a drain that keeps making progress ends
+  its turn and the member releases the placement while it still holds the lease (#3678). The yielded segment's next
+  steps are durable, and the next owner continues from that checkpoint once the recovery sweep re-drives the
+  execution. When the pump stops because the host stops or its shell is removed, it hands off whatever it still
+  holds. A shell reload is not such a stop: CShells activates the new generation before it drains
   the old one, the new generation's pump renews the leases under the host id, and the old one hands off nothing when it
   stops.
 - **Failover.** The first time a shell's runtime activates in a process, its join sweep reclaims every lease held under
@@ -83,18 +86,26 @@ lapsed, take over its runtime ownership and run the same workflow. That takeover
 wait for the old owner's lease to expire, which keeps recovery fast, so keeping placement renewed is what stops two
 nodes from running one execution (#3667).
 
-That leaves one gap (#3678). A hand-off or passivation waits for the drain's turn to end, and nothing asks the drain to
-yield to it. A drain that keeps making progress on a draining member, or on one that no longer meets the execution's
-requirement, never ends its turn. Its placement lapses after one lease, another member claims it, and both run the
-execution until fencing stops the old drain.
+A hand-off or passivation makes the drain yield at its next step (#3678), so it waits only for the step that is running.
+A drain that is waiting for a continuation another deliverer holds yields at its next poll, within half a second, and
+leaves that continuation with its holder (see [durable resumption](../../../../../../docs/runtime-durable-resumption.md#a-live-drains-continuation-in-the-sweeps-hands-2225)).
+Only a step that outlasts the lease, such as an activity blocked on I/O, lets the placement lapse first; another member
+then claims the execution, and fencing refuses the old drain's next commit. A Cancel sent meanwhile waits in the
+transport, because a sweep leases nothing for an execution it is handing off, and takes effect on the next owner. A
+sweep that overlaps a hand-off the stop path started can still lease the Cancel and dispatch it. Resolving the mailbox
+then waits for the passivation, so the Cancel runs on a fresh mailbox on this member once the hand-off has passivated
+the old one. Only a caller that resolved the mailbox before the passivation began reaches the passivating mailbox. Its
+Cancel asks the drain to yield too. Once the hand-off has passivated the mailbox, the Cancel is answered `Deferred` and
+runs nothing there. If the stop path's one-lease bound cancels the hand-off first, the drain still yields to the
+Cancel, which then runs on that mailbox.
 
 An execution with a drain this pump left running gets no inline wait:
 - A Cancel for it is dispatched without waiting, reaches the drain's mailbox, and the drain yields to it. A Cancel
   forwarded from another node waits in the transport until this node's next sweep that lists the execution delivers
   it, usually within `SweepInterval` (default 10 seconds). A sweep lists a scope's pending work once, after renewing and
   before dispatching there; a Cancel sent while that scope's dispatches are waited for (at most a third of the lease in
-  all) goes to the sweep after. Failure backoff (up to `MaxBackoffInterval`) or a hand-off or passivation still pending for the execution
-  (#3678) can delay it further.
+  all) goes to the sweep after. Failure backoff (up to `MaxBackoffInterval`) can delay it further. One sent while
+  this node hands the execution off takes effect on the next owner, or here as described above.
 - Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
   the pump releases the leases of exactly those commands and the next sweep dispatches them. A command dispatched
   earlier that came back deferred or rejected keeps its lease until it lapses.

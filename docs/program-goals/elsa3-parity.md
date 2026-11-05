@@ -29,7 +29,9 @@ features. Decisions: [ADR 0085](../adr/0085-elsa-3-parity-identity-administratio
 ## Out of scope
 
 - Activity-surface gaps; #1152 keeps that record.
-- StateMachine (deferred), MQTT (Elsa Integrations), LDAP (use an external IdP).
+- StateMachine delivery belongs to the separately owner-authorized [StateMachine program #3815](state-machine.md)
+  from 4 November 2026; its previous deferral is superseded only for that scope.
+- MQTT (Elsa Integrations), LDAP (use an external IdP).
 - Studio-rendered login (ADR 0085 D7).
 
 ## Active objectives
@@ -63,6 +65,12 @@ The User Tasks portion of Phase 5 was delivered separately under owner-authorize
 [implementation #3577 / PR #3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
 Its [resulting-main qualification](../../specs/1196-user-tasks/resulting-main-qualification.md)
 records the general task/forms/API/Studio capability. This changes no other parity phase or priority.
+
+StateMachine was revisited on owner demand on 4 November and routed to [Program #3815](state-machine.md),
+with hierarchy and parallel regions both in its first-release scope. [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)
+and [ADR 0085 D10](../adr/0085-elsa-3-parity-identity-administration-and-scope.md#d10-non-identity-scope)
+record that scoped change. #1152 remains the activity-gap inventory; this does not activate its other rows,
+change parity sequencing or imply StateMachine implementation or import support.
 
 ## Removal or completion conditions
 

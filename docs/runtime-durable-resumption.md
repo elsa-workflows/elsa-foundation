@@ -169,7 +169,7 @@ Now the drain treats such a continuation as still its own. It reports *Quiesced*
 | **That worker died** | Its claim lapses after the outbox's visibility timeout (1 minute). The drain never sleeps past the earliest lapse. It then claims the item through the normal durable claim path and delivers it itself. A worker that was merely slow finds its renewal refused and skips the item. |
 | **Already delivered** | A sweep that finished delivering before the drain looked leaves only queued work. So after a drain that ran steps and stopped neither on a final status nor at its work-item budget, it also checks the run's queue. |
 | **The other worker's attempt failed** | The listing also returns the run's `FailedRetryable` continuations, so a failed attempt waiting for retry is seen even if it failed before the drain first looked. An awaited item that ended failed is found by looking it up once it leaves the listing. A failed attempt is not known to have queued anything, so the drain stops with *OutboxDeliveryFailed* (as for a failed delivery of its own), and the command answers *AcceptedButFaulted* rather than *Accepted*. It does not wait for the retry; that stays with the sweep. |
-| **Waiting too long** | All of one drain request's waiting shares one deadline, set at the first wait, so the drain's cycles cannot multiply it. It defaults to the claim visibility timeout plus a 30-second margin: 90 seconds. When it passes with a continuation still held, the drain stops with *OutboxDeliveryFailed*; the item stays with its claimant, then the sweep. Cancellation and a lost lease end the wait like any other drain step. |
+| **Waiting too long** | All of one drain request's waiting shares one deadline, set at the first wait, so the drain's cycles cannot multiply it. It defaults to the claim visibility timeout plus a 30-second margin: 90 seconds. When it passes with a continuation still held, the drain stops with *OutboxDeliveryFailed*; the item stays with its claimant, then the sweep. Cancellation and a lost lease end the wait like any other drain step. A Cancel waiting for the run's mailbox, or a passivation such as a placement hand-off, ends it at the next poll, within half a second (#3678): the drain stops *Yielded*, as it does before a step, and takes nothing back and delivers nothing, so no step is queued ahead of the Cancel and a hand-off does not wait past the placement lease. The item stays with its claimant, which delivers it and re-drives the run. |
 
 **In a coalescing segment** (#3659). A segment reads the run's queue and continuations from its overlay, which it fills from the durable store on its first read. Work another worker queues after that, and a lapsed continuation the drain takes back, exist only in the durable store. So the drain closes the segment (at most one commit) before it takes a lapsed claim back. Once a delivery it waited for settles, it starts a fresh segment from durable state. Before, it reported *Quiesced* and left that work for the next sweep, or waited until the deadline and stopped with *OutboxDeliveryFailed*. This applies in every coalescing mode, Durable included, whose sessions keep an overlay across their per-activity commits. Closing the segment is then one more commit point mid-pass, even in Ephemeral, made only when another worker held one of the run's continuations.
 
@@ -254,11 +254,19 @@ skips that delivery while another Cancel already waits, so no step is queued ahe
 work when the mailbox is passivated (it answers `Deferred`), when the provider has been disposed, when the re-drive
 fails or answers anything but `Accepted` (both are logged), and when the yielded drain throws after it yielded, for
 example from a drain observer or `CheckpointRuleViolationWorkflowFaulter`, so its turn never reports `Yielded`. An idle drain adds no
-database read for this check. Distributed placement uses the configured local mailbox on the owning node. A Cancel sent
-through another node takes effect once the owner's next placement pump sweep that lists the execution delivers it to
-that mailbox, usually within `SweepInterval` (default 10 seconds). The sweep's own waits for local work, failure
-backoff, or a hand-off or passivation still pending for the execution (#3678) can make it later. The sweep does not
-wait for the running drain (see the
+database read for this check. Passivating the mailbox makes the drain yield the same way (#3678), so a hand-off, a
+terminal eviction or a reaper does not wait for a drain that keeps making progress, nor for one that waits for a
+continuation another worker holds (see "Waiting too long" above). A Cancel that reaches the mailbox while it passivates
+asks the drain to yield too. It answers `Deferred` and runs nothing once the passivation completes; if the passivation
+is cancelled first, the drain still yields to the Cancel, which then runs on that mailbox. A Cancel that resolves the
+mailbox only then waits for the passivation and runs on a fresh mailbox. A drain that yielded to a passivation is not re-driven on that
+mailbox: the resumption sweep delivers its flushed continuations and re-drives the execution, on its next owner. A passivation that is cancelled before it takes
+the mailbox re-drives a drain that yielded to it, as a withdrawn Cancel does. Distributed placement uses the configured
+local mailbox on the owning node. A Cancel sent through another node takes effect once the owner's next placement pump
+sweep that lists the execution delivers it to that mailbox, usually within `SweepInterval` (default 10 seconds). The
+sweep's own waits for local work or failure backoff can make it later, and one sent while the owner hands the execution
+off takes effect on the next owner, or on a fresh mailbox on the owner when a sweep that overlaps the stop path's
+hand-off already leased it. The sweep does not wait for the running drain (see the
 [distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
 The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
 `InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
