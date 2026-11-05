@@ -3,6 +3,13 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if ((info.project.use.viewport?.width ?? 0) <= 1024) {
+    const overlaps = await page.locator(".sidebar .nav-section a, .sidebar .nav-group-toggle").evaluateAll(nodes => {
+      const bounds = nodes.map(node => ({ label: node.textContent?.trim(), box: node.getBoundingClientRect() })).filter(item => item.box.width > 0 && item.box.height > 0).sort((a, b) => a.box.left - b.box.left);
+      return bounds.slice(1).flatMap((item, index) => item.box.left < bounds[index].box.right - 1 ? [`${bounds[index].label} overlaps ${item.label}`] : []);
+    });
+    expect(overlaps, "Horizontal navigation destinations must not overlap").toEqual([]);
+  }
   const screenshot = info.outputPath(`${name}.png`);
   await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
   await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
@@ -44,6 +51,9 @@ test.beforeEach(async ({ page }, info) => {
 
 test("collections and connection creation", async ({ page }, info) => {
   const stamp = `${info.project.name}-${Date.now()}`;
+  await page.goto("/workflows/activity-definitions");
+  await expect(page.getByRole("table", { name: "Activity Definitions", exact: true }).or(page.getByRole("heading", { name: "No designed activities yet", exact: true }))).toBeVisible();
+  await capture(page, info, "library-initial");
   await page.goto("/security/connections");
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
@@ -169,6 +179,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(sidebar.getByRole("button", { name: "More tools" })).toHaveCount(0);
   await navLink("Connections").click();
   await expect(navLink("Connections")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
   await capture(page, info, "groups");
   await navLink("Workflows").click();
   await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
@@ -180,6 +191,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(navLink("Library")).toHaveAttribute("aria-current", "page");
   await libraryViews.getByRole("link", { name: "Activity definitions", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Activity Definitions", exact: true }).or(page.getByRole("heading", { name: "No designed activities yet", exact: true }))).toBeVisible();
   await capture(page, info, "library");
   const screens = page.getByRole("tablist", { name: "Open screens", exact: true });
   const previousScreenCount = await screens.getByRole("tab").count();
@@ -220,5 +232,6 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
     await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();
   }
   await navLink("Connections").click();
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
   await capture(page, info, "completed");
 });

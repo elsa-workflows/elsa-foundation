@@ -78,6 +78,8 @@
 @media (max-width: 1024px) {
   .sidebar .nav-group-panel { display: flex; align-items: center; }
   .sidebar .nav-section-group { margin-top: 0; }
+  .studio-shell .sidebar .nav-group-toggle { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .sidebar .nav-group-panel { flex: 0 0 auto; }
   .sidebar-settings { margin: 0; padding: 0; flex: 0 0 auto; }
   .sidebar-settings > .nav-section { padding: 0; border-top: 0; }
 }

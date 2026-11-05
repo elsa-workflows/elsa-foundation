@@ -50,6 +50,11 @@ for (const width of [390, 768, 1024]) test(`keeps navigation compact and keyboar
   const after = await page.locator(".sidebar").boundingBox();
   expect(Math.abs(after!.height - before!.height)).toBeLessThanOrEqual(1);
   expect(after!.height).toBeLessThan(110);
+  const overlaps = await page.locator(".sidebar .nav-section a, .sidebar .nav-group-toggle").evaluateAll(nodes => {
+    const bounds = nodes.map(node => ({ label: node.textContent?.trim(), box: node.getBoundingClientRect() })).filter(item => item.box.width > 0 && item.box.height > 0).sort((a, b) => a.box.left - b.box.left);
+    return bounds.slice(1).flatMap((item, index) => item.box.left < bounds[index].box.right - 1 ? [`${bounds[index].label} overlaps ${item.label}`] : []);
+  });
+  expect(overlaps).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
