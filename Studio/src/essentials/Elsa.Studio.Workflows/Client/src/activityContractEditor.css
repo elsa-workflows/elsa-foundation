@@ -314,16 +314,16 @@
   background: var(--studio-accent-soft);
 }
 
-.ad-contract-workbench-member .ad-contract-reference-field {
+.ad-contract-workbench-member .ad-contract-staged-field.ad-contract-reference-field {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
 }
 
-.ad-contract-workbench-member .ad-contract-reference-field > small {
+.ad-contract-workbench-member .ad-contract-staged-field.ad-contract-reference-field > small {
   grid-column: 1 / -1;
 }
 
-.ad-contract-workbench-member .ad-contract-reference-field > button {
+.ad-contract-workbench-member .ad-contract-staged-field.ad-contract-reference-field > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
