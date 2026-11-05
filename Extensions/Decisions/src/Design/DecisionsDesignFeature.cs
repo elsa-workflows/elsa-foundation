@@ -21,8 +21,7 @@ public static class DecisionsDesignRegistration
 {
     public static IServiceCollection AddDecisionsDesign(this IServiceCollection services, DecisionDesignOptions? options = null)
     {
-        if (services.Count(x => x.ServiceType == typeof(IDecisionAccessPolicy)) > 1)
-            throw new InvalidOperationException("Decisions has competing access-policy replacements.");
+        DecisionDesignCompositionCheck.Validate(services, requirePolicy: false);
         services.TryAddSingleton(options ?? new DecisionDesignOptions());
         services.TryAddScoped<IDecisionAccessPolicy, UnsupportedDecisionAccessPolicy>();
         services.TryAddScoped(sp => new DecisionDesignService(
@@ -31,13 +30,14 @@ public static class DecisionsDesignRegistration
             sp.GetRequiredService<Elsa.Decisions.Core.IDecisionCompiler>(),
             sp.GetRequiredService<Elsa.Decisions.Core.IDecisionEvaluator>(),
             sp.GetRequiredService<IDecisionAccessPolicy>(), sp.GetRequiredService<DecisionDesignOptions>()));
+        DecisionDesignCompositionCheck.Register(services);
         return services;
     }
 
     /// <summary>Installs a provider policy while preserving an explicit host replacement.</summary>
     public static IServiceCollection UseDecisionsAccessPolicy<TPolicy>(this IServiceCollection services) where TPolicy : class, IDecisionAccessPolicy
     {
-        var policies = services.Where(x => x.ServiceType == typeof(IDecisionAccessPolicy)).ToArray();
+        var policies = services.Where(x => x.ServiceType == typeof(IDecisionAccessPolicy) && !x.IsKeyedService).ToArray();
         if (policies.Length > 1) throw new InvalidOperationException("Decisions has competing access-policy replacements.");
         if (policies.Length == 0 || policies[0].ImplementationType == typeof(UnsupportedDecisionAccessPolicy))
             services.Replace(ServiceDescriptor.Scoped<IDecisionAccessPolicy, TPolicy>());

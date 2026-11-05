@@ -24,10 +24,22 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
     api.backend.http.postJson.mockResolvedValue(asset as never);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Unsaved decision"); expect(host.querySelector(".decision-draft-bar")?.textContent).not.toContain("Saved draft");
     const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!;
     type(name, "Purchase approval"); click(button(host, "Save decision"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions", expect.objectContaining({ name: "Purchase approval", xml: expect.stringContaining("decisionTable") }));
+  });
+  it.each(["description", "sensitivity"])("guards a new decision's %s-only edit before its name is entered", async field => {
+    const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!, "Only unsaved metadata");
+    else click(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!);
+    const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
+    api.dialogs.confirm.mockResolvedValue(false); click(button(host, "Back to decisions"));
+    await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled()); expect(navigate).not.toHaveBeenCalled();
+    if (field === "description") expect(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!.value).toBe("Only unsaved metadata");
+    else expect(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!.checked).toBe(true);
   });
   it("preserves unsaved table work after a conflicting save and supports explicit reload", async () => {
     const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
@@ -164,6 +176,19 @@ describe("Decisions Studio journeys", () => {
         name: "Exact boundary", inputs: { amount: { kind: "number", value: "9007199254740993" } }
       }));
     } finally { frame.mockRestore(); }
+  });
+  it("preserves unsaved case fields until the author saves or cancels before editing another case", async () => {
+    const api = stubApi(), cases = ["First", "Second"].map((name, index) => ({ id: `case${index}`, name, revision: `c${index}`, inputs: { amount: { kind: "number", value: `${index}` } }, expectedStatus: "Success", expectedResult: { kind: "string", value: name } }));
+    api.backend.http.getJson.mockResolvedValue({ items: cases });
+    const { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Edit First")); click(button(host, "Edit First"));
+    const form = host.querySelector("form")!, name = form.querySelector<HTMLInputElement>("input")!, amount = form.querySelector<HTMLInputElement>('[aria-label="Case input amount"]')!;
+    type(name, "Unsaved boundary"); type(amount, "9007199254740993");
+    for (const label of ["Add case", "Edit First", "Edit Second"]) { expect(button(host, label).disabled).toBe(true); click(button(host, label)); }
+    expect(name.value).toBe("Unsaved boundary"); expect(amount.value).toBe("9007199254740993");
+    expect(host.textContent).toContain("Save or cancel this case before adding or editing another case."); expect(api.backend.http.postJson).not.toHaveBeenCalled();
+    click(button(host, "Cancel")); expect(button(host, "Add case").disabled).toBe(false); expect(button(host, "Edit Second").disabled).toBe(false);
+    click(button(host, "Edit Second")); expect(host.querySelector("form")?.querySelector<HTMLInputElement>("input")?.value).toBe("Second");
   });
   it("cancels case editing with Escape and restores its opener focus", async () => {
     const api = stubApi(), { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);

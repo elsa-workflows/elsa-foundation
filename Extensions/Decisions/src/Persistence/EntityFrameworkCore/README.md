@@ -6,4 +6,6 @@ Applications may instead install `AddDecisionsModel` in their own DbContext and 
 
 The provider stores domain JSON documents under hashed tenant, kind and opaque entity identity. Revision tokens are concurrency tokens. Serializable write transactions commit aggregate changes with their operation receipt. Publication appends an immutable version and updates the asset pointer in the same transaction. Operation identity includes trusted tenant, actor and operation ID; equivalent replay returns the original confirmation and different request content conflicts. Queries never fall back to another tenant, owner or version.
 
+A decision retains at most 1,000 completed test receipts. The same serializable insertion enforces that bound after existing-operation replay. At capacity, explicitly delete retained runs through the authorized history API before testing again; no history is automatically removed.
+
 Tests qualify actual SQLite connections, concurrent CAS and publication, completed-receipt replay and consumer-owned contexts. Migration generation for four engines is separate from executing their behavior suites; no PostgreSQL/SQL Server/MySQL runtime qualification follows from SQLite results. No background task or execution driver is registered.

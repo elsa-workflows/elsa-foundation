@@ -33,7 +33,14 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     const response = page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname.endsWith("/test"));
     await button("Run saved cases").click(); const result = await response; expect(result.ok(), await result.text()).toBe(true);
     const receipt = await result.json() as Receipt; expect(receipt.passed).toBe(passed);
-    await expect(surface.getByRole("heading", { name: passed ? "All cases passed" : "Cases failed", exact: true })).toBeVisible(); return receipt;
+    await expect(surface.getByRole("heading", { name: passed ? "All cases passed" : "Cases failed", exact: true })).toBeVisible();
+    if (info.project.name.startsWith("narrow")) {
+      const explanation = surface.getByRole("region", { name: "Actual rule evaluation, scroll horizontally for input tests", exact: true }).first();
+      await expect(explanation).toBeVisible();
+      expect(await explanation.getByRole("rowheader").first().evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(120);
+      expect(await explanation.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    }
+    return receipt;
   }
   async function addCase(amount: string, category: string, expected: string, status = "Success") {
     await button("Add case").click(); const form = surface.getByRole("form", { name: "New decision case" });
@@ -43,6 +50,9 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       await expect(form).toHaveCount(0); await expect(button("Add case")).toBeFocused(); await button("Add case").click();
     }
     await form.getByLabel("Case name", { exact: true }).fill(`Boundary ${amount} ${category}`);
+    await expect(button("Add case")).toBeDisabled();
+    for (const edit of await surface.getByRole("button", { name: /^Edit Boundary / }).all()) await expect(edit).toBeDisabled();
+    await expect(form.getByLabel("Case name", { exact: true })).toHaveValue(`Boundary ${amount} ${category}`);
     await form.getByRole("textbox", { name: "Case input amount", exact: true }).fill(amount);
     await form.getByRole("textbox", { name: "Case input customerCategory", exact: true }).fill(category);
     await form.getByRole("combobox", { name: "Expected outcome", exact: true }).selectOption(status);
@@ -67,6 +77,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await page.goto("/decisions"); await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
   await expect(surface.locator(".studio-skeleton-list")).toHaveCount(0); await part("decisions-list", surface.locator("#decisions-title"));
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
+  await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
   await part("decision-create", surface.getByLabel("Name", { exact: true }));
   await button("Back to decisions").click(); await expect(button("New decision")).toBeFocused();
   await button("New decision").click(); await surface.getByLabel("Name", { exact: true }).fill(`Approval policy ${suffix}`);

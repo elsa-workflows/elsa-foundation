@@ -17,6 +17,9 @@
 .decision-table-scroll { max-width: 100%; overflow-x: auto; }
 .decision-table, .decision-assets, .decision-case-table { width: 100%; border-collapse: collapse; text-align: left; }
 .decision-table { width: max-content; min-width: 100%; }
+.decision-rule-table { min-width: 40rem; overflow-wrap: normal; }
+.decision-rule-table th[scope="row"] { min-width: 9rem; }
+.decision-rule-table th[scope="col"] { white-space: nowrap; }
 .decision-table th, .decision-table td, .decision-assets th, .decision-assets td, .decision-case-table th, .decision-case-table td { padding: .65rem; vertical-align: top; border-bottom: 1px solid var(--studio-border); }
 .decision-table thead th { background: var(--studio-surface-subtle, var(--studio-surface)); min-width: 11rem; }
 .decision-table thead th:first-child { min-width: 3rem; }

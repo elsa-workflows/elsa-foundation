@@ -219,6 +219,7 @@ not automatic constitution violations.
 | Workflow publication | [Decisions workflow design](Extensions/Decisions/src/Workflows/Design/EXTENSION_POINTS.md) |
 | Workflow execution authority | [Decisions workflow runtime](Extensions/Decisions/src/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflow disclosure | [Decisions workflow API](Extensions/Decisions/src/Workflows/Api/EXTENSION_POINTS.md) |
+| Studio authoring and version selection | [Decisions Studio](Extensions/Decisions/studio/Elsa.Studio.Decisions/EXTENSION_POINTS.md) |
 
 ### Legacy
 

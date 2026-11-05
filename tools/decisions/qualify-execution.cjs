@@ -50,7 +50,7 @@ function result(view) { const o = view.outputs.decisionResult; expect(o.isRedact
             expect(report.direct.status).toBe('Success');
             expect(report.direct.result).toEqual({ kind: 'string', value: 'Manager' });
             expect(report.direct.trace.filter(row => row.selected).map(row => row.ruleId)).toEqual(['manager']);
-            const types = { decision: 'Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision', sequence: 'Elsa.Activities.Sequence.Activities.Sequence', bpmn: 'Elsa.Activities.Bpmn.Activities.BpmnProcess', event: 'Elsa.Activities.Primitives.Activities.Event' };
+            const types = { decision: 'Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision', sequence: 'Elsa.Activities.Sequence.Activities.Sequence', flowchart: 'Elsa.Activities.Flowchart.Activities.Flowchart', bpmn: 'Elsa.Activities.Bpmn.Activities.BpmnProcess', event: 'Elsa.Activities.Primitives.Activities.Event' };
             const ids = {};
             for (const [key, t] of Object.entries(types)) {
                 const list = await api('GET', `/design/activities/definitions?search=${encodeURIComponent(t)}`);
@@ -100,6 +100,13 @@ function result(view) { const o = view.outputs.decisionResult; expect(o.isRedact
                 save();
             }
             await workflow('native', node('root', ids.sequence, [], sequence([decision(), capture('root')])));
+            await workflow('flowchart', node('root', ids.flowchart, [], {
+                kind: 'elsa.flowchart.structure', schemaVersion: '1.0.0', payload: {
+                    startNodeId: 'decision', activities: [decision(), capture('scope:root')],
+                    connections: [{ id: 'decision-capture', source: { nodeId: 'decision', port: 'Done' }, target: { nodeId: 'capture' } }],
+                    nodeMetadata: {}, connectionMetadata: {}
+                }
+            }));
             const dynamicDecision = decision();
             dynamicDecision.inputs = dynamicDecision.inputs.map(binding => binding.referenceKey === 'Inputs'
                 ? literal('Inputs', { memberKey: 'decisionInputs' }, 'WorkflowRequest') : binding);

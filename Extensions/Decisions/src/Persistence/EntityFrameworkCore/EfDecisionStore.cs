@@ -106,6 +106,8 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
         {
             if (receipt.ActorId != operation.ActorId || receipt.EvaluatedAt > receipt.CompletedAt || receipt.Comparisons.Count > MaximumInventory) throw Invalid();
             _ = await Required(db, operation.TenantId, "asset", receipt.AssetId, null, token);
+            if (await Query(db, operation.TenantId, "run").CountAsync(row => row.OwnerId == receipt.AssetId, token) >= MaximumInventory)
+                throw new DecisionDesignException("limit", "Retained decision test history reached its limit of 1000 runs. Delete a retained run before testing again.");
             Upsert(db, null, operation.TenantId, "run", receipt.Id, receipt.AssetId, "1", receipt);
             return new(receipt.Id, "1");
         }, ct);

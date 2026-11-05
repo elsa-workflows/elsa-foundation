@@ -39,6 +39,8 @@ Saved cases store their declared values. Tests execute synchronously with in-mem
 
 If interruption precedes receipt commit, report no recorded completion. Retry requires the same expected revisions/hashes; changed/deleted content conflicts instead of selecting newer content. Completed receipts store identities/hashes/safe summaries by default; raw-value retention is opt-in. The response may deliver authorized detailed comparisons transiently. Summary-only replay explicitly reports detailed payload unavailable and never reconstructs it by reevaluation. No execution/admission/recovery ledger or cleanup scheduler is added.
 
+A decision retains at most 1,000 completed test receipts. Admission checks the limit atomically with insertion and rejects a new run with an actionable deletion message when full. Existing operation-key replay still returns its receipt at the limit. Authorized History + Manage callers may explicitly delete retained runs to admit another; the provider never silently prunes history.
+
 ## Workflow publication/recovery
 
 Specific version or latest-at-workflow-publication resolves once through `IExecutableCompilationSource`, within the publication tenant and authorization boundary. Verify eligibility/hash/profile/semantics and embed immutable content/provenance in node metadata. Do not use workflow-executable dependency claims for decision IDs.

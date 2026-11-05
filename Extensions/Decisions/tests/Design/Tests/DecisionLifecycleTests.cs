@@ -1,4 +1,6 @@
 using System.Text.Json;
+using CShells.Lifecycle;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Decisions;
 using Elsa.Decisions.Core;
 using Elsa.Decisions.Design;
@@ -66,6 +68,135 @@ public sealed class DecisionLifecycleTests
         var failed = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null, new("case-fail", "Fail", Fixture.Input("1"), "Success", Expected("2")));
         var run = await fixture.Service.TestAsync(fixture.Caller, asset.Id, new("test", asset.SourceHash, [new(passed.Id, passed.Revision), new(failed.Id, failed.Revision)], asset.Revision));
         Assert.False(run.Passed); Assert.Null(run.Comparisons[0].FailurePath); Assert.Equal("$.kind", run.Comparisons[1].FailurePath);
+    }
+
+    [Fact]
+    public async Task Completed_history_cap_preserves_reads_replay_and_explicit_delete_then_retry()
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "History cap", Fixture.Xml));
+        var other = await fixture.Service.SaveAsync(fixture.Caller, null, new("create-other", "Other history", Fixture.Xml));
+        var item = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null, new("case", "One", Fixture.Input("1"), "Success", Fixture.Expected("Automatic")));
+        var now = DateTimeOffset.UtcNow; var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        await using (var database = fixture.Factory.CreateDbContext())
+        {
+            var tenantKey = (await database.Set<DecisionRecord>().FirstAsync(row => row.Kind == "asset")).TenantKey;
+            for (var index = 0; index < 1000; index++)
+            {
+                var owner = index == 999 ? other.Id : asset.Id; var id = "seed-run-" + index.ToString("D4");
+                var receipt = new DecisionTestReceipt(id, owner, fixture.Caller.SubjectId, "seed", asset.Revision, asset.SourceHash, [], [], true, false, false, now, now);
+                database.Add(new DecisionRecord { TenantKey = tenantKey, Kind = "run", Id = id, OwnerId = owner, Revision = "1", Json = JsonSerializer.Serialize(receipt, json) });
+            }
+            await database.SaveChangesAsync();
+        }
+        async Task<(TestDecisionRequest Request, DecisionTestReceipt? Receipt, DecisionDesignException? Error)> Attempt(string operation)
+        {
+            var candidate = new TestDecisionRequest(operation, asset.SourceHash, [new(item.Id, item.Revision)], asset.Revision);
+            try { return (candidate, await fixture.Service.TestAsync(fixture.Caller, asset.Id, candidate), null); }
+            catch (DecisionDesignException error) { return (candidate, null, error); }
+        }
+        var attempts = await Task.WhenAll(Task.Run(() => Attempt("at-cap")), Task.Run(() => Attempt("competing-last-slot")));
+        var winner = Assert.Single(attempts, attempt => attempt.Receipt is not null);
+        Assert.Equal("limit", Assert.Single(attempts, attempt => attempt.Error is not null).Error!.Code);
+        var request = winner.Request; var last = winner.Receipt!;
+        Assert.Equal(1000, (await fixture.Service.RunsAsync(fixture.Caller, asset.Id)).Count);
+        Assert.Equal(last.Id, (await fixture.Service.TestAsync(fixture.Caller, asset.Id, request)).Id);
+        var retry = request with { OperationId = "over-cap" };
+        var refusal = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.TestAsync(fixture.Caller, asset.Id, retry));
+        Assert.Equal("limit", refusal.Code); Assert.Contains("Delete a retained run", refusal.Message);
+        Assert.Null(await fixture.Reader.FindOperationAsync(new(fixture.Caller.TenantId, fixture.Caller.SubjectId, retry.OperationId)));
+        Assert.Equal(1000, (await fixture.Reader.ListRunsAsync(fixture.Caller.TenantId, asset.Id)).Count);
+        await fixture.Service.DeleteRunAsync(fixture.Caller, asset.Id, "seed-run-0000", "delete-retained");
+        var afterDelete = await fixture.Service.TestAsync(fixture.Caller, asset.Id, retry);
+        Assert.True(afterDelete.Passed); Assert.Equal(1000, (await fixture.Service.RunsAsync(fixture.Caller, asset.Id)).Count);
+        Assert.Equal(afterDelete.Id, (await fixture.Service.TestAsync(fixture.Caller, asset.Id, retry)).Id);
+        Assert.Null(await fixture.Reader.FindRunAsync(fixture.Caller.TenantId, asset.Id, "seed-run-0000"));
+        Assert.Single(await fixture.Reader.ListRunsAsync(fixture.Caller.TenantId, other.Id));
+    }
+
+    [Theory]
+    [InlineData("policy")]
+    [InlineData("reader")]
+    [InlineData("writer")]
+    public void Early_competing_design_replacements_are_rejected(string contract)
+    {
+        var services = new ServiceCollection(); AddReplacement(services, contract); AddReplacement(services, contract);
+        Assert.Throws<InvalidOperationException>(() => services.AddDecisionsDesign());
+    }
+
+    [Theory]
+    [InlineData("reader")]
+    [InlineData("writer")]
+    public void Early_competing_persistence_replacements_are_rejected(string contract)
+    {
+        var services = new ServiceCollection(); AddReplacement(services, contract); AddReplacement(services, contract);
+        Assert.Throws<InvalidOperationException>(() => services.AddDecisionsEntityFrameworkCore<TestContext>());
+    }
+
+    [Theory]
+    [InlineData("policy", false)]
+    [InlineData("policy", true)]
+    [InlineData("reader", false)]
+    [InlineData("writer", false)]
+    public async Task Design_startup_rechecks_late_conflicts_and_required_policy_removal(string contract, bool remove)
+    {
+        var services = new ServiceCollection(); services.AddDecisionsDesign();
+        if (remove) services.RemoveAll<IDecisionAccessPolicy>();
+        else { AddReplacement(services, contract); if (contract != "policy") AddReplacement(services, contract); }
+        using var provider = services.BuildServiceProvider();
+        var guard = Assert.Single(provider.GetServices<IShellInitializer>(), task => task is DecisionDesignCompositionCheck);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => guard.InitializeAsync());
+        Assert.Contains(contract == "policy" ? nameof(IDecisionAccessPolicy) : contract == "reader" ? nameof(IDecisionReader) : nameof(IDecisionWriter), error.Message);
+    }
+
+    [Theory]
+    [InlineData("reader", false)]
+    [InlineData("reader", true)]
+    [InlineData("writer", false)]
+    [InlineData("writer", true)]
+    public async Task Persistence_startup_rechecks_late_conflicts_and_removal(string contract, bool remove)
+    {
+        var services = new ServiceCollection(); services.AddDecisionsEntityFrameworkCore<TestContext>();
+        if (remove) services.RemoveAll(contract == "reader" ? typeof(IDecisionReader) : typeof(IDecisionWriter));
+        else AddReplacement(services, contract);
+        using var provider = services.BuildServiceProvider();
+        var guard = Assert.Single(provider.GetServices<IShellInitializer>(), task => task is DecisionPersistenceCompositionCheck);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => guard.InitializeAsync());
+        Assert.Contains(contract == "reader" ? nameof(IDecisionReader) : nameof(IDecisionWriter), error.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Exactly_one_host_replacement_before_or_after_defaults_survives_startup(bool replaceLater)
+    {
+        await using var fixture = await Fixture.Create(); var policy = new MutablePolicy(); var services = new ServiceCollection();
+        void Replace()
+        {
+            services.Replace(ServiceDescriptor.Singleton<IDecisionAccessPolicy>(policy));
+            services.Replace(ServiceDescriptor.Singleton<IDecisionReader>(fixture.Reader));
+            services.Replace(ServiceDescriptor.Singleton<IDecisionWriter>(fixture.Writer));
+        }
+        if (!replaceLater) Replace();
+        services.AddDecisionsDesign(); services.AddDecisionsEntityFrameworkCore<TestContext>();
+        if (replaceLater) Replace();
+        services.AddDecisionsDesign(); services.AddDecisionsEntityFrameworkCore<TestContext>();
+        using var provider = services.BuildServiceProvider();
+        var guards = provider.GetServices<IShellInitializer>().ToArray(); Assert.Equal(2, guards.Length);
+        foreach (var guard in guards) await guard.InitializeAsync();
+        Assert.Same(policy, provider.GetRequiredService<IDecisionAccessPolicy>());
+        Assert.Same(fixture.Reader, provider.GetRequiredService<IDecisionReader>());
+        Assert.Same(fixture.Writer, provider.GetRequiredService<IDecisionWriter>());
+    }
+
+    private static void AddReplacement(IServiceCollection services, string contract)
+    {
+        switch (contract)
+        {
+            case "policy": services.AddScoped<IDecisionAccessPolicy, MutablePolicy>(); break;
+            case "reader": services.AddScoped<IDecisionReader>(_ => throw new InvalidOperationException("Startup must count descriptors without resolving a reader.")); break;
+            case "writer": services.AddScoped<IDecisionWriter>(_ => throw new InvalidOperationException("Startup must count descriptors without resolving a writer.")); break;
+        }
     }
 
     [Fact]
@@ -348,6 +479,7 @@ public sealed class DecisionLifecycleTests
         services.AddSingleton<IDecisionCompiler>(engine); services.AddSingleton<IDecisionEvaluator>(engine);
         services.AddSingleton<IDecisionAccessPolicy>(new MutablePolicy()); services.AddDecisionsDesign();
         using var provider = services.BuildServiceProvider();
+        foreach (var guard in provider.GetServices<IShellInitializer>()) await guard.InitializeAsync();
         var service = provider.GetRequiredService<DecisionDesignService>();
         var error = await Assert.ThrowsAsync<DecisionDesignException>(async () => await service.ListAsync(new("tenant-a", "user-a")));
         Assert.Equal("unavailable", error.Code);

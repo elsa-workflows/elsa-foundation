@@ -89,7 +89,7 @@ async function wait(admin, id, suspended = false) { for (let n = 0; n < 180; n++
     const protectedVersion = await api(admin, 'POST', `/decisions/${protectedAsset.id}/publish`, { operationId: crypto.randomUUID(), expectedRevision: protectedAsset.revision });
     await status(actors.source, 'Source without SensitiveValues cannot export protected literals', 'GET', `/decisions/${protectedAsset.id}/export`, 403);
     await status(actors.evaluator, 'Evaluate without SensitiveValues cannot disclose protected output', 'POST', `/decisions/${protectedAsset.id}/evaluate`, 403, { versionId: protectedVersion.id, inputs });
-    for (const row of witness.cases.filter(item => ['native', 'bpmn'].includes(item.name))) {
+    for (const row of witness.cases.filter(item => ['native', 'flowchart', 'bpmn'].includes(item.name))) {
      const url = `/runtime/workflows/instances/${row.run.workflowExecutionId}`;
      const denied = await status(actors.workflow, `${row.name} workflow-only value read is redacted`, 'GET', url, 200); assert.equal(denied.body.outputs.decisionResult.isRedacted, true); assert.ok(denied.body.outputs.decisionResult.value == null);
      const allowed = await status(actors.reader, `${row.name} domain Read discloses output`, 'GET', url, 200); assert.equal(allowed.body.outputs.decisionResult.isRedacted, false); assert.ok(allowed.body.outputs.decisionResult.value);

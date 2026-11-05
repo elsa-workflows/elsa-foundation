@@ -58,9 +58,11 @@ public static class DecisionsEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddDecisionsEntityFrameworkCore<TContext>(this IServiceCollection services) where TContext : DbContext
     {
+        DecisionPersistenceCompositionCheck.Validate(services, requireBoth: false);
         services.TryAddScoped<EfDecisionStore<TContext>>();
         services.TryAddScoped<IDecisionReader>(sp => sp.GetRequiredService<EfDecisionStore<TContext>>());
         services.TryAddScoped<IDecisionWriter>(sp => sp.GetRequiredService<EfDecisionStore<TContext>>());
+        DecisionPersistenceCompositionCheck.Register(services);
         return services;
     }
 }
