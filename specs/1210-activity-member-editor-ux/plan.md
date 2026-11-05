@@ -7,3 +7,5 @@ Adapt diagnostic focus to select the containing member panel before focusing. Ke
 Constitution review: frontend-only internal implementation, no new public extension contract, dependencies, domain ownership, persistence policy or draft architecture. ADR 0080 risk-based testing applies. Review spec before implementation: accepted as the bounded expression of the owner's screenshot, no unresolved architecture decision.
 
 Validation: affected Workflows tests/typecheck, focused isolated browser suite, composed feature journey in four viewport/theme projects. Review current-commit screenshots independently and retain downloadable CI artifacts. Shared machine builds use normal queue; high load is recorded when interpreting timing failures.
+
+The spec's delegated coverage clarification owns the finite composed matrix. Supporting negative tests cover unchanged authority/validation boundaries and the new unavailable-driver presentation; no live permission or module-removal qualification is claimed. A docs-only coverage clarification uses exact-head hosted proof rather than repeating broad local builds under shared-machine contention.
