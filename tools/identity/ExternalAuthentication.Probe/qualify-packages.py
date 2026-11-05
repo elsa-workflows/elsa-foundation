@@ -27,7 +27,7 @@ def main():
     source = git('rev-parse', 'HEAD')
     if git('status', '--porcelain'):
         raise ValueError('Commit changes before package qualification')
-    output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix='elsa-3579-packages-'))
+    output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix='elsa-3579-packages-')).resolve()
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
     producer, feed, consumer = [output / name for name in ('producer', 'feed', 'consumer')]
