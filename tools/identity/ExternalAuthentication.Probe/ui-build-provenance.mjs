@@ -4,7 +4,7 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, re
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runOwnedCommand } from "./ui-owned-command.mjs";
-import { assertToolchain, captureToolchain, fromPath } from "./ui-toolchain.mjs";
+import { absoluteToolPath, assertToolchain, captureToolchain, isExecutableIdentity } from "./ui-toolchain.mjs";
 
 const repo = resolve(import.meta.dirname, "../../..");
 const studioBin = "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0";
@@ -12,6 +12,40 @@ const probeProject = "tools/identity/ExternalAuthentication.Probe/ExternalAuthen
 const moduleRoot = "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
 const marker = "elsa-external-auth-ui-build/v1";
 const digest = value => createHash("sha256").update(value).digest("hex");
+function phaseExecutable(phase, tools) {
+  if (phase === "controls") return tools.node;
+  if (phase === "probe") return tools.dotnet.launcher;
+  if (phase === "studio") return tools.python;
+  throw new Error("Unknown owned qualification phase.");
+}
+function commandTimeoutCap(phase, index) {
+  return (phase === "controls" ? 2 : phase === "probe" ? index === 0 ? 10 : 12 : 30) * 60_000;
+}
+function commandRecipe(phase, tools, standardOutput) {
+  const executable = phaseExecutable(phase, tools);
+  if (!isExecutableIdentity(executable) || (phase !== "studio" && standardOutput !== null)) throw new Error("Invalid phase executable or output binding.");
+  if (phase === "controls") return [[executable.path, "--test", "--test-concurrency=1",
+    "tools/identity/ExternalAuthentication.Probe/ui-evidence.test.mjs", "tools/identity/ExternalAuthentication.Probe/ui-build-provenance.test.mjs",
+    "tools/identity/ExternalAuthentication.Probe/ui-owned-command.test.mjs"]];
+  if (phase === "probe") return [
+    [executable.path, "restore", probeProject, "--locked-mode", "--disable-parallel", "--disable-build-servers", "-m:2", "-p:BuildInParallel=false", "-nodeReuse:false"],
+    [executable.path, "build", probeProject, "--no-restore", "--disable-build-servers", "-m:2", "-p:BuildInParallel=false", "-nodeReuse:false", "-p:UseSharedCompilation=false", "-p:WarningsNotAsErrors=NU1603"]];
+  if (!absoluteToolPath(standardOutput) || !relative(repo, standardOutput).startsWith("..")) throw new Error("Invalid standard producer output binding.");
+  return [[executable.path, "tools/ux-acceptance/run.py", "--output", standardOutput]];
+}
+function assertCommandExecutions(receipt, phase, tools) {
+  const validCommand = command => Array.isArray(command) && command.length > 0 && command.every(argument =>
+    typeof argument === "string" && argument.length > 0 && argument.length <= 8192 && !/[\0\r\n]/u.test(argument));
+  const expected = commandRecipe(phase, tools, receipt.standardOutput);
+  if (receipt.phase !== phase || !Array.isArray(receipt.commands) || !receipt.commands.every(validCommand) ||
+      JSON.stringify(receipt.commands) !== JSON.stringify(expected) || !Array.isArray(receipt.executions) || receipt.executions.length !== expected.length ||
+      receipt.executions.some((execution, index) => !execution || typeof execution !== "object" || Array.isArray(execution) || execution.exitCode !== 0 ||
+        execution.cleanup !== "owned-group-absent" || !Number.isSafeInteger(execution.processGroup) || execution.processGroup <= 0 ||
+        !Number.isSafeInteger(execution.timeoutMs) || execution.timeoutMs <= 0 || execution.timeoutMs > commandTimeoutCap(phase, index) ||
+        !validCommand(execution.argv) || JSON.stringify(execution.argv) !== JSON.stringify(expected[index]) || !isExecutableIdentity(execution.executable) ||
+        JSON.stringify(execution.executable) !== JSON.stringify(phaseExecutable(phase, tools))))
+    throw new Error("Qualification command/executable records do not match the expected phase and frozen tool.");
+}
 export function sourceIdentity() {
   const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 }).trim();
   if (git("status", "--porcelain")) throw new Error("UI build provenance requires clean committed source.");
@@ -48,13 +82,11 @@ function outputs(phase) {
 }
 export function assertBuildReceipt(receipt, phase, identity, actualOutputs, toolchain) {
   assertToolchain(toolchain, receipt?.toolchain);
-  if (receipt?.kind !== "successful-owned-ui-build" || receipt.phase !== phase || receipt.exitCode !== 0 ||
-      receipt.sourceSha !== identity.sourceSha || receipt.tree !== identity.tree || !Array.isArray(receipt.commands) || !receipt.commands.length ||
-      !Array.isArray(receipt.executions) || receipt.executions.length !== receipt.commands.length || receipt.executions.some((execution, index) =>
-        execution.exitCode !== 0 || execution.cleanup !== "owned-group-absent" || !(execution.timeoutMs > 0) ||
-        !execution.executable?.sha256 || execution.executable.path !== receipt.commands[index][0] || JSON.stringify(execution.argv) !== JSON.stringify(receipt.commands[index])) ||
+  if (!["studio", "probe"].includes(phase) || receipt?.kind !== "successful-owned-ui-build" || receipt.phase !== phase || receipt.exitCode !== 0 ||
+      receipt.sourceSha !== identity.sourceSha || receipt.tree !== identity.tree ||
       !Array.isArray(receipt.outputs) || !receipt.outputs.length || JSON.stringify(receipt.outputs) !== JSON.stringify(actualOutputs))
     throw new Error("UI build receipt does not match current source and actual outputs.");
+  assertCommandExecutions(receipt, phase, toolchain);
 }
 export async function verifyUiBuild(root = process.env.ELSA_EXTERNAL_AUTH_UI_BUILD_ROOT) {
   if (!root || readFileSync(join(root, ".owned-ui-build"), "utf8") !== marker) throw new Error("An owned successful UI build receipt is required.");
@@ -105,19 +137,16 @@ async function recordBuild(phase, root, standardOutput, toolchainPath) {
         throw new Error("An earlier source owns this build root; create a fresh root.");
     }
   }
-  const commandExecutable = phase === "controls" ? pin.toolchain.node : phase === "studio" ? fromPath("python3") : pin.toolchain.dotnet.launcher;
-  const commands = phase === "controls" ? [[commandExecutable.path, "--test", "--test-concurrency=1",
-    "tools/identity/ExternalAuthentication.Probe/ui-evidence.test.mjs", "tools/identity/ExternalAuthentication.Probe/ui-build-provenance.test.mjs",
-    "tools/identity/ExternalAuthentication.Probe/ui-owned-command.test.mjs"]] : phase === "studio" ? [[commandExecutable.path, "tools/ux-acceptance/run.py", "--output", standardOutput ?? join(root, "composed-standard")]] : [
-    [commandExecutable.path, "restore", probeProject, "--locked-mode", "--disable-parallel", "--disable-build-servers", "-m:2", "-p:BuildInParallel=false", "-nodeReuse:false"],
-    [commandExecutable.path, "build", probeProject, "--no-restore", "--disable-build-servers", "-m:2", "-p:BuildInParallel=false", "-nodeReuse:false", "-p:UseSharedCompilation=false", "-p:WarningsNotAsErrors=NU1603"]];
+  const commandExecutable = phaseExecutable(phase, pin.toolchain);
+  const producerOutput = phase === "studio" ? standardOutput ?? join(root, "composed-standard") : null;
+  const commands = commandRecipe(phase, pin.toolchain, producerOutput);
   const startedAt = new Date().toISOString(); const executions = [];
   for (const [index, command] of commands.entries()) {
     const log = openSync(join(root, `${phase}-build-${index}.log`), "wx", 0o600);
     try {
       assertToolchain(pin.toolchain, await captureToolchain(deadline));
       const result = await runOwnedCommand(command[0], command.slice(1), { cwd: repo, log,
-        timeoutMs: Math.min(phase === "controls" ? 2 * 60_000 : phase === "probe" ? (index === 0 ? 10 : 12) * 60_000 : 30 * 60_000, deadline - Date.now()),
+        timeoutMs: Math.min(commandTimeoutCap(phase, index), deadline - Date.now()),
         graceMs: phase === "studio" ? 60_000 : phase === "controls" ? 20_000 : 5000,
         env: { ...process.env, DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: "1", MSBUILDDISABLENODEREUSE: "1" } });
       assertToolchain(pin.toolchain, await captureToolchain(deadline));
@@ -126,7 +155,8 @@ async function recordBuild(phase, root, standardOutput, toolchainPath) {
     } finally { closeSync(log); }
   }
   if (JSON.stringify(sourceIdentity()) !== JSON.stringify(identity)) throw new Error("Source changed during the UI build.");
-  const receipt = { ...identity, kind: phase === "controls" ? "successful-owned-ui-controls" : "successful-owned-ui-build", phase, commands, toolchain: pin.toolchain, executions, operationalDeadline: new Date(deadline).toISOString(), startedAt, completedAt: new Date().toISOString(), exitCode: 0, outputs: phase === "controls" ? [] : outputs(phase) };
+  const receipt = { ...identity, kind: phase === "controls" ? "successful-owned-ui-controls" : "successful-owned-ui-build", phase, standardOutput: producerOutput, commands, toolchain: pin.toolchain, executions, operationalDeadline: new Date(deadline).toISOString(), startedAt, completedAt: new Date().toISOString(), exitCode: 0, outputs: phase === "controls" ? [] : outputs(phase) };
+  assertCommandExecutions(receipt, phase, pin.toolchain);
   writeFileSync(join(root, phase === "controls" ? "controls-run.json" : `${phase}-build.json`), JSON.stringify(receipt, null, 2), { mode: 0o600, flag: "wx" });
   console.log(JSON.stringify({ phase, sourceSha: identity.sourceSha, tree: identity.tree, outputCount: receipt.outputs.length, receiptSha256: digest(JSON.stringify(receipt, null, 2)) }));
 }
@@ -143,7 +173,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     if (options.size !== 1 || !file || !isAbsolute(file) || !relative(repo, file).startsWith("..")) throw new Error("Pin tools to a new explicit file outside the checkout.");
     const pin = { kind: "owned-ui-toolchain-pin/v1", capturedAt: new Date().toISOString(), toolchain: await captureToolchain() };
     writeFileSync(file, JSON.stringify(pin, null, 2), { mode: 0o600, flag: "wx" });
-    console.log(JSON.stringify({ file, node: pin.toolchain.node.version, dotnetHost: pin.toolchain.dotnet.host.version, sdk: pin.toolchain.dotnet.sdk.version }));
+    console.log(JSON.stringify({ file, node: pin.toolchain.node.version, dotnetHost: pin.toolchain.dotnet.host.version, sdk: pin.toolchain.dotnet.sdk.version, python: pin.toolchain.python.version }));
   } else {
     if (options.has("--output") || phase !== "studio" && options.has("--standard-output")) throw new Error("Invalid build options.");
     await recordBuild(phase, options.get("--root"), options.get("--standard-output"), options.get("--toolchain"));
