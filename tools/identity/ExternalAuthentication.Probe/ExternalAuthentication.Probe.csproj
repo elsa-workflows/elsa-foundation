@@ -5,6 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
     <ProjectReference Include="../../../Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
     <ProjectReference Include="../../../Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />

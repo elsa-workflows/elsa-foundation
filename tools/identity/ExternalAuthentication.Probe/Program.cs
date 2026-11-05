@@ -29,7 +29,10 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 var ownedRoot = Option("--owned-root") ?? throw new InvalidOperationException("Supply a new owned --owned-root directory. The probe never uses existing host stores.");
 ownedRoot = Path.GetFullPath(ownedRoot);
@@ -44,8 +47,11 @@ var settingsPath = Path.Combine(ownedRoot, "probe-settings.json");
 var settings = File.Exists(settingsPath)
     ? JsonSerializer.Deserialize<ProbeSettings>(await File.ReadAllTextAsync(settingsPath), new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new InvalidOperationException("Invalid owned probe settings.")
     : new ProbeSettings();
-if (settings.Listen is not null && (!Uri.TryCreate(settings.Listen, UriKind.Absolute, out var listen) || !listen.IsLoopback || listen.Scheme != "http" || listen.AbsolutePath != "/" || listen.UserInfo.Length != 0))
+var listenValue = Option("--listen") ?? settings.Listen;
+if (listenValue is not null && (!Uri.TryCreate(listenValue, UriKind.Absolute, out var listen) || !listen.IsLoopback || listen.Scheme != "http" || listen.AbsolutePath != "/" || listen.UserInfo.Length != 0))
     throw new InvalidOperationException("The owned probe listen address must be loopback HTTP.");
+if (settings.PublicBaseUrl is not null && (!Uri.TryCreate(settings.PublicBaseUrl, UriKind.Absolute, out var publicBase) || !publicBase.IsLoopback || publicBase.Scheme != "http" || publicBase.AbsolutePath != "/backend" || publicBase.UserInfo.Length != 0 || publicBase.Query.Length != 0 || publicBase.Fragment.Length != 0))
+    throw new InvalidOperationException("The owned probe public base must be loopback HTTP at /backend.");
 string OwnedFile(string relative)
 {
     var path = Path.GetFullPath(relative, ownedRoot);
@@ -61,9 +67,36 @@ if (uiValue is not null && (!Uri.TryCreate(uiValue, UriKind.Absolute, out ui) ||
     throw new InvalidOperationException("The optional UI must be an owned loopback HTTP development server.");
 await using var company = await ControlledOidcServer.Start();
 await using var partner = await ControlledOidcServer.Start();
+if (args.Contains("--providers-only", StringComparer.Ordinal))
+{
+    var publicBackend = Option("--public-backend");
+    if (!Uri.TryCreate(publicBackend, UriKind.Absolute, out var publicUri) || !publicUri.IsLoopback || publicUri.Scheme != "http" || publicUri.AbsolutePath != "/backend" || publicUri.UserInfo.Length != 0)
+        throw new InvalidOperationException("The provider fixture requires an owned loopback /backend public URL.");
+    foreach (var (key, provider) in new[] { ("company", company), ("partner", partner) })
+        foreach (var logicalKey in new[] { key, "studio-" + key })
+            foreach (var purpose in new[] { "signin", "preview" })
+                provider.RegisteredCallbacks.Add($"{publicBackend}/identity/external/{purpose}/{logicalKey}/callback");
+    var keeperBuilder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", Args = [] });
+    keeperBuilder.Logging.ClearProviders(); keeperBuilder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
+    await using var keeper = keeperBuilder.Build();
+    var controlKey = await File.ReadAllTextAsync(OwnedFile(Option("--control-key-file") ?? "control-key.txt"));
+    keeper.MapPost("/__probe/subject", async (HttpContext context) =>
+    {
+        if (context.Request.Headers["X-Owned-Probe-Control"] != controlKey) return Results.Unauthorized();
+        if (context.Request.ContentLength is null or > 4096) return Results.BadRequest();
+        var change = await context.Request.ReadFromJsonAsync<ProbeSubjectChange>(context.RequestAborted);
+        if (change is null || change.Provider is not ("company" or "partner") || string.IsNullOrEmpty(change.Subject) || change.Subject.Length > 400) return Results.BadRequest();
+        (change.Provider == "company" ? company : partner).Subject = change.Subject;
+        return Results.Ok();
+    }).AllowPublic("owned-provider-fixture", "Loopback-only test controller requires this invocation's private control key.");
+    await keeper.StartAsync();
+    await File.WriteAllTextAsync(Path.Combine(ownedRoot, "providers.json"), JsonSerializer.Serialize(new { Instance = Option("--instance"),
+        CompanyIssuer = company.Issuer, PartnerIssuer = partner.Issuer, ControlledOidcServer.ClientId, ControlUrl = keeper.Urls.Single() }));
+    await keeper.WaitForShutdownAsync(); return;
+}
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", Args = [] });
 builder.Logging.ClearProviders();
-builder.WebHost.UseKestrel().UseUrls(settings.Listen ?? "http://127.0.0.1:0");
+builder.WebHost.UseKestrel().UseUrls(listenValue ?? "http://127.0.0.1:0");
 var services = builder.Services;
 services.AddAuthorization();
 services.AddApiCapabilities();
@@ -73,21 +106,35 @@ if (settings.StudioUrl is not null)
     services.Configure<AspNetCoreIdentityOptions>(options => options.AllowedReturnUrlOrigins.Add(settings.StudioUrl));
 }
 services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(ownedRoot, "keys"))).SetApplicationName("elsa-3579-owned-probe");
-var database = $"Data Source={Path.Combine(ownedRoot, "identity.db")};Pooling=False";
-services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
-services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database });
-services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database });
+if (settings.Provider is not ("Sqlite" or "PostgreSql")) throw new InvalidOperationException("The owned probe qualifies SQLite or PostgreSQL only.");
+string PostgreSqlConnection(string? file)
+{
+    if (file is null) throw new InvalidOperationException("PostgreSQL needs an owned connection file.");
+    var value = File.ReadAllText(OwnedFile(file)); var parsed = new NpgsqlConnectionStringBuilder(value);
+    if (parsed.Host is not ("127.0.0.1" or "localhost" or "::1") || parsed.Port <= 1024 ||
+        parsed.Database?.StartsWith("elsa3579_", StringComparison.Ordinal) != true || parsed.Username?.StartsWith("elsa3579_", StringComparison.Ordinal) != true)
+        throw new InvalidOperationException("Refusing a PostgreSQL target outside the owned loopback fixture namespace.");
+    return value;
+}
+var database = settings.Provider == "Sqlite" ? $"Data Source={Path.Combine(ownedRoot, "identity.db")};Pooling=False" : PostgreSqlConnection(settings.ConnectionStringFile);
+services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
+if (settings.DatabaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
+services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
 services.AddSingleton<ISecretValueResolver>(new ProbeSecrets(clientSecret));
 services.AddFoundationExternalOidc(options => options.AllowLoopbackHttpForDevelopment = true);
 services.AddFoundationExternalAuthentication(options =>
 {
-    options.AllowDatabaseManagement = true; options.AllowDeploymentOverrides = true;
+    options.AllowDatabaseManagement = settings.DatabaseManagement; options.AllowDeploymentOverrides = settings.DatabaseManagement;
     if (settings.StudioUrl is not null) options.AllowedReturnUrlOrigins.Add(settings.StudioUrl);
-    options.Connections = [Connection("company", "Company", settings.CompanyIssuer ?? company.Issuer, settings.ClientId),
-        Connection("partner", "Partner", settings.PartnerIssuer ?? partner.Issuer, settings.ClientId)];
+    options.Connections = [Connection("company", "Company", settings.CompanyIssuer ?? company.Issuer, settings.ClientId, settings.Provisioning),
+        Connection("partner", "Partner", settings.PartnerIssuer ?? partner.Issuer, settings.ClientId, settings.Provisioning)];
 });
 services.AddFoundationExternalAuthenticationApi(); services.AddFoundationIdentityApi();
-services.AddOpenIddictVendorForTests(options => options.UseSqlite($"Data Source={Path.Combine(ownedRoot, "tokens.db")};Pooling=False"));
+services.AddOpenIddictVendorForTests(options =>
+{
+    if (settings.Provider == "Sqlite") options.UseSqlite($"Data Source={Path.Combine(ownedRoot, "tokens.db")};Pooling=False");
+    else options.UseNpgsql(PostgreSqlConnection(settings.TokenConnectionStringFile));
+});
 var signingPath = Path.Combine(ownedRoot, "signing.pk8");
 if (!File.Exists(signingPath))
 {
@@ -120,7 +167,8 @@ app.MapGet("/__probe/state", async (HttpContext context) =>
     var sessions = scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>();
     await sessions.Database.OpenConnectionAsync(context.RequestAborted);
     await using var count = sessions.Database.GetDbConnection().CreateCommand();
-    count.CommandText = "SELECT COUNT(*) FROM identity_authentication_sessions";
+    var table = sessions.Model.GetEntityTypes().Single(type => type.GetTableName() == "identity_authentication_sessions");
+    count.CommandText = "SELECT COUNT(*) FROM " + sessions.GetService<ISqlGenerationHelper>().DelimitIdentifier(table.GetTableName()!, table.GetSchema());
     var sessionCount = Convert.ToInt64(await count.ExecuteScalarAsync(context.RequestAborted));
     return Results.Json(new { Users = await iam.Users.CountAsync(context.RequestAborted), Links = await iam.ExternalIdentities.CountAsync(context.RequestAborted),
         Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted),
@@ -150,13 +198,13 @@ async Task Initialize()
     await using var scope = app.Services.CreateAsyncScope();
     scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
     await scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.MigrateAsync();
-    await scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>().Database.MigrateAsync();
+    if (settings.DatabaseManagement) await scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>().Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>().Database.MigrateAsync();
 }
 async Task Run()
 {
     await app.StartAsync();
-    var backend = app.Urls.Single().TrimEnd('/') + "/backend";
+    var backend = settings.PublicBaseUrl ?? app.Urls.Single().TrimEnd('/') + "/backend";
     app.Services.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.PublicBaseUrl = backend;
     await using (var scope = app.Services.CreateAsyncScope())
     {
@@ -183,10 +231,11 @@ async Task Run()
     await app.WaitForShutdownAsync();
 }
 string? Option(string name) { var index = Array.IndexOf(args, name); return index >= 0 && index + 1 < args.Length ? args[index + 1] : null; }
-static ConnectionRecord Connection(string key, string displayName, string issuer, string clientId) => new()
+static ConnectionRecord Connection(string key, string displayName, string issuer, string clientId, bool provisioning) => new()
 {
     Key = key, DisplayName = displayName, Enabled = true, Settings = new Dictionary<string, string> { ["authority"] = issuer, ["clientId"] = clientId },
-    Secrets = new Dictionary<string, SecretReference> { ["clientSecret"] = new("client-" + key, "text", "identity/external") }, Admission = new() { Type = "reject" }
+    Secrets = new Dictionary<string, SecretReference> { ["clientSecret"] = new("client-" + key, "text", "identity/external") },
+    Admission = new() { Type = provisioning ? "jit" : "reject", DefaultRoleIds = provisioning ? ["reader"] : [] }
 };
 internal sealed class ProbeSecrets(string clientSecret) : ISecretValueResolver
 {
@@ -203,4 +252,11 @@ internal sealed class ProbeSettings
     public string ClientId { get; init; } = ControlledOidcServer.ClientId;
     public string? ClientSecretFile { get; init; }
     public string? StudioUrl { get; init; }
+    public string Provider { get; init; } = "Sqlite";
+    public string? ConnectionStringFile { get; init; }
+    public string? TokenConnectionStringFile { get; init; }
+    public string? PublicBaseUrl { get; init; }
+    public bool DatabaseManagement { get; init; } = true;
+    public bool Provisioning { get; init; }
 }
+internal sealed record ProbeSubjectChange(string Provider, string Subject);

@@ -52,3 +52,40 @@ The Workbench runner proves actual shell activation and capability registration,
 and durable session inspection. It uses owned native SQLite stores for IAM, tokens, artifacts and Data Protection,
 and random fixture credentials/signing material. It is a composition smoke; provider/browser journeys are recorded
 separately. These profiles do not establish server-database/restart/separate-node or universal cross-site acceptance.
+
+## Restart and separate processes
+
+After building the probe and standalone SDK, run each profile against new owned resources:
+
+```sh
+node tools/identity/ExternalAuthentication.Probe/qualify-nodes.mjs --sqlite
+node tools/identity/ExternalAuthentication.Probe/qualify-nodes.mjs --sqlite --baseline
+node tools/identity/ExternalAuthentication.Probe/qualify-nodes.mjs
+node tools/identity/ExternalAuthentication.Probe/qualify-nodes.mjs --baseline
+```
+
+The default engine is PostgreSQL 16.15, using the locally installed image
+`postgres@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab`; pull that digest first if absent.
+The runner verifies the actual server version. Its owned container has one CPU/768 MiB, an invocation-specific
+database user and two private databases: shared IAM/catalog/artifacts, and the explicit vendor token store.
+Connection files remain private inside the owned root; the probe refuses PostgreSQL outside its loopback fixture
+namespace. SQLite uses owned files on this machine and establishes no multi-machine SQLite claim.
+
+Two independently started backend processes share the configured stores, application discriminator, filesystem
+Data Protection ring and owner-readable signing key. An owned loopback proxy deterministically routes requests
+to either node while keeping the public callback URL stable. A separate provider process keeps real signed
+OIDC/PKCE grants alive while backend processes restart. Its private controller selects disposable upstream
+subjects; each grant captures its subject at authorization time. No backend domain response is intercepted.
+
+The profiles prove same-node restart, start-on-A/complete-on-B, concurrent single completion and replay refusal,
+equal-subject issuer isolation, shared cookie/bearer validation, selected revocation and unrelated refresh survival.
+Each node receives its own retained-cookie snapshot for revocation checks. Two guarded unlink requests cannot
+remove the final user path; removed-link credentials fail while the other link stays usable on both processes.
+Managed mode also proves catalog CAS and disabled override/archive/restore/remove observation across nodes.
+Deployment-only mode installs no provider-configuration store and refuses catalog writes; a rolled-out deployment
+material change invalidates pending state. Restoring prior material cannot revive rejected state.
+
+Contexts/processes stop before PostgreSQL is frozen to private custom-format dumps. Teardown verifies ownership
+and removes only the owned container and its anonymous volumes. Receipts mark inapplicable catalog races/lifecycle
+as null in deployment-only mode. These are HTTP process/store proofs, separate from the browser, external product
+and full Studio profiles; they do not establish universal cross-site or other server-engine qualification.

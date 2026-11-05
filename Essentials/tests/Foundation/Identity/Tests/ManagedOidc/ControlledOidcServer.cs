@@ -29,6 +29,7 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
     public Action<Dictionary<string, object>>? ChangeMetadata { get; set; }
     public string TokenScenario { get; set; } = "valid";
     public string Authentication { get; set; } = "client_secret_basic";
+    public string Subject { get; set; } = "opaque-Subject";
     public bool RedirectDiscovery { get; set; }
     public bool DelayDiscovery { get; set; }
     public bool RotateOnToken { get; set; }
@@ -85,7 +86,7 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
             query["code_challenge_method"] != "S256" || string.IsNullOrEmpty(query["nonce"]) || string.IsNullOrEmpty(query["state"]))
             return Results.BadRequest();
         var code = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        codes[code] = new(query["nonce"].ToString(), query["code_challenge"].ToString(), callback);
+        codes[code] = new(query["nonce"].ToString(), query["code_challenge"].ToString(), callback, Subject);
         return Results.Redirect(QueryHelpers.AddQueryString(callback, new Dictionary<string, string?>
             { ["code"] = code, ["state"] = query["state"], ["iss"] = Issuer }));
     }
@@ -115,7 +116,7 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
         if (RotateOnToken) { RotateKey(); RotateOnToken = false; }
         var payload = new Dictionary<string, object>
         {
-            ["iss"] = Issuer, ["sub"] = "opaque-Subject", ["aud"] = ClientId,
+            ["iss"] = Issuer, ["sub"] = grant.Subject, ["aud"] = ClientId,
             ["iat"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ["nbf"] = DateTimeOffset.UtcNow.AddSeconds(-1).ToUnixTimeSeconds(),
             ["exp"] = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(), ["nonce"] = grant.Nonce,
             ["email"] = "ada@example.test", ["email_verified"] = true, ["name"] = "Ada", ["roles"] = new[] { "external-admin" }
@@ -151,5 +152,5 @@ internal sealed class ControlledOidcServer : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() { await application.DisposeAsync(); key.Dispose(); }
-    private sealed record Grant(string Nonce, string Challenge, string Callback);
+    private sealed record Grant(string Nonce, string Challenge, string Callback, string Subject);
 }

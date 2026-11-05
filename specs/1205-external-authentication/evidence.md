@@ -950,3 +950,66 @@ T027–T031 remain open for the complete admission/source/UI/deployment matrix, 
 server-database nodes, remaining operator documentation and final packaged/public consumers/current required CI.
 Independent exact-head review, merge and resulting-main proof remain required. This is an implementation and
 qualification checkpoint, not completion of #3579/#2848/#2771 or the active goal.
+
+## Restart and shared-process-store qualification (5 November)
+
+`qualify-nodes.mjs` starts independent Kestrel backend processes, a separate real signed/PKCE OIDC provider process
+and an owned loopback routing proxy. Backend processes share only their configured stores, filesystem Data Protection
+ring/application name and owner-readable signing key. Node routing keeps the trusted public callback URL stable;
+the proxy never manufactures a backend domain response. Technical HTTP clients use independent cookie jars; browser
+cookie policy and actual Studio/product behavior are covered by the separate profiles above.
+
+| Engine and mode | Result | Owned root suffix under the system temporary directory |
+|---|---|---|
+| Native SQLite, database-managed | Passed | `elsa-3579-nodes-sqlite-managed-eIkD2c` |
+| Native SQLite, deployment-only | Passed | `elsa-3579-nodes-sqlite-baseline-of5QIL` |
+| PostgreSQL 16.15, database-managed | Passed | `elsa-3579-nodes-postgres-managed-K2vAqM` |
+| PostgreSQL 16.15, deployment-only | Passed | `elsa-3579-nodes-postgres-baseline-sfaRJi` |
+
+Each root contains `node-receipt.json`, per-process logs and private fixture configuration. PostgreSQL uses pinned
+`postgres@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab`, with the running server version
+queried and checked. One CPU/768 MiB and a fresh invocation-specific database user/container isolate each run.
+IAM/catalog/artifacts use one private database; the explicit vendor token context uses a second database. Settings
+files hold credentials only in the owned root; the probe rejects PostgreSQL outside its loopback fixture namespace.
+SQLite qualification is same-machine only and creates no multi-machine SQLite claim.
+
+All four profiles pass start-on-A/complete-on-B after A stops, same-node process restart and unexpired completion,
+simultaneous callbacks on A/B with exactly one session/user/link admission, and replay refusal. Equal opaque subjects
+from the two provider issuers create distinct Elsa users. Both nodes validate the shared cookie and first-party
+bearer. Selected-session revocation rejects independent retained-cookie snapshots, access and refresh credentials
+on both nodes; an unrelated provider/user's cookie, bearer and refresh family survive.
+
+Both providers then perform actual normal sign-ins for one explicitly linked account. Concurrent guarded unlink
+requests on separate nodes commit exactly one removal; a refreshed retry refuses the final remaining path.
+Removed-link cookies/bearers fail on both nodes while credentials through the retained link remain usable. Saved
+Elsa Reader memberships remain unchanged. Managed mode also races two same-revision catalog writes with exactly
+one winner and observes a disabled explicit override, archive, restore and removal from the other process.
+Source changes reject pending flows without changing user/link/session/token counts. A fresh prospective upstream
+subject avoids accidental existing-user conflicts in that check. Restoring prior material cannot revive rejected state.
+
+Deployment-only mode installs **no provider-configuration store**, refuses catalog mutation, and uses a restarted
+node to observe changed deployment material. Its catalog CAS/lifecycle receipts are null (inapplicable), while IAM,
+artifact/session and token persistence remain real. Managed profiles start five processes; baseline profiles start
+seven because they additionally roll deployment settings forward and back. Contexts/processes stop before private
+custom-format dumps freeze both PostgreSQL databases. Teardown verifies ownership and removes only the container
+and its anonymous volumes. SQLite databases and shared keys remain in their owned roots.
+
+The initial runner copied its process wrapper, causing duplicate log-descriptor cleanup; it was corrected to retain
+one owning wrapper and remaining owned processes were explicitly stopped. A baseline assertion also incorrectly
+treated actor permission as deployment write policy: current manage permission may be true while database management
+is disabled. The corrected profile checks those independently and actually proves writes are refused. Neither
+correction changed product authorization or persistence behavior.
+
+After extending the upstream fixture with an authorization-time subject snapshot, full Identity **895/895** passes,
+zero skips. Probe build passes with zero warnings/errors. Final architecture/maps/whitespace results follow below.
+Commands and boundaries are in the [probe README](../../tools/identity/ExternalAuthentication.Probe/README.md).
+Logs: `/tmp/elsa-3579-nodes-{sqlite,postgres}-{managed,baseline}-proof.log`,
+`/tmp/elsa-3579-node-fixture-identity.log`, `/tmp/elsa-3579-node-probe-build.log`.
+
+T028 is complete for these claimed process/store modes. Complete admission/source/permission/ownership/missing-module
+UI acceptance, remaining operator/package/public-consumer/current CI gates, independent exact-head review, merge and
+resulting-main proof remain open. These four profiles do not establish universal cross-site or additional server-engine
+claims, and do not close #3579/#2848/#2771 or the active goal.
+
+Final frozen-source architecture **616/616** passes, zero skips; generated-filter and staged/worktree whitespace
+checks pass. No production library/API behavior changed in this process-qualification increment.
