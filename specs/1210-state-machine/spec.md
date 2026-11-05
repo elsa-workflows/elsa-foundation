@@ -12,7 +12,7 @@
 
 ## Decision and approval boundary
 
-The program's [OD1–OD44 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
+The program's [OD1–OD45 register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026) records accepted owner direction. This draft translates it into user journeys and verifiable requirements. It does not approve an internal interpreter, schema, event-admission implementation or technical plan.
 
 The requirements identified as accepted direction below are grounded in that register. Platform constraints reuse existing governance. The proposed completion rules and unresolved contracts have not been accepted; they remain visible in Q1–Q3.
 
@@ -34,6 +34,7 @@ A workflow author creates a StateMachine through the normal workflow/activity au
 2. **Given** a larger workflow with work before and after a nested machine, **when** that machine runs to its agreed completion, **then** the parent continues through the normal activity-composition contract.
 3. **Given** a machine intended for reuse, **when** it is published through the existing reusable-activity mechanism, **then** callers use the ordinary definition/version/publication lifecycle rather than a separately managed StateMachine definition type.
 4. **Given** a machine, compound state with sequential child-state selection, or parallel region, **when** the author configures startup, **then** an explicit initial child state is required and missing or invalid selections are diagnosed. Moving shapes does not change startup behavior.
+5. **Given** machine-level final states have explicit mappings to declared normal Elsa activity outcomes, **when** successful machine completion occurs, **then** the mapped outcome permits the enclosing workflow/Flowchart to branch under normal activity contracts. State names do not implicitly create outcome names, nested completion remains local, and data outputs follow normal Elsa rules.
 
 ### User Story 2 — Share behavior through state hierarchy (Priority: P1)
 
@@ -227,6 +228,7 @@ An author declares values that span the machine's state changes and values local
 - **FR-053**: A trigger-based action-without-exit reaction MUST re-arm only its own trigger after its action succeeds, provided the same source visit remains active. It MUST NOT re-arm before action success or after that visit ends. Other waits/deadlines MUST remain intact and an event wait MUST listen for new input without replaying the consumed event. Repeated composite trigger work retains existing external-effect guarantees. Automatic paths without an activity trigger retain their separate rules; exact scheduling/recovery integration and immediately completing trigger-loop protection remain open.
 - **FR-054**: Studio MUST show nested states and parallel regions as expandable/collapsible chart containers paired with a synchronized hierarchy outline for keyboard and non-canvas navigation. Authors MUST be able to retain parent context while collapsing detail, and ordinary activity work MUST retain the normal-editor navigation agreed in FR-035. Navigation and expand/collapse MUST NOT change execution semantics, including initial selections and transition priority. Detailed interactions, view-state persistence under existing owners and accessible/read-only/responsive journeys remain Q3.
 - **FR-055**: Normal workflow execution inspection MUST integrate the StateMachine chart and outline, active configuration, pending phases and linked event/transition history with ordinary activity details, receipts/outcomes and normal incident/recovery tools. This MUST support root and nested machines against the exact executed version, connected to their surrounding workflow/activities under existing identity, permission, inspection and recovery authorities. Accepted observable admission/selection order MUST use recorded causal evidence rather than timestamp ordering alone. Exact projection/integration, retention/availability and detailed Studio journeys remain open.
+- **FR-056**: Machine-level final states MUST support explicit mappings to declared ordinary Elsa activity outcomes so the enclosing workflow/Flowchart can branch on StateMachine completion. State names MUST NOT implicitly become outcome names, and data outputs MUST follow normal Elsa rules. Existing outcome, binding, definition/publication and exact-version contracts, successful final-entry completion and local nested completion MUST remain authoritative. Mapping representation, validation, default/unmapped behavior and source/Studio integration remain open; this requirement MUST NOT silently approve pending core architecture decisions or introduce a new outcome authority.
 
 ### Platform constraints and design obligations
 
@@ -328,3 +330,5 @@ OD25 settles structured transition configuration and the normal activity/express
 OD44 places root/nested StateMachine inspection in normal workflow execution inspection, linking chart/outline, active configuration, pending phases and event/transition history with activity details, receipts/outcomes and normal incident/recovery tools against the exact executed version (FR-055). Exact causal evidence projection, source integration, retention/availability and detailed Studio journeys remain open.
 
 OD21 chooses machine-wide and state-visit-local value scopes (FR-032). Their concrete authoring/visibility/binding integration and outcome details remain to be specified against the existing platform contracts.
+
+OD45 explicitly maps machine-level final states to declared normal activity outcomes without deriving names from states, preserving normal data-output and existing platform contracts (FR-056). Mapping representation, validation, default/unmapped behavior and source/Studio integration remain open; pending core architecture decisions retain their actual agreement boundaries.

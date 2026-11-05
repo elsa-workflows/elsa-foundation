@@ -15,7 +15,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD5 — child-first with eligible ancestor fallback | FR-007 | A03 |
 | OD6 — compatible same-event regions | FR-009, FR-010 | A06, A07 |
 | OD7 — all-region finality, explicit early exit | FR-011 | A08 |
-| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A44 together |
+| OD8 — hierarchy and parallel first release | FR-004, FR-021 | A01–A45 together |
 | OD9 — durable activity work and visible phase | FR-005 | A10 |
 | OD10 — finish selected transition before later events | FR-015 | A10, A11 |
 | OD11 — bounded durable event acceptance | FR-016, FR-017 | A11, A13 |
@@ -52,6 +52,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | OD42 — re-arm a successful action-without-exit reaction | FR-053 | A42 |
 | OD43 — collapsible nested chart and synchronized outline | FR-054 | A43 |
 | OD44 — integrated workflow execution inspection | FR-055 | A44 |
+| OD45 — explicit final-state to activity-outcome mapping | FR-056 | A45 |
 
 ## Witness definitions
 
@@ -101,6 +102,7 @@ This matrix connects accepted [owner decisions](https://github.com/elsa-workflow
 | A42 | Repeated reaction within one visit | After successful trigger-based action without exit, only that trigger re-arms while the same visit remains active; other waits/deadlines persist, consumed input is not replayed, and pending/failed action or ended visit does not re-arm it | Actual event/timer/composite-trigger and host/restart/recovery witnesses with repeated new inputs and controlled trigger-work counts; exact scheduling/recovery and immediate-completion loop protection remain open |
 | A43 | Navigate nested chart and outline | Expand/collapse retains parent context; hierarchy outline and chart remain synchronized for keyboard/non-canvas navigation; activity drill-in remains normal and navigation does not alter startup/priority semantics | Actual Studio navigation/selection controls for root/nested hierarchy and parallel regions with authored-rule checks; view-state persistence, accessible/read-only/responsive details and editor integration remain Q3 |
 | A44 | Inspect the machine in its workflow execution | Exact-version root/nested chart/outline, configuration, pending phases and linked event/transition history lead to ordinary activity evidence, receipts/outcomes and normal recovery tools; surrounding workflow context and permissions remain intact | Actual Studio/host inspection with newer published-definition negative control, durable phase/recovery/event evidence and recorded causal-order controls; projection/integration/retention/availability and detailed Studio qualification remain open |
+| A45 | Complete a nested machine through normal outcomes | Explicit machine-level final-state mapping emits its declared normal activity outcome after successful final entry, enabling the enclosing Flowchart branch; state renaming does not implicitly rename outcomes and nested completion/data outputs follow existing contracts | Actual Studio mapping/save/reload/publish and parent-machine host execution witnesses with renamed-state, final-entry wait and nested-completion controls; mapping validation/defaults and source integration remain open |
 
 ## Qualification rules
 
