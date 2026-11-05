@@ -10567,6 +10567,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservationResult.Deconstruct(o
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySafety
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIdentity
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryIntegrityException.RuntimeHistoryIntegrityException(string! workflowExecutionId, string! reason) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryIntegrityException.RuntimeHistoryIntegrityException(string! workflowExecutionId, string! reason, System.Exception? innerException) -> void
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsHistory.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! selectedStore) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore.FindHeadAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead?>

@@ -106,6 +106,101 @@ public sealed partial class SourceOwnedStimulusRouterTests
         Assert.Equal(0, (await harness.Store.FindAsync(source.SourceOutboxItemId))!.DeliveryAttemptCount);
     }
 
+    [Theory]
+    [InlineData("eligible", false)]
+    [InlineData("eligible", true)]
+    [InlineData("removed", false)]
+    [InlineData("removed", true)]
+    [InlineData("rearmed", false)]
+    [InlineData("rearmed", true)]
+    [InlineData("terminal-owner", false)]
+    [InlineData("terminal-owner", true)]
+    public async Task Saved_resume_rechecks_final_eligibility_after_actor_activation_before_enqueue_and_disposition(string condition, bool captured)
+    {
+        var recorder = captured ? new ObservationRecorder() : null;
+        await using var harness = new Harness(observations: recorder);
+        await harness.SeedMaterial();
+        await harness.Wait("existing", "wait");
+        var owner = (await harness.Executions.FindAsync("existing"))!;
+        if (captured)
+        {
+            owner = owner with { HistoryCapturePolicy = new("runtime-history-v3", 3, true, RuntimeHistoryDeliveryFacts.Kinds) };
+            await harness.Executions.SaveAsync(owner);
+        }
+        var cause = captured ? new RuntimeHistoryCausation("publisher-event", "publisher", "source-commit:send") : null;
+        var source = await harness.Source(historyCausation: cause);
+        var original = (await harness.Bookmarks.ObserveAsync("existing", "wait"))!;
+        var expected = StimulusResumeRecipient.From(original, owner, Scope);
+        await harness.Store.InstallAsync(source, new(1, source.SourceOutboxItemId, source.IntentFingerprint,
+            StimulusDeliveryScope.From((await harness.Executions.FindAsync("publisher"))!, Scope), Now, "event", "named", [], [expected]));
+        var activations = 0;
+        harness.Actors.BeforeAgent = async activation =>
+        {
+            activations++;
+            Assert.Equal("existing", activation.WorkflowExecutionId);
+            Assert.Empty(harness.Actors.Attempts);
+            Assert.Equal(original.Generation, (await harness.Bookmarks.ObserveAsync("existing", "wait"))!.Generation);
+            Assert.NotNull((await harness.Store.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot);
+            if (recorder is not null) Assert.Equal("DeliveryReceived", Assert.Single(recorder.Observations).Event.Name);
+            if (condition is "removed" or "rearmed")
+                Assert.True(await harness.Bookmarks.DeleteAsync("existing", "wait"));
+            if (condition == "rearmed")
+            {
+                await harness.Wait("existing", "wait");
+                await harness.Executions.SaveAsync(owner);
+            }
+            if (condition == "terminal-owner")
+                await harness.Executions.SaveAsync(owner with { Status = WorkflowExecutionStatus.Completed, CompletedAt = Now });
+        };
+
+        var result = await harness.Resume.DispatchAsync(source, "existing", "wait");
+
+        Assert.Equal(1, activations);
+        var eligible = condition == "eligible";
+        Assert.Equal(eligible ? BookmarkResumeDispatchStatus.Dispatched : BookmarkResumeDispatchStatus.NotFound, result.Status);
+        if (eligible)
+        {
+            var queued = Assert.Single(harness.Actors.Attempts);
+            Assert.Equal(queued, Assert.Single(harness.Actors.Accepted));
+            var payload = queued.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+            Assert.Equal("wait", payload.BookmarkId);
+            Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(expected), JsonSerializer.SerializeToElement(payload.ExpectedBookmarkResume)));
+        }
+        else
+        {
+            Assert.Empty(harness.Actors.Attempts);
+            Assert.Empty(harness.Actors.Accepted);
+            Assert.Null(result.CommandDispatch);
+        }
+        if (condition == "removed") Assert.Null(await harness.Bookmarks.FindAsync("existing", "wait"));
+        else
+        {
+            var retained = (await harness.Bookmarks.ObserveAsync("existing", "wait"))!;
+            if (condition == "rearmed") Assert.NotEqual(original.Generation, retained.Generation);
+            else Assert.Equal(original.Generation, retained.Generation);
+        }
+        if (recorder is not null)
+        {
+            Assert.Collection(recorder.Observations,
+                received => { Assert.Equal("DeliveryReceived", received.Event.Name); Assert.Equal(cause, received.Event.Causation); },
+                disposition =>
+                {
+                    Assert.Equal(eligible ? "DeliveryDispatched" : "DeliveryUnmatched", disposition.Event.Name);
+                    Assert.Equal(recorder.Observations[0].Event.HistoryEventId, disposition.Event.Causation!.HistoryEventId);
+                    Assert.Equal(source.SourceOutboxItemId, disposition.Event.Causation.DeliveryId);
+                });
+            Assert.All(recorder.Observations, observation =>
+            {
+                Assert.Equal("existing", observation.Event.WorkflowExecutionId);
+                Assert.Equal("wait", observation.Event.BookmarkId);
+                Assert.Equal(expected.ActivityExecutionId, observation.Event.ActivityExecutionId);
+                Assert.Equal(RuntimeHistoryAuthority.DeliveryObservation, observation.Event.Authority);
+            });
+            Assert.DoesNotContain(recorder.Observations, observation => observation.Event.Name is "BookmarkConsumed" or "ActivityContinuationStarted");
+        }
+        Assert.Equal(0, (await harness.Store.FindAsync(source.SourceOutboxItemId))!.DeliveryAttemptCount);
+    }
+
     private sealed class ObservationRecorder : IRuntimeHistoryObservationWriter, IRuntimeHistoryStore
     {
         public List<RuntimeHistoryObservation> Observations { get; } = [];

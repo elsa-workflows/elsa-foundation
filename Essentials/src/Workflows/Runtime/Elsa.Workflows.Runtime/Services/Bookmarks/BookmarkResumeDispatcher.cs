@@ -165,9 +165,9 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
         };
         var responseCause = cause! with { HistoryEventId = receiptEventId, WorkflowExecutionId = request.WorkflowExecutionId };
         var disposition = RuntimeHistoryDeliveryFacts.Create(policy!, request.WorkflowExecutionId, receiptId, name, _timeProvider.GetUtcNow(),
-            request.StimulusType, result.Bookmark?.BookmarkId ?? unmatched?.Expected.BookmarkId,
-            result.Bookmark?.ActivityExecutionId ?? unmatched?.Expected.ActivityExecutionId,
-            result.Bookmark?.ExecutableNodeId ?? unmatched?.Expected.ExecutableNodeId,
+            request.StimulusType, result.Bookmark?.BookmarkId ?? target?.BookmarkId,
+            result.Bookmark?.ActivityExecutionId ?? target?.ActivityExecutionId,
+            result.Bookmark?.ExecutableNodeId ?? target?.ExecutableNodeId,
             responseCause, result.CommandDispatch?.Status.ToString() ?? result.Status.ToString());
         var recorded = await RecordHistoryAsync(disposition, cancellationToken);
         if (!recorded.Recorded) return result;
@@ -294,7 +294,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher, IRunti
             partition: partition);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
-        if (saved is not null && await _delivery!.PrepareResumeAsync(saved.Source, request.WorkflowExecutionId, request.BookmarkId!, cancellationToken) is null)
+        if (saved is not null && (await _delivery!.PrepareResumeAsync(saved.Source, request.WorkflowExecutionId, request.BookmarkId!, cancellationToken)).Eligible is null)
             return new(BookmarkResumeDispatchStatus.NotFound, request.WorkflowExecutionId, reason: "The exact saved wait retired before enqueue.");
         var commandDispatch = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
         var status = MapDispatchStatus(commandDispatch.Status);
