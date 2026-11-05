@@ -1,3 +1,4 @@
+import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -273,4 +274,8 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
   await capture(page, info, "high-contrast");
   await page.keyboard.press("Escape");
+});
+
+test("executable designer parity", async ({ page }, info) => {
+  await executableDesignerJourney(page, info, capture);
 });
