@@ -1,9 +1,11 @@
+import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 async function capture(page: Page, info: TestInfo, name: string) {
+  await assertToastPlacementHolds(page);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
   await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
@@ -11,6 +13,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
   await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
+  await assertToastPlacementHolds(page);
 }
 
 async function expectToastBelowModal(toast: Locator, backdropSelector: string) {
@@ -37,6 +40,7 @@ const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: s
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
+  await releaseToastPlacementHolds(page);
   // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
   for (const creation of createdWorkflows.get(page) ?? []) {
     const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
@@ -156,6 +160,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await secret.getByRole("button", { name: "Create", exact: true }).click();
   await expect(secret).toBeHidden();
   await expect(page.locator(".studio-toast").filter({ hasText: "Secret created." })).toBeVisible();
+  const secretHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: "Secret created." }));
   await expect(page.locator(".secrets-notification")).toHaveCount(0);
   await capture(page, info, "secret-created-toast");
   // Secrets uses the lowest first-party modal layer, so the shared toast must stay below it too.
@@ -188,11 +193,13 @@ test("collections and connection creation", async ({ page }, info) => {
   await name.click();
   await expect(name).toBeFocused();
   await capture(page, info, "invalid-name");
+  await secretHold.release();
   await name.fill(`qa-${stamp}`);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
+  const connectionHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` }));
   await expect(page.locator(".connections-notice")).toHaveCount(0);
   const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
   await expect(createdRow).toBeVisible();
@@ -246,6 +253,7 @@ test("collections and connection creation", async ({ page }, info) => {
     return stack.top >= header.bottom && stack.bottom <= innerHeight && stack.left >= 0 && stack.right <= innerWidth;
   })).toBe(true);
   await capture(page, info, "toasts-over-maximized-dock");
+  await connectionHold.release();
   while (await page.locator(".studio-toast").count()) {
     await page.locator(".studio-toast").first().getByRole("button", { name: "Dismiss notification", exact: true }).press("Enter");
   }

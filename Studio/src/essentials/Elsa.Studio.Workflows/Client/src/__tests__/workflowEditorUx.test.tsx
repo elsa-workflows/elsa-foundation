@@ -1,3 +1,4 @@
+import { Activity } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -537,4 +538,30 @@ describe("useAiProviderAvailability", () => {
     flushSync(() => providerAvailability.set(true));
     expect(container.querySelector("[data-testid='value']")?.textContent).toBe("available");
   });
+});
+
+
+it.each(["scope replacement", "retained visit"] as const)("does not publish a retired error-copy result after %s", async change => {
+  let finish!: () => void;
+  const work = new Promise<void>(resolve => { finish = resolve; });
+  const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const writeText = vi.fn().mockReturnValueOnce(work).mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const copied = vi.fn(), failed = vi.fn(), firstScope = {};
+  const error = { message: "Save rejected", traceId: "scope-trace" };
+  const render = (scope: object, mode: "visible" | "hidden" = "visible") => flushSync(() => root.render(
+    <Activity mode={mode}><WorkflowAlert error={error} scope={scope} onDismiss={() => {}} onCopied={copied} onCopyFailed={failed} /></Activity>));
+  try {
+    render(firstScope);
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="Copy trace id"]')!.click());
+    if (change === "scope replacement") render({});
+    else { render(firstScope, "hidden"); render(firstScope); }
+    finish(); await work; await Promise.resolve();
+    expect(copied).not.toHaveBeenCalled(); expect(failed).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Save rejected");
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="Copy trace id"]')!.click());
+    await vi.waitFor(() => expect(copied).toHaveBeenCalledWith("Trace id"));
+  } finally {
+    if (original) Object.defineProperty(navigator, "clipboard", original); else Reflect.deleteProperty(navigator, "clipboard");
+  }
 });
