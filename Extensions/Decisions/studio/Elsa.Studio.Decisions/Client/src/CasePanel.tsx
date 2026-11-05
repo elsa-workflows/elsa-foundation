@@ -1,0 +1,72 @@
+import React, { useEffect, useRef, useState } from "react";
+import { StudioAlert, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { can, deleteCase, deleteRun, failureMessage, getRun, history, listCases, runCases, saveCase, type DecisionAsset, type DecisionCase, type DecisionValue, type DecisionVersion, type Scalar, type TestRun } from "./decisionsApi";
+import { parseTable, type Clause } from "./decisionXml";
+import { RuleExplanation } from "./RuleExplanation";
+export const initial = (type: string): Scalar => ({ kind: type === "number" ? "number" : type === "boolean" ? "boolean" : "string", value: type === "number" ? "0" : type === "boolean" ? "false" : "" });
+const scalar = (value: unknown): value is Scalar => !!value && typeof value === "object" && "kind" in value && "value" in value;
+export function displayValue(value: unknown): string {
+  if (scalar(value)) return value.kind === "null" ? "null" : value.value ?? "";
+  if (Array.isArray(value)) return `[${value.map(displayValue).join(", ")}]`;
+  if (value && typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${displayValue(item)}`).join(", ");
+  return value === null || value === undefined ? "Not retained" : String(value);
+}
+export function ValueInput({ clause, value, onChange, label }: { clause: Clause; value: Scalar; onChange(value: Scalar): void; label: string }) {
+  return <label className="decision-value-field">{label}<span className="decision-value-controls">
+    <select aria-label={`${label} value kind`} value={value.kind === "null" ? "null" : clause.type} onChange={event => onChange(event.target.value === "null" ? { kind: "null", value: null } : initial(clause.type))}><option value={clause.type}>{clause.type === "number" ? "Number" : clause.type === "boolean" ? "Boolean" : "Text"}</option><option value="null">Null</option></select>
+    {value.kind === "boolean" ? <select aria-label={label} value={value.value ?? "false"} onChange={event => onChange({ kind: "boolean", value: event.target.value })}><option value="true">True</option><option value="false">False</option></select>
+      : <input aria-label={label} disabled={value.kind === "null"} inputMode={value.kind === "number" ? "decimal" : "text"} value={value.value ?? ""} onChange={event => onChange({ ...value, value: event.target.value })} />}
+  </span></label>;
+}
+export function CasePanel({ api, asset, candidate, xml, dirty }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean }) {
+  const [cases, setCases] = useState<DecisionCase[]>([]), [runs, setRuns] = useState<TestRun[]>([]), [run, setRun] = useState<TestRun | null>(null);
+  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [editing, setEditing] = useState<DecisionCase | "new" | null>(null), [name, setName] = useState(""), [inputs, setInputs] = useState<Record<string, Scalar>>({});
+  const [expected, setExpected] = useState<Record<string, Scalar>[]>([]), [status, setStatus] = useState("Success"), [sensitive, setSensitive] = useState(false);
+  const form = useRef<HTMLFormElement>(null), opener = useRef<HTMLButtonElement | null>(null);
+  let table; try { table = parseTable(xml); } catch { table = null; }
+  const alive = useRef(true); useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => { let current = true; setLoading(true); setCases([]); setRun(null); setRuns([]); setEditing(null);
+    void listCases(api, asset.id).then(items => { if (current) setCases(items); }, failure => { if (current) setError(failureMessage(failure)); }).finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [api, asset.id]);
+  const work = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); setError(""); try { await action(); } catch (failure) { if (alive.current) setError(failureMessage(failure)); } finally { if (alive.current) setBusy(false); } };
+  const close = () => { setEditing(null); requestAnimationFrame(() => opener.current?.focus()); };
+  const edit = (item: DecisionCase | "new", button: HTMLButtonElement) => {
+    if (!table) return; opener.current = button; setEditing(item); setName(item === "new" ? "" : item.name); setStatus(item === "new" ? "Success" : item.expectedStatus); setSensitive(item === "new" ? asset.isSensitive : item.isSensitive ?? false);
+    setInputs(item === "new" ? Object.fromEntries(table.inputs.map(clause => [clause.name, initial(clause.type)])) : item.inputs ?? {});
+    const values: DecisionValue[] = item === "new" || item.expectedResult === null ? [] : Array.isArray(item.expectedResult) ? item.expectedResult : [item.expectedResult];
+    setExpected(values.length ? values.map(value => Object.fromEntries(table!.outputs.map(clause => [clause.name, scalar(value) ? value : (value as Record<string, Scalar>)[clause.name] ?? initial(clause.type)]))) : [Object.fromEntries(table.outputs.map(clause => [clause.name, initial(clause.type)]))]);
+    requestAnimationFrame(() => form.current?.querySelector<HTMLInputElement>("input")?.focus());
+  };
+  const submit = (event: React.FormEvent) => { event.preventDefault(); if (!table || !editing) return; void work(async () => {
+    const resultRows = expected.map(row => table.outputs.length === 1 ? row[table.outputs[0].name] : row);
+    const result: DecisionValue | null = status !== "Success" ? null : ["RULE ORDER", "COLLECT"].includes(table.hitPolicy) ? resultRows : resultRows[0] ?? null;
+    await saveCase(api, asset.id, { name: name.trim(), inputs, expectedStatus: status, expectedResult: result, isSensitive: sensitive }, editing === "new" ? undefined : editing);
+    const next = await listCases(api, asset.id); if (alive.current) { setCases(next); close(); }
+  }); };
+  return <section className="decision-cases" aria-labelledby="decision-cases-title"><div className="decision-section-heading"><div><h2 id="decision-cases-title">Saved cases</h2><p className="decision-muted">Check expected results against this {candidate ? `published version ${candidate.number}` : "saved draft"}.</p></div><div className="decision-actions">
+    <StudioButton disabled={busy || !table || !can(api, "decisions:manage")} onClick={event => edit("new", event.currentTarget)}>Add case</StudioButton>
+    <StudioButton variant="primary" disabled={busy || loading || dirty || !cases.length} onClick={() => void work(async () => { const next = await runCases(api, asset, cases, candidate); if (alive.current) setRun(next); })}>Run saved cases</StudioButton>
+  </div></div>
+    {dirty ? <p className="decision-muted">Save the draft before running cases so the tested content is exact.</p> : null}
+    {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+    {!table ? <p className="decision-muted">Table source is needed to edit case inputs. You can still run saved cases with your existing test permission.</p> : null}
+    {loading ? <p role="status">Loading cases…</p> : !cases.length ? <p className="decision-muted">No saved cases yet. Add representative inputs and expected results before changing a policy.</p> : <StudioTableContainer><table className="decision-case-table"><thead><tr><th scope="col">Case</th><th scope="col">Expected outcome</th><th scope="col">Actions</th></tr></thead><tbody>{cases.map(item => <tr key={item.id}><th scope="row">{item.name}</th><td>{item.expectedStatus}</td><td><div className="decision-actions"><StudioButton disabled={busy || !table || !item.inputs || !can(api, "decisions:manage")} onClick={event => edit(item, event.currentTarget)}>Edit {item.name}</StudioButton><StudioButton disabled={busy || !can(api, "decisions:manage")} onClick={() => void work(async () => { if (!await api.dialogs.confirm({ title: "Delete case", message: `Delete “${item.name}”?`, confirmLabel: "Delete", tone: "danger" })) return; await deleteCase(api, asset.id, item); if (alive.current) setCases(await listCases(api, asset.id)); })}>Delete {item.name}</StudioButton></div>{!item.inputs ? <span className="decision-muted">Protected inputs are unavailable.</span> : null}</td></tr>)}</tbody></table></StudioTableContainer>}
+    {editing && table ? <form ref={form} className="decision-case-form" onSubmit={submit} onKeyDown={event => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }} aria-busy={busy} aria-label={editing === "new" ? "New decision case" : "Edit decision case"}><h3>{editing === "new" ? "New case" : "Edit case"}</h3><fieldset disabled={busy} className="decision-case-form-fields"><legend className="decision-visually-hidden">Case details and expectations</legend><label>Case name<input required value={name} onChange={event => setName(event.target.value)} /></label>
+      <fieldset><legend>Inputs</legend><div className="decision-form-grid">{table.inputs.map(clause => <ValueInput key={clause.id} clause={clause} label={`Case input ${clause.name}`} value={inputs[clause.name] ?? initial(clause.type)} onChange={value => setInputs(previous => ({ ...previous, [clause.name]: value }))} />)}</div></fieldset>
+      <label>Expected outcome<select value={status} onChange={event => setStatus(event.target.value)}><option>Success</option><option>NoMatch</option><option>HitPolicyViolation</option><option>InvalidInput</option><option>BudgetExceeded</option></select></label>
+      {status === "Success" ? <fieldset><legend>Expected result</legend>{expected.map((row, rowIndex) => <div className="decision-form-grid" key={rowIndex}>{table.outputs.map(clause => <ValueInput key={clause.id} clause={clause} label={`Expected ${clause.name}${expected.length > 1 ? `, result ${rowIndex + 1}` : ""}`} value={row[clause.name] ?? initial(clause.type)} onChange={value => setExpected(previous => previous.map((item, index) => index === rowIndex ? { ...item, [clause.name]: value } : item))} />)}{["RULE ORDER", "COLLECT"].includes(table.hitPolicy) ? <StudioButton onClick={() => setExpected(previous => previous.filter((_, index) => index !== rowIndex))}>Remove expected result {rowIndex + 1}</StudioButton> : null}</div>)}{["RULE ORDER", "COLLECT"].includes(table.hitPolicy) ? <StudioButton onClick={() => setExpected(previous => [...previous, Object.fromEntries(table!.outputs.map(clause => [clause.name, initial(clause.type)]))])}>Add expected result</StudioButton> : null}</fieldset> : null}
+      <label className="decision-checkbox"><input type="checkbox" checked={sensitive} onChange={event => setSensitive(event.target.checked)} /> Protect saved case values</label><div className="decision-actions"><StudioButton type="submit" variant="primary" disabled={busy || !name.trim()}>Save case</StudioButton><StudioButton disabled={busy} onClick={close}>Cancel</StudioButton></div></fieldset>
+    </form> : null}
+    {run ? <TestResult run={run} changed={!candidate && run.candidateHash !== asset.sourceHash || dirty} /> : null}
+    {can(api, "decisions:history") ? <div className="decision-history"><h3>Test history</h3><StudioButton disabled={busy} onClick={() => void work(async () => { const items = await history(api, asset.id); if (alive.current) setRuns(items); })}>Load test history</StudioButton>{runs.map(item => <div className="decision-history-row" key={item.id}><span>{item.passed ? "Passed" : "Failed"} · {new Date(item.completedAt).toLocaleString()}</span><StudioButton disabled={busy} onClick={() => void work(async () => { const receipt = await getRun(api, asset.id, item.id); if (alive.current) setRun(receipt); })}>Inspect run {item.id}</StudioButton>{can(api, "decisions:manage") ? <StudioButton disabled={busy} onClick={() => void work(async () => { if (!await api.dialogs.confirm({ title: "Delete test history", message: "Delete this completed test receipt and retained details?", confirmLabel: "Delete", tone: "danger" })) return; await deleteRun(api, asset.id, item.id); if (alive.current) { setRuns(previous => previous.filter(row => row.id !== item.id)); if (run?.id === item.id) setRun(null); } })}>Delete run {item.id}</StudioButton> : null}</div>)}</div> : null}
+  </section>;
+}
+export function TestResult({ run, changed }: { run: TestRun; changed: boolean }) {
+  return <section className="decision-test-result" aria-label="Decision test results"><h3>{run.passed ? "All cases passed" : "Cases failed"}</h3><p>{changed ? "These results belong to an earlier saved candidate." : "Exact tested candidate"} <code>{run.candidateId}</code></p><p className="decision-muted">Content {run.candidateHash}</p>
+    {!run.hasDetailedPayload ? <p className="decision-muted">Detailed values were not retained or are unavailable with your permissions.</p> : null}
+    {run.comparisons?.map(item => <article className="decision-comparison" key={item.caseId}><h4>{item.name} · {item.passed ? "Passed" : "Failed"}</h4><p>{item.status}{item.failurePath ? ` at ${item.failurePath}` : ""}</p>{item.expected !== undefined && item.expected !== null ? <p>Expected: <output>{displayValue(item.expected)}</output></p> : null}{item.actual !== undefined && item.actual !== null ? <p>Actual: <output>{displayValue(item.actual)}</output></p> : null}{item.matchedRules?.length ? <p>Matched rules: {item.matchedRules.join(", ")}</p> : null}{item.selectedRules?.length ? <p>Selected rules: {item.selectedRules.join(", ")}</p> : null}{item.trace?.length ? <RuleExplanation trace={item.trace} /> : null}</article>)}
+  </section>;
+}
