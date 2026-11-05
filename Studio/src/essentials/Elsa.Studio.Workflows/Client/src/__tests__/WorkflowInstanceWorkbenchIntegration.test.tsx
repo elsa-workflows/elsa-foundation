@@ -1366,3 +1366,23 @@ it("shows the short flowchart cause while retaining the original technical messa
   expect(row.message).toBe(message);
   expect(getIncidentRootCause(incident({ message: "Other failure", metadata: { "runtime.faultInnerMessage": "Select a task assignee or a group." } }))).toBe("Select a task assignee or a group.");
 });
+
+it("shows workflow outputs in run details while preserving payload format and redaction", async () => {
+  api.getWorkflowInstance.mockResolvedValue({ ...workflowDetails(), outputs: {
+    ReviewData: { value: { kind: "object", properties: [{ name: "Note", value: { kind: "string", preview: "Approved" } }] }, captureMode: "DiagnosticSnapshot", isRedacted: false, capturedAt: "2026-11-04T10:00:00Z" },
+    Payload: { value: { kind: "object", Note: "Raw payload" }, captureMode: "Payload", isRedacted: false, capturedAt: "2026-11-04T10:00:00Z" },
+    Secret: { value: "must-never-render", isRedacted: true, redactionReason: "Hidden by policy", capturedAt: "2026-11-04T10:00:00Z" }
+  } });
+  renderWorkbench("details");
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain("Approved"));
+  const outputs = container.querySelector('[aria-label="Workflow outputs"]')!;
+  expect(outputs.textContent).toContain("ReviewData"); expect(outputs.textContent).toContain("Note");
+  expect(outputs.textContent).toContain('"kind": "object"'); expect(outputs.textContent).toContain("Raw payload");
+  expect(outputs.textContent).toContain("Hidden by policy"); expect(outputs.textContent).not.toContain("must-never-render");
+});
+
+it.each([undefined, {}])("distinguishes unavailable workflow output evidence from no captured outputs (%s)", async outputs => {
+  api.getWorkflowInstance.mockResolvedValue({ ...workflowDetails(), outputs });
+  renderWorkbench("details");
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain(outputs ? "No workflow outputs have been captured." : "Workflow output inspection is unavailable on this host."));
+});

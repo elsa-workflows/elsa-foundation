@@ -318,3 +318,10 @@ it("recovers an immutable-version collision without discarding the authored fiel
   expect(field("Version").value).toBe("3"); expect(field("Name").value).toBe("Edited purchase");
   await click("Publish form version"); expect(post.mock.calls[1][1]).toMatchObject({ name: "Edited purchase", version: "3" });
 });
+
+it("distinguishes published forms that share a display name", async () => {
+  const get = vi.fn().mockResolvedValue({ items: ["purchase", "expense"].map(id => ({ form: { id, version: "1", name: "Approval" }, createdAt: "2026-11-02T10:00:00Z" })) });
+  await act(async () => root.render(<FormEditor api={api(get)} descriptor={{ name: "FormId", typeName: "String", uiHint: "user-task-form" }} value={null} context={{ activity: {}, expressionDescriptors: [] }} onChange={vi.fn()} />));
+  await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select")!.disabled).toBe(false));
+  expect([...container.querySelectorAll("option")].map(item => item.textContent)).toEqual(["No form", "Approval (purchase)", "Approval (expense)"]);
+});

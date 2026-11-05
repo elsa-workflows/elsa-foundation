@@ -41,6 +41,7 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
         var projection = Assert.Single(projections);
         Assert.Equal("Result", projection.Name);
         Assert.Equal("done", projection.Value!.Value.GetString());
+        Assert.Equal(RuntimePayloadCaptureMode.Payload, projection.CaptureMode);
         Assert.False(projection.IsRedacted);
     }
 
@@ -74,6 +75,7 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
         Assert.Equal("Result", projection.Name);
         Assert.False(projection.IsRedacted);
         Assert.Null(projection.RedactionReason);
+        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, projection.CaptureMode);
         var snapshot = Assert.IsType<JsonElement>(projection.Value);
         Assert.Equal("string", snapshot.GetProperty("kind").GetString());
         Assert.Equal("done", snapshot.GetProperty("preview").GetString());

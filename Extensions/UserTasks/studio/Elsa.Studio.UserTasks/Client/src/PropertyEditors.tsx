@@ -72,7 +72,7 @@ export function FormEditor({ api, value, disabled, onChange, context, descriptor
   const selected = typeof value === "string" ? value : "";
   const versions = items.filter(item => item.form.id === formId);
   const ids = [...new Set(items.map(item => item.form.id))];
-  const options = versionMode ? versions.map(item => ({ value: item.form.version, label: `Version ${item.form.version}` })) : ids.map(id => ({ value: id, label: items.find(item => item.form.id === id)!.form.name }));
+  const options = versionMode ? versions.map(item => ({ value: item.form.version, label: `Version ${item.form.version}` })) : ids.map(id => ({ value: id, label: `${items.find(item => item.form.id === id)!.form.name} (${id})` }));
   const unavailable = Boolean(selected && !options.some(item => item.value === selected));
   const invalid = !loading && !error && !dynamicForm && (versionMode ? Boolean(formId && (!selected || unavailable)) : unavailable);
   useEffect(() => { onValidationChange?.(invalid); return () => onValidationChange?.(false); }, [invalid, onValidationChange]);

@@ -4,6 +4,7 @@ import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDet
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 import "./activityInspection.css";
 import "./activityExecutionBrowser.css";
+import { RuntimeCapturedValue } from "./RuntimeValueEvidence";
 import { latestActivityExecution } from "../runtimeActivityOrder";
 import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
@@ -2525,6 +2526,19 @@ function WorkflowInstanceInspector({
                     />
                   </dl>
                   <WorkflowInstanceInspectionNote inspectionGranularity={details.inspectionGranularity} />
+                  <section className="wf-instance-section" aria-label="Workflow outputs">
+                    <h3>Workflow outputs</h3>
+                    {!details.outputs ? <p>Workflow output inspection is unavailable on this host.</p> : !Object.keys(details.outputs).length ? <p>No workflow outputs have been captured.</p> : (
+                      <div className="wf-runtime-input-list" role="list">
+                        {Object.entries(details.outputs).map(([name, output]) => (
+                          <article className="wf-runtime-input" role="listitem" key={name}>
+                            <header><strong>{name}</strong><small>Captured {formatDate(output.capturedAt)}</small></header>
+                            {output.isRedacted ? <p>{output.redactionReason || "This output is redacted."}</p> : <RuntimeCapturedValue value={output.value} captureMode={output.captureMode} />}
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
                 </>
               )}
             </div>

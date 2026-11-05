@@ -73,6 +73,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
     await page.getByLabel("Task form", { exact: true }).selectOption(formId);
     await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
+    for (const label of ["Task form", "Task form version"]) {
+      await expect.poll(() => page.getByLabel(label, { exact: true }).evaluate(element => getComputedStyle(element).backgroundImage)).not.toBe("none");
+    }
     await expect(page.getByRole("button", { name: "Remove action 1", exact: true })).toHaveText("");
     await page.getByLabel("Action 1", { exact: true }).scrollIntoViewIfNeeded();
     await captureInspector("task-authoring", page.getByLabel("Action 1", { exact: true }));
@@ -118,6 +121,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
+    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundImage)).not.toBe("none");
     const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header label", { hasText: /^Value$/ }) });
     await valueRow.locator("button.wf-syntax-picker-trigger").click(); await page.getByRole("option", { name: /^Variable/ }).click();
     await selectVariable(page.getByRole("combobox", { name: "Variable reference", exact: true }));
@@ -149,7 +153,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByRole("button", { name: "Approve", exact: true }).click();
     await expect.poll(async () => (await get(`/runtime/workflows/instances/${runId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
     const completed = await get(`/runtime/workflows/instances/${runId}`);
-    expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
+    expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
     await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${runId}`);
     const runtimeTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
     await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
@@ -160,7 +164,10 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByRole("tab", { name: "Details", exact: true }).click();
     const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
     if (await maximize.isVisible()) await maximize.click();
-    await page.setViewportSize(projectViewport); await capture(page, info, "workflow-result");
+    await page.setViewportSize(projectViewport);
+    const result = page.getByRole("region", { name: "Workflow outputs", exact: true });
+    await expect(result).toContainText("RenamedData"); await expect(result).toContainText("Approved with case preserved");
+    await result.scrollIntoViewIfNeeded(); await capture(page, info, "workflow-result");
 
     const catalog = await get("/design/activities/definitions?search=CreateUserTask");
     const taskVersion = catalog.items.find((item: { definition: { activityTypeKey: string } }) => item.definition.activityTypeKey.endsWith("CreateUserTask"))!.definition.headVersionId;

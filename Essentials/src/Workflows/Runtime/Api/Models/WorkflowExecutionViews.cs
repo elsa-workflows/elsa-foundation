@@ -118,8 +118,10 @@ public sealed record WorkflowOutputView(
     string? RedactionReason,
     DateTimeOffset CapturedAt)
 {
+    public string? CaptureMode { get; init; }
+
     public static WorkflowOutputView From(WorkflowOutputProjection projection) =>
-        new(projection.Value, projection.IsRedacted, projection.RedactionReason, projection.CapturedAt);
+        new(projection.Value, projection.IsRedacted, projection.RedactionReason, projection.CapturedAt) { CaptureMode = projection.CaptureMode?.ToString() };
 
     public static WorkflowOutputView Redacted(DateTimeOffset capturedAt) =>
         new(null, true, "Caller is not authorized to inspect sensitive values.", capturedAt);
