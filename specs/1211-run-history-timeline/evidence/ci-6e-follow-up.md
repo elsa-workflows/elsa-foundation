@@ -18,7 +18,7 @@ PR head `6e73c806ca6979660c20ea26cdab8e63414ba737` completed [CI42045484081](htt
 | Composed diagnostics | Not reached | Primary phase failed |
 | Full tier | Not run on this draft | Draft decision success is not test execution |
 
-The current canonical inventory is **24 primary +2 diagnostics =26**: five nonhistory journeys in four projects, plus four Timeline projects. All **20 Timeline frames per history project** remain required. The older 20+2 count describes an earlier integration snapshot, before the additional main journeys.
+The 6e canonical inventory is **24 primary +2 diagnostics =26**: five nonhistory journeys in four projects, plus four Timeline projects. All **20 Timeline frames per history project** remain required. The older 20+2 count describes an earlier integration snapshot, before the additional main journeys.
 
 Downloaded artifact `studio-ux-73549adbc535ad561eb646834cb4ee61041fec2f-1`, ID `13428526456`, is 417,915,733 bytes. Original report, Playwright results, PNG/ARIA and traces remain retained at `/tmp/1211-6e73-ux.zip`; concise case inventory is `/tmp/1211-6e73-ux-case-inventory.json`. The author opened actual desktop-light failed-menu and 320px dark Minimal PNGs and the menu ARIA. This is diagnosis, not independent visual approval. Raw traces remain local and must not be reproduced with request credentials.
 
@@ -55,3 +55,10 @@ The author and existing Studio source worker opened the actual desktop-light and
 The prepared correction preserves native start alignment and then makes an ordinary−8px scroll on the nearest already active `overflow-y:auto/scroll` ancestor. This keeps the heading and nearby Journal tab together. It changes no DOM content/styles or product state. Ratio1, all five hit-tests, both context anchors, all20 frames and normal300-second timeout remain. Actual geometry in all four projects requires qualification. Current e18 jobs are retained; no replacement push was made merely to cancel unfinished evidence.
 
 The separately reserved51e EF4 phase has since passed **4/4**, zero skips/retries, after normal canonical verification/locked restore. The complete head/policy, fresh-context replay,4,097-entry transaction/marker and refusal assertions executed. [Scoped receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6663395395) preserves exact TRX/binary/source manifests and original79 failures. `/tmp/1211-r4-51e-ef-positive/cleanup-final.json` verifies all five launched/descendant groups empty using78 scoped observed process identities; no signals or unrelated mutations. Its backend/build source equals e18. No current-head54-case aggregate or whole-feature acceptance is asserted; the next single saved-resume causal phase is requested separately, not launched.
+
+
+## Delivered-main integration before next publication
+
+The prepared candidate normally merges delivered main `5e333363bb1f18e460209e1f4f5525c12ae2656b`, including #3891 canonical BPMN gateway handling and #3864 template metadata defaults. All incoming source, assertions and five new template captures in each baseline project are preserved. Static evaluation of the merged unmodified runner yields **28 primary +2 diagnostics =30**, **304 primary PNG/ARIA pairs**, and all 20 Timeline frames in each of four history projects. Earlier e18 used main055 and its actual24+2 inventory; its results do not qualify this newer source.
+
+No Essentials/build source differs from e18. Reserved renderer/CSS blobs remain `7fba03d55df3ba489d5acfb55892de7fe86c4bc2`, `88be5d2426b4b348797462bcb1e27f3959d9b6fd` and `b0b5f0874ccb224098a5d8ec3f8a691792ed6d23`; unpublished local main remains `b7fc0ec330ad55a2062b5badbf7697705852201b`. `/tmp/1211-main5e-integration-inventory.json` records the immutable source/inventory check. No build, test or native execution is asserted for that merge.
