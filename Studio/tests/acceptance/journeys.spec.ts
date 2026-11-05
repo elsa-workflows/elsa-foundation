@@ -76,8 +76,10 @@ test("collections and connection creation", async ({ page }, info) => {
   const secretRow = page.getByRole("row").filter({ hasText: secretName });
   await expect(secretRow).toBeVisible();
   await capture(page, info, "secret-list");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
   await expect(secretRow.getByRole("status")).toHaveText("Copied");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
   await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
