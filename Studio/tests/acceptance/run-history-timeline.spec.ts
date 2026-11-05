@@ -9,7 +9,20 @@ if (process.env.UX_ACCEPTANCE_OWNED !== "1" || !backend || !restartDirectory) th
 
 async function revealCaptureAnchor(anchor: Locator, block: "start" | "center" = "center") {
   await anchor.scrollIntoViewIfNeeded();
-  await anchor.evaluate((element, alignment) => element.scrollIntoView({ block: alignment, inline: "nearest", behavior: "instant" }), block);
+  await anchor.evaluate((element, alignment) => {
+    element.scrollIntoView({ block: alignment, inline: "nearest", behavior: "instant" });
+    if (alignment !== "start") return;
+    // Fractional line heights can clip at an integer scroll boundary. Keep the
+    // heading and nearby Journal tab together inside the real viewport.
+    let parent = element.parentElement;
+    while (parent) {
+      if (["auto", "scroll"].includes(getComputedStyle(parent).overflowY) && parent.scrollTop > 0) {
+        parent.scrollBy({ top: -8, behavior: "instant" });
+        break;
+      }
+      parent = parent.parentElement;
+    }
+  }, block);
 }
 async function assertCaptureAnchor(anchor: Locator) {
   await expect(anchor).toBeInViewport({ ratio: 1 });
