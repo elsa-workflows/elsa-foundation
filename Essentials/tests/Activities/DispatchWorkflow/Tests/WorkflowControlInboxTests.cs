@@ -8,8 +8,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Services.Executions;
-using Elsa.Workflows.Runtime.Services.Coalescing;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -261,28 +259,22 @@ public sealed class WorkflowControlInboxTests
         Assert.True(await fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().IsDeletionTombstonedAsync(workflow.WorkflowExecutionId));
     }
 
-    private static void EnableCoherentDeletion(IServiceCollection services) =>
+    private static void EnableCoherentDeletion(IServiceCollection services)
+    {
+        var factory = services.Last(item => item.ServiceType == typeof(IWorkflowExecutionDeletionStore)).ImplementationFactory
+            ?? throw new InvalidOperationException("The fixture requires the registered Runtime deletion factory.");
         services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionDeletionStore>(provider =>
-            // Keep checkpoint recording for the witness, but qualify deletion against the same raw provider
-            // aggregate used by that recorder and the coalescing overlays, as production composition does.
-            new InMemoryWorkflowExecutionDeletionStore(
-                provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
-                provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
-                Underlying<IActivityExecutionInspectionStore>(provider),
-                provider.GetRequiredService<IActivityExecutionHierarchyStore>(),
-                Underlying<IWorkflowExecutionStateStore>(provider),
-                provider.GetRequiredService<IExecutionLivenessStateStore>(),
-                Underlying<IActivityExecutionStateStore>(provider),
-                provider.GetRequiredService<IActivityExecutionInspectionWriter>(),
-                provider.GetRequiredService<IActivityExecutionHierarchyWriter>(),
-                provider.GetRequiredService<IBookmarkStateStore>(),
-                Underlying<IDurableValueStateStore>(provider), Underlying<ISchedulerStateStore>(provider),
-                provider.GetRequiredService<IDurableTimerStore>(), Underlying<IWorkflowSchedulerWorkQueue>(provider),
-                provider.GetRequiredService<IIncidentStateStore>(), provider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
-                provider.GetRequiredService<IWorkflowHoldStateStore>())));
+            (IWorkflowExecutionDeletionStore)factory(new DeletionParticipants(provider))));
+    }
 
-    private static T Underlying<T>(IServiceProvider provider) where T : class =>
-        provider.GetService<CoalescingInner<T>>()?.Value ?? provider.GetRequiredService<T>();
+    // Reuse the production composition, including its scoped history participation. Substitute only the
+    // fixture's recording checkpoint decorator with the same actual native writer that it records.
+    private sealed class DeletionParticipants(IServiceProvider services) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => serviceType == typeof(IRuntimeCheckpointCommitStore)
+            ? services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>()
+            : services.GetService(serviceType);
+    }
 
     [Fact]
     public async Task A_valid_terminal_source_read_outage_keeps_the_bookmark_and_barrier_owed_until_retry()
