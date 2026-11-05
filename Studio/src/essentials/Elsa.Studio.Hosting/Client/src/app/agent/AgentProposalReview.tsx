@@ -278,8 +278,11 @@ function AuditDetails({ proposal }: { proposal: AgentActionProposal }) {
   );
 }
 
-function formatRisk(risk: AgentActionProposal["risk"]) {
-  return risk.split("-").join(" ");
+function formatRisk(risk: unknown): string {
+  const risks = ["read-only", "review-required", "destructive", "admin"];
+  const value = typeof risk === "number" && Number.isInteger(risk) ? risks[risk]
+    : typeof risk === "string" ? risk.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase() : undefined;
+  return risks.find(item => item === value)?.split("-").join(" ") ?? "unknown risk";
 }
 
 function formatStatus(status: string) {
