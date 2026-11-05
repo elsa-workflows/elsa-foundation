@@ -18,7 +18,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
-    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-created-toast', 'invalid-name', 'completed', 'primary-action-with-toasts', 'toasts-above-expanded-dock', 'toasts-over-maximized-dock', 'notification-history'],
+    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-created-toast', 'secret-dialog-over-toast', 'invalid-name', 'completed', 'primary-action-with-toasts', 'toasts-above-expanded-dock', 'toasts-over-maximized-dock', 'notification-history'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }
 JOURNEYS = set(CAPTURES)

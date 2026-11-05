@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -9,6 +9,15 @@ async function capture(page: Page, info: TestInfo, name: string) {
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
   await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
+}
+
+async function expectToastBelowModal(toast: Locator, backdropSelector: string) {
+  await expect(toast).toBeVisible();
+  expect(await toast.evaluate((element, selector) => {
+    const bounds = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    return hit !== null && hit.closest(selector) !== null && hit.closest(".studio-toast") === null;
+  }, backdropSelector)).toBe(true);
 }
 
 async function signIn(page: Page) {
@@ -72,6 +81,13 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.locator(".studio-toast").filter({ hasText: "Secret created." })).toBeVisible();
   await expect(page.locator(".secrets-notification")).toHaveCount(0);
   await capture(page, info, "secret-created-toast");
+  // Secrets uses the lowest first-party modal layer, so the shared toast must stay below it too.
+  await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
+  await expect(secret).toBeVisible();
+  await expectToastBelowModal(page.locator(".studio-toast").filter({ hasText: "Secret created." }), ".secrets-modal");
+  await capture(page, info, "secret-dialog-over-toast");
+  await secret.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(secret).toBeHidden();
 
   // Follow the shell navigation so notification history stays in the same mounted host session.
   const moreTools = page.getByRole("button", { name: "More tools", exact: true });
@@ -90,6 +106,10 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await expect(name).toHaveAttribute("aria-invalid", "true");
   await name.scrollIntoViewIfNeeded();
+  // Visibility alone cannot detect a toast painting over the dialog or intercepting its footer.
+  await expectToastBelowModal(page.locator(".studio-toast").filter({ hasText: "Secret created." }), ".connections-modal-backdrop");
+  await name.click();
+  await expect(name).toBeFocused();
   await capture(page, info, "invalid-name");
   await name.fill(`qa-${stamp}`);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();

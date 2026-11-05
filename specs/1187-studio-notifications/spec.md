@@ -110,7 +110,8 @@ All components live in `Elsa.Studio.Hosting/Client/src/app/ui/feedback/`.
   live shell header and to half the viewport height, scrolling when needed to keep its actions reachable. At most three are visible, newest on top; the rest queue (they are already in
   the Center). Each toast shows a level icon (spinner for `progress`), title, optional message,
   link, action and dismiss button. When the dock is maximized or space above it is too short,
-  the stack overlays dock content within the viewport rather than moving offscreen.
+  the stack overlays dock content within the viewport rather than moving offscreen. Its layer remains
+  above the maximized dock and below modal backdrops, so feedback cannot cover a dialog or intercept its controls.
 - Timer, hover and focus pause logic is extracted from `StudioActionNotice` into a shared hook used
   by both `StudioActionNotice` and the toast.
 - One host live region announces toasts: `assertive` for `error`, `polite` otherwise.
