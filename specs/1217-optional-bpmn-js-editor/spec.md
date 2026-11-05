@@ -18,6 +18,7 @@ An author opens an existing BPMN process, chooses the optional bpmn-js editor, e
 1. Switching preserves process, element, flow and activity binding identities and all untouched Elsa configuration, including expressions, inputs/outputs, connection/secret references, typed variables and nested/listener bodies.
 2. Supported canvas and property edits participate in the ordinary dirty/save/recovery and undo/redo lifecycle; switching neither saves nor discards changes implicitly.
 3. Reloaded layout and downloaded XML reflect the supported edited process. Serialization differences do not change behavior. Any XML export omissions remain visible and are distinguished from internal switching fidelity.
+4. Both editors support editing the full BPMN toolbox. Advanced content must retain accurate notation, editable configuration, identity and layout in the integrated Elsa editor; missing modeling support alone must not substitute a read-only view (owner correction, 6 November 2026).
 
 ### User Story 2 — Configure Elsa behavior while modeling (P1)
 
@@ -61,12 +62,13 @@ The alternate canvas fits existing navigation, themes, narrow screens and keyboa
 - **FR-002**: Preserve all untouched supported semantic/configuration data and stable identities, even when the alternate canvas does not display that data.
 - **FR-003**: Route changes through ordinary host authoring operations and one coherent history; explicit save, autosave, recovery and switching must agree.
 - **FR-004**: Reuse the existing Elsa inspector beside the bpmn-js canvas for authorized configuration and nested editing, including meaningful module contributions (owner choice, 5 November 2026).
-- **FR-005**: Expose the full BPMN toolbox in production (owner choice, 6 November 2026), aligned with the separately owned execution-model refactoring. Distinguish drawable, retainable and currently executable constructs. Preserve unsupported draft content and explain/block unsupported execution at validation/publication without reinterpretation or silent loss. Any editor transition that cannot preserve content must explain the limitation before mutation. Coordinate existing safeguards under #2736; this feature does not claim future execution support already exists.
+- **FR-005**: Expose the full BPMN toolbox in production (owner choice, 6 November 2026), aligned with the separately owned execution-model refactoring. Both bpmn-js and the integrated Elsa editor must support editing that toolbox. Distinguish authorable/retainable constructs from currently executable constructs. Preserve draft content and explain/block unsupported execution at validation/publication without reinterpretation or silent loss. Coordinate existing safeguards under #2736; this feature does not claim future execution support already exists.
 - **FR-006**: Preserve existing permissions, source ownership, validation, publication, Test Drive and actual run inspection.
 - **FR-007**: Load optionally through existing Studio composition, support compatible consumer packaging, and measure composed-host network/assets against current budgets.
 - **FR-008**: Preserve relevant layout and export behavior; distinguish internal preservation from public XML interchange limitations.
 - **FR-009**: Keep required attribution visible/unobstructed and document the pinned dependency, license, upgrade surface and maintenance controls.
 - **FR-010**: Demonstrate the real embedded prototype before freezing production integration contracts. Feasibility success alone does not complete delivery.
+- **FR-011**: Extend the integrated Elsa canvas and its configuration/navigation/connection operations to accurately represent and edit the full toolbox, including advanced structures and their relevant diagram data. Read-only behavior remains for actual permissions, source ownership and historical inspection; it is not the production fallback for missing modeling support.
 
 ### Key Entities
 
@@ -78,9 +80,12 @@ The existing process draft, BPMN elements/flows, bound Elsa activities and desig
 - **SC-002**: Both input paths execute the published edited version with expected bound activity results and inspectable occurrences.
 - **SC-003**: Every acceptance row explicitly records passed, failed, unsupported, not run or unavailable evidence; no omitted row counts as success.
 - **SC-004**: Current-commit composed-host journeys, inspected visuals and independent acceptance cover the changed experience; current-head review/checks and resulting-main qualification pass before closure.
+- **SC-005**: A construct/configuration matrix covering the pinned bpmn-js toolbox demonstrates authoring and lossless same-process switching in both editors, including advanced drafts whose execution the current host must refuse. The integrated editor must not silently replace unfamiliar notation with generic tasks or lock those drafts solely because its modeling support is incomplete.
 
 ## Assumptions and Boundaries
 
 Owner-selected same-process switching and retaining the integrated editor are fixed. The existing host-agnostic semantics core remains authoritative (ADR 0063). Adjacent execution-model, Block and testing work retain their owners. No production deployment/package release is authorized. Material incompatibility returns to the owner with concrete options; it does not silently reduce these requirements.
 
 The owner explicitly selected the full BPMN toolbox, citing ongoing full-spec execution-model work. The first prototype's restricted admission is temporary feasibility scaffolding, not production scope. Production design must reconcile full drafting/retention with current host execution safeguards and editor-switch preservation.
+
+On 6 November the owner corrected the subsequent advanced-draft choice to **expand Elsa's integrated editor to edit the full BPMN toolbox in this delivery**. This supersedes the earlier, immediately corrected read-only-view selection. The optional editor feature therefore owns the necessary integrated-editor modeling expansion; execution-engine completion remains separately owned.
