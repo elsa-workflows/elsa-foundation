@@ -278,8 +278,21 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = _jobs(ci).get(job, "")
         if not block:
             problems.append(f"{CI}: missing `{job}` required for complete ready runs")
-        if re.search(r"^    (?:name|if):.*ready_for_review", block, re.M):
-            problems.append(f"{CI}: `{job}` must run unchanged on the ready transition")
+        # A folded/quoted scalar may put the exclusion on a continuation line.
+        # Stop at the next job-level field; step-level conditions are unrelated.
+        for field in ("name", "if"):
+            match = re.search(rf"^    {field}:[ \t]*(.*)$", block, re.M)
+            if not match:
+                continue
+            value = [match.group(1)]
+            for line in block[match.end():].splitlines():
+                if line.strip() and len(line) - len(line.lstrip()) <= 4:
+                    break
+                if line.strip() and not line.lstrip().startswith("#"):
+                    value.append(line.strip())
+            if "ready_for_review" in " ".join(value):
+                problems.append(f"{CI}: `{job}` must run unchanged on the ready transition")
+                break
     concurrency = ci.split("\njobs:\n", 1)[0]
     if re.search(r"^.*ready_for_review.*(?:'ready'|'head').*$", concurrency, re.M):
         problems.append(f"{CI}: ready and head events must share one PR concurrency group")
@@ -438,6 +451,14 @@ def self_test() -> int:
     check("workflows: ready cannot rename or skip maps",
           bool(check_workflows(good_ci + "  generated-maps:\n    name: Generated maps fresh\n"
                "    if: github.event.action != 'ready_for_review'\n", good_full)))
+    check("workflows: a folded ready-only maps skip fails",
+          bool(check_workflows(good_ci.replace("    name: Generated maps fresh\n",
+               "    name: Generated maps fresh\n    if: >-\n"
+               "      github.event.action != 'ready_for_review' && github.event_name == 'pull_request'\n"), good_full)))
+    check("workflows: a multiline ready-only maps name fails",
+          bool(check_workflows(good_ci.replace("    name: Generated maps fresh\n",
+               "    name: >-\n      ${{ github.event.action == 'ready_for_review'\n"
+               "        && 'Maps already requested' || 'Generated maps fresh' }}\n"), good_full)))
     check("workflows: ready cannot skip the PR-tier plan",
           bool(check_workflows(good_ci.replace("  plan-tiers:\n", "  plan-tiers:\n    if: github.event.action != 'ready_for_review'\n"), good_full)))
     check("workflows: deleting maps cannot leave a required context missing",
