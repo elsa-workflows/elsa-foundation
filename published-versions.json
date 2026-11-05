@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "074259b3565e046701acbce69613120d7bed5f64",
+  "last_publish_commit": "db74c19a96320d2f91954742c07087fb62d234f8",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -374,8 +374,8 @@
     },
     {
       "package_id": "Elsa.Etl.Design",
-      "version": "4.0.12-preview",
-      "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
+      "version": "4.0.13-preview",
+      "commit": "db74c19a96320d2f91954742c07087fb62d234f8"
     },
     {
       "package_id": "Elsa.Etl.Design.Api",
@@ -384,8 +384,8 @@
     },
     {
       "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
-      "version": "4.0.14-preview",
-      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      "version": "4.0.15-preview",
+      "commit": "db74c19a96320d2f91954742c07087fb62d234f8"
     },
     {
       "package_id": "Elsa.Etl.RabbitMq",
