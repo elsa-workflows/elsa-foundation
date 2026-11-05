@@ -174,7 +174,10 @@ test("workflow template metadata defaults", async ({ page }, info) => {
       const dialog = page.getByRole("dialog", { name: "Create template", exact: true });
       await dialog.getByRole("textbox", { name: "Display name", exact: true }).fill(templateNames[index]);
       await dialog.getByRole("textbox", { name: "Description", exact: true }).fill(descriptions[index]);
-      await dialog.getByRole("radio", { name: "Sequence", exact: true }).check();
+      const sequence = dialog.getByRole("radio", { name: "Sequence", exact: true });
+      await sequence.focus();
+      await sequence.press("Space");
+      await expect(sequence).toBeChecked();
       await dialog.getByRole("button", { name: "Create template", exact: true }).click();
       await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
     }

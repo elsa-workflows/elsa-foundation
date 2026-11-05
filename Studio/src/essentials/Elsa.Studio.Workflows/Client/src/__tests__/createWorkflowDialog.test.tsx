@@ -1,5 +1,6 @@
 import React from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { applyCreateDialogPrefill } from "../workflow-editor/workflowLibraryAgent";
 import type { CreateWorkflowDraft } from "../workflow-editor/editorTypes";
 import * as templateApi from "../workflowTemplates";
 import type { WorkflowTemplate } from "../workflowTemplates";
@@ -96,10 +97,12 @@ async function editableDialog(initial: CreateWorkflowDraft = { name: "", descrip
   const ai = testApi().agent;
   const onSubmit = vi.fn();
   let current = initial;
+  let replace = (_draft: CreateWorkflowDraft) => {};
   const context = {} as StudioEndpointContext;
   function Harness() {
     const [draft, setDraft] = React.useState(initial);
     current = draft;
+    replace = next => flushSync(() => setDraft(next));
     return <CreateWorkflowDialog context={context} draft={draft} catalog={catalog} creating={false} ai={ai}
       suggestMetadataAction={{ id: "suggest", label: "Suggest", contextKind: "workflow", placement: "toolbar", createPrompt: () => ({ message: "Suggest metadata" }) }}
       onChange={setDraft} onClose={vi.fn()} onSubmit={() => onSubmit(draft)} />;
@@ -118,7 +121,7 @@ async function editableDialog(initial: CreateWorkflowDraft = { name: "", descrip
     Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  return { ai, onSubmit, field, select, fill, current: () => current };
+  return { ai, onSubmit, field, select, fill, replace: (next: CreateWorkflowDraft) => replace(next), current: () => current };
 }
 
 describe("template metadata defaults", () => {
@@ -177,6 +180,18 @@ describe("template metadata defaults", () => {
     const dialog = await editableDialog({ name: templates[0].name, description: templates[0].description!, rootActivityVersionId: null, templateId: "one", templateContent: structuredClone(templates[0].content) });
     dialog.select("two");
     expect(dialog.current()).toMatchObject({ name: templates[1].name, description: templates[1].description });
+  });
+
+  it("preserves an explicit empty Weaver prefill and restores inherited ownership when that prefill is undone", async () => {
+    const dialog = await editableDialog();
+    const original = dialog.current();
+    const prefilled = applyCreateDialogPrefill(original, { name: "Custom workflow", description: "", templateId: "one" }, templates)!;
+    dialog.replace(prefilled);
+    dialog.select("two");
+    expect(dialog.current()).toMatchObject({ name: "Custom workflow", description: "" });
+    dialog.replace(original);
+    dialog.select("two");
+    expect(dialog.current()).toMatchObject({ name: "Order processing", description: "Processes an order." });
   });
 
   it.each([false, true])("preserves applied AI suggestions when switching templates (automatic: %s)", async autoApply => {

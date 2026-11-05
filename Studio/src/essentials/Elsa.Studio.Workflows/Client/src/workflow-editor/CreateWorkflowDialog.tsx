@@ -11,6 +11,7 @@ import { getCreateRootActivity, parseWorkflowMetadataSuggestion } from "./editor
 import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { useDialogFocus } from "./useDialogFocus";
+import { getCreateMetadataEdits } from "./createWorkflowMetadata";
 
 export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
   context?: StudioEndpointContext;
@@ -91,13 +92,6 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  // Track edits independently, including clearing a field or retyping the inherited value.
-  const metadataEdited = useRef({
-    name: !draft.templateId && !draft.starter && draft.name !== "",
-    description: !draft.templateId && !draft.starter && draft.description !== ""
-  });
-  const inheritedMetadata = useRef({ name: draft.name, description: draft.description });
-
   const changeStartingPoint = (id: string) => {
     const selected = templates.find(item => item.template.id === id)?.template;
     const starter = builtInWorkflowTemplates.find(template => template.id === id);
@@ -105,14 +99,11 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
       name: selected?.name ?? (starter?.id === "http" ? starter.name : ""),
       description: selected?.description ?? (starter?.id === "http" ? starter.description : "")
     };
-    // Parent-driven prefills (including Weaver) also own their values once they differ from our defaults.
-    for (const field of ["name", "description"] as const) {
-      metadataEdited.current[field] ||= draft[field] !== inheritedMetadata.current[field];
-    }
-    inheritedMetadata.current = defaults;
+    const edited = getCreateMetadataEdits(draft);
     onChange({ ...draft,
-      name: metadataEdited.current.name ? draft.name : defaults.name,
-      description: metadataEdited.current.description ? draft.description : defaults.description,
+      name: edited.name ? draft.name : defaults.name,
+      description: edited.description ? draft.description : defaults.description,
+      metadataEdited: edited,
       starter: id === "http" ? "http" : undefined,
       templateId: selected?.id,
       templateContent: selected ? structuredClone(selected.content) : undefined
@@ -120,9 +111,9 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   };
 
   const applySuggestion = useCallback((value: WorkflowMetadataSuggestion) => {
-    const next = { ...draftRef.current };
-    if (value.name) { next.name = value.name; metadataEdited.current.name = true; }
-    if (value.description) { next.description = value.description; metadataEdited.current.description = true; }
+    const next = { ...draftRef.current, metadataEdited: getCreateMetadataEdits(draftRef.current) };
+    if (value.name) { next.name = value.name; next.metadataEdited.name = true; }
+    if (value.description) { next.description = value.description; next.metadataEdited.description = true; }
     onChangeRef.current(next);
     setSuggestion(null);
     setSuggestError(null);
@@ -246,7 +237,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
             <input
               aria-label="Display name"
               value={draft.name}
-              onChange={event => { metadataEdited.current.name = true; onChange({ ...draft, name: event.target.value }); }}
+              onChange={event => onChange({ ...draft, name: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), name: true } })}
             />
           </label>
           <label className="wf-form-field">
@@ -255,7 +246,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
               aria-label="Description"
               rows={3}
               value={draft.description}
-              onChange={event => { metadataEdited.current.description = true; onChange({ ...draft, description: event.target.value }); }}
+              onChange={event => onChange({ ...draft, description: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), description: true } })}
             />
           </label>
           {catalogState === "failed" ? (
