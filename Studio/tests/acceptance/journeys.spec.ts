@@ -204,16 +204,16 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await page.reload();
   await expect(build).toHaveAttribute("aria-expanded", "true");
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Create workflow tag", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Create workflow tag", exact: true })).toBeVisible();
   await capture(page, info, "tags-create");
   await page.getByRole("textbox", { name: "Tag name", exact: true }).fill(`navigation-${info.project.name}-${Date.now()}`);
   await page.getByRole("button", { name: "Create tag", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   // A real saved tag bookmark must also reveal the group after a fresh document load.
   await page.reload();
   await expect(build).toHaveAttribute("aria-expanded", "true");
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   const tagUrl = page.url();
   const tagDocument = await page.evaluate(() => performance.timeOrigin);
   await build.click();
@@ -234,7 +234,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(page).toHaveURL(tagUrl);
   await expect(build).toHaveAttribute("aria-expanded", "true");
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(tagDocument);
   await capture(page, info, "tags-edit");
   await navLink("Library").click();
