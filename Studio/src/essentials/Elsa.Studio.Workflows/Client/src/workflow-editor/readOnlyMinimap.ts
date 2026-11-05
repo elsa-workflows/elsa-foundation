@@ -24,3 +24,12 @@ export const readOnlyMinimapFitViewOptions: FitViewOptions = {
 export function shouldShowReadOnlyMiniMap(nodeCount: number): boolean {
   return nodeCount > READ_ONLY_MINIMAP_MAX_HIDDEN_NODES;
 }
+
+// Sparse graphs have no MiniMap, but their port labels extend beyond measured node boxes.
+const readOnlyOutcomeFitViewOptions: FitViewOptions = {
+  padding: { top: "24px", right: "112px", bottom: "32px", left: "32px" }
+};
+
+export function getReadOnlyFitViewOptions(nodeCount: number): FitViewOptions {
+  return shouldShowReadOnlyMiniMap(nodeCount) ? readOnlyMinimapFitViewOptions : readOnlyOutcomeFitViewOptions;
+}

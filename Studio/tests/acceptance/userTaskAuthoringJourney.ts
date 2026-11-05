@@ -4,8 +4,8 @@ type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 const jsonAlias = "System.Text.Json.JsonElement";
 
 // Real Studio authoring and autosave, followed by real publication, response and result reads.
-// Forms/task interactions use the project's viewport. The multi-pane graph is authored at desktop
-// size; its affected inspector is additionally captured in each project's viewport.
+// Forms/tasks, run navigation and results use the project's viewport. Multi-pane graph wiring
+// uses desktop size; affected authoring inspectors are additionally captured at project size.
 export async function userTaskAuthoringJourney(page: Page, info: TestInfo, capture: Capture) {
   const base = process.env.UX_BACKEND_URL;
   if (!base || process.env.UX_ACCEPTANCE_OWNED !== "1") throw new Error("Owned backend URL is required");
@@ -38,7 +38,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     if (projectViewport.width < 800) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
   };
   try {
-    await page.goto("/user-tasks/forms");
+    await page.getByRole("button", { name: "More tools", exact: true }).click();
+    await page.getByRole("link", { name: "Forms", exact: true }).click();
+    await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
     await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await page.getByLabel("Form ID", { exact: true }).fill(formId);
@@ -61,7 +63,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.goto("/workflows/definitions");
     await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
     const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
-    await dialog.getByLabel("Display name").fill(title); await dialog.getByRole("radio", { name: "Flowchart", exact: true }).check();
+    await dialog.getByLabel("Display name").fill(title);
+    const rootKind = dialog.getByRole("radio", { name: "Flowchart", exact: true });
+    await expect(rootKind).toBeEnabled(); await rootKind.press("Space"); await expect(rootKind).toBeChecked();
     const created = page.waitForResponse(response => response.request().method() === "POST" && /\/design\/workflows\/definitions$/.test(response.url()));
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     definitionId = (await (await created).json()).definition.id;
@@ -114,6 +118,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
     await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByText(/This output is no longer defined. Add a workflow output in Properties/)).toBeVisible();
     await captureInspector("removed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
     await page.getByRole("tab", { name: "Properties", exact: true }).click();
     await page.getByRole("button", { name: "Add output", exact: true }).click();
@@ -132,6 +137,8 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByRole("button", { name: "Auto-layout", exact: true }).click(); await page.getByRole("button", { name: "Fit View", exact: true }).click();
     await taskNode.locator('.source[data-handleid="Approve"]').dragTo(page.locator(`.react-flow__node[data-id="${outputNodeId}"] .target`));
     await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+    // Lay out the completed graph, rather than saving the disconnected palette placement.
+    await page.getByRole("button", { name: "Auto-layout", exact: true }).click();
     await save(); await page.reload();
     const savedTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
     await savedTask.click(); await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
@@ -158,15 +165,40 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     const runtimeTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
     await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
     await expect(runtimeTask.locator('.source[data-handleid="Reject"]')).toBeVisible();
-    await capture(page, info, "run-outcomes");
+    await page.setViewportSize(projectViewport);
+    await page.getByRole("button", { name: "Fit View", exact: true }).click();
     expect((await page.getByRole("button", { name: "All executions", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(32);
+    const canvasBox = (await page.getByRole("region", { name: "Workflow run canvas", exact: true }).boundingBox())!;
+    for (const node of await page.locator(".react-flow__node").all()) {
+      await expect.poll(async () => {
+        const box = await node.boundingBox();
+        return Boolean(box && box.x >= canvasBox.x && box.x + box.width <= canvasBox.x + canvasBox.width);
+      }).toBe(true);
+    }
+    for (const label of ["Approve", "Reject", "Unmatched"]) {
+      await expect.poll(async () => {
+        const box = await runtimeTask.locator(".wf-node-port-label").filter({ hasText: new RegExp(`^${label}$`) }).boundingBox();
+        if (!box || box.x < canvasBox.x || box.x + box.width > canvasBox.x + canvasBox.width) return false;
+        const others = await page.locator(`.react-flow__node:not([data-id="${taskNodeId}"])`).all();
+        for (const other of others) {
+          const target = await other.boundingBox();
+          if (target && box.x < target.x + target.width && box.x + box.width > target.x && box.y < target.y + target.height && box.y + box.height > target.y) return false;
+        }
+        return true;
+      }).toBe(true);
+    }
+    await expect(page.locator(".react-flow__edge-text").filter({ hasText: /^Approve$/ })).toHaveCount(0);
+    await capture(page, info, "run-outcomes");
     await info.attach("workflow-outputs.json", { body: JSON.stringify(completed.outputs, null, 2), contentType: "application/json" });
+    // Keyboard activation opens the real responsive inspector after changing viewport.
+    await runtimeTask.press("Enter");
     await page.getByRole("tab", { name: "Details", exact: true }).click();
     const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
     if (await maximize.isVisible()) await maximize.click();
-    await page.setViewportSize(projectViewport);
     const result = page.getByRole("region", { name: "Workflow outputs", exact: true });
     await expect(result).toContainText("RenamedData"); await expect(result).toContainText("Approved with case preserved");
+    const resultValue = result.locator(".wf-runtime-snapshot-property code");
+    expect((await resultValue.boundingBox())!.width).toBeGreaterThan(150);
     await result.scrollIntoViewIfNeeded(); await capture(page, info, "workflow-result");
 
     const catalog = await get("/design/activities/definitions?search=CreateUserTask");
@@ -185,8 +217,10 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
       const fault = await get(`/runtime/workflows/instances/${execution.workflowExecutionId}`);
       const expected = variant === "assignment" ? "Select a task assignee or a group." : "Prefill must be a JSON object";
       expect(fault.incidents.some((item: { message: string }) => item.message.includes(expected))).toBe(true);
-      await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${execution.workflowExecutionId}`);
-      await page.getByRole("tab", { name: /^Issues/ }).click();
+      await page.setViewportSize(projectViewport); await page.goto(`/workflows/instances/${execution.workflowExecutionId}`);
+      await page.getByRole("button", { name: /^Open run incidents:/ }).click();
+      const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
+      if (await maximize.isVisible()) await maximize.click();
       await expect(page.locator(".wf-instance-incident-summary").filter({ hasText: expected })).toBeVisible();
       if (variant === "assignment") {
         await expect(page.locator(".wf-instance-incident-cause").filter({ hasText: "Review its incident to correct the cause." })).toBeVisible();
@@ -196,9 +230,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
         await expect(parent.locator(".wf-incident-message")).toContainText("a faulted child cannot complete");
         await capture(page, info, "task-fault-details");
       } else {
-        const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
-        if (await maximize.isVisible()) await maximize.click();
-        await page.setViewportSize(projectViewport); await capture(page, info, "prefill-fault");
+        await capture(page, info, "prefill-fault");
       }
     }
   } finally {

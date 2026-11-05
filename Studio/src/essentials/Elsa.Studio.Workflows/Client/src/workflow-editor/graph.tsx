@@ -31,9 +31,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const { icon, fallback, tone } = resolveNodeActivityVisual(nodeData);
   const runtime = nodeData.runtime;
   const showFlowPorts = !nodeData.suppressFlowPorts;
-  const sourcePorts = showFlowPorts
-    ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
-    : [];
+  const sourcePorts = showFlowPorts ? nodeData.sourcePorts : [];
   const subtitle = formatNodeSubtitle(nodeData);
   const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
@@ -211,7 +209,7 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
           ...style,
           strokeWidth: isHighlighted ? 2.5 : style?.strokeWidth
         }}
-        label={label}
+        label={!actions && typeof label === "string" && label === props.sourceHandleId ? undefined : label}
         labelX={labelX}
         labelY={labelY}
         labelStyle={labelStyle}

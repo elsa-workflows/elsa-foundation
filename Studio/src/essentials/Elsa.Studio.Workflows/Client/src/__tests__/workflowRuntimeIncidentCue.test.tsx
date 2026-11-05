@@ -116,3 +116,10 @@ describe("workflow activity runtime incident cue", () => {
     expect(onNodeClick).not.toHaveBeenCalled();
   });
 });
+
+it("renders no source port for an explicitly empty executable outcome contract", () => {
+  container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+  const data: WorkflowNodeData = { label: "Terminal", activityVersionId: "terminal@1", childSlots: [], acceptsInbound: true, sourcePorts: [] };
+  flushSync(() => root!.render(<ReactFlowProvider><WorkflowActivityNode {...({ id: "terminal", data, selected: false } as unknown as NodeProps)} /></ReactFlowProvider>));
+  expect(container.querySelector(".wf-node-port-label")).toBeNull();
+});

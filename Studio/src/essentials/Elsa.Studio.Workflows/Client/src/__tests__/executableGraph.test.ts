@@ -35,6 +35,17 @@ it("keeps every pinned runtime outcome, including unconnected task actions, when
   }
 });
 
+it("honors an explicitly empty pinned outcome contract while retaining older-host fallback", () => {
+  for (const available of [catalog, []]) {
+    const empty = buildExecutableActivityGraph(executableNode({ outcomes: [] }), available);
+    expect(getActivitySourcePorts(empty.root, available[0])).toEqual([]);
+    for (const outcomes of [null, undefined]) {
+      const legacy = buildExecutableActivityGraph(executableNode({ outcomes }), available);
+      expect(getActivitySourcePorts(legacy.root, available[0]).map(port => port.name)).toEqual(["Done"]);
+    }
+  }
+});
+
 function sequenceRoot(children: WorkflowExecutableNode[]): WorkflowExecutableNode {
   return executableNode({
     executableNodeId: "exec-root",

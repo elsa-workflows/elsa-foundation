@@ -191,7 +191,9 @@ describe("IntrinsicInspector", () => {
     expect(picker.value).toBe("ReviewData"); expect(picker.getAttribute("aria-invalid")).toBe("true");
     expect(container.textContent).toContain("renamed or removed");
     flushSync(() => active!.root.render(renderState([], changed)));
-    expect(container.textContent).toContain("Select its current name");
+    expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
+    expect(container.textContent).toContain("This output is no longer defined.");
+    expect(container.textContent).toContain("Add a workflow output in Properties → Outputs");
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 

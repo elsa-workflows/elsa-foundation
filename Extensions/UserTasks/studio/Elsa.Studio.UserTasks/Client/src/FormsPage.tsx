@@ -15,7 +15,13 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   useEffect(() => { if (opened) previewHeading.current?.focus(); }, [opened]);
   const createButton = useRef<HTMLButtonElement>(null); const editor = useRef<HTMLFieldSetElement>(null);
   useEffect(() => { if (editing) editor.current?.querySelector<HTMLInputElement>("input")?.focus(); }, [editing]);
-  const closeEditor = () => { setFormError(""); setEditing(false); setForm(initial()); requestAnimationFrame(() => createButton.current?.focus()); };
+  const closeEditor = () => {
+    const focused = document.activeElement;
+    setFormError(""); setEditing(false); setForm(initial());
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body || document.activeElement === focused) createButton.current?.focus();
+    });
+  };
   const [form, setForm] = useState(initial); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => { try { const [who, all] = await Promise.all([actor(api), forms(api)]); setIdentity(who); setVersions(all.items); setNextPage(all.next ?? null); setError(""); } catch (failure) { setError(message(failure)); } finally { setLoading(false); } }, [api]);
   useEffect(() => { void refresh(); }, [refresh]);

@@ -325,3 +325,19 @@ it("distinguishes published forms that share a display name", async () => {
   await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select")!.disabled).toBe(false));
   expect([...container.querySelectorAll("option")].map(item => item.textContent)).toEqual(["No form", "Approval (purchase)", "Approval (expense)"]);
 });
+
+it("does not steal a form row's keyboard focus when publication restores the list", async () => {
+  const frames: FrameRequestCallback[] = [];
+  const frame = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length; });
+  try {
+    let form = { id: "purchase", version: "1", name: "Purchase", provider: "elsa.basic-forms/1", fields: [] };
+    const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [{ form, createdAt: "2026-11-02T10:00:00Z" }] });
+    const post = vi.fn(async (_path: string, value: typeof form) => { form = value; return {}; });
+    await act(async () => root.render(<FormsPage api={api(get, post)} />));
+    await click("Create next version"); await click("Publish form version");
+    const row = container.querySelector<HTMLButtonElement>("tbody button.user-task-link")!;
+    expect(row).toBeTruthy(); expect(frames.length).toBeGreaterThan(0);
+    row.focus(); frames.splice(0).forEach(callback => callback(0));
+    expect(document.activeElement).toBe(row);
+  } finally { frame.mockRestore(); }
+});

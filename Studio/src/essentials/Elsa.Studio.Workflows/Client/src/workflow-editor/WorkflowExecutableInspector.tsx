@@ -57,7 +57,7 @@ import {
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
@@ -362,7 +362,8 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
-            fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+            fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)}
+      minZoom={0.1}
             onNodesChange={onNodesChange}
             nodesDraggable={false}
             nodesConnectable={false}
@@ -373,7 +374,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             <Background />
             <FitReadOnlyFlowView nodeCount={flowNodes.length} />
             <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-            <Controls />
+            <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
             <RetainFlowViewport />
           </ReactFlow>
         )}

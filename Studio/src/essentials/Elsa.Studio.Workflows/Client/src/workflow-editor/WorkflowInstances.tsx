@@ -70,7 +70,7 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
@@ -2107,7 +2107,8 @@ function ReadOnlyWorkflowFlow({
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
-      fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+      fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)}
+      minZoom={0.1}
       onInit={onInit}
       onNodesChange={onNodesChange}
       nodesDraggable={false}
@@ -2119,7 +2120,7 @@ function ReadOnlyWorkflowFlow({
       <Background />
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-      <Controls />
+      <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
       <RetainFlowViewport />
     </ReactFlow>
   );
@@ -2531,7 +2532,7 @@ function WorkflowInstanceInspector({
                     {!details.outputs ? <p>Workflow output inspection is unavailable on this host.</p> : !Object.keys(details.outputs).length ? <p>No workflow outputs have been captured.</p> : (
                       <div className="wf-runtime-input-list" role="list">
                         {Object.entries(details.outputs).map(([name, output]) => (
-                          <article className="wf-runtime-input" role="listitem" key={name}>
+                          <article className="wf-runtime-input wf-workflow-output" role="listitem" key={name}>
                             <header><strong>{name}</strong><small>Captured {formatDate(output.capturedAt)}</small></header>
                             {output.isRedacted ? <p>{output.redactionReason || "This output is redacted."}</p> : <RuntimeCapturedValue value={output.value} captureMode={output.captureMode} />}
                           </article>

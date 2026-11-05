@@ -7736,8 +7736,3 @@ html[data-theme-material] .availability-search .wf-search {
   gap: var(--studio-space-2);
 }
 .runtime-diagnostics-page .wf-section-label svg { flex: 0 0 auto; }
-
-.wf-instance-incident + .wf-instance-incident { margin-top: var(--studio-space-4); }
-.wf-instance-incident-summary { gap: var(--studio-space-3); padding: var(--studio-space-4); }
-.wf-instance-incident-actions { padding: 0 var(--studio-space-4) var(--studio-space-4); gap: var(--studio-space-2); }
-.wf-instance-incident-cause { line-height: 1.55; }
