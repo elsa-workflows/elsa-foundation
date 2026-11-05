@@ -156,7 +156,12 @@ try {
   expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth)).toBe(true);
   await captureConnectionPanels("light", "narrow");
   if (settings.studioUrl) {
-    await connectionMode("dark"); await captureConnectionPanels("dark", "narrow"); await connectionMode("light");
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await connectionMode("dark");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await captureConnectionPanels("dark", "narrow");
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await connectionMode("light");
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
   if (settings.studioUrl) {
