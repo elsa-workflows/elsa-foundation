@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { openStudioWorkspaceTab, qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { saveWorkflowTemplate, templateContent } from "../workflowTemplates";
 import { getNotifications } from "./notifications";
@@ -18,7 +18,10 @@ export function SaveWorkflowTemplateDialog({ context, draft, name: initialName, 
       void saveWorkflowTemplate(context, { name, description: text, content: templateContent(draft) }).then(() => {
         onClose();
         notifications.notify({ level: "success", title: "Template saved",
-          link: { label: "View templates", path: templatePath } });
+          action: { label: "View templates", run: () => {
+            // Keep the source editor's unsaved changes when opening the saved copy.
+            if (!openStudioWorkspaceTab(templatePath)) window.open(templatePath, "_blank", "noopener");
+          } } });
       })
         .catch(error => setError(error instanceof Error ? error.message : String(error))).finally(() => { pending.current = false; setSaving(false); }); }}>
       <h3 id="save-template-title">Save as template</h3>

@@ -18,8 +18,9 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
   }
   const sequence = await version("Elsa.Activities.Sequence.Activities.Sequence");
   const line = await version("Elsa.Activities.Primitives.Activities.WriteLine");
+  const workflowName = `Template toast ${info.project.name} ${Date.now()}`;
   const submitted = await api<{ definition: { id: string }; draftId: string }>("/design/workflows/definitions/submit", "POST", {
-    name: `Template toast ${info.project.name} ${Date.now()}`,
+    name: workflowName,
     state: { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
       structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [{ nodeId: "message", activityVersionId: line, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: "Original saved text" } }], outputs: [] }] } } } }
   });
@@ -73,6 +74,11 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     await expect(page.getByRole("heading", { name: "Workflow templates", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
     await capture(page, info, "template-list");
+    // The toast opens another workspace tab so the source workflow keeps its unsaved edits.
+    await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
+    await expect(page.locator(".wf-sequence-summary").filter({ hasText: "Unsaved template text" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Text", exact: true })).toHaveValue("Unsaved template text");
+    await page.getByRole("tab", { name: "Workflow templates", exact: true }).click();
     // The original workflow deliberately retains unsaved edits. Its template copy is persisted;
     // accept only the native reload guard for this owned disposable journey.
     const allowOwnedReload = async (dialog: Dialog) => { expect(dialog.type()).toBe("beforeunload"); await dialog.accept(); };

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
+import { studioWorkspaceTabRequestedEvent, type StudioEndpointContext, type StudioNotificationApi, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { SaveWorkflowTemplateDialog } from "../workflow-editor/SaveWorkflowTemplateDialog";
 import { setNotifications } from "../workflow-editor/notifications";
 import { saveWorkflowTemplate, templateContent, type WorkflowTemplate } from "../workflowTemplates";
@@ -61,7 +61,20 @@ describe("Save template feedback", () => {
     await vi.waitFor(() => expect(element.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(opener);
     expect(notify).toHaveBeenCalledTimes(1); expect(otherNotify).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledWith({ level: "success", title: "Template saved", link: { label: "View templates", path: "/workflows/templates?backend=secondary" } });
+    expect(notify).toHaveBeenCalledWith({ level: "success", title: "Template saved", action: { label: "View templates", run: expect.any(Function) } });
+    const tabRequests: StudioWorkspaceTabRequest[] = [];
+    const openTab = (event: Event) => { tabRequests.push((event as CustomEvent<StudioWorkspaceTabRequest>).detail); event.preventDefault(); };
+    const browserOpen = vi.spyOn(window, "open").mockReturnValue(null);
+    window.addEventListener(studioWorkspaceTabRequestedEvent, openTab);
+    try {
+      notify.mock.calls[0][0].action!.run();
+      expect(tabRequests).toEqual([{ path: "/workflows/templates?backend=secondary", activate: true }]);
+      expect(browserOpen).not.toHaveBeenCalled();
+    } finally { window.removeEventListener(studioWorkspaceTabRequestedEvent, openTab); }
+    // Older hosts without workspace tabs preserve the editor in its browser tab instead.
+    notify.mock.calls[0][0].action!.run();
+    expect(browserOpen).toHaveBeenCalledWith("/workflows/templates?backend=secondary", "_blank", "noopener");
+    browserOpen.mockRestore();
     expect(element.textContent).not.toContain("Done");
   });
 
