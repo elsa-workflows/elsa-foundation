@@ -52,6 +52,8 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await form.getByRole("button", { name: "Save case", exact: true }).click(); const saved = await response;
     expect(saved.ok(), await saved.text()).toBe(true); const item = await saved.json();
     expect(item.inputs.amount).toEqual({ kind: "number", value: amount });
+    expect(item.inputs.customerCategory).toEqual({ kind: "string", value: category });
+    expect(item.name).toBe(`Boundary ${amount} ${category}`);
     if (status === "NoMatch") expect(item.expectedResult).toEqual({ kind: "null", value: null });
     await expect(form).toHaveCount(0);
     caseCount++;
