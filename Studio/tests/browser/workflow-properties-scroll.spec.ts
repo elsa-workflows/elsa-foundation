@@ -37,3 +37,21 @@ for (const mode of ["light", "dark"] as const) {
     });
   }
 }
+
+for (const mode of ["light", "dark"] as const) {
+  test(`keeps saved workflow metadata readable at 360px in ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 900 });
+    await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), mode);
+    await page.goto("/workspace-appearance.html?composition=sequence");
+    await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const collapseActivities = page.getByRole("button", { name: "Collapse activities panel", exact: true });
+    if (await collapseActivities.isVisible()) await collapseActivities.click();
+    for (const label of ["Workflow name", "Workflow description"]) {
+      const field = page.getByRole("textbox", { name: label, exact: true });
+      await expect(field).toBeInViewport();
+      expect((await field.boundingBox())!.width).toBeGreaterThanOrEqual(120);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
