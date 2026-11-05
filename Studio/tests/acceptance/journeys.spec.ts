@@ -199,11 +199,14 @@ test("workflow template metadata defaults", async ({ page }, info) => {
     expect(saved.request().postDataJSON().description || "").toBe(expectedDescription);
     await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible();
     await page.reload();
-    // On narrow screens the inspector occupies the workspace until its normal collapse action is used.
-    if ((page.viewportSize()?.width ?? 1440) < 700) {
-      await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+    const properties = page.getByRole("tab", { name: "Properties", exact: true });
+    await expect(properties).toBeVisible();
+    // Narrow layouts retain the user's inspector state; collapse it only when it is still open.
+    const collapseInspector = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
+    if ((page.viewportSize()?.width ?? 1440) < 700 && await collapseInspector.isVisible()) {
+      await collapseInspector.click();
     }
-    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await properties.click();
     await expect(page.getByRole("textbox", { name: "Workflow name", exact: true })).toHaveValue(expectedName);
     await expect(page.getByRole("textbox", { name: "Workflow description", exact: true })).toHaveValue(expectedDescription);
   };
