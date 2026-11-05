@@ -1,8 +1,9 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowFolder, moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
+import { useNotificationGuard } from "./notifications";
 import { useDialogFocus } from "./useDialogFocus";
 import { useWorkflowFolderTree, workflowFolderTreeKey } from "./useWorkflowFolderTree";
 
@@ -18,6 +19,9 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
   const [expectedRevision, setExpectedRevision] = useState(folder.revision);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mutationScope = useMemo(() => ({ context, folderId: folder.id }), [context, folder.id]);
+  const captureMutation = useNotificationGuard(mutationScope);
+  useLayoutEffect(() => setBusy(false), [mutationScope]);
   useDialogFocus(ref, busy ? null : onClose);
 
   const submit = async (event: FormEvent) => {
@@ -26,14 +30,16 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
     if (!normalized || busy) return;
     setBusy(true);
     setError(null);
+    const isCurrent = captureMutation();
     try {
       await renameWorkflowFolder(context, folder.id, normalized, expectedRevision);
+      if (!isCurrent()) return;
       await onRenamed();
-      onClose();
+      if (isCurrent()) onClose();
     } catch (caught) {
-      setError(`Couldn't rename this folder. ${caught instanceof Error ? caught.message : "The server rejected the name."} Correct the name or permissions, then try again.`);
+      if (isCurrent()) setError(`Couldn't rename this folder. ${caught instanceof Error ? caught.message : "The server rejected the name."} Correct the name or permissions, then try again.`);
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
   const reload = async () => {
@@ -75,6 +81,9 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   const [expectedRevision, setExpectedRevision] = useState(folder.revision);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mutationScope = useMemo(() => ({ context, folderId: folder.id }), [context, folder.id]);
+  const captureMutation = useNotificationGuard(mutationScope);
+  useLayoutEffect(() => setBusy(false), [mutationScope]);
   useDialogFocus(ref, busy ? null : onClose);
 
   const classify = useCallback((items: WorkflowFolder[], parentId?: string) => {
@@ -123,14 +132,16 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
     if (busy) return;
     setBusy(true);
     setError(null);
+    const isCurrent = captureMutation();
     try {
       await moveWorkflowFolder(context, folder.id, destinationId, expectedRevision);
+      if (!isCurrent()) return;
       await onMoved(destinationId, previousParentId.current);
-      onClose();
+      if (isCurrent()) onClose();
     } catch (caught) {
-      setError(`Couldn't move this folder. ${caught instanceof Error ? caught.message : "The server rejected the destination."} Choose another available destination or check permissions, then try again.`);
+      if (isCurrent()) setError(`Couldn't move this folder. ${caught instanceof Error ? caught.message : "The server rejected the destination."} Choose another available destination or check permissions, then try again.`);
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
 

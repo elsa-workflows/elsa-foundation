@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { describeExtensionBuilderError } from "./helpers";
 
@@ -18,10 +18,15 @@ export interface OperationTracker {
   runOperation<T>(scope: OperationScope, operation: () => Promise<T>, success: string | ((result: T) => string)): Promise<T | null>;
 }
 
-export function useOperationTracker(notifications?: StudioNotificationApi): OperationTracker {
+export function useOperationTracker(notifications: StudioNotificationApi | undefined, context: object, selection: string): OperationTracker {
   const [busyCounts, setBusyCounts] = useState<Partial<Record<OperationScope, number>>>({});
-  const mounted = useRef(false);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const visit = useMemo(() => ({ context, selection, notifications, active: false, generation: 0 }), [context, selection, notifications]);
+  const currentVisit = useRef(visit);
+  currentVisit.current = visit;
+  useLayoutEffect(() => {
+    visit.active = true;
+    return () => { visit.active = false; visit.generation++; };
+  }, [visit]);
   const [error, setError] = useState<string | null>(null);
 
   const adjust = useCallback((scope: OperationScope, delta: number) => {
@@ -35,23 +40,27 @@ export function useOperationTracker(notifications?: StudioNotificationApi): Oper
   }, []);
 
   const runOperation = useCallback(async <T,>(scope: OperationScope, operation: () => Promise<T>, success: string | ((result: T) => string)): Promise<T | null> => {
+    const generation = visit.generation;
+    const isCurrent = () => visit.active && currentVisit.current === visit && visit.generation === generation;
+    if (!isCurrent()) return null;
     adjust(scope, 1);
     setError(null);
     try {
       const result = await operation();
+      if (!isCurrent()) return null;
       const title = typeof success === "function" ? success(result) : success;
-      if (mounted.current && title) notifications?.notify({ level: "success", title });
+      if (title) notifications?.notify({ level: "success", title });
       return result;
     } catch (e) {
       // Every scoped operation error goes through the shared Extension Builder formatter so bridge infrastructure
       // failures name the backend-management state (with the bridge's detail — e.g. a relay timeout's "may still have
       // completed") and Studio 403s name the missing permission, instead of a generic message.
-      setError(describeExtensionBuilderError(e));
+      if (isCurrent()) setError(describeExtensionBuilderError(e));
       return null;
     } finally {
       adjust(scope, -1);
     }
-  }, [adjust, notifications]);
+  }, [adjust, notifications, visit]);
 
   const isBusy = useCallback((scope: OperationScope) => (busyCounts[scope] ?? 0) > 0, [busyCounts]);
   const anyBusy = Object.keys(busyCounts).length > 0;

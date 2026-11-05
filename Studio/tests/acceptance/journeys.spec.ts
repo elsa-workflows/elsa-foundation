@@ -73,7 +73,10 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.locator(".secrets-notification")).toHaveCount(0);
   await capture(page, info, "secret-created-toast");
 
-  await page.goto("/security/connections");
+  // Follow the shell navigation so notification history stays in the same mounted host session.
+  const moreTools = page.getByRole("button", { name: "More tools", exact: true });
+  if (await moreTools.getAttribute("aria-expanded") === "false") await moreTools.press("Enter");
+  await page.getByRole("link", { name: "Connections", exact: true }).press("Enter");
   const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
   await expect(openConnection).toBeEnabled();
   await openConnection.press("Enter");

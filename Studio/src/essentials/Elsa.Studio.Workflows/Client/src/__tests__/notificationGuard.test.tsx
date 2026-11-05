@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { useNotificationGuard } from "../workflow-editor/notifications";
 
 it("rejects outcomes and callbacks from a disposed page or obsolete context", () => {
@@ -26,4 +26,27 @@ it("rejects outcomes and callbacks from a disposed page or obsolete context", ()
   expect(currentCapture()()).toBe(true);
   flushSync(() => root.unmount());
   expect(currentCapture()()).toBe(false);
+});
+
+it("accepts a current outcome at commit and in the first clipboard completion microtask", async () => {
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const observed: boolean[] = [];
+  const context = {};
+  function Probe() {
+    const capture = useNotificationGuard(context);
+    useLayoutEffect(() => {
+      const current = capture();
+      observed.push(current());
+      void Promise.resolve().then(() => observed.push(current()));
+    }, [capture]);
+    return null;
+  }
+  try {
+    root.render(<Probe />);
+    await vi.waitFor(() => expect(observed).toHaveLength(2));
+    expect(observed).toEqual([true, true]);
+  } finally {
+    flushSync(() => root.unmount());
+  }
 });

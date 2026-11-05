@@ -877,6 +877,33 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it.each(["another workspace", "the same workspace"])("suppresses a retired Git confirmation after opening %s", async destination => {
+    const pending = deferred<unknown>();
+    const postJson = vi.fn(async (url: string) => url.endsWith("/source-control/push") ? pending.promise : defaultPostJson(url));
+    const getJson = async (url: string) => {
+      if (url.endsWith("/repositories")) return [repositorySummary(), repositorySummary({ id: "ws-2", name: "Other Extensions" })];
+      if (url.endsWith("/workspaces")) return [workspaceWithProject(), { ...workspaceWithProject(), id: "ws-2", displayName: "Other Extensions" }];
+      return defaultGetJson(url);
+    };
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    try {
+      await openSolution(container, "Team Extensions");
+      await clickTab(container, "Source control");
+      await clickExactButton(container, "Push");
+      expect(postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces/ws-1/source-control/push`, {}, { timeoutMs: 130_000 });
+      await clickExactButton(container, "Solutions");
+      const destinationName = destination === "another workspace" ? "Other Extensions" : "Team Extensions";
+      await openSolution(container, destinationName);
+      expect(container.querySelector(".extension-builder-crumb strong")?.textContent).toBe(destinationName);
+      pending.resolve({ operation: "Push", state: "Completed", message: "Pushed.", status: sourceControlStatus() });
+      await flushPromises();
+      expect(notifications.notify).not.toHaveBeenCalled();
+    } finally {
+      pending.resolve(null);
+      await unmount();
+    }
+  });
+
   it("blocks navigation and keeps the edit when an auto-save flush fails", async () => {
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
       putJson: async () => { throw new Error("Request failed with 503."); }

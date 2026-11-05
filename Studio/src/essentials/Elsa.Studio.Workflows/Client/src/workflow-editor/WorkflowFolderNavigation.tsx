@@ -200,16 +200,17 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   const deleteFolder = async () => {
     if (!selectedFolder) return;
+    const canNotify = captureNotificationGuard();
     const confirmed = await getDialogs().confirm({
       message: `Delete folder "${selectedFolder.name}"? Only empty folders can be deleted by this backend. This cannot be undone.`,
       confirmLabel: "Delete folder",
       tone: "danger"
     });
-    if (!confirmed) return;
-    const canNotify = captureNotificationGuard();
+    if (!confirmed || !canNotify()) return;
     setError(null);
     try {
       await deleteEmptyWorkflowFolder(context, selectedFolder.id, selectedFolder.revision);
+      if (!canNotify()) return;
       const survivor: WorkflowFolderSelection = selectedFolder.parentId ? { id: selectedFolder.parentId } : "all";
       const survivorKey = selectedFolder.parentId ? `folder:${selectedFolder.parentId}` : "all";
       select(survivor);
@@ -218,7 +219,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       if (canNotify()) getNotifications().notify({ level: "success", title: `Deleted folder ${selectedFolder.name}` });
       restoreFolderFocus(survivorKey);
     } catch (caught) {
-      setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
+      if (canNotify()) setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
     }
   };
 

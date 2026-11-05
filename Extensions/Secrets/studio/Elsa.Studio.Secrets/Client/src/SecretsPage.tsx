@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState} from "@elsa-workflows/studio-ui";
@@ -27,14 +27,22 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
   const [descriptorsLoading, setDescriptorsLoading] = useState(true);
   const [descriptorError, setDescriptorError] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const descriptorRequestSequence = useRef(0);
   const secretsRequestSequence = useRef(0);
   const attemptedSearch = useRef("");
-  const currentContext = useRef(context);
-  currentContext.current = context;
-  const mounted = useRef(false);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const operationScope = useMemo(() => ({ context, active: false, generation: 0 }), [context]);
+  const currentScope = useRef(operationScope);
+  currentScope.current = operationScope;
+  useLayoutEffect(() => {
+    operationScope.active = true;
+    setBusyName(null);
+    return () => { operationScope.active = false; operationScope.generation++; };
+  }, [operationScope]);
+  const captureOperation = () => {
+    const generation = operationScope.generation;
+    return () => currentScope.current === operationScope && operationScope.active && operationScope.generation === generation;
+  };
 
   const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
   const scopeOptions = useMemo(() => {
@@ -131,83 +139,90 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
     };
   }, [load]);
 
-  async function refreshWithConfirmation(message: string) {
-    if (!mounted.current || currentContext.current !== context) return;
+  async function refreshWithConfirmation(message: string, isCurrent: () => boolean) {
+    if (!isCurrent()) return;
     notifications?.notify({ level: "success", title: message });
     await load(completedSearch);
   }
 
   async function saveMetadata(name: string, request: UpdateSecretRequest) {
+    const isCurrent = captureOperation();
     setBusyName(name);
     setError(null);
     try {
       await updateSecret(context, name, request);
-      await refreshWithConfirmation("Secret metadata updated.");
+      await refreshWithConfirmation("Secret metadata updated.", isCurrent);
     } finally {
-      setBusyName(null);
+      if (isCurrent()) setBusyName(null);
     }
   }
 
   async function saveCreatedSecret(request: CreateSecretRequest) {
+    const isCurrent = captureOperation();
     setError(null);
     await createSecret(context, request);
-    await refreshWithConfirmation("Secret created.");
+    await refreshWithConfirmation("Secret created.", isCurrent);
   }
 
   async function saveRotation(name: string, request: RotateSecretRequest) {
+    const isCurrent = captureOperation();
     setBusyName(name);
     setError(null);
     try {
       await rotateSecret(context, name, request);
-      await refreshWithConfirmation("Secret rotated.");
+      await refreshWithConfirmation("Secret rotated.", isCurrent);
     } finally {
-      setBusyName(null);
+      if (isCurrent()) setBusyName(null);
     }
   }
 
   async function runTest(secret: SecretMetadata) {
+    const isCurrent = captureOperation();
     setBusyName(secret.name);
     setError(null);
     try {
       const result = await testSecret(context, secret.name);
       const summary = result.message?.trim() || (result.succeeded ? "Secret resolved successfully." : "Secret test failed.");
-      if (!mounted.current || currentContext.current !== context) return;
+      if (!isCurrent()) return;
       if (result.succeeded) notifications?.notify({ level: "success", title: "Secret test succeeded.", message: `(${result.code}): ${summary}` });
       else setError(`Test failed (${result.code}): ${summary}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Secret test failed.");
+      if (isCurrent()) setError(e instanceof Error ? e.message : "Secret test failed.");
     } finally {
-      setBusyName(null);
+      if (isCurrent()) setBusyName(null);
     }
   }
 
   async function revoke(secret: SecretMetadata) {
+    const isCurrent = captureOperation();
     if (secret.status === "Revoked" || secret.status === "Deleted") return;
-    if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" }))) return;
+    if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" })) || !isCurrent()) return;
     setBusyName(secret.name);
     setError(null);
     try {
       await revokeSecret(context, secret.name);
-      await refreshWithConfirmation("Secret revoked.");
+      await refreshWithConfirmation("Secret revoked.", isCurrent);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Secret could not be revoked.");
+      if (isCurrent()) setError(e instanceof Error ? e.message : "Secret could not be revoked.");
     } finally {
-      setBusyName(null);
+      if (isCurrent()) setBusyName(null);
     }
   }
 
   async function remove(secret: SecretMetadata) {
-    if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" }))) return;
+    const isCurrent = captureOperation();
+    if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrent()) return;
     setBusyName(secret.name);
     setError(null);
     try {
       await deleteSecret(context, secret.name);
+      if (!isCurrent()) return;
       setDialog(current => current?.kind === "edit" && current.name === secret.name ? null : current);
-      await refreshWithConfirmation("Secret deleted.");
+      await refreshWithConfirmation("Secret deleted.", isCurrent);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Secret could not be deleted.");
+      if (isCurrent()) setError(e instanceof Error ? e.message : "Secret could not be deleted.");
     } finally {
-      setBusyName(null);
+      if (isCurrent()) setBusyName(null);
     }
   }
 

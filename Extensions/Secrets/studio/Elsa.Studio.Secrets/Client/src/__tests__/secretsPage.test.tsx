@@ -239,6 +239,37 @@ describe("secrets page", () => {
     expect(notifications.notify).not.toHaveBeenCalled();
   });
 
+  it.each(["Test", "Revoke"])("does not toast a retired %s after hiding and showing the retained tab", async action => {
+    let finish!: (value: unknown) => void;
+    const work = new Promise(resolve => { finish = resolve; });
+    const postJson = vi.fn().mockReturnValueOnce(work).mockResolvedValue({ succeeded: true, code: "resolved" });
+    const { container, setVisible } = render({ postJson });
+    await waitForText(container, "Payments API");
+    await clickSecretAction(container, "payments.api", action);
+    await waitFor(() => postJson.mock.calls.length === 1);
+    setVisible(false); setVisible(true);
+    finish({ succeeded: true, code: "resolved" }); await work; await Promise.resolve();
+    expect(notifications.notify).not.toHaveBeenCalled();
+    await waitFor(() => container.querySelector("button[aria-label='Actions for payments.api']") !== null);
+    await clickSecretAction(container, "payments.api", action);
+    await waitFor(() => notifications.notify.mock.calls.length === 1);
+    expect(notifications.notify.mock.calls[0][0].title).toBe(action === "Test" ? "Secret test succeeded." : "Secret revoked.");
+  });
+
+  it("does not revoke from a confirmation opened by a retired tab visit", async () => {
+    let finish!: (confirmed: boolean) => void;
+    const work = new Promise<boolean>(resolve => { finish = resolve; });
+    const confirm = vi.fn(() => work), postJson = vi.fn();
+    const { container, setVisible } = render({ postJson, confirm });
+    await waitForText(container, "Payments API");
+    await clickSecretAction(container, "payments.api", "Revoke");
+    await waitFor(() => confirm.mock.calls.length === 1);
+    setVisible(false); setVisible(true);
+    finish(true); await work; await Promise.resolve();
+    expect(postJson).not.toHaveBeenCalled();
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
   it("clears entered rotation material and visibility when the target secret changes", async () => {
     const { container } = render({ getItems: () => [paymentSecret(), secret({ id: "2", name: "other.api", displayName: "Other API" })] });
     await waitForText(container, "Other API");
@@ -835,13 +866,14 @@ function render(options: {
   getDescriptors?(): unknown | Promise<unknown>;
   postJson?: ReturnType<typeof vi.fn>;
   putJson?: ReturnType<typeof vi.fn>;
+  confirm?: ReturnType<typeof vi.fn>;
 } = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   const listRequests: string[] = [];
   const dialogs = {
-    confirm: vi.fn(async () => true),
+    confirm: options.confirm ?? vi.fn(async () => true),
     prompt: vi.fn(async () => null),
     alert: vi.fn(async () => {})
   };
@@ -871,8 +903,11 @@ function render(options: {
       postForm: vi.fn()
     }
   });
-  const renderPage = (context = createContext()) => {
-    flushSync(() => root.render(<SecretsPage context={context} dialogs={dialogs} notifications={notifications} />));
+  let currentContext = createContext();
+  let visible = true;
+  const renderPage = (context = currentContext) => {
+    currentContext = context;
+    flushSync(() => root.render(<React.Activity mode={visible ? "visible" : "hidden"}><SecretsPage context={context} dialogs={dialogs} notifications={notifications} /></React.Activity>));
   };
   renderPage();
 
@@ -882,7 +917,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount, listRequests, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
+  return { container: host, unmount, listRequests, setVisible: (next: boolean) => { visible = next; renderPage(); }, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function getSearchTerm(url: string) {
