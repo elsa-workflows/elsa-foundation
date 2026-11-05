@@ -107,9 +107,9 @@ These are conservative implementation-plan defaults for review/testing, not appr
 
 | Setting | Candidate default / supported bound |
 |---|---|
-| Default buffer lifetime | `24h`; positive sender/deployment lifetime `1s..30d`; `0` means immediate-only, never an expired pending buffer. Integer seconds only. |
+| Default buffer lifetime | `24h`; configurable deployment maximum defaults to `30d` within `1s..30d`, and default must not exceed it. Reject sender overrides beyond that maximum without clamping. `0` is immediate-only, never an expired pending buffer; integer seconds only. |
 | Producer-ID deduplication lifetime | `7d`; deployment setting `1s..90d` when ID is supplied. Omit ID for no producer dedup; zero does not silently disable recognition. Independent of buffer lifetime. |
-| Request size / text limits | Total UTF-8 JSON body at most `1MiB`; name `256`, key `1024`, producer ID `256` UTF-8 bytes. Reject over-limit before acceptance. |
+| Request size / text limits | Raw HTTP body and shared normalized transport envelope each at most `1MiB`; name `256`, key `1024`, producer ID `256` UTF-8 bytes. The shared envelope includes name/key/payload and present optional fields, canonical payload and explicit JavaScriptEncoder.Default escaping; exclude internal fingerprint-version/null omission markers. Native/API use the same bound. Reject before acceptance. |
 | Frozen definition cohort | At most `256` eligible logical definitions per message; never truncate. An over-limit complete population explicitly refuses acceptance. |
 | Acceptance-time candidate work | At most `4096` exact candidates across the complete immediate-only cohort; exceedance refuses the whole acceptance, never reports a clipped set as unmatched. |
 | Scope backlog / payload capacity | `10,000` accepted sources with outstanding delivery obligations and `64MiB` outstanding payload bytes; reserve complete cohort obligations atomically. |
