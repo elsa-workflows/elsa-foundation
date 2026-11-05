@@ -26,7 +26,7 @@ public static class DecisionsApi
         void Map(string method, string path, string name, string permission, Type? response, Func<HttpContext, DecisionDesignService, DecisionCaller, Task<object?>> action)
         {
             api.MapUnboundOperation(method, "/decisions" + path, name, response, StatusCodes.Status200OK, null,
-                async context => await Handle(context, action), containFailures: false).RequirePermission(permission);
+                async context => await Handle(context, action), containFailures: false).DisableCookieRedirect().RequirePermission(permission);
         }
         Map("GET", "", "DecisionsList", DecisionPermissions.Read, typeof(DecisionAssetsResponse), async (ctx, service, caller) => new DecisionAssetsResponse(await service.ListAsync(caller, ctx.RequestAborted)));
         Map("POST", "", "DecisionsCreate", DecisionPermissions.Manage, typeof(DecisionAssetView), async (ctx, service, caller) => await service.SaveAsync(caller, null, await Body<SaveDecisionRequest>(ctx), ctx.RequestAborted));
