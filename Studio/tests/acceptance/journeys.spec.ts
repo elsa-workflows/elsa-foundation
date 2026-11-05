@@ -217,6 +217,9 @@ test("workflow template metadata defaults", async ({ page }, info) => {
     await expect(savedDescription).toHaveValue(expectedDescription);
     await expect(savedName).toBeInViewport();
     await expect(savedDescription).toBeInViewport();
+    // Being onscreen alone can still leave an unusable one-character input beside a fixed-width label.
+    expect((await savedName.boundingBox())!.width).toBeGreaterThanOrEqual(120);
+    expect((await savedDescription.boundingBox())!.width).toBeGreaterThanOrEqual(120);
   };
 
   await page.goto("/workflows/definitions");
