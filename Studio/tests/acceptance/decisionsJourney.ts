@@ -45,7 +45,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await form.getByLabel("Case name", { exact: true }).fill(`Boundary ${amount} ${category}`);
     await form.getByRole("textbox", { name: "Case input amount", exact: true }).fill(amount);
     await form.getByRole("textbox", { name: "Case input customerCategory", exact: true }).fill(category);
-    await form.getByLabel("Expected outcome", { exact: true }).selectOption(status);
+    await form.getByRole("combobox", { name: "Expected outcome", exact: true }).selectOption(status);
     if (status === "Success") await form.getByRole("textbox", { name: "Expected approvalLevel", exact: true }).fill(expected);
     if (caseCount === 0) { await part("decision-case-editor", form.getByLabel("Case name", { exact: true })); await part("decision-case-expectation", form.getByRole("textbox", { name: "Expected approvalLevel", exact: true })); }
     const response = page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname.endsWith("/cases"));
