@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
+import type { ActivityExecutionBrowsePage } from "../api/runtime";
 import type {
   ActivityExecutionInspection,
   ActivityExecutionStateSummary,
@@ -34,6 +35,7 @@ const designApi = vi.hoisted(() => ({
   listDefinitions: vi.fn(),
   getDefinition: vi.fn()
 }));
+const valueApi = vi.hoisted(() => ({ getActivityExecutionValuePayload: vi.fn() }));
 const mockFlowInstance = vi.hoisted(() => ({ fitView: vi.fn() }));
 const useActualReactFlow = vi.hoisted(() => ({ enabled: false }));
 
@@ -43,6 +45,7 @@ vi.mock("../api/runtime", () => ({
 }));
 vi.mock("../api/activityDesign", () => ({ listActivities: api.listActivities }));
 vi.mock("../api/workflowDesign", () => designApi);
+vi.mock("../api/activityExecutionValuePayload", () => valueApi);
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   return {
@@ -1473,4 +1476,71 @@ it("completes own-scope occurrence navigation", async () => {
   await new Promise(resolve=>setTimeout(resolve,50));
   expect(container.textContent).not.toContain("This execution scope is unavailable");
   expect(container.querySelector(".wf-activity-overview")).toBeTruthy();
+});
+
+
+it.each(["empty", "mismatched"])("does not revive an unavailable prepared child during a delayed refresh (%s page)", async result => {
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  const make = (id: string, node: string, authored: string, parent: string | null) => ({ ...activityExecution(), activityExecutionId: id,
+    executableNodeId: node, authoredActivityId: authored, status: "Completed", incidentCount: 0, incidentIds: [],
+    parentActivityExecutionId: parent, provenance: { parentActivityExecutionId: parent }, executionSequence: 1 });
+  const rows = [make("root", "compiled-root-sequence", "root-sequence", null),
+    make("scope4", "compiled-nested-sequence", "nested-sequence", "root"), make("scope5", "compiled-nested-sequence", "nested-sequence", "root"),
+    make("write4", "compiled-target", "target-node", "scope4"), make("write5", "compiled-target", "target-node", "scope5")];
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: rows, incidents: [] }));
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+    const row = rows.find(item => item.activityExecutionId === id)!;
+    return activityInspection({ ...row, outcomeNames: [], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"],
+      valueSnapshots: id === "write5" ? [{ evidenceId: "prepared-output", name: "Prepared output", subject: "ActivityOutput",
+        captureMode: "DiagnosticSnapshot", captureState: "diagnosticSnapshotCaptured", state: "captured",
+        type: { kind: "alias", id: "String", schema: null }, capturedAt: "2026-10-01T12:00:00Z", payload: null, snapshot: null,
+        isSensitive: false, accessState: "resolutionAvailable", metadata: {} }] : [] });
+  });
+  valueApi.getActivityExecutionValuePayload.mockResolvedValue({ evidenceId: "prepared-output", captureMode: "DiagnosticSnapshot",
+    payload: { kind: "string", preview: "PREPARED_CHILD_VALUE" } });
+  const pending = deferred<ActivityExecutionBrowsePage>();
+  let phase: "available" | "unavailable" | "pending" = "available";
+  const pageFor = (request: { executableNodeId?: string; parentActivityExecutionId?: string; ancestorActivityExecutionId?: string; limit?: number }) => {
+    const matches = rows.filter(item => (!request.executableNodeId || item.executableNodeId === request.executableNodeId) &&
+      (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId) &&
+      (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId));
+    const entries = matches.map((execution, index) => ({ execution, position: index + 1,
+      previousActivityExecutionId: matches[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: matches[index + 1]?.activityExecutionId ?? null }));
+    return { items: request.limit === 1 ? entries.slice(-1) : entries, totalCount: entries.length, previousCursor: null, nextCursor: null };
+  };
+  const childAnchor = (request: { executableNodeId?: string; anchorActivityExecutionId?: string; ancestorActivityExecutionId?: string }) =>
+    request.executableNodeId === "compiled-target" && request.ancestorActivityExecutionId === "scope5" && request.anchorActivityExecutionId === "write5";
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (childAnchor(request) && phase === "pending") return pending.promise;
+    if (childAnchor(request) && phase === "unavailable") return {
+      items: result === "empty" ? [] : [{ execution: rows[3], position: 1 }],
+      totalCount: result === "empty" ? 0 : 1, previousCursor: null, nextCursor: null
+    };
+    return pageFor(request);
+  });
+  renderWorkbench("activity", "write4");
+  await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
+  click(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']"));
+  await vi.waitFor(() => expect(window.location.search).toContain("write5"));
+  await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
+
+  phase = "unavailable";
+  click(buttonByText(container, "Refresh"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeNull());
+  expect(container.textContent).not.toContain("PREPARED_CHILD_VALUE");
+  expect(container.textContent).not.toContain("This execution scope is unavailable");
+
+  phase = "pending";
+  const beforeRefresh = api.browseActivityExecutions.mock.calls.length;
+  click(buttonByText(container, "Refresh"));
+  await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.slice(beforeRefresh).some(call => childAnchor(call[2]))).toBe(true));
+  expect(container.querySelector(".wf-activity-overview")).toBeNull();
+  expect(container.textContent).not.toContain("PREPARED_CHILD_VALUE");
+  expect(window.location.search).toContain("write5");
+  expect(container.textContent).not.toContain("This execution scope is unavailable");
+
+  // Only a new matching authoritative page may restore the selected child.
+  pending.resolve(pageFor({ executableNodeId: "compiled-target", ancestorActivityExecutionId: "scope5" }));
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 });
