@@ -200,6 +200,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Workflow authoring");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("Loading availability…", { exact: true })).toHaveCount(0);
   await capture(page, info, "workflow-authoring-settings");
   // Existing bookmarked routes must resolve to their new Settings surface as well.
   await page.goto("/workflows/runtime-diagnostics");
@@ -234,4 +235,30 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await navLink("Connections").click();
   await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
   await capture(page, info, "completed");
+  // Verify the same real module composition through the alternate navigation and contrast axes.
+  await page.goto("/settings/appearance");
+  await page.getByRole("radiogroup", { name: "Navigation", exact: true }).getByRole("radio", { name: "Top", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
+  const topSearch = sidebar.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await topSearch.fill("templates");
+  const topResults = page.getByRole("navigation", { name: "Search results", exact: true });
+  await expect(topResults.getByRole("link", { name: "Templates", exact: true })).toBeVisible();
+  await capture(page, info, "top-search");
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await topSearch.fill("");
+  await sidebar.getByRole("button", { name: "Build", exact: true }).click();
+  await sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Library", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Activity Definitions", exact: true })).toBeVisible();
+  await capture(page, info, "top-navigation");
+  await page.goto("/settings/appearance");
+  await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "High contrast", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "high-contrast");
+  await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
+  await sidebar.getByRole("navigation", { name: "Integrations", exact: true }).getByRole("link", { name: "Connections", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
+  await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
+  await capture(page, info, "high-contrast");
+  await page.keyboard.press("Escape");
 });

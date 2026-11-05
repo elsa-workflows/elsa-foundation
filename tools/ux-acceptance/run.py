@@ -18,7 +18,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
-    'grouped navigation and moved destinations': ['reference', 'groups', 'library', 'workflow-authoring-settings', 'runtime-settings', 'diagnostic-views', 'search', 'completed'],
+    'grouped navigation and moved destinations': ['reference', 'groups', 'library', 'workflow-authoring-settings', 'runtime-settings', 'diagnostic-views', 'search', 'completed', 'top-search', 'top-navigation', 'high-contrast'],
     'collections and connection creation': ['reference', 'library-initial', 'no-matches', 'connections-list', 'invalid-name', 'completed'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }
