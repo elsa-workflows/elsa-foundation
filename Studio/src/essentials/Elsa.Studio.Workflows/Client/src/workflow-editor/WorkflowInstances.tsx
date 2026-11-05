@@ -944,17 +944,18 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     handleInspectorResizeKeyDown
   } = useRunDetailLayout({ selectedActivityId: selectedActivity?.activityExecutionId });
   useEffect(() => {
-    if (appliedInitialInspectorTab.current === initialInspectorTab) return;
-    appliedInitialInspectorTab.current = initialInspectorTab;
+    const requestedInitialTab = initialInspectorTab === "timeline" && parsedInitialHistory.selection ? "activity" : initialInspectorTab;
+    if (appliedInitialInspectorTab.current === requestedInitialTab) return;
+    appliedInitialInspectorTab.current = requestedInitialTab;
     incidentNavigationRequest.current += 1;
     scopeRequest.current?.abort();
     setScopeNavigation(current => current.context === browserContext && current.loading
       ? { context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." } : current);
-    setActiveInspectorTab(initialInspectorTab);
-    // A default Activity tab without an exact target must leave Diagram available on a phone.
-    if (initialInspectorTab === "issues" || (initialInspectorTab === "activity"
-      && Boolean(initialActivityExecutionId?.trim() || parsedInitialHistory.selection))) openInspector();
-  }, [browserContext, initialInspectorTab, initialActivityExecutionId, parsedInitialHistory.selection, openInspector]);
+    setActiveInspectorTab(requestedInitialTab);
+    // Exact history links can resolve to an unavailable result without an activity owner.
+    // Activity-only links open through the resolved selection instead of an unverified ID.
+    if (parsedInitialHistory.selection || requestedInitialTab === "issues") openInspector();
+  }, [browserContext, initialInspectorTab, parsedInitialHistory.selection, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
   // it, published only once the run has loaded and withdrawn while loading, after a failed load and on unmount. The server

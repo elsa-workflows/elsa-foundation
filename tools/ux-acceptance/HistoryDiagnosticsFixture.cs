@@ -185,7 +185,7 @@ static bool ProcessAlive(int pid)
 }
 static bool ValidPermissions(string profile, string[] permissions)
 {
-    var expected = new HashSet<string>(["workflows/runtime:read"], StringComparer.Ordinal);
+    var expected = new HashSet<string>(["api-capabilities:read", "workflows/runtime:read"], StringComparer.Ordinal);
     if (profile is "metadata" or "payload-denied") expected.Add("workflows/activity-executions:inspect");
     if (profile == "payload-denied") expected.Add("workflows/activity-executions:inspect-values");
     return (profile is "metadata" or "payload-denied" or "denied") && expected.SetEquals(permissions);

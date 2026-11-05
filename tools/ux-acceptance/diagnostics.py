@@ -132,7 +132,7 @@ class DiagnosticsSupervisor:
             self.nonce = uuid.uuid4().hex
             suffix = self.nonce[:8]
             self.accounts = [dict(userName=f'history-probe-{suffix}-{profile}', tenantId='default', profile=profile,
-                                  password='Password123!', permissions=['workflows/runtime:read'] +
+                                  password='Password123!', permissions=['api-capabilities:read', 'workflows/runtime:read'] +
                                   (['workflows/activity-executions:inspect'] if profile != 'denied' else []) +
                                   (['workflows/activity-executions:inspect-values'] if profile == 'payload-denied' else []))
                              for profile in ('metadata', 'payload-denied', 'denied')]
