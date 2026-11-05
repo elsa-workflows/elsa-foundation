@@ -64,6 +64,10 @@ Parallel sessions on one machine compete for the same CPU. Four concurrent solut
 - Check `uptime` before trusting a timing-shaped failure. The load average counts runnable tasks, so compare it with the core count, and rerun at lower load before calling the failure real.
 - A process started as a background job of a non-interactive shell ignores SIGINT. Stop such a process with SIGTERM; a SIGINT that has no effect there does not mean the process hangs on Ctrl+C.
 
+## Studio delivery acceptance
+
+For visible UI or interaction changes, follow [Studio UX acceptance](docs/contributing/studio-ux-acceptance.md): define the user goal/reference/states before coding, verify the composed host, retain current-commit downloadable visual evidence, and include independent UX acceptance in the existing review loop. A green test summary without inspected experience is incomplete acceptance. Keep failed/not-run states visible and fix/retest before claiming the feature done.
+
 ## Program bookkeeping
 
 Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).

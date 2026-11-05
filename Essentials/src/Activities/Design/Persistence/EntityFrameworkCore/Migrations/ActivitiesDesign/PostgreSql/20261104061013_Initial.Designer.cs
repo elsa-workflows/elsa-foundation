@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.ActivitiesDesign.PostgreSql
 {
     [DbContext(typeof(ActivitiesDesignPostgreSqlDbContext))]
-    [Migration("20260928040640_Initial")]
+    [Migration("20261104061013_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -287,6 +287,12 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
+
+                    b.Property<string>("ActivityPresentation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValueSql("('[]')");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -802,6 +808,12 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
+
+                    b.Property<string>("ActivityPresentation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValueSql("('[]')");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()

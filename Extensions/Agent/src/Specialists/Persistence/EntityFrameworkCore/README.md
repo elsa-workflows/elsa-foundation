@@ -137,6 +137,11 @@ For an application-owned context, map `AddSourceRevisions("your_prefix", provide
 `AddAgentSourceStore<ApplicationDbContext>()`. Source writes use that scoped context and refuse
 pending unrelated changes; resolve a separate scope for concurrent operations.
 
+Normal module startup applies migrations and admits the schema write gate before source operations.
+The shared writer stamps new rows before that gate checks them and retains the verified shadow stamp
+when reattaching a copy. Applying migrations directly without module admission does not exercise this
+host boundary; composition qualification uses the ordinary module lifecycle.
+
 `IAgentSourceReader`/`IAgentSourceWriter` own typed instructions, model reference, business contract and
 policy. Tenant/partition/authority comes from trusted composition. The source API requires
 `agent/definitions:read` or `agent/definitions:manage`; generic activity permissions do not grant it.
