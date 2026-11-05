@@ -2,6 +2,11 @@ import { expect, type Dialog, type Page, type TestInfo } from "@playwright/test"
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export async function templateToastJourney(page: Page, info: TestInfo, capture: Capture) {
+  async function revealCanvas() {
+    if (!info.project.name.startsWith("narrow")) return;
+    const collapse = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
+    if (await collapse.isVisible()) await collapse.click();
+  }
   const base = process.env.ELSA_WORKBENCH_URL!;
   expect(base, "Owned Workbench URL").toBeTruthy();
   async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
@@ -78,8 +83,9 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     expect(templateTabLabel, "The Templates workspace tab has an accessible name").toBeTruthy();
     // The toast opens another workspace tab so the source workflow keeps its unsaved edits.
     await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
-    await expect(page.locator(".wf-sequence-summary").filter({ hasText: "Unsaved template text" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Text", exact: true })).toHaveValue("Unsaved template text");
+    await revealCanvas();
+    await expect(page.locator(".wf-sequence-summary").filter({ hasText: "Unsaved template text" })).toBeVisible();
     await page.getByRole("tab", { name: templateTabLabel!, exact: true }).click();
     // The original workflow deliberately retains unsaved edits. Its template copy is persisted;
     // accept only the native reload guard for this owned disposable journey.
@@ -88,6 +94,8 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     await page.reload();
     page.off("dialog", allowOwnedReload);
     await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
+    await revealCanvas();
     await expect(page.locator(".wf-sequence-summary").filter({ hasText: "Unsaved template text" })).toBeVisible();
     await capture(page, info, "reopened-template");
   } finally {
