@@ -12,8 +12,8 @@ optimistic revision and exact publication retry semantics in the [finite ETL con
 
 `EtlDesignApiFeature` registers the capability, permission contribution, signed cursor codec, operation seam and
 owner-local JSON/error contracts. It requires `EtlDesign` and `ApiCapabilities`. Hosts supply Foundation Identity,
-the ordinary persistence scope and an `IEtlDefinitionStore`/`IEtlDefinitionCatalog` provider. The SQLite design
-feature supplies both stores. No native workflow engine or actor provider is required by this API.
+the ordinary persistence scope and an `IEtlDefinitionStore`/`IEtlDefinitionCatalog` provider. The ETL design EF feature
+(SQLite, SQL Server, PostgreSQL or MySQL) supplies both stores. No native workflow engine or actor provider is required by this API.
 
 Binding discovery uses the optional `IEtlBindingCatalog` Core port. The default runtime host binding adapter
 returns current aliases and roles in exact scope without paths, revisions, digests or handles. An authoring host

@@ -3,6 +3,7 @@ using Elsa.Etl.Core;
 using Elsa.Etl.Design;
 using Elsa.Etl.Design.Stores;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
@@ -13,6 +14,10 @@ internal sealed class EfEtlDefinitionStore(
     IEtlArtifactCompiler artifactCompiler,
     IEtlArtifactCompilerV2? artifactCompilerV2 = null) : IEtlDefinitionStore, IEtlDefinitionStoreV2
 {
+    private static readonly EfWriteRetry PublishRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);
+    // A draft update racing a publication can be a deadlock victim on SQL Server; its one statement rolls back whole.
+    private static readonly EfWriteRetry UpdateRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);
+
     public async ValueTask<EtlDefinitionDraft?> FindDraftAsync(
         EtlScope scope,
         string definitionId,
@@ -84,6 +89,12 @@ internal sealed class EfEtlDefinitionStore(
             _ = EtlDefinitionRecordCodec.ReadDraftContent(existing, scope, definitionId);
             return new(EtlDefinitionWriteStatus.Conflict, existing);
         }
+        catch
+        {
+            // A create that failed otherwise, cancelled for one, must not leave its row for a later save on this context.
+            dbContext.Entry(row).State = EntityState.Detached;
+            throw;
+        }
     }
 
     private async ValueTask<DraftWrite> UpdateDraftCoreAsync(
@@ -96,21 +107,36 @@ internal sealed class EfEtlDefinitionStore(
             var pipelineHash = EtlDefinitionRecordCodec.HashPipeline(pipelineJson);
             var updatedAtUtcTicks = DateTimeOffset.UtcNow.UtcTicks;
             // A v2 update can explicitly upgrade a v1 draft. Old v1 clients cannot downgrade a v2 draft.
-            var changed = await DraftQuery(identity)
-                .Where(row => row.Revision == expectedRevision &&
-                    (row.FormatVersion == EtlArtifact.CurrentFormatVersion ||
-                     formatVersion == EtlArtifactV2Json.FormatVersion && row.FormatVersion == EtlArtifactV2Json.FormatVersion))
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(row => row.PipelineJson, pipelineJson)
-                    .SetProperty(row => row.PipelineHash, pipelineHash)
-                    .SetProperty(row => row.FormatVersion, formatVersion)
-                    .SetProperty(row => row.SchemaVersion, EtlDesignEfModule.SchemaVersion)
-                    .SetProperty(row => row.Revision, row => row.Revision + 1)
-                    .SetProperty(row => row.UpdatedAtUtcTicks, updatedAtUtcTicks), cancellationToken);
+            var changed = await UpdateRetry.RunAsync(dbContext,
+                async () => await DraftQuery(identity)
+                    .Where(row => row.Revision == expectedRevision &&
+                        (row.FormatVersion == EtlArtifact.CurrentFormatVersion ||
+                         formatVersion == EtlArtifactV2Json.FormatVersion && row.FormatVersion == EtlArtifactV2Json.FormatVersion))
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(row => row.PipelineJson, pipelineJson)
+                        .SetProperty(row => row.PipelineHash, pipelineHash)
+                        .SetProperty(row => row.FormatVersion, formatVersion)
+                        .SetProperty(row => row.SchemaVersion, EtlDesignEfModule.SchemaVersion)
+                        .SetProperty(row => row.Revision, row => row.Revision + 1)
+                        .SetProperty(row => row.UpdatedAtUtcTicks, updatedAtUtcTicks), cancellationToken),
+                conflict =>
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(conflict!);
+                    return ValueTask.FromResult(0);
+                },
+                cancellationToken);
             if (changed == 1)
             {
                 var updated = await FindDraftRowAsync(identity, cancellationToken)
                     ?? throw new InvalidDataException("The ETL draft disappeared after its update committed.");
+                // Another writer may have advanced the draft since this update committed; the result is this writer's
+                // revision, never the later one, so a caller saving on top of it still meets the later writer's conflict.
+                updated.Revision = expectedRevision + 1;
+                updated.PipelineJson = pipelineJson;
+                updated.PipelineHash = pipelineHash;
+                updated.FormatVersion = formatVersion;
+                updated.SchemaVersion = EtlDesignEfModule.SchemaVersion;
+                updated.UpdatedAtUtcTicks = updatedAtUtcTicks;
                 _ = EtlDefinitionRecordCodec.ReadDraftContent(updated, scope, definitionId);
                 return new(EtlDefinitionWriteStatus.Updated, updated);
             }
@@ -174,7 +200,30 @@ internal sealed class EfEtlDefinitionStore(
         if (!StringComparer.Ordinal.Equals(validated.ArtifactJson, recompiledEnvelope.ArtifactJson))
             return new(EtlPublicationStatus.InvalidArtifact, null);
 
-        var existing = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
+        // A lost race is a transient write conflict (a serialization failure, a deadlock, a lock timeout, or a busy or locked
+        // SQLite database), so the whole unit runs again, and a real competitor then settles through the existing-publication check.
+        return await PublishRetry.RunAsync(dbContext,
+            () => PublishOnceAsync(identity, scope, definitionId, expectedRevision, artifact, validated, cancellationToken),
+            conflict =>
+            {
+                // The database kept refusing: a persistence failure, not evidence of a competing writer.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(conflict!);
+                return ValueTask.FromResult<EtlPublicationResult>(null!);
+            },
+            cancellationToken);
+    }
+
+    private async ValueTask<EtlPublicationResult> PublishOnceAsync(
+        IdentitySet identity,
+        EtlScope scope,
+        string definitionId,
+        long expectedRevision,
+        EtlArtifact artifact,
+        EtlDefinitionRecordCodec.ValidatedArtifact validated,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        var existing = await QueryPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
         if (existing is not null)
             return ExistingPublicationResult(existing, scope, definitionId, validated);
 
@@ -182,14 +231,14 @@ internal sealed class EfEtlDefinitionStore(
         try
         {
             // Recheck after taking the transaction: retries of the same version converge, including after a later draft edit.
-            existing = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
+            existing = await QueryPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
             if (existing is not null)
             {
                 await transaction.RollbackAsync(cancellationToken);
                 return ExistingPublicationResult(existing, scope, definitionId, validated);
             }
 
-            var draft = await FindDraftRowAsync(identity, cancellationToken);
+            var draft = await QueryDraftRowAsync(identity, cancellationToken);
             if (draft is null)
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -233,14 +282,17 @@ internal sealed class EfEtlDefinitionStore(
             await transaction.CommitAsync(cancellationToken);
             return new(EtlPublicationStatus.Published, artifact);
         }
-        catch (DbUpdateException)
+        // A lost race propagates to the retry; disposing the transaction rolls it back, which an explicit rollback of one
+        // the server already aborted could not.
+        catch (DbUpdateException exception) when (!EfRelationalExceptionClassifier.IsWriteConflict(exception, EfWriteConflict.Transient))
         {
-            await transaction.RollbackAsync(cancellationToken);
+            // Clear first: an exception from the rollback below leaves this catch without reaching the one that clears.
             dbContext.ChangeTracker.Clear();
-            var published = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
+            await transaction.RollbackAsync(cancellationToken);
+            var published = await QueryPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
             if (published is not null)
                 return ExistingPublicationResult(published, scope, definitionId, validated);
-            var current = await FindDraftRowAsync(identity, cancellationToken);
+            var current = await QueryDraftRowAsync(identity, cancellationToken);
             if (current is null)
                 return new(EtlPublicationStatus.NotFound, null);
             _ = EtlDefinitionRecordCodec.ReadDraftContent(current, scope, definitionId);
@@ -250,19 +302,34 @@ internal sealed class EfEtlDefinitionStore(
             // the caller retains retry responsibility instead of treating it as stale input.
             throw;
         }
+        catch
+        {
+            // A failed attempt must not leave its artifact tracked, or a later save on this context would publish it.
+            dbContext.ChangeTracker.Clear();
+            throw;
+        }
     }
 
     private IQueryable<EtlDefinitionDraftRecord> DraftQuery(IdentitySet identity) =>
         dbContext.Drafts.AsNoTracking().Where(row => row.ScopeKey == identity.Scope.Key && row.DefinitionKey == identity.Definition.Key);
 
     private async Task<EtlDefinitionDraftRecord?> FindDraftRowAsync(IdentitySet identity, CancellationToken cancellationToken) =>
-        await DraftQuery(identity).SingleOrDefaultAsync(cancellationToken);
+        await EtlDesignReadRetry.RunAsync(dbContext, () => QueryDraftRowAsync(identity, cancellationToken), cancellationToken);
 
     private async Task<EtlPublishedArtifactRecord?> FindPublishedRowAsync(
         IdentitySet identity,
         int definitionVersion,
         CancellationToken cancellationToken) =>
-        await dbContext.PublishedArtifacts.AsNoTracking().SingleOrDefaultAsync(
+        await EtlDesignReadRetry.RunAsync(dbContext, () => QueryPublishedRowAsync(identity, definitionVersion, cancellationToken), cancellationToken);
+
+    // Unretried reads, for a publication attempt: its own retry runs the whole unit again, so a read retry there would
+    // multiply the budget.
+    private Task<EtlDefinitionDraftRecord?> QueryDraftRowAsync(IdentitySet identity, CancellationToken cancellationToken) =>
+        DraftQuery(identity).SingleOrDefaultAsync(cancellationToken);
+
+    private Task<EtlPublishedArtifactRecord?> QueryPublishedRowAsync(IdentitySet identity, int definitionVersion,
+        CancellationToken cancellationToken) =>
+        dbContext.PublishedArtifacts.AsNoTracking().SingleOrDefaultAsync(
             row => row.ScopeKey == identity.Scope.Key &&
                    row.DefinitionKey == identity.Definition.Key &&
                    row.DefinitionVersion == definitionVersion,
@@ -275,11 +342,11 @@ internal sealed class EfEtlDefinitionStore(
         EtlDefinitionRecordCodec.ValidatedArtifact validated,
         CancellationToken cancellationToken)
     {
-        var published = await FindPublishedRowAsync(identity, validated.Artifact.DefinitionVersion, cancellationToken);
+        var published = await QueryPublishedRowAsync(identity, validated.Artifact.DefinitionVersion, cancellationToken);
         if (published is not null)
             return ExistingPublicationResult(published, scope, definitionId, validated);
 
-        var draft = await FindDraftRowAsync(identity, cancellationToken);
+        var draft = await QueryDraftRowAsync(identity, cancellationToken);
         if (draft is not null)
             _ = EtlDefinitionRecordCodec.ReadDraftContent(draft, scope, definitionId);
         return draft is null

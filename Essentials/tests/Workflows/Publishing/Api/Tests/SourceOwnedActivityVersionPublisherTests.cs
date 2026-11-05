@@ -261,6 +261,19 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     }
 
     [Fact]
+    public async Task Replaced_core_evaluator_can_compile_provider_content_without_registering_the_default_compiler()
+    {
+        var command = new RecordingCommand();
+        var compiler = new FakeTemplateCompiler();
+        var evaluator = new ActivityPublicationCandidateEvaluator(compiler, new ActivityPublicationReadiness([new FakeActivationStrategy()],
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
+        var result = await CreatePublisher(command, evaluator: evaluator).PublishAsync(Definition(), ProviderVersion("version-1"));
+        Assert.True(result.IsPublished);
+        Assert.Single(compiler.Requests);
+        Assert.Same(compiler.Template, Assert.Single(command.Commits).ExecutableTemplate);
+    }
+
+    [Fact]
     public async Task Provider_backed_content_the_compiler_refuses_is_not_written()
     {
         var command = new RecordingCommand();
@@ -480,7 +493,8 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         IActivityTemplateCompiler? templateCompiler = null,
         IActivityDraftValidator? validator = null,
         bool withProviderValidator = true,
-        IEnumerable<IActivityActivationStrategy>? strategies = null)
+        IEnumerable<IActivityActivationStrategy>? strategies = null,
+        IActivityPublicationCandidateEvaluator? evaluator = null)
     {
         var types = TestWellKnownTypeRegistry.Create();
         var structure = new DefaultActivityStructureService([]);
@@ -497,7 +511,7 @@ public sealed class SourceOwnedActivityVersionPublisherTests
             templateCompiler,
             validator ?? (withProviderValidator ? new FakeValidator() : null),
             strategies ?? [new FakeActivationStrategy()],
-            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]), publicationEvaluator: evaluator);
     }
 
     private static ActivityVersionAlreadyPublishedException AlreadyPublished() =>
