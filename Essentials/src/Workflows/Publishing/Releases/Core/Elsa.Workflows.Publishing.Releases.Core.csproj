@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Compiler-free workflow release transport contracts. Transport verification does not establish owner semantic validity.</Description>
+  </PropertyGroup>
+</Project>

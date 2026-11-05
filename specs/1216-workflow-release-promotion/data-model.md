@@ -33,6 +33,11 @@ snapshot/effect state is execution state and never release content. ETL owner re
 
 ## Lifecycle and validation
 
+The runtime context digest identifies mapping/locator choices, not mutable resource revision observations. Preview/evidence
+fingerprints additionally capture actual non-secret revisions/configuration and prerequisites. A configuration change can
+invalidate a preview or integration claim while ordinary existing-run resource rotation continues. ETL retains its own exact
+host revision/handle after admission; this does not turn every workflow mapping into historical settings retention.
+
 The [attempt state table](contracts/promotion.md#state-and-recovery) governs transitions and terminal uncertainty.
 An overall application can make a standalone ETL catalog root available without inventing a serving slot for it. Root/member
 outcomes distinguish catalog availability from active future-start selection. Dependency-only content never creates endpoints.

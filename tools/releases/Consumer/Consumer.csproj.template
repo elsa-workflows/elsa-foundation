@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Elsa.Workflows.Publishing.Releases" Version="__ENGINE_VERSION__" />
+    <PackageReference Include="Elsa.Workflows.Publishing.Releases.Core" Version="__CORE_VERSION__" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="__DI_VERSION__" />
+  </ItemGroup>
+</Project>

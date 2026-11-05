@@ -37,7 +37,10 @@ it cannot start workflows, decide routing, transfer source ownership or substitu
 ## Bindings and starts
 
 - A binding capture is immutable non-secret data mapping logical requirements to authorized target resource identities and
-  incarnations, with observed revisions. Creating a new capture does not rewrite workflow/template content or old captures.
+  incarnations. Keep deployment/test revision observations separately: the runtime mapping-choice digest does not freeze
+  current settings or secret versions. Evidence/readiness fingerprints also bind observed non-secret owner revisions and
+  prerequisite state, so changed configuration cannot silently inherit earlier integration proof. Creating a new capture
+  does not rewrite workflow/template content or old captures.
 - Requirement identity is the structured defining-member identity plus authored origin/placement path, input/reference
   identity and resource kind. Equal technical names in different roots or reusable placements remain distinct unless
   explicitly grouped after compatibility checks. Model adapters retain their own semantic origin/scope identities.
@@ -50,6 +53,8 @@ it cannot start workflows, decide routing, transfer source ownership or substitu
   selected live workflow uses its own selected source's mapping capture. Reusable placements preserve their scoped origin.
   A missing/mismatching required capture fails before resource use; it never falls back to current release mappings.
   Legacy starts with no deployment capture retain ordinary direct-name behavior without a latest-deployment lookup.
+  New optional context fields preserve legacy serialized/fingerprint forms when absent. Keyed accepted-start replay checks
+  the saved context before current eligibility, and never reselects today's context for an already accepted start.
 - The mapped resource owner still resolves current authorized configuration and credentials. Normal secret rotation,
   revocation and supported connection configuration changes take effect; historical secret values/settings are not frozen.
 - Rebinding to another resource or a deleted/recreated incarnation requires another preview and deployment. A revoked

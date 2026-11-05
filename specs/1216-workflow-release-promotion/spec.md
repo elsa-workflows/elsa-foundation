@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft — product decisions confirmed below; production contracts and qualification remain open.
+**Status**: In progress — product decisions confirmed; the reviewed transport foundation is under implementation. Owner integration and qualification remain open.
 
 **Input**: Deliver [#3590](https://github.com/elsa-workflows/elsa-foundation/issues/3590) end to end under the [owner authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671598586).
 

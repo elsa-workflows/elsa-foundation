@@ -62,8 +62,8 @@ not imply that arbitrary external I/O was discovered or integration-tested.
 
 ## Digest and encoding
 
-This proposal reuses the existing [canonical value hasher](../../../Essentials/src/Workflows/Publishing/Core/Services/ExecutableActivityTemplateBehaviorHasher.cs), not a new JSON-equivalence algorithm.
-`releaseDigest = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(manifestElement)` over the complete manifest only; the digest is carried outside that preimage.
+The transport foundation privately pins the exact recursive recipe used by the existing [canonical value hasher](../../../Essentials/src/Workflows/Publishing/Core/Services/ExecutableActivityTemplateBehaviorHasher.cs), avoiding that project's Design-bearing dependencies. It defines no new JSON-equivalence algorithm.
+`releaseDigest` is the same canonical-value SHA-256 recipe over the normalized complete manifest only; the digest is carried outside that preimage.
 The manifest is closed-schema JSON containing explicit string/integer/boolean/null/object/array values and no opaque embedded payloads, floats or inferred defaults.
 The existing writer recursively orders object properties with `StringComparer.Ordinal`, preserves array order, emits compact UTF-8 through `Utf8JsonWriter`, and returns lowercase `sha256:<64 hex>`.
 Producer normalization sorts roots/members by structured member key; edges by `(from, relation, occurrence, to)`; prerequisites/resource requirements by their explicit keys. Duplicates are rejected before hashing.
@@ -100,7 +100,7 @@ Binding captures select authorized target resource incarnations separately; diff
 
 Version 1 supports a directory or ZIP transport with exactly `manifest.json` and `blobs/<lowercase digest hex>.json`; optional attachments use a separate enumerated attachment directory.
 Read without extracting untrusted paths: reject rooted paths, drive prefixes, backslashes, empty/dot/dot-dot segments, symlinks/hardlinks/devices, encrypted entries and duplicate/case-colliding normalized entry names.
-Reject unknown manifest/profile/codec versions, unknown manifest fields, duplicate JSON property names at every depth (including decoded owner payloads), invalid UTF-8, comments/trailing commas, duplicate identity keys and unlisted executable blobs.
+Reject unknown manifest/profile versions, unknown manifest fields, duplicate JSON property names at every depth (including decoded owner payloads), invalid UTF-8, comments/trailing commas, duplicate identity keys and unlisted executable blobs. Owner semantic validation separately rejects unknown owner codec names/versions; structural transport parsing never claims those adapters exist.
 Advertised target limits cover manifest/blob/total expanded bytes, entry/member/edge counts, nesting and dependency depth; preflight and apply use the same limits and report a named refusal before target mutation.
 Proposed defaults: 1 MiB manifest, 32 MiB per blob, 256 MiB total expanded bytes, 10,000 entries/members, 100,000 edges, JSON depth 128 and dependency depth 128. Apply enforces streaming byte/count bounds against dishonest ZIP lengths; larger releases require explicitly configured target limits.
 Validation inspects all required content before staging; hostile/malformed transport never creates an activatable prefix. Original inputs remain unchanged after refusal.
@@ -115,3 +115,59 @@ Association verifies the tested immutable subject/closure against covered releas
 Failed, skipped, cancelled, unavailable, incomplete, stale or mismatching evidence remains visible. Controlled substitutes prove their configured checks, never real target integration.
 Integration evidence belongs to its observed target/bindings/runtime context; another environment requires its own evidence where an optional policy demands it. No universal approval/publication gate is added.
 Exact-candidate reports may be associated before the complete #3588/#3892 saved-suite runner ships; their origin/trust is reported rather than implied by an upload.
+
+## Common structural envelope recipe (T006/T007)
+
+This implemented foundation captures transport and checks the **declared** graph only. It does not create a durable release,
+verify owner content identities or selected-version associations, discover omitted dependencies, check installed owner codecs,
+prove source retention, stage catalogs or authorize activation. All native/BPMN/ETL owner gates remain required.
+
+The current envelope profile tag is exactly `native-bpmn-etl/1`. Every object below is closed-schema: all listed properties
+are required, including explicit `null`, and extra properties refuse. Integers use canonical signed-64-bit decimal spelling
+without exponent, fractional part, redundant zero or negative zero; owner semantic validation imposes narrower owner ranges.
+String comparisons are ordinal; identities receive no Unicode/case normalization. Unpaired Unicode surrogate strings refuse.
+
+| Object | Required fields and structure |
+|---|---|
+| Manifest | `format: "elsa.workflow-release"`, `formatVersion: 1`, `profile`, `roots`, `members`, `edges`, `prerequisites`, `resourceRequirements` |
+| Member key | `{kind: nonempty string, identity: nonempty string}`; owner record identity is distinct from its codec/payload digest |
+| Root | `{member: key, content: key, action: "activate-serving" | "make-available"}`; selected source record and actual content can be different members |
+| Member | `{key, codec: nonempty string, codecVersion: positive integer, ownerVersion, payloadDigest, byteLength: positive integer}` |
+| Owner version | Explicit `null`, or `{scheme: "semver" | "integer" | "opaque", value}`; `integer` has a positive JSON integer, others a nonempty string |
+| Edge | `{from: key, to: key, relation: "dependency" | "association", occurrence: string}`; empty occurrence is allowed for a non-occurrence association |
+| Prerequisite | `{key: nonempty string, member: key, kind: nonempty string, identity: nonempty string, scheme: "exact" | "semver-range" | "integer-range" | "opaque", constraint: nonempty string}` |
+| Resource requirement | `{key: requirement key, schemaVersion: nonempty string}` |
+| Requirement key | `{member: key, origin: ordered string array, reference: nonempty string, kind: nonempty string}`; origins are nonempty path components; an empty array names the member's root scope |
+
+`roots` and `members` are nonempty. A selected member can occur once in `roots`; different selected versions may share a
+content member. Member keys, prerequisite keys, requirement keys and full edge tuples must be unique. Member and root
+content keys must exist. Both edge relations participate in root reachability; every member must be reachable from the
+root selected/content keys. Only `dependency` edges participate in executable-cycle and dependency-depth checks; metadata
+association cycles do not assert executable recursion. Owners must verify correct relation classification and actual edges.
+
+Normalize manifest sets before digesting, on both producer and reader: roots by selected member `(kind, identity)`;
+members by that tuple; edges by `(from.kind, from.identity, relation, occurrence, to.kind, to.identity)`; prerequisites by
+key. Resource keys sort by member tuple, lexicographic ordered origin components (shorter prefix first), reference, kind.
+All string comparisons use `StringComparer.Ordinal`. Preserve origin array order and every owner payload byte.
+Object properties use the original recursive ordinal-property writer, arrays preserve this normalized order and scalars
+use `JsonElement.WriteTo` through the default compact UTF-8 writer. Digest spelling is `sha256:` plus 64 lowercase hex digits.
+
+One pinned recipe vector has canonical text `{"items":[1,true,"\u003C"],"null":null,"\u03B2":"\u00E9"}` and digest
+`sha256:ea655576dff3d172bd93d6950f51d723ffd5a4bdebb8d008824d5a1e7e018db4`.
+This pins escaping/null/array behavior, not an owner artifact hash. Original manifest bytes are retained separately from
+the normalized digest subject; formatted or set-reordered manifests can therefore have the same content digest.
+
+Blob inputs and all result byte accessors are copied. JSON owner blobs require strict UTF-8, no BOM or appended newline,
+and no duplicate properties/comments/trailing commas; their original ordering and bytes remain unchanged. Blob-map keys
+are prefixed digests; transport filenames use the 64 hex digits without the prefix. Several members may share one blob.
+Opaque attachments under `attachments/` are bounded, preserved and excluded from the release digest; no evidence verdict
+is inferred from their presence. Attachment interpretation/authorization is a later owning feature.
+
+ZIP32 input validates central/local names, encryption flags, Unix file kinds and extra metadata before entry reads.
+Multi-volume/ZIP64 and link-bearing Unix/ASi extras refuse explicitly. Streaming bounds apply despite dishonest length
+metadata; independent manifest/blob hash and byte-length checks still apply when the platform decoder truncates an entry.
+Raw archive input has a separate 256 MiB default bound. Directory reads use no-follow relative opens and single-link regular
+file checks on macOS/Linux x64/arm64; other platforms refuse `directory_platform_unsupported` until their equivalent reader
+is qualified. ZIP transport is independent of that directory capability. No untrusted archive is extracted.
+JSON/dependency depth is configurable from 1 through 256; defaults remain 128. All entries, including directory markers,
+count against archive/directory entry bounds; total expanded bytes include manifest, distinct blobs and attachments.

@@ -23,9 +23,11 @@
 ## Feature readiness
 
 - [x] Independent author-side specification review completed; CLI and subset-evidence clarifications incorporated. This is not implementation approval or product acceptance.
-- [ ] Consequential owner decisions and detailed contracts resolved before implementation.
-- [ ] Design/plan reviewed against both constitutions and current code.
+- [x] Consequential owner choices resolved; independent review cleared the bounded transport/hash/declared-graph foundation. Model/owner integration still requires its specific technical proofs and review before freeze.
+- [x] Design/plan reviewed against both current constitutions and source; corrected package, scope, compensation and identity findings are incorporated. This is an implementation plan, not product acceptance.
 
 ## Notes
 
-Draft only. No runtime, CLI, Studio or promotion acceptance is claimed. Model-owned identity/closure/binding research must cover native, BPMN and ETL before plan approval. Review of receipt/fencing and binding-only activation is required because existing per-slot CAS/no-op behavior is insufficient by itself.
+Requirements/design checklist passed for staged implementation. No runtime, CLI, Studio or promotion acceptance is claimed.
+Native/BPMN/ETL source research and independent contract review are complete; implementation witnesses must verify the proposed
+owner receipt/fencing, binding-only activation, direct-model admission and exact ETL import before those integrations are accepted.

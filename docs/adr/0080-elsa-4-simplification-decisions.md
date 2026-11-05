@@ -47,6 +47,9 @@ is authorized for end-to-end delivery, including necessary interactive product/a
 specification, scoped implementation, verification, current-rule review/merge and resulting-main qualification.
 The [authorization receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671598586)
 preserves the selected immutable-content, dependency, exact-run-pin and Studio/API/CLI boundaries.
+The owner subsequently selected native, BPMN and ETL for the first complete delivery and publication-slot
+eligibility for direct BPMN, preserving running/accepted pins while requiring explicit activation of older
+unslotted publications for fresh starts; see [the decision receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671977123).
 Sequencing: establish reviewed contracts before consequential implementation; deliver immutable bundles,
 target mapping/preview, durable coordinated activation/rollback, Studio/CLI and integrated qualification.
 Run beside active priorities, displace none, preserve consolidation's priority one and coordinate shared

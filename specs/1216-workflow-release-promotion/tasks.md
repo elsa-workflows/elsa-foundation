@@ -14,10 +14,10 @@ Every behavioral delivery needs a meaningful red/green mutation or before/after 
 
 ## Phase 2 — Shared foundations
 
-- [ ] T005 Create lightweight release target Core/engine projects under `Essentials/src/Workflows/Publishing/Releases/`, excluding Design-bearing Publishing dependencies; add an actual packed Runtime-only consumer witness under `tools/releases/`.
-- [ ] T006 Implement compiler-free immutable manifest/member/root/requirement identities and bounded transport/hash/graph validation in `Essentials/src/Workflows/Publishing/Releases/Core/` and `Elsa.Workflows.Publishing.Releases/`.
-- [ ] T007 Prove canonical vectors, original blob preservation, duplicate/conflicting keys, malformed/oversized transport, cycles, missing/unrelated members and tamper rejection in `Essentials/tests/Workflows/Publishing/Releases/`; demonstrate mutation bite.
-- [ ] T008 Add optional feature composition, public API/owner extension catalogs, package boundary and generated solution/filter/tier registration for the new projects in `EXTENSION_POINTS.md`, `Elsa.slnx` and `tools/ci/test-tiers.json`.
+- [x] T005 Create lightweight release target Core/engine projects under `Essentials/src/Workflows/Publishing/Releases/`, excluding Design-bearing Publishing dependencies; prepare the packed consumer witness under `tools/releases/` (execution belongs to T008).
+- [x] T006 Implement compiler-free immutable manifest/member/root/requirement identities and bounded transport/hash/declared-graph validation in `Essentials/src/Workflows/Publishing/Releases/Core/` and `Elsa.Workflows.Publishing.Releases/`.
+- [x] T007 Prove canonical vectors, original blob preservation, duplicate/conflicting keys, malformed/oversized transport, cycles, missing/unrelated members and tamper rejection in `Essentials/tests/Workflows/Publishing/Releases/`; 51 passed, 0 failed/skipped. Digest-bypass mutation failed; restored green. I/O boundary controls failed 9 before fix and passed afterward.
+- [ ] T008 Add optional feature composition, public API/owner extension catalogs, package boundary and generated solution/filter/tier registration for the new projects in `EXTENSION_POINTS.md`, `Elsa.Server.slnx` and `tools/ci/test-tiers.json`.
 
 Foundation checkpoint: transport validity is distinct from owner semantic validity/readiness; no bundle may activate without owner verification.
 

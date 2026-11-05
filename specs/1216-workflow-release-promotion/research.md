@@ -94,6 +94,14 @@ This is source inspection and design evidence; no cross-environment runtime qual
 
 ## Proposed seams and qualification risks
 
+- Direct BPMN's visible publication/root path and ETL's standalone catalog require their own exact import/selection
+  behavior; see the source-linked [model artifact contract](contracts/model-artifacts.md). Native-only export is insufficient.
+- Existing Modularity `IFeatureManagementService` catalog reports package ID/version/manifest hash and live availability,
+  but its shell revision is not a package/capability inventory revision. Hash the observed non-secret prerequisite projection;
+  distinguish installed, loaded/descriptor-available, enabled, dormant and operation-qualified states. Host-bundled or unknown
+  package provenance must remain explicit; assembly versions are not package-version evidence.
+- Existing Publishing permission keys are declared by its Design-bearing API. The Runtime-safe target API must reuse
+  the canonical permission catalog without duplicate contributor keys or dragging source implementations into its package graph.
 - Add a bounded immutable runtime-owned mapping snapshot to activation source selection and durable execution state,
   separate from executable content identity. Resolve mappings without runtime dependencies on release/design catalogs.
 - Propagate it through start command/checkpoint payloads, saved stimulus recipients, child dispatch records/outbox payloads,
