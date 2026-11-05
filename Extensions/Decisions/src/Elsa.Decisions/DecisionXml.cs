@@ -39,12 +39,15 @@ internal sealed class DecisionXml
     {
         token.ThrowIfCancellationRequested();
         if (xml is null || xml.Length > MaximumXmlBytes || Utf8.GetByteCount(xml) > MaximumXmlBytes) { Error("DocumentTooLarge"); return null; }
+        // StringReader does not consume a byte-order signature as a byte stream reader does.
+        // Only the parser view drops one leading signature; compilation hashes the exact original bytes.
+        var parserXml = xml.Length > 0 && xml[0] == '\uFEFF' ? xml[1..] : xml;
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = MaximumXmlBytes,
             IgnoreComments = false, IgnoreProcessingInstructions = false, CloseInput = true
         };
-        using (var guard = XmlReader.Create(new StringReader(xml), settings))
+        using (var guard = XmlReader.Create(new StringReader(parserXml), settings))
         {
             var elements = 0;
             while (guard.Read())
@@ -54,7 +57,7 @@ internal sealed class DecisionXml
                 { Error("DocumentLimitExceeded"); return null; }
             }
         }
-        using var reader = XmlReader.Create(new StringReader(xml), settings);
+        using var reader = XmlReader.Create(new StringReader(parserXml), settings);
         var document = XDocument.Load(reader, LoadOptions.None);
         token.ThrowIfCancellationRequested();
         var root = document.Root;

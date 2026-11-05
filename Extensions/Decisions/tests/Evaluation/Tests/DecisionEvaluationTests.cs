@@ -396,6 +396,20 @@ public class DecisionEvaluationTests
         Assert.Single(trace.Cells);
     }
 
+    [Fact]
+    public void One_leading_utf8_signature_preserves_original_source_hash_and_executable_meaning()
+    {
+        var xml = Table(["-"], outputTexts: ["\"original value\""], outputType: "string");
+        var original = Compile(xml);
+        var signedXml = "\uFEFF" + xml;
+        var signed = Compile(signedXml);
+        Assert.NotEqual(original.SourceHash, signed.SourceHash);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(signedXml))), signed.SourceHash);
+        Assert.Equal(original.ContentHash, signed.ContentHash);
+        Assert.Equal("original value", engine.Evaluate(signed, Inputs(new("number", "1"))).Result.GetProperty("value").GetString());
+        Assert.False(engine.Compile("\uFEFF\uFEFF" + xml).Success);
+    }
+
     private DecisionArtifact Compile(string xml)
     {
         var result = engine.Compile(xml);
