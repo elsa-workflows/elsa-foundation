@@ -45,6 +45,46 @@ public sealed partial class SpecialistsApiHttpTests
             settings = new { }, limits = new { maximumModelCalls = 1, timeoutMilliseconds = 10000 } }
     });
 
+    [Theory]
+    [InlineData(".", "..")]
+    [InlineData("..", ".")]
+    [InlineData("writer/one", "draft/two")]
+    [InlineData("writer%2Fone", "%25 + 名 ")]
+    public async Task Opaque_source_and_copy_identities_round_trip_without_path_normalization(string agentId, string draftId)
+    {
+        const string root = "/agent/definitions";
+        using var source = JsonDocument.Parse(SourceBody("Exact opaque source"));
+        var content = source.RootElement.GetProperty("content").Clone();
+        var create = JsonSerializer.Serialize(new { agentId, draftId, name = "Opaque copy", content });
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, create, "agent/definitions:manage")).StatusCode);
+        var identity = "agentId=" + Uri.EscapeDataString(agentId);
+        var copy = identity + "&draftId=" + Uri.EscapeDataString(draftId);
+        var draft = await SendAsync(HttpMethod.Get, root + "/draft?" + copy, null, "agent/definitions:read");
+        Assert.Equal(HttpStatusCode.OK, draft.StatusCode);
+        using var read = JsonDocument.Parse(await draft.Content.ReadAsStringAsync());
+        Assert.Equal(agentId, read.RootElement.GetProperty("agentId").GetString());
+        Assert.Equal(draftId, read.RootElement.GetProperty("draftId").GetString());
+        var save = JsonSerializer.Serialize(new { agentId, draftId, expectedRevision = 0, name = "Saved opaque copy", content });
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Put, root + "/draft", save, "agent/definitions:manage")).StatusCode);
+        var captureBody = JsonSerializer.Serialize(new { agentId, draftId, expectedRevision = 1, operationId = "opaque review" });
+        var capture = await SendAsync(HttpMethod.Post, root + "/captures", captureBody, "agent/definitions:manage");
+        Assert.Equal(HttpStatusCode.OK, capture.StatusCode);
+        using var captured = JsonDocument.Parse(await capture.Content.ReadAsStringAsync());
+        var snapshotId = captured.RootElement.GetProperty("id").GetString()!;
+        var discard = JsonSerializer.Serialize(new { agentId, draftId, expectedRevision = 1 });
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/discard", discard, "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, root + "/draft?" + copy, null, "agent/definitions:read")).StatusCode);
+        var exact = await SendAsync(HttpMethod.Get, root + "/revision?" + identity + "&snapshotId=" + Uri.EscapeDataString(snapshotId), null, "agent/definitions:read");
+        Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
+        using var retained = JsonDocument.Parse(await exact.Content.ReadAsStringAsync());
+        Assert.Equal(draftId, retained.RootElement.GetProperty("sourceCopyId").GetString());
+        Assert.Equal("Exact opaque source", retained.RootElement.GetProperty("content").GetProperty("instructions").GetString());
+        var history = await SendAsync(HttpMethod.Get, root + "/revisions?" + identity, null, "agent/definitions:read");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var page = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        Assert.Equal(1, page.RootElement.GetProperty("total").GetInt32());
+    }
+
     [Fact]
     public async Task Agent_source_wide_history_inspects_exact_content_after_draft_replacement()
     {

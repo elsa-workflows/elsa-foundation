@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createHttpClient, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   captureAgentSource, createAgentSource, discardAgentSource, listAgentDefinitions, listAgentSourceRevisions,
   readAgentDraft, readAgentRevision, readAgentSourceRevision, saveAgentSource, type AgentContent, type AgentDraft, type AgentRevision
@@ -16,6 +16,34 @@ function copywriter(): AgentContent {
 }
 
 describe("Agent-owned source transport", () => {
+  it.each(["https://studio.test/", "https://studio.test/authoring/"])("keeps opaque selectors through the actual SDK and selected base %s", async baseUrl => {
+    for (const [agentId, draftId] of [["..", "."], [".", ".."], ["writer/one", "draft/two"], ["writer%2Fone", "%25 + 名 "]]) {
+      const fetchRequest = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
+        new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+      const context: StudioEndpointContext = { baseUrl, http: createHttpClient(baseUrl, { fetch: fetchRequest, applyTimeout: false }) };
+      const draft: AgentDraft = { agentId, draftId, name: "Copywriter", revision: 7, content: copywriter() };
+      await createAgentSource(context, draft);
+      await readAgentDraft(context, agentId, draftId);
+      await saveAgentSource(context, draft);
+      await captureAgentSource(context, draft, "review one");
+      await discardAgentSource(context, draft);
+      for (const [requestUrl, init] of fetchRequest.mock.calls) {
+        const url = new URL(String(requestUrl));
+        expect(url.pathname.startsWith(new URL(baseUrl).pathname + "agent/definitions")).toBe(true);
+        const body = init?.body ? JSON.parse(String(init.body)) as { agentId?: string; draftId?: string } : {};
+        // Compare the logical selectors seen after the real SDK's URL resolution.
+        // The legacy path form is read only by this regression oracle, not used as
+        // a fallback by the client. Dot normalization makes those selectors differ.
+        const segments = url.pathname.split("/");
+        const index = segments.indexOf("definitions");
+        const selectedAgent = body.agentId ?? url.searchParams.get("agentId") ?? decodeURIComponent(segments[index + 1] ?? "");
+        const selectedDraft = body.draftId ?? url.searchParams.get("draftId") ?? decodeURIComponent(segments[index + 3] ?? "");
+        expect(selectedAgent).toBe(agentId);
+        expect(selectedDraft).toBe(draftId);
+      }
+    }
+  });
+
   it("inspects exact retained content and copy provenance after draft replacement without a latest fallback", async () => {
     const retained: AgentRevision = { id: "S/old", sourceCopyId: "discarded-draft", operationId: "original-capture", revision: 7,
       fingerprint: "original-fingerprint", content: copywriter() };
