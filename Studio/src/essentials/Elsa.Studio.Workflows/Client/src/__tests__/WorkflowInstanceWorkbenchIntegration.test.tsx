@@ -1494,7 +1494,7 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
       valueSnapshots: id === "write5" ? [{ evidenceId: "prepared-output", name: "Prepared output", subject: "ActivityOutput",
         captureMode: "DiagnosticSnapshot", captureState: "diagnosticSnapshotCaptured", state: "captured",
         type: { kind: "alias", id: "String", schema: null }, capturedAt: "2026-10-01T12:00:00Z", payload: null, snapshot: null,
-        isSensitive: false, accessState: "resolutionAvailable", metadata: {} }] : [] });
+        captureReason: "Diagnostic snapshot captured.", isSensitive: false, accessState: "resolutionAvailable", metadata: {} }] : [] });
   });
   valueApi.getActivityExecutionValuePayload.mockResolvedValue({ evidenceId: "prepared-output", captureMode: "DiagnosticSnapshot",
     payload: { kind: "string", preview: "PREPARED_CHILD_VALUE" } });
