@@ -107,9 +107,18 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
     if (busyRef.current || reauthenticate) return;
     setError(""); setNotice("");
     const selectedId = selectedRef.current?.id;
+    ++panelRequest.current; setLoadingAccess(false);
     const next = await loadUsers(appliedSearch, userSkip);
     if (!next || active.current !== client || selectedRef.current?.id !== selectedId) return;
     const fresh = next.items.find(user => user.id === selectedId);
+    if (!fresh && selectedRef.current && dirty) {
+      const discard = await dialogs.confirm({ title: "Discard link draft?",
+        message: "The selected user is not in these refreshed results. It may be filtered out, on another page or unavailable. Discard the attachment draft and clear the selection?", confirmLabel: "Discard draft" });
+      if (active.current !== client || selectedRef.current?.id !== selectedId) return;
+      if (!discard) {
+        setNeedsRefresh(true); setNotice("Your link draft is kept. Find the selected user and refresh before making changes."); return;
+      }
+    }
     const current = fresh ? { ...fresh } : null;
     selectedRef.current = current; setSelected(current);
     if (!current) {

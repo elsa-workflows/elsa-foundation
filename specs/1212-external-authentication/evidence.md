@@ -1156,3 +1156,26 @@ builds pass with zero warnings/errors; SDK/component **47/47**, typecheck, ESLin
 verifier self-test pass. CI workflow/document contract and evidence-size checks pass. New full composed/profile
 captures and final packed inheritance consumer remain explicitly pending; these focused results do not establish
 UX acceptance or final delivery.
+
+
+## Independent review round 2 follow-up (5 November)
+
+At exact published head `086899d10fb4324995b9085b579638e01a15b788`, independent correctness and standards reviews
+find no actionable issues. Standards confirms the inheritance, exception-boundary and API-tracking corrections.
+The refreshed actual package run passes all **23** production candidates and its separate exact-version consumer,
+including the derived API feature that failed with CS0506 before the fix. Receipt:
+`/private/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-3579-packages-een3p80f/report.json`.
+This is backend registration/public-contract proof; the final full Studio archive/distribution and consumer gate
+remain separate.
+
+Acceptance source review finds two further P2 cases: a successful test did not replace the earlier missing-secret
+readiness, and absence from a filtered/paged user result silently discarded the selected user's attachment draft.
+The correction reconciles readiness only from a matching non-stale test, invalidating earlier detail requests.
+Refresh now confirms before clearing an out-of-result selection with a draft. Cancelling preserves it and requires
+finding/refreshing that user before mutation; absence from one page is not presented as deletion. Refresh also
+invalidates old panel requests so they cannot reopen actions after cancellation. Five new cases cover repaired/stale
+tests, filtering, pagination and explicit discard for an absent account. Four fail against the prior behavior;
+the stale-observation case is a preserved guard. The full SDK/component set passes **52/52** after these fixes
+(`/tmp/elsa-3579-review-r2-ui-{red,green}.log`). Backend C# is unchanged from the **909/909** and packed-consumer
+checkpoint. Fresh composed captures/downloadable evidence and visual completion remain pending in the runtime
+queue; UX acceptance is **incomplete**, not passed. A fresh independent exact-head round is still required.

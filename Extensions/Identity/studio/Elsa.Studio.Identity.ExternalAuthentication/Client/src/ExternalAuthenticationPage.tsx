@@ -29,6 +29,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   const catalogRef = useRef(catalog); catalogRef.current = catalog;
   const lastClient = useRef(client);
   const requestNumber = useRef(0);
+  const readinessRequest = useRef(0);
   const busyRef = useRef(false);
   const allowLeave = useRef(false);
   const returned = useRef(false);
@@ -44,6 +45,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   const configurationReady = readiness?.value?.ready === true;
 
   const clearProtectedState = useCallback(() => {
+    ++readinessRequest.current;
     catalogRef.current = null; setCatalog(null); setSelectedId(null); setSeed(null); setCreating(false);
     setDirty(false); setTest(null); setPreview(null); setReadiness(null); setNotice("");
   }, []);
@@ -68,18 +70,19 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   }, [client, clearProtectedState]);
 
   useEffect(() => {
+    const request = ++readinessRequest.current;
     setReadiness(null);
     if (!selected || !visible) return;
     const abort = new AbortController();
     void (async () => {
       try {
         const detail = await client.detail(selected.document.id, abort.signal);
-        if (abort.signal.aborted || currentClient.current !== client) return;
+        if (abort.signal.aborted || currentClient.current !== client || request !== readinessRequest.current) return;
         if (detail.revision !== visible.revision || detail.connection.document.id !== selected.document.id || detail.connection.materialRevision !== selected.materialRevision)
           throw new ExternalAuthenticationClientError("Connection changed. Refresh connections to check the current configuration.");
         setReadiness({ value: detail.connection.readiness });
       } catch (cause) {
-        if (abort.signal.aborted || currentClient.current !== client) return;
+        if (abort.signal.aborted || currentClient.current !== client || request !== readinessRequest.current) return;
         setReadiness({ error: externalAuthenticationError(cause) });
         const status = cause && typeof cause === "object" && "status" in cause ? cause.status : null;
         if (status === 401 || status === 403 || status === 404) { setError(externalAuthenticationError(cause)); clearProtectedState(); }
@@ -182,8 +185,16 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   }
   async function testConnection() {
     if (!selected || !visible || dirty || busyRef.current) return;
+    const request = ++readinessRequest.current;
     busyRef.current = true; setBusy("Testing provider"); setError(""); setPreview(null);
-    try { const result = await client.test(selected.document.id, visible.revision); if (currentClient.current === client) setTest(result); }
+    try {
+      const result = await client.test(selected.document.id, visible.revision);
+      if (currentClient.current === client && request === readinessRequest.current) {
+        setTest(result);
+        setReadiness(!result.stale && result.connectionRecordId === selected.document.id && result.materialRevision === selected.materialRevision
+          ? { value: result.readiness } : { error: "Connection changed. Refresh connections to check the current configuration." });
+      }
+    }
     catch (cause) { if (currentClient.current === client) setError(externalAuthenticationError(cause)); }
     finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }

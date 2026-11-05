@@ -59,6 +59,33 @@ async function draft(host: ReturnType<typeof harness>) {
 }
 
 describe("user access page", () => {
+  it.each(["filter", "page"])("preserves the attachment draft when refreshed %s results omit the selected user", async kind => {
+    const paged = { ...initialUsers, items: [...initialUsers.items, ...Array.from({ length: 25 }, (_, index) => ({
+      id: `user-${index + 3}`, userName: `person${index + 3}`, displayName: `Person ${index + 3}`, status: 0
+    }))], totalCount: 27 };
+    const host = harness({ users: kind === "page" ? paged : initialUsers }); await draft(host);
+    if (kind === "filter") {
+      host.setUsers({ ...initialUsers, items: [initialUsers.items[1]], totalCount: 1 });
+      type(field(host.container, "Exact username or email"), "bob"); click(await button(host.container, "Find users"));
+      await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")?.textContent).toContain("Bob"));
+    } else {
+      click(await button(host.container, "Next users"));
+      await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")?.textContent).toContain("Person 26"));
+    }
+    host.confirm.mockResolvedValueOnce(false); click(await button(host.container, "Refresh user access"));
+    await vi.waitFor(() => expect(host.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Discard link draft?" })));
+    expect(field(host.container, "External subject").value).toBe(" Exact Subject ");
+    expect(host.container.querySelector(".external-auth-detail")?.textContent).toContain("Alice");
+    expect(field(host.container, "External subject").closest("fieldset")!.disabled).toBe(true);
+    expect(host.postJson).not.toHaveBeenCalled();
+  });
+  it("confirms before discarding a draft whose selected account is absent from refreshed results", async () => {
+    const host = harness(); await draft(host); host.setUsers({ ...initialUsers, items: [], totalCount: 0 });
+    click(await button(host.container, "Refresh user access"));
+    await vi.waitFor(() => expect(host.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Discard link draft?" })));
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Select a user to inspect links and sessions."));
+  });
+
   it("reconciles the selected user's current status and clears selection when it disappears", async () => {
     const host = harness(); await choose(host);
     host.setUsers({ ...initialUsers, items: initialUsers.items.map(user => user.id === "user-1" ? { ...user, status: 1 } : user) });

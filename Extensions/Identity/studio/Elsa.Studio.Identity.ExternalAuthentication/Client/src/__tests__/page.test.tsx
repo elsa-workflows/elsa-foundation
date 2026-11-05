@@ -69,6 +69,22 @@ function type(input: HTMLInputElement, value: string) {
 function select(input: HTMLSelectElement, value: string) { flushSync(() => { input.value = value; input.dispatchEvent(new Event("change", { bubbles: true })); }); }
 
 describe("connection administration page", () => {
+  it.each([false, true])("reconciles repaired readiness after a configuration test, refusing stale observations (%s)", async stale => {
+    const host = harness(); const original = host.getJson.getMockImplementation()!;
+    host.getJson.mockImplementation(async (path: string) => path.endsWith("/external-connections/record")
+      ? { revision: fixtureCatalog.revision, connection: { ...view, readiness: { ready: false, failure: 5, protocolFailure: 0 } } }
+      : original(path));
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(host.container.textContent).toContain("The referenced secret could not be resolved"));
+    host.observed.stale = stale;
+    click(await button(host.container, "Test configuration"));
+    await vi.waitFor(() => expect(host.container.textContent).toContain(stale ? "Configuration changed during the test" : "Configuration test passed"));
+    if (stale) expect(host.container.textContent).not.toContain("Current configuration ready");
+    else await vi.waitFor(() => expect(host.container.textContent).toContain("Current configuration ready"));
+    expect((await button(host.container, "Preview sign-in")).disabled).toBe(stale);
+  });
+
   it("shows current secret readiness to a provider reader separately from configured enablement", async () => {
     const host = harness({ ...fixtureCatalog, canManageConnections: false,
       connections: [{ ...view, document: { ...connectionDocument, enabled: true } }] });
