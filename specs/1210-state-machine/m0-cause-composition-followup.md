@@ -1,6 +1,6 @@
 # M0 N10 composition correction and first follow-up
 
-**Status:** Reviewed research plan; correction source remains unbuilt/unexecuted after the failed `5d4c7359` batch. Independent correctness, standards and acceptance reviews are clean for the plan, correction source and actual generated dependency delta. The separately granted normal restore completed; a clean execution-head freeze and another explicit resource release are required before build/N10 execution. This does not approve production placement, Q1–Q3 or a public schema.
+**Status:** Executed bounded research correction. The separately granted N10-only build/run at `a787dfe1` produced all 15 expected generation results and has independent acceptance and correctness assessment. Earlier plan, source and generated-dependency reviews remain recorded separately. The failed `5d4c7359` batch is preserved. This does not approve production placement, Q1–Q3 or a public schema.
 
 ## Retained cause and scope
 
@@ -43,3 +43,9 @@ N10 still plans **15 distinct child generations**: three positive scenarios of f
 Independent acceptance must inspect actual readiness/finalization evidence, source/cohort identity and membership, both delayed completion orders, distinct causes, cold reports and the wrong-relay diagnostic. Preserve N9's earlier accepted evidence at its actual `5d4c7359` source/binary rather than implying a new-head N9 run. A successful later N10 probe would still leave production invocation admission, secret/withholding and real guard/phase topology, hierarchy/parallel semantics, Studio, saga and resulting-main gates open.
 
 Current-main CI remains pending. The coordinator's earlier exception authorized only the completed isolated prototype phase; future resource releases must state the applicable source-health direction. Neither this proposal nor its source review grants a producer, changes an owner decision or waives a final delivery gate.
+
+## Actual N10-only result
+
+The [a787 receipt](evidence/m0-native-witness-a787.json) records one released locked build (exit 0, 32.766 seconds, 283 warnings) and one N10-only batch (exit 0, 22.465 seconds). All 15 distinct generation processes produced expected results: fourteen exit-zero results and the intended wrong-relay failure. Every generation recorded the real schema/fleet/dormancy/router owners and available outbox finalized/write version 2.0.0. Independent read-only inspection corroborated physical publish rows, exact original recipient cohorts, both delayed completion orders, A retained after later gate B, distinct A/B sources, cold result ancestry and the negative binding control. Positive databases contain no incidents or scheduler poison.
+
+Frozen source and 64 recorded DLL hashes remained unchanged. All 57 sampled owned PIDs and three groups were absent after normal closeout; sampling is not a complete lifecycle trace and timeout cleanup was not exercised. The secondary slot was returned, with no replay or other producer. N9 was not rerun, the historical failed batch is unchanged, and current main/production/Studio/saga acceptance is not established. The next work is the concrete M0 input, visit-phase, admission/recovery and Studio contract, including the [input-profile proposal](m0-input-profile-proposal.md); that proposal is not accepted by this fixture result.

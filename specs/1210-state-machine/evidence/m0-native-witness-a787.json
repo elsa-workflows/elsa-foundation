@@ -1,0 +1,410 @@
+{
+  "status": "All15 expected N10 results; independently accepted bounded evidence",
+  "source": {
+    "head": "a787dfe1c39f66c49074d66a569382341a462d64",
+    "integratedMainAncestor": "e8476790d6f9d146c04ff5e02af266566e0b9d24",
+    "packet": "N10-execution-a787-r1",
+    "manifestSha256": "354efbddf2b0d21d6ee5c81b3cc60ab0d6628050cee7fc0b4b566946545f8bde",
+    "launcherSha256": "9959306177bec131fa6db49bc9f961ede591e4f2b86bcc02516681ed8e429632",
+    "cleanBeforeAndAfter": true,
+    "sourceHashesUnchanged": true,
+    "lockSha256": "58b275b4782d12a5381110f1a2adbf6e97354adb240fa1e4a4aa9b36405cc64c",
+    "recordedDllHashes": 64,
+    "binaryHashesUnchanged": true
+  },
+  "authorization": {
+    "scope": "One focused lockedbuild then oneN10-only15serialgeneration batch; no retry",
+    "lease": "Secondary; one N10 testworker under aggregate two testprocess cap",
+    "mainHealth": "Coordinator allowed isolated branch qualification while current279 main CI was pending; no healthy-main or final-delivery gate waiver"
+  },
+  "build": {
+    "exitCode": 0,
+    "elapsedSeconds": 32.765617166999995,
+    "warnings": 283,
+    "errors": 0
+  },
+  "batch": {
+    "exitCode": 0,
+    "elapsedSeconds": 22.464652291999997,
+    "plannedGenerations": 15,
+    "actualGenerations": 15,
+    "distinctGenerationPids": 15,
+    "expectedResults": 15,
+    "exitZero": 14,
+    "intendedFailures": 1,
+    "timedOut": false,
+    "processes": [
+      {
+        "scenario": "cause-child-delayed",
+        "generation": 1,
+        "pid": 84014,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-child-delayed",
+        "generation": 2,
+        "pid": 84019,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-child-delayed",
+        "generation": 3,
+        "pid": 84023,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-child-delayed",
+        "generation": 4,
+        "pid": 84026,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-distinct",
+        "generation": 1,
+        "pid": 84071,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-distinct",
+        "generation": 2,
+        "pid": 84078,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-distinct",
+        "generation": 3,
+        "pid": 84085,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-distinct",
+        "generation": 4,
+        "pid": 84090,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-parent-delayed",
+        "generation": 1,
+        "pid": 84037,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-parent-delayed",
+        "generation": 2,
+        "pid": 84049,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-parent-delayed",
+        "generation": 3,
+        "pid": 84057,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-parent-delayed",
+        "generation": 4,
+        "pid": 84069,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-wrong-relay",
+        "generation": 1,
+        "pid": 84098,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-wrong-relay",
+        "generation": 2,
+        "pid": 84106,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-wrong-relay",
+        "generation": 3,
+        "pid": 84167,
+        "exitCode": 1,
+        "expectedSuccess": false,
+        "observedExpectedResult": true,
+        "timedOut": false
+      }
+    ]
+  },
+  "readiness": {
+    "records": 15,
+    "statuses": [
+      "Available"
+    ],
+    "owners": [
+      {
+        "dormancy": "Elsa.Cluster.InProcess.SchemaDormancyCheck",
+        "fleet": "Elsa.Cluster.Readability.ClusterSchemaFleet",
+        "observedSchema": "Elsa.Cluster.Readability.EfObservedSchemaFinalization",
+        "router": "Elsa.Workflows.Runtime.Services.Triggers.StimulusRouter"
+      }
+    ],
+    "finalizedVersions": [
+      "2.0.0"
+    ],
+    "writeVersions": [
+      "2.0.0"
+    ],
+    "physicalPublishRows": [
+      {
+        "scenario": "cause-child-delayed",
+        "publishRows": [
+          {
+            "status": 2,
+            "schemaVersion": "2.0.0"
+          }
+        ],
+        "incidents": 0
+      },
+      {
+        "scenario": "cause-distinct",
+        "publishRows": [
+          {
+            "status": 2,
+            "schemaVersion": "2.0.0"
+          },
+          {
+            "status": 2,
+            "schemaVersion": "2.0.0"
+          }
+        ],
+        "incidents": 0
+      },
+      {
+        "scenario": "cause-parent-delayed",
+        "publishRows": [
+          {
+            "status": 2,
+            "schemaVersion": "2.0.0"
+          }
+        ],
+        "incidents": 0
+      },
+      {
+        "scenario": "cause-wrong-relay",
+        "publishRows": [
+          {
+            "status": 2,
+            "schemaVersion": "2.0.0"
+          }
+        ],
+        "incidents": 0
+      }
+    ],
+    "normalOwnersOnly": true,
+    "availabilityOrFleetOverrides": false
+  },
+  "positiveScenarios": [
+    {
+      "scenario": "cause-child-delayed",
+      "workflowStatus": "Completed",
+      "completionOrder": [
+        "parent",
+        "child"
+      ],
+      "originIds": [
+        "A",
+        "A"
+      ],
+      "finalIds": [
+        "A",
+        "A"
+      ],
+      "ambientSuspendedBeforeOwnedCleanup": true,
+      "sources": [
+        {
+          "outboxItemId": "commit:c515c2e71c05244e:invoke:cause-child-delayed-g2-activity-1:activity-completed:cause-child-delayed-g2-activity-1:9e6b602ad0070818:0",
+          "status": 2,
+          "publisherInvocationId": "cause-child-delayed-g2-activity-1",
+          "intentFingerprint": "46d104e08af5f8960b2a2f68e737d6b0cb0bb2b83447ecfd314be22cd040cdc4",
+          "starts": 0,
+          "resumes": 2
+        }
+      ]
+    },
+    {
+      "scenario": "cause-parent-delayed",
+      "workflowStatus": "Completed",
+      "completionOrder": [
+        "child",
+        "parent"
+      ],
+      "originIds": [
+        "A",
+        "A"
+      ],
+      "finalIds": [
+        "A",
+        "A"
+      ],
+      "ambientSuspendedBeforeOwnedCleanup": true,
+      "sources": [
+        {
+          "outboxItemId": "commit:973c41701082d14d:invoke:cause-parent-delayed-g2-activity-1:activity-completed:cause-parent-delayed-g2-activity-1:1fabda66051771a6:0",
+          "status": 2,
+          "publisherInvocationId": "cause-parent-delayed-g2-activity-1",
+          "intentFingerprint": "341e825b94c15558069916c7b36375e735be73c551f3271ab2321dae59e42d60",
+          "starts": 0,
+          "resumes": 2
+        }
+      ]
+    },
+    {
+      "scenario": "cause-distinct",
+      "workflowStatus": "Completed",
+      "completionOrder": [
+        "child",
+        "parent"
+      ],
+      "originIds": [
+        "A",
+        "B"
+      ],
+      "finalIds": [
+        "A",
+        "B"
+      ],
+      "ambientSuspendedBeforeOwnedCleanup": true,
+      "sources": [
+        {
+          "outboxItemId": "commit:84226205fd6ef7e8:invoke:cause-distinct-g2-activity-1:activity-completed:cause-distinct-g2-activity-1:57ca2fe491d90761:0",
+          "status": 2,
+          "publisherInvocationId": "cause-distinct-g2-activity-1",
+          "intentFingerprint": "81110cad9d7e9e8fb487e100783b6c5d384468538f9d5350124e58ea975d8a5b",
+          "starts": 0,
+          "resumes": 1
+        },
+        {
+          "outboxItemId": "commit:588e29741db85217:invoke:cause-distinct-g2-activity-2:activity-completed:cause-distinct-g2-activity-2:a5021ac3c3eabc81:0",
+          "status": 2,
+          "publisherInvocationId": "cause-distinct-g2-activity-2",
+          "intentFingerprint": "5eb15f4cb12191cd3fb7ac6cea4b2d9cae954ad15d2c6773321a34c5f25482a9",
+          "starts": 0,
+          "resumes": 1
+        }
+      ]
+    }
+  ],
+  "negativeControl": {
+    "scenario": "cause-wrong-relay",
+    "setupGenerations": 2,
+    "failureGeneration": 3,
+    "diagnostic": "N10: composite completion must retain the originating event ID",
+    "mutation": "Final relay uses newer gate B through a normal result binding instead of the initial Event A result",
+    "observation": "Retained wrong final B produces the intended witness assertion failure; not an unrelated activation or schema failure"
+  },
+  "independentAssessment": {
+    "acceptance": "Read actual SQLite sources/cohorts, readiness, cold reports, delayed orders, distinct causes and wrong-binding control; verified frozen/binary hashes and sampled closure",
+    "correctness": "Read actual2.0finalization history/write/source stamps; genuine source IDs/fingerprints and exact recipient cohorts; cold result ancestry; positiveDBs no incidents or scheduler poison",
+    "scope": "Bounded single-host ordinary-composite cause/source proof only"
+  },
+  "closeout": {
+    "sampledOwnedPids": 57,
+    "ownedGroups": 3,
+    "remainingOwnedRows": [],
+    "timedOut": false,
+    "secondaryLeaseReturned": true,
+    "protectedRiderGroup": 1105,
+    "limits": [
+      "Sampling is not a complete lifecycle trace",
+      "Timeout cleanup path unexercised"
+    ]
+  },
+  "historicalFailure": "m0-native-witness-5d4c.json remains unchanged: failed8of21/13notrun. This later corrected N10-only run does not relabel it passed or imply newN9execution.",
+  "rawEvidence": [
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/build.result.json",
+      "sha256": "2d1f6fe818b14e1f458849c200702c46beb0b645e2338e78dfc9ce7cd6c37776"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/integration.result.json",
+      "sha256": "3d660245472259ba6a2f8eb996ad3027c781fa4dbb39a023bfe3f71df4e5dbc4"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/terminal-cross-check.json",
+      "sha256": "059dc5d726337de3f008bc5b05b1e53482328749b46746b891316330f8fc8089"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/binary-hashes.json",
+      "sha256": "263ac3466501cb1e0bb8f5ca40c515b9141ba0baa10f537f36440ed93daeab8b"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/generations/cause-processes.json",
+      "sha256": "f41df396473b83b5bee48b5b2cf2100641b9a4bfe91122299dfaecc9a4eea9a4"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/generations/cause-wrong-relay-g3.stderr.log",
+      "sha256": "ca52c37b770f846c563e476565e3e0abc9a67300a7172476f64576013a26f618"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/generations/cause-child-delayed.db",
+      "sha256": "737fa062d7d4965582361d43be1714cdd94e57262bb3fd7e197548cf0e33b4dc"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/generations/cause-distinct.db",
+      "sha256": "a85f326802c8ae7ea951bfbde9adc2c74db61e5eb1be0fa9f7dfb392e37004d2"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/generations/cause-parent-delayed.db",
+      "sha256": "c7b40eff6ed9567513a12768f90293071c672765de3319d6ef6d7aa15658fca3"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/n10-composition-a787-first-run/generations/cause-wrong-relay.db",
+      "sha256": "8c562bf93fe3cd988df5083dcbc4245247531b7b86cc9b8b1b8debda017e20de"
+    }
+  ],
+  "notQualified": [
+    "Production StateMachine eligibility or complete hierarchical/parallel phase semantics",
+    "Invocation-wide admission/retention/ambiguouscommit/terminal races",
+    "Secret/withholding and production guard/phase/reusable-boundary topology",
+    "Studio author/save/reload/publish/inspect",
+    "Saga composition",
+    "New-head N9 or current-main acceptance",
+    "Whole program completion"
+  ]
+}
