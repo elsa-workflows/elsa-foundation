@@ -214,6 +214,8 @@ for (const theme of ["light", "dark"]) for (const width of [1024, 1440, 2048]) {
   test(`uses available toolbar space for feedback (${theme}, ${width}px)`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 720 });
     await page.goto(`/?mode=workflow-toolbar&theme=${theme}&name=Compensation`);
+    // Leave room for wider fallback glyphs and enlarged feedback text.
+    await page.addStyleTag({ content: ".wf-editor-save-status { font-family: monospace; font-size: 14px; }" });
     const toolbar = page.locator(".wf-editor-toolbar");
     const initialButtons = await readButtonPositions(toolbar.getByRole("button"));
     const messages = width >= 1440

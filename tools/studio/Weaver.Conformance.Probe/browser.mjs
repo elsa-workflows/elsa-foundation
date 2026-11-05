@@ -2078,7 +2078,7 @@ async function workflowVersionHistory() {
   const definitionBefore = await owner("definition-before", wf.definitionPath);
   await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   await expect(dock()).toBeVisible();
-  await nativeEnter("properties-tab", page.getByRole("tab", { name: "Properties", exact: true }), "Properties");
+  await nativeEnter("versions-tab", page.getByRole("tab", { name: "Versions", exact: true }), "Versions");
   const select = page.getByRole("button", { name: "Select version " + version.version, exact: true });
   await expect(select).toBeVisible();
   await nativeEnter("select-version", select, "Select version");
