@@ -28,17 +28,24 @@ test.afterEach(async ({ page }) => {
 });
 
 test.beforeEach(async ({ page }, info) => {
-  await page.addInitScript(mode => {
-    localStorage.removeItem("elsa-studio-theme");
-    localStorage.setItem("elsa-studio-workspace-style", "linen");
+  const reportedAppearance = info.title === "feature filtering and settings dialogs";
+  await page.addInitScript(({ mode, reportedAppearance }) => {
+    if (reportedAppearance) localStorage.setItem("elsa-studio-theme", "classic");
+    else localStorage.removeItem("elsa-studio-theme");
+    localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
-  }, info.project.use.colorScheme ?? "light");
+  }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
   const errors: string[] = [];
   browserErrors.set(page, errors);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
   await signIn(page);
+  if (reportedAppearance) {
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+  }
   await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
   await capture(page, info, "reference");
 });
