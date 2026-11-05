@@ -1,3 +1,4 @@
+import { readAgentProposalStatus } from "../agent/agentProposalStatus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContributionDiagnostic, StudioAgentMode, StudioAgentPromptRequest, StudioAgentSurface, StudioAgentToolResult } from "../../sdk";
 import { AgentExecutionError, classifyAutonomyFailure, classifyRecoveryFailure, createAgentClient, getAgentErrorCode, getAgentRetryAfterSeconds, POLICY_CHANGED, type AgentClient } from "../agent/agentClient";
@@ -1265,6 +1266,6 @@ function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPay
 }
 
 function normalizeProposalStatus(value: unknown): AgentActionProposal["status"] {
-  if (typeof value === "number") return (["draft", "awaiting-approval", "approved", "denied", "edited", "expired", "executed", "failed", "cancelled", "executing", "awaiting-client", "uncertain"] as const)[value] ?? "failed";
-  return (String(value ?? "awaiting-approval").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()) as AgentActionProposal["status"];
+  // A new proposal-created event may omit status; an explicitly unknown status cannot request approval.
+  return readAgentProposalStatus(value) ?? (value == null ? "awaiting-approval" : "uncertain");
 }
