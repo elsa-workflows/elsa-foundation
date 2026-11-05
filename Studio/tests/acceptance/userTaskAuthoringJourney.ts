@@ -74,7 +74,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByLabel("Task form", { exact: true }).selectOption(formId);
     await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
     for (const label of ["Task form", "Task form version"]) {
-      await expect.poll(() => page.getByLabel(label, { exact: true }).evaluate(element => getComputedStyle(element).backgroundImage)).not.toBe("none");
+      await expect.poll(() => page.getByLabel(label, { exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
     }
     await expect(page.getByRole("button", { name: "Remove action 1", exact: true })).toHaveText("");
     await page.getByLabel("Action 1", { exact: true }).scrollIntoViewIfNeeded();
@@ -121,7 +121,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
-    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundImage)).not.toBe("none");
+    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
     const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header label", { hasText: /^Value$/ }) });
     await valueRow.locator("button.wf-syntax-picker-trigger").click(); await page.getByRole("option", { name: /^Variable/ }).click();
     await selectVariable(page.getByRole("combobox", { name: "Variable reference", exact: true }));

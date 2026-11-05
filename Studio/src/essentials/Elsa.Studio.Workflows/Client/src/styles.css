@@ -5467,7 +5467,7 @@ button.wf-reference-select {
   min-width: 0;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background-color: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  background-color: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-panel-tone));
   color: var(--wf-text);
   font: inherit;
   font-size: 12px;

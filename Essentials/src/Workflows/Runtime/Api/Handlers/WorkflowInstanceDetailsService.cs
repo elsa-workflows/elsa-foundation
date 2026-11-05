@@ -53,7 +53,7 @@ public sealed class WorkflowInstanceDetailsService(
         var outputs = outputProjections.ToDictionary(
             output => output.Name,
             output => canInspectSensitiveValues
-                ? new WorkflowOutputView(output.Value, output.IsRedacted, output.RedactionReason, output.CapturedAt)
+                ? WorkflowOutputView.From(output)
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
