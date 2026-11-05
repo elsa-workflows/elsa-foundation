@@ -1,3 +1,4 @@
+import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -165,7 +166,6 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await capture(page, info, "completed");
 });
 
-
 test("compact Secret create journey", async ({ page }, info) => {
   const name = `compact-${info.project.name}-${Date.now()}`;
   await page.goto("/security/secrets");
@@ -211,4 +211,8 @@ test("compact Secret create journey", async ({ page }, info) => {
   await expect(dialog).toHaveCount(0);
   await expect(open).toBeFocused();
   await capture(page, info, "secret-cancelled");
+});
+
+test("executable designer parity", async ({ page }, info) => {
+  await executableDesignerJourney(page, info, capture);
 });
