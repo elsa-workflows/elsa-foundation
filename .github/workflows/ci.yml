@@ -1160,6 +1160,7 @@ jobs:
 
       - name: Qualify actual Studio packages and causal controls
         run: |
+          python3 -m unittest discover -s tools/ci -p 'test_studio_native_scratch.py'
           python3 tools/ci/qualify_studio_consumers.py --self-test
           python3 tools/ci/qualify_studio_consumers.py \
             --packages "$RUNNER_TEMP/studio-nuget" \
