@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CShells.Lifecycle;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
@@ -27,6 +28,7 @@ namespace Elsa.StateMachine.M0.Witness;
 internal static class Program
 {
     private const string WorkflowId = "m0-witness-workflow";
+    private const string PayloadCanary = "public-payload-must-not-appear-in-terminal-output";
     private static readonly WorkflowExecutionPartition Partition = new(WorkflowExecutionPartition.DefaultValue);
 
     public static async Task<int> Main(string[] args)
@@ -53,13 +55,18 @@ internal static class Program
             throw new InvalidOperationException("The owned output directory must be empty.");
         Directory.CreateDirectory(directory);
         var processes = new List<ProcessReceipt>();
-        foreach (var scenario in new[] { "normal", "action-retry", "guard-retry", "retry-without-reschedule-marker", "complete", "cancel" })
-            for (var generation = 1; generation <= 3; generation++)
+        foreach (var scenario in new[] { "normal", "action-retry", "guard-retry", "retry-without-reschedule-marker", "complete", "cancel", "cancel-selected" })
+            for (var generation = 1; generation <= 4; generation++)
                 processes.Add(await ChildAsync(directory, scenario, generation, null, expectedSuccess: true));
 
         // Separate databases isolate negative controls from the positive evidence.
         processes.Add(await ChildAsync(directory, "negative-state", 1, "omit-state", expectedSuccess: false));
         processes.Add(await ChildAsync(directory, "negative-provenance", 1, "corrupt-provenance", expectedSuccess: false));
+        foreach (var (scenario, mutation) in new[] { ("negative-terminal", "omit-terminal-export"), ("negative-cancel", "omit-cancel-projection") })
+        {
+            processes.Add(await ChildAsync(directory, scenario, 1, mutation, expectedSuccess: true));
+            processes.Add(await ChildAsync(directory, scenario, 2, mutation, expectedSuccess: false));
+        }
         await WriteAsync(Path.Join(directory, "processes.json"), new
         {
             capturedAt = DateTimeOffset.UtcNow,
@@ -93,7 +100,9 @@ internal static class Program
         {
             "omit-state" => "No committed native parent state is available",
             "corrupt-provenance" => "Provenance negative control",
-                        _ => null
+            "omit-terminal-export" => "N6: terminal archive must retain the original receipt IDs and order",
+            "omit-cancel-projection" => "N6: queued cancellation must have an explicit not-processed reason",
+            _ => null
         };
         var matched = (process.ExitCode == 0) == expectedSuccess && (expectedSuccess || expectedDiagnostic is not null && error.Contains(expectedDiagnostic, StringComparison.Ordinal));
         var result = new ProcessReceipt(scenario, generation, process.Id, mutation, expectedSuccess, process.ExitCode, matched);
@@ -107,9 +116,11 @@ internal static class Program
         var database = Path.Join(directory, scenario + ".db");
         var controls = new ProbeControls
         {
-            FailGuardForInput = generation == 1 && scenario is "guard-retry" or "retry-without-reschedule-marker" ? "A" : null,
+            FailGuardForInput = generation == 1 && scenario is "guard-retry" or "retry-without-reschedule-marker" or "cancel-selected" ? "A" : null,
             OmitPrivateState = mutation == "omit-state",
-            CorruptProvenance = mutation == "corrupt-provenance"
+            CorruptProvenance = mutation == "corrupt-provenance",
+            DisableTerminalReceiptExport = mutation == "omit-terminal-export",
+            DisableCancellationProjection = mutation == "omit-cancel-projection"
         };
         await using var harness = WorkflowExecutionHarness.Create()
             .ConfigureServices(services =>
@@ -139,7 +150,7 @@ internal static class Program
                 // durable partition, and use it explicitly for subsequent operator/cancellation calls.
                 await harness.StartPublishedAsync(reference, WorkflowId, partition: Partition);
                 var start = await SnapshotAsync(harness);
-                Check(start.State.Phase == "Action" && start.State.ExitCompletions == 1, "Ordinary Exit must finish once before the waiting Action.");
+                Check(start.RequiredState.Phase == "Action" && start.RequiredState.ExitCompletions == 1, "Ordinary Exit must finish once before the waiting Action.");
                 await WriteAsync(Path.Join(directory, scenario + "-original-action.json"), await WaitAsync(harness, ProbeNames.Action));
                 transport.Add(await AdmitAsync(harness, "A", parentFirst: true));
                 transport.Add(await AdmitAsync(harness, "B"));
@@ -147,73 +158,75 @@ internal static class Program
                 transport.Add(await AdmitAsync(harness, "A", parentFirst: false));
                 transport.Add(await AdmitAsync(harness, "C"));
                 var pending = await SnapshotAsync(harness);
-                Check(pending.State.Pending.SequenceEqual(["A", "B"]) && pending.State.Processed.Count == 0, "N1: pending inputs must be durably ordered without evaluation during Action.");
-                Check(pending.State.Decisions.Select(x => x.Status).SequenceEqual(["Accepted", "Accepted", "Duplicate", "Conflict", "Full"]), "N1: committed semantic decisions must distinguish admission, duplicate, conflict and full.");
+                Check(pending.RequiredState.Pending.SequenceEqual(["A", "B"]) && pending.RequiredState.Processed.Count == 0, "N1: pending inputs must be durably ordered without evaluation during Action.");
+                Check(pending.RequiredState.Decisions.Select(x => x.Status).SequenceEqual(["Accepted", "Accepted", "Duplicate", "Conflict", "Full"]), "N1: committed semantic decisions must distinguish admission, duplicate, conflict and full.");
                 if (scenario == "action-retry") transport.Add(await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Action), new ActionSignal(Fault: true)));
-                if (scenario is "guard-retry" or "retry-without-reschedule-marker" || mutation == "corrupt-provenance")
+                if (scenario is "guard-retry" or "retry-without-reschedule-marker" or "cancel-selected" || mutation == "corrupt-provenance")
                     transport.Add(await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Action), new ActionSignal()));
-                if (scenario is "guard-retry" or "retry-without-reschedule-marker" or "action-retry")
-                    Check((await SnapshotAsync(harness)).State.AwaitingRecovery, "A real child fault must preserve the parent awaiting normal recovery.");
+                if (scenario is "guard-retry" or "retry-without-reschedule-marker" or "cancel-selected" or "action-retry")
+                    Check((await SnapshotAsync(harness)).RequiredState.AwaitingRecovery, "A real child fault must preserve the parent awaiting normal recovery.");
                 if (mutation == "corrupt-provenance")
-                    Check((await SnapshotAsync(harness)).State.Processed.SequenceEqual(["A", "B"]), "Provenance negative control: corrupted cause must fail the positive drain assertion.");
+                    Check((await SnapshotAsync(harness)).RequiredState.Processed.SequenceEqual(["A", "B"]), "Provenance negative control: corrupted cause must fail the positive drain assertion.");
             }
             else if (generation == 2)
             {
                 var restored = await SnapshotAsync(harness);
                 await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.restored.json"), restored);
-                Check(restored.State.ExitCompletions == 1 && restored.State.Receipts.Count == 2, "N2: fresh process must recover native state and receipts.");
+                await CheckOriginalRootAsync(directory, scenario, restored);
+                Check(restored.RequiredState.ExitCompletions == 1 && restored.RequiredState.Receipts.Count == 2, "N2: fresh process must recover native state and receipts.");
                 if (scenario is "action-retry" or "guard-retry" or "retry-without-reschedule-marker")
                 {
-                    Check(restored.State.AwaitingRecovery && restored.State.FailedChild is not null, "Recovery must target the retained actual failed child.");
-                    recovery = await RetryAsync(harness, restored.State.FailedChild!);
+                    Check(restored.RequiredState.AwaitingRecovery && restored.RequiredState.FailedChild is not null, "Recovery must target the retained actual failed child.");
+                    recovery = await RetryAsync(harness, restored.RequiredState.FailedChild!);
                     if (scenario == "action-retry")
                     {
                         var old = JsonSerializer.Deserialize<BookmarkState>(await File.ReadAllTextAsync(Path.Join(directory, scenario + "-original-action.json")), ProbeNames.Json)!;
                         var successor = await WaitAsync(harness, ProbeNames.Action);
                         Check(old.BookmarkId != successor.BookmarkId && old.ActivityExecutionId != successor.ActivityExecutionId, "N5: normal Action retry must create a distinct physical wait.");
                         transport.Add(await ResumeAsync(harness, old, new ActionSignal()));
-                        Check((await WaitAsync(harness, ProbeNames.Action)).BookmarkId == successor.BookmarkId && (await SnapshotAsync(harness)).State.Processed.Count == 0,
+                        Check((await WaitAsync(harness, ProbeNames.Action)).BookmarkId == successor.BookmarkId && (await SnapshotAsync(harness)).RequiredState.Processed.Count == 0,
                             "N5: saved retired Action bookmark must not advance the replacement Action.");
                         transport.Add(await ResumeAsync(harness, successor, new ActionSignal()));
                     }
                 }
-                else if (scenario == "cancel") await harness.CancelAsync(WorkflowId, Partition);
-                else transport.Add(await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Action), new ActionSignal(Finish: scenario == "complete")));
+                else if (scenario is "cancel" or "cancel-selected" or "negative-cancel") await harness.CancelAsync(WorkflowId, Partition);
+                else transport.Add(await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Action), new ActionSignal(Finish: scenario is "complete" or "negative-terminal")));
                 var after = await SnapshotAsync(harness);
                 if (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker")
                 {
-                    Check(after.State.Processed.SequenceEqual(["A", "B"]) && after.State.ExitCompletions == 1, "N2/N3: drain in admission order without repeating completed Exit.");
-                    Check(after.State.Callbacks.GroupBy(x => x.InputId).All(group => group.Count() == 2 && group.Select(x => x.Source).ToHashSet().SetEquals(["child", "parent"])), "N4: both native guard callbacks must retain their scheduled logical input.");
-                    Check(after.State.Selections.Count == 2 && after.State.Selections.All(x => x.Source == "child"), "N4: child precedence must be independent of callback order.");
-                    Check(after.State.Callbacks.Where(x => x.InputId == "A").Select(x => x.Source).SequenceEqual(["parent", "child"]) &&
-                          after.State.Callbacks.Where(x => x.InputId == "B").Select(x => x.Source).SequenceEqual(["child", "parent"]),
+                    Check(after.RequiredState.Processed.SequenceEqual(["A", "B"]) && after.RequiredState.ExitCompletions == 1, "N2/N3: drain in admission order without repeating completed Exit.");
+                    Check(after.RequiredState.Callbacks.GroupBy(x => x.InputId).All(group => group.Count() == 2 && group.Select(x => x.Source).ToHashSet().SetEquals(["child", "parent"])), "N4: both native guard callbacks must retain their scheduled logical input.");
+                    Check(after.RequiredState.Selections.Count == 2 && after.RequiredState.Selections.All(x => x.Source == "child"), "N4: child precedence must be independent of callback order.");
+                    Check(after.RequiredState.Callbacks.Where(x => x.InputId == "A").Select(x => x.Source).SequenceEqual(["parent", "child"]) &&
+                          after.RequiredState.Callbacks.Where(x => x.InputId == "B").Select(x => x.Source).SequenceEqual(["child", "parent"]),
                         "N4: actual native callbacks must exercise both source orders.");
                     if (scenario == "guard-retry")
                     {
                         var previous = JsonSerializer.Deserialize<Snapshot>(await File.ReadAllTextAsync(Path.Join(directory, scenario + "-g1.json")), ProbeNames.Json)!;
-                        var successful = previous.State.Callbacks.Single();
-                        Check(after.State.Callbacks.Count(x => x.InvocationId == successful.InvocationId && x.OperationKey == successful.OperationKey) == 1,
+                        var successful = previous.RequiredState.Callbacks.Single();
+                        Check(after.RequiredState.Callbacks.Count(x => x.InvocationId == successful.InvocationId && x.OperationKey == successful.OperationKey) == 1,
                             "N3: preserve the successful guard callback across sibling retry.");
                     }
                 }
-                if (scenario == "cancel") Check(after.State.Receipts.Values.All(x => x.Status == "NotProcessed:Cancelled"), "N6: retained cancellation alone does not explicitly settle queued receipts.");
-                if (scenario == "complete") Check(after.State.Receipts.Values.All(x => x.Status == "NotProcessed:Completed"), "N6: normal completion must settle queued inputs explicitly.");
+                if (scenario is "cancel" or "cancel-selected" or "complete" or "negative-terminal" or "negative-cancel")
+                    CheckTerminal(after, scenario, ["A", "B"]);
             }
             else
             {
                 var restored = await SnapshotAsync(harness);
                 await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.restored.json"), restored);
-                if (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker")
+                await CheckOriginalRootAsync(directory, scenario, restored);
+                if (generation == 3 && (scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker"))
                 {
-                    Check(restored.State.Processed.SequenceEqual(["A", "B"]), "Cold verification must retain handled receipts.");
+                    Check(restored.RequiredState.Processed.SequenceEqual(["A", "B"]), "Cold verification must retain handled receipts.");
                     transport.Add(await AdmitAsync(harness, "stop"));
                 }
-                else Check(restored.WorkflowStatus is "Completed" or "Cancelled", "N6: terminal native execution and private receipts must survive process restart.");
+                else CheckTerminal(restored, scenario, scenario is "normal" or "action-retry" or "guard-retry" or "retry-without-reschedule-marker" ? ["A", "B", "stop"] : ["A", "B"]);
             }
             var final = await SnapshotAsync(harness);
             await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.json"), final);
             await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.delivery.json"), new { transport, recovery });
-            Console.WriteLine($"{scenario} generation {generation}: assertions passed; phase={final.State.Phase}; workflow={final.WorkflowStatus}");
+            Console.WriteLine($"{scenario} generation {generation}: assertions passed; phase={final.State?.Phase ?? "Terminal"}; workflow={final.WorkflowStatus}");
         }
         catch
         {
@@ -230,7 +243,37 @@ internal static class Program
     }
 
     private static async Task<object> AdmitAsync(WorkflowExecutionHarness harness, string id, bool parentFirst = false) =>
-        await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Inbox), new ProbeInput(id, JsonSerializer.SerializeToElement(new { parentFirst })));
+        await ResumeAsync(harness, await WaitAsync(harness, ProbeNames.Inbox), new ProbeInput(id, JsonSerializer.SerializeToElement(new { parentFirst, payloadCanary = PayloadCanary })));
+
+    private static void CheckTerminal(Snapshot snapshot, string scenario, string[] expectedIds)
+    {
+        var terminal = snapshot.Terminal ?? throw new InvalidOperationException("N6: no terminal receipt view is available.");
+        Check(terminal.FormatVersion == 1 && terminal.RootInvocationId == snapshot.RootInvocationId,
+            "N6: terminal evidence must remain linked to the exact original root invocation.");
+        Check(terminal.Receipts.Select(x => x.Id).SequenceEqual(expectedIds) && terminal.Receipts.Select(x => x.Order).SequenceEqual(Enumerable.Range(1, expectedIds.Length).Select(x => (long)x)),
+            "N6: terminal archive must retain the original receipt IDs and order.");
+        Check(terminal.Receipts.Length <= NativeProbeBase.ReceiptBudget, "N6: terminal evidence must stay bounded.");
+        if (snapshot.RootStatus == "Completed")
+        {
+            Check(!snapshot.HasPrivateState && snapshot.State is null && snapshot.TerminalSource == "CompletionResult", "N6: ordinary completion must clear private state and retain only the declared result.");
+            Check(!snapshot.CompletionResult!.Value.GetRawText().Contains(PayloadCanary, StringComparison.Ordinal), "N6: business payload must not leak into terminal output.");
+        }
+        else Check(snapshot.RootStatus == "Cancelled" && snapshot.TerminalSource == "CancelledRootState", "N6: cancellation facts must come from the terminal root state.");
+        if (scenario is "cancel" or "negative-cancel")
+            Check(terminal.Receipts.All(x => x.Status == "NotProcessed:Cancelled"), "N6: queued cancellation must have an explicit not-processed reason.");
+        else if (scenario == "cancel-selected")
+            Check(terminal.Receipts.Single(x => x.Id == "A").Status == "Interrupted:Cancelled" && terminal.Receipts.Single(x => x.Id == "B").Status == "NotProcessed:Cancelled",
+                "N6: selected interruption must remain distinct from unselected cancellation.");
+        else if (scenario is "complete" or "negative-terminal")
+            Check(terminal.Receipts.All(x => x.Status == "NotProcessed:Completed"), "N6: completion must settle queued receipts explicitly.");
+        else Check(terminal.Receipts.All(x => x.Status == "Handled"), "N6: handled receipts must remain handled after completion.");
+    }
+
+    private static async Task CheckOriginalRootAsync(string directory, string scenario, Snapshot restored)
+    {
+        var original = JsonSerializer.Deserialize<Snapshot>(await File.ReadAllTextAsync(Path.Join(directory, scenario + "-g1.json")), ProbeNames.Json)!;
+        Check(restored.RootInvocationId == original.RootInvocationId, "Cold read must retain the original machine invocation identity.");
+    }
 
     private static async Task<object> ResumeAsync(WorkflowExecutionHarness harness, BookmarkState bookmark, object payload)
     {
@@ -250,7 +293,12 @@ internal static class Program
     }
 
     private sealed record ActivitySnapshot(string ActivityExecutionId, string Node, string Invocation, string Status, string OperationKey);
-    private sealed record Snapshot(int Pid, string WorkflowStatus, ProbeState State, ActivitySnapshot[] Activities, BookmarkState[] Bookmarks);
+    private sealed record Snapshot(int Pid, string WorkflowStatus, string RootInvocationId, string RootStatus, bool HasPrivateState,
+        ProbeState? State, ProbeTerminalEvidence? Terminal, string? TerminalSource, JsonElement? CompletionResult,
+        ActivitySnapshot[] Activities, BookmarkState[] Bookmarks)
+    {
+        [JsonIgnore] public ProbeState RequiredState => State ?? throw new InvalidOperationException("This assertion requires an active native parent state.");
+    }
 
     private static async Task<Snapshot> SnapshotAsync(WorkflowExecutionHarness harness)
     {
@@ -259,7 +307,12 @@ internal static class Program
         var root = activities.Single(x => x.Execution.ExecutableNodeId == ProbeNames.Root);
         var workflow = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowId);
         var bookmarks = await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(WorkflowId);
-        return new(Environment.ProcessId, workflow?.Status.ToString() ?? "Missing", NativeProbeBase.Read(root),
+        var controls = harness.Services.GetRequiredService<ProbeControls>();
+        var terminal = NativeProbeBase.ReadTerminalEvidence(root, !controls.DisableCancellationProjection);
+        return new(Environment.ProcessId, workflow?.Status.ToString() ?? "Missing", root.InvocationId, root.Status.ToString(), root.PrivateState is not null,
+            root.PrivateState is not null ? NativeProbeBase.Read(root) : terminal is null ? NativeProbeBase.Read(root) : null, terminal,
+            root.Status == ActivityExecutionStatus.Completed ? "CompletionResult" : root.Status == ActivityExecutionStatus.Cancelled ? "CancelledRootState" : null,
+            root.Completion?.Result.InlineValue,
             activities.Select(x => new ActivitySnapshot(x.InvocationId, x.Execution.ExecutableNodeId, x.InvocationId, x.Status.ToString(), x.OperationKey)).ToArray(), bookmarks.ToArray());
     }
 

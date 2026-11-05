@@ -33,6 +33,8 @@ public sealed record ProbeReceipt(string Id, JsonElement Content, long Order, st
 public sealed record ProbeDecision(string CarrierInvocationId, string InputId, string Status, long? Order);
 public sealed record ProbeCallback(string InvocationId, string InputId, string Source, string OperationKey);
 public sealed record ProbeSelection(string InputId, string Source);
+public sealed record ProbeFinalReceipt(string Id, long Order, string Status, string CarrierInvocationId);
+public sealed record ProbeTerminalEvidence(int FormatVersion, string RootInvocationId, string Reason, ProbeFinalReceipt[] Receipts);
 public sealed record ProbeState(
     string Phase,
     int ExitCompletions,
@@ -59,6 +61,8 @@ public sealed class ProbeControls
     public string? FailGuardForInput { get; init; }
     public bool OmitPrivateState { get; init; }
     public bool CorruptProvenance { get; init; }
+    public bool DisableTerminalReceiptExport { get; init; }
+    public bool DisableCancellationProjection { get; init; }
     private int _guardFailed;
 
     public bool ShouldFailGuard(string input) => input == FailGuardForInput && Interlocked.Exchange(ref _guardFailed, 1) == 0;
@@ -68,13 +72,32 @@ public sealed class ProbeControls
 [ActivityStructure("m0.native-probe", "1.0.0", Mode = "m0-probe")]
 [ActivityChildSlot(ProbeNames.Slot, "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
-public abstract class NativeProbeBase(IActivityExecutionStateStore activities, ProbeControls controls) : StructuralActivity,
+public abstract class NativeProbeBase(IActivityExecutionStateStore activities, ProbeControls controls) : Activity<ProbeTerminalEvidence>,
     IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler,
-    IRuntimeLiveChildActivityConsumer
+    IRuntimeLiveChildActivityConsumer, IRuntimeActivityCheckpointParticipant
 {
     public const int PendingCapacity = 2;
     public const int ReceiptBudget = 8;
     public const int AttemptHistoryBudget = 16;
+    // Same-activation decision handoff to the immediate checkpoint participant; never recovery state.
+    private ProbeTerminalEvidence? _terminalEvidence;
+
+    protected override ValueTask<ActivityTransition<ProbeTerminalEvidence>> ExecuteAsync(ActivityExecutionContext context) =>
+        throw new InvalidOperationException("The native M0 structural fixture refuses ordinary invocation.");
+
+    public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+        IRuntimeActivityExecutionContext context, IReadOnlyDictionary<string, object?> effectiveInputs, DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
+
+    public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+        IRuntimeActivityExecutionContext context, IReadOnlyCollection<DurableValueState> persistedValues, DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var evidence = _terminalEvidence ?? throw new InvalidOperationException("No same-activation terminal decision exists.");
+        if (controls.DisableTerminalReceiptExport) evidence = evidence with { Receipts = [] };
+        return ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation([], ActivityTransition.Complete(evidence)));
+    }
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
     {
@@ -215,7 +238,28 @@ public abstract class NativeProbeBase(IActivityExecutionStateStore activities, P
         var receipts = state.Receipts.ToDictionary(pair => pair.Key,
             pair => pair.Value.Status == "Queued" ? pair.Value with { Status = "NotProcessed:Completed" } : pair.Value,
             StringComparer.Ordinal);
+        _terminalEvidence = new(1, context.ActivityExecutionState.InvocationId, "Completed", FinalReceipts(receipts.Values));
         return Persist(RuntimeStructuralContinuation.Complete(), state with { Phase = "Completed", Receipts = receipts, Pending = [] });
+    }
+
+    public static ProbeFinalReceipt[] FinalReceipts(IEnumerable<ProbeReceipt> receipts) => receipts.OrderBy(x => x.Order)
+        .Select(x => new ProbeFinalReceipt(x.Id, x.Order, x.Status, x.CarrierInvocationId)).ToArray();
+
+    public static ProbeTerminalEvidence? ReadTerminalEvidence(ActivityExecutionState root, bool projectCancellation)
+    {
+        if (root.Status == ActivityExecutionStatus.Completed)
+            return root.Completion?.Result.InlineValue?.Deserialize<ProbeTerminalEvidence>(ProbeNames.Json)
+                ?? throw new InvalidOperationException("Completed root has no declared terminal result.");
+        if (root.Status != ActivityExecutionStatus.Cancelled) return null;
+        if (root.CompletedAt is null) throw new InvalidOperationException("Cancelled root has no committed completion timestamp.");
+        var state = Read(root);
+        var receipts = state.Receipts.Values.Select(receipt => !projectCancellation ? receipt : receipt.Status switch
+        {
+            "Queued" => receipt with { Status = "NotProcessed:Cancelled" },
+            "Selected" => receipt with { Status = "Interrupted:Cancelled" },
+            _ => receipt
+        });
+        return new(1, root.InvocationId, "Cancelled", FinalReceipts(receipts));
     }
 
     private RuntimeStructuralContinuation Persist(RuntimeStructuralContinuation continuation, ProbeState state) =>
