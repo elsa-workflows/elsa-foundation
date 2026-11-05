@@ -42,7 +42,7 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   await expect(page.getByText("This field is required.", { exact: true }).first()).toBeVisible();
   await page.getByLabel(/^Amount/).fill("42"); await page.getByLabel(/^Confirmed/).selectOption("false"); await page.getByLabel(/^Note/).fill("Studio case preserved");
   await expectAccessible(page, ".user-tasks");
-  const detail = page.getByRole("complementary", { name: receipt.title, exact: true });
+  const detail = page.getByRole("region", { name: receipt.title, exact: true });
   await detail.getByRole("heading").scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("task-detail-top.png") });
   await detail.getByRole("button", { name: "Approve", exact: true }).scrollIntoViewIfNeeded();
@@ -62,15 +62,16 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   await page.getByRole("button", { name: "Refresh task", exact: true }).press("Enter");
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await expect(page.getByText("Your response is recorded. The workflow will continue when delivery completes.", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(row).toHaveCount(0);
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).getByText("History", { exact: true }).click();
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).locator("details li").last().scrollIntoViewIfNeeded();
+  await page.getByRole("region", { name: receipt.title, exact: true }).getByText("History", { exact: true }).click();
+  await page.getByRole("region", { name: receipt.title, exact: true }).locator("details li").last().scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("task-history.png") });
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).getByRole("heading").scrollIntoViewIfNeeded();
+  await page.getByRole("region", { name: receipt.title, exact: true }).getByRole("heading").scrollIntoViewIfNeeded();
   const screenshot = testInfo.outputPath(`user-task-${width}-${theme}.png`);
   await page.screenshot({ path: screenshot });
   await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });
+  await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+  await expect(page.getByRole("region", { name: receipt.title, exact: true })).toHaveCount(0);
+  await expect(row).toHaveCount(0);
 });
 
 test("authors reusable forms, assignment and connected action paths in the normal Studio designer", async ({ page }, testInfo) => {
