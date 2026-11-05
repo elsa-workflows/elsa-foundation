@@ -25,9 +25,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
     private readonly CheckpointRuleViolationWorkflowFaulter _checkpointRuleViolationFaulter;
     private readonly WorkflowDrainOrchestratorOptions _options;
-    private readonly IRuntimeExecutionOwnershipService _ownershipService;
-    private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
-    private readonly IPersistenceOperationScopeFactory? _heartbeatScopeFactory;
+    private readonly RuntimeExecutionLeaseRunner _leaseRunner;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
@@ -36,6 +34,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<WorkflowDrainOrchestrator> _logger;
+
+    internal DrainControlContext? DrainControls { private get; set; }
 
     /// <summary>
     /// Creates the orchestrator for a caller-owned ownership service. C1 (#1227): the six telescoping constructors
@@ -172,9 +172,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
         _checkpointRuleViolationFaulter = checkpointRuleViolationFaulter;
         _options = options ?? new WorkflowDrainOrchestratorOptions();
-        _ownershipService = ownershipService;
-        _ownershipContextAccessor = ownershipContextAccessor;
-        _heartbeatScopeFactory = heartbeatScopeFactory;
+        _leaseRunner = new(ownershipService, ownershipContextAccessor, heartbeatScopeFactory, timeProvider ?? TimeProvider.System);
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _persistenceModeResolver = persistenceModeResolver;
@@ -196,141 +194,25 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         if (!string.Equals(request.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new InvalidOperationException($"Scheduler drain request workflow execution ID '{request.WorkflowExecutionId}' does not match command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
 
-        // Single-writer ownership: claim a fencing lease for this drain and expose it as the active ownership
-        // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
-        // heartbeat to operational state, giving the recovery scanner real data. Renewal keeps long-running drains from
-        // expiring their own lease; process failure leaves the lease in place so interrupted execution stays detectable,
-        // while every in-process completion path stops renewal and releases it to avoid false-positive recovery. Both
-        // collaborators are required by construction (C1), so there is no unfenced fallback path.
-        var lease = await _ownershipService.AcquireAsync(request.WorkflowExecutionId, cancellationToken);
-        using (_ownershipContextAccessor.Push(lease))
-        using (var renewalStop = new CancellationTokenSource())
-        using (var drainCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        return await _leaseRunner.RunAsync(request.WorkflowExecutionId, envelope.Partition, async token =>
         {
-            var renewalTask = RenewOwnershipUntilStoppedAsync(lease, envelope.Partition, renewalStop.Token, drainCancellation);
             RuntimeSchedulerDrainResult? result = null;
-            Exception? drainFailure = null;
-            Exception? renewalFailure = null;
-            Exception? releaseFailure = null;
+            Exception? failure = null;
+            try { result = await DrainCoreAsync(envelope, request, token); }
+            catch (Exception exception) { failure = exception; }
+            // This policy belongs to native execution. It runs inside the shared ownership fence.
             try
             {
-                try
-                {
-                    result = await DrainCoreAsync(envelope, request, drainCancellation.Token);
-                }
-                catch (Exception exception)
-                {
-                    drainFailure = exception;
-                }
-
-                // #1780: a commit a checkpoint rule refused is refused again on every redelivery, so the execution is
-                // faulted instead of left non-terminal. This runs while the lease is still held, so the fault commit is
-                // fenced like the drain's own. The drain's result or failure is reported unchanged; only a fault commit
-                // that itself fails is added to it, because then the execution was not faulted. The envelope goes with
-                // it for #1799: a refused FIRST commit leaves no state to fault, and for a dispatched child the command
-                // is the only place its identity still exists.
-                try
-                {
-                    await _checkpointRuleViolationFaulter.FaultIfCheckpointRuleViolatedAsync(
-                        request.WorkflowExecutionId,
-                        result,
-                        drainFailure,
-                        envelope,
-                        drainCancellation.Token);
-                }
-                catch (Exception exception)
-                {
-                    drainFailure = drainFailure is null ? exception : new AggregateException(drainFailure, exception);
-                }
-            }
-            finally
-            {
-                await renewalStop.CancelAsync();
-                try
-                {
-                    await renewalTask;
-                }
-                catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
-                {
-                    // Expected when the drain completes before the next heartbeat cadence.
-                }
-                catch (Exception exception)
-                {
-                    renewalFailure = exception;
-                }
-
-                try
-                {
-                    var release = await _ownershipService.ReleaseAsync(lease, CancellationToken.None);
-                    if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
-                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
-                }
-                catch (Exception exception)
-                {
-                    releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
-                }
-            }
-
-            if (renewalFailure is not null)
-                ExceptionDispatchInfo.Capture(renewalFailure).Throw();
-
-            if (drainFailure is not null)
-                ExceptionDispatchInfo.Capture(drainFailure).Throw();
-
-            if (releaseFailure is not null)
-                ExceptionDispatchInfo.Capture(releaseFailure).Throw();
-
-            return result ?? throw new InvalidOperationException("Workflow execution draining completed without a result.");
-        }
-    }
-
-    private async Task RenewOwnershipUntilStoppedAsync(
-        RuntimeExecutionLease lease,
-        WorkflowExecutionPartition partition,
-        CancellationToken stopToken,
-        CancellationTokenSource drainCancellation)
-    {
-        var duration = lease.ExpiresAt - lease.AcquiredAt;
-        var cadence = TimeSpan.FromTicks(Math.Max(1, duration.Ticks / 3));
-        while (true)
-        {
-            await Task.Delay(cadence, _timeProvider, stopToken);
-            RuntimeExecutionOwnershipTransitionResult heartbeat;
-            try
-            {
-                heartbeat = await HeartbeatAsync(lease, partition, stopToken);
-            }
-            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
-            {
-                throw;
+                await _checkpointRuleViolationFaulter.FaultIfCheckpointRuleViolatedAsync(
+                    request.WorkflowExecutionId, result, failure, envelope, token);
             }
             catch (Exception exception)
             {
-                await drainCancellation.CancelAsync();
-                throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", transitionStatus: null, exception);
+                failure = failure is null ? exception : new AggregateException(failure, exception);
             }
-
-            if (heartbeat.Succeeded || heartbeat.Status == RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
-                continue;
-
-            await drainCancellation.CancelAsync();
-            throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", heartbeat.Status);
-        }
-    }
-
-    private async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(
-        RuntimeExecutionLease lease,
-        WorkflowExecutionPartition partition,
-        CancellationToken cancellationToken)
-    {
-        if (_heartbeatScopeFactory is null)
-            return await _ownershipService.HeartbeatAsync(lease, cancellationToken);
-
-        await using var scope = await _heartbeatScopeFactory.CreateAsync(
-            new PersistenceScope(partition.Value),
-            cancellationToken);
-        var ownershipService = scope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>();
-        return await ownershipService.HeartbeatAsync(lease, cancellationToken);
+            if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+            return result ?? throw new InvalidOperationException("Workflow execution draining completed without a result.");
+        }, cancellationToken);
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainCoreAsync(
@@ -362,7 +244,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // The scheduler loop owns each coalesced segment. A resume claim boundary ends one segment, dispatches
         // its durable item, and starts a fresh segment for subsequent replayable work under the same ownership lease.
         using var liveDrainScope = _liveDrainDeliveryAccessor?.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId));
-        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, cancellationToken);
+        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, IsYieldRedrive(envelope), cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
     }
@@ -370,12 +252,30 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(
         RuntimeSchedulerDrainRequest request,
         ResolvedPersistenceMode resolved,
+        bool deliverFlushedContinuations,
         CancellationToken cancellationToken)
     {
         RuntimeSchedulerDrainResult? firstDrainResult = null;
         RuntimeSchedulerDrainResult? lastDrainResult = null;
         var itemResults = new List<RuntimeSchedulerWorkItemResult>();
         var outboxDeliveryResults = new List<RuntimePostCommitOutboxProcessResult>();
+
+        // A yielded segment flushes its continuations without delivering them, so the Cancel it yielded to takes
+        // effect at that checkpoint. If the Cancel never ran, the actor re-drives the execution (#3647). A session
+        // reads this execution's continuations only from its own overlay, so hand over the flushed ones from the
+        // durable outbox before the first segment begins; otherwise only the sweep would find them.
+        // Stop before each batch while a Cancel waits: the drainer yields before its first step, and delivering then would
+        // queue the next step ahead of that Cancel's work. A withdrawn Cancel re-drives again.
+        if (deliverFlushedContinuations)
+        {
+            while (DrainControls?.ShouldYield(request.WorkflowExecutionId) != true)
+            {
+                var delivered = await _postCommitOutboxProcessor.ProcessAsync(ContinuationDelivery(request.WorkflowExecutionId), cancellationToken);
+                outboxDeliveryResults.Add(delivered);
+                if (delivered.DeliveredCount == 0 || delivered.FailedCount > 0)
+                    break;
+            }
+        }
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
         var continuationWait = new ContinuationWaitDeadline(_options.ContinuationClaimWaitLimit);
         var cycles = new DrainCycleBudget(_options, request.WorkflowExecutionId, _logger);
@@ -412,6 +312,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                     claimDurably = true;
                 }
 
+                if (drainResult.StopReason == RuntimeSchedulerDrainStopReason.Yielded)
+                {
+                    stopReason = RuntimeSchedulerDrainStopReason.Yielded;
+                    break;
+                }
+
                 if (drainResult.StoppedOnDeferral)
                 {
                     stopReason = RuntimeSchedulerDrainStopReason.Deferred;
@@ -427,6 +333,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 }
 
                 ContinuationSettlement settlement;
+                var segmentWasActive = coalescingScope.Session.IsActive;
                 var handoffDeliveredContinuation = false;
                 while (true)
                 {
@@ -453,7 +360,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                         ? ContinuationSettlement.Undelivered
                         : durableClaimBoundary
                             ? ContinuationSettlement.DrainAgain
-                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledDeliveryIds, cancellationToken);
+                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledDeliveryIds, coalescingScope, cancellationToken);
                     if (restartCoalescing && settlement == ContinuationSettlement.ConcurrentDeliverySettled)
                     {
                         handoffDeliveredContinuation = true;
@@ -472,7 +379,18 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
                 if (settlement is ContinuationSettlement.DrainAgain or ContinuationSettlement.ConcurrentDeliverySettled)
                 {
-                    if (restartCoalescing)
+                    // Another deliverer queued its continuation in the durable queue, after this segment filled its
+                    // overlay from it. The overlay never shows that work, so the next pass would run dry and report
+                    // quiescence, leaving the step to the sweep (#3659). Close this segment, unless taking back a lapsed
+                    // claim already did, and start one from durable state. A segment a boundary had already ended reads
+                    // the durable store directly, so it carries on as before: restarting it would resume coalescing that
+                    // a terminal or external boundary, or an abandoned reconciliation, ended on purpose.
+                    var refreshSegment = !restartCoalescing && segmentWasActive &&
+                        settlement == ContinuationSettlement.ConcurrentDeliverySettled;
+                    if (refreshSegment)
+                        await coalescingScope.FlushAtQuiescenceAsync(cancellationToken);
+
+                    if (restartCoalescing || refreshSegment)
                     {
                         // Start with durable state and a fresh read memo; never reactivate the previous overlay.
                         var nextMode = new ResolvedPersistenceMode(
@@ -522,6 +440,11 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         }
     }
 
+    private static bool IsYieldRedrive(WorkflowExecutionCommandEnvelope envelope) =>
+        envelope.Command.Kind == WorkflowExecutionCommandKind.RunSchedulerWork &&
+        envelope.Command.Metadata.TryGetValue("source", out var source) &&
+        string.Equals(source, InProcessWorkflowExecutionActorProvider.YieldRedriveSource, StringComparison.Ordinal);
+
     private RuntimePostCommitOutboxProcessRequest ContinuationDelivery(string workflowExecutionId) =>
         new(
             limit: _options.OutboxDeliveryBatchSize,
@@ -545,6 +468,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         List<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
         ContinuationWaitDeadline continuationWait,
         ICollection<string>? settledDeliveryIds,
+        IRuntimeCoalescingDrainScope segment,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId;
@@ -566,6 +490,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             var now = _timeProvider.GetUtcNow();
             if (held.Any(item => RuntimePostCommitOutboxClaimTransitions.ClaimableAt(item) <= now))
             {
+                // An active segment claims this run's continuations from its overlay only, so it would never find the
+                // durable item. Close the segment first; the caller starts a fresh one once delivery settles (#3659).
+                await segment.FlushAtQuiescenceAsync(cancellationToken);
                 var delivery = await DeliverLapsedContinuationsAsync(workflowExecutionId, cancellationToken);
                 outboxDeliveryResults.Add(delivery);
                 if (delivery.FailedCount > 0)

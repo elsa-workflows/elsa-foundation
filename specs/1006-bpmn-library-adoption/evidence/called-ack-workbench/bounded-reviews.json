@@ -1,0 +1,26 @@
+{
+  "sourceParentCommit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "scope": "Bounded ACK-loss source/artifact and T045 reconciliation; not full-PR approval.",
+  "reviews": [
+    {
+      "lens": "correctness",
+      "agent": "/root/round4_correctness",
+      "actionableFindings": [],
+      "supportsT045Closure": true
+    },
+    {
+      "lens": "standards",
+      "agent": "/root/round4_standards",
+      "actionableFindings": [],
+      "supportsT045Closure": true
+    },
+    {
+      "lens": "acceptance",
+      "agent": "/root/round4_acceptance",
+      "actionableFindings": [],
+      "supportsT045Closure": true
+    }
+  ],
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6
+}

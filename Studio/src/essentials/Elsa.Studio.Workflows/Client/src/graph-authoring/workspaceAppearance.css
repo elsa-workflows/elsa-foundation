@@ -1,0 +1,133 @@
+/* Deferred authoring treatments; the same controlled panels and resource state serve every style. */
+html[data-workspace-style] :is(.wf-palette, .wf-inspector) {
+  border: 0;
+  background: var(--studio-panel);
+}
+
+html[data-workspace-style] :is(.wf-panel-title, .wf-canvas-tabs, .wf-breadcrumb) {
+  border: 0;
+  background: transparent;
+}
+
+html[data-workspace-style] .wf-panel-title { padding-inline: 16px; }
+
+html[data-workspace-style] .wf-palette-activity {
+  min-height: 38px;
+  font-weight: 500;
+}
+
+html[data-workspace-style] .wf-palette-category-toggle {
+  font-family: var(--studio-font-ui);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-workspace-style] .wf-activity-icon {
+  border: 0;
+  background: transparent;
+}
+
+html[data-workspace-style] .wf-canvas { background-color: var(--studio-canvas); }
+
+:where(html[data-workspace-style]) .wf-node:where(:not(.selected):not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) {
+  border-color: transparent;
+  background: var(--studio-panel);
+  box-shadow: var(--shadow-md);
+}
+
+:where(html[data-workspace-style]) .wf-node.selected:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) {
+  border-color: var(--studio-accent);
+  background: color-mix(in srgb, var(--studio-accent) 7%, var(--studio-panel));
+}
+
+html[data-workspace-style] .wf-node-context-toolbar { border-color: var(--studio-edge-subtle); }
+
+html[data-workspace-style] .react-flow__node:focus-visible .wf-node {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 3px;
+}
+
+@media (min-width: 1025px) {
+  html[data-workspace-style="focus"] .wf-editor-body > .wf-canvas-shell {
+    grid-row: 1;
+    grid-column: 1 / -1;
+  }
+
+  html[data-workspace-style="focus"] .wf-editor-body > :is(.wf-palette, .wf-inspector) {
+    z-index: 3;
+    grid-row: 1;
+    margin: 12px;
+    border: 1px solid var(--studio-edge-subtle);
+    border-radius: var(--studio-radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  html[data-workspace-style="focus"] .wf-editor-body > .wf-side-resize-handle {
+    z-index: 4;
+    grid-row: 1;
+    margin-block: 12px;
+  }
+
+  html[data-workspace-style="focus"] .wf-side-resize-handle.left { transform: translateX(-12px); }
+  html[data-workspace-style="focus"] .wf-side-resize-handle.right { transform: translateX(12px); }
+
+  html[data-workspace-style="focus"] .wf-editor-body:not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas):not(.wf-sequence-designer) {
+    margin-inline: calc(var(--wf-palette-width, 260px) + 12px) calc(var(--wf-inspector-width, 320px) + 12px);
+  }
+
+  html[data-workspace-style="focus"] .wf-editor-body:not(.palette-maximized):not(.inspector-maximized) .wf-sequence-designer {
+    padding-inline: calc(var(--wf-palette-width, 260px) + 12px) calc(var(--wf-inspector-width, 320px) + 12px);
+  }
+
+  html[data-workspace-style="focus"] .wf-editor-body.palette-absent > .wf-canvas-shell > :not(.wf-canvas):not(.wf-sequence-designer) { margin-left: 12px; }
+  html[data-workspace-style="focus"] .wf-editor-body.palette-absent .wf-sequence-designer { padding-left: 12px; }
+
+  html[data-workspace-style="focus"] .wf-editor-body.palette-maximized > .wf-palette,
+  html[data-workspace-style="focus"] .wf-editor-body.inspector-maximized > .wf-inspector { grid-column: 1 / -1; }
+}
+
+html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.wf-palette, .wf-inspector) {
+  border: 1px solid var(--studio-edge-control);
+}
+
+html:where([data-workspace-style])[data-theme-appearance="high-contrast"] .wf-node:where(:not(.selected):not(.wf-node-runtime)) {
+  border-color: var(--studio-edge-control);
+}
+
+html[data-workspace-style="linen"] :is(.wf-palette, .wf-inspector) { background: var(--studio-workspace-panel-background, var(--studio-panel)); }
+html[data-workspace-style="linen"] .wf-inspector { border-left: 1px solid var(--studio-edge-subtle); }
+html[data-workspace-style="linen"] .wf-node { border-radius: var(--studio-radius-md); }
+html[data-workspace-style="linen"] .wf-node.selected:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) {
+  background: linear-gradient(125deg, color-mix(in srgb, var(--studio-accent) 6%, var(--studio-panel)), var(--studio-panel));
+}
+html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] .wf-node.selected:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) { background: var(--studio-panel); }
+
+/* Designer decoration loads with the workbench rather than the Definitions landing page. */
+html[data-workspace-style="linen"] .wf-editor { background: transparent; padding: 0 20px 16px; }
+html[data-workspace-style="linen"] .wf-editor-body {
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-panel);
+  box-shadow: var(--studio-shadow-sm);
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  html[data-workspace-style="linen"] .wf-editor { padding: 0 6px 6px; }
+}
+
+html[data-workspace-style="minimal"] .wf-editor { padding: 0 20px 16px; background: var(--studio-bg); }
+html[data-workspace-style="minimal"] .wf-editor-body { border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); overflow: hidden; }
+html[data-workspace-style="minimal"] :is(.wf-palette, .wf-inspector) { background: var(--studio-surface); }
+html[data-workspace-style="minimal"] .wf-inspector { border-left: 1px solid var(--studio-border); }
+html[data-workspace-style="minimal"] .wf-palette { border-right: 1px solid var(--studio-border); }
+html[data-workspace-style="minimal"] .wf-palette .wf-activity-icon { color: var(--studio-text-muted); background: transparent; }
+html[data-workspace-style="minimal"] .wf-node:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) { border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-node.selected:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) { border-color: var(--studio-selection-mark); background: var(--studio-surface); box-shadow: 0 0 0 1px var(--studio-selection-mark), var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-node:where(:not(.wf-node-runtime)) .wf-activity-icon { color: var(--studio-text-muted); background: transparent; }
+html[data-workspace-style="minimal"] .wf-panel-tab-list button.active { color: var(--studio-text); box-shadow: inset 0 -2px var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] :is(.wf-property-section, .wf-property-group) { border-bottom-style: var(--studio-section-boundary-style); }
+html[data-workspace-style="minimal"] .wf-property-row :is(input, textarea, select) { background: var(--studio-surface); }
+@media (max-width: 600px) {
+  html[data-workspace-style="minimal"] .wf-editor { padding: 0 6px 6px; }
+}

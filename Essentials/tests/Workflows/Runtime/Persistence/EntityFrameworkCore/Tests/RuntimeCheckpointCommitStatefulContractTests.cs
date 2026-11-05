@@ -78,8 +78,8 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
     /// <summary>
     /// #1780: completing a final child-start failure reports what was persisted. A child that exists makes the start
     /// delivered and discards the DispatchFailed projection and its parent resume; without one, all three are persisted.
-    /// Every store applies one shared rule, and so does a coalescing session that owns the claim, which persists into its
-    /// overlay; without a session the coalescing decorator passes straight through to the store.
+    /// Every store applies one shared rule. A retained coalescing session also claims external child starts through the
+    /// durable store, so the completion and dispatch outcome are immediately visible to another delivery scope.
     /// </summary>
     [Theory]
     [MemberData(nameof(ClaimCompletionData))]
@@ -125,22 +125,33 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             sessions,
             backend.Executions);
         RuntimeCoalescingSession? session = null;
+        await backend.SeedPendingOutboxItemAsync(start);
         if (coalesced)
         {
-            // Seeded straight into the overlay: a segment never defers a dispatch, but a session must apply the rule to any
-            // claim it owns.
+            // A dispatch boundary is already durable before its external child-start intent can be claimed.
             session = new RuntimeCoalescingSession(pending.ParentWorkflowExecutionId, backend.Queue, new PersistenceModeOptions(), backend.Delivery);
             session.RecordCapFlushState(new RuntimeCheckpointStateChangeSet(
                 null, null, [], [], [], [], [], [DispatchChange(started)], postCommitOutbox: [Change(start.OutboxItemId, start)]));
+            session.MarkOutboxDurablyPersisted([Change(start.OutboxItemId, start)]);
+            session.ClearBuffer();
         }
-        else
-            await backend.SeedPendingOutboxItemAsync(start);
         using var sessionScope = sessions.Push(session);
         var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
             "owner-contract", OccurredAt.AddSeconds(2), TimeSpan.FromMinutes(1), 1, pending.ParentWorkflowExecutionId)));
         var result = new RuntimePostCommitOutboxDeliveryResult(claim.OutboxItemId, RuntimePostCommitOutboxStatus.FailedFinal, OccurredAt.AddSeconds(3), "The child workflow could not be started.");
         var projection = await new WorkflowDispatchDeliveryFailureProjector(backend.Dispatches).ProjectAsync(claim.Item, result);
         var followUp = Assert.IsType<RuntimePostCommitOutboxItem>(projection?.FollowUpOutboxItem);
+
+        var forgedSnapshot = new StimulusDeliverySnapshot(1, followUp.OutboxItemId,
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(followUp.Intent),
+            new(new("forged"), null, null, WorkflowRunKind.Unknown, null), followUp.RecordedAt,
+            "event", "named", [], [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+        var forged = new RuntimePostCommitOutboxItem(followUp.OutboxItemId, followUp.Intent, followUp.Status,
+            followUp.RecordedAt, followUp.AvailableAt, followUp.RetryPolicy, 0, null, null, null, null, null, 0, null,
+            1, new("forged"), forgedSnapshot);
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxClaimCompletion(claim, result, projection!.WorkflowDispatch, forged));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, (await outbox.FindAsync(claim.OutboxItemId))!.Status);
+        Assert.Null(await outbox.FindAsync(followUp.OutboxItemId));
 
         var outcome = await outbox.CompleteClaimAsync(
             new RuntimePostCommitOutboxClaimCompletion(claim, result, projection!.WorkflowDispatch, followUp));
@@ -151,10 +162,9 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Assert.Equal(
             childExists ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.FailedFinal,
             (await outbox.FindAsync(claim.OutboxItemId))?.Status);
-        // A session writes its dispatch at its next flush, so read what that flush would persist.
-        var dispatch = session is null
-            ? await backend.Dispatches.FindAsync(pending.DispatchId)
-            : Assert.Single(session.FoldBufferedStateChanges().WorkflowDispatches).State;
+        var dispatch = await backend.Dispatches.FindAsync(pending.DispatchId);
+        if (session is not null)
+            Assert.Empty(session.FoldBufferedStateChanges().WorkflowDispatches);
         Assert.Equal(childExists ? WorkflowDispatchStatus.Started : WorkflowDispatchStatus.DispatchFailed, dispatch?.Status);
         Assert.Equal(childExists, await outbox.FindAsync(followUp.OutboxItemId) is null);
     }

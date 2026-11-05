@@ -18,7 +18,7 @@ public sealed class AlterationCheckpointTests
         var original = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [])
             .WithAlterationJobTerminalChange(terminal);
 
-        var copied = original.WithPostCommitOutbox([])
+        var copied = original.WithActivityExecutions([]).WithPostCommitOutbox([])
             .WithWorkflowDispatches([])
             .WithWorkflowDispatchCancellations([])
             .WithConsumedSchedulerWorkItems([]);

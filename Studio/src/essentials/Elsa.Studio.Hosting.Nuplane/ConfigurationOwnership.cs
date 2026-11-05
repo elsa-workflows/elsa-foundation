@@ -16,10 +16,13 @@ internal static class ConfigurationOwnership
 
     private static bool SameFile(JsonConfigurationProvider provider, string file)
     {
-        // A subclass can advertise this path while loading different data. Only the standard
-        // file-backed provider/source combination proves which file supplies the configuration.
-        if (provider.GetType() != typeof(JsonConfigurationProvider)
-            || provider.Source.GetType() != typeof(JsonConfigurationSource))
+        // Arbitrary subclasses can advertise this path while loading different data.
+        // Accept only the standard pair or Hosting's sealed resource-owning pair.
+        var standard = provider.GetType() == typeof(JsonConfigurationProvider)
+            && provider.Source.GetType() == typeof(JsonConfigurationSource);
+        var owned = provider.GetType() == typeof(StudioJsonConfigurationProvider)
+            && provider.Source.GetType() == typeof(StudioJsonConfigurationSource);
+        if (!standard && !owned)
             return false;
         // PhysicalFileProvider still identifies an optional source when the file has not been created yet.
         if (provider.Source.FileProvider is not PhysicalFileProvider physical || provider.Source.Path is not { } path)

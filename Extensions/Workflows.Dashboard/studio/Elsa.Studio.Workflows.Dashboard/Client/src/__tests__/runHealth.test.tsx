@@ -6,6 +6,12 @@ import { register } from "../module";
 import { apiFixture, render, runSnapshot } from "./testSupport";
 
 describe("Workflow Run Health widget", () => {
+  it("keeps native failed-run links bound to the selected backend",()=>{
+    window.history.replaceState({},"","/?backend=runtime");
+    const view=render(<WorkflowRunHealthWidget snapshot={runSnapshot()} settings={{range:"24h",includeTestRuns:false}} size="full" />);
+    try {expect(new URL(view.querySelector<HTMLAnchorElement>("a")!.href).searchParams.get("backend")).toBe("runtime");}
+    finally {window.history.replaceState({},"","/");}
+  });
   it("registers permission-gated Home widgets with versioned settings and refresh contracts", () => {
     const { api, items } = apiFixture();
     register(api);

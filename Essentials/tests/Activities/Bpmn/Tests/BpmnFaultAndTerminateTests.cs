@@ -3,6 +3,9 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed class BpmnFaultAndTerminateTests
@@ -37,10 +40,10 @@ public sealed class BpmnFaultAndTerminateTests
 
         run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
 
-        var state = await fixture.GetBpmnStateAsync();
-        Assert.True(state.Terminated);
-        Assert.Contains(state.Diagnostics, diagnostic => diagnostic.Kind == BpmnDiagnosticKind.Terminated);
-        Assert.Empty(state.ActiveChildren);
+        // The released interpreter withdraws unissued work and completes in this evaluation.
+        // Foundation clears private state on completion; no sibling invocation may escape the batch.
+        run.AssertDidNotRun("node-b");
+        Assert.Empty(await fixture.BookmarksAsync());
     }
 
     [Fact]

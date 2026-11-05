@@ -27,7 +27,7 @@ public sealed class BpmnEventSubprocessValidationTests
     [Fact]
     public void ValidEscalationEventSubprocess_BuildsCleanly_AndIndexesCatcher()
     {
-        var graph = BpmnGraph.From(Node(
+        var graph = BpmnGraphAdapter.Build(Node(
             [
                 BpmnRuntimeFixture.StartEvent(),
                 BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
@@ -51,7 +51,7 @@ public sealed class BpmnEventSubprocessValidationTests
     {
         // An error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix). It is a
         // catch-all (no error-code matching this slice) and always interrupting.
-        var graph = BpmnGraph.From(Node(
+        var graph = BpmnGraphAdapter.Build(Node(
             DefaultElements(),
             DefaultFlows(),
             children: [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start"))]));
@@ -62,7 +62,7 @@ public sealed class BpmnEventSubprocessValidationTests
         Assert.Null(catcher.Code);
         Assert.True(catcher.Interrupting);
         Assert.Equal("es-start", catcher.BodyStartElementId);
-        Assert.Same(catcher, graph.ErrorEventSubprocess());
+        Assert.Same(catcher, graph.ErrorEventSubprocess(null));
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public sealed class BpmnEventSubprocessValidationTests
     {
         // An error event subprocess coexists with an escalation event subprocess in the same scope; both
         // catchers are indexed.
-        var graph = BpmnGraph.From(Node(
+        var graph = BpmnGraphAdapter.Build(Node(
             [
                 BpmnRuntimeFixture.StartEvent(),
                 BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
@@ -196,7 +196,7 @@ public sealed class BpmnEventSubprocessValidationTests
 
         Assert.Equal(2, graph.EventSubprocesses.Count);
         Assert.Equal("es-1", graph.EscalationEventSubprocess("E1")!.ElementId);
-        Assert.Equal("es-2", graph.ErrorEventSubprocess()!.ElementId);
+        Assert.Equal("es-2", graph.ErrorEventSubprocess(null)!.ElementId);
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public sealed class BpmnEventSubprocessValidationTests
     [InlineData(BpmnEventDefinitionTypes.Timer)]
     public void ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher(string definitionType)
     {
-        var graph = BpmnGraph.From(Node(
+        var graph = BpmnGraphAdapter.Build(Node(
             [
                 BpmnRuntimeFixture.StartEvent(),
                 BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
@@ -238,7 +238,7 @@ public sealed class BpmnEventSubprocessValidationTests
 
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.Equal("es", catcher.ElementId);
-        Assert.Equal("node-es-listener", catcher.ListenerNodeId);
+        Assert.Equal("node-es-listener", catcher.ListenerBindingRef);
         Assert.True(catcher.IsExternalTrigger);
         Assert.False(catcher.Interrupting);
         Assert.Contains(catcher, graph.ExternalTriggerEventSubprocesses);
@@ -250,7 +250,7 @@ public sealed class BpmnEventSubprocessValidationTests
             DefaultElements(), // the "es" element binds no ListenerNodeId
             DefaultFlows(),
             [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
-            "requires a scope-listener node");
+            "requires scope-listener work");
 
     [Fact]
     public void EscalationEventSubprocess_WithListenerNode_IsRejected() =>
@@ -290,10 +290,10 @@ public sealed class BpmnEventSubprocessValidationTests
             ],
             DefaultFlows(),
             [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
-            "does not exist");
+            "scope-listener work 'node-missing', which the host did not supply");
 
     [Fact]
-    public void TimerEventSubprocess_WithCron_IsRejected() =>
+    public void TimerEventSubprocess_CronWithoutCycle_IsRejected() =>
         AssertRejects(
             [
                 BpmnRuntimeFixture.StartEvent(),
@@ -308,7 +308,27 @@ public sealed class BpmnEventSubprocessValidationTests
                 Body("node-body", new BpmnElement("es-start", BpmnElementTypes.StartEvent,
                     eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Cron] = "0 0 * * *" })]))
             ],
-            "cron/timeCycle timers are not supported");
+            "cron schedule without a cycle");
+
+    [Fact]
+    public void TimerEventSubprocess_ValidCronCycle_PreservesGraphBinding()
+    {
+        // Graph compatibility is separate from the interchange binder's timer-cycle readiness.
+        var timer = new BpmnElement("es-start", BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string>
+            {
+                [global::Bpmn.Model.BpmnEventDefinitionProperties.Cycle] = "0 0 * * *",
+                [BpmnEventDefinitionProperties.Cron] = "0 0 * * *"
+            })]);
+        var graph = BpmnGraphAdapter.Build(Node(
+            [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.Task("work", "node-work"), BpmnRuntimeFixture.EndEvent(),
+                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")],
+            DefaultFlows(), [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", timer)]));
+        var catcher = Assert.Single(graph.EventSubprocesses);
+        Assert.Equal(BpmnEventSubprocessTriggerKind.Timer, catcher.TriggerKind);
+        Assert.Equal("node-es-listener", catcher.ListenerBindingRef);
+        Assert.Equal("es-start", catcher.BodyStartElementId);
+    }
 
     /// <summary>A message/signal/timer event-subprocess body start with the stimulus facts populated (a name / a one-shot interval).</summary>
     private static BpmnElement ExternalStart(string elementId, string definitionType, bool interrupting) =>
@@ -338,8 +358,8 @@ public sealed class BpmnEventSubprocessValidationTests
         IReadOnlyCollection<ExecutableNode> children,
         string expectedMessage)
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(Node(elements, flows, children)));
-        Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(Node(elements, flows, children)));
+        Assert.True(exception.Message.Contains(expectedMessage, StringComparison.Ordinal), exception.ToString());
     }
 
     private static ExecutableNode Node(IReadOnlyCollection<BpmnElement> elements, IReadOnlyCollection<BpmnSequenceFlow> flows, IReadOnlyCollection<ExecutableNode> children) =>

@@ -3,6 +3,9 @@ using Elsa.Studio.Api.Options;
 using Elsa.Studio.Api.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Studio.Core.Events;
+using Elsa.Events.Core.Extensions;
 
 namespace Elsa.Studio.Api.Extensions;
 
@@ -30,6 +33,7 @@ public static class StudioApiServiceCollectionExtensions
             optionsBuilder.Configure(configure);
 
         services.AddScoped<IStudioModuleManifestProvider, StudioModuleManifestProvider>();
+        services.TryAddEventHandler<OnStudioRuntimeConfigurationCollecting, CollectStudioRuntimeConfiguration>();
         return services;
     }
 }

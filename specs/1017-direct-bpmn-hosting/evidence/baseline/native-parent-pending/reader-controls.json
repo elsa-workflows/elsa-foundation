@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "controls": [
+    {
+      "name": "actual-pending-fault",
+      "exitCode": 0,
+      "providerChecked": true,
+      "readOnlyInputUnchanged": true
+    },
+    {
+      "name": "wrong-marker-source",
+      "exitCode": 2,
+      "providerChecked": false,
+      "readOnlyInputUnchanged": true
+    },
+    {
+      "name": "wrong-api-invocation",
+      "exitCode": 2,
+      "providerChecked": false,
+      "readOnlyInputUnchanged": true
+    },
+    {
+      "name": "missing-pending-source",
+      "exitCode": 2,
+      "providerChecked": false,
+      "readOnlyInputUnchanged": true
+    },
+    {
+      "name": "missing-incident",
+      "exitCode": 2,
+      "providerChecked": false,
+      "readOnlyInputUnchanged": true
+    },
+    {
+      "name": "consumed-parent",
+      "exitCode": 2,
+      "providerChecked": false,
+      "readOnlyInputUnchanged": true
+    },
+    {
+      "name": "foreign-artifact-pin",
+      "exitCode": 2,
+      "providerChecked": false,
+      "readOnlyInputUnchanged": true
+    }
+  ],
+  "originalStoreSha256": "42ba933efd4f8e8d75bec9df2bfdcf5c9e97a36fa8baa5173c45e62fffa7ea95",
+  "originalUnchanged": true,
+  "upgradedHostRecoveryProved": false
+}

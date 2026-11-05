@@ -1,0 +1,20 @@
+{
+  "ownedProcesses": {
+    "beforeRestart": {
+      "controllerProcessId": 2604,
+      "processId": 2605,
+      "startEpochSeconds": 1793132797,
+      "childAndControllerExited": true
+    },
+    "afterRestart": {
+      "controllerProcessId": 5876,
+      "processId": 5879,
+      "startEpochSeconds": 1793133614,
+      "childAndControllerExited": true
+    }
+  },
+  "sameRuntimeAndDesignStores": true,
+  "publicApiBasePort": 63135,
+  "sourceBuiltStandardAssemblyUnchanged": true,
+  "noRecoveryProbe": true
+}

@@ -30,8 +30,8 @@ public sealed class BpmnTransactionValidationTests
             flows: [BpmnRuntimeFixture.Flow("f1", "start", "t"), BpmnRuntimeFixture.Flow("f2", "t", "end")],
             children: [Probe("node-t")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("transaction", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("transaction", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public sealed class BpmnTransactionValidationTests
             flows: [BpmnRuntimeFixture.Flow("f1", "start", "sub"), BpmnRuntimeFixture.Flow("f2", "sub", "end")],
             children: [Probe("node-sub")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("multi-instance", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("multi-instance", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -60,8 +60,8 @@ public sealed class BpmnTransactionValidationTests
             flows: [BpmnRuntimeFixture.Flow("f1", "start", "cancel-end")],
             isTransaction: false);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("cancel end event", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("cancel end event", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -84,8 +84,8 @@ public sealed class BpmnTransactionValidationTests
             ],
             children: [Probe("node-sub")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("not a transaction", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("not a transaction", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -111,8 +111,8 @@ public sealed class BpmnTransactionValidationTests
             ],
             children: [Probe("node-txn")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("at most one", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("at most one", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -130,8 +130,8 @@ public sealed class BpmnTransactionValidationTests
             children: [Probe("node-txn")]);
 
         // A cancel boundary is not exempt from the ≥1-outbound rule (unlike a compensation boundary).
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("outbound", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("outbound", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public sealed class BpmnTransactionValidationTests
             children: [Probe("node-task")],
             isTransaction: true);
 
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
 
         Assert.True(graph.IsTransaction);
     }
@@ -173,7 +173,7 @@ public sealed class BpmnTransactionValidationTests
             ],
             children: [Probe("node-txn")]);
 
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
 
         Assert.NotNull(graph.AttachedCancelBoundary("txn"));
         Assert.Empty(graph.AttachedCatchBoundaries("txn"));

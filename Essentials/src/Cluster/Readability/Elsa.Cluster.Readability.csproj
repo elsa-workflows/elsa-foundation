@@ -20,6 +20,7 @@
   -->
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Nuplane.Loading.Abstractions" />
   </ItemGroup>

@@ -23,6 +23,90 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed class ActivityDefinitionVersionRefreshTests
 {
     [Fact]
+    public async Task Sqlite_palette_hints_refresh_existing_catalog_without_changing_executable_identity()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var stores = new EfActivityDesignStores(db);
+        await ReconcileAsync(stores, CreateVersion(MessageInput()));
+        var before = await ReadRowAsync(db);
+        var previous = await db.ActivityDefinitionVersions.AsNoTracking().SingleAsync();
+        var hinted = CreateVersion(MessageInput(), [PaletteFacet("bpmn")]);
+        Assert.Equal(previous.Hash, hinted.Hash);
+
+        await ReconcileAsync(stores, hinted);
+        var after = await ReadRowAsync(db);
+        var stored = await db.ActivityDefinitionVersions.AsNoTracking().SingleAsync();
+        Assert.Contains("bpmn", stored.DesignFacetsSource);
+        Assert.Equal(previous.Id, stored.Id);
+        Assert.Equal(previous.Hash, stored.Hash);
+        Assert.Equal(previous.InputsSource, stored.InputsSource);
+        Assert.Equal(previous.OutputsSource, stored.OutputsSource);
+        Assert.Equal(previous.DescriptorPayloadSource, stored.DescriptorPayloadSource);
+        Assert.Equal(previous.SourceKind, stored.SourceKind);
+        Assert.Equal(previous.SourceId, stored.SourceId);
+        Assert.False(before.Token.SequenceEqual(after.Token));
+
+        await ReconcileAsync(stores, hinted);
+        var again = await ReadRowAsync(db);
+        Assert.Equal(after.LastModifiedAt, again.LastModifiedAt);
+        Assert.True(after.Token.SequenceEqual(again.Token));
+    }
+
+    [Fact]
+    public async Task Sqlite_palette_refresh_is_idempotent_and_rejects_stale_or_non_palette_writes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var stores = new EfActivityDesignStores(db);
+        await SeedAsync(db, "same-hash", [MessageInput()]);
+        var previous = await db.ActivityDefinitionVersions.AsNoTracking().SingleAsync();
+        var incoming = Incoming("same-hash", [MessageInput()]);
+        incoming.DesignFacets = [PaletteFacet("bpmn")];
+        var operation = new DesignOperationKey("palette-refresh");
+        await stores.RefreshPaletteHintsAsync(operation, incoming, previous.DesignFacetsSource);
+        var once = await ReadRowAsync(db);
+        await stores.RefreshPaletteHintsAsync(operation, incoming, previous.DesignFacetsSource);
+        var twice = await ReadRowAsync(db);
+        Assert.True(once.Token.SequenceEqual(twice.Token));
+
+        incoming.DesignFacets = [PaletteFacet("flowchart")];
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => stores.RefreshPaletteHintsAsync(operation, incoming, previous.DesignFacetsSource));
+        incoming.DesignFacets = [new ActivityDesignFacet("elsa.other", "1", JsonSerializer.SerializeToElement(new { changed = true }))];
+        await Assert.ThrowsAsync<InvalidOperationException>(() => stores.RefreshPaletteHintsAsync(operation, incoming, previous.DesignFacetsSource));
+        Assert.Contains("bpmn", (await db.ActivityDefinitionVersions.AsNoTracking().SingleAsync()).DesignFacetsSource);
+    }
+
+    [Fact]
+    public async Task Sqlite_input_label_and_help_refresh_preserves_the_existing_version_reference()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var stores = new EfActivityDesignStores(db);
+        await ReconcileAsync(stores, CreateVersion(MessageInput()));
+        var previous = await db.ActivityDefinitionVersions.AsNoTracking().SingleAsync();
+        await ReconcileAsync(stores, CreateVersion(MessageInput() with { DisplayName = "Start new workflows", Description = "Starts a new instance." }, [PaletteFacet("bpmn")]));
+        var stored = await db.ActivityDefinitionVersions.AsNoTracking().SingleAsync();
+        Assert.Equal(previous.Id, stored.Id);
+        Assert.Equal(previous.DescriptorPayloadSource, stored.DescriptorPayloadSource);
+        Assert.NotEqual(previous.Hash, stored.Hash);
+        Assert.Contains("Start new workflows", stored.InputsSource);
+        Assert.Contains("bpmn", stored.DesignFacetsSource);
+    }
+
+    private static ActivityDesignFacet PaletteFacet(string mode) => new("elsa.activity-palette", "1",
+        JsonSerializer.SerializeToElement(new { containerModes = new[] { mode } }));
+
+    [Fact]
     public async Task Sqlite_tier_only_reconcile_rewrites_hash_inputs_token_and_timestamp_then_is_a_noop()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -117,7 +201,7 @@ public sealed class ActivityDefinitionVersionRefreshTests
             stores).Reconcile(CancellationToken.None);
     }
 
-    private static IActivityDefinitionVersion CreateVersion(InputDefinition input)
+    private static IActivityDefinitionVersion CreateVersion(InputDefinition input, IReadOnlyCollection<ActivityDesignFacet>? facets = null)
     {
         var identities = new SequentialIdentityGenerator();
         var definition = new ActivityDefinitionFactory(identities).Create(
@@ -137,7 +221,7 @@ public sealed class ActivityDefinitionVersionRefreshTests
             "source",
             [input],
             [],
-            [],
+            facets ?? [],
             id: "ver-greet-1");
     }
 

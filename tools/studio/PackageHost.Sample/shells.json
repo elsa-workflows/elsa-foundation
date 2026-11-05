@@ -1,0 +1,15 @@
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "StudioApi": {},
+          "DashboardStudio": {}
+        },
+        "Configuration": {
+          "WebRouting": { "Path": "" }
+        }
+      }
+    }
+  }
+}

@@ -225,52 +225,69 @@ not publish successful values or outcomes through mutable execution-context `Set
 completion.** A successful completion carries an *outcome selection* instead of exactly one outcome.
 
 - **A selection** is one of three things:
-  - unspecified, which means the activity's default outcome, `Done`;
+  - unspecified, which means `Done` (see *The `Done` rule*);
   - one or more declared outcome names;
   - explicitly empty, meaning a successful completion with no outgoing path.
 
   Unspecified and explicitly empty stay distinct through completion, parent and join handling, persistence and
   recovery. An explicitly empty selection ends this invocation's outgoing paths; it does not itself cancel other
-  running branches. It is a successful completion, so the step's pending engine-owned changes still commit.
+  running branches. It is a successful completion, so the step's pending engine-owned changes still commit. A parent
+  that does not route by outcomes (a sequence, the workflow root, a loop body) treats it like any other successful
+  completion.
+- **The `Done` rule.** `Done` means "completed without choosing a branch". An activity whose completion may choose no
+  branch declares `Done` (a WriteLine, a Sequence, a RunJavaScript); an activity whose every completion chooses a branch
+  does not (an If with `True` and `False`, a Switch, a SendHttpRequest with expected status codes). `Done` is never
+  selected together with a branch. An unspecified selection on a node without `Done` is a defect in the activity's
+  code: it faults with `VF-ACT-006`, and the fault says that the activity completed without selecting an outcome and
+  declares no `Done`. Elsa 3, where `Done` fired on every
+  completion next to any branch, is converted by mapping its `Done` onto every branch (below).
 - **Selecting.** A C# activity returns the selection in its `Complete` transition.
-  - A script selects through `setOutcome(name)` and `setOutcomes([names])`. Each call replaces the pending selection,
-    so the last call wins.
-  - The selection is independent of ordinary returned business data. Returning a string or business object never
-    implicitly selects an outcome. This replaces RunJavaScript's implicit routing by return value (#1114, recorded
-    in `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome.
-  - The final script API remains open for S-3. An explicitly recognized returned completion value is a candidate,
-    consistent with C# transitions, for example:
-
-    ```javascript
-    return activity.complete({ result: data, outcomes: ["Approved"] });
-    ```
-
-    This example does not settle the signature or require both APIs. S-3 compares setters and an explicit returned
-    completion value, and defines precedence if they coexist. It never infers a completion instruction from ordinary
-    business-object properties. Every supported API uses the same default, validation and completion rules.
-  - A pending selection takes effect only on successful completion. A fault or cancellation dispatches nothing, and a
-    selection never dispatches a branch while the script is still running.
-  - The script setters are therefore part of the step's transaction (D-3). They are a sanctioned exception to the
-    sentence above about mutable `Set` methods, because the selection is applied as the completion's own data.
+  - A script uses an explicitly recognized returned completion/routing form that carries the business result and
+    outcome selection separately. Ordinary returned business data never implicitly selects a path. This replaces
+    RunJavaScript's implicit routing by return value (#1114, recorded in
+    `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`).
+  - S-3 defines the signature, recognition and validation of that form. An explicitly recognized returned
+    representation or a pure constructor can preserve script isolation; no ambient activity object or execution
+    context is required. The earlier `activity.complete(...)` example was illustrative, not a required API spelling.
+    Native `setOutcome` / `setOutcomes` host functions are not required. Elsa 3 setters remain conversion inputs.
+  - Named, unspecified and explicitly empty selections use the same rules regardless of their representation.
+    S-3's form must express multiple names where the node permits them without inferring control instructions from
+    ordinary business-object properties.
+  - The result and selection commit atomically on successful completion, within the step's transaction (D-3), before
+    dispatch. A fault or cancellation dispatches nothing, and a selection never dispatches a branch while the script
+    is still running.
 - **Declared outcomes per node.** The set of outcomes a node may select is resolved at design time. It combines the
   activity's statically declared outcomes with outcomes derived by design-time providers from the node's
   configuration. For example, `SendHttpRequest`'s expected status codes and RunJavaScript's possible outcomes each
   become a port.
   - Studio and publication use the same provider rules.
   - When provider-relevant configuration changes, the ports refresh and affected connections are exposed for repair.
-  - Publication pins the resolved per-node set in the executable.
+  - Publication pins the resolved per-node set in the executable, and refuses a connection whose source port is not in
+    its source node's set.
   - Outcome names are never invented at run time.
 - **Validation in two layers,** depending on how a name is written:
-  - a literal name (`setOutcome('Approved')`) that is not in the node's set is a publish diagnostic, so a typo is
+  - a literal selected name that is not in the node's set is a publish diagnostic, so a typo is
     caught before run time;
-  - a computed name (`setOutcome(variables.status)`) is checked at run time against the node's pinned set. An unknown
-    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a valid fallback
-    outcome. The fallback must itself be declared in the node's pinned outcome set. It never excuses an undeclared
-    result projection. Dynamic selections stay possible, within the set the designer declared.
+  - a computed selected name, such as the value of `variables.status`, is checked at run time against the node's
+    pinned set. An unknown name faults the step with `VF-ACT-006`. Dynamic selections stay possible within the set
+    the designer declared.
+  - An activity or script may deliberately map unfamiliar business data to a declared catch-all such as `Review` or
+    `Unmatched`. That is an ordinary explicit routing choice, not repair of an invalid selected name, and never
+    excuses an undeclared result projection. S-3 introduces no generic per-node outcome fallback setting; such a
+    configuration is deferred until a concrete use case justifies it.
 - **Unconnected outcomes.** A declared outcome with no connected edge is valid; selecting it ends that path.
-- **Several outcomes.** An activity contract declares whether its completions may select more than one outcome.
-  - The runtime rejects a selection of several outcomes when the activity contract does not permit it.
-  - The connections of every selected outcome are scheduled.
+- **Several outcomes.** Whether a node's completions may select more than one outcome is resolved at design time with
+  its outcome set, from the activity's static declaration or a provider over the node's configuration (a Switch may
+  in "match any" mode only), and pinned per node.
+  - The runtime rejects a selection of several outcomes on a node that does not permit it.
+  - The connections of every selected outcome are scheduled. When two of them lead to the same node, each is an
+    arrival at that node. Its default synchronizing implicit join
+    ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)) accounts for the eligible arrivals of one
+    activation and runs the target once. Explicit per-arrival behavior may create separate executions; later loop
+    iterations and independent activations remain distinct. Non-default behavior must be visible in authoring and
+    represented in the published contract. Waiting conditions, execution cardinality and losing-branch cancellation
+    remain explicit; S-3 must define invocation identity and data provenance for per-arrival execution and prove the
+    behavior through late arrivals, loop re-entry, cancellation and persistence/recovery.
   - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
     warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
     and inspection treat a node that may select several outcomes as an inclusive fork.
@@ -284,24 +301,31 @@ completion.** A successful completion carries an *outcome selection* instead of 
 Elsa 3 had no checked outcome set. A computed selection such as `setOutcome(variables.status)` remains supported,
 but the converter must establish a suitable set of possible names and preserve the original routing behavior.
 S-3 defines supported derivations and declarations, using the node's `PossibleOutcomes` and supported script analysis.
-Literal names found in a script are evidence, not necessarily an exhaustive set for a computed selection. The
-converter need not know which outcome a particular execution will select. If it cannot establish faithful conversion,
-it refuses with actionable guidance, such as supplying a suitable outcome declaration (faithful-or-refuse).
+`PossibleOutcomes`, literal names and connected ports are evidence, not proof that every computed runtime name is
+covered. Turning an Elsa 3 path-ending unknown name into an Elsa 4 fault changes behavior; a warning alone does not
+make that conversion faithful. Any behavior-changing conversion exception must be separately explicit, approved and
+documented. The converter need not know which outcome a particular execution will select. If it cannot establish
+faithful conversion, it refuses with actionable guidance, such as supplying a suitable outcome declaration
+(faithful-or-refuse).
 
-A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps Elsa 3's
-`Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it becomes
-`Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution, including the
-connected RunJavaScript cases behind #3295. This documentation amendment alone does not implement or prove that fix.
+Elsa 3 setters need not become native Elsa 4 host functions. S-3 establishes when rewriting them to the explicit
+returned form is faithful, including multiple setter calls (each replaces the pending selection), computed names,
+early returns and returned business data; otherwise conversion refuses with guidance.
+
+Preserve Elsa 3's always-firing `Done` connections by mapping them onto every applicable branch. S-3 must recheck the
+`Done` mapping and `Unmatched` handling with conversion, publication and execution evidence, including the connected
+RunJavaScript cases behind #3295. Neither changing the script API nor supplying an outcome declaration proves that
+mapping faithful for every activity or failure path. This documentation amendment does not implement or prove the fix.
 
 *Left to the implementing spec (S-3):*
-- comparing the script APIs, including an explicitly recognized returned completion value, its signature and any
-  precedence rules if it coexists with setters;
-- removing RunJavaScript's implicit routing by ordinary return value and its `Unmatched` outcome, and the converter's
-  R8 rule, with conversion, publication and execution evidence;
+- the explicit returned completion/routing form, its signature, recognition and validation, without requiring an
+  ambient activity object or native setters;
+- replacing implicit routing from ordinary business data and rechecking the converter's `Done`/`Unmatched` rules with
+  conversion, publication and execution evidence; an ordinary declared catch-all remains possible;
 - the supported derivations and declarations for faithful conversion of computed outcome selections;
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
-- the fallback configuration;
+- activity-defined catch-all routing within the pinned set; generic per-node outcome fallbacks remain deferred;
 - the changes to scheduling, joins and spec 266's exclusivity analysis.
 
 ### 7. Provide a generated method-call authoring facade

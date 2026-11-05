@@ -33,8 +33,8 @@ export function FilterEditor({
         <button type="button" disabled={disabled} onClick={() => onChange([...filters, { field: "", comparison: "equal", value: "" }])}>Add filter</button>
       </div>
       {filters.length === 0 ? <p className="etl-editor-empty" role="status">No output filters are configured.</p> : null}
-      <div className="etl-editor-table-wrap" tabIndex={0} role="region" aria-label="Output filter table">
-        <table className="etl-editor-table etl-editor-filter-table">
+      <div className="studio-table-container etl-editor-table-wrap" tabIndex={0} role="region" aria-label="Output filter table">
+        <table className="studio-table etl-editor-table etl-editor-filter-table">
           <thead><tr><th scope="col">Mapped field</th><th scope="col">Comparison</th><th scope="col">Value</th><th scope="col"><span className="etl-editor-sr-only">Actions</span></th></tr></thead>
           <tbody>
             {filters.map((filter, index) => {

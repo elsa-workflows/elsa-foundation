@@ -19,7 +19,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 public sealed class MinimalIdentityEndpointMetadataTests
 {
     [Fact]
-    public async Task The_two_identity_owners_expose_exactly_nine_minimal_api_endpoints()
+    public async Task The_two_identity_owners_expose_exactly_ten_minimal_api_endpoints()
     {
         using var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -45,12 +45,13 @@ public sealed class MinimalIdentityEndpointMetadataTests
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi)
             .ToArray();
 
-        Assert.Equal(9, endpoints.Length);
+        Assert.Equal(10, endpoints.Length);
 
         Assert.Equal(
             new[]
             {
                 "AspNetCoreIdentityLogin",
+                "AspNetCoreIdentityLoginArtwork",
                 "AspNetCoreIdentityLoginPage",
                 "FoundationIdentityBootstrap",
                 "FoundationIdentityCapabilities",
@@ -78,6 +79,7 @@ public sealed class MinimalIdentityEndpointMetadataTests
                 ("/_elsa/identity/challenge/{provider}", "GET"),
                 ("/_elsa/identity/login", "GET"),
                 ("/_elsa/identity/login", "POST"),
+                ("/_elsa/identity/login-assets/{name}", "GET"),
                 ("/_elsa/identity/logout/{provider}", "POST"),
                 ("/_elsa/identity/refresh", "POST"),
                 ("/_elsa/identity/session", "GET"),
@@ -88,7 +90,7 @@ public sealed class MinimalIdentityEndpointMetadataTests
         var publicEndpoints = endpoints
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>()?.Kind == EndpointSecurityDispositionKind.Public)
             .ToArray();
-        Assert.Equal(8, publicEndpoints.Length);
+        Assert.Equal(9, publicEndpoints.Length);
         Assert.All(publicEndpoints, endpoint => Assert.NotNull(endpoint.Metadata.GetMetadata<AllowAnonymousAttribute>()));
 
         var capabilities = Assert.Single(endpoints, endpoint => endpoint.RoutePattern.RawText == "/_elsa/identity/capabilities");
@@ -109,7 +111,7 @@ public sealed class MinimalIdentityEndpointMetadataTests
         var aspNetCoreOwner = typeof(AspNetCoreIdentityFeature).Assembly.GetName().Name
             ?? throw new InvalidOperationException("The ASP.NET Core Identity assembly has no name.");
         Assert.Equal(7, owners[foundationOwner]);
-        Assert.Equal(2, owners[aspNetCoreOwner]);
+        Assert.Equal(3, owners[aspNetCoreOwner]);
 
         var refresh = Assert.Single(endpoints, endpoint => endpoint.RoutePattern.RawText == "/_elsa/identity/refresh");
         var refreshRequest = Assert.Single(refresh.Metadata.OfType<IAcceptsMetadata>());

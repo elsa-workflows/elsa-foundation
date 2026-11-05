@@ -92,6 +92,25 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
     }
 
     [Fact]
+    public async Task Unavailable_usage_returns_a_typed_503_with_recovery_and_no_usage_rows()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var route = ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == "Versions.Dependencies");
+        using var request = Request(route, "trusted-dependency-unavailable");
+
+        using var response = await host.Client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var problem = document.RootElement;
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(503, problem.GetProperty("status").GetInt32());
+        Assert.Equal("activity.dependency.unavailable", problem.GetProperty("errorCode").GetString());
+        Assert.Equal("retry", problem.GetProperty("recovery").GetProperty("relation").GetString());
+        Assert.False(problem.TryGetProperty("items", out _));
+        Assert.False(problem.TryGetProperty("count", out _));
+    }
+
+    [Fact]
     public async Task Legacy_mediator_not_found_errors_keep_the_shared_404_contract()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();

@@ -1,0 +1,147 @@
+- complementary:
+  - link "Elsa Studio Foundation":
+    - /url: /
+    - strong: Elsa Studio
+    - generic: Foundation
+  - button "Collapse navigation" [expanded]:
+  - searchbox "Search modules"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard
+      - generic: Home
+    - link "Workflows":
+      - /url: /workflows/definitions
+      - generic: Workflows
+    - link "Runs":
+      - /url: /workflows/instances
+      - generic: Runs
+  - navigation "More tools":
+    - button "More tools":
+      - generic: More tools
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - group "Environment and account":
+    - 'group "Configured backend endpoint: 127.0.0.1:53186"':
+      - strong: Backend API
+      - generic: 127.0.0.1:53186
+    - 'button "Account: Administrator"':
+      - generic: A
+      - generic: Administrator
+- banner:
+  - generic: Studio / Runs
+  - heading "Runs" [level=1]
+  - button "Weaver":
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-studio
+  - link "Designer source":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-designer
+  - radiogroup "Colour mode":
+    - radio "Light":
+    - radio "Dark" [checked]:
+    - radio "Dim":
+  - button "Select theme":
+- main:
+  - text: Workflow management
+  - heading "Run" [level=2]
+  - generic: Workflow Instance ID
+  - code: 14iG40qMjTo
+  - button "Runs":
+    - text: Runs
+  - 'button "Open run incidents: No active incidents"':
+    - text: No active incidents
+  - button "Review workflow definition":
+    - text: Review workflow definition
+  - button "Refresh":
+    - text: Refresh
+  - button "Pause following" [pressed]
+  - status: Execution on this canvas
+  - button "Explain":
+    - text: Explain
+  - status
+  - region "Workflow run canvas":
+    - text: Pinned Runtime executable
+    - heading "CalledControlParent-SignalAndFailure-True-30c3bc64734147bcb37878761747646c 1.0.0" [level=3]
+    - generic: Completed
+    - button "Root"
+    - navigation "Execution scope":
+      - button "All executions"
+    - application:
+      - 'button "Node ID: start. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Start event":
+          - generic: Start event
+      - 'button "DispatchWorkflow. Node ID: call. Activity type: unknown. Run state: Completed. Not selected."':
+        - generic "Call activity":
+          - strong: DispatchWorkflow
+          - generic: Call activity
+      - 'button "Node ID: boundary. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Boundary event":
+          - strong: Boundary event
+          - generic: No activity bound
+      - 'button "Write Line. Node ID: normal. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Task":
+          - strong: Write Line
+          - generic: Task
+      - 'button "Node ID: normal-end. Activity type: unknown. State: authoring. Not selected."':
+        - generic "End event":
+          - generic: End event
+      - 'button "Event. Node ID: warning. Activity type: unknown. Run state: Completed. Not selected."':
+        - generic "Task":
+          - strong: Event
+          - generic: Task
+      - 'button "Node ID: warning-end. Activity type: unknown. State: authoring. Not selected."':
+        - generic "End event":
+          - generic: End event
+      - img "Mini Map"
+      - generic "Control Panel":
+        - button "Zoom In":
+        - button "Zoom Out":
+        - button "Fit View":
+        - button "Toggle Interactivity":
+      - link "React Flow attribution":
+        - /url: https://reactflow.dev
+        - text: React Flow
+  - separator "Resize run details panel"
+  - complementary "Run details panel":
+    - tablist "Run details tabs":
+      - tab "Timeline" [selected]:
+        - generic: Timeline
+      - tab "Activity":
+        - generic: Activity
+      - tab "Issues":
+        - generic: Issues
+      - tab "Details":
+        - generic: Details
+    - button "Collapse run details panel":
+    - button "Maximize run details panel":
+    - list "Execution timeline":
+      - button "BPMN Process BpmnProcess 03:41:41 took 3m 33s OK":
+        - strong: BPMN Process
+        - generic "BpmnProcess"
+        - time: 03:41:41
+        - generic: took 3m 33s
+        - generic: OK
+      - button "DispatchWorkflow DispatchWorkflow 03:41:41 took 2s OK":
+        - strong: DispatchWorkflow
+        - generic "DispatchWorkflow"
+        - time: 03:41:41
+        - generic: took 2s
+        - generic: OK
+      - button "Event Event 03:41:43 took 3m 31s OK":
+        - strong: Event
+        - generic "Event"
+        - time: 03:41:43
+        - generic: took 3m 31s
+        - generic: OK
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - generic "Bottom panel controls":
+    - button "Expand bottom panel":
+    - button "Maximize bottom panel":
+  - option "All sources" [selected]
+  - option "Elsa Studio · Sipkes-Mac-Mini:41059"

@@ -70,10 +70,10 @@ const signatureModes = foundationThemeIds.flatMap(id =>
   allThemeModes.map(mode => [id, mode, getThemeModeDefinition(getTheme(id)!, mode)!] as const));
 
 describe("signature themes", () => {
-  it("are the built-in list, with Classic as the out-of-box default", () => {
+  it("are the built-in list, with Linen as the out-of-box default", () => {
     expect(builtInThemeDefinitions.map(theme => theme.id)).toEqual([...foundationThemeIds]);
-    expect(foundationThemeIds[0]).toBe("classic");
-    expect(normalizeThemeStore().defaultThemeId).toBe("classic");
+    expect(foundationThemeIds[0]).toBe("linen");
+    expect(normalizeThemeStore().defaultThemeId).toBe("linen");
     expect(getTheme("meridian")).toBeDefined();
   });
 
@@ -110,7 +110,7 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "classic", "classic", "classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {
@@ -284,7 +284,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => root.unmount());
     container.remove();
     document.body.removeAttribute("style");
-    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "style"]) {
+    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "data-sidebar-color", "style"]) {
       document.documentElement.removeAttribute(attribute);
     }
     api = undefined;
@@ -322,18 +322,18 @@ describe("ThemeProvider and ThemeSwitcher", () => {
       await vi.waitFor(() => expect(getJson).toHaveBeenCalled());
       await act(() => {});
 
-      expect(document.documentElement.getAttribute("data-theme")).toBe("classic");
+      expect(document.documentElement.getAttribute("data-theme")).toBe("linen");
       expect(localStorage.getItem("elsa-studio-theme")).toBe("two-mode");
     });
   });
 
-  it("renders Classic by default and applies its typography and shape", async () => {
+  it("uses the configured palette default with Linen typography and shape", async () => {
     await render();
     const html = document.documentElement;
 
-    expect(html.getAttribute("data-theme")).toBe("classic");
-    expect(html.style.getPropertyValue("--font-sans")).toContain("Geist Variable");
-    expect(html.style.getPropertyValue("--radius")).toBe("8px");
+    await vi.waitFor(() => expect(html.getAttribute("data-theme")).toBe("classic"));
+    expect(html.style.getPropertyValue("--font-sans")).toContain("Manrope");
+    expect(html.style.getPropertyValue("--radius")).toBe("11px");
   });
 
   it("keeps data-theme-mode as the colour scheme and exposes the exact mode as data-theme-appearance", async () => {
@@ -547,6 +547,27 @@ describe("ThemeProvider and ThemeSwitcher", () => {
 
     expect(navMode()).toBe("top");
     expect(navItems()[2].getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("offers the sidebar color with Dark checked by default and names the top bar in top navigation", async () => {
+    await render();
+    await openThemeMenu();
+    const sidebarItems = () => radioItems("theme-sidebar-color-group");
+    const groupLabel = () => document.querySelector(".theme-sidebar-color-group")?.getAttribute("aria-label");
+
+    expect(sidebarItems().map(item => item.textContent)).toEqual(["Theme default", "Light", "Dark"]);
+    expect(sidebarItems()[2].getAttribute("aria-checked")).toBe("true");
+    expect(groupLabel()).toBe("Sidebar color");
+
+    await act(() => sidebarItems()[1].click());
+    expect(document.documentElement.getAttribute("data-sidebar-color")).toBe("light");
+    expect(localStorage.getItem("elsa-studio-sidebar-color")).toBe("light");
+
+    await act(() => navItems()[2].click());
+    expect(groupLabel()).toBe("Navigation bar color");
+
+    await act(() => api!.setModePreference("high-contrast"));
+    expect(sidebarItems().every(item => item.hasAttribute("data-disabled"))).toBe(true);
   });
 
   it("follows a live OS colour-scheme change while System mode is selected", async () => {

@@ -40,6 +40,18 @@ public sealed class ActivityAuthoringCatalogIconTests
         Assert.Null(descriptor.IconName);
     }
 
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("2", false)]
+    public async Task Catalog_projects_only_supported_palette_hint_versions(string schemaVersion, bool supported)
+    {
+        var view = await ListAsync(new ActivityDesignFacet("elsa.activity-palette", schemaVersion,
+            JsonSerializer.SerializeToElement(new { containerModes = new[] { "bpmn" } })));
+        var descriptor = Assert.Single(view.Activities, item => item.ActivityTypeKey == "Acme.Activities.NotifySlack");
+        Assert.Equal(supported, descriptor.PaletteHints.HasValue);
+        if (supported) Assert.Equal("bpmn", descriptor.PaletteHints!.Value.GetProperty("containerModes")[0].GetString());
+    }
+
     private static Task<ActivityAuthoringCatalogView> ListAsync(ActivityDesignFacet? iconFacet = null)
     {
         var definition = new ActivityDefinition

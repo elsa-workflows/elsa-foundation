@@ -1,3 +1,4 @@
+using System.Transactions;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
@@ -17,7 +18,28 @@ public sealed class EfBookmarkStateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IBookmarkStateStore, IBookmarkStimulusIndex
 {
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
     private static readonly JsonSerializerOptions Json = CreateJsonOptions();
+    public async ValueTask<BookmarkStateObservation?> ObserveAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
+    {
+        ValidateBound(workflowExecutionId, BookmarkStateEfModule.WorkflowIdentityMaximumLength, nameof(workflowExecutionId));
+        ValidateBound(bookmarkId, BookmarkStateEfModule.BookmarkIdentityMaximumLength, nameof(bookmarkId));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+            context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null)
+            throw new InvalidOperationException("Exact bookmark observation requires committed state and a clean context.");
+        var scope = RequireScope(); var id = CreateId(scope, workflowExecutionId, bookmarkId);
+        try
+        {
+            var row = await context.Bookmarks.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            return row is null ? null : new(MapChecked(row, scope, workflowExecutionId, bookmarkId, id), row.Revision, new PersistenceScope(scope));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is OperationCanceledException or IOException || EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
+        { throw NormalizeProviderFailure("observing exact bookmark", workflowExecutionId, exception); }
+    }
+
     public async ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
     {
         ValidateState(state);

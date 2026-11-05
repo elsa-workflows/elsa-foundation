@@ -1,0 +1,10 @@
+{
+  "databaseSha256": "7ef119513057163a4523280c3a3cf1b4ca4f951c078f601088e88966c5df514c",
+  "databaseBytes": 1236992,
+  "compressedSha256": "2aa5e720716520c3533916457bea740e5d88993c9a2cd6df440340f99269c26e",
+  "compressedBytes": 127821,
+  "wholeModuleDatabase": true,
+  "coherentClosedOnlineBackup": true,
+  "identityAndTokenStorageIncluded": false,
+  "integrityCheck": "ok"
+}

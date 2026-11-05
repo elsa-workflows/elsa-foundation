@@ -4,7 +4,7 @@ Optional Studio package and feature administration. The base Elsa.Studio.Hosting
 of Nuplane and this addon. Public composition, installed configuration choices and supported store profiles
 are implemented and qualified under [spec1010](https://github.com/elsa-workflows/elsa-foundation/tree/main/specs/1010-studio-optional-admin).
 
-This package is under implementation in Program #3340. It is not a release/publication request.
+This package is delivered and qualified under Program #3340. The [custom-host guide](../../../docs/custom-hosting.md) explains candidate sources, optional composition and migration; remote release/publication is a separate action.
 
 The optional routes use the installed selected shell, a frozen effective directory feed and the shared
 configuration mutation lease. Feed edits take effect on restart. A cache-only directory can receive uploads
@@ -48,7 +48,7 @@ Root-owned Nuplane services and the shared CShells adapter handle discovery and 
 Only an exclusively owned standard JSON source is writable. Custom/overlaid shell or management sources stay
 readable but refuse local changes. Writes hold the same process-wide mutation lease through read/revision/write/
 reload; an error after a completed atomic save explicitly reports that the configuration was saved but reload failed.
-This is not a cross-process configuration transaction.
+This is not a cross-process configuration transaction. A successful save normalizes JSON; comments are not preserved.
 
 ## Manual maintenance
 

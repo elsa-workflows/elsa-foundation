@@ -1,0 +1,55 @@
+.wf-organization-entry {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 20px 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  padding: 16px;
+}
+
+.wf-organization-entry > div { min-width: 0; }
+.wf-organization-entry h3 { margin: 0 0 4px; font-size: var(--studio-section-title-size); }
+.wf-organization-entry p,
+.wf-organization-heading p { margin: 0; color: var(--studio-text-muted); line-height: 1.5; }
+.wf-organization-entry > button { flex: 0 0 auto; }
+
+.wf-organization-dialog .wf-organization-heading h3 {
+  margin: 0 0 6px;
+  font-family: var(--studio-font-display);
+  font-size: var(--studio-section-title-size);
+  overflow-wrap: anywhere;
+}
+
+/* The chip field is the only frame; suggestions are quiet rows instead of nested cards. */
+.wf-organization-entry-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.wf-tag-editor { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.wf-tag-editor > label { font-weight: 600; }
+.wf-tag-input { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); }
+.wf-tag-input:focus-within { border-color: var(--studio-focus); outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.wf-tag-input[data-disabled] { background: var(--studio-surface-muted); }
+.wf-organization-dialog .wf-tag-input > input { flex: 1 1 160px; width: 0; min-width: min(160px, 100%); min-height: 32px; border: 0; border-radius: 0; outline: 0; background: transparent; padding: 4px; box-shadow: none; }
+.wf-tag-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; border-radius: 999px; background: var(--studio-surface-muted); color: var(--studio-text); padding: 3px 4px 3px 10px; font-size: var(--studio-label-size); line-height: 1.5; }
+.wf-tag-chip > span { min-width: 0; overflow-wrap: anywhere; }
+.wf-organization-dialog .wf-tag-chip > button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 26px; min-height: 26px; border: 0; border-radius: 50%; background: transparent; padding: 0; }
+.wf-organization-dialog .wf-tag-chip > button:hover { background: var(--studio-row-hover); }
+.wf-tag-suggestions { display: grid; gap: 6px; min-width: 0; }
+.wf-tag-suggestions > [role="listbox"] { max-height: 240px; overflow-y: auto; scrollbar-gutter: stable; }
+.wf-tag-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; border-radius: var(--studio-radius-sm); padding: 8px 10px; cursor: pointer; }
+.wf-tag-option > span { min-width: 0; overflow-wrap: anywhere; }
+.wf-tag-option > svg { flex: 0 0 auto; color: var(--studio-text-muted); }
+.wf-tag-option[aria-selected="true"] { background: var(--studio-row-hover); }
+.wf-tag-create { justify-content: start; }
+.wf-tag-suggestions > p { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px; color: var(--studio-text-muted); line-height: 1.5; }
+.wf-tag-suggestions > button { justify-self: start; }
+html[data-workspace-style="minimal"] .wf-organization-dialog .wf-tag-input > input { border-radius: 0; }
+.wf-organization-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--studio-border); padding-top: 16px; }
+.wf-organization-actions { display: flex; justify-content: end; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+
+@media (max-width: 700px) {
+  .wf-organization-entry { flex-wrap: wrap; margin: 12px 12px 0; padding: 12px; }
+  .wf-organization-entry-actions { width: 100%; }
+}

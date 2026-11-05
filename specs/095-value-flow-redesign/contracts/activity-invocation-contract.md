@@ -75,10 +75,14 @@ Cancel(reason)
 
 - `Complete` carries one complete typed result and one authored outcome selection: unspecified (the default `Done`),
   one or more declared outcome names, or explicitly empty (ADR 0045 §6 amendment, D-4). A selection of more than one
-  name is valid only for an activity whose contract declares multi-outcome completion; the runtime MUST reject it
-  otherwise. Unspecified and explicitly empty selections MUST remain distinct through parent and join handling,
-  persistence and recovery. Explicitly empty is successful completion without outgoing paths, not cancellation of
-  other running branches; the step's pending engine-owned changes still commit.
+  name is valid only on a node whose pinned outcome set permits several; the runtime MUST reject it otherwise.
+  Unspecified and explicitly empty selections MUST remain distinct through parent and join handling, persistence and
+  recovery. Explicitly empty is successful completion without outgoing paths, not cancellation of other running
+  branches; the step's pending engine-owned changes still commit. Unspecified means `Done`, which a node declares only
+  when a completion may choose no branch.
+- A script's explicitly recognized returned completion/routing form MUST keep the business result and selection
+  separate. Ordinary returned business data MUST NOT implicitly select an outcome. S-3 defines the form's signature,
+  recognition and validation without requiring an ambient activity object or native outcome setters.
 - `Suspend` carries one immutable private state document and one or more typed trigger registrations.
 - `Fault` carries normalized persistable fault information, never an arbitrary serialized exception.
 - `Cancel` is distinct from both failure and successful authored outcomes.
@@ -260,17 +264,19 @@ allocated, stable member key when applicable, and the pinned contract fingerprin
 | `VF-ACT-003` | Required input absent after binding normalization |
 | `VF-ACT-004` | Input type/nullability violation |
 | `VF-ACT-005` | Input, state, or result is nonpersistable under durable policy |
-| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set and no valid, explicitly configured outcome fallback applies |
+| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set; or several outcomes are selected on a node that does not permit them; or the selection is unspecified on a node without `Done` |
 | `VF-ACT-007` | Attempt requested after committed completion |
 | `VF-ACT-008` | Trigger type or identity does not match suspended state |
 | `VF-ACT-009` | Persisted invocation document version is incompatible and cannot be upcast |
 
-An outcome fallback MUST itself be declared in the node's pinned outcome set. A fallback MUST NOT suppress an
-undeclared result projection diagnostic.
+An activity or script may explicitly map unfamiliar business data to an ordinary declared catch-all outcome.
+Unknown selected names and undeclared result projections remain errors. S-3 introduces no generic per-node fallback
+that repairs an invalid selected name.
 
-Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault
-transition/incident path; contract and durability failures occur before user code and are not
-converted to authored outcomes.
+Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault transition/incident
+path. Contract and durability failures detectable before invocation MUST fail before user code; completion-dependent
+checks MUST fail before committing the result or dispatching outcomes. These failures are not converted to authored
+outcomes.
 
 ## 8. Conformance obligations
 

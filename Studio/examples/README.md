@@ -23,16 +23,10 @@ npm install @elsa-workflows/studio-ui @elsa-workflows/studio-code-editor \
             @elsa-workflows/studio-sdk @elsa-workflows/studio-workflows
 ```
 
-Two things differ between in-repo and published resolution — each app's README documents them
-and marks the external form in code comments:
-
-1. **CSS subpaths.** Published packages expose `@elsa-workflows/studio-ui/tokens.css` and
-   `@elsa-workflows/studio-workflows/style.css`. In-repo those subpaths do not resolve (on-disk
-   `exports` map only `"."`), so the examples import the same source files by relative path.
-2. **Component visual rules.** `@elsa-workflows/studio-ui` ships the `--studio-*` token layer
-   (`tokens.css`) but not the per-component visual rules (those are host chrome in
-   Elsa.Studio.Web). Each example supplies its own `studio-components.css` — a faithful copy
-   keyed off the `--studio-*` tokens — so the primitives look styled.
+The examples use the same public CSS subpaths as published consumers: `studio-ui/styles.css`,
+`studio-code-editor/style.css`, and (for the React workflow host) `studio-workflows/style.css`.
+Shared component styles are shipped by the package; there is no copied host stylesheet.
+Import your theme overrides after the public UI styles. See [module UI guidance](../docs/module-ui.md).
 
 ## Running
 

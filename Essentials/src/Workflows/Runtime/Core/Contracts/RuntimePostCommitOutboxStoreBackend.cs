@@ -11,6 +11,7 @@ public sealed class RuntimePostCommitOutboxStoreBackend
         typeof(IPostCommitOutboxLookupStore),
         typeof(IRuntimePostCommitOutboxClaimStore),
         typeof(IRuntimePostCommitOutboxClaimCompletionStore),
+        typeof(IStimulusDeliveryStore),
         typeof(IWorkflowDispatchRedriveStore)
     ];
 

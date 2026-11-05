@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import type { StudioNavigationContribution } from "../../sdk";
 import { settingsPathFor, type SettingsSectionGroup } from "./settingsSections";
@@ -49,7 +50,7 @@ function SettingsSectionLink({
   return (
     <a
       className="settings-nav-link"
-      href={href}
+      href={qualifyStudioBackendPath(href)}
       aria-current={current ? "page" : undefined}
       onClick={event => {
         event.preventDefault();

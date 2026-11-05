@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual partial callback/rearm recovery; broad T051 and delivery remain open",
+  "sourceParentCommit": "8a8d69fe8671b6e75f9212dc35ec902e6362dbd1",
+  "filesSha256": {
+    "e2e-tests/README.md": "c3782ac2cf6553fbb2a9583e82cb5a23c89e505c60b14a732103f072b0686f90",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "b81b838a3a30b63b994bd9fe7072eaa02119733f2765fce7ec9eda3f60688c72",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "837478aeda82b6adfda4bb8f39d3b357a2aed498e3d09dbf350280abfa253e89",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "89818d47caa97578c4905e6ffea5041f553960d587f2e855315f7e17378bac01"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-partial-resume-host.json": "b7839a78017e2d0d7920cd5ce71cb5f2dcc477a07465afbbbb6223f1b416afbd",
+    "broadcast-partial-resume-default-regression.json": "148494887f98c0eb5879e3ca891c1d478a62ac811185a80797c24fa6b4091d60"
+  },
+  "sourceBindingsCheckedPerCase": 1371,
+  "checks": [
+    {
+      "name": "actual partial callback/rearm crash to standard-host recovery",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual after-cohort recovery regression with same source/build manifests",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "explicit checked-observer controls on actual partial/rearm fixture",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "isolated locked probe/standard Release builds and checked reader build",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "name": "PowerShell parser, diff whitespace and frozen fingerprint",
+      "passed": true
+    }
+  ],
+  "partialEffects": {
+    "savedRecipientCount": 2,
+    "completedOriginalAttemptsBefore": 2,
+    "completedOriginalAttemptsAfter": 2,
+    "remainingOriginalAttemptsBefore": 1,
+    "remainingOriginalAttemptsAfter": 2,
+    "completedOriginalProjectionUnchanged": true,
+    "firstPhysicalRearmUnchanged": true,
+    "bothLaterWaitsRemainSuspended": true,
+    "alreadyParkedKeyedStartUnchanged": true,
+    "sourceFenceBefore": 1,
+    "sourceFenceAfter": 2,
+    "sourceOwnerChanged": true,
+    "sourceSnapshotUnchanged": true,
+    "sourceDelivered": true,
+    "workflowApiIncidents": 0
+  },
+  "reviews": {
+    "type": "three independent bounded component reviews and evidence audits, not full PR",
+    "findingFixed": "require exact already-completed activity projection/attempt equality and exactly one remaining resume attempt",
+    "remainingActionable": []
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceUnchanged": true,
+  "wholeSuitesRerun": false,
+  "inheritedWholeSuitePassedAtEarlierCommit": 5410,
+  "remainingGates": [
+    "delayed first-delivery inclusion",
+    "competing/empty cohorts, renewed/lost claims, ACK loss/redrive and GC/retention/republish races",
+    "remaining T045 semantics/native-composite and actual historical upgraded-host recovery",
+    "final current Studio, duplicate-semantics deletion/guards, full-PR review, exact-head required checks/protected merge and resulting main",
+    "separate ADR0063 acceptance and #2898/#2907/program production evidence"
+  ],
+  "fullPrRounds": 0
+}

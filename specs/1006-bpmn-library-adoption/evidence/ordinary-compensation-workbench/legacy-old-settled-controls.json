@@ -1,0 +1,56 @@
+{
+  "passed": true,
+  "stage": "Settled",
+  "controls": [
+    {
+      "name": "actual-compensation-stage",
+      "exitCode": 0,
+      "databaseSha256": "ba217ab9ea766563a22fab2a28bb66d576ddd3475a95b42b3169b581c536ef05",
+      "outputSha256": "943b90dba11c6259b9a0260181a2f75642d2772835dd1e3e673bc2585e83d32e",
+      "unchanged": true
+    },
+    {
+      "name": "wrong-snapshot-hash",
+      "exitCode": 2,
+      "databaseSha256": "ba217ab9ea766563a22fab2a28bb66d576ddd3475a95b42b3169b581c536ef05",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-complete-api-pin",
+      "exitCode": 2,
+      "databaseSha256": "ba217ab9ea766563a22fab2a28bb66d576ddd3475a95b42b3169b581c536ef05",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-original-handler-identity",
+      "exitCode": 2,
+      "databaseSha256": "ba217ab9ea766563a22fab2a28bb66d576ddd3475a95b42b3169b581c536ef05",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-handler-loses-scheduling-association",
+      "exitCode": 2,
+      "databaseSha256": "7858b9bf11a725946060a610c4809dcfc5ec2f2d9419aae059306529e5fe55cb",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "owed-physical-orphan-hidden-behind-canonical-source",
+      "exitCode": 2,
+      "databaseSha256": "f5ebc17c04fbff449dddc2e7deda18f1ee9ec9ff1ad01c945130e4627aa22e36",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-handler-loses-semantic-token",
+      "exitCode": 2,
+      "databaseSha256": "31d45dc2ce68a240aeca47b8753c6cfdf6dfb4e034216563d6ab298b91195000",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    }
+  ],
+  "originalSnapshotUnchanged": true
+}

@@ -43,7 +43,7 @@ public static class NuplaneHostingExtensions
         var managementFile = Path.GetFullPath(options.ManagementFile, contentRoot);
         try
         {
-            ((IConfigurationBuilder)studio.Configuration).AddJsonFile(managementFile, optional: true, reloadOnChange: true);
+            ((IConfigurationBuilder)studio.Configuration).Add(new StudioJsonConfigurationSource(managementFile, optional: true));
         }
         catch (Exception error) when (error is IOException or FormatException or UnauthorizedAccessException)
         {
@@ -66,7 +66,8 @@ public static class NuplaneHostingExtensions
             {
                 // Studio features must use the host's contract identities instead of private package copies.
                 foreach (var assembly in new[] { typeof(IShellFeature).Assembly, typeof(IWebShellFeature).Assembly,
-                             typeof(StudioModuleAttribute).Assembly, typeof(StudioApiFeature).Assembly, typeof(IServiceCollection).Assembly })
+                             typeof(StudioModuleAttribute).Assembly, typeof(StudioApiFeature).Assembly,
+                             typeof(Elsa.Events.Core.Contracts.IEvent).Assembly, typeof(Elsa.Pipelines.Core.Contracts.IPipelineBuilder<>).Assembly, typeof(IServiceCollection).Assembly })
                 {
                     var name = assembly.GetName();
                     var token = name.GetPublicKeyToken();

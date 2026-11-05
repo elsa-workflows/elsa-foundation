@@ -1,6 +1,7 @@
+import type { WorkflowTemplateContent } from "../workflowTemplates";
 import type React from "react";
 import type { Edge } from "@xyflow/react";
-import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowInstanceDetails, WorkflowTestRunView } from "../workflowTypes";
 import type { getChildSlots, ScopeFrame, WorkflowEdgeData } from "../workflowAdapter";
 import type { WorkflowRunInputDrafts } from "../workflowRunInputs";
@@ -12,6 +13,8 @@ export interface CreateWorkflowDraft {
   description: string;
   rootActivityVersionId: string | null;
   starter?: "http";
+  templateId?: string;
+  templateContent?: WorkflowTemplateContent;
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
@@ -48,6 +51,12 @@ export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publica
 
 export interface WorkflowTestRunState {
   draftSignature: string;
+  /** Presentation only: the first recorded batch belongs to a dispatch initiated in this mounted editor. */
+  startedHere?: boolean;
+  /** Exact authoring and presentation snapshot sent for this run; never the later editable draft. */
+  snapshot?: WorkflowDraft;
+  /** In-memory dispatch authority; a matching id on another endpoint is a different run. */
+  endpointContext?: StudioEndpointContext;
   view: WorkflowTestRunView;
   startLabel?: string;
   workflowInputNames?: string[];
@@ -67,7 +76,7 @@ export interface WorkflowTestRunWaitDraftState {
 
 export interface WorkflowTestDriveSetupState {
   snapshot: { draft: WorkflowDraft; signature: string; snapshotId: string };
-  selectedOptionId: string;
+  selectedOptionId: string | null; // null until options load; an empty string selects Direct start.
   selectedModeId: string;
   inputDrafts: WorkflowRunInputDrafts;
   stimulusDraft: string;

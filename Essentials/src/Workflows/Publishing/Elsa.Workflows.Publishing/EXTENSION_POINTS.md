@@ -158,6 +158,16 @@ A Publishing persistence package that backs the engine's authority state should:
 The supplied EF Core provider (`AddPublishingEntityFrameworkCore(...)`) composes these together with the API
 feature's `IActivityDraftTestRunStore`.
 
+That EF composition also registers `RebuildActivityUsageStartupTask` (`IStartupTask`, scoped,
+`[Order(6)]`). After catalog reconciliation it invokes
+`IActivityDependencyProjectionRebuildCoordinator` in a separate, explicitly privileged scope across
+tenants. Each shell start refreshes the derived usage snapshot from current activity and workflow
+drafts and versions, serialized by a per-shell distributed maintenance lock. Lock and rebuild failures
+are logged without failing shell activation; shutdown cancellation propagates and lock loss cancels the rebuild.
+A failed rebuild preserves the previous snapshot. With no snapshot, the dependency API returns
+`503 activity.dependency.unavailable` with recovery guidance, rather than claiming zero usages.
+Ordinary edits still follow the coordinator's snapshot semantics; this is not a live usage index.
+
 ## Executable compilation fan-in
 
 ### `IExecutableCompilationSource`
@@ -176,6 +186,8 @@ feature's `IActivityDraftTestRunStore`.
   result is exposed.
 - **Known implementation:** `DispatchPinSource` *(cross-domain — DispatchWorkflow Design)* contributes exact pinned
   child metadata and dependency claims after tenant/liveness/input-contract validation.
+- **Known implementation:** `BpmnEmbeddingPinSource` *(cross-domain — `Elsa.Activities.Bpmn.Design`)* contributes
+  exact live, tenant-matched published model identity/incarnation metadata and dependency claims for `RunBpmn`.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes
   declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable
   child graph by full artifact ID/hash before publication can activate the candidate.
@@ -205,11 +217,16 @@ feature's `IActivityDraftTestRunStore`.
 
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
-| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
-| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
+| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
 
 The Activity Graph implementation and its feature registration are documented in the
 [contributing-feature catalog](../../../Activities/Graph/Design/EXTENSION_POINTS.md).
+
+The provider/compiler/discovery registries are scoped. Contributors that read selected persistence
+access or scoped model metadata must remain in the publication operation; stateless singleton
+contributors remain supported. The specialist registrations are documented in their
+[contributing-feature catalog](../../../../../Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md).
 
 ## Cross-domain seams consumed by the engine
 
@@ -226,3 +243,7 @@ The Activity Graph implementation and its feature registration are documented in
 - Transport surface, transport authorization, and activity-draft seams: [Publishing API catalog](../Api/EXTENSION_POINTS.md).
 - Publication authority decision: [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 - Repo-wide index: [root extension-point index](../../../../../EXTENSION_POINTS.md).
+
+### Structure-owned occurrence inputs
+
+`ActivityTemplateOccurrenceCompilation.StructureInputs` optionally carries the owning Design handler's input projection from a graph provider to the publishing coordinator. Providers emit effective ordinary/projected argument states and validate their references against that same view. `ActivityTemplateCompiler` lowers declarations/policies against the exact source template into optional `ExecutableActivityTemplateOccurrenceOverlay.InputContracts`; no Design types enter Runtime artifacts. Placement compiles and stamps these same contracts, then applies the existing closed-scope variable/result remapping. Null is omitted for ordinary occurrences, preserving their serialized shape and template hashes. Switch condition overlays also retain their authored case outcomes on the placed contract.

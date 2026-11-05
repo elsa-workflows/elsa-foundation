@@ -33,6 +33,55 @@ public sealed class RuntimeDelayedScheduleDeliveryTests
     private static readonly DateTimeOffset Now = new(2026, 10, 20, 9, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset DueAt = Now.AddSeconds(60);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_owned_immediate_continuation_survives_clock_rollback_but_its_retry_still_waits(bool fastPath)
+    {
+        var clock = new FakeTimeProvider(Now.AddTicks(-1));
+        await using var provider = NewCoalescingProvider(clock, services =>
+            services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPath }));
+        await using var servicesScope = provider.CreateAsyncScope();
+        var services = servicesScope.ServiceProvider;
+        await using var drain = services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin(Wfid, new(PersistenceMode.Balanced, true));
+        var (_, _, immediate) = NewCommitWithDelayedAndImmediateIntents();
+        var commit = NewCommit([immediate]);
+        await services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
+        var outbox = services.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        var id = RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, immediate);
+        Assert.Equal(id, Assert.Single(await outbox.GetDeliverableAsync(new(clock.GetUtcNow(), 10, Wfid))).OutboxItemId);
+        var claims = Assert.IsAssignableFrom<IRuntimePostCommitOutboxClaimStore>(outbox);
+        var claim = Assert.Single(await claims.ClaimAsync(new("owner", clock.GetUtcNow(), TimeSpan.FromSeconds(30), 10, Wfid)));
+        Assert.Equal(id, claim.OutboxItemId);
+        Assert.Equal(Now, claim.Item.AvailableAt); // The persisted representation and replay fingerprint stay unchanged.
+        Assert.Equal(Now.AddSeconds(30), claim.VisibleAfter);
+        await claims.RecordDeliveryResultAsync(claim, new(id, RuntimePostCommitOutboxStatus.FailedRetryable, Now, "retry"));
+        Assert.Empty(await outbox.GetDeliverableAsync(new(clock.GetUtcNow(), 10, Wfid)));
+        Assert.Empty(await claims.ClaimAsync(new("owner", clock.GetUtcNow(), TimeSpan.FromSeconds(30), 10, Wfid)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_explicit_due_time_or_bare_outbox_row_is_not_an_owned_immediate_continuation(bool bareRow)
+    {
+        var clock = new FakeTimeProvider(Now.AddSeconds(-2));
+        await using var provider = NewCoalescingProvider(clock);
+        await using var servicesScope = provider.CreateAsyncScope();
+        var services = servicesScope.ServiceProvider;
+        await using var drain = services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin(Wfid, new(PersistenceMode.Balanced, true));
+        var intent = NewIntent("explicit", bareRow ? null : Now.AddSeconds(-1));
+        var commit = NewCommit([intent]);
+        if (bareRow)
+            commit = commit with { PostCommitIntents = [], StateChanges = commit.StateChanges.WithPostCommitOutbox([
+                new(RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent), RuntimeStateChangeOperation.Upsert,
+                    RuntimePostCommitOutboxItems.CreatePending(commit, intent), new Dictionary<string, string>())]) };
+        await services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
+        Assert.Empty(await services.GetRequiredService<IRuntimePostCommitOutboxStore>().GetDeliverableAsync(new(clock.GetUtcNow(), 10, Wfid)));
+        Assert.Empty(await Assert.IsAssignableFrom<IRuntimePostCommitOutboxClaimStore>(services.GetRequiredService<IRuntimePostCommitOutboxStore>()).ClaimAsync(
+            new("owner", clock.GetUtcNow(), TimeSpan.FromSeconds(30), 10, Wfid)));
+    }
+
     // Check 1: the in-process hop does not publish a not-yet-due continuation to the live drain's carrier.
     [Fact]
     public async Task DelayedSchedule_TheInProcessHopDoesNotPublishANotYetDueIntent()

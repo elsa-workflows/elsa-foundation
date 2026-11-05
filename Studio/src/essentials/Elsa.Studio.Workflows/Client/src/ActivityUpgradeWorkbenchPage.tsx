@@ -1,3 +1,5 @@
+import { qualifyStudioBackendPath, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -61,6 +63,9 @@ export function ActivityUpgradeWorkbenchPage({
   context: StudioEndpointContext;
   navigateToStudioPath?(path: string): void;
 }) {
+  // A plan can finish while this screen's workspace tab is in the background; recording it in the
+  // address then waits for the tab to return instead of taking over the active tab's address.
+  const whenActive = useStudioWorkspaceWhenActive();
   const locationSeed = useMemo(readLocationSeed, []);
   const persisted = useMemo(readSession, []);
   const [draft, setDraft] = useState(() => createActivityUpgradeDraft(locationSeed));
@@ -80,14 +85,20 @@ export function ActivityUpgradeWorkbenchPage({
   const requestedPlanId = locationSeed.planId ?? (hasNewSelectionSeed ? null : persisted?.planId) ?? null;
   const activePlanId = plan?.planId ?? null;
 
+  // Load each requested plan once. A background workspace tab mounts its effects again when it returns;
+  // reloading would replace the reviewed plan and clear its stale-evidence flag.
+  const loadedPlanRequestRef = useRef<{ context: StudioEndpointContext; planId: string } | null>(null);
   useEffect(() => {
     if (!requestedPlanId) return;
+    const loaded = loadedPlanRequestRef.current;
+    if (loaded?.context === context && loaded.planId === requestedPlanId) return;
     const controller = new AbortController();
     setBusy("load");
     setError(null);
     void getActivityUpgradePlan(context, requestedPlanId, controller.signal).then(
       loaded => {
         if (controller.signal.aborted) return;
+        loadedPlanRequestRef.current = { context, planId: requestedPlanId };
         setPlan(loaded);
         setReviewedEvidenceStale(false);
         setBusy(null);
@@ -143,7 +154,7 @@ export function ActivityUpgradeWorkbenchPage({
       receipts.current = [];
       idempotencyByStage.current = {};
       persistSession(reviewed.planId, [], {});
-      writePlanLocation(reviewed.planId, "push");
+      whenActive(() => writePlanLocation(reviewed.planId, "push"));
       observeActivityDefinitions({ event: "upgrade-plan", surface: "upgrade-workbench", outcome: "ready" });
     } catch (cause) {
       setError(privateSafePlanError(cause));
@@ -258,7 +269,7 @@ export function ActivityUpgradeWorkbenchPage({
       setPublicationVersions({});
       setOutcome(null);
       persistSession(successor.planId, receipts.current, idempotencyByStage.current);
-      writePlanLocation(successor.planId, "push");
+      whenActive(() => writePlanLocation(successor.planId, "push"));
       observeActivityDefinitions({ event: "upgrade-plan", surface: "upgrade-workbench", outcome: "ready" });
     } catch (cause) {
       setError(privateSafeMutationError(cause));
@@ -280,16 +291,9 @@ export function ActivityUpgradeWorkbenchPage({
   ) ?? null;
   const complete = Boolean(plan && normalizePlanStatus(plan.status) === "Applied" && currentPlanResult?.receiptId);
 
-  return <main className="ad-page au-page" aria-labelledby="activity-upgrade-title">
+  return <main className="studio-page ad-page au-page" aria-labelledby="activity-upgrade-title">
     <StudioLink className="ad-back" href="/workflows/activity-definitions" navigateToStudioPath={navigateToStudioPath}><ArrowLeft size={16} aria-hidden /> Activity Definitions</StudioLink>
-    <header className="ad-page-header">
-      <div>
-        <span className="ad-kicker">Activity Definition maintenance</span>
-        <h1 id="activity-upgrade-title">Staged dependency upgrades</h1>
-        <p>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</p>
-      </div>
-      {plan ? <button type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</button> : null}
-    </header>
+    <StudioPageHeader headingLevel={1} title={<>Staged dependency upgrades</>} titleId="activity-upgrade-title" description={<>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
 
     <div className="au-scope-note" role="note">
       <strong>Broad planning is deliberate</strong>
@@ -492,7 +496,7 @@ function writePlanLocation(planId: string, mode: "push" | "replace") {
   parameters.delete("rootId");
   parameters.delete("fromVersion");
   parameters.delete("toVersion");
-  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", `/workflows/activity-definitions/upgrades?${parameters}`);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", qualifyStudioBackendPath(`/workflows/activity-definitions/upgrades?${parameters}`));
 }
 
 function readSession(): PersistedUpgradeSession | null {

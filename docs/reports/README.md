@@ -4,6 +4,10 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Studio hosting reuse qualification](studio-hosting-reuse.md) - M0 adopt/adapt/keep/remove decisions and the bounded shared CShells/Nuplane lifecycle probe.
+- [Studio browser asset delivery qualification](studio-browser-asset-delivery.md) - actual archive/publish/HTTP/browser and custom-frontend ownership evidence behind the prebuilt Hosting payload.
+- [Studio package-store qualification](studio-package-store-qualification.md) - native store/admission and admitted-reader protection boundaries, including refused profiles.
+- [Studio hosting contract and class disposition](studio-hosting-contract.md) - accepted package/public API choices and the complete Web file disposition; current developer entrypoint is the [custom-host guide](../../Studio/docs/custom-hosting.md), with final delivery receipts in the [program ledger](../program-goals/studio-hosting-package-reuse.md).
 - [Scheduler poison sample: 16 October 2026](scheduler-poison-sample-2026-10-16.md) - read-only counts from two local demo backends found zero scheduler poison records and zero incidents; keep the current retry default until a representative observed sample exists.
 - [Native compensation: qualification and release readiness](native-compensation-qualification.md) - spec 261 (M5) record of the integrated candidate: every qualification matrix row with its revision and result, the supported and not-qualified configurations, known limits, open follow-ups and review findings. Claims no release or deployment.
 - [Native compensation: the Elsa 3 follow-on](native-compensation-elsa3-follow-on.md) - what an Elsa 3 implementation (elsa-core#4015) can reuse from Elsa 4's compensation: twenty engine-neutral acceptance scenarios and the participant contract, not the runtime seams; implementation is a separate effort.
