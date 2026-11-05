@@ -4,9 +4,11 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft — selected UX direction captured; implementation and qualification pending.
+**Status**: In progress — owner authorized end-to-end delivery on 2026-11-05; shared foundation implementation underway, qualification pending.
 
 **Tracking**: [Feature #3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849).
+
+**Delivery authority**: Owner instruction on 2026-11-05: “Set your goal to be the delivery of this feature end to end”; [recorded on the feature](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6645438505). Continue existing draft PR #3850 through planning, implementation, qualification, review/merge and resulting-main verification. Release/deployment and unrelated parked-program reactivation are excluded.
 
 **Program-goal state**: none/free-flow; direct owner-requested specification capture.
 
@@ -237,7 +239,7 @@ Use [canonical glossary meanings](../../docs/glossary/elsa.md) for executions, b
 
 ## Assumptions
 
-- **Authority**: The UX selection and specification capture are owner-approved. Draft status means ready for planning review, not implemented/accepted behavior or authorization to deliver parked work.
+- **Authority**: The UX selection and end-to-end delivery are owner-approved. In progress status records active implementation; it is not proof of accepted behavior or authorization to deliver unrelated parked work.
 - **Production composition**: Within explicit history-enabled composition, minimum semantic metadata is captured for new eligible runs by default. Earlier runs/absent hosts retain honest unavailable states; payload capture stays separate. Configuration packaging/module placement belong to planning.
 - **Retention**: Default history retention follows the retained run's lifetime, with explicit deployment purge/retention and separate value policy. No fixed numeric period or silent in-memory eviction is assumed.
 - **Existing policy**: [ADR 0080 D2](../../docs/adr/0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default) governs cadence and deterministic budgets. [Bookmark expiry](../../docs/bookmark-expiration.md) remains passive. This spec exposes those policies without amending them.
@@ -245,5 +247,5 @@ Use [canonical glossary meanings](../../docs/glossary/elsa.md) for executions, b
 - **Related work**: [#3305](https://github.com/elsa-workflows/elsa-foundation/issues/3305) overlaps mode/granularity; [#3375](https://github.com/elsa-workflows/elsa-foundation/issues/3375)/[#3642](https://github.com/elsa-workflows/elsa-foundation/issues/3642) concern execution browsing/stability; [#3814](https://github.com/elsa-workflows/elsa-foundation/issues/3814)/[#3828](https://github.com/elsa-workflows/elsa-foundation/pull/3828) and [#3844](https://github.com/elsa-workflows/elsa-foundation/issues/3844)/[#3847](https://github.com/elsa-workflows/elsa-foundation/pull/3847) contain adjacent toolbar/User Tasks work. Reconcile live heads during planning, without implicit supersession.
 - **QA boundary**: The [QA Execution Evidence program](../../docs/program-goals/runtime-execution-evidence.md) is parked and excludes a human-facing UI. Its [PRD](../../docs/plans/runtime-execution-evidence-prd.md), [#1132](https://github.com/elsa-workflows/elsa-foundation/issues/1132) and causation/durability work are references, not a reactivated program or mandatory evidence-session dependency. The [current collector](../../Essentials/src/Workflows/ExecutionEvidence/README.md) is a process-local MVP, not this production guarantee. No new domain is admitted here.
 - **Architecture**: Both [framework v6.1.0](../../.specify/memory/constitution-framework.md) and [Elsa v6.3.0](../../.specify/memory/constitution.md), their Gate indexes and [review checklist](../../docs/contributing/review-checklist.md) apply. Framework §2.24 and Elsa §E2.8 versioning/Model X and §E2.9 remain draft/provisional and are not ratified or relied on to settle new implementation design.
-- **Out of scope**: Whole-workflow historical state reconstruction, event-sourcing the engine, replay commands, exactly-once external effects, global cross-run ordering, arbitrary logs/traces as semantic facts, a new global delivery console, blanket values, a new export mechanism, QA/J-Test integration, release/deployment and production implementation in this documentation change. Existing diagnostics/control/export links retain existing contracts/access.
+- **Out of scope**: Whole-workflow historical state reconstruction, event-sourcing the engine, replay commands, exactly-once external effects, global cross-run ordering, arbitrary logs/traces as semantic facts, a new global delivery console, blanket values, a new export mechanism, QA/J-Test integration and release/deployment. Existing diagnostics/control/export links retain existing contracts/access.
 - **Next phase**: Planning must reconcile current source/PRs, choose ownership and capture/disposition contracts, define supported delivery-diagnostics integration, persistence/query/retention and deterministic budgets, and design qualification slices. No plan/tasks or implementation design is frozen by this specification.
