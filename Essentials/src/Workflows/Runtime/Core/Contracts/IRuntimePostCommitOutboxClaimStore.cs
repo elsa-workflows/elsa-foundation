@@ -37,7 +37,11 @@ public interface IRuntimePostCommitOutboxClaimStore
     /// (<see cref="RuntimePostCommitOutboxStatus.Delivering"/>), whoever owns the claim and whether or not it has lapsed,
     /// or failed and waiting for a retry (<see cref="RuntimePostCommitOutboxStatus.FailedRetryable"/>). Earliest
     /// <see cref="RuntimePostCommitOutboxClaimTransitions.ClaimableAt"/> first, at most
-    /// <see cref="RuntimePostCommitOutboxClaimedQuery.Limit"/> of them. Nothing is written.
+    /// <see cref="RuntimePostCommitOutboxClaimedQuery.Limit"/> of them. Nothing is written. With
+    /// <see cref="RuntimePostCommitOutboxClaimedQuery.DeliveredByClaimSince"/> it also lists the items a claim delivered
+    /// since then, after every unsettled one, in recording order. Previously observed delivered IDs in
+    /// <see cref="RuntimePostCommitOutboxClaimedQuery.ExcludedDeliveredOutboxItemIds"/> are excluded before limiting;
+    /// held items with those IDs remain listed.
     /// </summary>
     /// <remarks>
     /// A live drain reads this when its own delivery step delivered nothing (#2225). The resumption sweep claims across
@@ -46,7 +50,9 @@ public interface IRuntimePostCommitOutboxClaimStore
     /// has been drained, and once the claim lapses the drain claims the item itself. A failed one is a delivery of its own
     /// work that another deliverer attempted and failed, so the drain reports a failed delivery. A provider that left
     /// either out would let the drain report quiescence, and its command return, before the next step of its own work had
-    /// run.
+    /// run. A coalescing drain reads its queued work from an overlay filled once from the durable queue, so it also asks
+    /// for the deliveries a claim finished since then (#3661): their work is queued only durably. The listing stays one
+    /// read, so a drain no other deliverer touched pays nothing for it.
     /// </remarks>
     ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
         RuntimePostCommitOutboxClaimedQuery query,

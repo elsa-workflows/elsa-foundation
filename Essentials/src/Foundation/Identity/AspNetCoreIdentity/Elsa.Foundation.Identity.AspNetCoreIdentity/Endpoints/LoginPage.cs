@@ -21,8 +21,8 @@ public static class LoginPage
 
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "");
         var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" or "field-guide" or "parcel-room" ? options.Layout : "parcel-room";
-        var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" or "field-guide" or "parcel-room" ? options.Palette : "parcel-room";
-        var lightPalette = palette is "field-guide" or "parcel-room";
+        var palette = options.Palette is "pocket-orchestra" or "linen" or "tidal" or "daybreak" or "canopy" or "field-guide" or "parcel-room" ? options.Palette : "pocket-orchestra";
+        var lightPalette = palette is "field-guide" or "parcel-room" or "pocket-orchestra";
         var artwork = LoginArtwork.IsKnown(options.Artwork) ? options.Artwork : LoginArtwork.Default;
         var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
         var logoName = layout == "field-guide" ? "field-guide-logo.png" : "elsa-logo.png";
@@ -79,6 +79,8 @@ public static class LoginPage
             [data-layout="editorial"] .visual { border-radius:45% 45% 24px 24px; }
             /* Parcel Room: a small brand, clear form and full marker illustration on white. */
             body[data-palette="parcel-room"] { --ground:#fff; --paper:#fff; --ink:#18212b; --muted:#626d79; --line:#8a939f; --accent:#58a4b5; --on-accent:#10262d; --wash:#f1f6f7; color-scheme:light; }
+            body[data-palette="pocket-orchestra"] { --ground:#faf8f5; --paper:#faf8f5; --ink:#2d3030; --muted:#686d6b; --line:#858c89; --accent:#8bbfc0; --on-accent:#183234; --wash:#eeefea; color-scheme:light; }
+            body[data-palette="pocket-orchestra"] :is(input,button,a):focus-visible { outline-color:var(--ink); }
             [data-layout="parcel-room"] .entry { max-width:1600px; margin:auto; grid-template-columns:minmax(300px,.85fr) minmax(0,1.45fr); align-items:center; gap:clamp(32px,5vw,88px); padding:40px 5vw; }
             [data-layout="parcel-room"] .welcome { order:0; min-width:0; padding:32px 0; }
             [data-layout="parcel-room"] .form-wrap { max-width:380px; }
@@ -134,11 +136,11 @@ public static class LoginPage
               [data-layout="field-guide"] footer { margin-top:26px; padding-top:18px; }
             }
             @media(prefers-color-scheme:dark) {
-              :root:where(:not([data-appearance="light"])),body[data-palette]:where(:not([data-palette="field-guide"],[data-palette="parcel-room"])) { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
+              :root:where(:not([data-appearance="light"])),body[data-palette]:where(:not([data-palette="field-guide"],[data-palette="parcel-room"],[data-palette="pocket-orchestra"])) { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
               body[data-palette="tidal"] { --ground:#1d2729; --paper:#253338; --ink:#edf4f5; --muted:#b5c9cc; --line:#536b72; --accent:#acd3dc; --on-accent:#183239; }
               body[data-palette="daybreak"] { --ground:#2b242b; --paper:#362e35; --ink:#f5edf1; --muted:#d2bdc8; --line:#78636e; --accent:#dab2c4; --on-accent:#382630; }
               body[data-palette="canopy"] { --ground:#20271f; --paper:#2b3329; --ink:#eff4e9; --muted:#b6c5a7; --line:#5d6b53; --accent:#b4cd9e; --on-accent:#20301e; }
-              :where(body:not([data-palette="field-guide"],[data-palette="parcel-room"])) .error { color:#ffb6ad; background:#422d2b; }
+              :where(body:not([data-palette="field-guide"],[data-palette="parcel-room"],[data-palette="pocket-orchestra"])) .error { color:#ffb6ad; background:#422d2b; }
               [data-layout="field-guide"]:not([data-palette="field-guide"]) .visual>img { mix-blend-mode:normal; }
               [data-layout="field-guide"]:not([data-palette="field-guide"]) .logo { mix-blend-mode:normal; background:#f5f2ea; border-radius:4px; }
             }
