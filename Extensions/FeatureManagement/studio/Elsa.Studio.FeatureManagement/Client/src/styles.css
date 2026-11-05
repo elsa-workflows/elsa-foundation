@@ -1167,4 +1167,7 @@
 
 .feature-management-host-panel {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--studio-page-gap);
 }

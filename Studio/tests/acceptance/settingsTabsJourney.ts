@@ -56,6 +56,29 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
         }
       }
     }
+    if (prefix === "features") {
+      const pattern = /\/modularity\/features(?:\?.*)?$/;
+      await page.route(pattern, route => route.fulfill({ status: 503, contentType: "application/problem+json", body: JSON.stringify({ title: "Acceptance catalog unavailable", status: 503 }) }));
+      try {
+        await section.getByRole("button", { name: "Refresh features", exact: true }).click();
+        const panel = section.locator(".feature-management-host-panel");
+        const alert = panel.locator(":scope > .studio-alert[data-tone='danger']");
+        await expect(alert).toBeVisible();
+        await info.attach("controlled-catalog-error", { body: "Injected HTTP 503 at the selected feature catalog request to inspect feedback spacing and recovery; this is a controlled UI fault, not an observed backend outage.", contentType: "text/plain" });
+        const gap = await panel.evaluate(element => ({
+          actual: element.querySelector(".feature-management-layout")!.getBoundingClientRect().top - element.querySelector(".studio-alert[data-tone='danger']")!.getBoundingClientRect().bottom,
+          expected: parseFloat(getComputedStyle(element.parentElement!).rowGap)
+        }));
+        expect(gap.expected).toBeGreaterThan(0);
+        expect(gap.actual, "Feature feedback must retain the page gap").toBeCloseTo(gap.expected, 1);
+        await assertLinkedTabs(section);
+        await capture(page, info, "features-error");
+      } finally { await page.unroute(pattern); }
+      await section.getByRole("button", { name: "Refresh features", exact: true }).click();
+      await expect(section.locator(".feature-management-host-panel > .studio-alert[data-tone='danger']")).toHaveCount(0);
+      await expect(section.getByRole("button", { name: "Refresh features", exact: true })).toBeEnabled();
+      await assertLinkedTabs(section);
+    }
     await page.addScriptTag({ content: axe.source });
     const violations = await section.evaluate(async element => {
       const result = await (window as unknown as Window & { axe: typeof axe }).axe.run(element, { runOnly: { type: "rule", values: ["aria-valid-attr-value"] } });
