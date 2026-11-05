@@ -92,4 +92,4 @@ OD48 offers completion once per visit and consumes it when no transition is elig
 
 OD49 initially requires explicit whole-parent re-entry for parallel-parent-to-descendant transitions, resetting all regions and starting the explicit target in its region and initial states in others. Unsupported parent-preserving mode is diagnosed; compound-parent modes and local-region alternatives remain available. Complete boundaries, validation and source/Studio proof remain open.
 
-The next step is clarification and design review. No implementation readiness or approved specification is claimed.
+The [M0 engineering proposal](../research.md#m0-engineering-proposal-for-review) now supplies concrete candidate integration, selection/phase, admission/retention/recovery, Studio/outcome and saga-topology proposals, with a bounded witness sequence. Q1–Q3 remain open pending review/agreement and source integration proof. No implementation readiness or approved specification is claimed.

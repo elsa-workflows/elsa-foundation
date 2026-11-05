@@ -293,6 +293,8 @@ The following are review prompts, not accepted semantics. Interview the owner on
 
 [NEEDS CLARIFICATION: Confirm or amend the remaining scoped completion, complete hierarchical entry/exit/action, cross-state/region and automatic-candidate conflict, reevaluation and rearming/loop rules before declaring the behavior contract approved.]
 
+The concrete engineering proposal for these remaining details is [research P2](research.md#p2--complete-selection-and-phase-rules). It is proposed for review, not accepted by reference or a new owner decision.
+
 OD17 settles same-state selection order for one input (FR-028). OD40 requires explicit author-visible precedence between conflicting candidates sourced in unrelated regions, preserving child-over-parent precedence and compatible regional selection without implicit container-exit preference or diagram-layout priority (FR-051). Formal compatible-set selection and losing-trigger disposition remain open.
 
 OD39 disallows direct cross-region transition edges in the initial release with clear definition/Studio validation, while retaining region-local transitions, compatible shared-event reactions and explicit parallel-container exits (FR-050). Allowed transition boundary calculation and formal compatible-set selection remain open; OD40 settles unrelated-region conflict precedence.
@@ -315,6 +317,8 @@ OD42 keeps trigger-based action-without-exit reactions available by re-arming on
 
 [NEEDS CLARIFICATION: Agree the implementable bounded event identity/order/admission/outcome and fault/retry/recovery contract, with a source-grounded witness of the existing runtime integration.]
 
+The candidate comparison, admission/recovery policies and bounded witness are proposed in [research P1](research.md#p1--qualify-the-native-composite-first), [P3](research.md#p3--concrete-admission-and-recovery-contract-to-prove) and [P6](research.md#p6--bounded-integration-witness-and-decision-gate). They do not freeze placement or prove existing sufficiency.
+
 Specify configured bounds and overflow/unavailable behavior; deduplication/conflicting identity; receipts and retention; terminal/retired execution behavior; input disposition around faults and restart; and recovery of partial transition work with honest external-effect uncertainty. Do not equate accepted admission with exactly-once external effects. Demonstrate current sufficient seams or propose a reviewed bounded extension before freezing placement.
 
 OD34 requires immediate explicit capacity rejection without waiting or evicting accepted events (FR-045). OD35 deduplicates accepted events within a declared retention window by sender-provided ID scoped to the machine invocation, returns existing receipts/outcomes for identical retries and rejects conflicting contents (FR-046). Exact accounting, atomic concurrent admission/retries, content comparison/retention boundaries, expiry behavior and storage-unavailable behavior remain open.
@@ -332,6 +336,8 @@ OD29 requires completed sibling work to be preserved when a regional Action fail
 ### Q3 — Studio contract and remaining capability boundaries
 
 [NEEDS CLARIFICATION: Agree the concrete graph/outline/navigation, slots/conditions, diagnostics/inspection and accessibility/responsive journeys; classify remaining advanced capabilities and data/outcome/reuse details without silently expanding first-release scope.]
+
+The concrete Studio/outcome defaults and saga witness topology are proposed in [research P4](research.md#p4--studio-and-outcome-defaults) and [P5](research.md#p5--proposed-first-saga-witness-topology), with qualification staged in P6. These proposals do not approve a public schema, core ADR, exact topology or production implementation.
 
 The accepted chart/editor/navigation and inspection directions below still need concrete interaction, projection and qualification details. History-state destinations are deferred initially under OD46; full interchange, migration and shared-trigger identity remain uncommitted. Existing variable, expression and outcome contracts retain their authority; this program cannot approve pending core architecture decisions.
 
