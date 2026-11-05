@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 const repo = resolve(import.meta.dirname, "../../../../../..");
 const clientRoot = resolve(import.meta.dirname, "..");
 const { createUiEvidence } = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-evidence.mjs")));
+const { verifyUiBuild } = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs")));
 const recovery = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-recovery.mjs")));
 const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
 const sourceDirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" }).trim());
@@ -23,6 +24,7 @@ if (existsSync(marker) && readFileSync(marker, "utf8") !== "elsa-external-authen
 mkdirSync(ownedRoot, { recursive: true }); writeFileSync(marker, "elsa-external-authentication-probe/v1");
 const settingsPath = join(ownedRoot, "probe-settings.json");
 const settings = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, "utf8")) : {};
+const buildProvenance = settings.studioUrl ? verifyUiBuild() : null;
 async function completeProviderLogin(page) {
   if (settings.provider !== "Keycloak") return;
   const credentials = JSON.parse(readFileSync(join(ownedRoot, "browser-credentials.json"), "utf8"));
@@ -451,6 +453,7 @@ try {
     accessibility: accessAccessibility, darkAccessibility };
   if (settings.uiRecovery) await recovery.exerciseSelfRevocation({ page, admin, backend, componentUrl, adminSession, expect, capture, confirm: confirmStudio });
   expect(errors).toEqual([]);
+  if (settings.studioUrl) verifyUiBuild();
   const result = { passed: true, ownedRoot, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
     accessibility, connectionDarkAccessibility, access, connectionLifecycle, errorRecovery, uiEvidence: uiEvidence.result(settings.uiRecovery ? [
       "preferred-chooser-narrow", "key-to-name-tab", "missing-name-narrow-dark", "invalid-key", "configuration-test-failed", "corrected-draft-enter-reopen",
@@ -459,7 +462,7 @@ try {
       "revocation-before-write-recovered", "revocation-after-commit-failure", "revocation-after-commit-recovered", "link-draft-before-tab", "link-draft-after-tab",
       "stale-draft-preserved", "discard-conflicting-draft", "discard-cancel-preserves-draft", "conflict-recovered-save-reopen", "self-session-revoked", "self-session-reauthenticated"
     ] : ["key-to-name-tab", "last-login-path-refused"]), provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
-    fullStudioHost: Boolean(settings.studioUrl),
+    fullStudioHost: Boolean(settings.studioUrl), buildProvenance,
     limitations: [...(settings.provider === "Keycloak" ? [] : ["not an external IdP product"]), ...(settings.studioUrl ? [] : ["not a full Studio host"]), "not server-database or separate-node qualification", "custom evidence is selected ARIA and named actions; native replay remains unverified"] };
   writeFileSync(join(ownedRoot, "browser-receipt.json"), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));

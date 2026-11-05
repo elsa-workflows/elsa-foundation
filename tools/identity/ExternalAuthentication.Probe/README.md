@@ -26,7 +26,11 @@ Build the probe and frontend module before invoking them; the runners intentiona
 docker pull quay.io/keycloak/keycloak@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
 node tools/identity/ExternalAuthentication.Probe/qualify-keycloak.mjs
 
-dotnet build Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+# Reserve capacity first. This wraps the existing standard composed runner once;
+# it includes its normal builds and browser inventory, not just compilation.
+export ELSA_EXTERNAL_AUTH_UI_BUILD_ROOT="/tmp/elsa-3579-ui-build-<unique>"
+node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs studio --root "$ELSA_EXTERNAL_AUTH_UI_BUILD_ROOT"
+node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs probe --root "$ELSA_EXTERNAL_AUTH_UI_BUILD_ROOT"
 node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs
 # Combine the same full Studio host with both real Keycloak providers:
 node tools/identity/ExternalAuthentication.Probe/qualify-keycloak.mjs --studio
@@ -93,9 +97,10 @@ and full Studio profiles; they do not establish universal cross-site or other se
 
 ## Representative full Studio modes
 
-Use the same built Studio host/probe for each independent profile; each invocation owns a fresh root:
+Use the same verified Studio/probe build receipts through `ELSA_EXTERNAL_AUTH_UI_BUILD_ROOT` for each independent profile; each invocation owns a fresh root:
 
 ```sh
+node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs empty
 node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs configuration
 node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs provider-reader
 node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs denied
@@ -107,11 +112,11 @@ node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs missing-sess
 
 These use saved administrator role permissions, actual ownership settings and actual omitted module/store
 registrations. The browser checks current metadata against visible read-only/denied/unavailable actions and
-requires zero external-management writes. External-owned mode refuses link changes and session revocation;
+requires zero external-management writes except the empty profile's explicit first-draft creation. External-owned mode refuses link changes and session revocation;
 hybrid preserves read-only links but permits session revocation under the application authority. Missing API
 capability uses the host's unavailable-module surface. Missing durable sessions keeps ordinary local login while
 explaining unavailable session administration. Each profile scans settled light/dark themes with axe, changes
-colour mode with the keyboard and checks 390-pixel layout without horizontal overflow.
+colour mode with the keyboard and checks 360-pixel layout without horizontal overflow.
 
 The default controlled-provider full Studio journey additionally edits/disables/archives/restores/removes a
 managed connection, then prepares/tests/previews/promotes a complete same-key override. It proves an ordinary
@@ -146,3 +151,7 @@ The source exercises invalid/missing fields and correction, owned discovery404 a
 `ui-evidence.mjs` records ordered named actions, selected ARIA, focus, native-invalid-field flags and hashed selected screenshots. It rejects authentication/callback routes, unexpected query data and credential entry; the chooser requires blank credentials. Public snapshots omit unknown form values and retain only a closed vocabulary of public fixture draft values. Known authentication material/control sentinels fail capture. This is bounded owned-fixture handling, not a general web-page sanitizer. A missing checkpoint or changed file hash fails the receipt. Source SHA and actual dirty state accompany each record.
 
 Raw selected ARIA remains in an owner-only `elsa-3579-ui-private-*` directory outside the artifact glob, referenced by the owned root's hidden `.ui-private-evidence` pointer. CI exports only the checked `ui-evidence/*.json` and screenshots. Failed/unsafe captures are withheld with a fixed marker instead of dumping authentication pages or body text. Credentials, storageState, headers, request bodies and raw native traces are not captured. These records are **not native Playwright replay**; native replay remains explicitly unverified. The source and privacy-control tests require actual execution and independent evidence inspection before any UX acceptance claim.
+
+Full-Studio launch also requires successful build receipts from `ui-build-provenance.mjs`, bound to the clean source commit/tree and actual output hashes. Its `studio` phase wraps the existing standard runner, so it adds no second whole build or browser inventory; local execution still needs a capacity grant and a bounded launcher for that runner's child builds. The `probe` phase performs only the ordinary locked scoped restore/build with at most two workers. It can run first in a new owned build root; Studio is a later phase. Failed commands emit no successful receipt and existing receipts cannot be overwritten or reused for another source.
+
+Before and after a custom journey, hashes must still match the launched managed/native binaries, dependency/runtime manifests, Studio static asset roots and built external-module files. Studio must serve the recorded module JavaScript/CSS bytes without redirects. The checked source/build/output/served-asset records accompany each composed receipt and `build-provenance.json`. CI uploads those safe records and the fixed `failure-*.json`/`mode-failure.json` omission markers, while keeping build logs, control keys and private ARIA outside the artifact globs. Hash receipts are local build evidence, not signed supply-chain attestations. Provenance controls and actual launches remain unverified until executed.

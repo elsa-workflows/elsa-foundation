@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { verifyUiBuild } from "./ui-build-provenance.mjs";
 
 const repo = resolve(import.meta.dirname, "../../..");
 const { createUiEvidence } = await import(pathToFileURL(join(repo, "tools/identity/ExternalAuthentication.Probe/ui-evidence.mjs")));
@@ -11,6 +12,7 @@ const sourceDirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd
 const root = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT;
 if (!root || readFileSync(join(root, ".elsa-3579-owned-probe"), "utf8") !== "elsa-external-authentication-probe/v1") throw new Error("An owned Studio runner root is required.");
 const settings = JSON.parse(readFileSync(join(root, "probe-settings.json"), "utf8"));
+const buildProvenance = verifyUiBuild();
 const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
 const expect = baseExpect.configure({ timeout: 30_000 });
 const instance = randomUUID(); const log = openSync(join(root, "host.log"), "w", 0o600);
@@ -128,7 +130,8 @@ try {
   await page.screenshot({ path: join(root, "mode-narrow.png"), fullPage: false });
   await uiEvidence.capture(page, "profile-narrow-dark", { region: "body", action: "inspect-profile-at-360" });
   expect(writes).toEqual(profile === "empty" ? ["POST", "POST"] : []); expect(errors).toEqual([]);
-  const result = { passed: true, ownedRoot: root, profile, fullStudioHost: true, browser: "Chromium", store: "native SQLite",
+  verifyUiBuild();
+  const result = { passed: true, ownedRoot: root, profile, fullStudioHost: true, browser: "Chromium", store: "native SQLite", buildProvenance,
     noExternalManagementWrites: profile !== "empty", uiEvidence: uiEvidence.result(profile === "empty" ? ["empty-managed-catalog", "first-draft-confirmation", "first-disabled-draft-reopened", "empty-user-links-sessions", "profile-narrow-dark"] : ["profile-narrow-dark"]), accessibility: { light, dark }, narrowNoOverflow: true,
     limitations: ["representative ownership/permission/installation UI profile; full provider and process/store journeys are recorded separately"] };
   writeFileSync(join(root, "browser-receipt.json"), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));

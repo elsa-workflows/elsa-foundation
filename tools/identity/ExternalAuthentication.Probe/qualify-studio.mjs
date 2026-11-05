@@ -4,11 +4,13 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { verifyServedModule, verifyUiBuild } from "./ui-build-provenance.mjs";
 
 const repo = resolve(import.meta.dirname, "../../..");
 const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
 const sourceSha = git("rev-parse", "HEAD");
 if (git("status", "--porcelain")) throw new Error("Commit source changes before full Studio qualification; a dirty run cannot certify a revision.");
+const buildProvenance = verifyUiBuild();
 const profile = process.argv[2] ?? null;
 const profiles = {
   empty: { emptyCatalog: true },
@@ -68,6 +70,8 @@ try {
       throw new Error(`Owned Studio did not become ready; inspect ${join(root, "studio.log")}.`);
     await new Promise(done => setTimeout(done, 250));
   }
+  const servedModule = await verifyServedModule(studioUrl, buildProvenance);
+  writeFileSync(join(root, "build-provenance.json"), JSON.stringify({ ...buildProvenance, servedModule }, null, 2), { mode: 0o600 });
   const browserLog = openSync(join(root, "browser.log"), "w", 0o600);
   let code;
   try {
@@ -79,8 +83,9 @@ try {
   } finally { closeSync(browserLog); }
   if (code !== 0) throw new Error(`Owned full Studio browser journey failed (${code}); inspect ${join(root, "browser.log")}.`);
   if (git("rev-parse", "HEAD") !== sourceSha || git("status", "--porcelain")) throw new Error("Source changed during Studio qualification; rerun the committed revision.");
+  verifyUiBuild(); await verifyServedModule(studioUrl, buildProvenance);
   const receipt = { ...JSON.parse(readFileSync(join(root, "browser-receipt.json"), "utf8")),
-    sourceSha, headSha: process.env.UX_PR_HEAD_SHA ?? sourceSha, dirty: false, kind: "composed-source",
+    sourceSha, headSha: process.env.UX_PR_HEAD_SHA ?? sourceSha, dirty: false, kind: "composed-source", buildProvenance: { ...buildProvenance, servedModule },
     visualApproval: "requires independent review" };
   if (!receipt.fullStudioHost) throw new Error("Browser receipt did not prove the full Studio host.");
   writeFileSync(join(root, "studio-receipt.json"), JSON.stringify(receipt, null, 2));
