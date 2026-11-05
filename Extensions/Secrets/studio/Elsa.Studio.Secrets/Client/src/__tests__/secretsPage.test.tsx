@@ -626,7 +626,9 @@ describe("secrets page", () => {
       scope: "Integration:Later"
     });
     const firstPage = inventoryPage();
-    const { container, listRequests } = render({
+    const getSecret = vi.fn((name: string) => { expect(name).toBe(laterSecret.name); return laterSecret; });
+    const { container, listRequests, metadataRequests } = render({
+      getSecret,
       getItems: url => {
         const term = getSearchTerm(url);
         return term === laterSecret.name || term === laterSecret.displayName ? [laterSecret] : firstPage;
@@ -653,6 +655,9 @@ describe("secrets page", () => {
     trigger.focus();
     flushSync(() => trigger.click());
     expect(container.querySelector(".secrets-editor-page")).not.toBeNull();
+    await waitFor(() => metadataRequests.length === 1);
+    expect(metadataRequests).toEqual([`/secrets/${encodeURIComponent(laterSecret.name)}`]);
+    expect(getSecret).toHaveBeenCalledWith(laterSecret.name, "");
     await waitFor(() => container.querySelector(".secrets-edit-form") !== null);
     clickButton(container, "Cancel", ".secrets-editor-page");
     await waitFor(() => !container.querySelector(".secrets-editor-page"));
@@ -774,6 +779,7 @@ describe("secrets page", () => {
 
 function render(options: {
   getItems?(url: string, baseUrl: string): unknown[] | Promise<unknown[]>;
+  getSecret?(name: string, baseUrl: string): unknown | Promise<unknown>;
   totalCount?: number;
   getTotalCount?(items: unknown[], url: string): number;
   getDescriptors?(): unknown | Promise<unknown>;
@@ -784,12 +790,15 @@ function render(options: {
   document.body.appendChild(host);
   const root = createRoot(host);
   const listRequests: string[] = [];
+  const metadataRequests: string[] = [];
   const dialogs = {
     confirm: vi.fn(async () => true),
     prompt: vi.fn(async () => null),
     alert: vi.fn(async () => {})
   };
-  const createContext = (baseUrl = ""): StudioEndpointContext => ({
+  const createContext = (baseUrl = ""): StudioEndpointContext => {
+    const metadataByName = new Map<string, unknown>();
+    return ({
     baseUrl,
     http: {
       requestJson: vi.fn(),
@@ -802,12 +811,17 @@ function render(options: {
           } as T;
         }
         if (url.startsWith("/secrets/")) {
+          metadataRequests.push(url);
           const name = decodeURIComponent(url.split("/").at(-1)!);
-          const items = await options.getItems?.("/secrets", baseUrl) ?? [paymentSecret()];
-          return items.find(item => typeof item === "object" && item !== null && "name" in item && String(item.name).toLowerCase() === name.toLowerCase()) as T;
+          const record = options.getSecret ? await options.getSecret(name, baseUrl) : metadataByName.get(name.toLowerCase());
+          if (!record) throw Object.assign(new Error("Secret not found."), { status: 404 });
+          return record as T;
         }
         listRequests.push(url);
         const items = await options.getItems?.(url, baseUrl) ?? [paymentSecret()];
+        for (const item of items) {
+          if (typeof item === "object" && item !== null && "name" in item) metadataByName.set(String(item.name).toLowerCase(), item);
+        }
         return {
           items,
           totalCount: options.getTotalCount?.(items, url) ?? options.totalCount ?? items.length,
@@ -825,6 +839,7 @@ function render(options: {
       postForm: vi.fn()
     }
   });
+  };
   function Harness({ context }: { context: StudioEndpointContext }) {
     const [path, setPath] = useState("/security/secrets");
     const navigate = (next: string) => { window.history.pushState(window.history.state, "", next); setPath(next); };
@@ -845,7 +860,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount, listRequests, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
+  return { container: host, unmount, listRequests, metadataRequests, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function getSearchTerm(url: string) {
