@@ -150,6 +150,17 @@ describe("manual editor export confirmation lifecycle", () => {
     }
   });
 
+  it("retains the owned artifact export failure after a tab visit retires", async () => {
+    let fail!: (error: Error) => void;
+    const fixture = renderOperations({ retained: true, deferred: new Promise((_resolve, reject) => { fail = reject; }) });
+    const work = fixture.current().exportExecutableArtifact();
+    await vi.waitFor(() => expect(fixture.getJson.mock.calls.some(([url]) => url.includes("/executable-export"))).toBe(true));
+    fixture.render(undefined, "hidden"); fixture.render();
+    fail(new Error("Export unavailable.")); await work;
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toMatchObject({ message: expect.stringContaining("Export unavailable.") });
+    expect(fixture.setOperation).toHaveBeenLastCalledWith("idle"); expect(downloads).toHaveLength(0); expect(notify).not.toHaveBeenCalled();
+  });
+
   it("preserves newer editing status and operation while an accepted artifact export finishes", async () => {
     let finish!: (value: typeof closurePayload) => void;
     const fixture = renderOperations({ deferred: new Promise(resolve => { finish = resolve; }) });
@@ -355,6 +366,16 @@ describe("artifact list export action", () => {
     expect(fixture.onFailed).not.toHaveBeenCalled();
   });
 
+  it("keeps a list export refusal inline after its retained visit retires", async () => {
+    const fixture = renderArtifactDownload({ hold: true, retained: true, failWith: { status: 409, detail: "Dependency closure is incomplete." } });
+    await flushUpdates();
+    const work = fixture.current().exportArtifact(artifactRow("artifact-2", "version-2", "2.0.0"));
+    await vi.waitFor(() => expect(fixture.getJson.mock.calls.some(([url]) => url.endsWith("/executable-export"))).toBe(true));
+    fixture.render("hidden"); fixture.render(); fixture.release(); await work;
+    expect(fixture.onFailed.mock.calls.at(-1)?.[0]).toContain("Dependency closure is incomplete.");
+    expect(fixture.onExported).not.toHaveBeenCalled(); expect(downloads).toHaveLength(0);
+  });
+
   it("reports the in-flight artifact so the list can disable its rows", async () => {
     const fixture = renderArtifactDownload({ hold: true });
     await flushUpdates();
@@ -414,6 +435,7 @@ function renderArtifactDownload(options: {
   advertiseExport?: boolean;
   failWith?: Record<string, unknown>;
   hold?: boolean;
+  retained?: boolean;
 } = {}) {
   let release = () => undefined as void;
   const held = new Promise<void>(resolve => { release = () => resolve(); });
@@ -447,8 +469,9 @@ function renderArtifactDownload(options: {
     current = useExecutableArtifactDownload({ context, onExported, onFailed });
     return null;
   };
-  flushSync(() => root.render(<Harness />));
-  return { current: () => current!, getJson, onExported, onFailed, release: () => release() };
+  const render = (mode: "visible" | "hidden" = "visible") => flushSync(() => root.render(options.retained ? <React.Activity mode={mode}><Harness /></React.Activity> : <Harness />));
+  render();
+  return { current: () => current!, getJson, onExported, onFailed, render, release: () => release() };
 }
 
 const closurePayload = {

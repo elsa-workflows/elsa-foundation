@@ -34,14 +34,18 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
   const operationScope = useMemo(() => ({ context, active: false, generation: 0 }), [context]);
   const currentScope = useRef(operationScope);
   currentScope.current = operationScope;
+  const busyScope = useRef(operationScope);
   useLayoutEffect(() => {
     operationScope.active = true;
-    setBusyName(null);
+    if (busyScope.current !== operationScope) { busyScope.current = operationScope; setBusyName(null); }
     return () => { operationScope.active = false; operationScope.generation++; };
   }, [operationScope]);
   const captureOperation = () => {
     const generation = operationScope.generation;
-    return () => currentScope.current === operationScope && operationScope.active && operationScope.generation === generation;
+    return Object.assign(
+      () => currentScope.current === operationScope && operationScope.active && operationScope.generation === generation,
+      { isOwned: () => currentScope.current === operationScope }
+    );
   };
 
   const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
@@ -139,10 +143,10 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
     };
   }, [load]);
 
-  async function refreshWithConfirmation(message: string, isCurrent: () => boolean) {
-    if (!isCurrent()) return;
-    notifications?.notify({ level: "success", title: message });
-    await load(completedSearch);
+  async function refreshWithConfirmation(message: string, isCurrent: ReturnType<typeof captureOperation>) {
+    if (!isCurrent.isOwned()) return;
+    if (isCurrent()) notifications?.notify({ level: "success", title: message });
+    await load(attemptedSearch.current);
   }
 
   async function saveMetadata(name: string, request: UpdateSecretRequest) {
@@ -153,7 +157,7 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
       await updateSecret(context, name, request);
       await refreshWithConfirmation("Secret metadata updated.", isCurrent);
     } finally {
-      if (isCurrent()) setBusyName(null);
+      if (isCurrent.isOwned()) setBusyName(null);
     }
   }
 
@@ -172,7 +176,7 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
       await rotateSecret(context, name, request);
       await refreshWithConfirmation("Secret rotated.", isCurrent);
     } finally {
-      if (isCurrent()) setBusyName(null);
+      if (isCurrent.isOwned()) setBusyName(null);
     }
   }
 
@@ -183,13 +187,13 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
     try {
       const result = await testSecret(context, secret.name);
       const summary = result.message?.trim() || (result.succeeded ? "Secret resolved successfully." : "Secret test failed.");
-      if (!isCurrent()) return;
-      if (result.succeeded) notifications?.notify({ level: "success", title: "Secret test succeeded.", message: `(${result.code}): ${summary}` });
-      else setError(`Test failed (${result.code}): ${summary}`);
+      if (!isCurrent.isOwned()) return;
+      if (result.succeeded && isCurrent()) notifications?.notify({ level: "success", title: "Secret test succeeded.", message: `(${result.code}): ${summary}` });
+      else if (!result.succeeded) setError(`Test failed (${result.code}): ${summary}`);
     } catch (e) {
-      if (isCurrent()) setError(e instanceof Error ? e.message : "Secret test failed.");
+      if (isCurrent.isOwned()) setError(e instanceof Error ? e.message : "Secret test failed.");
     } finally {
-      if (isCurrent()) setBusyName(null);
+      if (isCurrent.isOwned()) setBusyName(null);
     }
   }
 
@@ -203,9 +207,9 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
       await revokeSecret(context, secret.name);
       await refreshWithConfirmation("Secret revoked.", isCurrent);
     } catch (e) {
-      if (isCurrent()) setError(e instanceof Error ? e.message : "Secret could not be revoked.");
+      if (isCurrent.isOwned()) setError(e instanceof Error ? e.message : "Secret could not be revoked.");
     } finally {
-      if (isCurrent()) setBusyName(null);
+      if (isCurrent.isOwned()) setBusyName(null);
     }
   }
 
@@ -216,13 +220,13 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
     setError(null);
     try {
       await deleteSecret(context, secret.name);
-      if (!isCurrent()) return;
+      if (!isCurrent.isOwned()) return;
       setDialog(current => current?.kind === "edit" && current.name === secret.name ? null : current);
       await refreshWithConfirmation("Secret deleted.", isCurrent);
     } catch (e) {
-      if (isCurrent()) setError(e instanceof Error ? e.message : "Secret could not be deleted.");
+      if (isCurrent.isOwned()) setError(e instanceof Error ? e.message : "Secret could not be deleted.");
     } finally {
-      if (isCurrent()) setBusyName(null);
+      if (isCurrent.isOwned()) setBusyName(null);
     }
   }
 

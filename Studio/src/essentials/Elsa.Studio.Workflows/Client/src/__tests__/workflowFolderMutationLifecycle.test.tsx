@@ -23,7 +23,7 @@ function render(kind: "rename" | "move", mode: "visible" | "hidden" = "visible",
     : <MoveWorkflowFolderDialog context={endpoint} folder={target} onMoved={onSaved} onClose={onClose} />}</React.Activity>));
 }
 function submit() { flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); }
-it.each(["rename", "move"] as const)("does not complete a retired %s after hiding and showing the retained tab", async kind => {
+it.each(["rename", "move"] as const)("reconciles an accepted %s after hiding and showing without reviving toast or focus", async kind => {
   let finish!: () => void;
   const work = new Promise<void>(resolve => { finish = resolve; });
   const mutation = kind === "rename" ? vi.mocked(renameWorkflowFolder) : vi.mocked(moveWorkflowFolder);
@@ -31,14 +31,23 @@ it.each(["rename", "move"] as const)("does not complete a retired %s after hidin
   render(kind); submit();
   expect(mutation).toHaveBeenCalledTimes(1);
   render(kind, "hidden"); render(kind);
-  expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
-  finish(); await work; await Promise.resolve();
-  expect(onSaved).not.toHaveBeenCalled();
-  expect(onClose).not.toHaveBeenCalled();
-  expect(container.querySelector<HTMLButtonElement>('button[type="button"]')?.disabled).toBe(false);
-  submit();
+  expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+  finish(); await work;
   await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onClose).toHaveBeenCalledWith(false);
+  const canNotify = onSaved.mock.calls[0][kind === "rename" ? 0 : 2] as () => boolean;
+  expect(canNotify()).toBe(false);
+  expect(mutation).toHaveBeenCalledTimes(1);
+});
+it.each(["rename", "move"] as const)("rejects a %s completion belonging to another backend", async kind => {
+  let finish!: () => void;
+  const work = new Promise<void>(resolve => { finish = resolve; });
+  const mutation = kind === "rename" ? vi.mocked(renameWorkflowFolder) : vi.mocked(moveWorkflowFolder);
+  mutation.mockReturnValue(work);
+  render(kind); submit();
+  render(kind, "visible", folder, { ...context, baseUrl: "https://second.example" });
+  finish(); await work; await Promise.resolve();
+  expect(onSaved).not.toHaveBeenCalled(); expect(onClose).not.toHaveBeenCalled();
 });
 it.each(["rename", "move"] as const)("keeps a current %s failure inline and completes a successful retry", async kind => {
   const mutation = kind === "rename" ? vi.mocked(renameWorkflowFolder) : vi.mocked(moveWorkflowFolder);

@@ -22,7 +22,7 @@ function fixture() {
     operations = useHostOperations(target, null, [], notify);
     return <>{operations.activeError ? <p role="alert">{operations.activeError}</p> : null}{operations.activeStatus ? <p role="status">{operations.activeStatus}</p> : null}</>;
   }
-  const render = (target: HostModel) => flushSync(() => root.render(withQueryClient(<Probe target={target} />, client)));
+  const render = (target: HostModel, mode: "visible" | "hidden" = "visible") => flushSync(() => root.render(withQueryClient(<React.Activity mode={mode}><Probe target={target} /></React.Activity>, client)));
   const unmount = () => { flushSync(() => root.unmount()); container.remove(); client.clear(); };
   return { container, notify, render, unmount, get operations() { return operations; } };
 }
@@ -41,6 +41,21 @@ describe("host operation feedback", () => {
       await view.operations.runHostOperation(async () => { throw new Error("Save failed."); }, "Should not toast.", "toast");
       await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("Save failed."));
       expect(view.notify).toHaveBeenCalledTimes(1);
+    } finally { view.unmount(); }
+  });
+
+  it.each(["condition", "failure"] as const)("keeps an owned inline %s after the retained visit retires", async outcome => {
+    const view = fixture(); const target = host("one");
+    let finish!: () => void;
+    const delayed = new Promise<void>(resolve => { finish = resolve; });
+    try {
+      view.render(target);
+      const pending = view.operations.runHostOperation(async () => { await delayed; if (outcome === "failure") throw new Error("Permission changed."); }, "Restart required.");
+      await vi.waitFor(() => expect(view.operations.isPending).toBe(true));
+      view.render(target, "hidden"); view.render(target);
+      finish(); await pending;
+      await vi.waitFor(() => expect(view.container.textContent).toContain(outcome === "condition" ? "Restart required." : "Permission changed."));
+      expect(view.notify).not.toHaveBeenCalled();
     } finally { view.unmount(); }
   });
 

@@ -10,8 +10,8 @@ import { useWorkflowFolderTree, workflowFolderTreeKey } from "./useWorkflowFolde
 export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed }: {
   context: StudioEndpointContext;
   folder: WorkflowFolder;
-  onClose(): void;
-  onRenamed(): Promise<void> | void;
+  onClose(restoreFocus?: boolean): void;
+  onRenamed(canNotify: () => boolean): Promise<void> | void;
 }) {
   const titleId = useId();
   const ref = useRef<HTMLElement>(null);
@@ -21,7 +21,10 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
   const [error, setError] = useState<string | null>(null);
   const mutationScope = useMemo(() => ({ context, folderId: folder.id }), [context, folder.id]);
   const captureMutation = useNotificationGuard(mutationScope);
-  useLayoutEffect(() => setBusy(false), [mutationScope]);
+  const busyScope = useRef(mutationScope);
+  useLayoutEffect(() => {
+    if (busyScope.current !== mutationScope) { busyScope.current = mutationScope; setBusy(false); }
+  }, [mutationScope]);
   useDialogFocus(ref, busy ? null : onClose);
 
   const submit = async (event: FormEvent) => {
@@ -33,13 +36,13 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
     const isCurrent = captureMutation();
     try {
       await renameWorkflowFolder(context, folder.id, normalized, expectedRevision);
-      if (!isCurrent()) return;
-      await onRenamed();
-      if (isCurrent()) onClose();
+      if (!isCurrent.isOwned()) return;
+      await onRenamed(isCurrent);
+      if (isCurrent.isOwned()) onClose(isCurrent());
     } catch (caught) {
-      if (isCurrent()) setError(`Couldn't rename this folder. ${caught instanceof Error ? caught.message : "The server rejected the name."} Correct the name or permissions, then try again.`);
+      if (isCurrent.isOwned()) setError(`Couldn't rename this folder. ${caught instanceof Error ? caught.message : "The server rejected the name."} Correct the name or permissions, then try again.`);
     } finally {
-      if (isCurrent()) setBusy(false);
+      if (isCurrent.isOwned()) setBusy(false);
     }
   };
   const reload = async () => {
@@ -57,7 +60,7 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
           {error ? <p className="wf-dialog-error" role="alert">{error} <button type="button" disabled={busy} onClick={() => void reload()}>Reload folder</button></p> : null}
           <label className="wf-form-field"><span>Name</span><input aria-label="Folder name" value={name} onChange={event => setName(event.target.value)} disabled={busy} /></label>
         </div>
-        <div className="wf-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" disabled={busy || !name.trim()}>{busy ? "Renaming…" : "Rename"}</button></div>
+        <div className="wf-dialog-actions"><button type="button" onClick={() => onClose()} disabled={busy}>Cancel</button><button type="submit" disabled={busy || !name.trim()}>{busy ? "Renaming…" : "Rename"}</button></div>
       </form>
     </section>
   </div>;
@@ -68,8 +71,8 @@ type Eligibility = "eligible" | "descendant";
 export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: {
   context: StudioEndpointContext;
   folder: WorkflowFolder;
-  onClose(): void;
-  onMoved(parentId: string | null, previousParentId: string | null): Promise<void> | void;
+  onClose(restoreFocus?: boolean): void;
+  onMoved(parentId: string | null, previousParentId: string | null, canNotify: () => boolean): Promise<void> | void;
 }) {
   const titleId = useId();
   const ref = useRef<HTMLElement>(null);
@@ -83,7 +86,10 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   const [error, setError] = useState<string | null>(null);
   const mutationScope = useMemo(() => ({ context, folderId: folder.id }), [context, folder.id]);
   const captureMutation = useNotificationGuard(mutationScope);
-  useLayoutEffect(() => setBusy(false), [mutationScope]);
+  const busyScope = useRef(mutationScope);
+  useLayoutEffect(() => {
+    if (busyScope.current !== mutationScope) { busyScope.current = mutationScope; setBusy(false); }
+  }, [mutationScope]);
   useDialogFocus(ref, busy ? null : onClose);
 
   const classify = useCallback((items: WorkflowFolder[], parentId?: string) => {
@@ -135,13 +141,13 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
     const isCurrent = captureMutation();
     try {
       await moveWorkflowFolder(context, folder.id, destinationId, expectedRevision);
-      if (!isCurrent()) return;
-      await onMoved(destinationId, previousParentId.current);
-      if (isCurrent()) onClose();
+      if (!isCurrent.isOwned()) return;
+      await onMoved(destinationId, previousParentId.current, isCurrent);
+      if (isCurrent.isOwned()) onClose(isCurrent());
     } catch (caught) {
-      if (isCurrent()) setError(`Couldn't move this folder. ${caught instanceof Error ? caught.message : "The server rejected the destination."} Choose another available destination or check permissions, then try again.`);
+      if (isCurrent.isOwned()) setError(`Couldn't move this folder. ${caught instanceof Error ? caught.message : "The server rejected the destination."} Choose another available destination or check permissions, then try again.`);
     } finally {
-      if (isCurrent()) setBusy(false);
+      if (isCurrent.isOwned()) setBusy(false);
     }
   };
 
@@ -190,7 +196,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
             {rows(roots)}{controls()}
           </div></fieldset>
         </div>
-        <div className="wf-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" disabled={busy || (destinationId !== null && eligibility[destinationId] !== "eligible")}>{busy ? "Moving…" : "Move"}</button></div>
+        <div className="wf-dialog-actions"><button type="button" onClick={() => onClose()} disabled={busy}>Cancel</button><button type="submit" disabled={busy || (destinationId !== null && eligibility[destinationId] !== "eligible")}>{busy ? "Moving…" : "Move"}</button></div>
       </form>
     </section>
   </div>;

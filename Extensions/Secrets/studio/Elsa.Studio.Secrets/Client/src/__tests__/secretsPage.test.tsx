@@ -256,6 +256,23 @@ describe("secrets page", () => {
     expect(notifications.notify.mock.calls[0][0].title).toBe(action === "Test" ? "Secret test succeeded." : "Secret revoked.");
   });
 
+  it.each(["success", "failure"] as const)("reconciles an owned revoke %s after the resumed list read precedes its result", async outcome => {
+    let finish!: () => void; let revoked = false;
+    const delayed = new Promise<void>(resolve => { finish = resolve; });
+    const postJson = vi.fn(async () => { await delayed; if (outcome === "failure") throw new Error("Revoke refused."); revoked = true; return {}; });
+    const { container, setVisible, listRequests } = render({ postJson, getItems: () => [paymentSecret({ status: revoked ? "Revoked" : "Active" })] });
+    await waitForText(container, "Payments API"); await clickSecretAction(container, "payments.api", "Revoke");
+    await waitFor(() => postJson.mock.calls.length === 1);
+    const before = listRequests.length;
+    setVisible(false); setVisible(true);
+    await waitFor(() => listRequests.length > before && container.querySelector("tr td") !== null);
+    expect(revoked).toBe(false);
+    finish();
+    await waitForText(container, outcome === "success" ? "revoked" : "Revoke refused.");
+    if (outcome === "success") expect(listRequests.length).toBeGreaterThan(before + 1);
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
   it("does not revoke from a confirmation opened by a retired tab visit", async () => {
     let finish!: (confirmed: boolean) => void;
     const work = new Promise<boolean>(resolve => { finish = resolve; });

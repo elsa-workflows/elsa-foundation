@@ -50,3 +50,18 @@ it("accepts a current outcome at commit and in the first clipboard completion mi
     flushSync(() => root.unmount());
   }
 });
+
+it("keeps domain ownership across a retained visit but retires its confirmation", () => {
+  const container = document.createElement("div"); const root = createRoot(container);
+  let capture!: ReturnType<typeof useNotificationGuard>;
+  const first = {}; const second = {};
+  function Probe({ context }: { context: object }) { capture = useNotificationGuard(context); return null; }
+  const render = (context: object, mode: "visible" | "hidden" = "visible") => flushSync(() => root.render(<React.Activity mode={mode}><Probe context={context} /></React.Activity>));
+  try {
+    render(first); const result = capture(); expect(result()).toBe(true);
+    render(first, "hidden"); expect(result()).toBe(false); expect(result.isOwned()).toBe(true);
+    render(first); expect(result()).toBe(false); expect(result.isOwned()).toBe(true);
+    render(second); expect(result.isOwned()).toBe(false);
+    render(first); expect(result.isOwned()).toBe(false);
+  } finally { flushSync(() => root.unmount()); }
+});

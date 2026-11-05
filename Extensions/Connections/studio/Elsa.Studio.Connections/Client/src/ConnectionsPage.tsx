@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Plus, RefreshCw, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioSearchInput , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar} from "@elsa-workflows/studio-ui";
@@ -13,6 +13,7 @@ type Notice = { message: string; error?: boolean };
 export function ConnectionsPage({ context, dialogs, notifications }: { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi }) {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const appliedSearchRef = useRef(appliedSearch); appliedSearchRef.current = appliedSearch;
   const [items, setItems] = useState<ConnectionMetadata[]>([]);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [descriptors, setDescriptors] = useState<ConnectionDescriptorsResponse | null>(null);
@@ -27,6 +28,8 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const operationRef = useRef<object | null>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
   const focusAfterCreate = useRef(false);
+  const owner = useMemo(() => ({ context }), [context]);
+  const currentOwner = useRef(owner); currentOwner.current = owner;
   currentContextRef.current = context;
   const contextIsLoaded = loadedContext === context;
   const visibleItems = contextIsLoaded ? items : [];
@@ -144,6 +147,14 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
     {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { focusAfterCreate.current = true; notifications?.notify({ level: "success", title: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={(created, canNotify) => {
+      if (currentOwner.current !== owner) return;
+      if (canNotify) {
+        focusAfterCreate.current = true;
+        notifications?.notify({ level: "success", title: `Connection '${created.name}' created.` });
+        setCreating(false); setSelectedName(null); setSearch(appliedSearch);
+      }
+      void load(appliedSearchRef.current);
+    }} /> : null}
   </StudioPage>;
 }

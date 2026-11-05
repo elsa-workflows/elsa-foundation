@@ -24,7 +24,7 @@ export function ConnectionCreateDialog({
   context: StudioEndpointContext;
   descriptors: ConnectionDescriptorsResponse;
   onCancel(): void;
-  onCreated(connection: ConnectionMetadata): void;
+  onCreated(connection: ConnectionMetadata, canNotify: boolean): void;
 }) {
   const [name, setName] = useState("");
   const [typeName, setTypeName] = useState(() => initialTypeName(descriptors));
@@ -231,17 +231,17 @@ export function ConnectionCreateDialog({
         secretFields: secretFields!
       };
       const created = await createConnection(operationContext, request);
-      if (!isCurrent()) return;
+      if (currentScopeRef.current !== operationScope) return;
 
       closed = true;
       submittingRef.current = false;
       setSubmitting(false);
-      onCreated(created);
-      onCancel();
+      onCreated(created, isCurrent());
+      if (isCurrent()) onCancel();
     } catch (cause) {
       const message = await describeApiError(cause);
       const validation = await tryExtractValidationErrors(cause);
-      if (isCurrent()) {
+      if (currentScopeRef.current === operationScope) {
         const knownKeys = ["name", ...typeSettings.map(field => `settings.${field.name}`),
           ...nonSensitiveSchemeFields.map(field => `settings.${field.name}`),
           ...sensitiveFields.map(field => `secretFields.${field.name}`)];
@@ -256,7 +256,7 @@ export function ConnectionCreateDialog({
         setError(message || "The connection could not be created.");
       }
     } finally {
-      if (!closed && isCurrent()) {
+      if (!closed && currentScopeRef.current === operationScope) {
         submittingRef.current = false;
         setSubmitting(false);
       }

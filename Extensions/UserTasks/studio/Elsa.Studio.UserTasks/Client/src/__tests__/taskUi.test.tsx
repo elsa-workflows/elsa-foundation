@@ -163,6 +163,44 @@ it("publishes a reusable basic form through the structured field editor", async 
   expect(container.textContent).not.toContain("immutable form version is available");
 });
 
+it.each(["hidden", "visible"] as const)("reconciles an accepted form publication while the retained editor is %s", async completion => {
+  let finish!: () => void; let published = false;
+  const delayed = new Promise<void>(resolve => { finish = resolve; });
+  const form = { id: "purchase", version: "1", name: "Purchase response", provider: "elsa.basic-forms/1", fields: [] };
+  const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: published ? [{ form }] : [] });
+  const post = vi.fn(async () => { await delayed; published = true; return {}; });
+  const context = api(get, post);
+  const render = (mode: "hidden" | "visible") => act(() => root.render(<React.Activity mode={mode}><FormsPage api={context} /></React.Activity>));
+  await render("visible"); await click("Create form version");
+  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+  await input(field("Form ID"), form.id); await input(field("Name"), form.name); await click("Publish form version");
+  expect(post).toHaveBeenCalledTimes(1); expect(published).toBe(false);
+  await render("hidden"); if (completion === "visible") await render("visible");
+  expect(container.querySelector(".user-task-form-editor")).not.toBeNull();
+  await act(() => finish()); await render("visible");
+  await vi.waitFor(() => expect(container.querySelector(".user-task-form-editor")).toBeNull());
+  expect(container.querySelector("table")?.textContent).toContain(form.name);
+  expect(notifications.notify).not.toHaveBeenCalled(); expect(post).toHaveBeenCalledTimes(1);
+});
+
+it("reconciles accepted completion after a retained-tab refresh read the old task", async () => {
+  let finish!: () => void; let accepted = false;
+  const delayed = new Promise<void>(resolve => { finish = resolve; });
+  const result = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
+  const get = vi.fn(async () => accepted ? result : task());
+  const post = vi.fn(async () => { await delayed; accepted = true; return result; });
+  const context = api(get, post); const changed = vi.fn();
+  const render = (mode: "visible" | "hidden") => act(() => root.render(<React.Activity mode={mode}><TaskDetail api={context} id="task" identity={identity} changed={changed} /></React.Activity>));
+  await render("visible"); await click("Approve");
+  expect(post).toHaveBeenCalledTimes(1); expect(accepted).toBe(false);
+  await render("hidden"); await render("visible");
+  expect(get.mock.calls.length).toBeGreaterThanOrEqual(2); expect(accepted).toBe(false);
+  await act(() => finish());
+  await vi.waitFor(() => expect(container.textContent).toContain("Your response is recorded."));
+  expect(changed).toHaveBeenCalledTimes(1); expect(notifications.notify).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("Retry Approve");
+});
+
 it("uses advertised operation relations and encodes opaque task identities", async () => {
   const get = vi.fn().mockResolvedValue(task()); const context = api(get);
   const capability = context.backendSession!.capabilities!.capabilities[0];

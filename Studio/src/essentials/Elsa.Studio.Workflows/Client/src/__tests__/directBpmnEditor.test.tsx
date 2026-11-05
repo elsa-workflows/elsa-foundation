@@ -210,7 +210,7 @@ it("finishes an accepted BPMN download without toasting after its editor is disp
 });
 
 it("copies a real editor error trace through shared notifications and keeps failure/retry inline", async () => {
-  const view = await editor(false, false, { handle: async (url, init) => url.includes("/drafts/draft-1") && init?.method === "PUT"
+  const view = await editor(true, false, { handle: async (url, init) => url.includes("/drafts/draft-1") && init?.method === "PUT"
     ? response({ title: "Save rejected", traceId: "trace-copy-proof", status: 500 }, 500) : undefined });
   const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
   const writeText = vi.fn().mockRejectedValueOnce(new Error("Clipboard unavailable")).mockResolvedValue(undefined);

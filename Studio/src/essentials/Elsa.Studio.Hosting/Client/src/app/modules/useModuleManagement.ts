@@ -131,30 +131,34 @@ export function useHostOperations(
   const generation = useRef(0);
   const active = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; generation.current++; }; }, [activeHost.context]);
-  const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, string | null>>>({});
-  const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, string | null>>>({});
+  const contextsByHost = useRef<Partial<Record<HostId, HostModel["context"]>>>({});
+  contextsByHost.current[activeHost.id] = activeHost.context;
+  type Feedback = { context: HostModel["context"]; message: string | null };
+  const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, Feedback>>>({});
+  const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, Feedback>>>({});
   const mutation = useHostMutationRunner(activeHost, onSettledDelaysMs);
 
   // The banners are keyed per host so switching tabs preserves each host's transient state; these two
   // closures centralize that keying so the update shape lives in one place.
   const hostId = activeHost.id;
-  const setStatus = (status: string | null) => setStatusByHost(current => ({ ...current, [hostId]: status }));
-  const setLocalError = (error: string | null) => setLocalErrorByHost(current => ({ ...current, [hostId]: error }));
+  const setStatus = (message: string | null) => setStatusByHost(current => ({ ...current, [hostId]: { context: activeHost.context, message } }));
+  const setLocalError = (message: string | null) => setLocalErrorByHost(current => ({ ...current, [hostId]: { context: activeHost.context, message } }));
 
   async function runHostOperation(operation: () => Promise<unknown>, success: string, feedback: "inline" | "toast" = "inline") {
     if (!active.current || currentContext.current !== activeHost.context) return;
     const operationGeneration = generation.current;
     const isCurrent = () => currentContext.current === activeHost.context && generation.current === operationGeneration;
+    const isOwned = () => contextsByHost.current[hostId] === activeHost.context;
     setLocalError(null);
     setStatus(null);
     try {
       // mutateAsync invalidates + (optionally) schedules follow-up refetches on success (see useHostMutationRunner).
       await mutation.mutateAsync(operation);
-      if (!isCurrent()) return;
-      if (feedback === "toast") notifySuccess?.(success);
+      if (!isOwned()) return;
+      if (feedback === "toast") { if (isCurrent()) notifySuccess?.(success); }
       else setStatus(success);
     } catch (e) {
-      if (!isCurrent()) return;
+      if (!isOwned()) return;
       // A 403 on a mutation is a Studio authorization failure: the signed-in user holds read but not
       // module-management:manage. Name it as a permission problem rather than surfacing a raw HTTP error (#249).
       setLocalError(isPermissionDenied(e)
@@ -177,8 +181,8 @@ export function useHostOperations(
 
   return {
     isPending: mutation.isPending,
-    activeError: localErrorByHost[hostId] ?? errorMessageFor(queryError),
-    activeStatus: statusByHost[hostId] ?? null,
+    activeError: (localErrorByHost[hostId]?.context === activeHost.context ? localErrorByHost[hostId]?.message : null) ?? errorMessageFor(queryError),
+    activeStatus: statusByHost[hostId]?.context === activeHost.context ? statusByHost[hostId]?.message ?? null : null,
     runHostOperation,
     confirmAndRun,
     reportError

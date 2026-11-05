@@ -34,6 +34,9 @@ export function useNotificationGuard(context: object) {
   }, [scope]);
   return () => {
     const captured = scope.generation;
-    return () => scope.active && current.current === scope && scope.generation === captured;
+    return Object.assign(
+      () => scope.active && current.current === scope && scope.generation === captured,
+      { isOwned: () => current.current === scope }
+    );
   };
 }

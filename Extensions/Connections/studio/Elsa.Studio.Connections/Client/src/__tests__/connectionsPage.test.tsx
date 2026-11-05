@@ -89,6 +89,25 @@ describe("Connections page", () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it("reloads an accepted connection after the resumed list read precedes creation", async () => {
+    const pending = deferred<ConnectionMetadata>(); let accepted = false; let reads = 0;
+    const created = { ...connection, name: "late-api", displayName: "Late API" };
+    const { context } = endpointContext({
+      getJson: vi.fn(async (url: string) => { if (url.startsWith("/connections?")) { reads++; return { items: accepted ? [created] : [] }; } return descriptors; }),
+      postJson: vi.fn(async () => { const result = await pending.promise; accepted = true; return result; })
+    });
+    const { host, setVisible } = renderPage(context);
+    await waitFor(() => host.textContent?.includes("No connections yet") === true);
+    await createConnection(host, created.name);
+    setVisible(false); setVisible(true);
+    await waitFor(() => reads >= 2 && host.textContent?.includes("No connections yet") === true);
+    expect(accepted).toBe(false);
+    pending.resolve(created);
+    await waitFor(() => host.textContent?.includes(created.displayName!) === true);
+    expect(reads).toBeGreaterThanOrEqual(3); expect(notifications.notify).not.toHaveBeenCalled();
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it("returns to the refreshed collection without opening details when the created connection is present", async () => {
     const created = { ...connection, name: "customer-api" };
     let listCalls = 0;
@@ -269,7 +288,8 @@ function renderPage(context: StudioEndpointContext, dialogs = createDialogs()) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  flushSync(() => root.render(<ConnectionsPage context={context} dialogs={dialogs} notifications={notifications} />));
+  const render = (target: StudioEndpointContext, mode: "visible" | "hidden" = "visible") => flushSync(() => root.render(<React.Activity mode={mode}><ConnectionsPage context={target} dialogs={dialogs} notifications={notifications} /></React.Activity>));
+  render(context);
   cleanups.push(() => {
     flushSync(() => root.unmount());
     host.remove();
@@ -277,7 +297,8 @@ function renderPage(context: StudioEndpointContext, dialogs = createDialogs()) {
   return {
     host,
     leave: () => flushSync(() => root.render(<p>Another page</p>)),
-    changeContext: (next: StudioEndpointContext) => flushSync(() => root.render(<ConnectionsPage context={next} dialogs={dialogs} notifications={notifications} />))
+    changeContext: (next: StudioEndpointContext) => render(next),
+    setVisible: (visible: boolean) => render(context, visible ? "visible" : "hidden")
   };
 }
 

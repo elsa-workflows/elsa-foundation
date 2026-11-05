@@ -145,12 +145,12 @@ export function useWorkflowOperations({
       const fileName = await downloadExecutableArtifact(context, publishedExecutable);
       // Both name segments come from the root artifact's identity; the double fallback means it carried
       // none, which is worth saying rather than shipping an anonymous file as if it were normal.
-      if (ownsExport() && canNotify()) {
+      if (ownsExport()) {
         if (fileName === anonymousArtifactFileName) setStatus(`Exported ${fileName} — the artifact carried no definition id or version.`);
-        notifySuccess(`Exported executable artifact as ${fileName}.`);
+        if (canNotify()) notifySuccess(`Exported executable artifact as ${fileName}.`);
       }
     } catch (e) {
-      if (ownsExport() && canNotify()) setError(describeExecutableArtifactExportFailure(e));
+      if (ownsExport()) setError(describeExecutableArtifactExportFailure(e));
     } finally {
       // A retained tab still needs its operation cleared after its notification visit retires.
       if (ownsExport()) {

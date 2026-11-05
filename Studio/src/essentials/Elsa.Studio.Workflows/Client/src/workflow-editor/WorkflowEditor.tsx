@@ -1035,7 +1035,7 @@ export function WorkflowEditor({
       URL.revokeObjectURL(url);
       if (canNotify()) { setError(""); notifySuccess("Exported BPMN 2.0 XML."); }
     } catch {
-      if (canNotify()) { setStatus(""); setError("BPMN export failed."); }
+      if (canNotify.isOwned()) { setStatus(""); setError("BPMN export failed."); }
     }
   }, [captureNotificationGuard, context, details?.definition?.name, draft, setError, setStatus]);
 

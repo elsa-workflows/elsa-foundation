@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Inbox, LayoutList, Menu, Move, PanelLeftClose, PanelLeftOpen, Trash2, X } from "lucide-react";
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
@@ -51,6 +51,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
   const selectedId = selectedFolderId(selection);
+  const dialogOwner = useMemo(() => ({ context, selectedId, mutationDialog }), [context, selectedId, mutationDialog]);
+  const currentDialogOwner = useRef(dialogOwner); currentDialogOwner.current = dialogOwner;
   const breadcrumbIdentity = `${context.baseUrl}\u0000${selectedId ?? ""}`;
   const breadcrumbIdentityRef = useRef<string | null>(null);
   const breadcrumbContextRef = useRef(context);
@@ -193,9 +195,10 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     });
   };
 
-  const closeMutationDialog = (action: "rename" | "move" | "delete") => {
+  const closeMutationDialog = (action: "rename" | "move" | "delete", restoreFocus = true) => {
+    if (currentDialogOwner.current !== dialogOwner) return;
     setMutationDialog(null);
-    requestAnimationFrame(() => ((action === "rename" ? renameButtonRef.current : action === "move" ? moveButtonRef.current : deleteButtonRef.current) ?? manageButtonRef.current)?.focus());
+    if (restoreFocus) requestAnimationFrame(() => ((action === "rename" ? renameButtonRef.current : action === "move" ? moveButtonRef.current : deleteButtonRef.current) ?? manageButtonRef.current)?.focus());
   };
 
   const deleteFolder = async () => {
@@ -219,7 +222,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       if (canNotify()) notifySuccess(`Deleted folder ${selectedFolder.name}`);
       if (canNotify()) restoreFolderFocus(survivorKey);
     } catch (caught) {
-      if (canNotify()) setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
+      if (canNotify.isOwned()) setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
     }
   };
 
@@ -304,9 +307,9 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     {available && mutationDialog === "rename" && selectedFolder ? <RenameWorkflowFolderDialog
       context={context}
       folder={selectedFolder}
-      onClose={() => closeMutationDialog("rename")}
-      onRenamed={async () => {
-        const canNotify = captureNotificationGuard();
+      onClose={restoreFocus => closeMutationDialog("rename", restoreFocus)}
+      onRenamed={async canNotify => {
+        if (currentDialogOwner.current !== dialogOwner) return;
         await refreshAfterStructureChange([selectedFolder.parentId ?? null]);
         if (canNotify()) notifySuccess("Folder renamed");
       }}
@@ -314,9 +317,9 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     {available && mutationDialog === "move" && selectedFolder ? <MoveWorkflowFolderDialog
       context={context}
       folder={selectedFolder}
-      onClose={() => closeMutationDialog("move")}
-      onMoved={async (parentId, previousParentId) => {
-        const canNotify = captureNotificationGuard();
+      onClose={restoreFocus => closeMutationDialog("move", restoreFocus)}
+      onMoved={async (parentId, previousParentId, canNotify) => {
+        if (currentDialogOwner.current !== dialogOwner) return;
         await refreshAfterStructureChange([previousParentId, parentId]);
         if (canNotify()) notifySuccess("Folder moved");
       }}

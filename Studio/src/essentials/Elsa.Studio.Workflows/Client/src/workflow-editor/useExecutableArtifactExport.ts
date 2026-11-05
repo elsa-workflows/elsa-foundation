@@ -198,7 +198,7 @@ export function useExecutableArtifactDownload({ context, onExported, onFailed }:
       });
       if (canNotify()) onExported(fileName, executable);
     } catch (error) {
-      if (canNotify()) onFailed(formatExecutableArtifactExportError(error), executable);
+      if (canNotify.isOwned()) onFailed(formatExecutableArtifactExportError(error), executable);
     } finally {
       setExportingArtifactId(null);
     }
