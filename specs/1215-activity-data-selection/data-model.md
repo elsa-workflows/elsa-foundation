@@ -99,12 +99,13 @@ The dependency changes are bounded and explicit:
   `Elsa.Activities.Runtime.Core` package; never add Design → Runtime implementation. Prefer consuming
   persisted/provider contract shape facts through the existing Activities Design Core seam.
 
-The final cross-package metadata/profile interface placement remains subject to the M2 architecture
-review. Keep implementations/internal helpers internal by default; expose only a contract or thin domain
-helper that the reviewed cross-package use requires. Cross-domain `InternalsVisibleTo` is not a substitute.
-Metadata DTOs belong to the owning Core contract; reflection, provider work and cache implementations
-remain outside Core. Update architecture/maps evidence for any new dependency edge; no implementation
-or heavy package is added to a Core package.
+The [technical plan](plan.md#implementation-seams) fixes the proposed package boundary for M2 review:
+serialized-shape fact contracts in Activities Design Core, the thin profile definition in Activities
+Runtime Core, and shared source-analysis contracts in Workflows Design Validations Core. Reflection,
+provider work, analysis and caches stay in the owning implementations. Keep internal by default; expose
+only the cross-package contract/thin definition that module authors need. Cross-domain
+`InternalsVisibleTo` is not a substitute. Update architecture/maps evidence for actual new edges; no
+heavy package or implementation-shaped service is added to Core.
 
 CLR extraction follows effective serializer metadata, including explicit names, ignored/readable
 members, applicable ignore conditions and converter ownership. A custom converter whose shape cannot
@@ -116,15 +117,15 @@ behavior is not executed to populate discovery.
 
 ## Compiled read selection
 
-The provisional logical name is `RuntimeReadSelection`. Exact CLR naming is reviewed with the
-technical plan; its semantic fields are fixed here:
+The proposed logical name is `RuntimeReadSelection`, owned by Workflows Runtime Core as fixed in the
+technical plan. Its semantic fields are fixed here; M2 reviews their concrete API before production:
 
 | Field | Meaning |
 |---|---|
 | Selection schema | Version `1` for this literal object/dictionary read operation. |
 | Segments | Immutable copied literal member segments, in order. |
 | Validation mode | `Known` for an authoritative resolved member; `DeferredFit` for an admissible unknown/truncated suffix. |
-| Selected contract | Resolved source type/schema, presence, nullability, cardinality and representation in Known mode. Unknown facts stay unknown in DeferredFit mode. |
+| Selected contract | Leaf type/schema, cardinality and representation plus effective presence/nullability composed from the root and every path segment in Known mode. Unknown facts stay unknown in DeferredFit mode. |
 | Deferred target constraint | Pinned target-fit contract, profile/codec support facts and existing conversion intent used to validate a deferred selection; it does not assert an invented source type. |
 | Protection minimum | The source/output/member minimum established at publication, combined with the actual source envelope at materialization. |
 | Contract identity | Deterministic identity of the profile/source contract facts used for this selection; no labels, run values or CLR object instances. |
@@ -135,8 +136,17 @@ carry exactly one corresponding existing role identity payload **and** a nonempt
 Old whole-value kinds reject an attached selection instead of discarding it. New member kinds reject
 a missing/empty/malformed selection. No constructor accepts arbitrary mutually competing source payloads.
 
-Known selections pin the selected leaf contract **before** the existing conversion planner runs. A
-Customer object is not presented as the source type of its String customer ID. Deferred selections pin
+Known selections pin the effective selected contract **before** the existing conversion planner runs. A
+Customer object is not presented as the source type of its String customer ID. Required presence holds
+only when the root and every traversed member are guaranteed present. A nullable root or intermediate
+member can terminate the read with ExplicitNull even if the leaf declaration is non-nullable: nullable
+`address` plus non-nullable `street` therefore yields a possibly-null `address.street`. An optional prefix
+makes the effective read possibly absent. Unknown prefix/suffix facts remain unknown; they never become
+required/non-null because a leaf is known. Preserve per-segment facts or equivalent deterministic composed
+constraints sufficient for these checks and provenance, and include their behavior in the hash.
+Discovery ranking, compilation/conversion and runtime fit use this same effective contract. Existing
+destination null/default rules decide whether the actual absent/null outcome is admissible; the path
+adds no fallback. Deferred selections pin
 the destination's accepted fit checks before execution; the runtime does not choose a conversion mode
 or profile from observed business data. See the binding contract for the deferred-fit boundary.
 
@@ -157,7 +167,7 @@ committed. It preserves source protection and reports distinct causes:
 | Explicitly optional producer unavailable | Preserve existing producer-optional behavior, with producer-absence provenance; do not conflate it with member optionality. |
 | Object/dictionary member absent | Preserve `Absent` and the failed path segment; destination presence rules decide admissibility. |
 | Selected member explicitly null | Preserve `ExplicitNull`; destination nullability rules decide admissibility. |
-| Intermediate value is null | Stop traversal and retain explicit-null origin; use the pinned path nullability/admission rule, never continue by fabricating an object. |
+| Intermediate value is null | Stop traversal and retain explicit-null origin; use the composed effective path contract and destination admission, never continue by fabricating an object. |
 | Intermediate value is a non-object/non-map scalar or array | Selection shape failure; no implicit indexing, coercion or fan-out. |
 | Present selected value | Validate the pinned contract/target fit, convert under pinned settings and commit the existing consumer snapshot. |
 

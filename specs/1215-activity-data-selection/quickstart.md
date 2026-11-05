@@ -73,13 +73,15 @@ surface/source inventory. A non-applicable target needs its actual contract reas
 For typed target controls include scalar, typed object, JSON/Any, Array/List, HashSet and Dictionary.
 Use authoritative collectionKind plus element alias. Include a non-primitive alias distinction, an ignored
 member and custom/provider shape limit. Assert no render-time coercion or silent ignored member path.
+Include nullable and optional intermediate parents with required non-null leaves, required-parent controls
+and unknown suffixes; assert the composed effective contract, not only the leaf's declaration facts.
 Nested source reads cover activity results, workflow inputs, scoped/shadowed variables and a structure's
 exposed current item; write-target selectors do not gain member-write semantics.
 
 Publication controls cover direct result/member inputs and existing portable expression parameters on
 every affected executable-producing/test-run path. A known invalid required source/member fails before
 artifact/publication/activation writes. Unknown literal-path presence/null/type checks can be deferred;
-assert failure before consumer activation/user code, preserving the successful producer, rather than
+assert failure before consumer activity construction/invocation or intrinsic assignment, preserving the producer, rather than
 requiring a static validator to predict runtime data.
 
 ## Normal, minimal and restarted owned hosts

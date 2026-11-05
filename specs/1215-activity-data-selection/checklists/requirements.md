@@ -27,11 +27,12 @@
 - [x] Meaningful publication and runtime proof is required rather than component rendering alone.
 - [x] Read-only/protected/minimal-host, keyboard/narrow/theme and independent visual evidence are included.
 - [x] Independent product-specification review is complete; the static/deferred validation finding was fixed and independently rechecked.
-- [ ] Technical plan/contracts review is complete.
+- [x] Independent technical plan/contracts review is complete; Publishing composition, runtime DTO effects and effective path nullability/presence findings were fixed and rechecked.
+- [x] Cross-artifact analysis covers all 25 functional requirements, 8 success criteria and 5 stories with 51 tasks; the shared-reference dependency finding was fixed and rechecked.
 - [ ] M1 qualification/closeout permits formal M2 approval.
 
 ## Notes
 
-Content review passes as a provisional draft. The two unchecked items are explicit milestone/approval
-gates, not a claim that production implementation may begin. Technical representation, source metadata,
-artifact identity and the shared authority seam belong in the reviewed plan/contracts.
+Content, technical and coverage review pass as a provisional draft. The remaining unchecked prerequisite
+is a milestone/approval gate, not permission for production implementation. Exact-head PR review/checks
+and M2 merge/resulting-main qualification remain required. No product acceptance is claimed here.

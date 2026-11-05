@@ -7,7 +7,7 @@
 **Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882) · [current goal](../program-goals/activity-data-selection.md).
 **Existing feature:** [#3094 — Author activity-output references in Studio](https://github.com/elsa-workflows/elsa-foundation/issues/3094).
 **Program-goal state:** **Activity Data Selection**, authorized by the owner's "Proceed as proposed" instruction.
-**Product owner:** Sipke. Codex coordinates establishment and the first proof; executable ownership is claimed per issue.
+**Product owner:** Sipke. Codex coordinates delivery through M5 under the 5 November all-milestones continuation; executable ownership is claimed per issue.
 
 ## Recommendation
 
@@ -90,6 +90,11 @@ Broader ADR 0046 coercion also remains proposed outside its accepted output-capt
 decisions; route any needed semantic amendment through its normal agreement process.
 
 ## Milestones and handoff gates
+
+The owner's 5 November instruction, **"Set a goal to deliver all milestones"**, continues this plan
+through M1–M5, normal review/merge and resulting-main qualification. The
+[program receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6667218844)
+records that authorization without expanding scope or waiving milestone gates.
 
 ### M0 — Establish the scoped program ([#3883](https://github.com/elsa-workflows/elsa-foundation/issues/3883))
 

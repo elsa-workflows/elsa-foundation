@@ -69,6 +69,8 @@ carry selected type, presence, nullability, cardinality, protection and known/un
 Use the actual serializer/profile metadata, including explicit names such as `display_name`, ignored
 members and declaration nullability. Do not guess a runtime field by lowercasing a CLR name. Provider
 schemas and immutable templates must supply equivalent authoritative facts or report their limits.
+For a nested choice, compatibility uses effective presence/nullability through the root and all member
+prefixes; a required non-null leaf below a nullable/optional parent is not a guaranteed non-null/present read.
 
 For an unknown or truncated object/dictionary shape, the chooser permits keeping the whole source or
 entering literal member segments. Each segment names one property/key: a dot inside a key is not an
@@ -194,7 +196,7 @@ edit transaction so Undo/Redo restores node edits and reference remaps together.
 | Unauthorized or revoked | Clear cached restricted metadata, cancel reads, preserve protected stored state and show only authorized feedback. No hidden field/editor contains revoked data. |
 | Stale/canceled/late response | Do not replace current facts or mutate the input. A canceled chooser restores focus; a current revision can be explicitly retried. |
 | Known invalid source/member | Show the affected input and working repair. Publication fails before artifact/publication/activation writes on supporting servers. |
-| Deferred member absence/null/type failure | Attribute failure before consumer activation/user code under the binding contract; do not rerun or retroactively invalidate the completed producer. |
+| Deferred member absence/null/type failure | Attribute failure before consumer activity construction/invocation or intrinsic assignment under the binding contract; preserve the completed producer. Runtime target deserialization is distinct from metadata-only discovery. |
 
 All introduced actions work with keyboard/touch and retain accessible names, native focus and cancel
 behavior. References wrap/read at narrow widths. Independent acceptance inspects actual composed states

@@ -179,7 +179,8 @@ composition, a reusable public output and an activity-bearing BPMN node.
   unsupported selection before using it; silently ignoring the member and consuming the whole value is forbidden.
 - **FR-014**: Statically missing/invalid direct references, known member selections and portable expression-source
   bindings MUST fail validation before executable/publication/activation writes. Deferred member-presence/null/type
-  checks MUST fail before consumer activation or user code; runtime causal checks remain as defense in depth.
+  checks MUST fail before constructing/invoking the consumer activity or executing an intrinsic assignment;
+  runtime causal checks remain as defense in depth.
 - **FR-015**: Rename, move, copy/paste, delete, source replacement and Undo/Redo MUST preserve or explicitly
   invalidate the intended reference. Internal references in a copied pair MUST remap to the copied producer.
 - **FR-016**: Invalid references MUST remain inspectable with a useful reason, source/target navigation where
@@ -241,7 +242,7 @@ composition, a reusable public output and an activity-bearing BPMN node.
   have explicit executed outcomes covering every eligible inventory row, without substituting narrower fixture evidence.
 - **SC-003**: Every statically invalid required source/member case in the agreed matrix is rejected before
   publication or activation writes. Deferred member-presence/null/type failures are detected before consumer
-  activation/user code, preserving the successfully committed producer and without re-executing it.
+  activity construction/invocation or intrinsic assignment, preserving the committed producer without re-executing it.
 - **SC-004**: Copy/edit/history cases retain the correct source or present an actionable repair state after
   reopen, with no silent whole-value substitution, changed producer or discarded selection.
 - **SC-005**: The persistent restart journey completes the consumer with its original selected value and

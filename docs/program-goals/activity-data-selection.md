@@ -3,7 +3,8 @@
 - **Status:** Active; owner authorization, 5 November 2026. Establishment precedes the bounded proof;
   reviewed production contracts/specification precede implementation.
 - **Area:** Foundation value binding/source discovery and Studio eligible-input authoring.
-- **Steward:** Sipke. Codex coordinates the first proof; executable ownership is recorded by a valid claim per leaf.
+- **Steward:** Sipke. Codex coordinates delivery through M5 under the owner's 5 November continuation;
+  executable ownership is recorded by a valid claim per leaf.
 - **Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882).
 - **Delivery plan:** [Activity Data Selection](../plans/activity-data-selection.md).
 
@@ -55,12 +56,18 @@ Native sub-issues link all three initial tasks and #3094 to #3882. M1 is blocked
 M1. #3094 retains its narrower criteria and follows the applicable contract gates, rather than acquiring
 unrelated scope from the new parent. New issues start `needs-triage`; assignment does not promote them to Ready.
 
-M0 establishment merged and its resulting main qualified. The current objective is review and closeout
-of the bounded [M1 customer proof](../reports/activity-data-selection-m1.md): actual persisted runtime
+The owner instructed **"Set a goal to deliver all milestones"** on 5 November, recorded on
+[#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6667218844).
+The active delivery objective includes M1–M5, review/merge and resulting-main qualification within the
+existing scope. M0 merged and its initial resulting main qualified. The
+[M1 research report](../reports/activity-data-selection-m1.md) merged: supporting persisted runtime
 controls work, while the requested no-expression UI journey fails at identified binding/source seams.
-M2 consumes the accepted findings through its own reviewed specification, plan and tasks before parallel
-production workers start. The experiment adopts no production contract or implementation. A separate
-Project board is optional and does not delay the first result.
+Post-report resulting-main qualification remains pending in the owning task; cancelled runs are not passes.
+
+[Spec 1215](../../specs/1215-activity-data-selection/spec.md) is provisional M2 preparation while that
+prerequisite runs. Specification, plan/contracts and tasks receive sequential independent review before
+approval or production dispatch. The experiment adopts no production contract/code. Parallel workers
+start only from committed qualified shared contracts. A separate Project board is optional.
 
 ## Completion
 

@@ -103,8 +103,11 @@ hashing. Client metadata is advisory. The closure must cover ordinary workflow c
 test runs, reusable activity/provider templates and placed template occurrences. A Member operation
 on an intrinsic input is the same consumer instruction, not an activity-specific expression shortcut.
 
-Known-member compilation pins its actual leaf type, representation, nullability, presence and collection
-kind. Existing conversion planning then receives that leaf source contract. The producer's declared
+Known-member compilation pins leaf type, representation and collection kind, with effective presence and
+nullability composed from the root and every member prefix as specified in the data model. A nullable or
+optional parent cannot become guaranteed non-null/present merely because its leaf is required. Preserve
+per-segment facts or equivalent composed constraints in the immutable plan/hash. Discovery, conversion
+planning and runtime admission use that effective selected contract. The producer's declared
 result projections and completion policy are not extended with derived fields. Invalid declared paths
 or known incompatible contracts fail publication at the consuming input location.
 
@@ -145,12 +148,18 @@ The existing seams are distinct and require a bounded integration:
 - `WorkflowIntrinsicExecutor.ValidateAssignmentPayload` already uses executable-input validation for
   intrinsic destinations; its source read/selection must use the same pinned admission semantics.
 
-Factor/reuse a bounded internal runtime target-fit helper at the materialization boundary using the
-unchanged activity-value profile and pinned target/nullability facts. Its final contract/interface
-placement remains subject to M2 architecture review. Invoke it before a new selected input
+Factor/reuse a bounded internal Workflows Runtime target-fit helper at the materialization boundary using
+the unchanged activity-value profile and pinned target/nullability facts, as fixed in the
+[technical plan](../plan.md#implementation-seams) for M2 review. Invoke it before a new selected input
 snapshot is committed and before constructing/invoking the consumer, including intrinsic inputs. Keep
 the ordinary hydrator's existing checks as defense in depth. This is new integration, not a claim that
 the existing baseline already performs those checks at the required point.
+
+The pre-activation guarantee concerns the consumer activity's construction/invocation and an intrinsic's
+assignment, not arbitrary code in target DTO deserialization. Runtime fit under the admitted activity
+profile can invoke DTO constructors/setters or configured converters as existing hydration does. Do not
+claim this is side-effect-free metadata inspection. Discovery remains metadata-only and must not perform
+that deserialization; unsupported opaque target handling remains the publication rule above.
 
 ## 4. Presence, policies and execution order
 
@@ -168,7 +177,7 @@ Materialization follows this order:
 
 A present object lacking a segment yields `Absent` with segment provenance. An explicit-null leaf
 remains `ExplicitNull`. A null encountered before the last segment stops traversal with explicit-null
-origin; the pinned path nullability and destination admission decide acceptance rather than fabricating
+origin; the composed effective path contract and destination admission decide acceptance rather than fabricating
 an object or converting it to a missing key. A non-object/non-map intermediate value fails the read.
 Absent required inputs and non-nullable null/absence fail before the consumer is activated. Existing
 permitted optional/null and explicit-default semantics remain; this feature adds no implicit fallback.
@@ -260,7 +269,8 @@ from variables/current items retain lexical scope; no write target inherits memb
 
 Before adopting implementation, require behavioral evidence for:
 
-- Typed Customer ID and explicit `display_name`, ignored members, nullability, literal-dot and empty-key
+- Typed Customer ID and explicit `display_name`, ignored members, nullable/optional intermediate parents
+  with required non-null leaves, required-parent controls, unknown suffixes, literal-dot and empty-key
   paths; known absent fields reject statically, unknown literal fields defer checks honestly.
 - Whole-value no-change byte/hash controls and distinct hashes for distinct member paths/contracts.
 - Three new compiled role kinds, exactly-one payload validation, absent/empty plans and selection attached
