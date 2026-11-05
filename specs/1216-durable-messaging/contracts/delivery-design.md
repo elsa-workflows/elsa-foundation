@@ -373,10 +373,12 @@ change who wins correlation. Quotas and basic durable-payload validation remain 
 checks; they are not recipient selection filters.
 
 Classify transient unavailability, permanent refusal, expiry and ambiguous acknowledgement
-separately. Retrying transient work preserves exact identity and payload. An authorized retry
-of a failed delivery redrives that winner only, after current authority/policy checks; it cannot
-erase recipient proof or reset a delivered definition to pending. Retry is unavailable when a
-terminally consumed target cannot accept the same logical operation. An operator may abandon
+separately. Selected retains an open capability while its attempt is retry-scheduled, unavailable
+or intervention-required. Authorized Retry redrives only that still-open winner after current
+policy checks. Failed is a closed terminal outcome, including immutable payload incompatibility;
+it cannot reopen or offer Retry. Correcting availability can recover an open attempt; changing
+immutable payload/target requires a new explicit business submission/identity. Never reset a
+delivered definition to pending. An operator may abandon
 pending work through a durable audited transition, but cannot delete a deduplication identity
 to bypass its window or unlock a potentially live start.
 
@@ -528,3 +530,22 @@ and operator inspection also require composed Studio acceptance and independent 
 
 This document records a candidate design and its unresolved contracts. It is not evidence that
 any acceptance criterion, provider topology, product journey or protected delivery gate passed.
+
+## Native sender outcome and scoped execution clarification
+
+The source-to-message binding is the accepted branch of a create-only native SourceOutcome:
+Accepted(original receipt and duplicate result) or PermanentlyRejected(safe reason). A definitive
+post-checkpoint refusal records rejection and an exact private continuation even though no inbox
+message exists. The callback guards against that source outcome, consumes the sender wait and
+faults the same send invocation atomically. Temporary/unknown failures cannot become rejection.
+A rejected source never later accepts after authority changes; a new invocation is a new source.
+Continue owed callbacks until consumed or authoritative sender retirement; missing state is not
+retirement. Source proof survives independent producer windows and source/terminal collection.
+
+Production business identity is persistence scope + tenant + canonical definition namespace/ID.
+Finite test scopes are isolated; source run-kind/partition are retained and validated authority,
+not ways to mint extra production recipients/admission lanes. Default partition derives from
+PersistenceScope. Unsupported host partition/run-kind mappings refuse before acceptance.
+ReceiveMessage start mode captures the admitted name/key; wait mode evaluates its expected key.
+Both expose exact name/key, payload and receipt reference so later waits can bind the key without
+requiring it to be duplicated in payload or inferred from execution CorrelationId.

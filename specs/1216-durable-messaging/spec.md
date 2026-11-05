@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3583-durable-messaging`
 **Created**: 2026-11-05
-**Status**: Draft — product decisions recorded; concrete engineering/shared ingress review remains before production implementation.
+**Status**: In progress — owner scope/product decisions and reviewed plan authorize independent submission-rule implementation; T003 shared ingress mapping precedes dependent ABI changes. No producer or durable capability is implemented yet.
 **Input**: Deliver [#3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583) end to end under the [5 November owner authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3583#issuecomment-6671359620).
 **Program goal**: [Durable Messaging](../../docs/program-goals/durable-messaging.md). #3583 remains the canonical feature and delivery record.
 
@@ -204,4 +204,4 @@ Apply both [framework](../../.specify/memory/constitution-framework.md) and [Els
 
 Framework §2.24 and Elsa §E2.8 versioning/Model X and §E2.9 are draft/provisional. This work does not ratify them. Changes to initiative-owned contracts require their agreement path; #3583 currently has no matching #3052 board topic or parent link.
 
-[Quality review](checklists/requirements.md) is incomplete. Implementation planning follows resolution/review of open contracts; this draft is not ready for `speckit-implement`.
+[Planning quality review](checklists/requirements.md) is complete for the independent submission-rule unit. [Tasks](tasks.md) retain the shared-source mapping prerequisite before dependent ABI/store changes and every product/provider/UX qualification still outstanding.
