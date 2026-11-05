@@ -97,6 +97,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             commit.StateChanges.WorkflowExecution?.State is not { Status: WorkflowExecutionStatus.Faulted, HistoryCaptureEnabledAtAdmission: true }))
             throw new InvalidOperationException("Initial fault capture requires the actual readable admitted start boundary.");
         var activities = commit.StateChanges.ActivityExecutions.ToDictionary(change => change.StateId, change => change.State, StringComparer.Ordinal);
+        var sourceFacts = commit.HistorySourceFacts ?? [];
+        var incidents = commit.StateChanges.Incidents.ToDictionary(change => change.StateId, change => change.State, StringComparer.Ordinal);
+        var incidentFactIds = sourceFacts.Where(fact => IsIncidentFact(fact.Kind)).Select(fact => fact.IncidentId).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        var suspendedActivities = sourceFacts.Where(fact => fact.Kind == RuntimeHistorySourceFactKind.ActivityContinuationSuspended)
+            .Select(fact => fact.ActivityExecutionId).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        var deletesBookmarks = commit.StateChanges.Bookmarks.Any(change => change.Operation == RuntimeStateChangeOperation.Delete);
         var selectedBookmark = Read(RuntimeMetadataKeys.BookmarkId);
         var selectedActivity = Read(RuntimeMetadataKeys.ActivityExecutionId);
         var cause = checkpoint.HistoryCausation ?? new RuntimeHistoryCausation(CommandId: Read(RuntimeMetadataKeys.CommandId), SchedulerWorkItemId: Read(RuntimeMetadataKeys.SchedulerWorkItemId));
@@ -124,7 +130,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 RuntimeCheckpointNames.ActivityAttemptClaimed or RuntimeCheckpointNames.ActivityCompleted or RuntimeCheckpointNames.IntrinsicCompleted or
                 RuntimeCheckpointNames.ActivitySuspended or RuntimeCheckpointNames.ActivityCancelled or RuntimeCheckpointNames.ActivityRecovered or RuntimeCheckpointNames.IncidentRecorded) &&
                 !(checkpoint.Name == RuntimeCheckpointNames.BookmarkCreated && a.Status == ActivityExecutionStatus.Suspended &&
-                  (commit.HistorySourceFacts ?? []).Any(fact => fact.Kind == RuntimeHistorySourceFactKind.ActivityContinuationSuspended && fact.ActivityExecutionId == a.InvocationId)))
+                  suspendedActivities.Contains(a.InvocationId)))
                 continue; // Re-projecting a state is not itself an activity lifecycle transition.
             string? name = a.Status switch
             {
@@ -137,7 +143,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 _ => checkpoint.Name == RuntimeCheckpointNames.ActivityStarted ? "ActivityStarted" :
                     checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed ?
                         (Read(RuntimeMetadataKeys.ResumeTargetId) is not null ?
-                            (commit.StateChanges.Bookmarks.Any(b => b.Operation == RuntimeStateChangeOperation.Delete) ? "ActivityResumeClaimed" : "ActivityResumeRetried") : "ActivityAttemptClaimed") : null
+                            (deletesBookmarks ? "ActivityResumeClaimed" : "ActivityResumeRetried") : "ActivityAttemptClaimed") : null
             };
             if (name is null) continue;
             Add(name, RuntimeHistoryEventCategory.ActivityLifecycle, change.StateId, a,
@@ -166,11 +172,14 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         {
             var explicitBookmarks = commit.StateChanges.Bookmarks.Select(change => change.StateId).ToHashSet(StringComparer.Ordinal);
             foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
+            {
+                var ownedBookmarks = cleanup.BookmarkIds.ToHashSet(StringComparer.Ordinal);
+                var ownedActivities = cleanup.ActivityExecutionIds.ToHashSet(StringComparer.Ordinal);
                 foreach (var summary in cleanup.HistoryBookmarks ?? [])
                 {
                     var identity = summary.Identity;
-                    if (identity.WorkflowExecutionId != commit.WorkflowExecutionId || !cleanup.BookmarkIds.Contains(identity.BookmarkId, StringComparer.Ordinal) ||
-                        !cleanup.ActivityExecutionIds.Contains(identity.ActivityExecutionId, StringComparer.Ordinal))
+                    if (identity.WorkflowExecutionId != commit.WorkflowExecutionId || !ownedBookmarks.Contains(identity.BookmarkId) ||
+                        !ownedActivities.Contains(identity.ActivityExecutionId))
                         throw new InvalidOperationException("History cleanup summary differs from its exact owned resource inventory.");
                     if (!explicitBookmarks.Add(identity.BookmarkId)) continue;
                     activities.TryGetValue(identity.ActivityExecutionId, out var activity);
@@ -184,10 +193,11 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                     Add(superseded ? "BookmarkSuperseded" : "BookmarkRemoved", RuntimeHistoryEventCategory.BookmarkLifecycle,
                         identity.BookmarkId, activity, identity.BookmarkId, metadata, mutation, identity.ActivityExecutionId);
                 }
+            }
         }
 
         foreach (var change in commit.StateChanges.Incidents)
-            if (!(commit.HistorySourceFacts ?? []).Any(fact => fact.IncidentId == change.StateId && IsIncidentFact(fact.Kind)))
+            if (!incidentFactIds.Contains(change.StateId))
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The incident owner did not supply an explicit lifecycle or decision contribution.");
         EmitFacts(null, incidentPhase: true);
         foreach (var change in commit.StateChanges.WorkflowDispatches.OrderBy(change => change.StateId, StringComparer.Ordinal))
@@ -255,7 +265,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
         void EmitFacts(bool? beforeOutput, bool incidentPhase = false)
         {
-        foreach (var fact in (commit.HistorySourceFacts ?? []).Where(fact => IsIncidentFact(fact.Kind) == incidentPhase &&
+        foreach (var fact in sourceFacts.Where(fact => IsIncidentFact(fact.Kind) == incidentPhase &&
                      (beforeOutput is null || IsBeforeOutput(fact) == beforeOutput)))
         {
             activities.TryGetValue(fact.ActivityExecutionId ?? "", out var activity);
@@ -268,7 +278,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             if (fact.OutcomeNames.Count > 0) metadata["history.outcomeNames"] = JsonSerializer.Serialize(fact.OutcomeNames);
             if (IsIncidentFact(fact.Kind))
             {
-                var incident = commit.StateChanges.Incidents.SingleOrDefault(change => change.StateId == fact.IncidentId)?.State;
+                incidents.TryGetValue(fact.IncidentId ?? "", out var incident);
                 if (fact.SubjectId != fact.IncidentId || incident is null && fact.Kind != RuntimeHistorySourceFactKind.IncidentProjectionReconciled || incident is not null &&
                     (incident.WorkflowExecutionId != commit.WorkflowExecutionId || incident.ActivityExecutionId != fact.ActivityExecutionId ||
                      fact.Kind == RuntimeHistorySourceFactKind.IncidentCreated && fact.OccurredAt != incident.CreatedAt ||

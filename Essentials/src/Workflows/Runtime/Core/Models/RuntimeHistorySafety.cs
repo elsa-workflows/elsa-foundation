@@ -9,10 +9,13 @@ public static class RuntimeHistorySafety
     {
         ArgumentNullException.ThrowIfNull(batch);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        if (batch.Candidates.Count > 4096) throw new InvalidOperationException("A logical history group exceeds its bounded candidate limit.");
         if (batch.SourceFingerprint is { } source && (source.Length != 64 || source.Any(character => !char.IsAsciiHexDigit(character))))
             throw new InvalidOperationException("A history source proof must be a bounded semantic fingerprint.");
-        foreach (var candidate in batch.Candidates)
+        // Native decisions retain one logical group, regardless of their resource width.
+        // Validate every candidate in bounded temporary windows, without resetting ordinals
+        // or introducing another source identity, allocation, transaction or checkpoint.
+        foreach (var window in batch.Candidates.Chunk(128))
+        foreach (var candidate in window)
         {
             var e = candidate.Event;
             if (e.WorkflowExecutionId != workflowExecutionId || e.CheckpointId != batch.LogicalCheckpointId ||

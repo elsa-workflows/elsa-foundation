@@ -1,0 +1,362 @@
+{
+  "reviewedPredecessor": "799278d305c7dc08620504382783eafbdfb9a7ae",
+  "ownSourceStatus": "frozen, UNCOMPILED/UNEXECUTED",
+  "preparedAt": "2026-11-05T11:52:36.623403+00:00",
+  "formalRound": 3,
+  "maximumRounds": 6,
+  "retainedFindings": [
+    "bulk total-width refusal/native work amplification",
+    "compound failure cause/classification loss",
+    "owner observation integrity classified unavailable"
+  ],
+  "newTestCaseCounts": {
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeHistoryBulkCaptureTests.cs": 14,
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.HistoryBulk.cs": 4,
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowHistoryTests.ObservationFailures.cs": 10,
+    "Essentials/tests/Activities/Runtime/Tests/PublishStimulusSourcePipelineTests.ObservationFailures.cs": 10,
+    "Essentials/tests/Workflows/Runtime/Tests/SourceOwnedStimulusRouterTests.CompoundFailures.cs": 10,
+    "Essentials/tests/Activities/Runtime/Tests/PublishStimulusSourcePipelineTests.CompoundFailures.cs": 3,
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowHistoryTests.CompoundFailures.cs": 3
+  },
+  "newTestCaseTotal": 54,
+  "publicApiDelta": [
+    "one closed diagnostic constant on existing RuntimeHistoryDeliveryFacts; no new type/port/wire shape"
+  ],
+  "schemaProfileCadence": "no migration/schema/policy-version/identity/fingerprint-format/physical-boundary change",
+  "actualCiFeedback": "799 Workflows3416pass/2fail/1unhandled; test-only corrections unexecuted, original assertions retained",
+  "localCapacity": "no heavy producer until explicit post-presentation queue release",
+  "nativeAcceptance": "INCOMPLETE; current20 primary +2 diagnostics=22 journeys,20 Timeline frames per history project, downloaded independent inspection pending",
+  "sourceManifestKind": "Static combined-source identity after normal main integration; no binary/runtime/provider/UX execution proof.",
+  "framedSha256": "3d362c3d7a81d86caf3abe1f67fba550c6576a2728be6553d404182bde7aa1ab",
+  "files": [
+    {
+      "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs",
+      "bytes": 27604,
+      "sha256": "1603977e8bb01d165a84de1dadc1cf3cb0d6cf32586d273ec362fd0af4b666b0",
+      "gitBlob": "af78059748c27ab4c050666ce76adc71ef79171a"
+    },
+    {
+      "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildStartHistoryObservations.cs",
+      "bytes": 6439,
+      "sha256": "3cfa5468be137b5fb167dad75bb5badf9a2de0f5eaf757d966a77185b2aed607",
+      "gitBlob": "83d2fbfa8dafe71c31211ddcbebbf93c152c8cb0"
+    },
+    {
+      "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs",
+      "bytes": 12521,
+      "sha256": "da6264aaf9b226730bd71ac554b69a92ccc86662284214f8690b17f41f5ab2a7",
+      "gitBlob": "18b7f5258662bde894e56795dc890fdee3ec34b2"
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/Services/PublishStimulusExecutor.cs",
+      "bytes": 7882,
+      "sha256": "32b2af5525e73b0d2609ea090b134e0680c9d7b06d2b66201c75eab7381d9e09",
+      "gitBlob": "faff3f09e78855b7dff8f01b041e3bafe44ee2b0"
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/Services/PublishStimulusHistoryObservations.cs",
+      "bytes": 6800,
+      "sha256": "c6e0e02f3da12fc4b5c255763e7edc0ffd29f8599142a4d471096a7561872811",
+      "gitBlob": "16da93e7845b60cdf51c2589d313916c4c87f54c"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeHistoryDeliveryFacts.cs",
+      "bytes": 5427,
+      "sha256": "e1daad6a162226a51ed3867a3695a7712f32c126cf2474ec43c94f396455eecc",
+      "gitBlob": "bc37d6307acd02177c8c45883d46210917d72113"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeHistorySafety.cs",
+      "bytes": 4497,
+      "sha256": "097143e33fd1f5c4429b4936f866fa90e46ddcc1cd7a5728886863fa39d2d041",
+      "gitBlob": "6111030ea74aaa025064eef08f948462113cbdd5"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeHistorySourceSupport.cs",
+      "bytes": 7179,
+      "sha256": "e0bbdc368db73698aa6fbfb039ead33bcec2bdaa25c3934634cec9504cdb02ed",
+      "gitBlob": "4096269e009fcec63b153285abba335095ddcdb0"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt",
+      "bytes": 1654185,
+      "sha256": "270b64ab0b89863549e3bbfe5d208776e86d5b9d43d2d11aca5dc786e0a82b5f",
+      "gitBlob": "0c86ecf2d259910fcf8e5b92756131f28dcf2d62"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs",
+      "bytes": 24800,
+      "sha256": "617abcc9b9ff016e6202aa968471dedb3dfc7a7929d3c2fdfa193eeaa3da8b49",
+      "gitBlob": "51dacdc2b2a002221b5e0095f7524430a54ffb47"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/History/RuntimeHistoryCapture.cs",
+      "bytes": 29751,
+      "sha256": "e84feabdd87b22fc31bcdabca404a5e66f91927c87130522b3243b0e61c952f8",
+      "gitBlob": "147370e3524265946f232f00b649d7ea34fa1e32"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/History/RuntimeHistorySourceAvailability.cs",
+      "bytes": 5274,
+      "sha256": "68437f227ad786ac1b8bae29f3ef79d44efd97096a389ebf4e236636dad65ff1",
+      "gitBlob": "4fcd50142898723768875b9e9f0eec9d6ba31ba5"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryFailures.cs",
+      "bytes": 1144,
+      "sha256": "ea6ca90bb00521775a1ad5de957942bd53d944e62037afdbcd52f072cbcab530",
+      "gitBlob": "82fd8c30958c02ee2a5e2ec2e347c3d9e722afbe"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryCheckpoint.cs",
+      "bytes": 22653,
+      "sha256": "62475d71c19feca447f0af69ebf47fe946af37a568f65ab19f0bae2048cf2a46",
+      "gitBlob": "bfbccf519d2aa6737a5d3732a33b396fe0231c01"
+    },
+    {
+      "path": "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowHistoryTests.CompoundFailures.cs",
+      "bytes": 14718,
+      "sha256": "657e0d4a084981761bfc95dc9b1db0beb17b815923a7e6ad19099769826cd811",
+      "gitBlob": "10c0b4633fdd737d62a21be9be39561846f927a6"
+    },
+    {
+      "path": "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowHistoryTests.ObservationFailures.cs",
+      "bytes": 10309,
+      "sha256": "b1ca85e58a5fce11e3ca70115ede5fd03ff0eaab87efc60d3b1c5754b339a66c",
+      "gitBlob": "5209ce31db8d05d5cd1f689d455996b2c4618e6b"
+    },
+    {
+      "path": "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowHistoryTests.cs",
+      "bytes": 28544,
+      "sha256": "4a5e5a244d0ca9e1658d1f99b20dea7a5766839ddf630532869fceb4950cf7ae",
+      "gitBlob": "984ba331fd249796f30968cb5147ecb98d33ed5d"
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/PublishStimulusSourcePipelineTests.CompoundFailures.cs",
+      "bytes": 7651,
+      "sha256": "26fcfa87cb3a907b5ccc67ac3b2ceeb1f319d1bccc5da52db0f79312bc58fc99",
+      "gitBlob": "a46e81c9561e53e5cff0ce2bee5bc1b6692657eb"
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/PublishStimulusSourcePipelineTests.ObservationFailures.cs",
+      "bytes": 8713,
+      "sha256": "04f9c52bd8b6f478e8ffdee0d6373b94e42554dde056331b881cacf5b85eada0",
+      "gitBlob": "ffb73f5783d5bf9b60f004706f8af9d77d1200f8"
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/PublishStimulusSourcePipelineTests.cs",
+      "bytes": 37762,
+      "sha256": "1dfb8e20546561202d475d75166983d930fa5d798808fc4977e484ff77dcb1bd",
+      "gitBlob": "9c45af047c370e083ac1112b359cdf53327d22a9"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.HistoryBulk.cs",
+      "bytes": 18062,
+      "sha256": "8e07152a9f98dcd53466c5d07860ac92587e8a958976296de8dc50dfc0e943ce",
+      "gitBlob": "271e73614a99507b89c06f9a6d2c7cb8a80daef0"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/RuntimeHistoryBulkCaptureTests.cs",
+      "bytes": 28156,
+      "sha256": "6d249c079b61b7fef8670a7470815866feea758eb9356d478fb6f5c96b380279",
+      "gitBlob": "54ab547914e7f0683d14721a6f979e07b0238923"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/SourceOwnedStimulusRouterTests.CompoundFailures.cs",
+      "bytes": 11743,
+      "sha256": "b64e3e9d7e7b0465bd25667023131d7ed3a1cc98f705eeff90d270d6485b6eba",
+      "gitBlob": "0b22d1214058421cea99f654312be7021be7ae02"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/SourceOwnedStimulusRouterTests.History.cs",
+      "bytes": 17807,
+      "sha256": "1bd723d6db410209ce6e7880b254252cdb556a7ef7781be849f176407c6be452",
+      "gitBlob": "7bf5852439a93b572eae9c10209c4f583bcca7e2"
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx",
+      "bytes": 323804,
+      "sha256": "575a0f6a0a6111bd6e6661953b2e9e1bfa3b77f6be852528a86e894f2acc24a5",
+      "gitBlob": "606f0b42c4d033cf3c6feb82195b8447894c126d"
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryInspection.test.tsx",
+      "bytes": 29569,
+      "sha256": "fb027b08dcd5bfc0ea144c5b69357c1eb78edfa34e570b9c35d86f9def6d23b8",
+      "gitBlob": "31665b1618367cc7998502744c27f287f90e35df"
+    },
+    {
+      "path": "specs/1211-run-history-timeline/evidence/implementation-progress.md",
+      "bytes": 37162,
+      "sha256": "261d7dbec61ddd51bb97aa01c68948e794c9699041174a0e861d4b985b7d0610",
+      "gitBlob": "2e96998613cfef92a78db6c7fa1de8db7173a4e2"
+    },
+    {
+      "path": "specs/1211-run-history-timeline/evidence/review-round-3.md",
+      "bytes": 5493,
+      "sha256": "2b0dbd395e0f51c646c9b26fc66ae1e22774dde6a86117304cc93ef013a4b84d",
+      "gitBlob": "7ed7ffa8a910283c314b99c99bb455a1d46b012f"
+    }
+  ],
+  "integratedMain": "fbd86b5ead89d4a00f12d647605a7e7502f7d2a6",
+  "ownFixCommit": "77157cb443b7888b0b38bee9d3abf8ed6bfbc666",
+  "nativeInventory": {
+    "primary": 20,
+    "diagnostics": 2,
+    "total": 22,
+    "timelineFramesPerHistoryProject": 20,
+    "incomingUserTasksFramesPerProject": 11
+  },
+  "mainIntegrationFiles": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "13b647610640d82f4e912dc65597133c6ef137a389877069bb84bc07e277e2cd",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/package.json",
+      "sha256": "a5688e2a1a97f614a21ecdfebf4f46f4700090bc35603312b9509649771849c0",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/FormsPage.tsx",
+      "sha256": "36750c36dc5a056e2503760fa4bede427e90f406fdf3ecb3ed16819389a23be6",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TasksPage.tsx",
+      "sha256": "a1a55d495487f1be48d78d2ddfef57b3aeb40a2ec3aeb4be4e73241ac8b17787",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/__tests__/taskUi.test.tsx",
+      "sha256": "83a40f23e940eab4f857800a1991ca235751cf74d1f253e64a4c58128e484bec",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css",
+      "sha256": "ddbc48d87dd56f94a14859d16a437c4f8daf97d20fb9d0c1fe9788167d59d8de",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/pnpm-lock.yaml",
+      "sha256": "56dba1eda739d2e97283f39572b4c9bb31da0296c16cdea86195ef7daaeeaa07",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx",
+      "sha256": "73ab0f2fa0b3b840d55fe14b5dbee7700a0323f9b1aae6e1a40e0439e26c4284",
+      "matchesMainExactly": false
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityExecutionBrowser.test.tsx",
+      "sha256": "f480fd1890e8053453472f4861bd0c2fc1e4d3bf335d7c6707081978139561d1",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityExecutionBrowser.tsx",
+      "sha256": "c210ae1218ee7cd56676be6d3f39d47634d5de14537ca4a6b6dfe46fea200668",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/AttachedRunActivityInspector.tsx",
+      "sha256": "854a8fcfdb40517eae530c302228d79d6b9c9119d4ae106e6bc1859e3163c9ed",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx",
+      "sha256": "9b84009da471ef341eae4bdfd68207c8cda4a104255bf7d7949addb9ddd59ecc",
+      "matchesMainExactly": false
+    },
+    {
+      "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/activityExecutionBrowser.css",
+      "sha256": "85049dd66de506b8b605c8c7297ea190e2a86ee4354cc05b7a2a803f4de1219e",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/acceptance/journeys.spec.ts",
+      "sha256": "ccf5eda64c0d08fb7076b2058fa494fd37c348d77b8f1c0b9778fcbc67a02964",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/acceptance/userTasksJourney.ts",
+      "sha256": "07d0e8c40534feb840d2998e7dcb9beec24b4d5962e84aaeb063e48c80d1183e",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/activityDuplicateEditorFixture.tsx",
+      "sha256": "904ff8a50f61ca994a7e5152ba0e25b22b4cf81641fb46f97d72bdb5824c699f",
+      "matchesMainExactly": false
+    },
+    {
+      "path": "Studio/tests/browser/iteration-inspection.spec.ts",
+      "sha256": "28495669bf4534cfccfe6704b9bfd49ad35bcb2934f9263e6f4441ae06d37ec4",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/user-tasks-ux.html",
+      "sha256": "27cfa33a66d37702b2151b4468517fe61e10f988b68f8a4b0a728562ab514746",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/user-tasks-ux.spec.ts",
+      "sha256": "88adcba2f0f2da77b50e1e05a4f45c2c6bf7bf7680f3694fdca53a0df3f389d7",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/browser/userTasksUxFixture.tsx",
+      "sha256": "f27826cbec5dd51cb7781638badcd2668bab27c2aacf771249cbe2835e07b4cb",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "Studio/tests/live/user-tasks-journey.spec.ts",
+      "sha256": "3cc42074ec16a1b992c1a38d8615df9d78cdbc89f6d8abcd3c1b4268dd1599b9",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "docs/contributing/published-image-pair.md",
+      "sha256": "8342577056297a2c90b2128ecaee0580d1f7b80a9262d91195e7ac761c97679b",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "docs/contributing/studio-ux-acceptance.md",
+      "sha256": "151f939c22f444ac8ffd95e9902e275f0666e7c06ed81a670b7000753a020871",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/ci/qualify_studio_consumers.py",
+      "sha256": "3363f55291fc5e2b746ccbefc196fc8d7a180ac3379bd64d54f5cb77bafb85af",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/ci/test_studio_native_scratch.py",
+      "sha256": "601f1ccda6f1459b75f711fd5a16ab13f6e9f396207a555f6a01555a5e1b3aca",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/contributor-pair-proof/diagnostics.mjs",
+      "sha256": "01ae6b8e6190a009aaedd0abd81cc1e210ffe49ad4a16226d1f526f31aeaf29d",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/contributor-pair-proof/diagnostics.test.mjs",
+      "sha256": "bf063c4252722b878b74f7c982f13aa352991619632abf488995150e3b2a58ae",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/contributor-pair-proof/run.mjs",
+      "sha256": "ece012d0cf469c07d83cd9e3c2f679e99af9178e83a883faa3c60e96c89d0b08",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/studio/HostingReuse.Probe/StorePruning/Program.cs",
+      "sha256": "bc2b90327b36ba8bea142707ee903edb23cda46acf4cab3672b6be502ddf972f",
+      "matchesMainExactly": true
+    },
+    {
+      "path": "tools/ux-acceptance/run.py",
+      "sha256": "60023b0f7d99b2c7824f3eb87ec16af7d2ba3ab1a31a5488d64c0f35d725d816",
+      "matchesMainExactly": false
+    }
+  ]
+}

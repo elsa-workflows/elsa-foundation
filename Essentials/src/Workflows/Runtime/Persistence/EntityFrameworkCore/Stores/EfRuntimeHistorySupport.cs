@@ -24,7 +24,7 @@ internal static class EfRuntimeHistorySupport
     {
         try { return read(); }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or InvalidOperationException or NotSupportedException or OverflowException)
-        { throw new RuntimeHistoryIntegrityException(run, "a retained history projection cannot be interpreted safely"); }
+        { throw new RuntimeHistoryIntegrityException(run, "a retained history projection cannot be interpreted safely", exception); }
     }
     internal static void EnsureWritable(RuntimeDbContext context)
     {

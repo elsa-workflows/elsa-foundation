@@ -18,17 +18,20 @@ const api = vi.hoisted(() => ({ getWorkflowHistoryBookmark: vi.fn(), getWorkflow
 vi.mock("../api/runtimeHistory", async original => ({ ...await original<typeof import("../api/runtimeHistory")>(), ...api }));
 const context = { baseUrl: "https://history.example" } as StudioEndpointContext;
 let root: Root, container: HTMLDivElement;
+const scrollIntoView = vi.fn();
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 function render(ui: React.ReactNode) { flushSync(() => root.render(ui)); }
 function click(text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.includes(text)); expect(target).toBeTruthy(); flushSync(() => target!.click()); }
 function bookmarkPage(overrides: Partial<RuntimeHistoryBookmarkPage> = {}): RuntimeHistoryBookmarkPage { return { coverage: historyCoverage, items: [historyBookmark()], totalCount: null, activeCount: null, scopeComplete: true, readAt: "2026-11-05T09:02:00Z", ...overrides }; }
 beforeEach(() => {
+  HTMLElement.prototype.scrollIntoView = scrollIntoView;
   vi.resetAllMocks(); api.supportsWorkflowHistory.mockResolvedValue(true); api.getWorkflowHistoryPage.mockResolvedValue(historyPage());
   api.listWorkflowHistoryBookmarks.mockResolvedValue(bookmarkPage());
   api.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: historyBookmark(), readAt: "2026-11-05T09:02:00Z" });
   api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(), readAt: "2026-11-05T09:02:00Z" });
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+afterEach(() => { flushSync(() => root.unmount()); container.remove(); HTMLElement.prototype.scrollIntoView = originalScrollIntoView; vi.restoreAllMocks(); });
 it("shows bookmark disposition separately from passive expiry, missing creation and current eligibility", async () => {
   api.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: historyBookmark({ priorState: "Unknown", createdHistoryEventId: null }), readAt: "now" });
   render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "bookmark", id: "bookmark-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
@@ -188,6 +191,7 @@ it("submits search explicitly, clears query filters and keeps live/follow toggle
   expect([...container.querySelectorAll("button")].find(button => button.textContent === "Resume live updates")?.getAttribute("aria-pressed")).toBe("false");
   click("Follow latest");
   expect([...container.querySelectorAll("button")].find(button => button.textContent === "Following latest")?.getAttribute("aria-pressed")).toBe("true");
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   expect(changed).toHaveBeenCalledTimes(changesBeforeToggles);
   expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled(); expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });

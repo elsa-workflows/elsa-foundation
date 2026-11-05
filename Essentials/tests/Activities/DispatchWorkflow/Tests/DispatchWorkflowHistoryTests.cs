@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
-public sealed class DispatchWorkflowHistoryTests
+public sealed partial class DispatchWorkflowHistoryTests
 {
     [Theory]
     [InlineData(false)] [InlineData(true)]

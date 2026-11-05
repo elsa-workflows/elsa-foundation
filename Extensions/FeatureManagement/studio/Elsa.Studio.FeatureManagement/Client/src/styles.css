@@ -367,6 +367,10 @@
   gap: 0;
 }
 
+.feature-management-list > .feature-management-muted {
+  padding-inline: 13px;
+}
+
 .feature-management-card {
   display: grid;
   grid-template-columns: 20px 28px minmax(0, 1fr) 28px;
@@ -910,7 +914,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--studio-surface, var(--card));
-  box-shadow: 0 24px 70px var(--fm-overlay-strong);
+  box-shadow: var(--studio-shadow-sm);
   overflow: hidden;
 }
 

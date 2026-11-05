@@ -3625,10 +3625,13 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Review workflow definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
-    window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
+    // Return to the same exact activity deep link; Data belongs to that execution's inspector.
+    window.history.replaceState({}, "", "/workflows/instances/wfexec-1?selected=activity-execution-1");
     // Timeline is the primary workspace. Older hosts report unsupported history without fabricating an activity journal.
     expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     await waitForText(container, "This host does not support durable run history");
+    await waitForText(container, "Data");
+    expect(container.querySelector('[role="tablist"][aria-label="Activity execution views"]')).not.toBeNull();
     await click(buttonByText(container, "Data"));
     await waitForText(container, "Activity Execution ID");
     expect(container.textContent).toContain("activity-execution-1");

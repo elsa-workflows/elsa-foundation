@@ -52,12 +52,13 @@ public sealed class ParentResumeExecutor(
             throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
                 new InvalidOperationException("The parent resume differs from its exact child source."), false);
         source = await WorkflowDispatchHistorySource.ValidateAsync(source, _historyServices, _historyClock, cancellationToken);
-        try { await HandleCoreAsync(source.Intent, source.Intent.HistoryCausation, cancellationToken); }
+        try { await HandleCoreAsync(source.Intent, source.Intent.HistoryCausation, cancellationToken, source); }
         catch (RuntimeSchedulerWorkUnavailableException exception) when (exception.Code == "runtime.history.capture-unavailable")
         { throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, true); }
     }
 
-    private async ValueTask HandleCoreAsync(RuntimePostCommitIntent intent, RuntimeHistoryCausation? sourceCause, CancellationToken cancellationToken)
+    private async ValueTask HandleCoreAsync(RuntimePostCommitIntent intent, RuntimeHistoryCausation? sourceCause, CancellationToken cancellationToken,
+        PostCommitDeliveryContext? verifiedSource = null)
     {
         ArgumentNullException.ThrowIfNull(intent);
         if (!StringComparer.Ordinal.Equals(intent.Kind, DispatchWorkflowConstants.ResumeParentIntentKind) ||
@@ -75,8 +76,7 @@ public sealed class ParentResumeExecutor(
         if (sourceCause is not null && sourceCause.WorkflowExecutionId != payload.ChildWorkflowExecutionId)
             throw new InvalidOperationException("Parent resume history must retain its actual child origin.");
 
-        var result = await bookmarkResumeDispatcher.DispatchAsync(
-            new BookmarkResumeDispatchRequest(
+        var request = new BookmarkResumeDispatchRequest(
                 workflowExecutionId: payload.ParentWorkflowExecutionId,
                 stimulusType: payload.StimulusType,
                 stimulusHash: payload.StimulusHash,
@@ -91,8 +91,20 @@ public sealed class ParentResumeExecutor(
                 payloadType: new ValueTypeDescriptor(
                     TypeAliasConvention.CanonicalAlias(typeof(WorkflowDispatchParentResumePayload)),
                     schemaVersion: 1),
-                providerId: DispatchWorkflowConstants.ParentResumeProviderId) { HistoryCausation = sourceCause },
-            cancellationToken: cancellationToken);
+                providerId: DispatchWorkflowConstants.ParentResumeProviderId) { HistoryCausation = sourceCause };
+        BookmarkResumeDispatchResult result;
+        try { result = await bookmarkResumeDispatcher.DispatchAsync(request, cancellationToken: cancellationToken); }
+        catch (OperationCanceledException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (WorkflowDispatchAdmissionProjectionException) { throw; }
+        catch (Exception primary) when (verifiedSource is not null)
+        {
+            var secondary = CurrentObservationFailures(primary, request);
+            if (secondary.Count == 0) throw;
+            throw new RuntimePostCommitSourceBoundaryException(verifiedSource.SourceOutboxItemId, verifiedSource.Intent.Kind,
+                new AggregateException("Parent delivery and its failure observation both failed.", [primary, .. secondary]),
+                ObservationUnavailable(primary) && secondary.All(ObservationUnavailable));
+        }
 
         if (result.Bookmark is { } resolvedBookmark)
             ValidateBookmark(resolvedBookmark, payload);
@@ -114,6 +126,33 @@ public sealed class ParentResumeExecutor(
         throw new ParentResumeDeferredException(
             payload.DispatchId,
             payload.ParentWorkflowExecutionId);
+    }
+
+    private static IReadOnlyList<Exception> CurrentObservationFailures(Exception primary, BookmarkResumeDispatchRequest request)
+    {
+        object? value;
+        var data = primary.Data;
+        lock (data.SyncRoot) value = data[RuntimeHistoryDeliveryFacts.ObservationFailureDataKey];
+        // The original exception may be reused across requests. Diagnostics retained for any previous request,
+        // or opaque caller data, cannot establish a new failure observation for this verified invocation.
+        return value is IReadOnlyList<object> entries ? entries
+            .OfType<KeyValuePair<WeakReference<object>, Exception>>()
+            .Where(entry => entry.Key.TryGetTarget(out var invocation) && ReferenceEquals(invocation, request))
+            .Select(entry => entry.Value).ToArray() : [];
+    }
+
+    private static bool ObservationUnavailable(Exception failure)
+    {
+        if (RuntimeCheckpointCommitValidationException.IsCauseOf(failure)) return false;
+        return failure switch
+        {
+            RuntimePostCommitSourceBoundaryException source => source.IsUnavailable,
+            StimulusDeliveryBoundaryException source => source.IsUnavailable,
+            RuntimePostCommitDeliveryException delivery => delivery.Kind == PostCommitFailureKind.Transient,
+            RuntimeHistoryIntegrityException or InvalidDataException or JsonException or ArgumentException or NotSupportedException => false,
+            _ when failure.InnerException is { } inner => ObservationUnavailable(inner),
+            _ => failure is not InvalidOperationException
+        };
     }
 
     private static void ValidateIntent(

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Data;
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework.Tests;
@@ -130,12 +132,32 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
                 InvokeHistoryPortAsync(HistoryStore(context, new FixedAccessor("tenant-a")), operation, stop.Token));
             Assert.Equal(stop.Token, cancelled.CancellationToken);
         }
-        await using (var corrupt = db.Open("tenant-a"))
-            await corrupt.RuntimeHistoryHeads.ExecuteUpdateAsync(setters => setters.SetProperty(row => row.ContentJson, "[malformed"));
-        await using var invalid = db.Open("tenant-a");
-        await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() =>
-            InvokeHistoryPortAsync(HistoryStore(invalid, new FixedAccessor("tenant-a")), operation));
-        Assert.Empty(invalid.ChangeTracker.Entries());
+        string originalContent;
+        await using (var stored = db.Open("tenant-a"))
+            originalContent = await stored.RuntimeHistoryHeads.AsNoTracking().Select(row => row.ContentJson).SingleAsync();
+        using (var stored = JsonDocument.Parse(originalContent))
+            Assert.Equal(JsonValueKind.Number, stored.RootElement.GetProperty("policy").GetProperty("version").ValueKind);
+        var typed = JsonNode.Parse(originalContent)!;
+        typed["policy"]!["version"] = "malformed-policy-version";
+        foreach (var corruption in new[] { (Content: "[malformed", Typed: false), (Content: typed.ToJsonString(), Typed: true) })
+        {
+            await using (var corrupt = db.Open("tenant-a"))
+                await corrupt.RuntimeHistoryHeads.ExecuteUpdateAsync(setters => setters.SetProperty(row => row.ContentJson, corruption.Content));
+            await using var invalid = db.Open("tenant-a");
+            var integrity = await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() =>
+                InvokeHistoryPortAsync(HistoryStore(invalid, new FixedAccessor("tenant-a")), operation));
+            var parse = Assert.IsType<JsonException>(integrity.InnerException);
+            Assert.False(string.IsNullOrWhiteSpace(parse.Path));
+            Assert.False(string.IsNullOrWhiteSpace(parse.StackTrace));
+            if (corruption.Typed)
+            {
+                Assert.Equal("$.policy.version", parse.Path);
+                Assert.Equal(0, parse.LineNumber);
+                Assert.True(parse.BytePositionInLine > 0);
+            }
+            Assert.DoesNotContain("malformed-policy-version", integrity.Message);
+            Assert.Empty(invalid.ChangeTracker.Entries());
+        }
     }
 
     [Fact]

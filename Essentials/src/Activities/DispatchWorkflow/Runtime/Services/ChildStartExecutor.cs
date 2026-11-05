@@ -94,14 +94,34 @@ public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHa
             disposition = await HandleCoreAsync(source.Intent, cancellationToken, source.Intent.HistoryCausation);
         }
         catch (OperationCanceledException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (WorkflowDispatchAdmissionProjectionException) { throw; }
         catch (RuntimePostCommitSourceBoundaryException) { throw; }
-        catch (Exception)
+        catch (Exception primary)
         {
-            if (observation is not null) await observation.DispositionAsync("child-start-failure-observed", cancellationToken);
+            if (observation is not null)
+            {
+                try { await observation.DispositionAsync("child-start-failure-observed", cancellationToken); }
+                catch (Exception secondary)
+                {
+                    throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                        new AggregateException("Child delivery and its failure observation both failed.", primary, secondary),
+                        ObservationUnavailable(primary) && ObservationUnavailable(secondary));
+                }
+            }
             throw;
         }
         if (observation is not null) await observation.DispositionAsync(disposition, cancellationToken);
     }
+
+    private static bool ObservationUnavailable(Exception failure) => failure switch
+    {
+        RuntimePostCommitSourceBoundaryException source => source.IsUnavailable,
+        StimulusDeliveryBoundaryException source => source.IsUnavailable,
+        RuntimePostCommitDeliveryException delivery => delivery.Kind == PostCommitFailureKind.Transient,
+        RuntimeHistoryIntegrityException or InvalidDataException or ArgumentException or NotSupportedException => false,
+        _ => failure is not InvalidOperationException
+    };
 
     private async ValueTask<string> HandleCoreAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken,
         RuntimeHistoryCausation? sourceCause = null)
