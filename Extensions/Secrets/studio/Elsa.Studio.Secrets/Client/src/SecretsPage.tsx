@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, KeyRound, Plus, RefreshCw, X } from "lucide-react";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AlertCircle, KeyRound, Plus, RefreshCw, X } from "lucide-react";
+import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState} from "@elsa-workflows/studio-ui";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
@@ -11,7 +11,7 @@ import { CreateSecretDialog, RotateSecretDialog } from "./SecretDialogs";
 const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked", "Deleted"];
 const MAX_SECRETS_PER_LOAD = 100;
 
-export function SecretsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
+export function SecretsPage({ context, dialogs, notifications }: { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi }) {
   const [search, setSearch] = useState("");
   const [completedSearch, setCompletedSearch] = useState("");
   const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
@@ -27,11 +27,14 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const [descriptorsLoading, setDescriptorsLoading] = useState(true);
   const [descriptorError, setDescriptorError] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
   const descriptorRequestSequence = useRef(0);
   const secretsRequestSequence = useRef(0);
   const attemptedSearch = useRef("");
+  const currentContext = useRef(context);
+  currentContext.current = context;
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
   const scopeOptions = useMemo(() => {
@@ -128,18 +131,18 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     };
   }, [load]);
 
-  async function refreshWithStatus(message: string) {
+  async function refreshWithConfirmation(message: string) {
+    if (!mounted.current || currentContext.current !== context) return;
+    notifications?.notify({ level: "success", title: message });
     await load(completedSearch);
-    setStatus(message);
   }
 
   async function saveMetadata(name: string, request: UpdateSecretRequest) {
     setBusyName(name);
     setError(null);
-    setStatus(null);
     try {
       await updateSecret(context, name, request);
-      await refreshWithStatus("Secret metadata updated.");
+      await refreshWithConfirmation("Secret metadata updated.");
     } finally {
       setBusyName(null);
     }
@@ -147,18 +150,16 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
 
   async function saveCreatedSecret(request: CreateSecretRequest) {
     setError(null);
-    setStatus(null);
     await createSecret(context, request);
-    await refreshWithStatus("Secret created.");
+    await refreshWithConfirmation("Secret created.");
   }
 
   async function saveRotation(name: string, request: RotateSecretRequest) {
     setBusyName(name);
     setError(null);
-    setStatus(null);
     try {
       await rotateSecret(context, name, request);
-      await refreshWithStatus("Secret rotated.");
+      await refreshWithConfirmation("Secret rotated.");
     } finally {
       setBusyName(null);
     }
@@ -167,11 +168,12 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   async function runTest(secret: SecretMetadata) {
     setBusyName(secret.name);
     setError(null);
-    setStatus(null);
     try {
       const result = await testSecret(context, secret.name);
       const summary = result.message?.trim() || (result.succeeded ? "Secret resolved successfully." : "Secret test failed.");
-      setStatus(`${result.succeeded ? "Test succeeded" : "Test failed"} (${result.code}): ${summary}`);
+      if (!mounted.current || currentContext.current !== context) return;
+      if (result.succeeded) notifications?.notify({ level: "success", title: "Secret test succeeded.", message: `(${result.code}): ${summary}` });
+      else setError(`Test failed (${result.code}): ${summary}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Secret test failed.");
     } finally {
@@ -184,10 +186,9 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" }))) return;
     setBusyName(secret.name);
     setError(null);
-    setStatus(null);
     try {
       await revokeSecret(context, secret.name);
-      await refreshWithStatus("Secret revoked.");
+      await refreshWithConfirmation("Secret revoked.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Secret could not be revoked.");
     } finally {
@@ -199,11 +200,10 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" }))) return;
     setBusyName(secret.name);
     setError(null);
-    setStatus(null);
     try {
       await deleteSecret(context, secret.name);
       setDialog(current => current?.kind === "edit" && current.name === secret.name ? null : current);
-      await refreshWithStatus("Secret deleted.");
+      await refreshWithConfirmation("Secret deleted.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Secret could not be deleted.");
     } finally {
@@ -255,8 +255,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           {" "}<button type="button" onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</button>
         </p>
       ) : null}
-      {error ? <SecretNotification message={error} error onDismiss={() => setError(null)} /> : null}
-      {status ? <SecretNotification message={status} onDismiss={() => setStatus(null)} /> : null}
+      {error ? <SecretNotification message={error} onDismiss={() => setError(null)} /> : null}
       {!loading && !loadError && partialResult ? (
         <p className="secrets-coverage">
           Only the first {MAX_SECRETS_PER_LOAD} results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.
@@ -296,9 +295,9 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
                   <td className="secrets-name-cell">
                     <div className="secrets-name-heading">
                       <button type="button" className="secrets-row-link" data-secret-open={secret.name} onClick={() => setDialog({ kind: "edit", name: secret.name })}><strong>{secret.displayName || secret.name}</strong></button>
-                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} /> : null}
+                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} notifications={notifications} /> : null}
                     </div>
-                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} /></div> : null}
+                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} /></div> : null}
                   </td>
                   <td>{labelType(descriptors, secret.typeName)}</td>
                   <td>{labelStore(descriptors, secret.storeName)}</td>
@@ -326,6 +325,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
         </StudioTableContainer>
 
         {dialog?.kind === "edit" && dialogSecret ? <SecretDetail
+          notifications={notifications}
           key={dialogSecret.name}
           secret={dialogSecret}
           descriptors={descriptors}
@@ -364,15 +364,14 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   );
 }
 
-function SecretNotification({ message, error = false, onDismiss }: { message: string; error?: boolean; onDismiss(): void }) {
-  const Icon = error ? AlertCircle : CheckCircle2;
+function SecretNotification({ message, onDismiss }: { message: string; onDismiss(): void }) {
   return (
-    <div className={`secrets-notification ${error ? "secrets-alert" : "secrets-status"}`}>
-      <div className="secrets-notification-message" role={error ? "alert" : "status"}>
-        <Icon size={16} aria-hidden />
+    <div className="secrets-notification secrets-alert">
+      <div className="secrets-notification-message" role="alert">
+        <AlertCircle size={16} aria-hidden />
         <span>{message}</span>
       </div>
-      <button type="button" className="secrets-notification-close" aria-label={error ? "Dismiss error" : "Dismiss notification"} title="Dismiss" onClick={onDismiss}>
+      <button type="button" className="secrets-notification-close" aria-label="Dismiss error" title="Dismiss" onClick={onDismiss}>
         <X size={16} aria-hidden />
       </button>
     </div>

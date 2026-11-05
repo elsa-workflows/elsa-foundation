@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { SecretsPage } from "../SecretsPage";
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 const cleanup = new Set<() => void>();
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 afterEach(() => {
+  notifications.notify.mockClear();
   for (const dispose of cleanup) dispose();
   if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
   else Reflect.deleteProperty(navigator, "clipboard");
@@ -125,7 +127,7 @@ describe("secrets page", () => {
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
     clickButton(container, "Save changes");
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(container.querySelector("table")?.textContent).toContain("Updated payments");
     expect(document.activeElement?.getAttribute("data-secret-edit")).toBe("payments.api");
@@ -186,7 +188,7 @@ describe("secrets page", () => {
     expect(container.querySelector("[role=dialog]")).toBe(editor);
     expect(editor.querySelector<HTMLButtonElement>("button[aria-label='Close editor']")?.disabled).toBe(true);
     finishSave(paymentSecret());
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
   });
 
@@ -203,34 +205,38 @@ describe("secrets page", () => {
     expect(editor.querySelector("[role=alert]")?.textContent).toContain("Metadata save unavailable.");
     expect(editor.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Retry payments");
     clickButton(container, "Save changes");
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(putJson).toHaveBeenCalledTimes(2);
   });
 
-  it.each([false, true])("dismisses operation notifications and shows later results (error=%s)", async error => {
-    const postJson = error
-      ? vi.fn().mockRejectedValue(new Error("Test unavailable."))
-      : vi.fn().mockResolvedValue({ succeeded: true, code: "resolved", message: "Secret resolved successfully." });
+  it("toasts successful tests once and leaves failed test results inline", async () => {
+    const postJson = vi.fn().mockResolvedValueOnce({ succeeded: true, code: "resolved", message: "Secret resolved successfully." })
+      .mockResolvedValueOnce({ succeeded: false, code: "unavailable", message: "Provider unavailable." });
     const { container } = render({ postJson });
     await waitForText(container, "Payments API");
-    const runTest = () => clickSecretAction(container, "payments.api", "Test");
-    await runTest();
-    const message = error ? "Test unavailable." : "Secret resolved successfully.";
-    await waitForText(container, message);
-    const notice = container.querySelector<HTMLElement>(".secrets-notification")!;
-    const messageRegion = notice.querySelector("[role]")!;
-    expect(messageRegion.getAttribute("role")).toBe(error ? "alert" : "status");
-    expect(messageRegion.querySelector("button")).toBeNull();
-    const dismiss = notice.querySelector<HTMLButtonElement>("button")!;
-    expect(dismiss.getAttribute("aria-label")).toBe(error ? "Dismiss error" : "Dismiss notification");
-    flushSync(() => dismiss.click());
+    await clickSecretAction(container, "payments.api", "Test");
+    await waitFor(() => notifications.notify.mock.calls.length === 1);
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Secret test succeeded.", message: "(resolved): Secret resolved successfully." });
     expect(container.querySelector(".secrets-notification")).toBeNull();
-    expect(container.textContent).toContain("Payments API");
-    await runTest();
-    await waitForText(container, message);
-    expect(container.querySelector(".secrets-notification")).not.toBeNull();
-    expect(postJson).toHaveBeenCalledTimes(2);
+    await clickSecretAction(container, "payments.api", "Test");
+    await waitForText(container, "Test failed (unavailable): Provider unavailable.");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Provider unavailable.");
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
+    flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Dismiss error"]')!.click());
+    expect(container.querySelector(".secrets-notification")).toBeNull();
+  });
+
+  it("does not toast a test result from an obsolete backend context", async () => {
+    let finish!: (value: unknown) => void;
+    const postJson = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const { container, changeEndpoint } = render({ postJson });
+    await waitForText(container, "Payments API");
+    await clickSecretAction(container, "payments.api", "Test");
+    changeEndpoint("https://other-context.example");
+    finish({ succeeded: true, code: "resolved" });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(notifications.notify).not.toHaveBeenCalled();
   });
 
   it("clears entered rotation material and visibility when the target secret changes", async () => {
@@ -464,7 +470,7 @@ describe("secrets page", () => {
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
     clickButton(container, "Save changes");
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
 
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
@@ -757,7 +763,8 @@ describe("secrets page", () => {
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await waitFor(() => button.parentElement?.textContent === "Copied");
+      await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret name copied."));
+      expect(button.parentElement?.textContent).not.toContain("Copied");
     }
     expect(writeText.mock.calls).toEqual([["payments.api"], ["payments.api"]]);
     expect(JSON.stringify(writeText.mock.calls)).not.toContain("raw-secret-value");
@@ -795,11 +802,13 @@ describe("secrets page", () => {
     change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "secret-value");
     clickButton(container, "Create", ".secrets-modal");
 
-    await waitForText(container, "Secret created.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret created."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(container.querySelector(".secrets-detail")).toBeNull();
     expect(container.textContent).toContain("smtp-password");
     expect(postJson).toHaveBeenCalledWith("/secrets", expect.objectContaining({ value: "secret-value" }));
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".secrets-notification")).toBeNull();
     unmount();
   });
 
@@ -863,7 +872,7 @@ function render(options: {
     }
   });
   const renderPage = (context = createContext()) => {
-    flushSync(() => root.render(<SecretsPage context={context} dialogs={dialogs} />));
+    flushSync(() => root.render(<SecretsPage context={context} dialogs={dialogs} notifications={notifications} />));
   };
   renderPage();
 

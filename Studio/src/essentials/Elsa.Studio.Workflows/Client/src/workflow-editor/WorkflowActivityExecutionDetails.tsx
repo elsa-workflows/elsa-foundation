@@ -1,3 +1,4 @@
+import { getNotifications } from "./notifications";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Undo2 } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
@@ -202,7 +203,7 @@ export function WorkflowActivityExecutionDetails({
       code: true
     }] : [])
   ];
-  const markCopied = (label: string) => setCopyStatus(`Copied ${label}.`);
+  const markCopied = (label: string) => { setCopyStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}.` }); };
   const markCopyFailed = (label: string) => setCopyStatus(`Could not copy ${label}.`);
 
   return (

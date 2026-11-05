@@ -48,6 +48,7 @@ export function TaskDetail({ api, id, identity, changed }: { api: ElsaStudioModu
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const [missing, setMissing] = useState(false); const [stale, setStale] = useState(false);
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
+  const currentApi = useRef(api); currentApi.current = api;
   const edited = useRef(false); const busyRef = useRef(false); const sequence = useRef(0);
   const attempt = useRef<{ action: string; data: Record<string, unknown>; requestId: string; revision: number } | null>(null);
   const refresh = useCallback(async () => {
@@ -66,7 +67,7 @@ export function TaskDetail({ api, id, identity, changed }: { api: ElsaStudioModu
   useEffect(() => { if (task?.status !== "CompletionPending") return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [task?.status, refresh]);
   const act = async (operation: string, action?: string) => {
     if (!task || busyRef.current) return;
-    busyRef.current = true; setBusy(true); setNotice(""); setErrors({}); ++sequence.current;
+    busyRef.current = true; setBusy(true); setNotice(""); setErrors({}); const operationSequence = ++sequence.current;
     const retrying = operation === "complete" && attempt.current !== null;
     try {
       let request: Record<string, unknown> = { requestId: crypto.randomUUID() };
@@ -78,9 +79,12 @@ export function TaskDetail({ api, id, identity, changed }: { api: ElsaStudioModu
       }
       if (operation === "reassign") request = { ...request, assigneeId: targetKind === "user" ? target : null, groupId: targetKind === "group" ? target : null };
       const result = await mutate(api, task, operation, request);
+      if (currentApi.current !== api || sequence.current !== operationSequence) return;
       setTask(result); if (result.decision) { setData(result.decision.response.data); edited.current = false; }
       if (result.status !== "CompletionPending") attempt.current = null;
-      setNotice(result.status === "CompletionPending" ? responsePendingNotice : "Task updated."); changed();
+      if (result.status === "CompletionPending") setNotice(responsePendingNotice);
+      else api.notifications?.notify({ level: "success", title: "Task updated." });
+      changed();
     } catch (failure) {
       const status = statusOf(failure); setNotice(status === 409 ? "This task changed. Refresh to review its current state; your entered values are preserved." : message(failure));
       if (status === 409 || status === 403 || status === 404) setStale(true);

@@ -51,7 +51,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   // Every Extension Builder call is routed through the Studio management bridge on the Studio origin (ADR 0037, #256),
   // so the whole module runs on api.host and the browser never talks to the backend host-control surface directly.
   const context = api.host;
-  const tracker = useOperationTracker();
+  const tracker = useOperationTracker(api.notifications);
 
   const [state, setState] = useState<BuilderState>("loading");
   const [managementUnavailable, setManagementUnavailable] = useState<BackendManagementUnavailable | null>(null);
@@ -317,7 +317,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     activeBuild, buildHistory, buildLog, buildCommand, buildTargetPath, runtimeStatus, promotionResult,
     sourceControlStatus, sourceControlDiff, commitMessage, activeInspectorTab, dockOpen, extensionName,
     workspaceName, serverLocalPath, serverLocalName, cloneRepositoryUrl, cloneRepositoryName, projectDraft,
-    templateDraft, workingBranchName, allowProtectedBranchEdit, newFilePath, status: tracker.status, error: tracker.error,
+    templateDraft, workingBranchName, allowProtectedBranchEdit, newFilePath, error: tracker.error,
     selectedWorkspace, selectedRepository, selectedProject, selectedProjectId, latestArtifact, inWorkspace,
     canBuild, buildDisabledReason, canPromote, defaultWorkingBranchName, buildInProgress,
     isBusy: tracker.isBusy,

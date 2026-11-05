@@ -1,24 +1,27 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import { actor, basicProvider, createForm, forms, message, type FormVersion, type TaskActor, type TaskField, type TaskForm } from "./taskApi";
 const initial = (): TaskForm => ({ id: "", version: "1", name: "", provider: basicProvider, fields: [] });
 export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
+  const currentApi = useRef(api); currentApi.current = api;
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current++; }, [api]);
   const [versions, setVersions] = useState<FormVersion[]>([]); const [nextPage, setNextPage] = useState<string | null>(null); const [identity, setIdentity] = useState<TaskActor>();
-  const [form, setForm] = useState(initial); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState(initial); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => { try { const [who, all] = await Promise.all([actor(api), forms(api)]); setIdentity(who); setVersions(all.items); setNextPage(all.next ?? null); setError(""); } catch (failure) { setError(message(failure)); } }, [api]);
   useEffect(() => { void refresh(); }, [refresh]);
   const field = (index: number, update: Partial<TaskField>) => setForm(value => ({ ...value, fields: value.fields.map((entry, i) => i === index ? { ...entry, ...update } : entry) }));
   const save = async () => {
-    if (busy) return; setBusy(true); setNotice("");
-    try { await createForm(api, form); setNotice("The immutable form version is available to new tasks."); await refresh(); }
+    if (busy) return; setBusy(true); setError("");
+    const operationGeneration = generation.current;
+    try { await createForm(api, form); if (currentApi.current !== api || generation.current !== operationGeneration) return; api.notifications?.notify({ level: "success", title: "Form version published.", message: "The immutable form version is available to new tasks." }); await refresh(); }
     catch (failure) { setError(message(failure)); } finally { setBusy(false); }
   };
   const valid = form.id.trim() && form.version.trim() && form.name.trim() && form.fields.every(item => item.key.trim() && item.label.trim()) && new Set(form.fields.map(item => item.key)).size === form.fields.length;
   return <StudioPage className="user-tasks"><StudioPageHeader title="Reusable task forms" description="Publish a field definition once and select its exact version in a User Task." actions={<a href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>} />
     {error ? <div role="alert"><StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /></div> : null}
-    {notice ? <p role="status">{notice}</p> : null}
     <ul>{versions.map(version => <li key={`${version.form.id}/${version.form.version}`}><strong>{version.form.name}</strong> · {version.form.id} · version {version.form.version}
       {identity?.canManageForms && version.form.provider === basicProvider ? <StudioButton onClick={() => setForm({ ...structuredClone(version.form), version: "" })}>Create next version</StudioButton> : null}</li>)}</ul>
     {nextPage ? <StudioButton onClick={() => { void forms(api, nextPage).then(page => { setVersions(previous => [...previous, ...page.items]); setNextPage(page.next ?? null); }, failure => setError(message(failure))); }}>More form versions</StudioButton> : null}

@@ -67,6 +67,9 @@ test("collections and connection creation", async ({ page }, info) => {
   await secret.getByLabel("Value", { exact: true }).fill("disposable-acceptance-value");
   await secret.getByRole("button", { name: "Create", exact: true }).click();
   await expect(secret).toBeHidden();
+  await expect(page.locator(".studio-toast").filter({ hasText: "Secret created." })).toBeVisible();
+  await expect(page.locator(".secrets-notification")).toHaveCount(0);
+  await capture(page, info, "secret-created-toast");
 
   await page.goto("/security/connections");
   const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
@@ -87,7 +90,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("status").filter({ hasText: /^Connection / })).toContainText(`Connection 'qa-${stamp}' created.`);
+  await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
+  await expect(page.locator(".connections-notice")).toHaveCount(0);
   const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
   await expect(createdRow).toBeVisible();
   const nameLink = createdRow.getByRole("button", { name: `qa-${stamp}`, exact: true });

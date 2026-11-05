@@ -116,7 +116,7 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
       "promote",
       () => promoteBuild(context, workspaceId, projectId, buildId, { buildId })
         .catch(error => refreshAfterPromoteRelayTimeout(error, workspaceId, projectId, buildId)),
-      `Promotion response received for ${latestArtifact.packageId} ${latestArtifact.version}.`
+      ""
     );
     await applyPromotionResult(result, workspaceId, projectId);
   }
@@ -134,7 +134,7 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
       "promote",
       () => promoteBuildArtifact(context, workspaceId, projectId, buildId, artifact.id, { buildId })
         .catch(error => refreshAfterPromoteRelayTimeout(error, workspaceId, projectId, buildId)),
-      `Promotion response received for ${artifact.packageId} ${artifact.version}.`
+      ""
     );
     await applyPromotionResult(result, workspaceId, projectId);
   }

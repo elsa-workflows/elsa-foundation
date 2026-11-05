@@ -170,13 +170,14 @@ Decide per feedback surface whether it becomes a notification:
 | Existing feedback | Becomes |
 |---|---|
 | Result of a user action (moved, deleted, restored, saved, favorited) | `notify({ level: "success" })` |
-| Failed action the user cannot correct on the page | `notify({ level: "error" })` |
-| Long-running operation (export, publish, import, test run) | `track()` |
+| Failed action, validation or field error | stays inline with retry/recovery context |
+| Operation progress or a detailed execution/import/publication receipt | stays near the operation; toast a brief completion only when useful |
 | Reversible action with existing reversal logic | toast with an `action` |
-| Load failure, stale data, validation and field errors | stays inline |
+| Load failure, stale data, required restart or other ongoing condition | stays inline until resolved |
+| Autosave or local editing state | quiet inline indicator |
 | Loading placeholders (`Suspense` fallbacks) | stays inline |
 
-Publish action results through the injected `api.notifications`; never render a local status bar for them.
+Publish transient confirmations through the injected `api.notifications` at action completion, not from a render or an effect that can replay on navigation. Do not duplicate them in local success banners. Preserve inline errors, ongoing conditions, detailed receipts and quiet editor indicators.
 
 ## Verify a new module
 

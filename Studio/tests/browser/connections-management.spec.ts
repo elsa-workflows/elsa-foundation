@@ -78,7 +78,8 @@ test("creating a Connection preserves the accepted search and leaves absent resu
   await expect(dialog).toHaveCount(0);
   await expect(search).toHaveValue("customer");
   await expect.poll(() => listQueries).toEqual(["", "customer", "customer"]);
-  await expect(page.getByRole("status")).toContainText("Connection 'billing-api' created.");
+  await expect(page.locator(".studio-toast")).toContainText("Connection 'billing-api' created.");
+  await expect(page.locator(".connections-notice")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 

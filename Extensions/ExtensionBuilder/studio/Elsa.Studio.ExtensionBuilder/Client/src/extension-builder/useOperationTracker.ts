@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { describeExtensionBuilderError } from "./helpers";
 
 // Operations are grouped into independent scopes so that running one action (e.g. staging a file)
@@ -7,22 +8,20 @@ import { describeExtensionBuilderError } from "./helpers";
 export type OperationScope = "home" | "explorer" | "save" | "build" | "source" | "promote" | "runtime";
 
 export interface OperationTracker {
-  status: string | null;
   error: string | null;
-  setStatus(value: string | null): void;
   setError(value: string | null): void;
   // True while any operation in the given scope is running.
   isBusy(scope: OperationScope): boolean;
   // True while any operation at all is running (used only for hard, page-wide guards).
   anyBusy: boolean;
-  // Runs `operation` under `scope`, mirroring the previous runOperation semantics (clears error/
-  // status, sets success status, surfaces errors) but scoping the busy flag to `scope`.
-  runOperation<T>(scope: OperationScope, operation: () => Promise<T>, success: string): Promise<T | null>;
+  // Runs `operation` under `scope`, toasts completion and keeps errors inline.
+  runOperation<T>(scope: OperationScope, operation: () => Promise<T>, success: string | ((result: T) => string)): Promise<T | null>;
 }
 
-export function useOperationTracker(): OperationTracker {
+export function useOperationTracker(notifications?: StudioNotificationApi): OperationTracker {
   const [busyCounts, setBusyCounts] = useState<Partial<Record<OperationScope, number>>>({});
-  const [status, setStatus] = useState<string | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [error, setError] = useState<string | null>(null);
 
   const adjust = useCallback((scope: OperationScope, delta: number) => {
@@ -35,13 +34,13 @@ export function useOperationTracker(): OperationTracker {
     });
   }, []);
 
-  const runOperation = useCallback(async <T,>(scope: OperationScope, operation: () => Promise<T>, success: string): Promise<T | null> => {
+  const runOperation = useCallback(async <T,>(scope: OperationScope, operation: () => Promise<T>, success: string | ((result: T) => string)): Promise<T | null> => {
     adjust(scope, 1);
     setError(null);
-    setStatus(null);
     try {
       const result = await operation();
-      setStatus(success);
+      const title = typeof success === "function" ? success(result) : success;
+      if (mounted.current && title) notifications?.notify({ level: "success", title });
       return result;
     } catch (e) {
       // Every scoped operation error goes through the shared Extension Builder formatter so bridge infrastructure
@@ -52,10 +51,10 @@ export function useOperationTracker(): OperationTracker {
     } finally {
       adjust(scope, -1);
     }
-  }, [adjust]);
+  }, [adjust, notifications]);
 
   const isBusy = useCallback((scope: OperationScope) => (busyCounts[scope] ?? 0) > 0, [busyCounts]);
   const anyBusy = Object.keys(busyCounts).length > 0;
 
-  return { status, error, setStatus, setError, isBusy, anyBusy, runOperation };
+  return { error, setError, isBusy, anyBusy, runOperation };
 }

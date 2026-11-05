@@ -21,7 +21,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
 function ExtensionBuilderView() {
   const builder = useExtensionBuilder();
-  const { state, capabilities, managementUnavailable, error, status, advanced, inWorkspace } = builder;
+  const { state, capabilities, managementUnavailable, error, advanced, inWorkspace } = builder;
 
   if (state === "loading") {
     return <EmptyState icon={<Hammer size={22} />}>Loading Extension Builder capabilities.</EmptyState>;
@@ -73,7 +73,6 @@ function ExtensionBuilderView() {
   return (
     <section className={inWorkspace ? "extension-builder-page extension-builder-page-workspace" : "studio-page extension-builder-page"}>
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
-      {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
       {!inWorkspace ? (
         <HomeView

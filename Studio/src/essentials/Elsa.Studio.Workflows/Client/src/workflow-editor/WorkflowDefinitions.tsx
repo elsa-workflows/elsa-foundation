@@ -527,8 +527,9 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     requestAnimationFrame(() => { if (isCurrentGeneration()) refreshButtonRef.current?.focus(); });
   };
   const changeFavorite = async (definition: WorkflowDefinitionSummary) => {
+    setRequestError(null);
     try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); if (!isCurrentGeneration()) return; getNotifications().notify({ level: "success", title: definition.favorite ? "Removed from favorites" : "Added to favorites" }); rebase(true); }
-    catch (caught) { if (isCurrentGeneration()) getNotifications().notify({ level: "error", title: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
+    catch (caught) { if (isCurrentGeneration()) setRequestError({ identity: targetIdentity, message: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {

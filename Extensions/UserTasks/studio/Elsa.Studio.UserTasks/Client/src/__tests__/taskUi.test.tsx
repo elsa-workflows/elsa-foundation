@@ -17,12 +17,13 @@ async function act(action: () => unknown) {
   await new Promise(resolve => setTimeout(resolve, 0));
   flushSync(() => {});
 }
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 let container: HTMLDivElement; let root: Root;
-beforeEach(() => { container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
+beforeEach(() => { notifications.notify.mockClear(); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 const identity: TaskActor = { userId: "alice", canRead: true, canAct: true, canManage: false, canManageForms: false, canReadForms: false };
 const task = (): TaskItem => ({ id: "task", title: "Purchase", assigneeId: "alice", actions: ["Approve", "Reject"], optionalFormActions: [], prefill: {}, status: "Open", revision: 1, history: [{ operation: "created", actorId: "workflow", at: "2026-11-02T12:00:00Z" }] });
-function api(getJson = vi.fn().mockResolvedValue(task()), postJson = vi.fn()) { return { backend: { http: { getJson, postJson } }, backendSession: { capabilities: { capabilities: [{ id: "elsa.api.user-tasks", contractVersion: "1", links: [{ rel: "identity", href: "runtime/user-task-identity" }, { rel: "tasks", href: "runtime/user-tasks" }, { rel: "task", href: "runtime/user-tasks/{id}" }, ...["claim", "release", "complete", "reassign"].map(rel => ({ rel, href: `runtime/user-tasks/{id}/${rel}` })), { rel: "forms", href: "runtime/user-task-forms" }, { rel: "targets", href: "runtime/user-task-targets" }] }] } }, userTaskForms: { list: () => [{ id: "basic", provider: "elsa.basic-forms/1", component: BasicTaskForm }] } } as unknown as ElsaStudioModuleApi; }
+function api(getJson = vi.fn().mockResolvedValue(task()), postJson = vi.fn()) { return { notifications, backend: { http: { getJson, postJson } }, backendSession: { capabilities: { capabilities: [{ id: "elsa.api.user-tasks", contractVersion: "1", links: [{ rel: "identity", href: "runtime/user-task-identity" }, { rel: "tasks", href: "runtime/user-tasks" }, { rel: "task", href: "runtime/user-tasks/{id}" }, ...["claim", "release", "complete", "reassign"].map(rel => ({ rel, href: `runtime/user-tasks/{id}/${rel}` })), { rel: "forms", href: "runtime/user-task-forms" }, { rel: "targets", href: "runtime/user-task-targets" }] }] } }, userTaskForms: { list: () => [{ id: "basic", provider: "elsa.basic-forms/1", component: BasicTaskForm }] } } as unknown as ElsaStudioModuleApi; }
 async function click(text: string) { const button = [...container.querySelectorAll("button")].find(item => item.textContent === text); expect(button).toBeTruthy(); await act(async () => button!.click()); }
 async function input(element: HTMLInputElement | HTMLTextAreaElement, value: string) { await act(async () => { const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
 
@@ -156,7 +157,8 @@ it("publishes a reusable basic form through the structured field editor", async 
   await click("Add field"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
   await click("Publish form version");
   expect(post.mock.calls[0][1]).toMatchObject({ id: "purchase", version: "1", name: "Purchase response", fields: [{ key: "AccountID", kind: "text" }] });
-  expect(container.textContent).toContain("immutable form version is available");
+  expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Form version published.", message: "The immutable form version is available to new tasks." });
+  expect(container.textContent).not.toContain("immutable form version is available");
 });
 
 it("uses advertised operation relations and encodes opaque task identities", async () => {
@@ -219,4 +221,24 @@ it("selects task assignment and form contributions before the generic scalar edi
     await act(async () => root.render(<Component descriptor={descriptor} context={propertyContext} value={null} onChange={vi.fn()} />));
     expect(container.querySelector("select")).toBeTruthy();
   }
+});
+
+it.each(["form", "task"])("does not toast a delayed %s mutation after leaving its page", async kind => {
+  let finish!: (result: unknown) => void;
+  const post = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+  const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true } : path.includes("forms") ? { items: [] } : task());
+  const moduleApi = api(get, post);
+  if (kind === "form") {
+    await act(async () => root.render(<FormsPage api={moduleApi} />));
+    const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+    await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
+    await click("Publish form version");
+  } else {
+    await act(async () => root.render(<TaskDetail api={moduleApi} id="task" identity={identity} changed={vi.fn()} />));
+    await click("Approve");
+  }
+  expect(post).toHaveBeenCalledTimes(1);
+  await act(async () => root.render(<p>Another page</p>));
+  await act(async () => finish({ ...task(), status: "Completed", revision: 2 }));
+  expect(notifications.notify).not.toHaveBeenCalled();
 });

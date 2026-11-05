@@ -29,6 +29,7 @@ import {
   writeDictionaryEditorSession,
   type DictionaryEditorTab
 } from "./dictionaryEditorSession";
+import { getNotifications } from "./workflow-editor/notifications";
 import { copyTextToClipboard } from "./workflow-editor/editorHelpers";
 
 const jsonAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
@@ -103,7 +104,7 @@ export function DictionaryValueEditor({
   const [filter, setFilter] = useState("");
   const [pinnedRowIds, setPinnedRowIds] = useState<Set<string>>(() => new Set());
   const [removed, setRemoved] = useState<RemovedEntry | null>(null);
-  const [notice, setNotice] = useState<{ key: string; message: string } | null>(null);
+  const [copyError, setCopyError] = useState("");
   const [pendingTab, setPendingTab] = useState<DictionaryEditorTab | null>(null);
   const effectiveTab: DictionaryEditorTab = variant === "inline" ? "table" : activeTab;
   const emittedSignature = useRef<string | null>(null);
@@ -268,8 +269,13 @@ export function DictionaryValueEditor({
   };
 
   const copyJson = async () => {
-    await copyTextToClipboard(jsonDraft);
-    setNotice({ key: `copied-${Date.now()}`, message: "JSON copied" });
+    setCopyError("");
+    try {
+      await copyTextToClipboard(jsonDraft);
+      getNotifications().notify({ level: "success", title: "JSON copied" });
+    } catch {
+      setCopyError("Could not copy JSON.");
+    }
   };
 
   const visibleRows = filterRows(rows, filter, variant, tableValidation.valid ? [] : tableValidation.errors, pinnedRowIds);
@@ -429,14 +435,8 @@ export function DictionaryValueEditor({
           onAction={undoRemove}
           onDismiss={() => setRemoved(null)}
         />
-      ) : notice ? (
-        <StudioActionNotice
-          key={notice.key}
-          className="wf-dictionary-notice"
-          message={notice.message}
-          onDismiss={() => setNotice(null)}
-        />
       ) : null}
+      {copyError ? <p role="alert">{copyError}</p> : null}
     </div>
   );
 }

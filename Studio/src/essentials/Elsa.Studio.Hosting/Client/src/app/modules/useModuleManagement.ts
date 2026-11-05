@@ -109,7 +109,7 @@ export interface HostOperations {
   // A local write error takes precedence over a stale read error; otherwise the registry query's failure.
   activeError: string | null;
   activeStatus: string | null;
-  runHostOperation(operation: () => Promise<unknown>, success: string): Promise<void>;
+  runHostOperation(operation: () => Promise<unknown>, success: string, feedback?: "inline" | "toast"): Promise<void>;
   confirmAndRun(confirm: () => Promise<boolean>, operation: () => Promise<unknown>, success: string): Promise<void>;
   // Surface a client-side validation error on the active host without running an operation.
   reportError(message: string): void;
@@ -122,9 +122,15 @@ export interface HostOperations {
 export function useHostOperations(
   activeHost: HostModel,
   queryError: unknown,
-  onSettledDelaysMs: number[] = []
+  onSettledDelaysMs: number[] = [],
+  notifySuccess?: (message: string) => void
 ): HostOperations {
-  // Success/validation banners are transient UI, kept local; query/mutation errors surface via `activeError`.
+  // Keep ongoing host conditions inline; short confirmations use the injected notification service.
+  const currentContext = useRef(activeHost.context);
+  currentContext.current = activeHost.context;
+  const generation = useRef(0);
+  const active = useRef(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; generation.current++; }; }, [activeHost.context]);
   const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, string | null>>>({});
   const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, string | null>>>({});
   const mutation = useHostMutationRunner(activeHost, onSettledDelaysMs);
@@ -135,14 +141,20 @@ export function useHostOperations(
   const setStatus = (status: string | null) => setStatusByHost(current => ({ ...current, [hostId]: status }));
   const setLocalError = (error: string | null) => setLocalErrorByHost(current => ({ ...current, [hostId]: error }));
 
-  async function runHostOperation(operation: () => Promise<unknown>, success: string) {
+  async function runHostOperation(operation: () => Promise<unknown>, success: string, feedback: "inline" | "toast" = "inline") {
+    if (!active.current || currentContext.current !== activeHost.context) return;
+    const operationGeneration = generation.current;
+    const isCurrent = () => currentContext.current === activeHost.context && generation.current === operationGeneration;
     setLocalError(null);
     setStatus(null);
     try {
       // mutateAsync invalidates + (optionally) schedules follow-up refetches on success (see useHostMutationRunner).
       await mutation.mutateAsync(operation);
-      setStatus(success);
+      if (!isCurrent()) return;
+      if (feedback === "toast") notifySuccess?.(success);
+      else setStatus(success);
     } catch (e) {
+      if (!isCurrent()) return;
       // A 403 on a mutation is a Studio authorization failure: the signed-in user holds read but not
       // module-management:manage. Name it as a permission problem rather than surfacing a raw HTTP error (#249).
       setLocalError(isPermissionDenied(e)

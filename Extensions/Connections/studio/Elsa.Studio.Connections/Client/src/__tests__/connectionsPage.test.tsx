@@ -6,9 +6,11 @@ import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/stu
 import { ConnectionsPage } from "../ConnectionsPage";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "../connectionTypes";
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 const cleanups: Array<() => void> = [];
 
 afterEach(() => {
+  notifications.notify.mockClear();
   cleanups.splice(0).forEach(cleanup => cleanup());
 });
 
@@ -79,7 +81,9 @@ describe("Connections page", () => {
     changeSearch(host, "draft-only");
     await createConnection(host, created.name);
 
-    await waitFor(() => host.textContent?.includes("Connection 'billing-api' created.") === true);
+    await waitFor(() => notifications.notify.mock.calls.length === 1);
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Connection 'billing-api' created." });
+    expect(host.querySelector(".connections-notice")).toBeNull();
     expect(listQueries).toEqual(["", "customer", "customer"]);
     expect(host.querySelector<HTMLInputElement>('input[aria-label="Search connections"]')?.value).toBe("customer");
     expect(host.querySelector('[role="dialog"]')).toBeNull();
@@ -102,7 +106,8 @@ describe("Connections page", () => {
 
     await waitFor(() => detailsButton(host) !== null);
     expect(host.querySelector('[role="dialog"]')).toBeNull();
-    expect(host.textContent).toContain("Connection 'customer-api' created.");
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Connection 'customer-api' created." });
+    expect(host.querySelector(".connections-notice")).toBeNull();
   });
 
   it("shows a list error and retries the current search", async () => {
@@ -153,7 +158,9 @@ describe("Connections page", () => {
 
     result.resolve({ succeeded: true, message: "Connection is available." });
     await waitFor(() => findButton(host, "Test") !== null);
-    expect(host.querySelector('[role="status"].connections-notice')?.textContent).toContain("Connection is available.");
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Connection test succeeded.", message: "Connection is available." });
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".connections-notice")).toBeNull();
   });
 
   it("announces an unsuccessful connection test as an error", async () => {
@@ -168,6 +175,7 @@ describe("Connections page", () => {
 
     expect(host.querySelector('[role="alert"].connections-notice')?.textContent).toContain("Authorization has expired.");
     expect(host.querySelector('[role="status"].connections-notice')).toBeNull();
+    expect(notifications.notify).not.toHaveBeenCalled();
   });
 
   it.each(["Revoke", "Delete"] as const)("does not %s a connection when confirmation is cancelled", async action => {
@@ -185,6 +193,7 @@ describe("Connections page", () => {
     expect(confirm).toHaveBeenCalledWith({ message: `${action} ${connection.name}?`, tone: "danger" });
     expect(http.postJson).not.toHaveBeenCalled();
     expect(http.deleteJson).not.toHaveBeenCalled();
+    expect(notifications.notify).not.toHaveBeenCalled();
     expect(host.querySelector('[role="dialog"]')).not.toBeNull();
     expect(host.textContent).not.toContain("revoked");
     expect(host.textContent).not.toContain("deleted");
@@ -244,7 +253,7 @@ function renderPage(context: StudioEndpointContext, dialogs = createDialogs()) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  flushSync(() => root.render(<ConnectionsPage context={context} dialogs={dialogs} />));
+  flushSync(() => root.render(<ConnectionsPage context={context} dialogs={dialogs} notifications={notifications} />));
   cleanups.push(() => {
     flushSync(() => root.unmount());
     host.remove();

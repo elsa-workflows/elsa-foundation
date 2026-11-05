@@ -1,4 +1,5 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, EyeOff, ListChecks, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -66,6 +67,7 @@ function ActivityIconChip({ icon }: { icon: ReturnType<typeof resolveActivityIco
 }
 
 export function ActivityAvailabilityPage({ context }: { context: StudioEndpointContext }) {
+  const captureNotificationGuard = useNotificationGuard(context);
   const settingsQuery = useActivityAvailabilitySettings(context);
   const diagnosticsQuery = useActivityAvailabilityDiagnostics(context);
   const catalogQuery = useWorkflowActivities(context);
@@ -79,7 +81,6 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
   const [draft, setDraft] = useState<AvailabilityDraft>(() => createAvailabilityDraft(settings));
   const [search, setSearch] = useState("");
   const [hiddenOnly, setHiddenOnly] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   // Reseed the editable draft whenever the persisted settings change (initial load + after save).
@@ -151,7 +152,6 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
   };
 
   const editDraft = (edit: (current: AvailabilityDraft) => AvailabilityDraft) => {
-    setStatus(null);
     setDraft(edit);
   };
   const updateMode = (mode: AvailabilityDraft["mode"]) => editDraft(current => ({ ...current, mode }));
@@ -163,14 +163,14 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
     editDraft(current => setRuleTargetEnabled(current, "sets", setName, enabled));
 
   const save = () => {
-    setStatus(null);
+    const canNotify = captureNotificationGuard();
     saveMutation.mutate(
       {
         scope: settings?.scope ?? "host-default",
         mode: getAvailabilityModePayload(draft.mode),
         rules: { activityTypes: draft.activityTypes, sets: draft.sets }
       },
-      { onSuccess: () => setStatus("Activity availability saved.") }
+      { onSuccess: () => canNotify() && getNotifications().notify({ level: "success", title: "Activity availability saved." }) }
     );
   };
 
@@ -199,7 +199,6 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
             )}
           </div>
         )}
-        {status && !errorMessage && <div className="availability-banner availability-banner-success">{status}</div>}
 
         <div className="availability-mode" role="group" aria-label="Activity availability mode">
           <button type="button" className={draft.mode === "AllExcept" ? "active" : ""} onClick={() => updateMode("AllExcept")} disabled={loading || saving}>

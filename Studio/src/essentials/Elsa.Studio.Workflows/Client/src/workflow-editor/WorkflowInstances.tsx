@@ -1,3 +1,4 @@
+import { getNotifications } from "./notifications";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
@@ -2806,7 +2807,7 @@ export function WorkflowIncidentList({
                   ariaLabel={`Copy incident ${incident.failureType}`}
                   copiedLabel="incident"
                   textLabel="Copy incident details"
-                  onCopied={label => setCopyStatus(`Copied ${label}`)}
+                  onCopied={label => { setCopyStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}` }); }}
                   onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
                 />
               </div>
@@ -2997,7 +2998,7 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
               ariaLabel={`Copy incident ${incident.failureType}`}
               copiedLabel="incident"
               textLabel="Copy incident details"
-              onCopied={() => setCopyStatus("Copied incident")}
+              onCopied={() => { setCopyStatus(""); getNotifications().notify({ level: "success", title: "Copied incident" }); }}
               onCopyFailed={() => setCopyStatus("Could not copy incident.")}
             />
             {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}

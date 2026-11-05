@@ -1018,6 +1018,11 @@ function MoveDefinitionsFixture() {
 }
 
 function FolderRestructureFixture() {
+  const [notifications] = useState(() => {
+    const controller = createNotificationController();
+    setNotifications(controller.api);
+    return controller;
+  });
   const [, setRevision] = useState(0);
   const foldersRef = useRef([
     { id: "folder-platform", parentId: null as string | null, name: "Platform", normalizedName: "platform", createdAt: "", lastModifiedAt: "" },
@@ -1162,6 +1167,7 @@ function FolderRestructureFixture() {
   return <main className="wf-editor browser-fixture">
     <h1>Workflow folders</h1>
     <DirectWorkflowDefinitions context={context} ai={ai} />
+    <ToastHost controller={notifications} navigate={() => {}} />
   </main>;
 }
 

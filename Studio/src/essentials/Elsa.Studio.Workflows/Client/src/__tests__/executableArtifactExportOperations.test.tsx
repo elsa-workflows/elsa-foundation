@@ -291,6 +291,18 @@ describe("artifact list export action", () => {
     expect(fixture.onFailed).not.toHaveBeenCalled();
   });
 
+  it("does not publish export feedback after its page has gone away", async () => {
+    const fixture = renderArtifactDownload({ hold: true });
+    await flushUpdates();
+    const inFlight = fixture.current().exportArtifact(artifactRow("artifact-2", "version-2", "2.0.0"));
+    await flushUpdates();
+    flushSync(() => mounted!.root.render(<p>Another page</p>));
+    fixture.release();
+    await inFlight;
+    expect(fixture.onExported).not.toHaveBeenCalled();
+    expect(fixture.onFailed).not.toHaveBeenCalled();
+  });
+
   it("reports the in-flight artifact so the list can disable its rows", async () => {
     const fixture = renderArtifactDownload({ hold: true });
     await flushUpdates();
