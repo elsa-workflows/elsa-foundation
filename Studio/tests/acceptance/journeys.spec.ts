@@ -1,3 +1,4 @@
+import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
@@ -64,7 +65,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.goto("/security/secrets");
   const secretName = `DbConnectionString-${stamp}`;
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
-  const secret = page.getByRole("dialog", { name: "Create secret", exact: true });
+  const secret = page.getByRole("region", { name: "Create secret", exact: true });
   const technicalName = secret.getByLabel("Technical name", { exact: true });
   await technicalName.fill(` ${secretName} `);
   await technicalName.press("Tab");
@@ -81,10 +82,10 @@ test("collections and connection creation", async ({ page }, info) => {
   await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
   await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");
-  await editor.getByRole("button", { name: "Close editor", exact: true }).click();
+  await editor.getByRole("button", { name: "Back to secrets", exact: true }).click();
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
@@ -191,4 +192,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
 
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture);
+});
+
+test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
+  await tabbedSecretsJourney(page, info, capture);
 });
