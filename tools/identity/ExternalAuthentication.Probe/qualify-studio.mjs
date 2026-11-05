@@ -10,7 +10,7 @@ const repo = resolve(import.meta.dirname, "../../..");
 const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
 const sourceSha = git("rev-parse", "HEAD");
 if (git("status", "--porcelain")) throw new Error("Commit source changes before full Studio qualification; a dirty run cannot certify a revision.");
-const buildProvenance = verifyUiBuild();
+const buildProvenance = await verifyUiBuild();
 const profile = process.argv[2] ?? null;
 const profiles = {
   empty: { emptyCatalog: true },
@@ -57,7 +57,7 @@ const log = openSync(join(root, "studio.log"), "w", 0o600);
 const environment = { ...process.env, ASPNETCORE_ENVIRONMENT: "Development", DOTNET_ENVIRONMENT: "Development" };
 // Prevent ambient Studio/shell selections from retargeting this owned host.
 for (const key of Object.keys(environment)) if (/^(Studio__|CShells__|ASPNETCORE_URLS)/i.test(key)) delete environment[key];
-const host = spawn("dotnet", [join(repo, "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0/Elsa.Studio.Web.dll"),
+const host = spawn(buildProvenance.toolchain.dotnet.launcher.path, [join(repo, "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0/Elsa.Studio.Web.dll"),
   "--contentRoot", content, "--urls", studioUrl], { cwd: content, env: environment, stdio: ["ignore", log, log] });
 try {
   const deadline = Date.now() + 90_000;
@@ -83,7 +83,7 @@ try {
   } finally { closeSync(browserLog); }
   if (code !== 0) throw new Error(`Owned full Studio browser journey failed (${code}); inspect ${join(root, "browser.log")}.`);
   if (git("rev-parse", "HEAD") !== sourceSha || git("status", "--porcelain")) throw new Error("Source changed during Studio qualification; rerun the committed revision.");
-  verifyUiBuild(); await verifyServedModule(studioUrl, buildProvenance);
+  await verifyUiBuild(); await verifyServedModule(studioUrl, buildProvenance);
   const receipt = { ...JSON.parse(readFileSync(join(root, "browser-receipt.json"), "utf8")),
     sourceSha, headSha: process.env.UX_PR_HEAD_SHA ?? sourceSha, dirty: false, kind: "composed-source", buildProvenance: { ...buildProvenance, servedModule },
     visualApproval: "requires independent review" };

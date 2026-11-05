@@ -12,11 +12,11 @@ const sourceDirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd
 const root = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT;
 if (!root || readFileSync(join(root, ".elsa-3579-owned-probe"), "utf8") !== "elsa-external-authentication-probe/v1") throw new Error("An owned Studio runner root is required.");
 const settings = JSON.parse(readFileSync(join(root, "probe-settings.json"), "utf8"));
-const buildProvenance = verifyUiBuild();
+const buildProvenance = await verifyUiBuild();
 const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
 const expect = baseExpect.configure({ timeout: 30_000 });
 const instance = randomUUID(); const log = openSync(join(root, "host.log"), "w", 0o600);
-const host = spawn("dotnet", [join(repo, "tools/identity/ExternalAuthentication.Probe/bin/Debug/net10.0/ExternalAuthentication.Probe.dll"),
+const host = spawn(buildProvenance.toolchain.dotnet.launcher.path, [join(repo, "tools/identity/ExternalAuthentication.Probe/bin/Debug/net10.0/ExternalAuthentication.Probe.dll"),
   "--owned-root", root, "--instance", instance], { cwd: repo, stdio: ["ignore", log, log] });
 let browser; let uiEvidence;
 try {
@@ -130,7 +130,7 @@ try {
   await page.screenshot({ path: join(root, "mode-narrow.png"), fullPage: false });
   await uiEvidence.capture(page, "profile-narrow-dark", { region: "body", action: "inspect-profile-at-360" });
   expect(writes).toEqual(profile === "empty" ? ["POST", "POST"] : []); expect(errors).toEqual([]);
-  verifyUiBuild();
+  await verifyUiBuild();
   const result = { passed: true, ownedRoot: root, profile, fullStudioHost: true, browser: "Chromium", store: "native SQLite", buildProvenance,
     noExternalManagementWrites: profile !== "empty", uiEvidence: uiEvidence.result(profile === "empty" ? ["empty-managed-catalog", "first-draft-confirmation", "first-disabled-draft-reopened", "empty-user-links-sessions", "profile-narrow-dark"] : ["profile-narrow-dark"]), accessibility: { light, dark }, narrowNoOverflow: true,
     limitations: ["representative ownership/permission/installation UI profile; full provider and process/store journeys are recorded separately"] };

@@ -24,7 +24,7 @@ if (existsSync(marker) && readFileSync(marker, "utf8") !== "elsa-external-authen
 mkdirSync(ownedRoot, { recursive: true }); writeFileSync(marker, "elsa-external-authentication-probe/v1");
 const settingsPath = join(ownedRoot, "probe-settings.json");
 const settings = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, "utf8")) : {};
-const buildProvenance = settings.studioUrl ? verifyUiBuild() : null;
+const buildProvenance = settings.studioUrl ? await verifyUiBuild() : null;
 async function completeProviderLogin(page) {
   if (settings.provider !== "Keycloak") return;
   const credentials = JSON.parse(readFileSync(join(ownedRoot, "browser-credentials.json"), "utf8"));
@@ -76,7 +76,7 @@ await server.listen();
 const ui = server.resolvedUrls.local[0];
 const log = createWriteStream(join(ownedRoot, "host.log"));
 const instance = randomUUID();
-const host = spawn("dotnet", ["run", "--no-build", "--project", "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj", "--", "--owned-root", ownedRoot, "--ui", ui, "--instance", instance], { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
+const host = spawn(buildProvenance?.toolchain.dotnet.launcher.path ?? "dotnet", ["run", "--no-build", "--project", "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj", "--", "--owned-root", ownedRoot, "--ui", ui, "--instance", instance], { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
 host.stdout.pipe(log); host.stderr.pipe(log);
 let browser;
 try {
@@ -453,7 +453,7 @@ try {
     accessibility: accessAccessibility, darkAccessibility };
   if (settings.uiRecovery) await recovery.exerciseSelfRevocation({ page, admin, backend, componentUrl, adminSession, expect, capture, confirm: confirmStudio });
   expect(errors).toEqual([]);
-  if (settings.studioUrl) verifyUiBuild();
+  if (settings.studioUrl) await verifyUiBuild();
   const result = { passed: true, ownedRoot, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
     accessibility, connectionDarkAccessibility, access, connectionLifecycle, errorRecovery, uiEvidence: uiEvidence.result(settings.uiRecovery ? [
       "preferred-chooser-narrow", "key-to-name-tab", "missing-name-narrow-dark", "invalid-key", "configuration-test-failed", "corrected-draft-enter-reopen",
