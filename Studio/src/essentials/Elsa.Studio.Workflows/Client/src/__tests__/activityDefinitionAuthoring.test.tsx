@@ -615,7 +615,7 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
     const resultPane = contractMemberPane(rendered.container, "output", "result");
     expect(resultPane.dataset.contractSelected).toBe("true");
-    expect(resultPane.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")?.open).toBe(false);
+    expect(resultPane.querySelector<HTMLButtonElement>("[role='tab'][data-tab-id='General']")?.getAttribute("aria-selected")).toBe("true");
     await waitFor(() => expect(document.activeElement).toBe(controlByLabel<HTMLInputElement>(resultPane, "Name")));
 
     addContractMember(rendered.container, "outcome", "Rejected");
@@ -970,7 +970,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "Published baseline");
     showContractView(rendered.container);
-    openDetails(rendered.container.querySelector(".ad-contract-advanced")!);
+    click(buttonByText(rendered.container, "Presentation"));
     change(controlByLabel<HTMLInputElement>(rendered.container, "Display name"), "Friendly message");
     await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
     expect(rendered.container.textContent).not.toContain("Review breaking input change");
@@ -1027,7 +1027,7 @@ describe("Activity Definition authoring", () => {
     showContractView(rendered.container);
     const pane = selectContractMember(rendered.container, "input", "message");
     change(controlByLabel<HTMLInputElement>(pane, "Value"), "candidate");
-    openDetails(pane.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")!);
+    click(buttonByText(pane, "Advanced"));
     change(controlByLabel<HTMLInputElement>(pane, "Stable reference key"), "message-v2");
     click(buttonByText(pane, "Apply key"));
     await waitForText(rendered.container, "Change a published reference key");
@@ -1527,6 +1527,8 @@ describe("Activity Definition authoring", () => {
     click(contractDiagnostic);
     await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
     expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
+    expect(document.activeElement?.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
+    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("Advanced");
     click(buttonByText(rendered.container, "Return to diagnostic"));
     expect(document.activeElement).toBe(contractDiagnostic);
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);
@@ -2849,7 +2851,7 @@ function managementDefinition() {
 }
 
 function buttonByText(container: HTMLElement, text: string) {
-  const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent?.includes(text));
+  const button = [...container.querySelectorAll("button")].find(candidate => (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label") === text));
   if (!button) throw new Error(`Button '${text}' not found.`);
   return button;
 }

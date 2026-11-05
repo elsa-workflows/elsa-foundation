@@ -144,6 +144,48 @@ test("agent authoring and navigation", async ({ page }, info) => {
     await view.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
     await expect(view.getByRole("textbox", { name: `${kind === "input" ? "Input" : "Output"} name`, exact: true })).toBeFocused();
     await view.getByRole("button", { name: "Cancel", exact: true }).click();
+    await view.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
+    await view.getByRole("textbox", { name: `${kind === "input" ? "Input" : "Output"} name`, exact: true }).fill(kind === "input" ? "Topic" : "Result");
+    await view.getByRole("button", { name: `Add ${kind}`, exact: true }).last().click();
+    const member = view.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
+    const settings = member.getByRole("tablist", { name: "Member settings", exact: true });
+    await expect(member.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    if (kind === "input") {
+      await member.getByRole("combobox", { name: "Default", exact: true }).selectOption("literal");
+      await member.getByRole("textbox", { name: "Value", exact: true }).fill("A retained topic");
+    }
+    await capture(page, info, `${kind}-general`);
+    await settings.getByRole("tab", { name: "General", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(settings.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+    await member.getByRole("textbox", { name: /^Display name/ }).fill(kind === "input" ? "Writing topic" : "Written result");
+    await member.getByRole("combobox", { name: /^Category/ }).fill("Writing");
+    await member.getByRole("spinbutton", { name: "Order", exact: true }).fill("2");
+    await capture(page, info, `${kind}-presentation`);
+    await settings.getByRole("tab", { name: "Advanced", exact: true }).click();
+    await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+    await expect(member.getByText("Type alias", { exact: true })).toHaveCount(0);
+    const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
+    await key.fill(`${kind}-writing`);
+    await member.getByRole("button", { name: "Apply key", exact: true }).click();
+    await expect(member.getByRole("button", { name: "Apply key", exact: true })).toBeDisabled();
+    await capture(page, info, `${kind}-advanced`);
+    await settings.getByRole("tab", { name: "General", exact: true }).click();
+    if (kind === "input") {
+      await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
+      await member.getByRole("button", { name: "Apply default", exact: true }).click();
+    }
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    await page.reload();
+    await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: kind === "input" ? "Inputs (1)" : "Outputs (1)", exact: true }).click();
+    const saved = page.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
+    if (kind === "input") await expect(saved.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
+    await saved.getByRole("tab", { name: "Presentation", exact: true }).click();
+    await expect(saved.getByRole("combobox", { name: /^Category/ })).toHaveValue("Writing");
+    await expect(saved.getByRole("spinbutton", { name: "Order", exact: true })).toHaveValue("2");
+    await saved.getByRole("tab", { name: "Advanced", exact: true }).click();
+    await expect(saved.getByRole("textbox", { name: "Stable reference key", exact: true })).toHaveValue(`${kind}-writing`);
   }
   await tabs.getByRole("tab", { name: "Outcomes (1)", exact: true }).click();
   const outcome = page.getByRole("region", { name: "Done", exact: true });
