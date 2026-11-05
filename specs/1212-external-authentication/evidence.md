@@ -1205,7 +1205,7 @@ TypeScript, ESLint and module/SDK build passing (`/tmp/elsa-3579-ui-cancel-focus
 Backend C# and the provisioning-policy-only decision are unchanged. Fresh composed execution and independent
 visual acceptance are still required; the failed attempts have not been reclassified as passing.
 
-## Independent review round 3 and settled confirmations (6 November)
+## Independent review round 3 and settled confirmations (5 November)
 
 At `cb373530d`, the complete composed Studio journey and all seven representative UI profiles pass, with clean
 source-bound receipts. Correctness and standards reviewers find no actionable issue. The acceptance reviewer
@@ -1236,3 +1236,10 @@ The `2dbdcca6a` scanner check still fails for that same sole occurrence; its cur
 to removal commit `abfef8dc9` (SHA-256 `bab4f00c03c25742d715784d4dc4590f6aad30034f1b3bf04b04041ff31b38df`).
 No scanner success or protection bypass is claimed. Required checks, all other findings, final review,
 distribution/consumer evidence, merge and resulting-main qualification remain mandatory.
+
+The same composed journey passes again after evidence-only commit `6ecf3261b`, in owned root
+`elsa-3579-full-studio-6fjE50`. At that head, four actual module/support archives and independent NuGet C# and
+React-independent extracted-SDK consumers also pass, with zero project references or .NET-consumer frontend
+tool invocations (`/tmp/elsa-3579-final-rcl-consumer.log`). This is the module closure, not the complete Studio
+distribution. The final source-bound profiles and independent review are retained on the PR without further
+evidence-only source changes while validation is pending.
