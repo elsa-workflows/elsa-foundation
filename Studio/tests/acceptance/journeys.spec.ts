@@ -1,3 +1,4 @@
+import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -268,4 +269,8 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await capture(page, info, "template-catalog-entry");
   await submitAndInspect(templateNames[1], descriptions[1]);
   await capture(page, info, "template-persisted");
+});
+
+test("executable designer parity", async ({ page }, info) => {
+  await executableDesignerJourney(page, info, capture);
 });
