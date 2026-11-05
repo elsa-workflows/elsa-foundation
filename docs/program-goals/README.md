@@ -27,6 +27,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
 | [Foundation/Studio Consolidation](https://github.com/elsa-workflows/elsa-foundation/issues/2501) | Active; priority one | Essentials, Extensions and Studio in Foundation | Sipke | Isolated rehearsal and qualification under #2510 from captured copies; live cutover remains gated |
+| [Standalone durable jobs](standalone-jobs.md) | Active; owner authorization, 5 November; design first | Standalone .NET jobs, native/BPMN integration and API/Studio operations | Sipke | Canonical feature/program #3586; M0 research, architecture admission and reviewed contract before production implementation |
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
 | [Runtime Efficiency](runtime-efficiency.md) | Active; end-to-end continuation, 1 November | Runtime database access, immutable preparation, persistence and concurrent correctness | Sipke | Program #2531; M0–M5 efficiency and recovery qualification |

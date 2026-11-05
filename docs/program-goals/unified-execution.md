@@ -43,6 +43,13 @@ The immediate sequence is direct BPMN start → wait → host restart → resume
 
 ## Follow-up after current delivery: durable task runner
 
+**Scoped sequencing amendment, 5 November 2026:** the owner now authorizes independent end-to-end
+delivery through [standalone durable jobs #3586](standalone-jobs.md). Its
+[authorization receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3586#issuecomment-6671631992)
+supersedes the historical wait for this program's completion only for that feature. The criteria below
+remain design inputs, not implemented capabilities. #2892 acceptance, actual technical prerequisites,
+other programs' priorities and scoped pauses remain unchanged.
+
 [Owner intent recorded on 20 October 2026](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6299076556):
 discuss a horizontally scalable durable task runner after this program is delivered. This is outside the current
 acceptance and active implementation queue. Preserve durable work acceptance separately from dispatch eligibility;

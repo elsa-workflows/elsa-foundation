@@ -42,6 +42,18 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 5 November 2026:** [Standalone durable jobs #3586](../program-goals/standalone-jobs.md)
+is authorized for discovery, necessary product/architecture design and specification, scoped
+implementation, verification, review/merge under current rules and resulting-main qualification.
+The owner instructed: “Let's also start a new chat in its own worktree to deliver the standalone
+background job runner (#3586) end to end, including brainstorming and design sessions where necessary.”
+The [authorization receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3586#issuecomment-6671631992)
+preserves the selected scope. Sequencing: start now alongside existing work, superseding only this
+feature's historical post-Unified-Execution sequence; preserve actual technical prerequisites,
+architecture agreement and priority-one consolidation. Reactivate no unrelated program or paused
+scope. #3586 remains the canonical feature/program record. No deployment, production credentials
+or package release is authorized.
+
 **Owner amendment, 5 November 2026:** [Activity Data Selection #3882](../program-goals/activity-data-selection.md)
 is authorized for scoped program establishment, a bounded real-Studio customer proof, reviewed production
 contracts/specification and delivery through the normal implementation and acceptance gates. After reviewing
