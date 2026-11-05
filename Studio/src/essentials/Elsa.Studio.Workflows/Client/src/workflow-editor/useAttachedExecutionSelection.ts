@@ -18,10 +18,11 @@ interface SelectionState {
 }
 
 /** Exact selection survives inspector tabs; obsolete or unauthorized evidence never does. */
-export function useAttachedExecutionSelection({ context, attachmentId, workflowExecutionId, enabled, nodeId, canvasOwnerId, visibleNodeIds, activityCatalog }: {
+export function useAttachedExecutionSelection({ context, attachmentId, workflowExecutionId, enabled, nodeId, canvasOwnerId, visibleNodeIds, activityCatalog, observationRevision = 0 }: {
   context: StudioEndpointContext; attachmentId: string; workflowExecutionId: string; enabled: boolean; nodeId: string | null;
   canvasOwnerId?: string; visibleNodeIds?: readonly string[];
   activityCatalog?: readonly ActivityCatalogItem[];
+  observationRevision?: number;
 }) {
   const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${attachmentId}`;
   const [state, setState] = useState<SelectionState | null>(null);
@@ -33,6 +34,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
   const request = useRef<AbortController | null>(null);
   const retrySelection = useRef<(() => Promise<boolean>) | null>(null);
   const visibleNodeKey = JSON.stringify(visibleNodeIds);
+  const latestObservationRevision = useRef(observationRevision); latestObservationRevision.current = observationRevision;
   const currentKey = useRef(key); currentKey.current = key;
   const currentNode = useRef(nodeId); currentNode.current = nodeId;
   const active = useRef(enabled && authorized); active.current = enabled && authorized;
@@ -56,6 +58,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
   const choose = useCallback(async (execution: ActivityExecutionStateSummary, graph: ExecutableActivityGraph,
     labelFor: (execution: ActivityExecutionStateSummary) => string, includeSelf = false, label?: string) => {
     if (!active.current || execution.workflowExecutionId !== workflowExecutionId) return false;
+    const preparedRevision = latestObservationRevision.current;
     setPending(null);
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
@@ -78,7 +81,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
         canvasOwnerId, JSON.parse(visibleNodeKey ?? "null") ?? undefined, activityCatalog);
       if (!isCurrent() || controller.signal.aborted) return false;
       retrySelection.current = null;
-      setState({ key, nodeId, execution, scopes: result.scopes, prepared, loading: false, error: "" });
+      setState({ key, nodeId, execution, scopes: result.scopes, prepared: { ...prepared, observationRevision: preparedRevision }, loading: false, error: "" });
       return true;
     } catch (error) {
       if (!isCurrent() || controller.signal.aborted) return false;

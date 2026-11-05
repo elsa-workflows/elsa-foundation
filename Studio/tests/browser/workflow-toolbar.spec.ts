@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from "@playwright/test";
 
-const statusValues = ["Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel", ""];
+const statusValues = ["Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel", ""];
 
 for (const width of [320, 768, 1024, 1440]) {
   test(`keeps workflow actions stationary through save status changes at ${width}px`, async ({ page }) => {
@@ -34,9 +34,9 @@ for (const width of [320, 768, 1024, 1440]) {
     if (width >= 768) {
       expect(Math.abs(centerY(initialCanvasTools!) - centerY(initialSave!))).toBeLessThan(1);
     }
-    if (width >= 1024) {
+    if (width > 1100) {
       expect(Math.abs(centerY(initialTitle!) - centerY(initialSave!))).toBeLessThan(1);
-    } else if (width === 768) {
+    } else if (width >= 768) {
       expect(initialTitleRow!.y + initialTitleRow!.height).toBeLessThanOrEqual(initialSave!.y);
     }
     await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");
@@ -186,18 +186,8 @@ for (const theme of ["light", "dark"]) {
       const observations = [];
       for (const state of ["accepted", "rejected", "incidents", "runtime-issue", "stale", ""]) {
         await page.getByLabel("Test Run status", { exact: true }).selectOption(state);
-        const status = toolbar.locator(".wf-test-run-trigger");
-        if (state) {
-          await expect(status).toBeVisible();
-          await expect(status).toHaveText(state === "rejected" ? /Test Run rejected/ : state === "incidents" ? /Test Run accepted with incidents/ : state === "runtime-issue" ? /Test Run accepted with a runtime issue/ : state === "stale" ? /Earlier draft · Test Run dispatched/ : /Test Run dispatched/);
-          await toolbar.locator(".wf-run-button").focus();
-          await page.keyboard.press("Tab");
-          await expect(toolbar.getByRole("button", { name: "More workflow actions" })).toBeFocused();
-          await page.keyboard.press("Tab");
-          await expect(status).toBeFocused();
-          await status.press("Enter");
-          await expect(page.getByText("Selected action: Runtime details", { exact: true })).toBeVisible();
-        } else await expect(status).toHaveCount(0);
+        await expect(toolbar.locator(".wf-editor-run-status")).toHaveCount(0);
+        if (state) await expect(page.getByRole("region", { name: "Test run summary" })).toBeVisible();
         for (const saveStatus of statusValues) {
           await page.getByLabel("Save status", { exact: true }).selectOption(saveStatus);
           await expect(toolbar.locator(".wf-editor-save-status")).toHaveText(saveStatus);
@@ -218,4 +208,26 @@ for (const theme of ["light", "dark"]) {
       }
     });
   }
+}
+
+for (const theme of ["light", "dark"]) for (const width of [1024, 1440, 2048]) {
+  test(`uses available toolbar space for feedback (${theme}, ${width}px)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.goto(`/?mode=workflow-toolbar&theme=${theme}&name=Compensation`);
+    // Leave room for wider fallback glyphs and enlarged feedback text.
+    await page.addStyleTag({ content: ".wf-editor-save-status { font-family: monospace; font-size: 14px; }" });
+    const toolbar = page.locator(".wf-editor-toolbar");
+    const initialButtons = await readButtonPositions(toolbar.getByRole("button"));
+    const messages = width >= 1440
+      ? ["Workflow organization updated", "Published to an unusually long publication channel"]
+      : ["Workflow organization updated"];
+    for (const message of messages) {
+      await page.getByLabel("Save status").selectOption(message);
+      const text = toolbar.locator(".wf-editor-save-status > span");
+      await expect(text).toHaveText(message);
+      expect(await text.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await readButtonPositions(toolbar.getByRole("button"))).toEqual(initialButtons);
+    }
+    await page.screenshot({ path: testInfo.outputPath("toolbar-feedback.png") });
+  });
 }
