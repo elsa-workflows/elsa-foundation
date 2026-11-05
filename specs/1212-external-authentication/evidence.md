@@ -1243,3 +1243,33 @@ React-independent extracted-SDK consumers also pass, with zero project reference
 tool invocations (`/tmp/elsa-3579-final-rcl-consumer.log`). This is the module closure, not the complete Studio
 distribution. The final source-bound profiles and independent review are retained on the PR without further
 evidence-only source changes while validation is pending.
+
+## Final local qualification and ready-PR prerequisite (5 November)
+
+At clean source `463eb332bf09e4cb55a4a1f8029db4f31ace37aa`, the complete fresh Studio distribution passes:
+26 Studio archives, nine support archives and all 16 precise consumer/composition/lifecycle observations,
+including expected failure controls and successful restored outcomes. The final batch follows the full
+frontend rebuild and checks all 3,666 generated inputs after execution, with zero mismatches. An earlier
+passing batch is intermediate evidence because 89 cached Weaver-only inputs changed on that rebuild;
+shared hosting and external-authentication inputs were identical. The exact final module archive also
+passes independent C# feature-inheritance and extracted React-independent SDK consumers, with zero project
+references or .NET-consumer frontend invocations. The generated solution-filter graph check passes.
+
+The standard composed Studio gate passes 8/8, with zero skipped, unexpected or flaky cases. The independent
+acceptance reviewer opens all 56 canonical standard screenshots and compares them with the 70 previously
+inspected custom screenshots. No additional actionable UI/source findings remain; the local reference-capture
+gap is resolved. All three round-four lenses find no actionable source/UI issues at that exact head. These
+are local results; formal UX acceptance still requires downloaded and inspected current Actions evidence.
+The bounded reports and reviewer receipt are retained in
+[round-four addendum 6648625814](https://github.com/elsa-workflows/elsa-foundation/pull/3806#issuecomment-6648625814).
+
+Hosted CI subsequently starts: its generated-map check is green, and other checks are running or queued.
+Main prerequisite `aa2712cc3d1757b3ae11b58de927a4538d0982dc` (#3867) is integrated so a ready transition
+reports all required contexts together in one run. Its changes are CI routing/tests and contributor notes;
+the authentication, Studio and probe production trees are unchanged from `463eb332b`. The final exact head,
+checks and downloadable evidence are recorded on the PR after this integration.
+
+The spec's `Implemented` marker is prospective in the implementation PR, as the lifecycle policy requires:
+it becomes true on merge. Its terminal process checklist is removed. The still-open gate and resulting-main
+tasks are not marked complete in advance. [Resulting-main qualification](resulting-main-qualification.md)
+defines the post-merge proof; actual results remain pending until the protected merge occurs.

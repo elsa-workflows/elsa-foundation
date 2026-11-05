@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3579-external-auth`  
 **Created**: 2026-11-04  
-**Status**: In progress
+**Status**: Implemented
 **Input**: [#3579](https://github.com/elsa-workflows/elsa-foundation/issues/3579), authorized for end-to-end delivery by Sipke on 4 November 2026. Program: [Elsa 3 parity #2771](https://github.com/elsa-workflows/elsa-foundation/issues/2771). Decisions: [ADR 0085](../../docs/adr/0085-elsa-3-parity-identity-administration-and-scope.md), with the explicit override amendment authorized in #3579. Necessary prerequisite: [#2848](https://github.com/elsa-workflows/elsa-foundation/issues/2848).
 
 ## User Scenarios & Testing
