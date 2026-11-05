@@ -24,6 +24,36 @@ public sealed class SqliteEfSecretRepositoryTests
     private const int KeyTooLong = 1946;
 
     [Fact]
+    public async Task Preserved_Casing_Uses_Normalized_Keys_For_Every_Write_And_Reopen()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var repository = fixture.Repository;
+        var secret = Secret("tenant-a", "DbConnectionString", "first");
+        Assert.True(await repository.TryAddAsync(secret));
+        Assert.False(await repository.TryAddAsync(Secret("tenant-a", "DBCONNECTIONSTRING", "duplicate")));
+        Assert.True(await repository.TryAddAsync(Secret("tenant-b", "DBCONNECTIONSTRING", "other-tenant")));
+        Assert.Equal("dbconnectionstring", (await fixture.Context.Secrets.AsNoTracking().SingleAsync(row => row.TenantId == "tenant-a")).NormalizedName);
+
+        await using var reopened = await fixture.CreateSiblingAsync();
+        var revisions = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(reopened.Repository);
+        var loaded = (await revisions.FindWithRevisionAsync("tenant-a", "dbconnectionstring"))!;
+        Assert.Equal("DbConnectionString", loaded.Secret.Name);
+        loaded.Secret.Description = "updated";
+        Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisions.SaveWithRevisionAsync(loaded.Secret, loaded.Revision)).Status);
+        loaded.Secret.DisplayName = "Database";
+        await reopened.Repository.SaveAsync(loaded.Secret);
+        Assert.Equal("updated", (await repository.FindAsync("tenant-a", "dbconnectionstring"))!.Description);
+
+        loaded = (await revisions.FindWithRevisionAsync("tenant-a", "dbconnectionstring"))!;
+        loaded.Secret.Status = SecretStatus.Deleted;
+        Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisions.SaveWithRevisionAsync(loaded.Secret, loaded.Revision)).Status);
+        Assert.True(await repository.TryAddAsync(Secret("tenant-a", "DBConnectionString", "successor")));
+        await reopened.Repository.SaveAsync(loaded.Secret);
+        Assert.Equal("DBConnectionString", (await repository.FindAsync("tenant-a", "dbconnectionstring"))!.Name);
+        Assert.Equal(0, await SecretsProjectionContract.ReindexAsync(fixture.Context));
+    }
+
+    [Fact]
     public async Task Migrate_crud_revision_conflict_and_tenant_isolation()
     {
         await using var fixture = await SqliteFixture.CreateAsync();

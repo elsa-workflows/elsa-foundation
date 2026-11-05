@@ -34,7 +34,7 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.Created, encrypted.StatusCode);
         await AssertSafeAsync(encrypted, valueMarker);
         using var encryptedDocument = JsonDocument.Parse(await encrypted.Content.ReadAsStringAsync());
-        Assert.Equal("lifecycle.encrypted", encryptedDocument.RootElement.GetProperty("name").GetString());
+        Assert.Equal("Lifecycle.Encrypted", encryptedDocument.RootElement.GetProperty("name").GetString());
 
         using var configuration = await host.Client.SendAsync(JsonRequest(
             HttpMethod.Post,
@@ -78,7 +78,7 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
     public async Task Duplicate_create_is_rejected_without_overwriting_existing_metadata()
     {
         await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
-        const string name = "lifecycle-duplicate";
+        const string name = "Lifecycle-Duplicate";
 
         using (var create = await host.Client.SendAsync(JsonRequest(
                    HttpMethod.Post,
@@ -91,7 +91,7 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
             HttpMethod.Post,
             "/secrets",
             "write",
-            JsonSerializer.Serialize(new { name, displayName = "Overwritten", value = "duplicate-marker" })));
+            JsonSerializer.Serialize(new { name = $" {name.ToUpperInvariant()} ", displayName = "Overwritten", value = "duplicate-marker" })));
         Assert.True((int)duplicate.StatusCode >= 400);
         await AssertSafeAsync(duplicate, "duplicate-marker");
 
