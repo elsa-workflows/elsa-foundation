@@ -18,6 +18,8 @@ The requirements identified as accepted direction below are grounded in that reg
 
 Delegated engineering direction DE1 permits the reviewed M0 proposal to be used provisionally for a bounded native-first witness, with model hosting as fallback. Later supervisory authority covers necessary owner decisions and progress through the normal gates without waiting for Sipke's return. Record that provenance separately from OD1–OD49 and never infer another designated approver's agreement. This does not establish runtime sufficiency, final engine placement or a public schema; the [focused witness plan](m0-witness-plan.md) is design qualification work.
 
+The [5 November delegated principles decision](https://github.com/elsa-workflows/elsa-foundation/issues/3815#issuecomment-6669211076) agrees the input/occurrence and owner-lifetime principles in the exact `036a88bf` proposal: preserve independent common-publication arbitration, distinguish readiness from retained provenance and close only exiting owners. It does not approve the actual fence/control/admission mechanism, native placement, Q1–Q3 or production plan. The [principles record](m0-input-profile-proposal.md) and its remaining gates are part of M0; no other person's agreement or draft Model X ratification is inferred.
+
 Hierarchy and parallel regions both belong to first-release acceptance. Delivery priority and independently testable stories do not reduce that scope. No implementation plan or implementation task list is authorized by this draft.
 
 ## User Scenarios & Testing

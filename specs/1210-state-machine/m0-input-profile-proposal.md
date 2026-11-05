@@ -1,6 +1,6 @@
 # M0 proposal: chart inputs and activity-trigger ownership
 
-**Status:** Independently reviewed technical proposal awaiting delegated owner agreement. Correctness, standards and acceptance reviews found no remaining conformance defects in the revised proposal; they did not approve its semantics or mechanism. This is not accepted semantics, a production implementation plan or proof that Q1–Q3 are closed. It preserves OD1–OD49 and must be checked against them before agreement. The [research proposal](research.md#m0-engineering-proposal-for-review) and [specification](spec.md) remain provisional.
+**Status:** Input/occurrence and owner-lifetime principles agreed under delegated owner authority on 5 November 2026, against exact proposal commit `036a88bfbc721e8a982f35bd11c5735b1ed6e3a9`: [recorded decision](https://github.com/elsa-workflows/elsa-foundation/issues/3815#issuecomment-6669211076). Independent review preceded that decision; reviewer conclusions are not the agreement. The concrete durable fence, transitive obligations, atomic selection/recovery, control/admission protocol, native placement and Q1–Q3 remain design/proof gates. This is no production implementation plan, Model X ratification or producer grant. OD1–OD49 remain unchanged.
 
 ## Why this decision is next
 
@@ -8,11 +8,11 @@ The [N9 result](evidence/m0-native-witness-5d4c.json) qualifies real native visi
 
 In N10, one boundary finishes with A while another still waits for B; the second later finishes with A too. Common originating data therefore cannot alone define when a chart must select a transition set. An implicit wait for every composite to finish would be a new execution rule. Conversely, choosing the first callback without defining shared-input boundaries would not establish compatible regional selection. M0 needs a deliberate contract before production code.
 
-## Proposed input profile
+## Agreed input principles
 
 Use explicit chart input kinds, with different identities for a business admission, a trigger occurrence and its provenance:
 
-| Input | Admission/evaluation identity | Proposed eligibility boundary |
+| Input | Admission/evaluation identity | Eligibility principle |
 |---|---|---|
 | Machine-addressed business event | Sender event ID within the exact machine invocation; canonical receipt and durable admission order | Evaluate that event against the current stable active configuration and all matching authored machine-event rules. Select the compatible set once under hierarchy and authored-order rules. |
 | Ordinary activity/composite trigger completion | Trusted current delivery/readiness wave plus exact retained trigger activation/attempt and committed completion occurrences | Collect ready occurrences from that wave, then evaluate the compatible set against one configuration. An earlier external origin remains separate provenance; equal result contents are not an identity. |
@@ -37,9 +37,9 @@ Every authored activity trigger and activation has one actual owning container. 
 
 A rejected occurrence is consumed. Rearm only that trigger, once, if the same source visit remains active, after the input evaluation and any selected work from that evaluation settle. An action-without-exit reaction rearms its trigger after Action succeeds. A completed losing candidate is consumed rather than replayed against a later visit; any allowed rearm follows the same visit check after selected work settles. Unaffected pending waits and deadlines remain intact. When a visit exits, cancel its relevant trigger subtrees and reject late completions by exact visit/activation identity.
 
-**Decision requiring agreement:** adopt this delivery-boundary and occurrence-ownership profile, including a real closure mechanism and treatment of later durable completions. The reviewed contract must cover both two independent regional Event/composite triggers and independent child-versus-parent triggers receiving one publication. Common-publication grouping remains required for independent triggers. No closure mechanism or production placement is approved by this document.
+**Agreed direction; mechanism still gated:** retain these delivery-boundary and occurrence-ownership principles, including the requirement for a real closure mechanism and the treatment of later durable completions. The reviewed contract must cover both two independent regional Event/composite triggers and independent child-versus-parent triggers receiving one publication. Common-publication grouping remains required for independent triggers. No closure mechanism or production placement is approved by this document.
 
-## Proposed native ownership profile
+## Agreed ownership principles; native placement pending
 
 Prefer the ordinary native StateMachine activity, with real machine, compound-state and leaf-visit containers owning the corresponding normal variable frames. Production placement is still pending agreement on the concrete shared input/control extension and the complete qualification matrix.
 
@@ -56,6 +56,6 @@ The native coordinator needs a reviewed, checkpointed way to request work from a
 
 ## Proof and agreement gate
 
-Before accepting this profile, independently review its reading of the owner decisions, event outcomes, source-wave closure and authored trigger choices. Confirm that independent common-event triggers preserve child/parent precedence and compatible regional selection, an evaluated-unhandled input is never revived through retained provenance, and occurrence handling does not silently change lifetime or scope. Production proof must establish the actual shared-runtime fence; a captured cohort, a receipt flag or N10's fixture join cannot substitute for it.
+The principles decision does not accept the missing mechanism. Its contract and implementation still need independent review against the owner decisions, event outcomes, delivery closure and authored trigger choices. Confirm that independent common-event triggers preserve child/parent precedence and compatible regional selection, an evaluated-unhandled input is never revived through retained provenance, and occurrence handling does not silently change lifetime or scope. Production proof must establish the actual shared-runtime fence; a captured cohort, a receipt flag or N10's fixture join cannot substitute for it.
 
 The concrete production contract and plan must then cover shared-input compatible regional selection, competing distinct completions, a composite durably waiting after an earlier event, hierarchy fallback with guards in their real scopes, selected-work phase barriers, cancellation of leaving-state waits, Exit/Action frame closure, and normal secret/withholding/reusable-boundary policies. The invocation-wide admission, content fingerprint, receipt/retention, ambiguous-commit and terminal-race contract remains Q2. Studio's actual definition, trigger ownership and inspection journeys remain Q3. None of these is closed by the bounded N9/N10 results.

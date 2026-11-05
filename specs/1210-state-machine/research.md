@@ -186,7 +186,7 @@ N10 did not reach publication/cohort qualification. Read-only inspection found a
 
 ### Production contract next
 
-The existing native seams now have bounded visit-frame and ordinary composite-cause evidence. The [proposed chart-input and trigger-ownership profile](m0-input-profile-proposal.md) makes the next agreement explicit: chart input identity, causal provenance and separately completing activities cannot be conflated into an implicit production selection rule. Actual phase work also needs a checkpointed path to its real live visit owner; parent scheduling causality does not change lexical scope. This is technical proposal work for Q1–Q3, not acceptance of an engine/schema or a reason to replace the full implementation/Studio/saga qualification with more fixture passes.
+The existing native seams now have bounded visit-frame and ordinary composite-cause evidence. The [input/occurrence and owner-lifetime principles](m0-input-profile-proposal.md) now have scoped delegated agreement at exact proposal commit `036a88bf`; their concrete mechanism remains gated. They make the next contract explicit: chart input identity, causal provenance and separately completing activities cannot be conflated into an implicit production selection rule. Actual phase work also needs a checkpointed path to its real live visit owner; parent scheduling causality does not change lexical scope. The next work is the shared source/continuation fence and exact live-invocation control/admission contract, coordinated with the execution-model owner. The principles decision is not acceptance of that mechanism or an engine/schema, and does not replace full implementation/Studio/saga qualification with fixture passes.
 
 ## Readiness
 

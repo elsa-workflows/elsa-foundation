@@ -65,6 +65,8 @@ contract, event/trigger lifetime and matching, complete hierarchical/parallel se
 data/outcomes/versioning, Studio journeys and saga composition. The program issue owns the evolving decision
 register; the accepted product direction does not by itself approve an internal engine design.
 
+The [5 November delegated agreement](https://github.com/elsa-workflows/elsa-foundation/issues/3815#issuecomment-6669211076) settles only input/occurrence and owner-lifetime principles at exact proposal commit `036a88bf`. Bounded N9 visit-frame and corrected N10 composite-source evidence are recorded in spec1210; their historical failures and limits remain. The immediate M0 contract work is the real durable source/continuation fence and exact native control/admission protocol, coordinated with Unified Execution. Native placement, Q1–Q3, production planning and full Studio/saga qualification remain gated.
+
 The program completes only when the accepted first-release requirements have actual native/Studio authoring,
 execution and persistence evidence, appropriate reviewed/merged changes and resulting-main qualification.
 A planning PR, flat-only runtime, hierarchy alone, attractive editor or closed child issues is insufficient.
