@@ -863,7 +863,7 @@ export function ShellFrame({
           </nav>
         ) : null}
 
-        {topSearch ? <NavigationSearch query={query} path={path} searchInput={searchInput}>
+        {topSearch ? <NavigationSearch query={navQuery} path={path} searchInput={searchInput}>
           {!hasNavResults ? <p className="sidebar-search-empty" role="status">No destinations match "{navQuery.trim()}".</p> : null}
           {topSearchItems.map(item =>
             <NavItemGroup key={item.id} item={item} childItems={[]} items={visibleNavigation} path={path} collapsed={false} onNavigate={navigateFromMainNavigation} />)}

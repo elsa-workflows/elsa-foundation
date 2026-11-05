@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { hasExactUrlMultimap } from "./exactUrl.mjs";
 
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
 type Submitted = { definition: { id: string }; draftId: string; version: { id: string } };
@@ -49,6 +50,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     });
     definitions.push(frameDraft.definition.id);
     const frameUrl = `/workflows/definitions?backend=legacy&definition=${frameDraft.definition.id}&version=${frameDraft.version.id}`;
+    const expectedFrameUrl = new URL(frameUrl, page.url());
     await page.goto(frameUrl);
     const editor = page.locator('.studio-workspace-panel:not([hidden]) > .wf-editor');
     await expect(editor.locator(".wf-sequence-step")).toHaveCount(16);
@@ -111,7 +113,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     await expect(screens.getByRole("tab")).toHaveCount(screenCount + 1);
     await expect(editor).toHaveCount(0);
     await page.locator(`[id="${editorTabId}"]`).click();
-    await expect(page).toHaveURL(new URL(frameUrl, page.url()).href);
+    await expect(page).toHaveURL(actual => hasExactUrlMultimap(actual, expectedFrameUrl));
     await expect(editor).toHaveAttribute("data-frame-retention", "same-editor");
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(epoch);
     await assertFrame("definition-frame-retained");

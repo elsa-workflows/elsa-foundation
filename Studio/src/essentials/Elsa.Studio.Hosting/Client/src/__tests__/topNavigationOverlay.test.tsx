@@ -209,6 +209,59 @@ describe("top navigation Build overlay", () => {
     expect(search.value).toBe("Reports");
   });
 
+  it.each(["Escape", "outside pointer", "outside focus", "navigation"])("releases %s dismissal after editing away and back to the same query", async dismissal => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    await act(() => search.focus());
+    setSearch(search, "absent-destination");
+    const results = groupPanel()!;
+    expect(results.querySelector('[role="status"]')?.textContent).toBe('No destinations match "absent-destination".');
+    const outside = document.createElement("button");
+    container.append(outside);
+
+    if (dismissal === "Escape") {
+      await act(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+      expect(document.activeElement).toBe(search);
+    } else if (dismissal === "outside pointer") {
+      await act(() => outside.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    } else if (dismissal === "outside focus") {
+      await act(() => outside.focus());
+      expect(document.activeElement).toBe(outside);
+    } else {
+      await renderShell(vi.fn(), "/reports");
+    }
+    expect(results.hidden).toBe(true);
+    expect(search.value).toBe("absent-destination");
+    await renderShell(vi.fn(), dismissal === "navigation" ? "/reports" : "/home");
+    expect(results.hidden).toBe(true);
+    await act(() => search.focus());
+
+    setSearch(search, "Reports");
+    expect(groupPanel()).toBe(results);
+    expect(results.querySelector('a[href="/reports"]')).not.toBeNull();
+    setSearch(search, "absent-destination");
+    expect(groupPanel()).toBe(results);
+    expect(results.hidden).toBe(false);
+    expect(results.querySelector('[role="status"]')?.textContent).toBe('No destinations match "absent-destination".');
+    expect(document.activeElement).toBe(search);
+    outside.remove();
+  });
+
+  it("reopens after a raw edit that leaves the filtering query unchanged", async () => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
+    await act(() => search.focus());
+    setSearch(search, "Reports");
+    const results = groupPanel()!;
+    await act(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(results.hidden).toBe(true);
+    setSearch(search, " Reports ");
+    expect(groupPanel()).toBe(results);
+    expect(results.querySelector('a[href="/reports"]')).not.toBeNull();
+    expect(search.value).toBe(" Reports ");
+    expect(document.activeElement).toBe(search);
+  });
+
   it("preserves inline no-match feedback and Escape clearing in left navigation", async () => {
     localStorage.setItem(navModeStorageKey, "left");
     await renderShell();

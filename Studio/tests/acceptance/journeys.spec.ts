@@ -473,6 +473,19 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await page.getByRole("radiogroup", { name: "Navigation", exact: true }).getByRole("radio", { name: "Top", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
   const topSearch = sidebar.getByRole("searchbox", { name: "Search Studio", exact: true });
+  const topFrame = () => sidebar.evaluate(node => {
+    const topbar = document.querySelector(".topbar"), content = document.querySelector(".content");
+    if (!topbar || !content) throw new Error("The composed shell frame is missing");
+    return { stripHeight: node.getBoundingClientRect().height, topbarTop: topbar.getBoundingClientRect().top, contentTop: content.getBoundingClientRect().top };
+  });
+  await expect(topSearch).toHaveValue("");
+  const ordinaryTopFrame = await topFrame();
+  const assertTopFrame = async () => {
+    await expect.poll(async () => {
+      const current = await topFrame();
+      return Math.max(...Object.keys(ordinaryTopFrame).map(key => Math.abs(current[key as keyof typeof current] - ordinaryTopFrame[key as keyof typeof ordinaryTopFrame])));
+    }, { message: "Search and dismissal must preserve the ordinary navigation height and composed frame position" }).toBeLessThanOrEqual(1);
+  };
   await topSearch.fill("templates");
   const topResults = page.getByRole("navigation", { name: "Search results", exact: true });
   const templateResult = topResults.getByRole("link", { name: "Templates", exact: true });
@@ -483,35 +496,59 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
     const box = label.getBoundingClientRect();
     return box.left >= 0 && box.right <= innerWidth && node.contains(document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2));
   })).toBe(true);
+  await assertTopFrame();
   await capture(page, info, "top-search");
   await topSearch.press("Escape");
   await expect(topResults).toBeHidden();
   await expect(topSearch).toBeFocused();
+  await assertTopFrame();
   await topSearch.fill("");
   const headerHeight = await sidebar.evaluate(node => node.getBoundingClientRect().height);
   const absentDestination = "no-such-navigation-acceptance-long-unbroken-destination";
   await topSearch.fill(absentDestination);
   const topNoMatch = topResults.getByRole("status");
-  await expect(topNoMatch).toHaveText(`No destinations match "${absentDestination}".`);
-  await expect(topResults).toBeVisible();
-  await expect(topNoMatch).toBeInViewport({ ratio: 1 });
-  expect(await topNoMatch.evaluate(node => {
-    const range = document.createRange(); range.selectNodeContents(node);
-    const surface = node.closest(".nav-search-results")!.getBoundingClientRect();
-    return Array.from(range.getClientRects()).every(rect => rect.left >= 0 && rect.right <= innerWidth &&
-      rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= surface.left && rect.right <= surface.right &&
-      rect.top >= surface.top && rect.bottom <= surface.bottom &&
-      node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))) &&
-      node.scrollWidth <= node.clientWidth + 1;
-  }), "The complete no-match message must wrap inside the visible search surface").toBe(true);
-  expect(Math.abs(await sidebar.evaluate(node => node.getBoundingClientRect().height) - headerHeight), "No-match feedback must not enlarge the navigation strip").toBeLessThanOrEqual(1);
+  const assertNoMatch = async () => {
+    await expect(topNoMatch).toHaveText(`No destinations match "${absentDestination}".`);
+    await expect(topResults).toBeVisible();
+    await expect(topNoMatch).toBeInViewport({ ratio: 1 });
+    expect(await topNoMatch.evaluate(node => {
+      const range = document.createRange(); range.selectNodeContents(node);
+      const surface = node.closest(".nav-search-results")!.getBoundingClientRect();
+      return Array.from(range.getClientRects()).every(rect => rect.left >= 0 && rect.right <= innerWidth &&
+        rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= surface.left && rect.right <= surface.right &&
+        rect.top >= surface.top && rect.bottom <= surface.bottom &&
+        node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))) &&
+        node.scrollWidth <= node.clientWidth + 1;
+    }), "The complete no-match message must wrap inside the visible search surface").toBe(true);
+  };
+  await assertNoMatch();
+  expect(Math.abs(await sidebar.evaluate(node => node.getBoundingClientRect().height) - headerHeight), "No-match feedback must not shift the navigation strip").toBeLessThanOrEqual(1);
+  await assertTopFrame();
   await capture(page, info, "top-search-no-match");
   await topSearch.press("Escape");
   await expect(topResults).toBeHidden();
   await expect(topNoMatch).toBeHidden();
   await expect(topSearch).toBeFocused();
   await expect(topSearch).toHaveValue(absentDestination);
+  await assertTopFrame();
   await capture(page, info, "top-search-no-match-dismissed");
+  // An edit releases dismissal even when a later edit restores the previously dismissed query.
+  await topSearch.fill("templates");
+  await expect(templateResult).toBeInViewport({ ratio: 1 });
+  await expect(topSearch).toBeFocused();
+  await assertTopFrame();
+  await capture(page, info, "top-search-query-edited");
+  await topSearch.fill(absentDestination);
+  await assertNoMatch();
+  await expect(topSearch).toBeFocused();
+  await assertTopFrame();
+  await capture(page, info, "top-search-query-returned");
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topNoMatch).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await expect(topSearch).toHaveValue(absentDestination);
+  await assertTopFrame();
   // Input-to-outside keyboard traversal must dismiss without stealing outside focus.
   await topSearch.fill(absentDestination + "-tab");
   await expect(topNoMatch).toBeVisible();

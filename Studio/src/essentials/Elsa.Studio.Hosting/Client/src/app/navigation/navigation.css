@@ -65,6 +65,8 @@
 @media (min-width: 1025px) {
   .studio-shell .sidebar { gap: 12px; padding: 20px 12px 14px; }
   .studio-shell .sidebar-search { min-height: 38px; }
+  /* Keep the ordinary 44px group row occupied when search replaces its groups. */
+  html[data-nav-mode="top"] .sidebar-top { min-height: 44px; }
   .studio-shell.sidebar-collapsed .nav-group-toggle { display: none; }
   .studio-shell.sidebar-collapsed .nav-section-group { border-top: 1px solid var(--border); padding-top: 12px; }
   html[data-nav-mode="top"] .sidebar .nav-section-group { margin-top: 0; }

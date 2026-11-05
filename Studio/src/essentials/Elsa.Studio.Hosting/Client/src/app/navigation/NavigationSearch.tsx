@@ -13,6 +13,9 @@ export function NavigationSearch({ query, path, searchInput, children }: {
   const open = query !== dismissedQuery;
   const previousPath = useRef(path);
   useLayoutEffect(() => {
+    setDismissedQuery(null);
+  }, [query]);
+  useLayoutEffect(() => {
     if (previousPath.current === path) return;
     previousPath.current = path;
     setDismissedQuery(query);
