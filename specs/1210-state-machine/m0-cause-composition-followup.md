@@ -1,0 +1,43 @@
+# M0 N10 composition correction and first follow-up
+
+**Status:** Reviewed research plan; correction source prepared, unbuilt and unexecuted after the failed `5d4c7359` batch. Independent correctness, standards and acceptance reviews are clean for the frozen plan and correction source. The new project reference still requires a separately granted normal restore and generated-lock review. This does not approve production placement, Q1–Q3 or a public schema. Review the exact dependency changes and freeze the resulting clean head before further execution.
+
+## Retained cause and scope
+
+The [actual receipt](evidence/m0-native-witness-5d4c.json) records one successful focused build, followed by eight of 21 planned generations. N9 produced its six expected outcomes and has independent bounded acceptance. N10's first setup succeeded; its second generation failed and stopped the batch. Thirteen generations were not run. No replay is part of this plan.
+
+Read-only inspection of the closed owned SQLite database found a blocking publisher incident: `PublishStimulusSchemaGuard` refused the checkpoint because the fixture composed no shared dormancy check. Its actual `RuntimePostCommitOutbox` finalization record remained at 1.0.0; publication requires 2.0.0. Six scheduler outboxes were delivered and zero publish sources existed. The pre-sweep observation assumption was not reached beyond this earlier refusal and remains unqualified.
+
+The fixture also omitted the normal stimulus router/trigger composition that publication delivery will need. These are fixture-composition omissions, not evidence for changing the existing guard, source ownership or the event/cohort contract. Preserve all failed source, logs, snapshots, databases and receipts at their original paths. Source investigation and the proposed correction do not turn the failed batch green.
+
+## Minimum correction to review
+
+1. Add the existing `Elsa.Cluster.Readability` project reference to the research executable. In the N10 host only, compose `AddEfSchemaReadability()` alongside the existing normal runtime EF registration and migration startup. This is the real host bridge: its in-process membership, `ClusterSchemaFleet`, admitted module gates, finalization records, observed-schema source and shared dormancy check. Do not copy the component test's controlled fleet, provide static version answers, update schema rows manually or override schema availability. N9's host composition and all old fixture commands remain unchanged.
+2. Compose the existing `WorkflowsRuntimeTriggersFeature` in that same N10 host. It installs the normal stimulus router/index/lookup services while preserving selected durable providers. It does not authorize manually creating start/recipient records, replacing the selected EF stores or routing around the normal checkpoint/outbox path.
+3. After normal shell initializers, before publication or restored work is driven, record the actual schema/dormancy/fleet/router implementation identities and observed `RuntimePostCommitOutbox` status for this owned generation. Ask the normal dormancy check to ensure the required 2.0.0 contract. Record the check's outcome before propagating any refusal. A host that cannot observe legitimate readiness fails here; readiness is not a fixture-supplied version or an alternate execution authority. The normal in-process fleet is a single-host qualification, not distributed membership proof.
+4. Keep the existing pre-sweep source capture, normal sweep, exact durable lookup, actual publisher ownership/fingerprint, complete recipient snapshot, unchanged Event/result bindings and unrelated-wait assertions. Do not add timing retries, extra sweeps, fake locators/cohorts or an in-memory source provider to obtain a passing result. If a later failure actually refutes the observation timing, preserve it and review that distinct cause before another change.
+5. Add bounded failure evidence from the normal incident store when a generation fails, including publisher incident identity, type and masked message. An incident-read failure is retained separately and must not replace the original exception. This diagnostic copy supplies no execution state. Public research inputs remain public; no secret material is introduced or copied into a continuation/result.
+
+Source precedents: [real host composition](../../Essentials/apps/Elsa.Workbench/Program.cs), [readability/dormancy registration](../../Essentials/src/Cluster/Readability/EfSchemaReadabilityServiceCollectionExtensions.cs), [fleet](../../Essentials/src/Cluster/Readability/ClusterSchemaFleet.cs), [gate activation](../../Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaModuleGate.cs), [trigger feature](../../Essentials/src/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) and [publication guard](../../Essentials/src/Activities/Primitives/Services/PublishStimulusSchemaGuard.cs). Existing `PublishStimulusStartContract` tests use a controlled fleet; that component substitute is deliberately not the proposed host composition.
+
+## First resource phase: dependency preparation only
+
+The new real-host project reference requires normal dependency resolution. After the plan and exact source correction are independently reviewed, freeze the source head, project/source hashes, current lock hash, command, fresh log path, deadline and owned closeout. Request a separate coordinator release for **one focused restore only**:
+
+```text
+dotnet restore specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj --use-lock-file --disable-parallel -m:1 -nr:false -p:RestoreLockedMode=false -p:UseSharedCompilation=false --nologo
+```
+
+Bound it to 300 seconds plus owned closeout, max one MSBuild worker, no build or generation. Preserve its actual exit, warnings/errors and every lock/project/source diff. Do not edit/copy a lock file manually. Any unexpected dependency or unrelated tracked-file change stops for inspection; do not silently discard it or proceed. Return the slot when the restore is terminal and all observed owned processes/groups are closed. A preparation failure gets no automatic retry.
+
+Review the actual generated dependency/lock delta, commit the coherent source/lock/evidence checkpoint through the existing draft PR and freeze the resulting clean execution head. A successful restore is dependency preparation, not runtime qualification.
+
+## Later resource phase: N10 only, separately granted
+
+Only after dependency review and a separate explicit release, freeze one focused locked build and **one `cause-run` invocation** against a brand-new owned output directory. Use the same single-worker, no-node-reuse/no-shared-compiler settings and source/assembly/ownership checks as the reviewed r3 launcher. The proposed bounds remain 600 seconds for build, 1,200 seconds for the batch and 90 seconds per child, with cooperative TERM/INT and bounded owned cleanup. Freeze a new launcher revision; never modify or reuse the executed r3 packet/output.
+
+N10 still plans **15 distinct child generations**: three positive scenarios of four generations each and the separate wrong-relay control's setup/setup/intended failure. Derive actual counts from receipts; expected complete execution is 14 exit-zero results plus one failure with `N10: composite completion must retain the originating event ID`. Stop on an unexpected result. Do not run the combined 21-generation command, N9, old 47-generation command, Workbench, Studio, a provider matrix or retries under this proposed phase.
+
+Independent acceptance must inspect actual readiness/finalization evidence, source/cohort identity and membership, both delayed completion orders, distinct causes, cold reports and the wrong-relay diagnostic. Preserve N9's earlier accepted evidence at its actual `5d4c7359` source/binary rather than implying a new-head N9 run. A successful later N10 probe would still leave production invocation admission, secret/withholding and real guard/phase topology, hierarchy/parallel semantics, Studio, saga and resulting-main gates open.
+
+Current-main CI remains pending. The coordinator's earlier exception authorized only the completed isolated prototype phase; future resource releases must state the applicable source-health direction. Neither this proposal nor its source review grants a producer, changes an owner decision or waives a final delivery gate.

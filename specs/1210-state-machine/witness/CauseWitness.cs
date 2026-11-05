@@ -4,7 +4,12 @@ using CShells.Lifecycle;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Testing;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.Readability;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema.SchemaFinalization;
+using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -97,12 +102,16 @@ internal static class CauseWitness
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
+                // Use the real host fleet/observed-gate bridge. No fixture version
+                // answer or schema-row mutation substitutes for normal finalization.
+                services.AddEfSchemaReadability();
                 services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite", ConnectionString = $"Data Source={database};Pooling=False",
                     RecoveryContinuationSigningKey = "m0-public-fixture-recovery-signing-material",
                     HierarchyCursorSigningKey = "m0-public-fixture-hierarchy-signing-material"
                 }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+                new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
                 new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
                 services.AddPersistenceModes(options => { options.Mode = PersistenceMode.Balanced; options.RecordCompletion = true; });
             })
@@ -112,6 +121,7 @@ internal static class CauseWitness
         harness.InitializeActivityTypes();
         try
         {
+            await CheckHostReadinessAsync(harness, directory, scenario, generation);
             if (generation == 1)
             {
                 var reference = await harness.PublishAsync(CauseExecutable.Create(scenario), "m0-cause-publication");
@@ -161,8 +171,63 @@ internal static class CauseWitness
         catch
         {
             try { await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.failed-state.json"), await SnapshotAsync(harness)); }
-            catch (Exception error) { await File.WriteAllTextAsync(Path.Join(directory, $"{scenario}-g{generation}.state-read-failure.log"), error.ToString()); }
+            catch (Exception error)
+            {
+                await TryWriteFailureEvidenceAsync(Path.Join(directory, $"{scenario}-g{generation}.state-read-failure.json"),
+                    new { FailureType = error.GetType().FullName, error.Message });
+            }
+            try
+            {
+                await using var scope = harness.Services.CreateAsyncScope();
+                var incidents = await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(WorkflowId);
+                await WriteAsync(Path.Join(directory, $"{scenario}-g{generation}.failed-incidents.json"),
+                    incidents.Select(item => new { item.IncidentId, item.ActivityExecutionId, item.ExecutableNodeId, item.Status, item.FailureType, item.Message }).ToArray());
+            }
+            catch (Exception error)
+            {
+                // Failure diagnostics must not replace the original generation error.
+                await TryWriteFailureEvidenceAsync(Path.Join(directory, $"{scenario}-g{generation}.incident-read-failure.json"),
+                    new { FailureType = error.GetType().FullName, error.Message });
+            }
             throw;
+        }
+    }
+
+    private static async Task CheckHostReadinessAsync(WorkflowExecutionHarness harness, string directory, string scenario, int generation)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var dormancy = services.GetRequiredService<ISchemaDormancyCheck>();
+        var owners = new
+        {
+            Dormancy = dormancy.GetType().FullName,
+            ObservedSchema = services.GetRequiredService<IObservedSchemaFinalization>().GetType().FullName,
+            Fleet = services.GetRequiredService<IEfSchemaFleet>().GetType().FullName,
+            Router = services.GetRequiredService<IStimulusRouter>().GetType().FullName
+        };
+        var path = Path.Join(directory, $"{scenario}-g{generation}.host-readiness.json");
+        var before = dormancy.Observe().SingleOrDefault(item => item.Family == "RuntimePostCommitOutbox");
+        await WriteAsync(path, new { Status = "Checking", Owners = owners, SchemaBeforeCheck = before });
+        try
+        {
+            await dormancy.EnsureAvailableAsync([new SchemaVersionRequirement("RuntimePostCommitOutbox", "2.0.0")],
+                PublishStimulusConstants.PublishStimulusIntentKind);
+        }
+        catch (Exception error)
+        {
+            await TryWriteFailureEvidenceAsync(path, new { Status = "Failed", Owners = owners, SchemaBeforeCheck = before, FailureType = error.GetType().FullName, error.Message });
+            throw;
+        }
+        await WriteAsync(path, new { Status = "Available", Owners = owners, Schema = dormancy.Observe().SingleOrDefault(item => item.Family == "RuntimePostCommitOutbox") });
+    }
+
+    private static async Task TryWriteFailureEvidenceAsync(string path, object evidence)
+    {
+        try { await WriteAsync(path, evidence); }
+        catch (Exception)
+        {
+            // The original generation failure remains authoritative even if its
+            // diagnostic sink is unavailable; missing evidence cannot qualify a run.
         }
     }
 
