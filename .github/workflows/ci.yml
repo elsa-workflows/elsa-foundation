@@ -1438,12 +1438,27 @@ jobs:
         working-directory: tools/contributor-pair-proof
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Test bounded failure diagnostics without a browser
+        run: node --test tools/contributor-pair-proof/diagnostics.test.mjs
+
       - name: Install Chromium
         working-directory: tools/contributor-pair-proof
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Run the published image pair journey
+        id: published-pair-journey
         run: node tools/contributor-pair-proof/run.mjs
+
+      - name: Retain bounded published pair failure diagnostics
+        if: ${{ failure() && steps.published-pair-journey.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-pair-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/published-pair-diagnostics/diagnostic.json
+            ${{ runner.temp }}/published-pair-diagnostics/viewport.png
+          retention-days: 7
+          if-no-files-found: warn
 
   shuffled-unit-tests:
     needs: plan-scope
