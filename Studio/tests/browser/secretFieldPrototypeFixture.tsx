@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { CreateSecretDialog } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs";
 import { SecretFormField } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretFormField";
@@ -26,6 +27,25 @@ const descriptors: SecretDescriptorsResponse = {
   ]
 };
 
+type FieldStyle = "filled" | "outlined";
+const fieldStyleStorageKey = "secret-field-prototype-style";
+
+function readFieldStyle(): FieldStyle {
+  const stored = query.get("field-style") ?? localStorage.getItem(fieldStyleStorageKey);
+  return stored === "outlined" ? "outlined" : "filled";
+}
+
+function FieldStyleSwitch({ value, onChange }: { value: FieldStyle; onChange(value: FieldStyle): void }) {
+  const name = useId();
+  return <fieldset className="secret-prototype-field-style">
+    <legend>Field style</legend>
+    {(["filled", "outlined"] as const).map(style => <label key={style}>
+      <input type="radio" name={name} value={style} tabIndex={value === style ? 0 : -1} checked={value === style} onChange={() => onChange(style)} />
+      {style === "filled" ? "Filled" : "Outlined"}
+    </label>)}
+  </fieldset>;
+}
+
 function StateSheet() {
   const [value, setValue] = useState("");
   return <section className="secrets-modal secret-prototype-states" aria-label="Representative field states">
@@ -52,14 +72,27 @@ function StateSheet() {
 
 function Prototype() {
   const { availableThemes, currentTheme, mode, setTheme, setMode, supportedModes, workspaceStyle, setWorkspaceStyle } = useTheme();
+  const [fieldStyle, setFieldStyle] = useState<FieldStyle>(readFieldStyle);
+  const mainRef = useRef<HTMLElement>(null);
+  const [dialogHeader, setDialogHeader] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(query.get("open") === "1");
   const [states, setStates] = useState(query.get("view") === "states");
   const [saveMode, setSaveMode] = useState(query.get("save") ?? "success");
   const [catalog, setCatalog] = useState(query.get("catalog") ?? "ready");
   const [message, setMessage] = useState("");
-  return <main className="secret-prototype">
+  useEffect(() => {
+    localStorage.setItem(fieldStyleStorageKey, fieldStyle);
+    const url = new URL(location.href);
+    url.searchParams.set("field-style", fieldStyle);
+    history.replaceState(null, "", url);
+  }, [fieldStyle]);
+  useEffect(() => {
+    setDialogHeader(open ? mainRef.current?.querySelector<HTMLElement>(".secrets-create-header") ?? null : null);
+  }, [open]);
+  return <main ref={mainRef} className="secret-prototype" data-field-style={fieldStyle}>
     <header><h1>Compact Secret fields</h1><p>Interactive component prototype · demonstration data</p></header>
     <div className="secret-prototype-toolbar">
+      <FieldStyleSwitch value={fieldStyle} onChange={setFieldStyle} />
       <label>Theme<select aria-label="Preview theme" value={currentTheme.id} onChange={event => setTheme(event.target.value)}>{availableThemes.map(theme => <option key={theme.id} value={theme.id}>{theme.name}</option>)}</select></label>
       <label>Appearance<select aria-label="Preview appearance" value={mode} onChange={event => setMode(event.target.value as typeof mode)}>{supportedModes.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       <label>Workspace<select aria-label="Preview workspace" value={workspaceStyle ?? "theme"} onChange={event => setWorkspaceStyle(event.target.value === "theme" ? null : event.target.value as typeof workspaceStyle)}>{["theme", "linen", "minimal", "quiet", "focus", "open"].map(item => <option key={item} value={item}>{item}</option>)}</select></label>
@@ -76,6 +109,7 @@ function Prototype() {
         if (saveMode === "error") throw new Error("The demonstration save failed. Your entries are retained; try again.");
         setMessage(`Created ${request.name}. This preview does not persist data.`);
       }} /> : null}
+    {open && dialogHeader ? createPortal(<FieldStyleSwitch value={fieldStyle} onChange={setFieldStyle} />, dialogHeader) : null}
   </main>;
 }
 

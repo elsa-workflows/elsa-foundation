@@ -35,3 +35,9 @@ The theme gallery is isolated actual-component evidence. Read-only is a represen
 ## Local validation result
 
 Tested UI source: `6732623e2d9294a19f8ad5493f142ea7dacf6d7b`, clean. Secrets 73/73, browser 76/76 (48 appearance combinations, no skips/retries), owned composed 12/12, architecture 616/616, generated-map check, build/typecheck and touched-file lint passed. A focused mutation removing aria-invalid failed the new regression and passed again after restoration. The architecture discovery inventory has 601 entries; two deferred MemberData theories expand from 2 entries to 11 domain-feature and 6 collectible-metadata cases at execution, accounting for 616 executed cases. Independent review receipts and the pending shared CI artifact gate are recorded on PR #3857. Failed preliminary runs are retained separately from final evidence.
+
+## Filled / Outlined comparison
+
+The preview now compares both treatments independently of theme choice. Native radio controls in the toolbar and dialog header preserve entered values and validation when switching, with URL/local preview persistence. Outlined labels sit on the border even when empty; keeping them in flow lets long/enlarged names wrap and keeps multiline scrolling below the label. The notch consumes the same surface role as its surrounding dialog/optional section/state sheet.
+
+The comparison implementation remains confined to browser preview files. It adds no shared API, product setting or new dependency. The prior real-host proof covers the unchanged product implementation; the two-style comparison has its own isolated matrix and independent visual review recorded on PR #3857. Keep Filled as the existing default while comparing both; the evidence can guide theme defaults during later extraction.

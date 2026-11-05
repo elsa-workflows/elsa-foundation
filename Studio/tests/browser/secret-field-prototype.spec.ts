@@ -31,13 +31,16 @@ async function namesAndContrast(page: Page, selector: string) {
   expect(violations).toEqual([]);
 }
 
+for (const fieldStyle of ["filled", "outlined"] as const) test.describe(fieldStyle, () => {
+
 for (const theme of builtInThemeDefinitions) for (const mode of getSupportedThemeModes(theme)) {
   test(`${theme.id} / ${mode}: labels, states and Create secret`, async ({ page }, info) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await appearance(page, theme.id, mode);
-    await page.goto("/secret-field-prototype.html?view=states");
+    await page.goto(`/secret-field-prototype.html?view=states&field-style=${fieldStyle}`);
     await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", mode);
     await expect(page.getByLabel("Preview theme")).toHaveValue(theme.id);
+    await expect(page.locator(".secret-prototype")).toHaveAttribute("data-field-style", fieldStyle);
     await expect(page.getByLabel("Disabled field", { exact: true })).toBeDisabled();
     await expect(page.getByLabel("Read-only field", { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Invalid field", { exact: true })).toHaveAttribute("aria-invalid", "true");
@@ -62,6 +65,15 @@ for (const theme of builtInThemeDefinitions) for (const mode of getSupportedThem
       const label = (element as HTMLInputElement).labels![0].getBoundingClientRect();
       return { labelTop: label.top - input.top, labelBottom: label.bottom - input.top, height: input.height };
     });
+    if (fieldStyle === "outlined") {
+      const notch = await name.evaluate(element => {
+        const control = element.parentElement!.getBoundingClientRect();
+        const label = (element as HTMLInputElement).labels![0].getBoundingClientRect();
+        return { labelCenter: (label.top + label.bottom) / 2, borderTop: control.top, labelBottom: label.bottom, inputTop: element.getBoundingClientRect().top };
+      });
+      expect(Math.abs(notch.labelCenter - notch.borderTop)).toBeLessThanOrEqual(2);
+      expect(notch.labelBottom).toBeLessThanOrEqual(notch.inputTop + 1);
+    }
     expect(geometry.labelTop).toBeLessThan(10);
     expect(geometry.labelBottom).toBeLessThanOrEqual(24);
     await expect(dialog.getByLabel("Type", { exact: true })).not.toHaveCSS("background-image", "none");
@@ -80,7 +92,7 @@ for (const theme of builtInThemeDefinitions) for (const mode of getSupportedThem
 for (const workspace of ["linen", "minimal", "quiet", "focus", "open"]) test(`${workspace}: narrow layout and enlarged text`, async ({ page }, info) => {
   await appearance(page, "classic", "dark", workspace);
   await page.setViewportSize({ width: 360, height: 800 });
-  await page.goto("/secret-field-prototype.html?open=1");
+  await page.goto(`/secret-field-prototype.html?open=1&field-style=${fieldStyle}`);
   const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
   await dialog.getByRole("button", { name: /^More options/ }).click();
   const before = await dialog.getByLabel("Technical name", { exact: true }).evaluate(element => parseFloat(getComputedStyle(element).fontSize));
@@ -111,7 +123,7 @@ for (const workspace of ["linen", "minimal", "quiet", "focus", "open"]) test(`${
 
 test("password, multiline and configuration sources preserve labels and draft recovery", async ({ page }, info) => {
   await appearance(page, "classic", "dark");
-  await page.goto("/secret-field-prototype.html?save=error&catalog=error");
+  await page.goto(`/secret-field-prototype.html?save=error&catalog=error&field-style=${fieldStyle}`);
   await page.getByRole("button", { name: "Open Create secret", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
   await dialog.getByLabel("Technical name", { exact: true }).fill("billing.connection");
@@ -151,7 +163,7 @@ test("password, multiline and configuration sources preserve labels and draft re
 
 test("submitting disables draft editing and duplicate submission", async ({ page }, info) => {
   await appearance(page, "classic", "light");
-  await page.goto("/secret-field-prototype.html?open=1&save=pending");
+  await page.goto(`/secret-field-prototype.html?open=1&save=pending&field-style=${fieldStyle}`);
   const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
   await dialog.getByLabel("Technical name", { exact: true }).fill("billing.connection");
   await dialog.getByLabel("Value", { exact: true }).fill("demonstration-value");
@@ -168,12 +180,58 @@ test("submitting disables draft editing and duplicate submission", async ({ page
 test("native autofill, reduced motion and forced colors retain a label and focus", async ({ page }, info) => {
   await appearance(page, "classic", "light");
   await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
-  await page.goto("/secret-field-prototype.html?view=states");
+  await page.goto(`/secret-field-prototype.html?view=states&field-style=${fieldStyle}`);
   await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "light");
   const input = page.getByLabel("Empty field", { exact: true });
   await input.evaluate(element => { (element as HTMLInputElement).value = "autofilled value"; });
   await page.getByLabel("Read-only field", { exact: true }).focus();
-  expect(await input.evaluate(element => parseFloat(getComputedStyle((element as HTMLInputElement).labels![0]).top))).toBeLessThan(6);
+  const labelPosition = await input.evaluate(element => {
+    const label = (element as HTMLInputElement).labels![0];
+    return { top: parseFloat(getComputedStyle(label).top), labelBottom: label.getBoundingClientRect().bottom, inputTop: element.getBoundingClientRect().top };
+  });
+  if (fieldStyle === "filled") expect(labelPosition.top).toBeLessThan(6);
+  else expect(labelPosition.labelBottom).toBeLessThanOrEqual(labelPosition.inputTop + 1);
   expect(await input.locator("..").locator("label").evaluate(element => parseFloat(getComputedStyle(element).transitionDuration))).toBeLessThanOrEqual(.001);
   await capture(page, info, "forced-colors-reduced-motion");
+});
+
+});
+
+test("field style switches live without resetting values and persists across appearances and reload", async ({ page }, info) => {
+  await page.goto("/secret-field-prototype.html?view=states");
+  const toolbar = page.locator(".secret-prototype-toolbar");
+  await page.getByLabel("Empty field", { exact: true }).fill("Keep this value");
+  await toolbar.getByRole("radio", { name: "Outlined", exact: true }).check();
+  await expect(page.getByLabel("Empty field", { exact: true })).toHaveValue("Keep this value");
+  await page.getByLabel("Preview theme").selectOption("meridian");
+  await page.getByLabel("Preview appearance").selectOption("dim");
+  await expect(toolbar.getByRole("radio", { name: "Outlined", exact: true })).toBeChecked();
+  await page.getByRole("button", { name: "Open Create secret", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
+  await dialog.getByLabel("Technical name", { exact: true }).fill("invalid name");
+  await dialog.getByLabel("Value", { exact: true }).fill("demonstration-value");
+  await dialog.getByRole("radio", { name: "Filled", exact: true }).check();
+  await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveValue("invalid name");
+  await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  await capture(page, info, "live-filled");
+  await dialog.getByRole("radio", { name: "Outlined", exact: true }).check();
+  await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue("demonstration-value");
+  await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveAccessibleDescription("Use letters, numbers, dot, dash, underscore, or colon.");
+  await capture(page, info, "live-outlined");
+  const outlined = dialog.getByRole("radio", { name: "Outlined", exact: true });
+  await expect(outlined).toBeFocused();
+  await outlined.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(outlined).toBeFocused();
+  await outlined.press("ArrowLeft");
+  await expect(dialog.getByRole("radio", { name: "Filled", exact: true })).toBeChecked();
+  await page.keyboard.press("ArrowRight");
+  await expect(outlined).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Open Create secret", exact: true })).toBeFocused();
+  // Remove the URL override and verify the stored preference independently.
+  await page.evaluate(() => { history.replaceState(null, "", "/secret-field-prototype.html?view=states"); });
+  await page.reload();
+  await expect(toolbar.getByRole("radio", { name: "Outlined", exact: true })).toBeChecked();
 });

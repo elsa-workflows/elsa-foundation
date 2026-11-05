@@ -49,6 +49,7 @@ Autofilled/password-manager content, long localized labels, long help/error mess
 - **FR-005**: Fields MUST use the selected theme's semantic roles and support every built-in theme/appearance. Existing custom themes inherit those roles; arbitrary external themes are not claimed as inspected.
 - **FR-006**: The prototype MUST expose representative read-only and disabled states for evaluating a future shared field contract, without changing host authorization.
 - **FR-007**: Retain current-revision captures and distinguish isolated preview evidence, composed-host journey results and independent visual acceptance.
+- **FR-009**: The comparison preview MUST offer Filled and Outlined styles independently of theme/appearance, including a switch inside the open dialog. Switching MUST preserve draft values, validation and focus behavior; remember the choice across reloads. Outlined labels MUST remain on the border without clipping or collisions, including enlarged/long labels and multiline editors. This option remains preview-only.
 - **FR-008**: Document what should move into shared components and which controls need exceptions before a wider migration.
 
 ## Success Criteria
@@ -67,3 +68,7 @@ The owner's supplied Material floating-label image is the interaction reference;
 ## Prototype validation
 
 Implemented as a bounded prototype in PR #3857. Local proof at source `6732623e2d9294a19f8ad5493f142ea7dacf6d7b` passed 73 module tests, 76 browser checks across 48 built-in theme/appearance combinations and 12 composed journeys. Shared downloadable CI evidence and the overall product acceptance gate remain pending; the PR stays draft for prototype review. This status records prototype implementation, not approval of the wider migration.
+
+## Filled / Outlined comparison extension
+
+Owner requested the second presentation on 2026-11-05. Extend the same draft prototype and matrix to both styles before deciding shared defaults. Prior implementation evidence above describes the Filled baseline; comparison qualification is recorded separately on PR #3857.

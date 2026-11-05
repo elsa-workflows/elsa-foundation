@@ -36,3 +36,9 @@ Pre-design gate: passed. Post-design gate: passed; helper stays internal to the 
 ## Validation and review
 
 Run affected Secrets unit suite whole, module typecheck/build, CSS/JS lint for touched files, browser scope regressions and theme/state matrix. Compare before/after dialog geometry at the same viewport/theme. Commit before composed proof. Independent acceptance reviewer inspects screenshots of the exact source revision; fixture passes cannot substitute for composed proof. Publish a draft prototype PR and retain the prototype status until its findings guide a future shared component decision.
+
+## Filled / Outlined comparison follow-up
+
+Scope: preview-only controls and styles in `Studio/tests/browser/secretFieldPrototypeFixture.tsx` and `.css`; product/module/shared-UI sources are unchanged. The toolbar and an in-dialog portal expose native radio groups with one tab stop each. A preview preference and URL parameter persist the presentation independently of theme choice. Live switching changes only the ancestor style attribute, preserving control instances, draft values, validation and reveal state.
+
+Outlined uses an in-flow wrapping label crossing the outer border and a separate native-control row. The label paints with the containing surface role, including More options and state sheets. Textarea scrolling remains in its own row. Parameterize the existing theme/state suite over both styles, add a live-switch/persistence/focus journey, and inspect captures independently. No new public field API, product setting or module dependency is introduced; composed-host product sources and prior proof remain unchanged.
