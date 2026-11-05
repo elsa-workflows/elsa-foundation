@@ -236,6 +236,11 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(tagDocument);
+  // Restore the open preference through the UI before the later disclosure/rail exercise.
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "false");
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "true");
   await capture(page, info, "tags-edit");
   await navLink("Library").click();
   const libraryViews = page.getByRole("navigation", { name: "Library views" });
