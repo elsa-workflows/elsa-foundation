@@ -342,14 +342,37 @@ export function mergeBpmnJsDefinitions(owner: ActivityNode, definitions: unknown
   const activities = source.activities.filter(activity => retainedBindings.has(activity.nodeId));
   validateReferences(elements, flows, activities);
   const diagrams = array(document.diagrams, "BPMN diagrams");
-  if (diagrams.length !== 1) refuse("exactly one BPMN diagram is required");
-  const diagram = object(diagrams[0], "BPMN diagram");
-  if (diagram.$type !== "bpmndi:BPMNDiagram") refuse("the diagram has an unsupported type");
-  supportedFields(diagram, ["id", "plane", "$attrs"], "BPMN diagram"); attributes(diagram, [], "BPMN diagram"); admitOwnedId(diagram.id);
-  const plane = object(diagram.plane, "BPMN plane");
-  if (plane.$type !== "bpmndi:BPMNPlane") refuse("the diagram plane has an unsupported type");
-  supportedFields(plane, ["id", "bpmnElement", "planeElement", "$attrs"], "BPMN plane"); attributes(plane, [], "BPMN plane"); admitOwnedId(plane.id);
-  if (reference(plane.bpmnElement, "diagram process") !== source.processId) refuse("the BPMN diagram belongs to another process");
+  let plane: RecordValue | undefined;
+  const auxiliaryBodies = new Set<string>();
+  for (const raw of diagrams) {
+    const diagram = object(raw, "BPMN diagram");
+    if (diagram.$type !== "bpmndi:BPMNDiagram") refuse("the diagram has an unsupported type");
+    supportedFields(diagram, ["id", "plane", "$attrs"], "BPMN diagram"); attributes(diagram, [], "BPMN diagram");
+    const candidate = object(diagram.plane, "BPMN plane");
+    if (candidate.$type !== "bpmndi:BPMNPlane") refuse("the diagram plane has an unsupported type");
+    supportedFields(candidate, ["id", "bpmnElement", "planeElement", "$attrs"], "BPMN plane"); attributes(candidate, [], "BPMN plane");
+    const target = reference(candidate.bpmnElement, "diagram process");
+    if (target === source.processId) {
+      if (plane) refuse("exactly one root process BPMN diagram is required");
+      admitOwnedId(diagram.id); admitOwnedId(candidate.id);
+      plane = candidate;
+      continue;
+    }
+    // bpmn-js 18.31.1 SubprocessCompatibility creates an idless empty child diagram for every
+    // collapsed subprocess on import, including our placeholders for opaque Elsa bodies. It is
+    // transient modeler bookkeeping, not another authored body. Admit only that exact empty shape:
+    // identified, annotated, populated, unrelated or repeated planes must not disappear silently.
+    const body = byId.get(target);
+    const retained = previousElements.get(target);
+    const projected = array(process.flowElements, "BPMN flow elements").find(value => object(value, "BPMN flow element").id === target);
+    if (!body || body.elementType !== "subProcess" || !body.childNodeId || retained?.elementType !== "subProcess"
+      || body.childNodeId !== retained.childNodeId || candidate.bpmnElement !== projected
+      || diagram.id !== undefined || candidate.id !== undefined
+      || array(candidate.planeElement, "auxiliary BPMN diagram elements").length || auxiliaryBodies.has(target))
+      refuse(`diagram for '${target}' is not an empty modeler-generated plane of a retained Elsa body`);
+    auxiliaryBodies.add(target);
+  }
+  if (!plane) refuse("exactly one root process BPMN diagram is required");
   const priorDiagram = oldDiagram(source);
   const shapes = { ...priorDiagram.shapes }; const edges = { ...priorDiagram.edges };
   const records = indexedLayout(layout);

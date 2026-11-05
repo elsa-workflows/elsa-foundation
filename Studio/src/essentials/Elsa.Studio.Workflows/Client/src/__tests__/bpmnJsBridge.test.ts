@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error bpmn-moddle 10.3.1 publishes schema types but no declaration for its runtime export.
 import { BpmnModdle } from "bpmn-moddle";
+import SubprocessCompatibility from "bpmn-js/lib/features/drilldown/SubprocessCompatibility";
 import type { ActivityNode, DesignMetadataRecord } from "../workflowTypes";
 import { mergeBpmnJsDefinitions, projectBpmnJsXml } from "../bpmn/bpmnJsBridge";
 
@@ -65,6 +66,18 @@ async function projected(owner = richOwner(), positions = layout) {
   const result = await moddle.fromXML(projectBpmnJsXml(owner, positions));
   expect(result.warnings).toEqual([]);
   return result.rootElement;
+}
+function normalizeSubprocessPlanes(definitions: ObjectValue) {
+  // Exercise the actual pinned modeler's import.render.start module, which creates child planes
+  // even for the empty collapsed subprocess placeholders used for opaque Elsa bodies.
+  let onImport: ((event: unknown, context: { definitions: ObjectValue }) => void) | undefined;
+  const events = { on(name: string, _priority: number, handler: typeof onImport) {
+    expect(name).toBe("import.render.start"); onImport = handler;
+  } };
+  new SubprocessCompatibility(events as unknown as ConstructorParameters<typeof SubprocessCompatibility>[0],
+    moddle as unknown as ConstructorParameters<typeof SubprocessCompatibility>[1]);
+  expect(onImport).toBeDefined();
+  onImport!({}, { definitions });
 }
 function authoredElement(owner: ActivityNode, id: string) { return values(owner.structure!.payload.elements).find(value => value.elementId === id)!; }
 function authoredFlow(owner: ActivityNode, id: string) { return values(owner.structure!.payload.sequenceFlows).find(value => value.flowId === id)!; }
@@ -139,6 +152,46 @@ describe("identity-preserving bpmn-js authoring bridge", () => {
     expect(di(reread, "gateway").isMarkerVisible).toBe(isMarkerVisible);
     expect(record(di(reread, "gateway").bounds).x).toBe(730);
     expect(merged.owner.structure!.payload.activities).toEqual(owner.structure!.payload.activities);
+  });
+
+  it.each(["nested-bpmn", "native-sequence"])("accepts real modeler normalization of a collapsed %s body without replacing it", async bodyKind => {
+    const owner = richOwner();
+    if (bodyKind === "native-sequence") {
+      const activities = values(owner.structure!.payload.activities);
+      activities[2] = { ...leaf("nested-node"), structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [leaf("native-child")] } } };
+    }
+    const before = structuredClone(owner);
+    const definitions = await projected(owner);
+    normalizeSubprocessPlanes(definitions);
+    expect(values(definitions.diagrams)).toHaveLength(2);
+    const childPlane = record(values(definitions.diagrams)[1].plane);
+    expect(record(childPlane.bpmnElement)).toBe(flow(definitions, "sub"));
+    expect(values(childPlane.planeElement)).toEqual([]);
+    flow(definitions, "gateway").name = "Edited after real normalization";
+    record(di(definitions, "gateway").bounds).x = 730;
+    const merged = mergeBpmnJsDefinitions(owner, definitions, layout);
+    expect(authoredElement(merged.owner, "gateway").name).toBe("Edited after real normalization");
+    expect(merged.layout.find(value => value.nodeId === "gateway")).toMatchObject({ x: 730 });
+    expect(merged.owner.structure!.payload.activities).toEqual(owner.structure!.payload.activities);
+    expect(values(merged.owner.structure!.payload.activities)[2]).toBe(values(owner.structure!.payload.activities)[2]);
+    expect(owner).toEqual(before);
+  });
+
+  it.each([
+    ["nonempty child plane", (definitions: ObjectValue) => { record(values(definitions.diagrams)[1].plane).planeElement = [di(definitions, "gateway")]; }],
+    ["unrelated child plane", (definitions: ObjectValue) => { record(values(definitions.diagrams)[1].plane).bpmnElement = flow(definitions, "work"); }],
+    ["identified child diagram", (definitions: ObjectValue) => { values(definitions.diagrams)[1].id = "authored-diagram"; }],
+    ["identified child plane", (definitions: ObjectValue) => { record(values(definitions.diagrams)[1].plane).id = "authored-plane"; }],
+    ["annotated child plane", (definitions: ObjectValue) => { record(record(values(definitions.diagrams)[1].plane).$attrs)["vendor:keep"] = "content"; }],
+    ["named child diagram", (definitions: ObjectValue) => { values(definitions.diagrams)[1].name = "Authored name"; }],
+    ["duplicate child plane", (definitions: ObjectValue) => { values(definitions.diagrams).push(values(definitions.diagrams)[1]); }],
+    ["duplicate root diagram", (definitions: ObjectValue) => { values(definitions.diagrams).push(values(definitions.diagrams)[0]); }]
+  ])("refuses %s rather than silently ignoring authored diagram content", async (_name, mutate) => {
+    const owner = richOwner(); const before = structuredClone(owner);
+    const definitions = await projected(owner);
+    normalizeSubprocessPlanes(definitions); mutate(definitions);
+    expect(() => mergeBpmnJsDefinitions(owner, definitions, layout)).toThrow("The Elsa process is unchanged");
+    expect(owner).toEqual(before);
   });
 
   it("retains a newly edited shared-inspector binding on subsequent canvas edits", async () => {

@@ -15,7 +15,7 @@ This ledger records preliminary evidence before the first committed real-host wi
 | Light/Dark diagram/label/attribution contrast | Passed browser assertions and inspected visuals | Desktop fixture only. Narrow/keyboard/full accessibility remain unproved. |
 | Initial Workflows build budgets | Passed after deferred split | Largest chunk317.14kB; landing400.95kB/402kB budget before final refinements. These are build estimates; composed requests unmeasured. |
 | Owned Workbench and Studio builds | Passed | Rebuild the committed revision for actual host proof. |
-| Same-process real save/reload, publication, two input routes, bound results and inspection | Not run | First owned-host journey is prepared; no feasibility success asserted. |
+| Same-process real save/reload, publication, two input routes, bound results and inspection | Failed initial attempt | Exact source4f91b48a7, both directions reached shared/nested editing then native-command refusal from generated subprocess DI planes. Publication/execution not reached; no feasibility success asserted. |
 | Full toolbox draft retention, reusable/direct/source-owned/capability failure production matrix | Not run | Required before production completion. |
 
 ## Findings and Retests
@@ -26,6 +26,7 @@ This ledger records preliminary evidence before the first committed real-host wi
 - Native external-label selection sent an editor-only label ID and lost the Elsa inspector context. Real browser attempt10 failed both directions; mapping through the owning element made attempt11 pass both directions. Failed traces remain failed.
 - Earlier fixture attempts exposed test hit-target, selection-toggle, Undo reselection and SVG whitespace assumptions, plus HMR-invalidated runs. Those attempts are retained as failed/invalidated test executions, not product acceptance or causal product regressions.
 - Cross-editor movement after native DI geometry exists needs further proof: integrated movement can change layout positions while saved edge/label geometry remains unchanged. This is a production layout concern, not yet corrected or passed.
+- Real composed-host attempt1 on4f91b48a7 exposed modeler normalization of collapsed subprocesses: it creates auxiliary empty BPMN diagrams, even for an opaque Elsa-bound Sequence body. The bridge's one-diagram assumption rejected the native drag and restored canonical state. The trace confirms actual gateway/flow drag before refusal. Both cases failed; original screenshots/traces and incomplete receipts remain in `bpmn-js-prototype-4f91b48a7-1`. Both owned hosts terminated with exit0. Shared/nested authoring rendered; publication and actual execution were not reached.
 
 ## Local Retrieval
 
