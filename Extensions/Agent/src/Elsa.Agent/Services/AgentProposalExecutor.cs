@@ -43,6 +43,9 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
     internal bool IsOwnBeforeDispatch(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> result)
         => IsBeforeDispatch(proposal, result, _dispatchOrigin);
 
+    internal static bool HasBeforeDispatchProof(AgentResult<AgentProposalExecutionResult> result)
+        => Undispatched.TryGetValue(result, out _);
+
     /// <summary>True only for this executor's own pre-dispatch cancellation result.</summary>
     internal static bool IsCancelledBeforeDispatch<T>(AgentResult<T> result) => ReferenceEquals(result.Error, CancelledBeforeDispatch);
 

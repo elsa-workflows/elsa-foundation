@@ -21,9 +21,13 @@ internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrat
 
     /// <summary>Approval reads retained core meaning only; it never resolves a tool or a principal.</summary>
     internal ValueTask<AgentError?> CheckReviewAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
-        => proposal.PreparedInvocation is { } prepared
-            ? CheckInvocationAsync(prepared, cancellationToken: cancellationToken)
-            : CheckPrivilegesAsync(null, proposal.Risk, false, cancellationToken);
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        // Shared feature/schema observation belongs to acceptance and dispatch, not the human decision.
+        // Approval must still work when an owner or its schema observation became unavailable after review.
+        return ValueTask.FromResult(privileges.Check(proposal.PreparedInvocation?.RequiredPrivilegeClasses,
+            proposal.PreparedInvocation?.Risk ?? proposal.Risk));
+    }
 
     internal static bool UsesNewContract(AgentToolDescriptor descriptor) => descriptor.CanPerformWithoutPersistence || descriptor.ModuleCodes is not null;
 

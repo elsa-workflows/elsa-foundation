@@ -757,6 +757,14 @@ internal sealed class InMemoryAgentProposalService(
     private async Task<AgentResult<AgentProposalExecutionResult>> StoreOutcomeAsync(AgentActionProposal proposal, long version, AgentResult<AgentProposalExecutionResult> outcome,
         Func<AgentResult<AgentProposalExecutionResult>, string?>? acknowledgement = null, string? refusal = null)
     {
+        var beforeDispatch = IsBeforeDispatch(proposal, outcome);
+        // A replaced producer may return a genuine engine refusal borrowed from another executor (or copy
+        // its private cancellation error). That does not establish what this producer did after handoff.
+        // Discard its zero-effect message as well as its classification before retention or disclosure.
+        if (!beforeDispatch && (DefaultAgentActionProposalExecutor.HasBeforeDispatchProof(outcome)
+            || DefaultAgentActionProposalExecutor.IsCancelledBeforeDispatch(outcome)))
+            outcome = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
+                "The executor returned an unverified refusal after handoff. Its effect is uncertain and will not be replayed."));
         if (outcome.Value?.Executed == true && (proposal.PreparedInvocation is not { } preparedInvocation
             || outcome.Value.ToolResult is not { } observed
             || !AgentInvocationIntegrity.ValidReceipt(preparedInvocation, observed,
@@ -768,7 +776,6 @@ internal sealed class InMemoryAgentProposalService(
         var value = outcome.Value;
         // Only the executor's own engine-owned signal is a pre-dispatch cancellation; a module returning the same
         // public code after dispatch is an ordinary refusal (Failed, refused lifecycle, claim released).
-        var beforeDispatch = IsBeforeDispatch(proposal, outcome);
         var cancelled = beforeDispatch && DefaultAgentActionProposalExecutor.IsCancelledBeforeDispatch(outcome);
         var status = cancelled ? AgentActionProposalStatus.Cancelled
             : beforeDispatch && outcome.Error?.Code == "agent.proposal.expired" ? AgentActionProposalStatus.Expired

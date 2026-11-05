@@ -4,6 +4,10 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Extensions;
 using Elsa.Agent.Services;
+using Elsa.Api.AspNetCore;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.Core.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -139,6 +143,29 @@ public sealed class AgentPrivilegeLifecycleTests
     }
 
     [Fact]
+    public async Task Approval_does_not_depend_on_a_schema_observation_that_became_unavailable_after_review()
+    {
+        var observation = new GuardedObservation();
+        var tool = new ProposalMutationTool { PrivilegeClasses = [AgentPrivilegeClass.Activation] };
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+        {
+            Configure(Configuration(7), effects: false)(services);
+            new AgentEffectsFeatureTests.ObservedEffectsFeature().ConfigureServices(services);
+            services.AddScoped<ISchemaDormancyCheck>(_ => observation);
+        });
+        var proposal = await fixture.ProposeAsync();
+        var calls = observation.Calls;
+        Assert.True(calls > 0);
+        observation.Available = false;
+        Assert.True((await fixture.ApproveAsync(proposal)).Succeeded);
+        Assert.Equal(calls, observation.Calls);
+        Assert.Equal("schema-version-not-finalized", (await fixture.ExecuteAsync(proposal)).Error?.Code);
+        Assert.True(observation.Calls > calls);
+        Assert.Equal(0, tool.DispatchCalls);
+        Assert.Contains("No effect occurred", (await fixture.Proposals.FindResultAsync(proposal.Id))!.Content);
+    }
+
+    [Fact]
     public async Task A_toggle_during_the_executing_record_write_precedes_custom_executor_handoff()
     {
         var config = Configuration(7);
@@ -167,20 +194,32 @@ public sealed class AgentPrivilegeLifecycleTests
         var tool = new ProposalMutationTool();
         using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
         {
+            services.AddRouting().AddElsaEndpoints();
             var original = services.Single(row => row.ServiceType == typeof(IAgentActionProposalExecutor));
             services.Replace(ServiceDescriptor.Scoped<IAgentActionProposalExecutor>(scope =>
                 new BorrowedCancellation((IAgentActionProposalExecutor)original.ImplementationFactory!(scope), tool)));
         });
         var proposal = await fixture.ProposeAsync();
         await fixture.ApproveAsync(proposal);
-        await fixture.ExecuteAsync(proposal);
+        var execution = await fixture.ExecuteAsync(proposal);
+        Assert.Null(execution.Error);
+        Assert.Equal("uncertain", execution.Value?.Status);
+        Assert.DoesNotContain("No effect occurred", execution.Value!.Summary);
         Assert.Equal(1, tool.ExecuteCalls);
         Assert.Equal("new", tool.Value);
         Assert.NotEqual(AgentActionProposalStatus.Cancelled, (await fixture.Proposals.FindAsync(proposal.Id))!.Status);
         Assert.DoesNotContain("No effect occurred", (await fixture.Proposals.FindResultAsync(proposal.Id))!.Content);
         Assert.DoesNotContain(await fixture.Audit.ListAsync(fixture.Session.Id), row => row.Kind == AgentAuditEventKind.ProposalFailed
             && row.Metadata.GetValueOrDefault("effect") == "none");
-        await fixture.ExecuteAsync(proposal);
+        var duplicate = await fixture.ExecuteAsync(proposal);
+        Assert.Null(duplicate.Error);
+        Assert.Same(execution.Value, duplicate.Value);
+        Assert.Equal(1, tool.ExecuteCalls);
+        var response = await AgentApiExecutionOutcomeTests.ExecuteAsync(fixture, proposal, proposal.BaseRevision);
+        Assert.Equal(200, response.Status);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, response.Body.GetProperty("error").ValueKind);
+        Assert.Equal("uncertain", response.Body.GetProperty("data").GetProperty("status").GetString());
+        Assert.DoesNotContain("No effect occurred", response.Body.GetRawText());
         Assert.Equal(1, tool.ExecuteCalls);
     }
 
@@ -317,6 +356,25 @@ public sealed class AgentPrivilegeLifecycleTests
         { Calls++; throw new InvalidOperationException("A veto must precede custom executor handoff."); }
         public Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal, AgentClientAcknowledgement acknowledgement,
             CancellationToken cancellationToken = default) => throw new InvalidOperationException("No client request was issued.");
+    }
+    private sealed class GuardedObservation : ISchemaDormancyCheck
+    {
+        internal bool Available { get; set; } = true;
+        internal int Calls { get; private set; }
+        public SchemaAvailability Evaluate(IEnumerable<SchemaVersionRequirement> requirements)
+            => SchemaDormancyRule.Evaluate(requirements, family => Available
+                ? new(family, null, ["1.0.0"], "1.0.0", "1.0.0", false, null, [], null, DateTimeOffset.UnixEpoch) : null);
+        public ValueTask<SchemaAvailability> EvaluateAsync(IEnumerable<SchemaVersionRequirement> requirements, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(Evaluate(requirements));
+        }
+        public ValueTask EnsureAvailableAsync(IEnumerable<SchemaVersionRequirement> requirements, string? featureId = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public IReadOnlyList<SchemaFamilyObservation> Observe() => [];
+        public ValueTask<IReadOnlyList<SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(Observe());
     }
     private sealed class BorrowedCancellation(IAgentActionProposalExecutor inner, ProposalMutationTool tool) : IAgentActionProposalExecutor
     {
