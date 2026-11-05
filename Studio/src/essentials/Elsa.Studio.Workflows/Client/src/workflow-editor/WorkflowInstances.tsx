@@ -1575,6 +1575,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     choiceFocus={occurrenceChoiceFocus}
     initialPage={!browserExactId || prepared?.execution?.activityExecutionId === browserExactId ? prepared?.page : undefined}
     confirmedExecution={prepared?.execution}
+    onUnavailable={() => setPreparedScope(current => current?.prepared === prepared ? null : current)}
     renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
       backendSession={backendSession} runRelatedLinks={runRelatedLinks}
       refreshKey={evidenceRevision}
