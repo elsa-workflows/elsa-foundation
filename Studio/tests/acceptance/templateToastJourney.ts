@@ -74,7 +74,7 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     await expect(page.getByRole("heading", { name: "Workflow templates", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
     await capture(page, info, "template-list");
-    const templateTabLabel = await page.getByRole("tab", { selected: true }).getAttribute("aria-label");
+    const templateTabLabel = await page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true }).getAttribute("aria-label");
     expect(templateTabLabel, "The Templates workspace tab has an accessible name").toBeTruthy();
     // The toast opens another workspace tab so the source workflow keeps its unsaved edits.
     await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
