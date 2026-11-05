@@ -99,6 +99,9 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   const edited = `Panel navigation ${info.project.name}`;
   await name.fill(edited);
   await selectByKey(views, "ArrowRight", /^Tokens$/);
+  const primary = theme.getByRole("textbox", { name: "primary", exact: true });
+  const editedPrimary = "oklch(0.5 0.15 250)";
+  await primary.fill(editedPrimary);
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-tokens");
   const modes = theme.getByRole("tablist", { name: "Theme mode", exact: true });
@@ -107,6 +110,8 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
     await assertLinkedTabs(theme);
   }
   await capture(page, info, "theme-mode-last");
+  await selectByKey(modes, "Home", /^Light$/);
+  await expect(primary).toHaveValue(editedPrimary);
   await selectByKey(views, "ArrowRight", /^Assets$/);
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-assets");
@@ -117,6 +122,10 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await expect(name).toHaveValue(edited);
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-edited");
+  await selectByKey(views, "ArrowRight", /^Tokens$/);
+  await expect(primary).toHaveValue(editedPrimary);
+  await selectByKey(views, "Home", /^Overview$/);
+  await expect(name).toHaveValue(edited);
   await theme.getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("dialog", { name: "Delete theme", exact: true }).getByRole("button", { name: "Delete theme", exact: true }).click();
   await expect(name).toBeDisabled();
