@@ -59,6 +59,7 @@
   <ItemGroup>
     <Compile Include="../Shared/*.cs" Link="Support/%(Filename)%(Extension)" />
     <Compile Include="../Shared/DesignStore/*.cs" Link="Support/DesignStore/%(Filename)%(Extension)" />
+    <Compile Include="../Shared/RuntimeStore/*.cs" Link="Support/RuntimeStore/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
