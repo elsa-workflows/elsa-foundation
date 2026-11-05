@@ -1,3 +1,4 @@
+import { executableDesignerJourney } from "./executableDesignerJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
@@ -165,4 +166,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
 
 test("save template toast", async ({ page }, info) => {
   await templateToastJourney(page, info, capture);
+});
+
+test("executable designer parity", async ({ page }, info) => {
+  await executableDesignerJourney(page, info, capture);
 });
