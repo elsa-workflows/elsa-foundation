@@ -160,3 +160,91 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "completed");
 });
+
+test("workflow template metadata defaults", async ({ page }, info) => {
+  const stamp = `Metadata ${info.project.name} ${Date.now()}`;
+  const templateNames = [`${stamp} greeting`, `${stamp} order`];
+  const descriptions = ["Sends a greeting.", "Processes an order."];
+  const creations: Array<{ url: string; authorization: string; id: string }> = [];
+  try {
+    // Persist real templates using the same composition and controls as a workflow author.
+    for (let index = 0; index < templateNames.length; index++) {
+      await page.goto("/workflows/templates");
+      await page.getByRole("button", { name: "New template", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Create template", exact: true });
+      await dialog.getByRole("textbox", { name: "Display name", exact: true }).fill(templateNames[index]);
+      await dialog.getByRole("textbox", { name: "Description", exact: true }).fill(descriptions[index]);
+      await dialog.getByRole("radio", { name: "Sequence", exact: true }).check();
+      await dialog.getByRole("button", { name: "Create template", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
+    }
+
+    const submitAndInspect = async (expectedName: string, expectedDescription: string) => {
+      const response = page.waitForResponse(value => value.request().method() === "POST" && /\/definitions$/.test(new URL(value.url()).pathname));
+      await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
+      const saved = await response;
+      expect(saved.ok()).toBe(true);
+      const body = await saved.json();
+      creations.push({ url: saved.url(), authorization: saved.request().headers().authorization, id: body.definition.id });
+      expect(saved.request().postDataJSON()).toMatchObject({ name: expectedName });
+      expect(saved.request().postDataJSON().description || "").toBe(expectedDescription);
+      await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible();
+      await page.reload();
+      await page.getByRole("tab", { name: "Properties", exact: true }).click();
+      await expect(page.getByRole("textbox", { name: "Workflow name", exact: true })).toHaveValue(expectedName);
+      await expect(page.getByRole("textbox", { name: "Workflow description", exact: true })).toHaveValue(expectedDescription);
+    };
+
+    await page.goto("/workflows/definitions");
+    const open = page.getByRole("button", { name: "Create workflow", exact: true }).first();
+    await open.click();
+    const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+    const startingPoint = dialog.getByRole("combobox", { name: "Starting point", exact: true });
+    const name = dialog.getByRole("textbox", { name: "Display name", exact: true });
+    const description = dialog.getByRole("textbox", { name: "Description", exact: true });
+    await expect(startingPoint).toBeFocused();
+    await startingPoint.press("Tab");
+    await expect(name).toBeFocused();
+    await name.press("Tab");
+    await expect(description).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(open).toBeFocused();
+    await open.click();
+    await expect(startingPoint.locator("option").filter({ hasText: templateNames[0] })).toHaveCount(1);
+    await startingPoint.selectOption({ label: templateNames[0] });
+    await expect(name).toHaveValue(templateNames[0]);
+    await expect(description).toHaveValue(descriptions[0]);
+    await capture(page, info, "template-defaults");
+    await startingPoint.selectOption({ label: templateNames[1] });
+    await expect(name).toHaveValue(templateNames[1]);
+    await expect(description).toHaveValue(descriptions[1]);
+    await name.fill(`${stamp} custom`);
+    await startingPoint.selectOption({ label: templateNames[0] });
+    await expect(name).toHaveValue(`${stamp} custom`);
+    await expect(description).toHaveValue(descriptions[0]);
+    await description.fill("");
+    await startingPoint.selectOption({ label: templateNames[1] });
+    await expect(name).toHaveValue(`${stamp} custom`);
+    await expect(description).toHaveValue("");
+    await capture(page, info, "template-edits");
+    await submitAndInspect(`${stamp} custom`, "");
+
+    await page.goto("/workflows/templates");
+    const card = page.locator("article").filter({ has: page.getByRole("button", { name: templateNames[0], exact: true }) });
+    await card.getByRole("button", { name: "Use template", exact: true }).click();
+    await expect(name).toHaveValue(templateNames[0]);
+    await expect(description).toHaveValue(descriptions[0]);
+    await startingPoint.selectOption({ label: templateNames[1] });
+    await expect(name).toHaveValue(templateNames[1]);
+    await expect(description).toHaveValue(descriptions[1]);
+    await capture(page, info, "template-catalog-entry");
+    await submitAndInspect(templateNames[1], descriptions[1]);
+    await capture(page, info, "template-persisted");
+  } finally {
+    // Leave the shared disposable acceptance store empty for the next project.
+    for (const creation of creations) {
+      const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
+      expect(removed.ok()).toBe(true);
+    }
+  }
+});
