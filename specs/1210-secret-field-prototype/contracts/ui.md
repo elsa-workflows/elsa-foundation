@@ -9,4 +9,4 @@
 
 ## Preview presentation comparison
 
-The preview offers Filled and Outlined radio choices in its toolbar and open-dialog header. Filled remains the default; URL `field-style` overrides the stored preview choice. Outlined keeps labels permanently raised on the border, including empty/select/date/multiline fields. Long/enlarged labels wrap in flow. Switching preserves existing controls, values, validation and keyboard containment; a checked radio is each group's only tab stop. This choice does not alter the composed product or freeze a shared API.
+The preview offers Filled and Outlined radio choices in its toolbar and open-dialog header. Outlined is the default; URL `field-style` overrides the stored preview choice. Outlined keeps labels permanently raised on the border, including empty/select/date/multiline fields. Long/enlarged labels wrap in flow. Switching preserves existing controls, values, validation and keyboard containment; a checked radio is each group's only tab stop. This choice does not alter the composed product or freeze a shared API.

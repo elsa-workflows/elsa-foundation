@@ -32,7 +32,7 @@ const fieldStyleStorageKey = "secret-field-prototype-style";
 
 function readFieldStyle(): FieldStyle {
   const stored = query.get("field-style") ?? localStorage.getItem(fieldStyleStorageKey);
-  return stored === "outlined" ? "outlined" : "filled";
+  return stored === "filled" ? "filled" : "outlined";
 }
 
 function FieldStyleSwitch({ value, onChange }: { value: FieldStyle; onChange(value: FieldStyle): void }) {

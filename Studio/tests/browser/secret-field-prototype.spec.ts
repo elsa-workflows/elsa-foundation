@@ -208,7 +208,10 @@ test("native autofill, reduced motion and forced colors retain a label and focus
 test("field style switches live without resetting values and persists across appearances and reload", async ({ page }, info) => {
   await page.goto("/secret-field-prototype.html?view=states");
   const toolbar = page.locator(".secret-prototype-toolbar");
+  await expect(toolbar.getByRole("radio", { name: "Outlined", exact: true })).toBeChecked();
   await page.getByLabel("Empty field", { exact: true }).fill("Keep this value");
+  await toolbar.getByRole("radio", { name: "Filled", exact: true }).check();
+  await expect(page.getByLabel("Empty field", { exact: true })).toHaveValue("Keep this value");
   await toolbar.getByRole("radio", { name: "Outlined", exact: true }).check();
   await expect(page.getByLabel("Empty field", { exact: true })).toHaveValue("Keep this value");
   await page.getByLabel("Preview theme").selectOption("meridian");
