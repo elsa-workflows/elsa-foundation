@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Activity Data Selection M1 customer proof](activity-data-selection-m1.md) - actual composed customer experiment, persisted runtime controls and precise UI/binding/source/publication seams for M2; no production contract adopted.
 - [Studio hosting reuse qualification](studio-hosting-reuse.md) - M0 adopt/adapt/keep/remove decisions and the bounded shared CShells/Nuplane lifecycle probe.
 - [Studio browser asset delivery qualification](studio-browser-asset-delivery.md) - actual archive/publish/HTTP/browser and custom-frontend ownership evidence behind the prebuilt Hosting payload.
 - [Studio package-store qualification](studio-package-store-qualification.md) - native store/admission and admitted-reader protection boundaries, including refused profiles.
