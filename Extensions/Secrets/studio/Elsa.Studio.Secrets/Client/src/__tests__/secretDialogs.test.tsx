@@ -156,9 +156,17 @@ describe("Create dialog regression contract", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
     expect(value.disabled).toBe(true);
     rejectSave(new Error("Demonstration failure"));
-    await waitFor(() => expect(name.disabled).toBe(false));
+    await waitFor(() => {
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toBe("Demonstration failure");
+      expect(document.activeElement).toBe(alert);
+      expect(name.disabled).toBe(false);
+      expect(value.disabled).toBe(false);
+      expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("false");
+      expect(name.value).toBe("DbConnectionString");
+    });
     expect(value.value).toBe("demonstration-value");
-    expect(name.value).toBe(" DbConnectionString ");
+    expect(name.value).toBe("DbConnectionString");
     expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("false");
   });
 

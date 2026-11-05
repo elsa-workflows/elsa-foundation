@@ -412,6 +412,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             }
             try
             {
+                // A mailbox grant can win the wait's cancellation race. Do not admit cancelled work.
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope workflow execution ID does not match this agent.");
 

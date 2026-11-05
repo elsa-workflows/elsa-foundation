@@ -735,6 +735,50 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   expect(state.requestedUrls.some(url => url.includes("direction=inbound") && url.includes("transitive=true"))).toBe(true);
 });
 
+for (const theme of ["light", "dark"]) {
+  for (const width of [1440, 360]) {
+    test(`Activity member settings retain edits and align controls (${theme}, ${width})`, async ({ page }, info) => {
+      await mockActivityDefinitionAuthoring(page);
+      await page.setViewportSize({ width, height: 1000 });
+      await createBrowserActivity(page, theme);
+      await page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first().locator("summary").click();
+      await page.getByRole("tab", { name: "Inputs (0)", exact: true }).click();
+      await page.getByRole("button", { name: "Add input", exact: true }).click();
+      await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Topic");
+      await page.getByRole("button", { name: "Add input", exact: true }).last().click();
+      const member = page.locator("[data-contract-kind='input'][data-contract-selected='true']");
+      await member.getByRole("combobox", { name: "Default", exact: true }).selectOption("literal");
+      await member.getByRole("textbox", { name: "Value", exact: true }).fill("A pending topic");
+      await page.screenshot({ path: info.outputPath("general.png"), fullPage: true });
+      const general = member.getByRole("tab", { name: "General", exact: true });
+      await general.focus();
+      await general.press("ArrowRight");
+      await expect(member.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+      const displayName = member.getByRole("textbox", { name: /^Display name/ });
+      const category = member.getByRole("combobox", { name: /^Category/ });
+      await displayName.fill("Writing topic");
+      await category.fill("Writing");
+      const a = (await displayName.boundingBox())!, b = (await category.boundingBox())!;
+      expect(a.height).toBe(b.height);
+      if (width > 760) expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: info.outputPath("presentation.png"), fullPage: true });
+      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
+      await key.fill("writing-topic");
+      const apply = member.getByRole("button", { name: "Apply key", exact: true });
+      expect((await apply.boundingBox())!.x).toBeGreaterThan((await key.boundingBox())!.x);
+      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+      await apply.click();
+      await expect(apply).toBeDisabled();
+      await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
+      await general.click();
+      await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
+      await member.getByRole("button", { name: "Apply default", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+}
+
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
@@ -761,6 +805,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await contractInput.getByText("Advanced", { exact: true }).click();
   await contractInput.getByRole("checkbox", { name: /Allow null/ }).check();
   await expectSavedRevision(page, 3);
+  await contractInput.getByRole("tab", { name: "General", exact: true }).click();
   await contractInput.getByRole("combobox", { name: /^Default/ }).selectOption("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
   await expectSavedRevision(page, 4);
@@ -1297,13 +1342,13 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   state.preflightMode = "invalid";
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Publication blocked")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish 1.0.0" })).toBeDisabled();
   expect(state.publicationWrites).toBe(0);
 
   state.preflightMode = "valid";
   state.publishMode = "stale";
-  await page.getByRole("button", { name: "Refresh review" }).click();
+  await page.getByRole("button", { name: "Check again" }).click();
   await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();

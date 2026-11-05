@@ -30,11 +30,14 @@ class VerdictTests(unittest.TestCase):
             for journey in acceptance.JOURNEYS]}]}
 
     def test_complete_evidence(self):
-        self.assertEqual(16, acceptance.verdict(self.report, self.root))
+        self.assertEqual(36, acceptance.verdict(self.report, self.root))
 
     def test_named_baseline_and_secret_journeys_remain_required(self):
         self.assertTrue({'collections and connection creation', 'agent authoring and navigation',
-                         'executable designer parity', 'compact Secret create journey'} <= acceptance.JOURNEYS)
+                         'executable designer parity', 'compact Secret create journey',
+                         'user tasks inbox and response', 'feature filtering and settings dialogs',
+                         'workflow template metadata defaults', 'save template toast',
+                         'publication blockers explain how to correct agent settings'} <= acceptance.JOURNEYS)
 
     def test_existing_designer_capture_contract_cannot_shrink(self):
         self.assertTrue({'reference', 'definition-sequence', 'executable-sequence', 'nested-sequence',
@@ -49,11 +52,12 @@ class VerdictTests(unittest.TestCase):
             acceptance.verdict(report, self.root)
 
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
-        for change in ('missing', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
+        for change in ('missing', 'missing-journey', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
             with self.subTest(change=change):
                 report = copy.deepcopy(self.report)
                 tests = report['suites'][0]['specs'][0]['tests']
                 if change == 'missing': tests.pop()
+                if change == 'missing-journey': report['suites'][0]['specs'].pop()
                 if change == 'duplicate': tests.append(copy.deepcopy(tests[0]))
                 if change == 'empty': report['suites'] = []
                 if change == 'skipped': tests[0]['results'][0]['status'] = 'skipped'

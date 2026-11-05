@@ -944,9 +944,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         lock (_state.SyncRoot)
         {
+            // A delivered item is never claimable again, so it sorts after every unsettled one.
             return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(_state.OutboxItems.Values
                 .Where(query.Matches)
-                .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
+                .OrderBy(item => item.Status == RuntimePostCommitOutboxStatus.Delivered
+                    ? DateTimeOffset.MaxValue
+                    : RuntimePostCommitOutboxClaimTransitions.ClaimableAt(item))
                 .ThenBy(item => item.RecordedAt)
                 .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
                 .Take(query.Limit)
