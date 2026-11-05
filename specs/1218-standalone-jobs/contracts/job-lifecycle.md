@@ -30,7 +30,10 @@ Owner selections include the durable permission cutoff and default coalesced cat
 - Acceptance receipts advertise a minimum key-recognition-until instant, pinned by the accepted policy (proposed default 30 days). Within that window, matching replay returns the same JobId and a different request under the key conflicts.
 - Recognition records cannot be retired while that job or its delivery/consumer responsibility remains pending, even after the minimum window. Payload retention never silently shortens recognition.
 - After the advertised window and all obligations are settled, explicit recognition cleanup may retire the key. Reuse after that cleanup may create a new JobId; callers must not assume indefinite deduplication or use expired keys to reconcile an uncertain submission. Direct lookup by retained JobId remains separate from key recognition.
-- Acknowledgement means accepted state committed durably, including while paused. An unknown commit outcome is reconciled by the same idempotency key.
+- The finite window applies to ordinary producer keys. Trusted model, schedule and other durable outbox origins use a separate exact-origin admission receipt/tombstone; ordinary key cleanup cannot retire their recognition.
+- A durable-origin receipt remains protected until exact owner proof covers all retained retry paths and already-dispatched/in-flight duplicates. If that cannot be proved, retain a compact origin tombstone that resolves the original JobId or rejects the retired origin; never treat replay as fresh work. Sender Delivered, parent terminal or receiver job/result settlement alone is insufficient retirement proof.
+- Independent model submissions retain the same origin recognition even without an awaited result. Only a validated trusted adapter can supply a durable origin, rather than an arbitrary tenant request forging it.
+- Acknowledgement means accepted state committed durably, including while paused. An uncertain ordinary submission is reconciled using its protected key; an expired/cleaned key cannot safely resolve that uncertainty. Durable-origin replay uses its separately protected receipt.
 - Immediate, delayed and recurring invocations share acceptance semantics; acceptance does not reserve an execution slot.
 - Payloads contain bounded values and authorized secret/connection references, never delegates, services or plaintext credentials.
 - Handler version/schema support is pinned. Missing deployed support leaves work unavailable and observable without spending a business attempt.
@@ -141,7 +144,7 @@ Owner selections include the durable permission cutoff and default coalesced cat
 ## Cross-store responsibility and evidence limits
 
 - Job result commit and parent checkpoint are separately owned. No atomic transaction across arbitrary stores is asserted.
-- Durable parent outbox → idempotent job acceptance, and durable result outbox → model permission → exact consumption proof, preserve responsibility across failure windows.
+- Durable parent outbox → origin-protected idempotent job acceptance, and durable result outbox → model permission → exact consumption proof, preserve responsibility across failure windows, including acknowledgement loss beyond the ordinary producer-key window.
 - The gate authority commits model permission first; the model durably consumes the exact permitted input in its own store. Failure between them leaves recoverable owed delivery.
 - Pause after that grant allows the already started continuation to finish; this proposed model cutoff avoids pretending that pause and a remote model checkpoint commit atomically.
 - Same-database EF may enlist narrow operations only when existing shared-transaction target checks prove one physical database/provider; qualification must name the actual profile.

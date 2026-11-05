@@ -26,8 +26,9 @@ at a future time and on a recurring schedule; restart either process and inspect
 
 1. **Given** a valid submission, **when** durable acceptance is acknowledged, **then** its pinned handler,
    inputs, policy and identity survive restart and can be inspected without a workflow installation.
-2. **Given** a lost acknowledgement, **when** the producer resubmits the same idempotency key and request,
-   **then** it recovers the same job; changing that request produces an explicit conflict.
+2. **Given** a lost acknowledgement within protected key recognition, **when** the producer resubmits the
+   same key/request, **then** it recovers the same job; changed content conflicts. Expired-key recovery
+   follows the separately disclosed retention contract and cannot assume indefinite recognition.
 3. **Given** two independent workers, **when** one loses ownership or stops, **then** supported recovery
    preserves the invocation, attempts and retained outcomes under the documented provider guarantee.
 
@@ -149,6 +150,9 @@ retention during an owed result; cross-tenant cursors/associations; raw exceptio
   queue/job-type pauses govern attempt starts rather than holding completed result delivery.
 - **FR-019**: Each model MUST own its continuation, association and consumption proof. Delivery is retired
   only after durable consumption/equivalence or exact terminal-parent proof, never mere transport acceptance.
+- **FR-019a**: Durable model/schedule/outbox origins MUST retain admission recognition independently of
+  ordinary producer-key expiry, including independent jobs with no result consumer. Safe retirement MUST
+  cover retained retries and in-flight duplicates or leave a compact tombstone rejecting late origin replay.
 - **FR-020**: Association identity MUST cover model, tenant, definition/version, exact instance and saved
   invocation. Nested/detached jobs and parent completion/cancellation MUST follow explicit ownership policies.
 - **FR-021**: Authorized manual retry MUST be idempotent, audited, linked to the original run and preserve

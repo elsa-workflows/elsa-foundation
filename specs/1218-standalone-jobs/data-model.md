@@ -7,6 +7,7 @@ partition/tenant scope. Names below describe responsibility, not a mandate for o
 |---|---|---|
 | Handler registration | Type/version, schema aliases/versions, trusted deployment implementation identity | One supported registration per identity; no assembly-name durable key or silent semantic repin |
 | Acceptance | Client key, canonical request digest, JobId, accepted-at, advertised minimum recognition-until | Unique scoped key while protected; equal replay recovers one JobId, unequal replay conflicts |
+| Durable origin receipt | Trusted model/schedule/outbox origin, immutable digest, original JobId or retired-origin refusal tombstone | Separate from finite ordinary producer-key retention; exact late origin replay never becomes fresh work |
 | Job | JobId, handler/input/result pins, bounded input, queue, immutable policy and association | Immutable accepted request; mutable lifecycle projections never replace retained attempts/results |
 | Attempt | AttemptId/number, JobId, owner incarnation, fence/revision, granted-at, lease and absolute timeout | Start transaction checks every gate and permit; no stale-owner mutation or successor permit release |
 | Physical receipt | AttemptId plus receipt identity, authenticated origin, outcome and bounded payload/digest | Retain late completion as evidence; receipt alone cannot select authoritative result |
@@ -56,4 +57,8 @@ Purge cannot turn a pending obligation into NotFound or allow duplicate acceptan
 After the window and settled obligations, recognition cleanup may retire a key, and later reuse can
 create a new JobId. This expiry behavior is documented, observable and tested separately from payload
 expiry; no indefinite key-recognition promise is made. Retained JobId lookup remains independent.
+This finite policy never retires trusted durable-origin recognition. Such origins include independent
+model submissions without a result consumer. Retain their receipt until exact owner proof covers all
+retained retries and in-flight duplicates, or keep a compact tombstone rejecting retired-origin replay.
+Sender Delivered, parent terminality or receiver result settlement alone is not sufficient proof.
 Missing old schema/handler support is unavailable, not corrupt user input or successful completion.

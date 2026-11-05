@@ -27,7 +27,7 @@ so the template does not invent it. Required behavioral red/green bite-proofs re
 
 - [ ] T009 [US1] Implement pinned handler registration, idempotent durable client and bounded request/result dispatch in `Extensions/Jobs/src/Elsa.Jobs/`.
 - [ ] T010 [US1] Implement independent worker hosting, fenced lease renewal, physical receipts and terminal/result responsibility in `Extensions/Jobs/src/Elsa.Jobs/` and its job-owned EF transitions.
-- [ ] T011 [US1] Cover equal/conflicting key replay, advertised recognition expiry/cleanup with pending-obligation extension, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
+- [ ] T011 [US1] Cover equal/conflicting ordinary-key replay/expiry/cleanup, pending-obligation extension, separately protected durable-origin receipts/tombstones, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
 - [ ] T012 [US1] Add immutable clean PackageReference producer/worker witness in `tools/jobs/`; record dependency closure, actual versions/hashes and useful result/restart evidence in `specs/1218-standalone-jobs/evidence/`.
 
 ## M2 — US1 schedules and US2 outage controls
@@ -48,7 +48,7 @@ so the template does not invent it. Required behavioral red/green bite-proofs re
 - [ ] T019 [US3] Implement optional native activity, accepted handler/schema pin contribution, saved-wait checkpoint/outbox admission and cancellation-before-admission under `Extensions/Jobs/src/Workflows/` using existing model contracts.
 - [ ] T020 [US3] Implement exact ResultId/ContinuationId permission and consumption proof in the optional native adapter under `Extensions/Jobs/src/Workflows/Runtime/`; preserve current delivered-elsewhere/coalescing refresh.
 - [ ] T021 [US3] Implement the real BPMN invocation/input adapter at the reviewed model-owned seam under `Extensions/Jobs/src/Bpmn/` or the smallest agreed consumer module; add no kernel model-name switch or duplicate retry authority.
-- [ ] T022 [US3] Qualify same-handler native/BPMN success/failure, held result-driven continuation, permission replay, parent termination/cancel-first, nested/detached association and acknowledgement-loss restart in `Extensions/Jobs/tests/Integration/` and `tools/jobs/`.
+- [ ] T022 [US3] Qualify same-handler native/BPMN success/failure, held continuation/permit replay, parent termination/cancel-first, nested/detached association and lost admission acknowledgements with independent sender replay/in-flight duplicates beyond ordinary-key expiry in `Extensions/Jobs/tests/Integration/` and `tools/jobs/`.
 
 ## M4 — US4 operations and Studio
 
