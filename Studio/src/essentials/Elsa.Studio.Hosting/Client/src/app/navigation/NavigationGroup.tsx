@@ -29,6 +29,7 @@ export function NavigationGroup({ label, top, rail, path, query, active, open, o
   useLayoutEffect(() => {
     if (previousPath.current === path) return;
     previousPath.current = path;
+    setCollapsedAtPath(null);
     setMenuOpen(false);
   }, [path]);
   useEffect(() => {

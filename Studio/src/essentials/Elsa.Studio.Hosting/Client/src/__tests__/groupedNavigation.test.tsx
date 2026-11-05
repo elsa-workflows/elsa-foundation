@@ -70,6 +70,32 @@ describe("grouped navigation", () => {
     } finally { await act(() => root.unmount()); container.remove(); }
   });
 
+  it.each(["/workflows/tags/region", "/workflows/definitions"])("reveals Build when SPA navigation returns to deliberately collapsed %s", async path => {
+    const entries: StudioNavigationContribution[] = [
+      { id: "home", label: "Home", path: "/dashboard", placement: "main" },
+      { id: "workflows", label: "Workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "build", childDisplay: "views" },
+      { id: "definitions", label: "Definitions", path: "/workflows/definitions", parentId: "workflows" }
+    ];
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    const render = (currentPath: string) => act(() => root.render(<ThemeProvider><ShellFrame navigation={getStudioNavigation(entries)} panels={[]} path={currentPath} title="Studio" backendBaseUrl="https://backend.example" onNavigate={vi.fn()}><p>Retained page</p></ShellFrame></ThemeProvider>));
+    const build = () => container.querySelector<HTMLButtonElement>('nav[aria-label="Build"] button')!;
+    try {
+      await render(path);
+      expect(build().getAttribute("aria-expanded")).toBe("true");
+      await act(() => build().click());
+      expect(build().getAttribute("aria-expanded")).toBe("false");
+      await render(path); // Deliberate collapse must survive rerenders of the current route.
+      expect(build().getAttribute("aria-expanded")).toBe("false");
+      await render("/dashboard");
+      expect(build().getAttribute("aria-expanded")).toBe("false");
+      // Back and retained-tab selection both return through the same path prop without remounting.
+      await render(path);
+      expect(build().getAttribute("aria-expanded")).toBe("true");
+      expect(container.querySelector('nav[aria-label="Build"] a[aria-label="Workflows"]')?.getAttribute("aria-current")).toBe("page");
+    } finally { await act(() => root.unmount()); container.remove(); }
+  });
+
   it("opens named groups and displays User tasks directly", async () => {
     const container = document.createElement("div");
     document.body.append(container);
