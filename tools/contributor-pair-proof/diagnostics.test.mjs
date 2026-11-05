@@ -24,7 +24,7 @@ function deferred() {
 
 function editorState(overrides = {}) {
   return {
-    url: editorUrl, sensitiveForms: 0, frames: 0, visibleDialogs: 1,
+    url: editorUrl, sensitiveForms: 0, frames: 0, authFallback: 0, visibleDialogs: 1,
     busyElements: 2, editorCanvases: 1, viewport: { width: 1440, height: 1000 },
     ...overrides
   };
@@ -55,7 +55,11 @@ class FakePage extends EventEmitter {
     this.calls.push(["evaluate", callback]);
     if (this.inspectImpl) return this.inspectImpl(callback);
     this.currentState = this.states.length > 1 ? this.states.shift() : this.states[0];
-    return { ...this.currentState };
+    const state = { ...this.currentState };
+    // Authentication fallback is discovered through the real Playwright locator,
+    // not through inspectPage's DOM evaluation result.
+    delete state.authFallback;
+    return state;
   }
 
   getByRole(role, options) {
@@ -74,6 +78,7 @@ class FakePage extends EventEmitter {
     this.calls.push(["locator", selector]);
     if (selector.includes('input[type="password"]')) return { count: async () => this.currentState.sensitiveForms };
     if (selector === "iframe, frame") return { count: async () => this.currentState.frames };
+    if (selector === ".studio-auth-signing-in") return { count: async () => this.currentState.authFallback };
     return { maskSelector: selector };
   }
 
@@ -192,6 +197,7 @@ test("safe capture bounds events, buttons, numbers and JSON and requests a maske
 for (const [name, state] of [
   ["password or login form", editorState({ sensitiveForms: 1 })],
   ["embedded frame", editorState({ frames: 1 })],
+  ["authentication fallback", editorState({ authFallback: 1 })],
   ["unknown origin", editorState({ url: `https://other.example/${secret}?definition=${secret}` })],
   ["login route", editorState({ url: `${origin}/_elsa/identity/login?returnUrl=${secret}` })],
   ["arbitrary Studio route", editorState({ url: `${origin}/${secret}?definition=${secret}` })],
@@ -214,7 +220,8 @@ for (const [name, mutate] of [
   ["navigation event even if the URL returns", page => page.emit("framenavigated", page.mainFrame())],
   ["URL change", page => { page.states = [editorState({ url: `${origin}/_elsa/identity/login?token=${secret}` })]; }],
   ["new password form", page => { page.states = [editorState({ sensitiveForms: 1 })]; }],
-  ["new frame", page => { page.states = [editorState({ frames: 1 })]; }]
+  ["new frame", page => { page.states = [editorState({ frames: 1 })]; }],
+  ["authentication fallback", page => { page.states = [editorState({ authFallback: 1 })]; }]
 ]) {
   test(`screenshot bytes are discarded after ${name} during capture`, async t => {
     const page = new FakePage();
@@ -230,6 +237,14 @@ test("a page change before the image prevents screenshot invocation", async t =>
   const f = await fixture(t, { page: new FakePage({ states: [editorState(), editorState({ frames: 1 })] }) });
   assert.equal(await f.observer.captureFailure(clickStage, "error"), "suppressed-navigation-or-page-change");
   assert.ok(!f.page.calls.some(call => call[0] === "screenshot"));
+});
+
+test("authentication fallback appearing before the image prevents screenshot invocation", async t => {
+  const f = await fixture(t, { page: new FakePage({ states: [editorState(), editorState({ authFallback: 1 })] }) });
+  assert.equal(await f.observer.captureFailure(clickStage, "error"), "suppressed-navigation-or-page-change");
+  assert.ok(!f.page.calls.some(call => call[0] === "screenshot"));
+  assert.equal((await f.receipt()).screenshot, "suppressed");
+  assert.deepEqual(await f.files(), ["diagnostic.json"]);
 });
 
 test("an oversized or invalid screenshot is excluded from disk", async t => {

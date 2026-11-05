@@ -71,11 +71,12 @@ async function inspectPage(page) {
   // login form or embedded frame in one for a safe editor screenshot.
   state.sensitiveForms = await page.locator('input[type="password"], form[action*="/_elsa/identity/login"]').count();
   state.frames = await page.locator("iframe, frame").count();
+  state.authFallback = await page.locator(".studio-auth-signing-in").count();
   return state;
 }
 
 function safeEditor(state, studioOrigin) {
-  return classifyLocation(state?.url, studioOrigin).editor && state.sensitiveForms === 0 && state.frames === 0;
+  return classifyLocation(state?.url, studioOrigin).editor && state.sensitiveForms === 0 && state.frames === 0 && state.authFallback === 0;
 }
 
 // This observer never reads console text/arguments, error messages, request bodies,
