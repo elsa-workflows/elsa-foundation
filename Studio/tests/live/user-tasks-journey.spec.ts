@@ -108,7 +108,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
   await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
   await page.getByLabel("Task form", { exact: true }).selectOption(formId);
-  await page.getByRole("textbox", { name: "Form Version", exact: true }).fill("1");
+  await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
   await page.getByRole("button", { name: "Add action", exact: true }).click();
   await page.getByLabel("Action 3", { exact: true }).fill("Request More Info"); await page.getByLabel("Action 3", { exact: true }).press("Tab");
   const actions = ["Approve", "Reject", "Request More Info"]; const branchIds: string[] = [];

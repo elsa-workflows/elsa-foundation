@@ -14,6 +14,35 @@ public sealed class UserTaskOperationsTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData("title", "task title")]
+    [InlineData("missing-assignment", "Select a task assignee or a group")]
+    [InlineData("both-assignments", "clear the other assignment")]
+    [InlineData("actions", "unique task actions")]
+    [InlineData("optional-actions", "Optional form actions")]
+    [InlineData("prefill", "Prefill must be a JSON object")]
+    [InlineData("version", "Select a published version")]
+    public void Creation_reports_the_configuration_field_to_correct(string invalid, string message)
+    {
+        var request = new UserTaskCreation("run", "invocation", "node", "operation", "Review", null, "alice", null,
+            ["Approve", "Reject"], [], null, Json("{}"));
+        UserTaskRules.ValidateCreation(request);
+        request = invalid switch
+        {
+            "title" => request with { Title = "" },
+            "missing-assignment" => request with { AssigneeId = null },
+            "both-assignments" => request with { GroupId = "reviewers" },
+            "actions" => request with { Actions = ["Approve", "Approve"] },
+            "optional-actions" => request with { OptionalFormActions = ["Unknown"] },
+            "prefill" => request with { Prefill = Json("\"{}\"") },
+            "version" => request with { FormId = "purchase" },
+            _ => throw new ArgumentOutOfRangeException(nameof(invalid))
+        };
+        var failure = Assert.Throws<UserTaskException>(() => UserTaskRules.ValidateCreation(request));
+        Assert.Equal("validation", failure.Code);
+        Assert.Contains(message, failure.Message);
+    }
+
     [Fact]
     public async Task Concurrent_claims_have_one_winner_and_one_atomic_history_change()
     {

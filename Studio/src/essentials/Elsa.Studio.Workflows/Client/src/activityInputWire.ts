@@ -72,8 +72,8 @@ function mapState(
   // The normalizer is deliberately shape-loose (it repairs legacy/wire records), so its unknown[]
   // result is asserted back to the declared variables type rather than validated per-field.
   if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument) as VariableDefinition[];
-  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, normalizeInputDefinition);
-  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentRecord(record, false));
+  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, record => normalizeArgumentDefinition(record, true));
+  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentDefinition(record, false));
   return next;
 }
 
@@ -134,8 +134,8 @@ function normalizeStoredArgument(record: Record<string, unknown>): Record<string
   return normalizeArgumentRecord(record, true);
 }
 
-function normalizeInputDefinition(record: Record<string, unknown>): Record<string, unknown> {
-  const next = normalizeStoredArgument(record);
+function normalizeArgumentDefinition(record: Record<string, unknown>, keepStorage: boolean): Record<string, unknown> {
+  const next = normalizeArgumentRecord(record, keepStorage);
   const isNullable = record.isNullable ?? record.IsNullable;
   delete next.IsNullable;
   next.isNullable = typeof isNullable === "boolean" ? isNullable : false;

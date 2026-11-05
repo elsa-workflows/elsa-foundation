@@ -37,12 +37,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
             throw new UserTaskException("validation", "This task journal cannot store withheld or encryption-required input values.");
         var id = UserTaskRules.Id(access.Current.RequireScope().Value, execution.TenantId, request.WorkflowExecutionId, request.InvocationId);
         if (await store.FindAsync(execution.TenantId, id, ct) is { } prior) return prior;
-        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 500 || request.Description?.Length > 10000 ||
-            (string.IsNullOrWhiteSpace(request.AssigneeId) == string.IsNullOrWhiteSpace(request.GroupId)) || request.Actions.Count is < 1 or > 20 ||
-            request.Actions.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 100 || x != x.Trim() || x == "Unmatched") ||
-            request.Actions.Distinct(StringComparer.Ordinal).Count() != request.Actions.Count ||
-            request.OptionalFormActions.Any(x => !request.Actions.Contains(x, StringComparer.Ordinal)) || request.Prefill.ValueKind != JsonValueKind.Object)
-            throw new UserTaskException("validation", "A task requires a title, one assignment, unique actions and an object of prefilled values.");
+        UserTaskRules.ValidateCreation(request);
         var form = request.Form;
         if (request.FormId is not null)
             form = (await store.FindFormAsync(execution.TenantId, request.FormId, request.FormVersion ?? "", ct))?.Form
