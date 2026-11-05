@@ -55,10 +55,12 @@ Native sub-issues link all three initial tasks and #3094 to #3882. M1 is blocked
 M1. #3094 retains its narrower criteria and follows the applicable contract gates, rather than acquiring
 unrelated scope from the new parent. New issues start `needs-triage`; assignment does not promote them to Ready.
 
-The current objective is M0 establishment and the first Codex proof assignment. M1 may prepare read-only;
-its research code starts after the establishment records merge and resulting main is qualified. M2 uses the
-proof findings before parallel production workers start. A separate Project board is optional and does not
-delay the first result.
+M0 establishment merged and its resulting main qualified. The current objective is review and closeout
+of the bounded [M1 customer proof](../reports/activity-data-selection-m1.md): actual persisted runtime
+controls work, while the requested no-expression UI journey fails at identified binding/source seams.
+M2 consumes the accepted findings through its own reviewed specification, plan and tasks before parallel
+production workers start. The experiment adopts no production contract or implementation. A separate
+Project board is optional and does not delay the first result.
 
 ## Completion
 
