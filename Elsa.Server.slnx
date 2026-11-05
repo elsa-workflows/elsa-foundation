@@ -858,4 +858,7 @@
   <Folder Name="/Essentials/tests/Versioning/Publisher/">
     <Project Path="Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj" />
   </Folder>
+  <Folder Name="/specs/1210-state-machine/witness/">
+    <Project Path="specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj" />
+  </Folder>
 </Solution>

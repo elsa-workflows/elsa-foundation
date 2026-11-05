@@ -1,0 +1,636 @@
+{
+  "schemaVersion": 1,
+  "status": "passed bounded N1-N6 research fixture; production acceptance unqualified",
+  "sourceHead": "873d1a06128c3fc7e5f7c530312ab49e031dfd88",
+  "sourceCleanAtBuildAndLaunch": true,
+  "build": {
+    "command": "dotnet build specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj -m:1 --no-restore --nologo",
+    "exitCode": 0,
+    "warnings": 280,
+    "errors": 0,
+    "log": "/tmp/elsa4-statemachine-program/m0-873-build.log"
+  },
+  "execution": {
+    "command": "dotnet specs/1210-state-machine/witness/bin/Debug/net10.0/StateMachine.M0.Witness.dll run /tmp/elsa4-statemachine-program/m0-873-run",
+    "exitCode": 0,
+    "processCount": 34,
+    "expectedResults": 34,
+    "exitZero": 30,
+    "intendedNegativeFailures": 4,
+    "distinctProcessIds": 34,
+    "processes": [
+      {
+        "scenario": "normal",
+        "generation": 1,
+        "pid": 77684,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 2,
+        "pid": 77835,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 3,
+        "pid": 77897,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 4,
+        "pid": 78185,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 1,
+        "pid": 78273,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 2,
+        "pid": 78761,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 3,
+        "pid": 78968,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 4,
+        "pid": 79137,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 1,
+        "pid": 79142,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 2,
+        "pid": 79359,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 3,
+        "pid": 79441,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 4,
+        "pid": 79489,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 1,
+        "pid": 79494,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 2,
+        "pid": 79682,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 3,
+        "pid": 79713,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 4,
+        "pid": 79744,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 1,
+        "pid": 79755,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 2,
+        "pid": 79834,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 3,
+        "pid": 79843,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 4,
+        "pid": 79848,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 1,
+        "pid": 79877,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 2,
+        "pid": 80002,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 3,
+        "pid": 80093,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 4,
+        "pid": 80102,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 1,
+        "pid": 80130,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 2,
+        "pid": 80285,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 3,
+        "pid": 80321,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 4,
+        "pid": 80335,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-state",
+        "generation": 1,
+        "pid": 80382,
+        "mutation": "omit-state",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-provenance",
+        "generation": 1,
+        "pid": 80397,
+        "mutation": "corrupt-provenance",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-terminal",
+        "generation": 1,
+        "pid": 80429,
+        "mutation": "omit-terminal-export",
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-terminal",
+        "generation": 2,
+        "pid": 80475,
+        "mutation": "omit-terminal-export",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-cancel",
+        "generation": 1,
+        "pid": 80492,
+        "mutation": "omit-cancel-projection",
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-cancel",
+        "generation": 2,
+        "pid": 80508,
+        "mutation": "omit-cancel-projection",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      }
+    ]
+  },
+  "qualification": {
+    "N1": {
+      "status": "passed; sequential ordinary carrier only",
+      "decisions": [
+        {
+          "carrierInvocationId": "normal-g1-activity-3",
+          "inputId": "A",
+          "status": "Accepted",
+          "order": 1
+        },
+        {
+          "carrierInvocationId": "normal-g1-activity-5",
+          "inputId": "B",
+          "status": "Accepted",
+          "order": 2
+        },
+        {
+          "carrierInvocationId": "normal-g1-activity-6",
+          "inputId": "A",
+          "status": "Duplicate",
+          "order": 1
+        },
+        {
+          "carrierInvocationId": "normal-g1-activity-7",
+          "inputId": "A",
+          "status": "Conflict",
+          "order": 1
+        },
+        {
+          "carrierInvocationId": "normal-g1-activity-8",
+          "inputId": "C",
+          "status": "Full",
+          "order": null
+        }
+      ]
+    },
+    "N2": {
+      "status": "passed; cold native state/FIFO",
+      "writerPid": 77684,
+      "readerPid": 77835,
+      "processed": [
+        "A",
+        "B"
+      ]
+    },
+    "N3": {
+      "status": "passed; normal guard helper retry",
+      "recovery": {
+        "jobId": "alteration-job-91470a186900a693f3b1f178b874ee5f",
+        "sourceActivityExecutionId": "guard-retry-g1-activity-11",
+        "status": "Succeeded"
+      },
+      "preservedCallback": {
+        "invocationId": "guard-retry-g1-activity-10",
+        "inputId": "A",
+        "source": "parent",
+        "operationKey": "guard-retry-g1-activity-10"
+      },
+      "callbacksAfterRetry": [
+        {
+          "invocationId": "guard-retry-g1-activity-10",
+          "inputId": "A",
+          "source": "parent",
+          "operationKey": "guard-retry-g1-activity-10"
+        },
+        {
+          "invocationId": "325bea0aa11e12a4:alteration-retry:0:guard-retry-g1-activity-11",
+          "inputId": "A",
+          "source": "child",
+          "operationKey": "guard-retry-g1-activity-11"
+        },
+        {
+          "invocationId": "guard-retry-g2-activity-1",
+          "inputId": "B",
+          "source": "child",
+          "operationKey": "guard-retry-g2-activity-1"
+        },
+        {
+          "invocationId": "guard-retry-g2-activity-2",
+          "inputId": "B",
+          "source": "parent",
+          "operationKey": "guard-retry-g2-activity-2"
+        }
+      ],
+      "withoutRescheduleMarker": {
+        "jobId": "alteration-job-eb0df74e442710ed3618dc16395db82f",
+        "sourceActivityExecutionId": "retry-without-reschedule-marker-g1-activity-11",
+        "status": "Succeeded"
+      }
+    },
+    "N4": {
+      "status": "passed; immutable logical input and both callbackorders",
+      "callbacks": [
+        {
+          "invocationId": "normal-g2-activity-1",
+          "inputId": "A",
+          "source": "parent",
+          "operationKey": "normal-g2-activity-1"
+        },
+        {
+          "invocationId": "normal-g2-activity-2",
+          "inputId": "A",
+          "source": "child",
+          "operationKey": "normal-g2-activity-2"
+        },
+        {
+          "invocationId": "normal-g2-activity-3",
+          "inputId": "B",
+          "source": "child",
+          "operationKey": "normal-g2-activity-3"
+        },
+        {
+          "invocationId": "normal-g2-activity-4",
+          "inputId": "B",
+          "source": "parent",
+          "operationKey": "normal-g2-activity-4"
+        }
+      ],
+      "selections": [
+        {
+          "inputId": "A",
+          "source": "child"
+        },
+        {
+          "inputId": "B",
+          "source": "child"
+        }
+      ]
+    },
+    "N5": {
+      "status": "passed; real Action fault/normalretry and exact retiredwait rejection",
+      "awaitingRecoveryBeforeRetry": true,
+      "recoveryAndDeliveries": {
+        "transport": [
+          {
+            "bookmarkId": "action-retry-g1-activity-4:attempt:1:trigger:1",
+            "activityExecutionId": "action-retry-g1-activity-4",
+            "transportStatus": "NotFound",
+            "reason": "No active bookmark matched stimulus 'Event'/'sha256:93594e0b37991138df15fca7cd5d037b7c2a7f94d56ddca6c1d5192a7823586a' for workflow execution 'm0-witness-workflow'."
+          },
+          {
+            "bookmarkId": "10ecfe81de66085a:alteration-retry:0:action-retry-g1-activity-4:attempt:1:trigger:1",
+            "activityExecutionId": "10ecfe81de66085a:alteration-retry:0:action-retry-g1-activity-4",
+            "transportStatus": "Dispatched",
+            "reason": null
+          }
+        ],
+        "recovery": {
+          "jobId": "alteration-job-d8c2d9d52455814b2f68f286ab17a946",
+          "sourceActivityExecutionId": "action-retry-g1-activity-4",
+          "status": "Succeeded"
+        }
+      }
+    },
+    "N6": {
+      "status": "passed within normal native record retention only",
+      "completedCold": {
+        "pid": 79848,
+        "workflowStatus": "Completed",
+        "rootInvocationId": "complete-g1-activity-1",
+        "rootStatus": "Completed",
+        "hasPrivateState": false,
+        "terminal": {
+          "formatVersion": 1,
+          "rootInvocationId": "complete-g1-activity-1",
+          "reason": "Completed",
+          "receipts": [
+            {
+              "id": "A",
+              "order": 1,
+              "status": "NotProcessed:Completed",
+              "carrierInvocationId": "complete-g1-activity-3"
+            },
+            {
+              "id": "B",
+              "order": 2,
+              "status": "NotProcessed:Completed",
+              "carrierInvocationId": "complete-g1-activity-5"
+            }
+          ]
+        },
+        "terminalSource": "CompletionResult"
+      },
+      "cancelledCold": {
+        "pid": 80102,
+        "workflowStatus": "Cancelled",
+        "rootInvocationId": "cancel-g1-activity-1",
+        "rootStatus": "Cancelled",
+        "hasPrivateState": true,
+        "terminal": {
+          "formatVersion": 1,
+          "rootInvocationId": "cancel-g1-activity-1",
+          "reason": "Cancelled",
+          "receipts": [
+            {
+              "id": "A",
+              "order": 1,
+              "status": "NotProcessed:Cancelled",
+              "carrierInvocationId": "cancel-g1-activity-3"
+            },
+            {
+              "id": "B",
+              "order": 2,
+              "status": "NotProcessed:Cancelled",
+              "carrierInvocationId": "cancel-g1-activity-5"
+            }
+          ]
+        },
+        "terminalSource": "CancelledRootState"
+      },
+      "selectedCancellationCold": {
+        "pid": 80335,
+        "workflowStatus": "Cancelled",
+        "rootInvocationId": "cancel-selected-g1-activity-1",
+        "rootStatus": "Cancelled",
+        "hasPrivateState": true,
+        "terminal": {
+          "formatVersion": 1,
+          "rootInvocationId": "cancel-selected-g1-activity-1",
+          "reason": "Cancelled",
+          "receipts": [
+            {
+              "id": "A",
+              "order": 1,
+              "status": "Interrupted:Cancelled",
+              "carrierInvocationId": "cancel-selected-g1-activity-3"
+            },
+            {
+              "id": "B",
+              "order": 2,
+              "status": "NotProcessed:Cancelled",
+              "carrierInvocationId": "cancel-selected-g1-activity-5"
+            }
+          ]
+        },
+        "terminalSource": "CancelledRootState"
+      },
+      "assertions": "Original invocation, receipt IDs/order/dispositions, cleared completed private state, bounded receipt-only result and absent public business-payload canary all asserted."
+    },
+    "negativeControls": {
+      "negative-state": "System.InvalidOperationException: No committed native parent state is available.",
+      "negative-provenance": "System.InvalidOperationException: Provenance negative control: corrupted cause must fail the positive drain assertion.",
+      "negative-terminal": "System.InvalidOperationException: N6: terminal archive must retain the original receipt IDs and order.",
+      "negative-cancel": "System.InvalidOperationException: N6: queued cancellation must have an explicit not-processed reason."
+    }
+  },
+  "earlierCounterexamples": "m0-native-witness-b337.json remains failed/partial; no historical failure relabelled passed",
+  "sourceFiles": [
+    {
+      "path": "specs/1210-state-machine/witness/NativeProbe.cs",
+      "sha256": "81e99270e52825543bbd37c840ab77d606c0e028baae31f73d1a490f08e09def"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/Program.cs",
+      "sha256": "3559f910eb356405eee4ae1466d8ad7b18bafdabd3581fdac5e04c9b5aee49e5"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj",
+      "sha256": "2b608e648ab937a5a998ef3029938883d4681827bd73f608d9cf79be503202f1"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/packages.lock.json",
+      "sha256": "ea5bfa9e3ed7e2b0184cf2643f466593ed5eadcf4acb51b17cf4d66ac5fa7ddf"
+    }
+  ],
+  "executedRuntimeAssemblies": [
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Activities.Runtime.dll",
+      "sha256": "fc8ba3d009eae7501482e1b78ea97d48ad5d3ea55caf095c1ba445fac00247ed"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "7bdd31e80000fabcb13b87304bda317e891e7f35d3e96cc1b7d68d071782a723"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "sha256": "d84161884b9da40c861dd77d5f7470ea9e44c8b6289b8a56f9a0f082506d10cd"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
+      "sha256": "120253307f41b401524833fdcb6d4504c79d55b312afb7a0038d811f43817a50"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/StateMachine.M0.Witness.dll",
+      "sha256": "fb72544c01f7e3d4ed423d78f6b91cfdceb36692098dea963709a2f8237578a1"
+    }
+  ],
+  "retainedFullAttestation": {
+    "path": "/tmp/elsa4-statemachine-program/m0-873-attestation.json",
+    "sha256": "1aa57dd33061141433632310642cc5f6c1bbd8e4ff1c41b583e490b8004102ac"
+  },
+  "retainedRawEvidenceManifest": {
+    "path": "/tmp/elsa4-statemachine-program/m0-873-run/raw-evidence-manifest.json",
+    "sha256": "4bacc62eab527b8fa1cfe5ce0f6b8086a2bca1ee90beafc964f44fe113dfd529",
+    "fileCount": 208
+  },
+  "limits": [
+    "Research fixture, not a StateMachine implementation",
+    "Sequential ordinary Event carriers; no complete machine inbox/API guarantee",
+    "Guard helper adapter, not all inline expression recovery",
+    "No Studio, provider matrix or saga qualification",
+    "No receipt-retention window SLA or terminal deduplication guarantee",
+    "No concurrent last-slot/continuous ingress or ambiguouscommit qualification yet",
+    "No new production runtime contract, storage authority or cleanup/privacy change",
+    "No crash-before-terminal-commit claim; cold reads reopen committed outcomes"
+  ]
+}
