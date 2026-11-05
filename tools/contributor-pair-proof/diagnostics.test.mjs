@@ -478,7 +478,7 @@ test("the journey keeps its strict selector, visibility wait, original click and
   assert.deepEqual(calls, []);
 });
 
-test("workflow creation waits for the pinned root catalog before submitting", async () => {
+test("workflow creation waits for an enabled root card without clicking its clipped radio", async () => {
   const start = runSource.indexOf('  stage = "workflow-create";');
   const end = runSource.indexOf('  await page.waitForFunction(', start);
   assert.ok(start > 0 && end > start);
@@ -487,12 +487,24 @@ test("workflow creation waits for the pinned root catalog before submitting", as
   const calls = [];
   const createDialog = {
     getByLabel: () => ({ fill: async () => {} }),
-    getByRole(role, options) {
-      calls.push([role, options]);
+    locator(selector) {
+      const root = /aria-label="([^"]+)"/.exec(selector)?.[1];
       return { click: async () => {
-        if (role === "radio") { waitingForRoot.resolve(); await ready.promise; calls.push("root-ready"); }
-        else calls.push("submitted");
+        // A card containing an enabled input does not match until the catalog is ready.
+        if (selector.includes(":enabled")) { waitingForRoot.resolve(); await ready.promise; }
+        calls.push(["root-card", root]);
       } };
+    },
+    getByRole(role, options) {
+      return {
+        click: async () => {
+          // The pinned input has clip:rect(0 0 0 0); it has no pointer hit target.
+          assert.notEqual(role, "radio", "the visually clipped radio cannot receive a pointer click");
+          calls.push([role, options]); calls.push("submitted");
+        },
+        // An already checked default radio can short-circuit check() while still disabled.
+        check: async () => {}
+      };
     }
   };
   const page = {
@@ -501,10 +513,10 @@ test("workflow creation waits for the pinned root catalog before submitting", as
   };
   const pending = new AsyncFunction("page", "workflowName", `let stage; ${runSource.slice(start, end)}`)(page, "Owned workflow");
   await Promise.race([waitingForRoot.promise, pending]);
-  assert.deepEqual(calls, [["radio", { name: "Flowchart", exact: true }]]);
+  assert.deepEqual(calls, [], "Create must not run while the checked Flowchart root remains disabled");
   ready.resolve(); await pending;
   assert.deepEqual(calls, [
-    ["radio", { name: "Flowchart", exact: true }], "root-ready",
+    ["root-card", "Flowchart"],
     ["button", { name: "Create", exact: true }], "submitted"
   ]);
 });
