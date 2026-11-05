@@ -71,7 +71,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             var access = new FixedAccessor("tenant-a");
             await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(committed, Decision());
             var reopened = HistoryStore(restarted, access);
-            Assert.Equal(head, await reopened.FindHeadAsync(BulkEfRun));
+            AssertBulkEfHeadEqual(head, await reopened.FindHeadAsync(BulkEfRun));
             Assert.Equal(last, await reopened.FindBookmarkAsync(BulkEfRun, last.Bookmark.Identity.BookmarkId));
             Assert.Equal(before + 1, await restarted.RuntimeCheckpointCommits.CountAsync());
             Assert.NotNull(await reopened.FindEventAsync(BulkEfRun, last.EndedHistoryEventId!));
@@ -128,7 +128,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         else await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => fixture.CancelAsync());
 
         Assert.Equal(before, await fixture.Context.RuntimeCheckpointCommits.CountAsync());
-        Assert.Equal(head, await reader.FindHeadAsync(BulkEfRun));
+        AssertBulkEfHeadEqual(head, await reader.FindHeadAsync(BulkEfRun));
         Assert.Equal(4097, await fixture.Context.Bookmarks.CountAsync());
         Assert.Equal(ActivityExecutionStatus.Suspended, (await fixture.Activities.FindAsync(BulkEfRun, BulkEfOwner))!.Status);
         Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.Executions.FindAsync(BulkEfRun))!.Status);
@@ -136,6 +136,24 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal(4097, inventory.TotalCount); Assert.Equal(4097, inventory.ActiveCount);
         Assert.Equal(RuntimeHistoryBookmarkStatus.Active, (await reader.FindBookmarkAsync(BulkEfRun, BulkEfBookmark(4096).BookmarkId))!.Status);
         Assert.Null((await reader.FindBookmarkAsync(BulkEfRun, BulkEfBookmark(4096).BookmarkId))!.EndedHistoryEventId);
+    }
+
+    private static void AssertBulkEfHeadEqual(RuntimeHistoryHead? expected, RuntimeHistoryHead? actual)
+    {
+        Assert.NotNull(expected);
+        Assert.NotNull(actual);
+        Assert.Equal(expected.WorkflowExecutionId, actual.WorkflowExecutionId);
+        Assert.Equal(expected.FirstSequence, actual.FirstSequence);
+        Assert.Equal(expected.LastSequence, actual.LastSequence);
+        Assert.Equal(expected.LastPhysicalCommitId, actual.LastPhysicalCommitId);
+        Assert.Equal(expected.LastCommittedAt, actual.LastCommittedAt);
+        Assert.Equal(expected.CapturedFromStart, actual.CapturedFromStart);
+        Assert.Equal(expected.HasGaps, actual.HasGaps);
+        Assert.Equal(expected.PurgedThroughSequence, actual.PurgedThroughSequence);
+        Assert.Equal(expected.Policy.PolicyId, actual.Policy.PolicyId);
+        Assert.Equal(expected.Policy.Version, actual.Policy.Version);
+        Assert.Equal(expected.Policy.Required, actual.Policy.Required);
+        Assert.Equal(expected.Policy.SupportedKinds.ToArray(), actual.Policy.SupportedKinds.ToArray());
     }
 
     private static BookmarkState BulkEfBookmark(int index) => new($"bulk-ef-bookmark-{index:D5}", BulkEfRun, BulkEfOwner,
