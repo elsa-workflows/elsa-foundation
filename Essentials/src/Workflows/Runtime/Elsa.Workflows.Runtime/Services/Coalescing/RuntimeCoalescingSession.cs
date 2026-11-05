@@ -867,12 +867,20 @@ public sealed class RuntimeCoalescingSession
 
     // ---- Queue overlay ---------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// When the overlay was filled from the durable queue, or <see langword="null"/> before then. Work another deliverer
+    /// queued durably after this time may be missing from the overlay (#3661).
+    /// </summary>
+    internal DateTimeOffset? QueueSeededAt { get; private set; }
+
     /// <summary>Copies the durable inner queue's current items for this workflow execution into the overlay once.</summary>
     public async ValueTask EnsureQueueSeededAsync(CancellationToken cancellationToken)
     {
         if (_queueSeeded)
             return;
 
+        // Taken before the read: a delivery that finished earlier queued its work before it, so the read shows that work.
+        QueueSeededAt = _timeProvider.GetUtcNow();
         _durableWorkItemIds.Clear();
         if (SupportsDeferredOverlayRelease)
         {
