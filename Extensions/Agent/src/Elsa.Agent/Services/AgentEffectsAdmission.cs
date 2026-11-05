@@ -37,11 +37,19 @@ internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrat
     private async ValueTask<AgentError?> CheckPrivilegesAsync(IReadOnlyList<AgentPrivilegeClass>? requirements, AgentRisk risk,
         bool needsEffects, string subject, CancellationToken cancellationToken)
     {
+        Task<AgentError?>? pending = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (privileges.Check(requirements, risk) is { } veto) return veto;
-            if (needsEffects && await CheckAsync(cancellationToken) is { } unavailable) return unavailable;
+            AgentError? unavailable = null;
+            if (needsEffects)
+            {
+                pending = CheckAsync(cancellationToken).AsTask();
+                unavailable = await pending.WaitAsync(cancellationToken);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            if (unavailable is not null) return unavailable;
             // A shared refresh can await I/O. The host setting observed before it is no longer current authority.
             return privileges.Check(requirements, risk);
         }
@@ -50,6 +58,17 @@ internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrat
             // Context collection calls CheckAsync directly and keeps its optional/required failure policy.
             throw new AgentContributionException($"{subject} effects admission could not be established.", error);
         }
+        finally
+        {
+            if (pending is not null) _ = ObserveLateAdmissionAsync(pending);
+        }
+    }
+
+    private static async Task ObserveLateAdmissionAsync(Task pending)
+    {
+        // Stop ends admission independently of the observer; a late answer cannot dispatch an owner callback.
+        try { await pending; }
+        catch (Exception) { }
     }
 
     internal async ValueTask<AgentError?> CheckAsync(CancellationToken cancellationToken = default)

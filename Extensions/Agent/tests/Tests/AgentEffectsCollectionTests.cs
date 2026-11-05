@@ -474,6 +474,44 @@ public sealed class AgentEffectsCollectionTests
         Assert.Equal(0, tool.PrepareCalls);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Direct_Stop_finishes_before_an_uncooperative_observer_and_never_enters_the_next_owner_callback(bool finalReadAdmission)
+    {
+        using var stop = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tool = new PreparedReadTool();
+        var checks = 0;
+        var observation = new Observation
+        {
+            Available = true, IgnoreCancellation = true,
+            BeforeEvaluate = _ =>
+            {
+                if (++checks != (finalReadAdmission ? 2 : 1)) return ValueTask.CompletedTask;
+                entered.SetResult();
+                return new(release.Task);
+            }
+        };
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+        {
+            new AgentEffectsFeatureTests.ObservedEffectsFeature().ConfigureServices(services);
+            services.AddScoped<ISchemaDormancyCheck>(_ => observation);
+        });
+        var dispatch = fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy, stop.Token);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            stop.Cancel();
+            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dispatch.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Equal(stop.Token, error.CancellationToken);
+            Assert.Equal(finalReadAdmission ? 1 : 0, tool.Inner.PrepareCalls);
+            Assert.Equal(0, tool.ExecuteCalls);
+        }
+        finally { release.TrySetResult(); }
+    }
+
     private static ServiceProvider Build(string composition, Observation observation, Action<IServiceCollection> configure)
         => AgentTestServices.Create(services =>
         {
@@ -563,6 +601,24 @@ public sealed class AgentEffectsCollectionTests
         }
     }
 
+    private sealed class PreparedReadTool : IAgentTool
+    {
+        internal ProposalMutationTool Inner { get; } = new();
+        internal int ExecuteCalls { get; private set; }
+        public AgentToolDescriptor Descriptor => Inner.Descriptor with
+            { Name = "prepared_read", Mutability = AgentToolMutability.ReadOnly, Risk = AgentRisk.ReadOnly, ModuleCodes = [] };
+        public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            var result = await Inner.PrepareAsync(invocation, cancellationToken);
+            return result with { Value = result.Value! with { Risk = AgentRisk.ReadOnly } };
+        }
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            ExecuteCalls++;
+            return Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "Read completed.")));
+        }
+    }
+
     private sealed class Registry(Func<CancellationToken, Task<IReadOnlyCollection<IAgentTool>>> list) : IAgentToolRegistry
     {
         public Task<IReadOnlyCollection<IAgentTool>> ListAsync(CancellationToken cancellationToken = default) => list(cancellationToken);
@@ -575,6 +631,7 @@ public sealed class AgentEffectsCollectionTests
         internal Exception? Failure { get; set; }
         internal Action? OnEvaluate { get; init; }
         internal Func<CancellationToken, ValueTask>? BeforeEvaluate { get; init; }
+        internal bool IgnoreCancellation { get; init; }
         public SchemaAvailability Evaluate(IEnumerable<SchemaVersionRequirement> requirements) => SchemaDormancyRule.Evaluate(requirements,
             family => new(family, null, ["0.0.0", "1.0.0"], Available ? "1.0.0" : "0.0.0", Available ? "1.0.0" : "0.0.0", false, null, [], null, DateTimeOffset.UnixEpoch));
         public async ValueTask<SchemaAvailability> EvaluateAsync(IEnumerable<SchemaVersionRequirement> requirements, CancellationToken cancellationToken = default)
@@ -582,7 +639,7 @@ public sealed class AgentEffectsCollectionTests
             await Task.Yield();
             if (BeforeEvaluate is { } before) await before(cancellationToken);
             OnEvaluate?.Invoke();
-            cancellationToken.ThrowIfCancellationRequested();
+            if (!IgnoreCancellation) cancellationToken.ThrowIfCancellationRequested();
             if (Failure is { } error) throw error;
             return Evaluate(requirements);
         }
