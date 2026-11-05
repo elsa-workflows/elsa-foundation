@@ -9,17 +9,17 @@
 
 Independent test: create/find/reopen and cancellation on an owned host with correct label/error/focus behavior.
 
-- [ ] T003 [US1] Build module-local field shell in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretFormField.tsx and styles.css.
-- [ ] T004 [US1] Integrate Create secret and opt-in Scope picker in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx and SecretScopePicker.tsx.
-- [ ] T005 [US1] Verify associated help, validation, disabled submission, cancellation and regression in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/.
+- [x] T003 [US1] Build module-local field shell in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretFormField.tsx and styles.css.
+- [x] T004 [US1] Integrate Create secret and opt-in Scope picker in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx and SecretScopePicker.tsx.
+- [x] T005 [US1] Verify associated help, validation, disabled submission, cancellation and regression in Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/.
 
 ## US2 — Appearance and state review
 
 Independent test: actual-component preview and complete registry-derived theme/appearance matrix with retained captures.
 
-- [ ] T006 [US2] Add interactive preview in Studio/tests/browser/secretFieldPrototypeFixture.tsx and secret-field-prototype.html.
-- [ ] T007 [US2] Add executable theme/state/accessibility matrix in Studio/tests/browser/secret-field-prototype.spec.ts; measure before/after geometry and inspect captures.
-- [ ] T008 [US2] Add real create/find/reopen/cancel proof in Studio/tests/acceptance/journeys.spec.ts and required inventory in tools/ux-acceptance/run.py.
+- [x] T006 [US2] Add interactive preview in Studio/tests/browser/secretFieldPrototypeFixture.tsx and secret-field-prototype.html.
+- [x] T007 [US2] Add executable theme/state/accessibility matrix in Studio/tests/browser/secret-field-prototype.spec.ts; measure before/after geometry and inspect captures.
+- [x] T008 [US2] Add real create/find/reopen/cancel proof in Studio/tests/acceptance/journeys.spec.ts and required inventory in tools/ux-acceptance/run.py.
 
 ## Validation and findings
 

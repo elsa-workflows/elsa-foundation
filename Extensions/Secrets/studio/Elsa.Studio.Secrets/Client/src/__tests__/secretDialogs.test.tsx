@@ -119,6 +119,34 @@ describe("entered secret visibility", () => {
 });
 
 describe("Create dialog regression contract", () => {
+  it("associates compact name validation and guidance with the input and clears the error after recovery", () => {
+    const { container } = renderDialog("create");
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    change(name, "has spaces");
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Use letters, numbers, dot, dash, underscore, or colon.");
+    change(name, "valid.name");
+    expect(name.hasAttribute("aria-invalid")).toBe(false);
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toContain("Trimmed and lowercased");
+  });
+
+  it("disables field editing while pending and restores the draft after a failed save", async () => {
+    let rejectSave!: (error: Error) => void;
+    const { container, onSave } = renderDialog("create");
+    onSave.mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectSave = reject; }));
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(value, "demonstration-value");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("true");
+    expect(name.disabled).toBe(true);
+    expect(value.disabled).toBe(true);
+    rejectSave(new Error("Demonstration failure"));
+    await waitFor(() => expect(name.disabled).toBe(false));
+    expect(value.value).toBe("demonstration-value");
+    expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("false");
+  });
+
   it("uses descriptor defaults, gates submission on Value, and submits the exact default request without reading stored values", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
@@ -212,7 +240,7 @@ describe("Create dialog regression contract", () => {
     });
   });
 
-  it("starts More options collapsed, keeps required fields and context direct, and counts only authored optional configuration", () => {
+  it("starts More options collapsed, keeps field context adjacent, and counts only authored optional configuration", () => {
     const { container } = renderDialog("create", { descriptors: scopeDescriptors });
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
     const options = moreOptionsButton(dialog);
@@ -235,18 +263,17 @@ describe("Create dialog regression contract", () => {
     expect(name.compareDocumentPosition(type) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(type.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(expires.parentElement?.textContent).toContain("Expires");
-    expect(textNodeOutside(dialog, "Store: Encrypted", body)).not.toBeNull();
+    expect(textNodeOutside(dialog, "Store: Encrypted", body)).toBeNull();
     expect(textNodeOutside(dialog, "Fixture type description.", body)).not.toBeNull();
-    expect(textNodeOutside(dialog, "Fixture store description.", body)).not.toBeNull();
+    expect(fieldControl<HTMLSelectElement>(dialog, "Store").closest(".secrets-compact-field")?.textContent).toContain("Fixture store description.");
 
     const scopeHint = [...dialog.querySelectorAll<HTMLParagraphElement>("p")].filter(paragraph => paragraph.textContent?.trim() === SECRET_SCOPE_MATCHING_HINT);
     expect(scopeHint).toHaveLength(1);
-    expect(body.contains(scopeHint[0])).toBe(false);
+    expect(body.contains(scopeHint[0])).toBe(true);
     const scopeSelect = fieldControl<HTMLSelectElement>(dialog, "Scope");
     const scopeDescriptionIds = scopeSelect.getAttribute("aria-describedby")!.split(/\s+/);
-    expect(scopeDescriptionIds).toHaveLength(2);
-    expect(scopeDescriptionIds).toContain(scopeHint[0].id);
-    expect(document.getElementById(scopeDescriptionIds.find(id => id !== scopeHint[0].id)!)).not.toBeNull();
+    expect(scopeDescriptionIds).toHaveLength(1);
+    expect(document.getElementById(scopeDescriptionIds[0])?.contains(scopeHint[0])).toBe(true);
 
     change(name, "authored.name");
     change(value, "authored-source");
