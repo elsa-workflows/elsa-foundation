@@ -219,6 +219,7 @@ internal sealed class ProposalMutationTool : IAgentTool
 
 internal sealed class ProposalClientTool : IAgentTool, IAgentClientTool
 {
+    public IReadOnlyList<AgentPrivilegeClass>? PrivilegeClasses { get; set; }
     public int ExecuteCalls { get; private set; }
     public int CompleteCalls { get; private set; }
     public bool UseSnapshotBinding { get; set; }
@@ -231,7 +232,7 @@ internal sealed class ProposalClientTool : IAgentTool, IAgentClientTool
         => Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(new("test.module", "test.editor", "editor-1", "revision-1"),
             JsonSerializer.SerializeToElement(invocation.Arguments), AgentRisk.ReviewRequired,
             new("test.preview", "1", JsonSerializer.SerializeToElement(new { value = "new" })), false)
-        { Client = UseSnapshotBinding ? invocation.Context.Single().Client : invocation.Client }));
+        { Client = UseSnapshotBinding ? invocation.Context.Single().Client : invocation.Client, RequiredPrivilegeClasses = PrivilegeClasses }));
     public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     { ExecuteCalls++; return Task.FromResult(AgentResult<AgentToolResult>.Failure("test.client_only", "The browser owns this operation.")); }
     public async Task<AgentResult<AgentToolResult>> CompleteAsync(AgentPreparedToolInvocation invocation, AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)

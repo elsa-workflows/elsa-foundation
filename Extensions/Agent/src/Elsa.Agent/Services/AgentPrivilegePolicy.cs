@@ -1,3 +1,4 @@
+using Elsa.Agent.Core.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
@@ -7,6 +8,20 @@ namespace Elsa.Agent.Services;
 /// <summary>Copies the current host observation; neither a session nor a startup value grants a class.</summary>
 internal sealed class AgentPrivilegePolicy(IOptionsMonitor<AgentPrivilegePolicyOptions> options)
 {
+    internal AgentError? Check(IReadOnlyList<AgentPrivilegeClass>? requirements, AgentRisk risk)
+    {
+        if (!Enum.IsDefined(risk) || requirements?.Any(value => !Enum.IsDefined(value)) == true)
+            return new("agent.proposal.binding_invalid", "The operation contains an unsupported privilege classification.", 409);
+        var administrative = risk == AgentRisk.Admin || requirements?.Contains(AgentPrivilegeClass.Administrative) == true;
+        var irrecoverable = requirements?.Contains(AgentPrivilegeClass.Irrecoverable) == true;
+        var activation = requirements?.Contains(AgentPrivilegeClass.Activation) == true;
+        if (!administrative && !irrecoverable && !activation) return null;
+        var current = Read();
+        return administrative && !current.Administrative || irrecoverable && !current.Irrecoverable || activation && !current.Activation
+            ? new("agent.proposal.privilege_disabled", "Current host policy disables a privilege required by this operation. A new proposal is required after policy changes.", 403)
+            : null;
+    }
+
     internal AgentPrivilegePolicySnapshot Read()
     {
         var current = options.CurrentValue;

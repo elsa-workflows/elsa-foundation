@@ -59,12 +59,14 @@ internal sealed class InMemoryAgentProposalService(
     InMemoryAgentProposalStore store,
     IAgentActionProposalExecutor executor,
     AgentPreparedInvocationResolver preparedResolver,
+    AgentEffectsAdmission effects,
     IAgentSessionService sessions,
     IAgentAuditSink auditSink,
     TimeProvider clock,
     ILogger<InMemoryAgentProposalService>? logger = null) : IAgentProposalService, IAgentSessionPolicyParticipant
 {
     private readonly InMemoryAgentSessionService? _owner = sessions as InMemoryAgentSessionService;
+    private readonly DefaultAgentActionProposalExecutor.DispatchOrigin _dispatchOrigin = new();
 
     InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => _owner;
 
@@ -340,6 +342,20 @@ internal sealed class InMemoryAgentProposalService(
                 await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<AgentActionProposal>();
             }
+            if (proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited or AgentActionProposalStatus.Approved)
+            {
+                var veto = await effects.CheckReviewAsync(proposal, cancellationToken);
+                if (PastPreDispatchDeadline(proposal))
+                {
+                    await ExpireBeforeDispatchAsync(proposal, version, actorId);
+                    return Expired<AgentActionProposal>();
+                }
+                if (veto is not null)
+                {
+                    await RefuseBeforeDispatchAsync(proposal, version, actorId, veto);
+                    return new(null, veto);
+                }
+            }
             // Only a recorded review decision is idempotent. An automatic approval is not one, so approving it
             // cannot report or relabel it as a human decision.
             if (proposal.RequiresApproval && proposal.ApprovedBy == actorId
@@ -425,10 +441,18 @@ internal sealed class InMemoryAgentProposalService(
                 await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<AgentProposalExecutionResult>();
             }
-            if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
-                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             if (proposal.PreparedInvocation is null)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.executor_unavailable", "This proposal has no concrete prepared executor.", 409);
+            var frozenVeto = await effects.CheckInvocationAsync(proposal.PreparedInvocation, cancellationToken: cancellationToken);
+            if (PastPreDispatchDeadline(proposal))
+            {
+                await ExpireBeforeDispatchAsync(proposal, version, actorId);
+                return Expired<AgentProposalExecutionResult>();
+            }
+            if (frozenVeto is not null)
+                return await RefuseBeforeDispatchAsync(proposal, version, actorId, frozenVeto);
+            if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
+                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             // Story 2.3: the approval basis must still be the session's current policy revision. A stale basis is a
             // recorded zero-effect refusal; the executor and resolver then recheck everything else before dispatch.
             if (_owner is not null && proposal.PolicyRevision is { } stamped
@@ -456,20 +480,38 @@ internal sealed class InMemoryAgentProposalService(
                 return Expired<AgentProposalExecutionResult>();
             }
             AgentResult<AgentProposalExecutionResult> result;
+            var handedOff = false;
             try
             {
-                result = await executor.ExecuteAsync(executing, cancellationToken);
+                // Recording Executing can await storage. A host toggle during that write must veto before
+                // either a default or replaced executor is called, without pretending to revoke a later effect.
+                var currentVeto = await effects.CheckInvocationAsync(executing.PreparedInvocation!, cancellationToken: cancellationToken);
+                if (executing.PreparedInvocation!.ExpiresAt <= clock.GetUtcNow())
+                    currentVeto = new("agent.proposal.expired", "The prepared operation has expired.", 409);
+                if (currentVeto is not null)
+                    result = DefaultAgentActionProposalExecutor.RefusedBeforeDispatch(executing, currentVeto, _dispatchOrigin);
+                else
+                {
+                    handedOff = true;
+                    result = await executor.ExecuteAsync(executing, cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {
-                result = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
-                    "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."));
+                result = !handedOff
+                    ? DefaultAgentActionProposalExecutor.CancelledBeforeDispatchResult(executing, _dispatchOrigin)
+                    : AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
+                        "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."));
             }
             catch (Exception ex)
             {
-                logger?.LogError("Prepared operation {InvocationId} failed with {FailureType}; its outcome is uncertain.", proposal.PreparedInvocation.InvocationId, ex.GetType().Name);
-                result = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
-                    "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
+                logger?.LogError("Prepared operation {InvocationId} failed with {FailureType} ({DispatchPhase}).",
+                    proposal.PreparedInvocation.InvocationId, ex.GetType().Name, handedOff ? "after executor handoff" : "before executor handoff");
+                result = !handedOff
+                    ? DefaultAgentActionProposalExecutor.RefusedBeforeDispatch(executing, new("agent.proposal.admission_unavailable",
+                        "Current execution admission could not be established before dispatch.", 503), _dispatchOrigin)
+                    : AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
+                        "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
             }
             finally { _owner?.EndExecution(proposal.SessionId, proposalId); }
             try { result = await StoreOutcomeAsync(executing, dispatched, result); }
@@ -509,7 +551,7 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The operation was dispatched, but its outcome could not be recorded. Its effect is uncertain and will not be replayed; read its current state."));
             }
-            await AuditOutcomeAsync(proposalId, result, actorId);
+            await AuditOutcomeAsync(proposalId, result, actorId, IsBeforeDispatch(proposal, result) ? PreDispatchExpiry : null);
             return result;
         }
         catch (AgentProposalConflictException) { return Conflict<AgentProposalExecutionResult>(); }
@@ -726,8 +768,10 @@ internal sealed class InMemoryAgentProposalService(
         var value = outcome.Value;
         // Only the executor's own engine-owned signal is a pre-dispatch cancellation; a module returning the same
         // public code after dispatch is an ordinary refusal (Failed, refused lifecycle, claim released).
-        var cancelled = DefaultAgentActionProposalExecutor.IsCancelledBeforeDispatch(outcome);
+        var beforeDispatch = IsBeforeDispatch(proposal, outcome);
+        var cancelled = beforeDispatch && DefaultAgentActionProposalExecutor.IsCancelledBeforeDispatch(outcome);
         var status = cancelled ? AgentActionProposalStatus.Cancelled
+            : beforeDispatch && outcome.Error?.Code == "agent.proposal.expired" ? AgentActionProposalStatus.Expired
             : !outcome.Succeeded ? AgentActionProposalStatus.Failed
             : value?.Executed == true ? AgentActionProposalStatus.Executed
             : value?.Status == "awaiting-client" ? AgentActionProposalStatus.AwaitingClient
@@ -739,11 +783,24 @@ internal sealed class InMemoryAgentProposalService(
             ?? (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared
                 ? DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", cancelled
                     ? "The operation was cancelled before dispatch to its owning module. No effect occurred."
-                    : refusal ?? "The owning executor refused application before reporting an effect.")
+                    : refusal ?? (beforeDispatch ? "Execution admission refused the operation before dispatch. No effect occurred."
+                        : "The owning executor refused application before reporting an effect."))
                 : null);
         await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
             version, result, outcome, acknowledgement?.Invoke(outcome));
         return outcome;
+    }
+
+    private bool IsBeforeDispatch(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> result)
+        => DefaultAgentActionProposalExecutor.IsBeforeDispatch(proposal, result, _dispatchOrigin)
+            || executor is DefaultAgentActionProposalExecutor defaults && defaults.IsOwnBeforeDispatch(proposal, result);
+
+    private async Task<AgentResult<AgentProposalExecutionResult>> RefuseBeforeDispatchAsync(AgentActionProposal proposal, long version,
+        string actorId, AgentError error)
+    {
+        var refused = await StoreOutcomeAsync(proposal, version, DefaultAgentActionProposalExecutor.RefusedBeforeDispatch(proposal, error, _dispatchOrigin));
+        await AuditOutcomeAsync(proposal.Id, refused, actorId, PreDispatchExpiry);
+        return refused;
     }
 
     /// <summary>

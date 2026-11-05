@@ -10,6 +10,7 @@ internal sealed class DefaultAgentToolInvoker(
     IAgentSessionService sessions,
     IAgentToolAuthorizer authorizer,
     IAgentPolicyEvaluator policyEvaluator,
+    AgentEffectsAdmission effects,
     IAgentAuditSink auditSink,
     InMemoryAgentProposalStore proposalStore,
     TimeProvider clock) : IAgentToolInvoker, IAgentSessionPolicyParticipant
@@ -89,6 +90,9 @@ internal sealed class DefaultAgentToolInvoker(
                     return AgentToolDispatch.Proposed(existing);
                 }
 
+                if (await effects.CheckPreparationAsync(descriptor, cancellationToken) is { } preparationVeto)
+                    return await DeniedAsync(preparationVeto.Code, preparationVeto.Message, preparationVeto.StatusCode);
+
                 AgentResult<AgentToolPreparation> preparation;
                 try
                 {
@@ -148,6 +152,9 @@ internal sealed class DefaultAgentToolInvoker(
                 {
                     return await DeniedAsync("agent.tool.preparation_invalid", "The module returned an invalid preparation contract.", 400);
                 }
+
+                if (await effects.CheckInvocationAsync(prepared, descriptor, cancellationToken) is { } preparedVeto)
+                    return await DeniedAsync(preparedVeto.Code, preparedVeto.Message, preparedVeto.StatusCode);
 
                 if (!isMutation)
                 {

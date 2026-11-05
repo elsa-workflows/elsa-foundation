@@ -1,4 +1,5 @@
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Extensions;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
@@ -8,8 +9,34 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Agent.Services;
 
 /// <summary>Checks the selected effects feature through the shared schema observation at each acceptance boundary.</summary>
-internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrations, IServiceProvider services)
+internal sealed class AgentEffectsAdmission(AgentRegistrationValidator registrations, IServiceProvider services, AgentPrivilegePolicy privileges)
 {
+    internal ValueTask<AgentError?> CheckPreparationAsync(AgentToolDescriptor descriptor, CancellationToken cancellationToken = default)
+        => CheckPrivilegesAsync(null, descriptor.Risk, UsesNewContract(descriptor) || descriptor.Risk == AgentRisk.Admin, cancellationToken);
+
+    internal ValueTask<AgentError?> CheckInvocationAsync(AgentPreparedToolInvocation prepared,
+        AgentToolDescriptor? descriptor = null, CancellationToken cancellationToken = default)
+        => CheckPrivilegesAsync(prepared.RequiredPrivilegeClasses, prepared.Risk,
+            prepared.RequiredPrivilegeClasses is { Count: > 0 } || descriptor is not null && UsesNewContract(descriptor), cancellationToken);
+
+    /// <summary>Approval reads retained core meaning only; it never resolves a tool or a principal.</summary>
+    internal ValueTask<AgentError?> CheckReviewAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
+        => proposal.PreparedInvocation is { } prepared
+            ? CheckInvocationAsync(prepared, cancellationToken: cancellationToken)
+            : CheckPrivilegesAsync(null, proposal.Risk, false, cancellationToken);
+
+    internal static bool UsesNewContract(AgentToolDescriptor descriptor) => descriptor.CanPerformWithoutPersistence || descriptor.ModuleCodes is not null;
+
+    private async ValueTask<AgentError?> CheckPrivilegesAsync(IReadOnlyList<AgentPrivilegeClass>? requirements, AgentRisk risk,
+        bool needsEffects, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (privileges.Check(requirements, risk) is { } veto) return veto;
+        if (needsEffects && await CheckAsync(cancellationToken) is { } unavailable) return unavailable;
+        // A shared refresh can await I/O. The host setting observed before it is no longer current authority.
+        return privileges.Check(requirements, risk);
+    }
+
     internal async ValueTask<AgentError?> CheckAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

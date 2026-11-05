@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 
@@ -7,6 +8,9 @@ namespace Elsa.Agent.Services;
 /// <summary>Routes the stored preparation to the same installed module, with current server authorization.</summary>
 internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocationResolver resolver) : IAgentActionProposalExecutor
 {
+    // Proof may outlive a request with its retained result. Its opaque token must not retain this scoped executor.
+    private readonly DispatchOrigin _dispatchOrigin = new();
+    internal sealed class DispatchOrigin;
     /// <summary>A known zero-effect cancellation observed before the owning module or client was dispatched.</summary>
     internal const string CancelledBeforeDispatchCode = "agent.proposal.cancelled";
 
@@ -17,6 +21,27 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
     /// </summary>
     private static readonly AgentError CancelledBeforeDispatch = new(CancelledBeforeDispatchCode,
         "Execution was cancelled before dispatch to the owning module. No effect occurred.", 409);
+
+    private static readonly ConditionalWeakTable<AgentResult<AgentProposalExecutionResult>, PreDispatchProof> Undispatched = new();
+    private sealed record PreDispatchProof(string ProposalId, string? InvocationId, DispatchOrigin Origin);
+
+    /// <summary>Private live proof tied to this execution producer and exact invocation, never to a public code/flag.</summary>
+    internal static AgentResult<AgentProposalExecutionResult> RefusedBeforeDispatch(AgentActionProposal proposal, AgentError error, DispatchOrigin origin)
+    {
+        AgentResult<AgentProposalExecutionResult> result = new(null, error);
+        Undispatched.Add(result, new(proposal.Id, proposal.PreparedInvocation?.InvocationId, origin));
+        return result;
+    }
+
+    internal static AgentResult<AgentProposalExecutionResult> CancelledBeforeDispatchResult(AgentActionProposal proposal, DispatchOrigin origin)
+        => RefusedBeforeDispatch(proposal, CancelledBeforeDispatch, origin);
+
+    internal static bool IsBeforeDispatch(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> result, DispatchOrigin origin)
+        => Undispatched.TryGetValue(result, out var proof) && ReferenceEquals(proof.Origin, origin)
+            && proof.ProposalId == proposal.Id && proof.InvocationId == proposal.PreparedInvocation?.InvocationId;
+
+    internal bool IsOwnBeforeDispatch(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> result)
+        => IsBeforeDispatch(proposal, result, _dispatchOrigin);
 
     /// <summary>True only for this executor's own pre-dispatch cancellation result.</summary>
     internal static bool IsCancelledBeforeDispatch<T>(AgentResult<T> result) => ReferenceEquals(result.Error, CancelledBeforeDispatch);
@@ -29,15 +54,20 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
         try { resolved = await resolver.ResolveAsync(proposal, cancellationToken); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return new(null, CancelledBeforeDispatch);
+            return CancelledBeforeDispatchResult(proposal, _dispatchOrigin);
+        }
+        catch (Exception)
+        {
+            return RefusedBeforeDispatch(proposal, new("agent.proposal.admission_unavailable",
+                "Current execution admission could not be established before dispatch.", 503), _dispatchOrigin);
         }
         if (resolved.Error is { } error)
-            return AgentResult<AgentProposalExecutionResult>.Failure(error.Code, error.Message, error.StatusCode);
+            return RefusedBeforeDispatch(proposal, error, _dispatchOrigin);
         var prepared = proposal.PreparedInvocation!;
         if (prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState)
         {
             if (!proposal.RequiresApproval || proposal.ApprovedAt is null || prepared.Client is null || resolved.Tool is not IAgentClientTool)
-                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.client_unavailable", "No reviewed originating client execution contract is available.", 409);
+                return RefusedBeforeDispatch(proposal, new("agent.proposal.client_unavailable", "No reviewed originating client execution contract is available.", 409), _dispatchOrigin);
             return AgentResult<AgentProposalExecutionResult>.Success(Result(proposal, false,
                 "Waiting for the originating view to confirm the change.", "awaiting-client") with { ClientInvocation = prepared });
         }

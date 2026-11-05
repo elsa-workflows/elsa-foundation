@@ -9,6 +9,7 @@ internal sealed class AgentPreparedInvocationResolver(
     IAgentSessionService sessions,
     IAgentToolAuthorizer authorizer,
     IAgentPolicyEvaluator policyEvaluator,
+    AgentEffectsAdmission effects,
     TimeProvider clock)
 {
     internal async Task<(IAgentTool? Tool, AgentError? Error)> ResolveAsync(AgentActionProposal proposal, CancellationToken cancellationToken)
@@ -38,6 +39,8 @@ internal sealed class AgentPreparedInvocationResolver(
         if (session.Policy.RequiresApprovalForMutations
             && (!proposal.RequiresApproval || proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
             return (null, new("agent.proposal.approval_required", "Current session policy requires approval of the exact operation.", 409));
+        if (await effects.CheckInvocationAsync(prepared, cancellationToken: cancellationToken) is { } frozenVeto)
+            return (null, frozenVeto);
         IAgentTool? tool;
         try { tool = await registry.FindAsync(prepared.ToolName, cancellationToken); }
         catch (AgentContributionException)
@@ -58,11 +61,17 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.contract_changed", "The operation's current risk requires a new review.", 409));
         if (session.Policy.DeniedCapabilityIds.Contains(tool.Descriptor.Name, StringComparer.OrdinalIgnoreCase))
             return (null, new("agent.tool.denied", "Current host policy disables this tool.", 403));
+        if (await effects.CheckInvocationAsync(prepared, tool.Descriptor, cancellationToken) is { } contractVeto)
+            return (null, contractVeto);
         var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken);
         if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
             return (null, unavailable);
         if (!admission.Allowed)
             return (null, new("agent.proposal.forbidden", "Current server authority denies the prepared target.", 403));
+        if (await effects.CheckInvocationAsync(prepared, tool.Descriptor, cancellationToken) is { } currentVeto)
+            return (null, currentVeto);
+        if (prepared.ExpiresAt <= clock.GetUtcNow())
+            return (null, new("agent.proposal.expired", "The prepared operation has expired.", 409));
         return (tool, null);
     }
 
