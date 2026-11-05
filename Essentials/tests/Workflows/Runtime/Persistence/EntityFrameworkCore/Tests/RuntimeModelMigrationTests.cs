@@ -44,12 +44,18 @@ public sealed class RuntimeModelMigrationTests
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "RunHistory"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 4, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "RunHistory"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 5, upgradedHistory.Length);
             await using (var nativeKinds = connection.CreateCommand())
             {
                 nativeKinds.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\" WHERE IsModelMaterial <> 0";
                 Assert.Equal(0L, (long)(await nativeKinds.ExecuteScalarAsync())!);
+            }
+            // A legacy outbox row has no claim delivery time, so a drain's listing never returns it as a new delivery.
+            await using (var claimDeliveries = connection.CreateCommand())
+            {
+                claimDeliveries.CommandText = $"SELECT COUNT(*) FROM \"{RuntimePostCommitOutboxEfModule.TableName}\" WHERE ClaimDeliveredAtUtcTicks IS NOT NULL";
+                Assert.Equal(0L, (long)(await claimDeliveries.ExecuteScalarAsync())!);
             }
             // Schema upgrade only: no execution is resumed and no direct-host acceptance is implied.
         }
@@ -82,10 +88,11 @@ public sealed class RuntimeModelMigrationTests
             var rows = new List<string>();
             while (await reader.ReadAsync())
             {
-                // Compare every original column; the newly added discriminator is verified separately above.
+                // Compare every original column; the newly added columns are verified separately above.
                 var columns = Enumerable.Range(0, reader.FieldCount).Where(i =>
                     (table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial") &&
-                    (table != RuntimeOperationalStateEfModule.DurableTimerTableName || reader.GetName(i) is not ("HistoryPending" or "HistoryRetired" or "HistoryRevision"))).ToArray();
+                    (table != RuntimeOperationalStateEfModule.DurableTimerTableName || reader.GetName(i) is not ("HistoryPending" or "HistoryRetired" or "HistoryRevision")) &&
+                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) != "ClaimDeliveredAtUtcTicks")).ToArray();
                 var row = columns.Select(i => reader.IsDBNull(i) ? null : reader.GetValue(i)).ToArray();
                 rows.Add(JsonSerializer.Serialize(row));
             }
