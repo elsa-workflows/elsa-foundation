@@ -9,6 +9,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Agent.Tests;
 
