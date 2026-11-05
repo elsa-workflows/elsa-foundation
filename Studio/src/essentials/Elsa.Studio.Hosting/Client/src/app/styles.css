@@ -3274,11 +3274,13 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .studio-dialog-body {
   display: grid;
+  min-width: 0;
   gap: 14px;
 }
 
 .studio-dialog-title {
   margin: 0;
+  overflow-wrap: anywhere;
   font-family: var(--studio-font-display);
   font-size: var(--studio-section-title-size);
   font-weight: var(--studio-title-weight, 700);
@@ -3287,6 +3289,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .studio-dialog-message {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--studio-text-muted);
   font-size: var(--studio-body-size);
   line-height: 1.5;

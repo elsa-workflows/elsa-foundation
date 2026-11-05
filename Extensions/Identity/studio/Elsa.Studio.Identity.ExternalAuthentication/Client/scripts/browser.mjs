@@ -30,6 +30,28 @@ async function confirmStudio(page, title, label = title) {
   if (settings.studioUrl) {
     const dialog = page.getByRole("dialog", { name: title, exact: true });
     await expect(dialog).toBeVisible();
+    await dialog.evaluate(async element => {
+      await element.ownerDocument.fonts.ready;
+      await Promise.all(element.getAnimations({ subtree: true })
+        .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map(animation => animation.finished));
+    });
+    const geometry = await dialog.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      return { width: element.clientWidth, scroll: element.scrollWidth, left: bounds.left, right: bounds.right,
+        viewport: element.ownerDocument.documentElement.clientWidth,
+        content: [...element.querySelectorAll(".studio-dialog-message, button")].map(child => {
+          const box = child.getBoundingClientRect();
+          return { left: box.left, right: box.right };
+        }) };
+    });
+    expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
+    for (const box of geometry.content) {
+      expect(box.left).toBeGreaterThanOrEqual(geometry.left);
+      expect(box.right).toBeLessThanOrEqual(geometry.right);
+    }
     await page.screenshot({ path: join(ownedRoot, `confirmation-${++confirmationNumber}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`), fullPage: false });
     await dialog.getByRole("button", { name: label, exact: true }).click();
   }
@@ -350,10 +372,15 @@ try {
         if (label === "Disable sign-in" && stored?.document.enabled) return null;
         return state.connections.find(item => item.source === 0 && item.document.key === "company").effective;
       }).toBe(baselineEffective);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByText("Connection updated. The sign-in chooser uses the current effective configuration.", { exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
     }
     connectionLifecycle = { edited: true, retiredAndRestored: true, draftDoesNotShadow: true, explicitPromotion: true,
       disabledOverrideShadows: true, archiveRevealsBaseline: true, restoreShadowsAgain: true, removalRevealsBaseline: true,
       previewAdministratorTokenExchanges: overrideAdministratorExchanges };
+    await expect(page.getByRole("heading", { name: "Choose a connection", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Sign-in connections", exact: true }).locator("li")).toHaveCount(2);
     await page.screenshot({ path: join(ownedRoot, "connection-lifecycle.png"), fullPage: false });
   }
   const access = { targetRolesPreserved: partnerSession.roles.includes("reader"), finalPathRefused: true, attachedExistingUser: true,
