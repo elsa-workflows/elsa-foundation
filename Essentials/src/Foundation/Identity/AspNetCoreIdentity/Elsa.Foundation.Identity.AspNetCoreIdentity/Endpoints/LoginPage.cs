@@ -79,7 +79,8 @@ public static class LoginPage
             [data-layout="editorial"] .visual { border-radius:45% 45% 24px 24px; }
             /* Parcel Room: a small brand, clear form and full marker illustration on white. */
             body[data-palette="parcel-room"] { --ground:#fff; --paper:#fff; --ink:#18212b; --muted:#626d79; --line:#8a939f; --accent:#58a4b5; --on-accent:#10262d; --wash:#f1f6f7; color-scheme:light; }
-            body[data-palette="pocket-orchestra"] { --ground:#faf8f5; --paper:#faf8f5; --ink:#2d3030; --muted:#686d6b; --line:#8c9290; --accent:#8bbfc0; --on-accent:#183234; --wash:#eeefea; color-scheme:light; }
+            body[data-palette="pocket-orchestra"] { --ground:#faf8f5; --paper:#faf8f5; --ink:#2d3030; --muted:#686d6b; --line:#858c89; --accent:#8bbfc0; --on-accent:#183234; --wash:#eeefea; color-scheme:light; }
+            body[data-palette="pocket-orchestra"] :is(input,button,a):focus-visible { outline-color:var(--ink); }
             [data-layout="parcel-room"] .entry { max-width:1600px; margin:auto; grid-template-columns:minmax(300px,.85fr) minmax(0,1.45fr); align-items:center; gap:clamp(32px,5vw,88px); padding:40px 5vw; }
             [data-layout="parcel-room"] .welcome { order:0; min-width:0; padding:32px 0; }
             [data-layout="parcel-room"] .form-wrap { max-width:380px; }
