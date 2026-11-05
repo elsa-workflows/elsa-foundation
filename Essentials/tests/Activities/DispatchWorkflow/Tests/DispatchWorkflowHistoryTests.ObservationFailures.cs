@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.Testing;
@@ -43,6 +44,10 @@ public sealed partial class DispatchWorkflowHistoryTests
         var before = await history.ReadPageAsync(new(run.Start.WorkflowExecutionId, 500));
         var dispatchBefore = JsonSerializer.Serialize(await services.GetRequiredService<IWorkflowDispatchStore>().FindAsync(run.Identity.DispatchId));
         var processor = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        var firstAttemptAt = services.GetRequiredService<TimeProvider>().GetUtcNow();
+        var expectedMetadata = originalSource.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        expectedMetadata.Add(RuntimePostCommitOutboxClaimTransitions.FirstDeliveryAttemptedAtMetadataKey,
+            firstAttemptAt.ToString("O", CultureInfo.InvariantCulture));
 
         var failure = await Record.ExceptionAsync(async () =>
         {
@@ -92,7 +97,8 @@ public sealed partial class DispatchWorkflowHistoryTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, held.Status);
         Assert.Equal(0, held.DeliveryAttemptCount);
         Assert.Equal(originalSource.LastFailureMessage, held.LastFailureMessage);
-        Assert.Equal(originalSource.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal), held.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal));
+        Assert.Equal(firstAttemptAt, RuntimePostCommitOutboxClaimTransitions.ReadFirstDeliveryAttemptedAt(held));
+        Assert.Equal(expectedMetadata.OrderBy(item => item.Key, StringComparer.Ordinal), held.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal));
         Assert.Null(held.DeliveredAt);
         Assert.Equal(originalSource.StimulusDeliverySourceScope, held.StimulusDeliverySourceScope);
         Assert.Equal(RuntimeCheckpointCommitFingerprint.ComputeIntent(originalSource.Intent), RuntimeCheckpointCommitFingerprint.ComputeIntent(held.Intent));

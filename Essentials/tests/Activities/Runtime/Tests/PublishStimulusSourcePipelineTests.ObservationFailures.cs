@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -31,6 +32,10 @@ public sealed partial class PublishStimulusSourcePipelineTests
         await harness.SeedMaterial(); await harness.Bind("one-start");
         var originalSource = await harness.Commit();
         var before = await harness.History.ReadPageAsync(new("publisher"));
+        var firstAttemptAt = harness.Clock.GetUtcNow();
+        var expectedMetadata = originalSource.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        expectedMetadata.Add(RuntimePostCommitOutboxClaimTransitions.FirstDeliveryAttemptedAtMetadataKey,
+            firstAttemptAt.ToString("O", CultureInfo.InvariantCulture));
 
         var failure = await Record.ExceptionAsync(async () =>
         {
@@ -80,7 +85,8 @@ public sealed partial class PublishStimulusSourcePipelineTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, held.Status);
         Assert.Equal(0, held.DeliveryAttemptCount);
         Assert.Equal(originalSource.LastFailureMessage, held.LastFailureMessage);
-        Assert.Equal(originalSource.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal), held.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal));
+        Assert.Equal(firstAttemptAt, RuntimePostCommitOutboxClaimTransitions.ReadFirstDeliveryAttemptedAt(held));
+        Assert.Equal(expectedMetadata.OrderBy(item => item.Key, StringComparer.Ordinal), held.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal));
         Assert.Null(held.DeliveredAt);
         Assert.Equal(originalSource.StimulusDeliverySourceScope, held.StimulusDeliverySourceScope);
         Assert.Equal(RuntimeCheckpointCommitFingerprint.ComputeIntent(originalSource.Intent), RuntimeCheckpointCommitFingerprint.ComputeIntent(held.Intent));
