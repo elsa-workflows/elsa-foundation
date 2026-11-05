@@ -789,7 +789,12 @@ export function ShellFrame({
   const searchableSettingsItems = settingsGroups.flatMap(group => group.sections).filter(itemVisible);
   const showSettingsEntry = hasSettingsSections(settingsGroups) && (!query || "settings".includes(query));
   const settingsActive = isSettingsSurfacePath(path, navigation);
-  const hasNavResults = mainItems.length + groupedItems.reduce((count, group) => count + group.items.length, 0) + searchableSettingsItems.length + (showSettingsEntry ? 1 : 0) > 0;
+  const topSearchItems: StudioNavigationContribution[] = [
+    ...visibleNavigation.filter(item => matchesQuery(item) && resolveNavigationPlacement(item, visibleNavigation)),
+    ...(showSettingsEntry ? [{ id: "studio-settings", label: "Settings", path: "/settings", placement: "main" as const, icon: Settings }] : [])
+  ].sort(compareNavigationItems);
+  const hasNavResults = topSearch ? topSearchItems.length > 0
+    : mainItems.length + groupedItems.reduce((count, group) => count + group.items.length, 0) + searchableSettingsItems.length + (showSettingsEntry ? 1 : 0) > 0;
 
   const branding = getStudioBranding();
   return (
@@ -859,7 +864,7 @@ export function ShellFrame({
         ) : null}
 
         {topSearch ? <NavigationSearch query={query} path={path} searchInput={searchInput}>
-          {visibleNavigation.filter(item => item.label.toLowerCase().includes(query) && resolveNavigationPlacement(item, visibleNavigation)).sort(compareNavigationItems).map(item =>
+          {topSearchItems.map(item =>
             <NavItemGroup key={item.id} item={item} childItems={[]} items={visibleNavigation} path={path} collapsed={false} onNavigate={navigateFromMainNavigation} />)}
         </NavigationSearch> : groupedItems.map(group => (
           <NavigationGroup key={group.id} label={group.label} top={topNav} rail={navCollapsed && !topNav && desktopNavigation}

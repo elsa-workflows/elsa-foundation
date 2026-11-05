@@ -181,14 +181,17 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await libraryViews.getByRole("link", { name: "Activity definitions", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
   await capture(page, info, "library");
-  await page.locator(".studio-library-header").getByRole("link", { name: "Activity availability", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+  const screens = page.getByRole("tablist", { name: "Open screens", exact: true });
+  const previousScreenCount = await screens.getByRole("tab").count();
+  await page.locator(".studio-library-header").getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["Alt"] });
+  await expect(screens.getByRole("tab")).toHaveCount(previousScreenCount + 1);
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Workflow authoring");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "workflow-authoring-settings");
   // Existing bookmarked routes must resolve to their new Settings surface as well.
   await page.goto("/workflows/runtime-diagnostics");
-  await expect(page.getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Runtime");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "runtime-settings");

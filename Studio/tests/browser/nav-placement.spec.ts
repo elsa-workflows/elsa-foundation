@@ -97,3 +97,17 @@ test("a saved desktop rail preference does not lock narrow disclosure controls o
   await build.press("Enter");
   await expect(page.getByRole("link", { name: "Agents", exact: true })).toBeVisible();
 });
+
+test("top navigation finds Settings and closes a same-page group selection", async ({ page }) => {
+  await page.goto("/?mode=nav-placement&navigation=top");
+  const integrations = page.getByRole("button", { name: "Integrations", exact: true });
+  await integrations.click();
+  await page.getByRole("navigation", { name: "Integrations", exact: true }).getByRole("link", { name: "Connections", exact: true }).click();
+  await expect(integrations).toHaveAttribute("aria-expanded", "false");
+  const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await search.fill("settings");
+  const results = page.getByRole("navigation", { name: "Search results", exact: true });
+  await expect(results.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+  await results.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(search).toHaveValue("");
+});

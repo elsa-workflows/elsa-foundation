@@ -50,7 +50,10 @@ export function NavigationGroup({ label, top, rail, path, query, active, open, o
     };
   }, [dismiss, expanded, top]);
 
-  return <nav ref={section} className="nav-section nav-section-group" aria-label={label} onBlur={event => {
+  return <nav ref={section} className="nav-section nav-section-group" aria-label={label} onClick={event => {
+    if (!top || !(event.target instanceof Element) || !event.target.closest("a")) return;
+    if (event.defaultPrevented || (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey)) dismiss();
+  }} onBlur={event => {
     if (!top || (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) return;
     dismiss();
   }}>

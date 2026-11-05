@@ -1,7 +1,7 @@
 /* Shared shell treatment: named groups stay quiet across every palette and layout. */
 .sidebar .nav-section { gap: 3px; }
 .sidebar .nav-group-panel { display: grid; gap: 3px; }
-.sidebar .nav-group-panel[hidden], .sidebar .nav-search-results[hidden] { display: none; }
+.studio-shell .sidebar .nav-group-panel[hidden], .studio-shell .sidebar .nav-search-results[hidden] { display: none; }
 
 .studio-shell .sidebar .nav-group-toggle {
   display: flex;
