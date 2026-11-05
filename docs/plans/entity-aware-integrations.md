@@ -1,6 +1,7 @@
 # Entity-aware integrations and optional process records
 
-**State:** proposed delivery plan; product/design decisions remain open as marked below.
+**State:** proposed delivery plan; external integrations are the production scope. Service connections
+come first; the optional record backend is an explicit follow-on. Architecture decisions remain open as marked below.
 **Owner authorization:** [6 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671902429).
 **Canonical request:** [#3608](https://github.com/elsa-workflows/elsa-foundation/issues/3608).
 **Assessment baseline:** main `e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`.
@@ -35,8 +36,8 @@ The paths below describe actual inspected source, rather than acceptance evidenc
 | [Internal delivery](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryServices.cs) | Runtime-owned recipient retention and exact resume semantics | The current publisher/checkpoint boundary is workflow-owned; an external event cannot invent a publisher workflow |
 | [User Task forms](../../Essentials/src/Workflows/Runtime/Core/UserTasks/UserTaskContracts.cs) | Pinned form versions, validation and explicit prefill | Reference/attachment editors and authorized live dimensions are not built-in field types |
 
-The first external execution profile should be an explicitly disclosed **tenant/service connection**,
-with current Elsa permissions checked as well. Current Connections do not establish delegated human
+The [owner selected](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6672133904)
+**tenant/service connections first**, with current Elsa permissions checked as well. Current Connections do not establish delegated human
 source identity. Discovering a type never grants access to all its records or fields. Authorization is
 rechecked at discovery, selection, read, invocation, event admission and projection boundaries.
 
@@ -95,6 +96,18 @@ Evaluate whether these contracts fit an Integrations subdomain or need a new dom
 requires the applicable ADR and narrow §E2.1 admission before production, not an incidental addition to
 Primitives. No constitution amendment or unratified execution proposal is assumed by this plan.
 
+**Private source catalog admission remains unresolved.** A disposable public-extension experiment preserved
+separately typed operation inputs, exact decimals and immutable schemas through normal catalog/publication
+and runtime paths. That does not establish safe source-specific metadata exposure. The private-tenant
+case failed: [source publication](../../Essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs)
+copied explicit tenant-owned entities through factories that dropped tenant ownership, producing a global
+definition visible to another tenant. Narrow prerequisite [#3917](https://github.com/elsa-workflows/elsa-foundation/issues/3917)
+owns that existing ownership defect. Availability filtering is also addability, not a source-disclosure
+policy; construct/detail/assistant paths must be covered as well as the picker. Before private operation
+versions are adopted, M2 must agree tenant-preserving provisioning and a common source-aware disclosure
+decision through the existing catalog. No second catalog, nested binding language or entity-specific core
+switch is justified. Experimental evidence stays on #3907; source privacy remains failed/incomplete.
+
 ### Event and recovery obligations
 
 The provider declares event coverage, filters, commit boundary, retry window, ordering and optional
@@ -115,13 +128,19 @@ source/receiver restart, denied/revoked access, outages, stale concurrency and d
 Diagnostics expose safe source/event/reference identities, acceptance/delivery state and recovery steps,
 without secrets or sensitive record snapshots.
 
-## Optional record module: bounded decision
+## Optional record backend: assessed follow-on
 
-**[Owner choice, 6 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671994762):**
-assess first, then decide production scope. The source journey and
-bounded comparison precede a later explicit go/follow-on decision; production scope remains open. Neither
-permanent exclusion nor a full data-platform mandate follows from the intake. External-only deployment
-must remain independent of any business-record store.
+**[Owner decision, 6 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6672584508):**
+after the bounded assessment, the **record backend is an explicit follow-on**, tracked in
+[#3916](https://github.com/elsa-workflows/elsa-foundation/issues/3916).
+This delivery completes the external entity-integration production scope and records the optional-backend
+assessment/outcome. It does not implement that backend. External-only deployment remains independent of
+any business-record store. The follow-on creates no active implementation lane or mandatory CRM.
+
+An Elsa-managed business record would be maintained by an optional record module, with its own identity,
+validation, permissions, history and persistence independent of workflow lifetime. This describes the
+system responsible for maintaining the record; the existing external application retains that role in
+the initial integration delivery.
 
 The proposed audience is a small process application without an existing business backend. The initial
 profile is Expense Claim: text, decimal amount plus currency, boolean, date, bounded choice, one-record
@@ -129,17 +148,20 @@ employee reference and attachment references to a separately authorized owner. N
 objects, many-to-many modeling, calculated scripting, generic application builder or binary store is
 assumed. A source type/action designer is separate from a workflow designer.
 
-Before a production go decision, settle type/field validation, create/read/bounded query/update APIs and
+Before activating the follow-on, settle type/field validation, create/read/bounded query/update APIs and
 Studio forms/list/detail states; current tenant/record/field permissions; conditional writes; history;
 deletion/retention and dangling references; schema revisioning and existing-record migration; active
 workflow compatibility; and committed-change events backed by the actual persistence boundary. Named
 Submit/Approve/Reject operations preserve record rules. Record lifetime is independent of workflow runs.
 
-Compare reusing a source such as Orchard with an optional Elsa-owned module against that finite profile.
-Do not select tables/documents or a persistence provider ahead of those requirements. If the decision is
-assessment-only, record the evidence, a clear follow-on and every unimplemented obligation; it is not
-production delivery of a record store. If included, add its production milestones and qualification before
-closing #3608. The open choice cannot be converted into scope by elapsed time.
+The assessment found reusable field rendering, identity, composition and persistence primitives, while
+independent record storage/UI, history, migrations and record-commit event responsibility remain new work.
+User Task storage is execution-owned and cannot provide independent business-record lifetime. The real
+source experiment demonstrated source validation/reopen and a callback-before-rollback case; its custom
+post-commit handoff still has a crash-loss window. Those observations support completing integrations
+before the new data domain. [The decision brief](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6672266759)
+and #3916 preserve the bounded obligations. No tables/documents/persistence provider is selected, and no
+production record store is claimed.
 
 ## Staged critical path
 
@@ -147,10 +169,10 @@ closing #3608. The open choice cannot be converted into scope by elapsed time.
 |---|---|
 | M0 — establish and assess ([#3906](https://github.com/elsa-workflows/elsa-foundation/issues/3906)) | Owner receipt, scoped D0/registry/goal, this refreshed assessment, concrete journey and bounded-record decision register. Existing #3608 remains canonical. This stage does not approve production contracts. |
 | M1 — prove source boundary ([#3907](https://github.com/elsa-workflows/elsa-foundation/issues/3907)) | Reproducible owned real-source discovery/reference/read/operation and event-to-Elsa feasibility; investigate source commit/access semantics and a separately authored/compiled provider using only public SDK/contracts. Controlled adapters are labeled separately. |
-| M2 — agree production design ([#3908](https://github.com/elsa-workflows/elsa-foundation/issues/3908)) | Reviewed spec → plan → tasks resolving contract placement, identity/access, compatibility, event acceptance and authoring/UX states. Preserve any initiative-owned architecture agreement. Resolve optional-record production scope explicitly. |
+| M2 — agree production design ([#3908](https://github.com/elsa-workflows/elsa-foundation/issues/3908)) | Reviewed spec → plan → tasks resolving contract placement, service-connection access, compatibility, event acceptance and authoring/UX states. Preserve any initiative-owned architecture agreement and the explicit record-backend follow-on. |
 | M3 — deliver provider/read/operations | Small optional contracts, authorized metadata/cache/reference services, normal catalog activities and source/type/record/operation authoring. Actual composed-host and independent SDK evidence. |
 | M4 — deliver events and projections | Shared Runtime ingress, declared event/filter/feedback behavior, recovery/diagnostics and explicit consumer projections. Coordinate adjacent owners; no blanket dependency on their complete programs. |
-| M5 — qualify and close | Real provider journey and fault/security/schema/restart matrix, independently inspected Studio evidence, practical docs/examples, reviewed merges and resulting-main qualification. Include agreed record-module production acceptance or its explicit assessment/follow-on outcome. |
+| M5 — qualify and close | Real provider journey and fault/security/schema/restart matrix, independently inspected Studio evidence, practical docs/examples, reviewed merges and resulting-main qualification. Preserve the record-backend assessment/outcome and actionable #3916 follow-on without claiming a delivered store. |
 
 Maintain one active implementation leaf and one integration lane; split concrete delivery leaves only
 when their contract and ownership are clear. New issues enter needs-triage. Track transitions and evidence
@@ -185,8 +207,8 @@ provider using only supported public SDK/contracts, registered without core chan
 read/operation and event extensibility. A consumer that only calls a first-party provider is insufficient.
 Also cover stable references through source/receiver reopen; multiple workflows per record; invalid/denied/foreign
 tenant reads and operations; field restrictions; incompatible schema/connection recreation; duplicates,
-outages and feedback. Any included record module additionally proves independent record lifetime,
-authorized management, concurrent writes/deletion/retention, schema evolution and committed-change events
-across restart. Risk-based targeted tests and required architecture/maps/CI gates remain mandatory.
-Record passed, failed, skipped, cancelled, unavailable and incomplete separately. No runtime, provider
-or UX qualification has been performed by this assessment.
+outages and feedback. Follow-on #3916 separately requires independent record lifetime, authorized management,
+concurrent writes/deletion/retention, schema evolution and committed-change events across restart before
+that backend may be called delivered. Risk-based targeted tests and required architecture/maps/CI gates remain mandatory.
+Record passed, failed, skipped, cancelled, unavailable and incomplete separately. Preliminary source/runtime
+experiments are recorded on #3907; no production provider/SDK/UX qualification is claimed by this plan.

@@ -46,8 +46,9 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 is authorized for research, necessary product/architecture design and specification, scoped implementation,
 verification, applicable review/merge and resulting-main qualification. The [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671902429)
 supersedes its intake-only delivery state. Entity-aware integrations come first, with external applications
-retaining record authority. Assess a bounded optional business-record module and obtain an explicit
-production-scope decision; neither a full data platform nor permanent exclusion is presumed. Domain
+retaining record authority. The owner selected service connections first and, after the bounded assessment,
+the optional business-record backend as an explicit [follow-on #3916](https://github.com/elsa-workflows/elsa-foundation/issues/3916).
+The current production scope is external entity-aware integration; no record store is claimed. Domain
 applications remain separate compositions. Follow the [staged critical path](../plans/entity-aware-integrations.md):
 assessment/source proof and applicable design/spec agreement precede production implementation. Run beside
 active programs, preserve consolidation's priority one, coordinate shared ownership and keep one active
