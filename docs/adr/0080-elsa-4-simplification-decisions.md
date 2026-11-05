@@ -42,6 +42,20 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 5 November 2026:** [Workflow Releases and Environment Promotion #3590](../program-goals/workflow-release-promotion.md)
+is authorized for end-to-end delivery, including necessary interactive product/architecture design,
+specification, scoped implementation, verification, current-rule review/merge and resulting-main qualification.
+The [authorization receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671598586)
+preserves the selected immutable-content, dependency, exact-run-pin and Studio/API/CLI boundaries.
+Sequencing: establish reviewed contracts before consequential implementation; deliver immutable bundles,
+target mapping/preview, durable coordinated activation/rollback, Studio/CLI and integrated qualification.
+Run beside active priorities, displace none, preserve consolidation's priority one and coordinate shared
+publication/runtime/Studio paths. This reactivates no paused or parked stream. Actual promotion exercises
+use owned disposable test environments; shared/production deployments and software/package release
+publication are excluded. #3590 remains the canonical product/program record; the current readiness-cap
+excess is not authorization to add ready issues or duplicate its backlog. Planning and staged artifacts
+alone do not complete this program. Other decisions and applicable agreement gates remain in force.
+
 **Owner amendment, 5 November 2026:** [Activity Data Selection #3882](../program-goals/activity-data-selection.md)
 is authorized for scoped program establishment, a bounded real-Studio customer proof, reviewed production
 contracts/specification and delivery through the normal implementation and acceptance gates. After reviewing
