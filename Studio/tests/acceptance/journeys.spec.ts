@@ -1,20 +1,6 @@
+import { expect, test, type Page } from "@playwright/test";
+import { capture } from "./capture";
 import { executableDesignerJourney } from "./executableDesignerJourney";
-import { writeFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
-
-async function capture(page: Page, info: TestInfo, name: string) {
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined)));
-  });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const screenshot = info.outputPath(`${name}.png`);
-  await page.screenshot({ path: screenshot, fullPage: true });
-  await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
-  const aria = info.outputPath(`${name}.aria.yml`);
-  writeFileSync(aria, await page.locator("body").ariaSnapshot());
-  await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
-}
 
 async function signIn(page: Page) {
   await page.goto("/workflows/definitions");

@@ -12,18 +12,17 @@ async function appearance(page: Page, theme: string, mode: string, workspace?: s
 }
 
 async function capture(page: Page, info: TestInfo, name: string) {
-  await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(() => document.fonts.status === "loaded", undefined, { timeout: 10_000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   const path = info.outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage: true });
+  await page.screenshot({ path, fullPage: true, animations: "disabled", timeout: 10_000 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await info.attach(name, { path, contentType: "image/png" });
 }
 
 async function namesAndContrast(page: Page, selector: string) {
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined)));
-  });
+  // Use the same finite-animation preparation as the retained screenshots before auditing paint.
+  await page.screenshot({ animations: "disabled", timeout: 10_000 });
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async selector => (window as unknown as Window & { axe: typeof axe }).axe.run(document.querySelector(selector)!, {
     runOnly: ["color-contrast", "label", "button-name", "label-content-name-mismatch", "aria-valid-attr-value"]
@@ -107,7 +106,7 @@ for (const workspace of ["linen", "minimal", "quiet", "focus", "open"]) test(`${
   }, before);
   await expect.poll(() => dialog.getByLabel("Technical name", { exact: true }).evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeCloseTo(before * 2, 0);
   await dialog.getByLabel("Technical name", { exact: true }).fill("enlarged.field");
-  await page.evaluate(async () => { await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined))); });
+  await page.screenshot({ animations: "disabled", timeout: 10_000 });
   const separation = await dialog.getByLabel("Technical name", { exact: true }).evaluate(element => {
     const input = element as HTMLInputElement;
     const style = getComputedStyle(input);

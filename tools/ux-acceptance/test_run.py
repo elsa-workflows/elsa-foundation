@@ -30,7 +30,23 @@ class VerdictTests(unittest.TestCase):
             for journey in acceptance.JOURNEYS]}]}
 
     def test_complete_evidence(self):
-        self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+        self.assertEqual(16, acceptance.verdict(self.report, self.root))
+
+    def test_named_baseline_and_secret_journeys_remain_required(self):
+        self.assertTrue({'collections and connection creation', 'agent authoring and navigation',
+                         'executable designer parity', 'compact Secret create journey'} <= acceptance.JOURNEYS)
+
+    def test_existing_designer_capture_contract_cannot_shrink(self):
+        self.assertTrue({'reference', 'definition-sequence', 'executable-sequence', 'nested-sequence',
+                         'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'} <=
+                        set(acceptance.CAPTURES.get('executable designer parity', [])))
+
+    def test_missing_existing_designer_journey_cannot_pass(self):
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs']
+                                      if row['title'] != 'executable designer parity']
+        with self.assertRaises(ValueError):
+            acceptance.verdict(report, self.root)
 
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
         for change in ('missing', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):

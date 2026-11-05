@@ -48,6 +48,10 @@ interface Window {
 
 declare const process: NodeJS.Process;
 
+declare module "node:fs" {
+  export function writeFileSync(path: string, data: string): void;
+}
+
 declare module "node:fs/promises" {
   export function mkdir(path: string, options?: { recursive?: boolean }): Promise<string | undefined>;
   export function writeFile(path: string, data: string | Uint8Array): Promise<void>;
