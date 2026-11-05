@@ -147,7 +147,7 @@ public sealed class CompensationScopeNestingTests
         Assert.All(StateOf(done).Entries, entry => Assert.Equal(CompensationEntryStatus.Confirmed, entry.Status));
         // Ordinary cloning/serialization is passive; only the final capture handoff materializes the owner factory.
         var cloned = done.Continuation.WithState(done.Continuation.StateUpdate!.Value, done.Continuation.StateUpdate.StateVersion);
-        Assert.Empty(cloned.HistorySourceFacts);
+        Assert.Null(cloned.HistorySourceFacts);
         var facts = cloned.MaterializeHistorySourceFacts(DateTimeOffset.UnixEpoch);
         Assert.Equal(2, facts.Count); // The newly completed forward step is also actually registered.
         var confirmation = Assert.Single(facts, fact => fact.Kind == RuntimeHistorySourceFactKind.CompensationConfirmed);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { getActivityExecutionInspection } from "../../api/runtime";
 import { RuntimeHistoryIdentityError } from "../../api/runtimeHistory";
 import { evaluationPhase, evaluationSequence } from "../../inputInspectionRows";
@@ -23,8 +24,8 @@ export function HistoryValueInspection({ context, workflowExecutionId, activityE
   useEffect(() => { heading.current?.focus(); heading.current?.scrollIntoView?.({ block: "nearest" }); }, [evidenceId]);
   return <section className="wf-history-recorded-value" aria-label="Recorded value Data">
     <h4 ref={heading} tabIndex={-1}>Recorded value · Data</h4>
-    <p><code>{evidenceId}</code></p><button type="button" onClick={onClose}>Close recorded value</button>
-    {resource.error ? <p role="status">{resource.error} <button type="button" onClick={resource.retry}>Retry value observation</button></p> : null}
+    <p><code>{evidenceId}</code></p><StudioButton type="button" onClick={onClose}>Close recorded value</StudioButton>
+    {resource.error ? <p role="status">{resource.error} <StudioButton type="button" onClick={resource.retry}>Retry value observation</StudioButton></p> : null}
     {snapshot ? <><dl className="wf-history-facts">
       <dt>Subject</dt><dd>{snapshot.subject}</dd><dt>Phase</dt><dd>{evaluationPhase(snapshot) || "Not recorded"}</dd>
       <dt>Observation sequence</dt><dd>{evaluationSequence(snapshot) ?? "Not recorded"}</dd><dt>Captured</dt><dd>{historyInstant(snapshot.capturedAt)}</dd>

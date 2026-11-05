@@ -24,7 +24,7 @@ CAPTURES = {
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }
 HISTORY_JOURNEY = 'durable run timeline across a native task resume and owned process restart'
-CAPTURES[HISTORY_JOURNEY] = ['reference', 'bookmark-waiting', 'after-restart', 'retained-bookmark-consumed', 'resumed-event', 'bookmark-consumed', 'activity-journal-context', 'activity-journal', 'causal-delivery', 'causal-successors', 'recording-coverage', 'atomic-group', 'activity-data', 'recorded-value', 'no-matches', 'faulted-timeline', 'diagram', 'stale-history', 'reconnected-history']
+CAPTURES[HISTORY_JOURNEY] = ['reference', 'minimal-controls', 'bookmark-waiting', 'after-restart', 'retained-bookmark-consumed', 'resumed-event', 'bookmark-consumed', 'activity-journal-context', 'activity-journal', 'causal-delivery', 'causal-successors', 'recording-coverage', 'atomic-group', 'activity-data', 'recorded-value', 'no-matches', 'faulted-timeline', 'diagram', 'stale-history', 'reconnected-history']
 JOURNEYS = set(CAPTURES)
 EXPECTED_JOURNEYS = {(project, journey) for project in PROJECTS for journey in JOURNEYS - {HISTORY_JOURNEY}}
 EXPECTED_JOURNEYS |= {(project, HISTORY_JOURNEY) for project in ('desktop-light', 'desktop-dark', 'timeline-320-light', 'timeline-320-dark')}

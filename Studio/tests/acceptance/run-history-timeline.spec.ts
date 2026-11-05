@@ -129,7 +129,47 @@ test("durable run timeline across a native task resume and owned process restart
   await expect(inspector.getByRole("heading", { name: "CreateUserTask", exact: true })).toBeVisible();
   await eventRow(timeline, creation!).scrollIntoViewIfNeeded();
   await expect(eventRow(timeline, creation!)).toBeInViewport();
+  await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "linen");
   await capture(page, info, "reference");
+  const urlBeforeStyle = page.url(), rowsBeforeStyle = await recordedRows(timeline);
+  const previousStyle = await page.locator("html").getAttribute("data-workspace-style");
+  const theme = page.getByRole("button", { name: "Select theme", exact: true });
+  await theme.click();
+  const previousStyleName = (await page.locator('[aria-label="Workspace style"]').getByRole("menuitemradio", { checked: true }).innerText()).trim();
+  const minimalControlBounds: Array<{ name: string; height: number; roleHeight: number }> = [];
+  try {
+    // Use Studio's ordinary preference action, preserving the real authorized run and
+    // palette. The original reference and every later frame keep their Linen treatment.
+    await page.getByRole("menuitemradio", { name: "Minimal", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+    const search = timeline.getByRole("searchbox", { name: "Search recorded events", exact: true });
+    const submit = timeline.getByRole("button", { name: "Search", exact: true });
+    const searchField = search.locator("xpath=ancestor::label[1]");
+    const surfaces: Array<[string, Locator]> = [["Search field", searchField], ["Search surface", search.locator("..")], ["Search button", submit],
+      ...["History scope", "History detail", "History category"].map(name => [name, timeline.getByRole("combobox", { name, exact: true })] as [string, Locator]),
+      ["Refresh button", timeline.getByRole("button", { name: "Refresh run history", exact: true })],
+      ["Live button", timeline.getByRole("button", { name: "Pause live updates", exact: true })],
+      ["Follow button", timeline.getByRole("button", { name: "Follow latest", exact: true })]];
+    for (const [name, control] of surfaces) {
+      await expect(control).toBeVisible();
+      const bounds = await control.evaluate(element => ({ height: element.getBoundingClientRect().height,
+        roleHeight: Number.parseFloat(getComputedStyle(element).getPropertyValue("--studio-control-height")) }));
+      expect(bounds.roleHeight, `${name}: Minimal density is active`).toBe(36);
+      expect(bounds.height + 0.5, `${name}: rendered control honors the public role`).toBeGreaterThanOrEqual(bounds.roleHeight);
+      minimalControlBounds.push({ name, ...bounds });
+    }
+    await search.focus(); await page.keyboard.press("Tab"); await expect(submit).toBeFocused();
+    await expect(submit).toHaveCSS("outline-style", "solid"); await expect(submit).toHaveCSS("outline-width", "2px");
+    expect(page.url()).toBe(urlBeforeStyle); expect(await recordedRows(timeline)).toEqual(rowsBeforeStyle);
+    await revealCaptureAnchor(timeline.locator("form").filter({ has: search }));
+    await capture(page, info, "minimal-controls", [searchField, submit]);
+  } finally {
+    await page.keyboard.press("Escape"); await theme.click();
+    await page.getByRole("menuitemradio", { name: previousStyleName, exact: true }).click(); await page.keyboard.press("Escape");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", previousStyle!);
+  }
+  expect(page.url()).toBe(urlBeforeStyle); expect(await recordedRows(timeline)).toEqual(rowsBeforeStyle);
   await inspector.getByRole("tab", { name: "Bookmarks", exact: true }).press("Enter");
   await expect(inspector.getByText(bookmarkId, { exact: true })).toBeVisible();
   await inspector.getByRole("button", { name: "View lifecycle →", exact: true }).first().press("Enter");
@@ -314,6 +354,7 @@ test("durable run timeline across a native task resume and owned process restart
   expect(page.url()).toBe(urlBeforeOffline); await capture(page, info, "reconnected-history");
   const finalUrl = new URL(page.url()); expect(finalUrl.searchParams.get("selected")).toBe(owner); expect(finalUrl.searchParams.get("returnTo")).toBe("/workflows/instances");
   const facts = info.outputPath("durable-facts.json"); writeFileSync(facts, JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, fixture, owner, bookmarkId, creation, consumed, before: before.events, after: final!.events,
+    minimalControls: { control: "Studio ThemeSwitcher workspace-style preference", previousStyle, previousStyleName, selectedStyle: "minimal", restoredStyle: previousStyle, bounds: minimalControlBounds },
     catchUp: { usedSamePreRestartToken: true, upperSequence: before.upperSequence, afterRestart: catchUpAfterRestart.items.map(event => event.historyEventId), afterResume: catchUpAfterResume.items.map(event => event.historyEventId) }, runRows, journalRows }, null, 2));
   await info.attach("durable-facts", { path: facts, contentType: "application/json" });
   expect(errors).toEqual([]);
