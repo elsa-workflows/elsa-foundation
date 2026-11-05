@@ -22,8 +22,10 @@ This specification covers the remaining integration; #3545 and #3598 retain thei
    atomicity, external-effect boundaries, replay identity and stale-writer rejection. Lower deterministic command
    budgets only after measuring the changed behavior.
 6. Qualify representative native, available BPMN and ETL execution with expressions/payloads, sustained work,
-   duplicate delivery, owner failure and database interruption. Two- and four-node results use independent machines
-   and name database placement. Record completion, errors, recovery, commands, allocation and throughput separately.
+   duplicate delivery, owner failure and database interruption. Record a current one-member distributed-cluster
+   cohort separately from standalone or independent-start results. Two- and four-node results use independent
+   machines and name database and driver placement. Record completion, errors, recovery, commands, allocation and
+   throughput separately.
 7. All changes complete independent review, affected whole-suite accounting, rebuilt relevant backend e2e,
    architecture/maps and exact-head hosted gates. Verify the containing main and final fixture cleanup before closing.
 

@@ -14,9 +14,13 @@ queue exceeds its cap. Keep one implementation lane and retain the acceptance of
    Verify fresh arguments/policies, concurrent first use, rejection behavior and collectible ownership.
 5. Implement applicable storage, pump and cancellation work sequentially, with original acceptance and causal controls.
    Qualify pooling rather than changing its default from a narrow experiment.
-6. Build final qualification artifacts from reviewed source. Reuse the original Azure runner in an isolated task
-   directory; use four temporary D2s_v6 workers for independent-host runs within existing quota. Preserve old data,
-   remove task-owned resources and restore the runner's initial deallocated state after collecting evidence.
+6. Build final qualification artifacts from reviewed source. Select a fresh fixture using actual quota, SKU, image
+   and cost evidence; obtain the owner's explicit approval before Azure spending or destructive cleanup. Prepare a
+   finite controller and cleanup scope for only the approved task-owned resources. Qualify a one-member distributed
+   cluster as well as two and four independent workers, naming the DB/driver boundary and proving actual membership
+   and actor participation. A DB/driver cohost and an independent driver are different measurement boundaries; an
+   independent sixth host is optional. Preserve historical evidence and unrelated VMs. The earlier fixture is retired;
+   its old runner-reuse instruction does not authorize restarting or restoring any existing resource.
 7. Review the full integration, run affected whole suites and rebuilt REST e2e, complete hosted gates, merge normally,
    and verify containing main. Publish evidence and reconcile program/child status only after those results exist.
 
