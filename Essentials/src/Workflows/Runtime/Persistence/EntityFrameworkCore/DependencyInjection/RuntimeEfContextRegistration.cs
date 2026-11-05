@@ -1,5 +1,6 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -197,7 +198,11 @@ internal static class RuntimeEfContextRegistration
     {
         var start = services.Count;
         Binding.AddContext<TContext>(services, options.Pooling, (serviceProvider, builder) =>
-            Binding.Apply(builder, serviceProvider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
+        {
+            Binding.Apply(builder, serviceProvider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema);
+            // Pooled options are frozen before OnConfiguring; install the same interceptor here.
+            EfRuntimeReadTransaction.Configure(builder);
+        });
         services.TryAddScoped<RuntimeDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
         // What the module's finalization gate says, for the runtime's placement.
         services.TryAddSingleton<IRuntimeSchemaFinalization, EfRuntimeSchemaFinalization>();
