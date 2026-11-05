@@ -71,14 +71,14 @@ public sealed class PackageMaintenanceTests
         Assert.True((string?)keepAllPreview["protectionKnowledge"] == "Known", keepAllPreview.ToJsonString());
         Assert.Null(keepAllPreview["retention"]);
         var keepAll = await Prune(host, Execute(keepAllPreview));
-        Assert.Equal("Completed", (string?)keepAll["status"]);
+        AssertCompleted(keepAllPreview, keepAll);
         Assert.DoesNotContain(keepAll["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
         Assert.True(Directory.Exists(obsolete));
         await SavePolicy(host, 0);
         var preview = await Prune(host, new JsonObject());
         Assert.True((string?)preview["protectionKnowledge"] == "Known", preview.ToJsonString());
         var firstPrune = await Prune(host, Execute(preview));
-        Assert.Equal("Completed", (string?)firstPrune["status"]);
+        AssertCompleted(preview, firstPrune);
         Assert.Contains(firstPrune["candidates"]!.AsArray(), candidate => (string?)candidate!["physicalOutcome"] == "Deleted");
         Assert.False(Directory.Exists(obsolete));
 
@@ -91,7 +91,7 @@ public sealed class PackageMaintenanceTests
             Assert.Equal("second", current.ServiceProvider.GetRequiredService<string>());
         var replacedPreview = await Prune(host, new JsonObject());
         var replaced = await Prune(host, Execute(replacedPreview));
-        Assert.Equal("Completed", (string?)replaced["status"]);
+        AssertCompleted(replacedPreview, replaced);
         Assert.Contains(replaced["candidates"]!.AsArray(), candidate => (string?)candidate!["install"]!["version"] == "1.0.0"
             && (string?)candidate["physicalOutcome"] == "Retained" && candidate["reasons"]!.AsArray().Any(reason => (string?)reason == "ProtectedLiveUse"));
         Assert.True(Directory.Exists(firstPath));
@@ -266,6 +266,9 @@ public sealed class PackageMaintenanceTests
             ["Studio:PackageManagement:RetentionPolicy:KeepNewestInactiveVersionsPerPackage"] = "99"
         };
     }
+
+    private static void AssertCompleted(JsonObject preview, JsonObject result) =>
+        Assert.True((string?)result["status"] == "Completed", $"Preview: {preview.ToJsonString()}; execution: {result.ToJsonString()}");
 
     private static async Task SavePolicy(AdministrationHost host, int? count)
     {

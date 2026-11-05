@@ -657,6 +657,12 @@ const secretPickerExpressionEditor: StudioExpressionEditorContribution = {
 };
 
 function Fixture() {
+  const [notifications] = useState(() => {
+    if (!dictionaryFixture) return null;
+    const controller = createNotificationController();
+    setNotifications(controller.api);
+    return controller;
+  });
   const activeScalarDescriptor = connectionReferenceFixture ? connectionReferenceDescriptor
     : secretReferenceFixture ? secretReferenceDescriptor : scalarInputDescriptor;
   const [activity, setActivity] = useState<ActivityNode>({
@@ -703,6 +709,7 @@ function Fixture() {
 
   return (
     <main className="wf-editor browser-fixture">
+      {notifications ? <ToastHost controller={notifications} navigate={() => {}} /> : null}
       <div className="browser-fixture-copy">
         <h1>Workflow designer</h1>
         <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
@@ -1781,7 +1788,7 @@ const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
   // Toast, bell and sheet styles live in the shared primitives sheet; load it only where they render.
-  if (moveDefinitionsFixture) await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
+  if (moveDefinitionsFixture || dictionaryFixture) await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
   if (searchParams.get("mode") === "intrinsic-labels") {
     const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
     root.render(<IntrinsicLabelsFixture />);

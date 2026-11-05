@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createEndpointContext, createNotificationController } from "@elsa-workflows/studio-sdk";
+import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
@@ -9,12 +11,13 @@ import { EtlPublishedSelectionEditor } from "../../../Extensions/Etl/studio/Elsa
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
 
+const notifications = createNotificationController();
 const endpoint = createEndpointContext(`${window.location.origin}/fixture-etl`);
 
 function Fixture() {
   const [selection, setSelection] = useState<unknown>("");
   return <ThemeProvider><main>
-    <EtlDefinitionsPage context={endpoint} dialogs={dialogs} profile="connector" />
+    <EtlDefinitionsPage context={endpoint} dialogs={dialogs} notifications={notifications.api} profile="connector" />
     <section className="etl-shell" aria-labelledby="native-pipeline-selection">
       <h2 id="native-pipeline-selection">Workflow pipeline selection</h2>
       <EtlPublishedSelectionEditor endpointContext={endpoint}
@@ -22,6 +25,6 @@ function Fixture() {
         context={{ activity: {}, expressionDescriptors: [] }} value={selection} onChange={setSelection} />
       <output aria-label="Saved pipeline selection">{typeof selection === "string" ? selection : ""}</output>
     </section>
-  </main><DialogHost /></ThemeProvider>;
+  </main><ToastHost controller={notifications} navigate={() => {}} /><DialogHost /></ThemeProvider>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);
