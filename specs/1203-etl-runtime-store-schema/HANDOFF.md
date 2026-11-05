@@ -1,5 +1,16 @@
 # Handoff: #2908 ETL delivery, from spec 1203 onward (2026-11-04)
 
+## Codex continuation checkpoint — 5 November
+
+Live GitHub state overrides the historical checkpoints below. Part of #2908.
+
+- Parent #3737 protected-merged at `db74c19a96320d2f91954742c07087fb62d234f8` from reviewed head `144400e03df4fe9ae4a722b15d2fc8d0b1c60e15`, after clean full review12 and all three authentic required checks succeeded. [Merge receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3737#issuecomment-6646663693). Resulting-main CI41945105078 and fresh resulting-main host qualification are separate pending gates.
+- This schema PR #3803 is draft again and now targets `main`. Its ordinary merge of that actual parent/main preserves the prior implementation, tests, migrations and project graph from schema head `7afdb3456b6dd76b341bff959d12edf6124e89ee`; the only additional authored change is this continuation update. Six conflicts were reviewed: each incoming file was byte-identical to the previous parent `7190843f0`, so the schema's additions were retained without dropping newer parent work. The next complete independent review is round7; do not reset the count or call this new head already clean.
+- Historical proof remains source-bound: provider807 at `5c26c218c`, ETL1325 and architecture616 at their recorded sources, SQLite expression/migration preservation and collation/initialization controls. Current-head hosted checks and protected delivery still need completion. Server runtime registration remains guarded until spec1206.
+- New broad local Workbench/composed-host rebuilds are queued behind the current demo/User Tasks/shared-designer integration priority. Use that interval for review and dependency reconciliation; do not launch a competing host matrix or infer a product timing failure under high machine load. No technical gate is waived.
+- Existing concurrency PR #3804 remains at `023f061cd5fc484cf7c94053dc134e6a4a1febea` with clean full implementation review2 against its earlier schema base. Reconcile it only after this schema delivery. Local #3789 preparation is independently reviewed at `fc2d5f657569a738e569c0b621d9343547f166b7`; its [portable source/review checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/3789#issuecomment-6645944595) records12 composed checks and44 inspected SQL screenshots. It remains unpublished; downloadable current-source CI/UX evidence and protected delivery are still pending.
+- #3838 is Core publication-contract preparation; durable non-runnable Runtime retention for T066 remains in the [existing Runtime queue](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6641948798). Preserve that dependency and the remaining transforms/admission, recovery/stale-writer, BPMN/Studio and broader program acceptance. Feature/program/Project #62 remain In Progress / Partial. Existing standing continuation/merge authority applies; never bypass required checks, human holds or protection.
+
 ## Codex continuation checkpoint — 4 November
 
 Live GitHub state overrides older statuses below; refresh the existing stack before acting. Part of #2908.

@@ -21,6 +21,14 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertTrue(selected['studio'])
         self.assertFalse(selected['weaver'])
 
+    def test_composed_acceptance_inputs_and_deletions_select_studio(self):
+        for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
+                     'Studio/tests/acceptance/journeys.spec.ts',
+                     'Essentials/apps/Elsa.Workbench/shells.json',
+                     'Extensions/Agent/specialists/Core/Manifest.cs']:
+            with self.subTest(path=path):
+                self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
+
     def test_ready_event_only_starts_affected_weaver(self):
         selected = self.selected(paths=['Studio/src/Feature.ts'], action='ready_for_review')
         self.assertEqual(['weaver'], [name for name, enabled in selected.items() if enabled])
