@@ -211,10 +211,11 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       confirmLabel: "Delete folder",
       tone: "danger"
     });
-    if (!confirmed || !canNotify()) return;
+    if (!confirmed || !canNotify.isOwned() || currentDialogOwner.current !== dialogOwner) return;
     setError(null);
     try {
       await deleteEmptyWorkflowFolder(context, selectedFolder.id, selectedFolder.revision);
+      if (!canNotify.isOwned()) return;
       // The accepted delete still reconciles its owning tab while hidden; only transient feedback is visit-bound.
       const survivor: WorkflowFolderSelection = selectedFolder.parentId ? { id: selectedFolder.parentId } : "all";
       const survivorKey = selectedFolder.parentId ? `folder:${selectedFolder.parentId}` : "all";

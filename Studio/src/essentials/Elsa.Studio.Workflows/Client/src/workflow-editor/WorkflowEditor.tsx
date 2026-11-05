@@ -1034,7 +1034,8 @@ export function WorkflowEditor({
       anchor.download = `${details?.definition?.name || "workflow"}.bpmn`;
       anchor.click();
       URL.revokeObjectURL(url);
-      if (canNotify()) { setError(""); notifySuccess("Exported BPMN 2.0 XML."); }
+      if (canNotify.isOwned()) setError("");
+      if (canNotify()) notifySuccess("Exported BPMN 2.0 XML.");
     } catch {
       if (canNotify.isOwned()) { setStatus(""); setError("BPMN export failed."); }
     }

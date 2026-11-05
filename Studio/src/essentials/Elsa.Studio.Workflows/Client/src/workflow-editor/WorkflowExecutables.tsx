@@ -89,7 +89,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   });
   const artifactExport = useExecutableArtifactDownload({
     context,
-    onExported: fileName => { setError(""); setLastRun(null); setStatus(""); getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
+    onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
@@ -430,7 +430,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   });
   const artifactExport = useExecutableArtifactDownload({
     context,
-    onExported: fileName => { setError(""); setLastRun(null); setStatus(""); getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
+    onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 

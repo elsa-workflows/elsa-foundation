@@ -145,9 +145,9 @@ export function useHostOperations(
   const setLocalError = (message: string | null) => setLocalErrorByHost(current => ({ ...current, [hostId]: { context: activeHost.context, message } }));
 
   async function runHostOperation(operation: () => Promise<unknown>, success: string, feedback: "inline" | "toast" = "inline") {
-    if (!active.current || currentContext.current !== activeHost.context) return;
+    if (contextsByHost.current[hostId] !== activeHost.context) return;
     const operationGeneration = generation.current;
-    const isCurrent = () => currentContext.current === activeHost.context && generation.current === operationGeneration;
+    const isCurrent = () => active.current && currentContext.current === activeHost.context && generation.current === operationGeneration;
     const isOwned = () => contextsByHost.current[hostId] === activeHost.context;
     setLocalError(null);
     setStatus(null);

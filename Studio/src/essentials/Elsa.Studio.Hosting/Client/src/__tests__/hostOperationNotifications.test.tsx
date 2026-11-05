@@ -59,6 +59,38 @@ describe("host operation feedback", () => {
     } finally { view.unmount(); }
   });
 
+  it.each(["hidden", "returned"] as const)("honors a confirmed operation after its owning host is %s", async visit => {
+    const view = fixture(); const target = host("one");
+    let finish!: (value: boolean) => void;
+    const confirmation = new Promise<boolean>(resolve => { finish = resolve; });
+    const operation = vi.fn(async () => {});
+    try {
+      view.render(target);
+      const work = view.operations.confirmAndRun(() => confirmation, operation, "Restart required.");
+      view.render(target, "hidden");
+      if (visit === "returned") view.render(target);
+      finish(true); await work;
+      expect(operation).toHaveBeenCalledTimes(1);
+      view.render(target);
+      await vi.waitFor(() => expect(view.container.textContent).toContain("Restart required."));
+      expect(view.notify).not.toHaveBeenCalled();
+    } finally { view.unmount(); }
+  });
+
+  it.each(["cancel", "replacement"] as const)("does not run a confirmed operation after %s", async change => {
+    const view = fixture();
+    let finish!: (value: boolean) => void;
+    const confirmation = new Promise<boolean>(resolve => { finish = resolve; });
+    const operation = vi.fn(async () => {});
+    try {
+      view.render(host("one"));
+      const work = view.operations.confirmAndRun(() => confirmation, operation, "Restart required.");
+      if (change === "replacement") view.render(host("two"));
+      finish(change !== "cancel"); await work;
+      expect(operation).not.toHaveBeenCalled();
+    } finally { view.unmount(); }
+  });
+
   it.each(["switch", "unmount"])("suppresses a delayed toast after %s", async action => {
     const view = fixture();
     let finish!: () => void;

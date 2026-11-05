@@ -167,7 +167,7 @@ export async function downloadExecutableArtifact(
  */
 export function useExecutableArtifactDownload({ context, onExported, onFailed }: {
   context: StudioEndpointContext;
-  onExported(fileName: string, executable: WorkflowExecutableSummary): void;
+  onExported(fileName: string, executable: WorkflowExecutableSummary, canNotify: () => boolean): void;
   onFailed(message: string, executable: WorkflowExecutableSummary): void;
 }) {
   const [supported, setSupported] = useState(false);
@@ -196,7 +196,7 @@ export function useExecutableArtifactDownload({ context, onExported, onFailed }:
         definitionId: executable.definitionId,
         artifactVersion: executable.artifactVersion
       });
-      if (canNotify()) onExported(fileName, executable);
+      if (canNotify.isOwned()) onExported(fileName, executable, canNotify);
     } catch (error) {
       if (canNotify.isOwned()) onFailed(formatExecutableArtifactExportError(error), executable);
     } finally {

@@ -354,7 +354,7 @@ describe("artifact list export action", () => {
     expect(fixture.onFailed).not.toHaveBeenCalled();
   });
 
-  it("does not publish export feedback after its page has gone away", async () => {
+  it("finishes an owned download without publishing a toast after its page has gone away", async () => {
     const fixture = renderArtifactDownload({ hold: true });
     await flushUpdates();
     const inFlight = fixture.current().exportArtifact(artifactRow("artifact-2", "version-2", "2.0.0"));
@@ -362,7 +362,10 @@ describe("artifact list export action", () => {
     flushSync(() => mounted!.root.render(<p>Another page</p>));
     fixture.release();
     await inFlight;
-    expect(fixture.onExported).not.toHaveBeenCalled();
+    expect(downloads).toHaveLength(1);
+    expect(fixture.onExported).toHaveBeenCalledTimes(1);
+    expect(fixture.onExported.mock.calls[0][2]()).toBe(false);
+    expect(notify).not.toHaveBeenCalled();
     expect(fixture.onFailed).not.toHaveBeenCalled();
   });
 
@@ -374,6 +377,32 @@ describe("artifact list export action", () => {
     fixture.render("hidden"); fixture.render(); fixture.release(); await work;
     expect(fixture.onFailed.mock.calls.at(-1)?.[0]).toContain("Dependency closure is incomplete.");
     expect(fixture.onExported).not.toHaveBeenCalled(); expect(downloads).toHaveLength(0);
+  });
+
+  it("clears an owned list export failure when its retry succeeds after the visit retires", async () => {
+    const fixture = renderArtifactDownload({ hold: true, retained: true });
+    await flushUpdates();
+    let attempts = 0;
+    fixture.getJson.mockImplementation(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true);
+      if (++attempts === 1) throw new Error("Earlier export failed.");
+      await pending; return closurePayload;
+    });
+    let finish!: () => void;
+    const pending = new Promise<void>(resolve => { finish = resolve; });
+    let inlineError = "";
+    fixture.onFailed.mockImplementation(message => { inlineError = message; });
+    fixture.onExported.mockImplementation((_file, _artifact, canNotify: () => boolean) => { inlineError = ""; if (canNotify()) notify(); });
+    await fixture.current().exportArtifact(artifactRow("artifact-2", "version-2", "2.0.0"));
+    expect(inlineError).toContain("Earlier export failed.");
+    await flushUpdates();
+    const retry = fixture.current().exportArtifact(artifactRow("artifact-2", "version-2", "2.0.0"));
+    await vi.waitFor(() => expect(attempts).toBe(2));
+    fixture.render("hidden"); fixture.render(); finish(); await retry;
+    expect(downloads).toHaveLength(1);
+    expect(inlineError).toBe("");
+    expect(fixture.onExported).toHaveBeenCalledTimes(1);
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("reports the in-flight artifact so the list can disable its rows", async () => {
@@ -457,7 +486,7 @@ function renderArtifactDownload(options: {
     baseUrl: `test://artifact-download-${Math.random()}`,
     http: { getJson }
   } as unknown as StudioEndpointContext;
-  const onExported = vi.fn();
+  const onExported = vi.fn((_file: string, _artifact: unknown, canNotify: () => boolean) => { if (canNotify()) notify(); });
   const onFailed = vi.fn();
 
   let current: ReturnType<typeof useExecutableArtifactDownload> | null = null;

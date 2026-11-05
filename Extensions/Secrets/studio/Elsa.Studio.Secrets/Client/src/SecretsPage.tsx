@@ -200,7 +200,7 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
   async function revoke(secret: SecretMetadata) {
     const isCurrent = captureOperation();
     if (secret.status === "Revoked" || secret.status === "Deleted") return;
-    if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" })) || !isCurrent()) return;
+    if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" })) || !isCurrent.isOwned()) return;
     setBusyName(secret.name);
     setError(null);
     try {
@@ -215,7 +215,7 @@ export function SecretsPage({ context, dialogs, notifications }: { context: Stud
 
   async function remove(secret: SecretMetadata) {
     const isCurrent = captureOperation();
-    if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrent()) return;
+    if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrent.isOwned()) return;
     setBusyName(secret.name);
     setError(null);
     try {

@@ -44,7 +44,8 @@ export async function renderRegisteredRoute(
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
   capabilities = capabilityDocument(),
-  historyState: unknown = {}
+  historyState: unknown = {},
+  retained = false
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -94,8 +95,10 @@ export async function renderRegisteredRoute(
     return <Component navigate={navigate} />;
   }
 
+  let visible = true;
   const rerender = () => flushSync(() => {
-    root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
+    const route = <RegisteredRouteHost />;
+    root.render(<QueryClientProvider client={queryClient}>{retained ? <React.Activity mode={visible ? "visible" : "hidden"}>{route}</React.Activity> : route}</QueryClientProvider>);
   });
   rerender();
 
@@ -107,7 +110,7 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, rerender, unmount };
+  return { api, container, rerender, unmount, setVisible: (next: boolean) => { visible = next; rerender(); } };
 }
 
 function routeMatchesPath(routePath: string, path: string) {

@@ -4,7 +4,7 @@ import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { bpmnActivity } from "./fixtures";
 import { capabilityDocument, definition, renderRegisteredRoute, response } from "./routeRenderingHelpers";
 
-async function editor(direct: boolean, service = false, options: { organization?: boolean; handle?: (url: string, init?: RequestInit) => Promise<Response | undefined> } = {}) {
+async function editor(direct: boolean, service = false, options: { retained?: boolean; organization?: boolean; handle?: (url: string, init?: RequestInit) => Promise<Response | undefined> } = {}) {
   const root = { nodeId: "root", activityVersionId: bpmnActivity.activityVersionId, inputs: [], outputs: [], structure: {
     kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: { activities: [], elements: [{ elementId: "keep", name: "Keep this task", elementType: "task" }], sequenceFlows: [] }
   } };
@@ -40,7 +40,7 @@ async function editor(direct: boolean, service = false, options: { organization?
     Object.defineProperty(api, "backendSession", { value: { key: "session", profile: { id: "backend", baseUrl: api.backend.baseUrl, name: "Backend", source: "configuration", environment: "Test" },
       context: api.backend, identity: { status: "authenticated", subject: "author", roles: [], permissions: [] }, capabilities, disposed: false,
       pendingWrites: 0, refreshCapabilities: async () => capabilities } satisfies StudioBackendSession });
-  }, false, capabilities);
+  }, false, capabilities, {}, options.retained);
   await vi.waitFor(() => expect(rendered.container.querySelector(".wf-editor-toolbar")).not.toBeNull(), { timeout: 5000 });
   return { ...rendered, calls };
 }
@@ -192,6 +192,28 @@ it("retains the exact inline BPMN export error without a success notification", 
   await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("BPMN export failed."));
   expect(view.api.notifications!.notify).not.toHaveBeenCalled();
   await view.unmount();
+});
+
+it("clears an earlier BPMN export failure when an owned retry succeeds after tab retirement", async () => {
+  let attempts = 0; let finish!: (value: Response) => void;
+  const work = new Promise<Response>(resolve => { finish = resolve; });
+  const download = interceptBpmnDownload();
+  try {
+    const view = await editor(false, false, { retained: true, handle: async url => {
+      if (!url.endsWith("interchange/bpmn/export")) return undefined;
+      return ++attempts === 1 ? response({ title: "Export refused" }, 500) : work;
+    } });
+    await chooseBpmnExport(view);
+    await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("BPMN export failed."));
+    await chooseBpmnExport(view);
+    await vi.waitFor(() => expect(attempts).toBe(2));
+    view.setVisible(false); view.setVisible(true);
+    finish(response({ xml: "<definitions />" }));
+    await vi.waitFor(() => expect(download.downloads).toEqual(["Hello World.bpmn"]));
+    await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent ?? "").not.toContain("BPMN export failed."));
+    expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+    await view.unmount();
+  } finally { download.restore(); }
 });
 
 it("finishes an accepted BPMN download without toasting after its editor is disposed", async () => {

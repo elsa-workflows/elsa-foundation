@@ -278,16 +278,38 @@ describe("secrets page", () => {
     expect(notifications.notify).not.toHaveBeenCalled();
   });
 
-  it("does not revoke from a confirmation opened by a retired tab visit", async () => {
+  it.each([["Revoke", false], ["Revoke", true], ["Delete", false], ["Delete", true]] as const)("honors a confirmed %s after hiding its owning tab (returned=%s)", async (action, returnBeforeConfirm) => {
+    let finish!: (confirmed: boolean) => void;
+    const work = new Promise<boolean>(resolve => { finish = resolve; });
+    const confirm = vi.fn(() => work);
+    let accepted = false;
+    const mutation = vi.fn(async () => { accepted = true; return {}; });
+    const view = render({ confirm, postJson: mutation, deleteJson: mutation,
+      getItems: () => action === "Delete" && accepted ? [] : [paymentSecret({ status: accepted ? "Revoked" : "Active" })] });
+    await waitForText(view.container, "Payments API");
+    await clickSecretAction(view.container, "payments.api", action);
+    await waitFor(() => confirm.mock.calls.length === 1);
+    view.setVisible(false);
+    if (returnBeforeConfirm) view.setVisible(true);
+    finish(true);
+    await waitFor(() => mutation.mock.calls.length === 1);
+    view.setVisible(true);
+    await waitFor(() => action === "Delete" ? view.container.querySelector("tr td") === null : view.container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    expect(mutation).toHaveBeenCalledTimes(1);
+    expect(notifications.notify).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it.each(["cancel", "backend replacement"] as const)("does not write after confirmation %s", async change => {
     let finish!: (confirmed: boolean) => void;
     const work = new Promise<boolean>(resolve => { finish = resolve; });
     const confirm = vi.fn(() => work), postJson = vi.fn();
-    const { container, setVisible } = render({ postJson, confirm });
-    await waitForText(container, "Payments API");
-    await clickSecretAction(container, "payments.api", "Revoke");
+    const view = render({ postJson, confirm });
+    await waitForText(view.container, "Payments API");
+    await clickSecretAction(view.container, "payments.api", "Revoke");
     await waitFor(() => confirm.mock.calls.length === 1);
-    setVisible(false); setVisible(true);
-    finish(true); await work; await Promise.resolve();
+    if (change === "backend replacement") view.changeEndpoint("https://replacement.example");
+    finish(change !== "cancel"); await work; await Promise.resolve();
     expect(postJson).not.toHaveBeenCalled();
     expect(notifications.notify).not.toHaveBeenCalled();
   });
@@ -888,6 +910,7 @@ function render(options: {
   getDescriptors?(): unknown | Promise<unknown>;
   postJson?: ReturnType<typeof vi.fn>;
   putJson?: ReturnType<typeof vi.fn>;
+  deleteJson?: ReturnType<typeof vi.fn>;
   confirm?: ReturnType<typeof vi.fn>;
 } = {}) {
   const host = document.createElement("div");
@@ -921,7 +944,7 @@ function render(options: {
       },
       postJson: options.postJson ?? vi.fn(),
       putJson: options.putJson ?? vi.fn(),
-      deleteJson: vi.fn(),
+      deleteJson: options.deleteJson ?? vi.fn(),
       postForm: vi.fn()
     }
   });
