@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
-    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'invalid-name', 'completed'],
+    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }
