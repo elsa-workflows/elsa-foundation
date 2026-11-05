@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "db74c19a96320d2f91954742c07087fb62d234f8",
+  "last_publish_commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -19,13 +19,13 @@
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Design",
-      "version": "4.0.1-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.2-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
-      "version": "4.0.24-preview",
-      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      "version": "4.0.25-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Activities.Compensation",
@@ -74,8 +74,8 @@
     },
     {
       "package_id": "Elsa.Activities.DispatchWorkflow.Design",
-      "version": "4.0.14-preview",
-      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      "version": "4.0.15-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Activities.DispatchWorkflow.Runtime",
@@ -89,8 +89,8 @@
     },
     {
       "package_id": "Elsa.Activities.Graph.Design",
-      "version": "4.0.17-preview",
-      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+      "version": "4.0.18-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Activities.Graph.Runtime",
@@ -194,13 +194,13 @@
     },
     {
       "package_id": "Elsa.Agent.Specialists.Design",
-      "version": "4.0.5-preview",
-      "commit": "9810757feeca31791caa226148ca29809615d130"
+      "version": "4.0.6-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Agent.Specialists.Inspection.Api",
-      "version": "4.0.3-preview",
-      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      "version": "4.0.4-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Agent.Specialists.JsonSchema",
@@ -414,8 +414,8 @@
     },
     {
       "package_id": "Elsa.Etl.Workflows.Design",
-      "version": "4.0.5-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.6-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Etl.Workflows.Runtime",
@@ -684,8 +684,8 @@
     },
     {
       "package_id": "Elsa.Rules.Workflows.Design",
-      "version": "4.0.3-preview",
-      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+      "version": "4.0.4-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Rules.Workflows.Runtime",
@@ -839,23 +839,23 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.46-preview",
-      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+      "version": "4.0.47-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
-      "version": "4.0.31-preview",
-      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+      "version": "4.0.32-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Core",
-      "version": "4.0.22-preview",
-      "commit": "9810757feeca31791caa226148ca29809615d130"
+      "version": "4.0.23-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
-      "version": "4.0.25-preview",
-      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+      "version": "4.0.26-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
@@ -934,8 +934,8 @@
     },
     {
       "package_id": "Elsa3.Activities.Design.Import.Publishing",
-      "version": "4.0.7-preview",
-      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      "version": "4.0.8-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
     },
     {
       "package_id": "Elsa3.Mapping",
