@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "reviewRound": 8,
+  "reviewedHead": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+  "base": "c0b61d8731de3266d14928e8b1624a31c386184d",
+  "findings": [
+    "Dispose allocated design database after context/migration initialization failure, preserving original failure even when cleanup fails.",
+    "Report nonzero owned-container removal.",
+    "Use credential-free errors for failed Docker startup and MySQL catalog commands."
+  ],
+  "additionalCorrection": "On Python 3.9, annotate cleanup errors only when add_note exists, preserving original initialization failure.",
+  "executingFiles": {
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlProviderDesignDatabase.cs": "51c55676d0f1844a62bedfcd711e7223a921c778b364cc88fa93cf7f1e4e383d",
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlDesignDatabaseInitializationTests.cs": "cee3b3af5e87a95ccb7cb9b7be5fae7cbd3a01caca19f40f18b9c81f6c9e9cc2",
+    "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "daef0e97f3f6b4698b108e711f98c5e634c7964b10154ec39262e08380deda34",
+    "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "cd47e6fb2a9c866d57682d93ec405d8f0b5ad5665f09a613909be420fbf07178"
+  },
+  "controller": {
+    "beforeSafeErrorAndRemovalFix": {
+      "passed": 13,
+      "failed": 1,
+      "errors": 2
+    },
+    "beforePython39PreservationFix": {
+      "passed": 16,
+      "failed": 0,
+      "errors": 2
+    },
+    "afterAllCorrections": {
+      "passed": 18,
+      "failed": 0,
+      "errors": 0
+    },
+    "logSha256": {
+      "3737-r8-controller-red.log": "376f17969a98eaca72bd99f90ce60feef0cb1cf9006b37e67586990b29faeab6",
+      "3737-r8-cleanup-primary-red.log": "0569d1414b5d0f73ec130b7b7bced6786658b15fe42e2169637decd1421fb5c9",
+      "3737-r8-controller-final.log": "dd5f3e5379c4fa1a48436209b856716f6ea408f871f28a84ad8317d76da2c7d9"
+    }
+  },
+  "databaseInitialization": {
+    "red": {
+      "total": "3",
+      "executed": "3",
+      "passed": "0",
+      "failed": "3",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "greenWholeProviderProject": {
+      "total": "108",
+      "executed": "108",
+      "passed": "108",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "redTrxSha256": "9d47bf45e460c961415d4a361c3899ea6255f161256999cbe14cdcedf96f89b4",
+    "greenTrxSha256": "b8c0a25123c1960b74dddd6d898650cd423d13667fdecec4a13c972c31e191b5",
+    "injection": "Real EF context/migrator path with controlled pre-open failure, plus unsupported context selection; no native-recovery or physical database-deletion proof is inferred from these three controls."
+  },
+  "hostIntegration": {
+    "source": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+    "checks": 18,
+    "passed": true,
+    "summarySha256": "cdb1e19699fdc93c77117eb5b4f230de2bf790c3c0872b3b71c99caf2ed33c61",
+    "productsSha256": "dfbf855ebba5e062910ef4071d71f003e7e163a27be7a0dc1c5041b85f549f6f",
+    "scope": "Design stores server-backed; runtime/native SQLite. Re-run corrected controller pending."
+  },
+  "pending": [
+    "Full independent review round9 on fixed committed source",
+    "Fresh exact-head required checks and historical GitGuardian triage",
+    "Protected base-first merge/resulting-main verification"
+  ]
+}
