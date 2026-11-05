@@ -88,6 +88,8 @@ while IFS= read -r snapshot; do
   # #2898 retains real saved executions and their Design authoring. Preserve both histories in every mode.
   [[ "$mode" == "incremental" || "$name" =~ ^(Runtime|WorkflowsDesign)(Sqlite|SqlServer|PostgreSql|MySql)DbContext$ ]] && continue
   [[ "$snapshot" == */Secrets/* && "$name" != SecretsMySqlDbContext ]] && continue
+  # ETL and Rules keep internal contexts and their own generators (tools/etl, tools/rules); this tool never builds them.
+  [[ "$snapshot" == Extensions/Etl/* || "$snapshot" == Extensions/Rules/* ]] && continue
   rm -rf "$(dirname "$snapshot")"
 done < <(find "${module_roots[@]}" -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
 
