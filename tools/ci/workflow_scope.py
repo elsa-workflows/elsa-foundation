@@ -31,17 +31,16 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
         return result
     if event_name not in {'push', 'pull_request'}:
         return result
-    ready = event.get('action') == 'ready_for_review'
     draft = event.get('pull_request', {}).get('draft', False)
     for suite, filters in patterns.items():
         affected = changed is None or any(matches(path, pattern) for path in changed for pattern in filters)
         if suite == 'studio':
-            result[suite] = event_name == 'push' or affected and not ready
+            result[suite] = event_name == 'push' or affected
         elif suite == 'weaver':
             result[suite] = affected and not draft
         else:
-            result[suite] = event_name == 'pull_request' and affected and not ready
-    result['studio-order'] = event_name == 'pull_request' and not ready and (
+            result[suite] = event_name == 'pull_request' and affected
+    result['studio-order'] = event_name == 'pull_request' and (
         changed is None or any(path in {'.github/workflows/ci.yml', 'tools/ci/workflow_scope.py',
                                       'tools/ci/workflow-paths.json', 'tools/ci/test_workflow_scope.py',
                                       '.github/actions/setup-studio/action.yml'} for path in changed))
