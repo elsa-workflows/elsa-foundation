@@ -42,6 +42,34 @@ Never replace a genuine accepted terminal receipt with a later policy refusal or
 
 The last options read is an admission observation, not a distributed configuration lock. Recheck immediately before default dispatch after awaited authority checks where possible. A toggle after that read can race dispatch; prove this with barriers and preserve truthful outcomes.
 
+### Custom-host configuration migration
+
+The current source registers monitored options from the host's `IConfiguration`. A host can explicitly
+opt in with the following section; omission keeps all three values false. This is a host setting,
+not a session update or resource permission:
+
+```json
+{
+  "Elsa": {
+    "Agent": {
+      "Privileges": {
+        "Administrative": true,
+        "Irrecoverable": true,
+        "Activation": true
+      }
+    }
+  }
+}
+```
+
+A change becomes observable through the host configuration provider's reload token; this does not
+promise reload for providers that do not support it. Invalid boolean values fail configuration without
+including their raw contents in the diagnostic. Bootstrap reads current monitored values after awaited
+discovery. That projection cannot update policy and does not establish tool advertisement or authority.
+See the [Agent package catalog](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#module-support-preview-spec-1203-not-yet-qualified)
+for selected-store and scoped-principal migration. These are implemented-source descriptions awaiting
+current compilation, composed-host and immutable-package qualification; the contract remains Proposed.
+
 ## Legacy integrity and review
 
 Empty classes call the exact existing PreparedDigest anonymous shape. Only a nonempty canonical set adds a RequiredPrivilegeClasses member to that hash shape. Null/empty must not add a new null/empty JSON property to the old digest.
