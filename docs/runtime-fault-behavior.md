@@ -334,14 +334,15 @@ Rules' `RunRules`; BPMN and child control before their commits.
      coalescing segment that a boundary deactivated refuses this way when the step's durable copy is gone,
      or another owner holds it under a live claim.
 
-     One case is left ([#3700](https://github.com/elsa-workflows/elsa-foundation/issues/3700)). An active segment records the release in its overlay at once and persists
-     it only at its flush, after the flush commit has landed. If by then the step's durable copy is gone, or another owner
-     holds it under a live claim, this drain has lost the step. The flush fails with an
-     `InvalidOperationException`, as it does when any other work it tracks goes missing, although its
-     commit landed. The drainer has already recorded `RetryScheduled` with a `NextRetryAt` that this drain
-     did not persist: whoever holds the durable copy decides when the step runs. The flush commit is fenced
-     on the run's ownership, so this happens only when the step's durable copy leaves the drain after that
-     commit and before the release.
+     An active segment records the release in its overlay at once and persists it at its flush, after the
+     flush commit has landed. If the provider then refuses because the step's durable copy is gone or held
+     under another owner's live claim, this drain discards its pending release and local queue tracking
+     without throwing for that refusal ([#3700](https://github.com/elsa-workflows/elsa-foundation/issues/3700)).
+     It leaves the successor's durable copy and claim untouched; repeating queue reconciliation cannot
+     resurrect the lost copy. The earlier `RetryScheduled` record describes this drain's retry decision,
+     but its `NextRetryAt` was not persisted by this release and cannot override the successor's ownership.
+     Provider exceptions and other reconciliation failures still propagate. The run's ownership fence
+     remains in the flush transaction; this path grants no authority to acknowledge the lost work.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 
