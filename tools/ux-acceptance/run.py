@@ -18,8 +18,8 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
 CAPTURES = {
+    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed', 'library-initial'],
     'grouped navigation and moved destinations': ['reference', 'groups', 'executables-list', 'tags-list', 'tags-create', 'tags-edit', 'library', 'workflow-authoring-settings', 'runtime-settings', 'diagnostic-views', 'search', 'features-navigation', 'completed', 'top-search', 'top-navigation', 'high-contrast'],
-    'collections and connection creation': ['reference', 'library-initial', 'no-matches', 'connections-list', 'invalid-name', 'completed'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'completed'],
 }
