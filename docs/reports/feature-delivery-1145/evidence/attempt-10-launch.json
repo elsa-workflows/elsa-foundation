@@ -1,9 +1,0 @@
-{
-  "name": "fr2-1145-host-10",
-  "id": "0188399c89e40f475b3ad693a266cd72d56d14e91ae19c15083dc77f34b0d1ec",
-  "image": "elsaworkflows/elsa-foundation-host@sha256:f418270b598253020291c14eed175807440cc46049b5f945d5df3ddd668a8d43",
-  "url": "https://localhost:32922",
-  "state": "/Users/sipke/.codex/visualizations/2026/11/02/01a19dd6-a3d3-7cc1-a085-73d8ca7c31ae/fr2-1145-reviewed/state-10",
-  "data": "/Users/sipke/.codex/visualizations/2026/11/02/01a19dd6-a3d3-7cc1-a085-73d8ca7c31ae/fr2-1145-reviewed/data-10",
-  "emptyStateBeforeLaunch": true
-}

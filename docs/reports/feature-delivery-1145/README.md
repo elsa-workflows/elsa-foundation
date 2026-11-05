@@ -13,15 +13,15 @@ process. The host acquired 69 packages from public remote feeds before the live 
 set contained 72 packages: the original remote set, the remotely added JSON reconciliation package and the
 two compatible local witnesses. The incompatible witness was refused and never became active or loaded.
 
-The final execution `01a1addc247a7d679c8629df2e7aa408` was a persisted `PublishedRun`, `Completed` with
+The final execution `01a1ade1b905729db04d87699be53999` was a persisted `PublishedRun`, `Completed` with
 zero incidents and output `proof = remote-feed-execution-passed`. It ran after the incompatibility control,
 on the same serving process used for cold boot and the live remote addition. The container is stopped;
 its owned state and database are retained locally.
 
 | Criterion | Public evidence |
 | --- | --- |
-| Pin and isolate | [Summary](evidence/summary.json), [environment](evidence/environment.json), [launch](evidence/attempt-10-launch.json), [image dependencies](evidence/host.deps.json), [production declarations](evidence/host.production.json), [initial feed configuration](evidence/initial-appsettings.json) |
-| Remote acquisition and activation | [Cold inventory](evidence/cold-inventory.json), [initial readiness](evidence/readiness.json), [live remote addition](evidence/live-remote-reconcile.json), [final discovery](evidence/final-directory-witness.json) |
+| Pin and isolate | [Summary](evidence/summary.json), [environment](evidence/environment.json), [launch](evidence/attempt-11-launch.json), [image dependencies](evidence/host.deps.json), [production declarations](evidence/host.production.json), [initial feed configuration](evidence/initial-appsettings.json) |
+| Remote acquisition and activation | [Exact remote-pin validation](evidence/remote-pin-validation.json), [declared pins](evidence/declared-remote-pins.json), [cold inventory](evidence/cold-inventory.json), [initial readiness](evidence/readiness.json), [live remote addition](evidence/live-remote-reconcile.json), [final discovery](evidence/final-directory-witness.json) |
 | File reconciliation, publication and execution | [Authored catalog](evidence/workflow-catalog.json), [definition read](evidence/workflow-definition.json), [publication](evidence/workflow-publish.json), [execution](evidence/workflow-execute.json), [completed instance and output](evidence/workflow-instance.json) |
 | Directory coexistence | [Directory witness](evidence/directory-witness.json), [compatible witness](evidence/compatible-witness.json), [final package inventory](evidence/final-inventory.json), workflow execution after the controls |
 | Compatibility refusal and positive control | [Exact diagnostic and remedy](evidence/compatibility-diagnostic.json), [before/after loaded-assembly control](evidence/incompatible-control.json), [active state and failure](evidence/incompatible-state.json), [compatible activation](evidence/compatible-witness.json) |
@@ -45,7 +45,8 @@ python3 /path/to/elsa-foundation/docs/reports/feature-delivery-1145/run.py \
   /absolute/path/to/new-empty-fr2-run --attempt 1
 ```
 
-`pins.json` freezes the root package versions from the recorded publish state. `prepare.py` pins the image
+`pins.json` freezes the root package versions from the recorded publish state. `runtime-pins.json` adds
+the exact dependency required by Nuplane’s nuspec walk but pruned by the framework-aware restore. `prepare.py` pins the image
 by its OCI index digest. The runner pulls that image, extracts its actual dependency metadata and CShells
 contracts, and restores the package roots in a separate folder to compute their closure and origins.
 Neither that restore cache nor the fixture build output is mounted into the serving host. The host receives
@@ -126,3 +127,11 @@ and a log filter that skipped values containing `=`. The generator now chooses i
 randomly, and log redaction includes padded base64 values. The [regression receipt](evidence/redaction-regression.json)
 records the saved-log test failing against the original source and passing after the correction. The entire
 fresh-state proof was rerun after both changes; the published receipts and fixture-source hashes are from that run.
+
+Independent merge review also found that a diagnostic-write failure could skip container cleanup, and that
+Nuplane acquired `System.Text.Json` outside the framework-aware restore closure. Cleanup now stops its
+owned container in a nested `finally`, even when snapshotting fails. The runtime dependency is explicitly
+pinned, the SQLite capability contribution has an exact version and feed, and cold/final remote inventories
+must exactly match declared IDs, versions and feeds. [Failure-injection receipts](evidence/review-regressions.json)
+show both regressions failing without their enforcement and passing after the changes. The complete
+fresh-state proof was replayed after these corrections; it has zero undeclared remote acquisitions.

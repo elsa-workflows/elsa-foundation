@@ -14,6 +14,21 @@ from launch import launch
 from exercise import Proof
 
 
+def check_remote_inventory(packages, declared):
+    observed = {x['id'].lower(): x for x in packages}
+    assert set(observed) == set(declared), dict(undeclared=sorted(set(observed) - set(declared)), missing=sorted(set(declared) - set(observed)))
+    for name, pin in declared.items():
+        assert observed[name]['version'] == pin['version'] and observed[name]['feed'] == pin['feed'], dict(expected=pin, actual=observed[name])
+
+
+def stop_owned_host(proof, receipts):
+    try:
+        if not (receipts / 'summary.json').exists():
+            proof.snapshot()
+    finally:
+        subprocess.run(['docker', 'stop', proof.host['name']], check=True, stdout=subprocess.DEVNULL)
+
+
 def main(root, attempt):
     if root.exists() and any(root.iterdir()):
         raise RuntimeError('Use a new, empty output directory for every replay')
@@ -40,6 +55,9 @@ def main(root, attempt):
         proof.ready()
         initial_state = json.loads(subprocess.check_output(['docker', 'inspect', proof.host['name'], '--format', '{{json .State}}'], text=True))
         cold = proof.inventory('cold-inventory')
+        declared = json.loads((root / 'declared-remote-pins.json').read_text())
+        check_remote_inventory(cold, declared)
+        proof.save('declared-remote-pins', declared)
         assert all(x['feed'] in ['elsa-4', 'nuget.org'] for x in cold), cold
         assert not any(x['id'] == 'Elsa.Workflows.Design.Reconciliation.Json' for x in cold)
         anonymous = proof.request('/design/workflows/definitions')
@@ -57,6 +75,11 @@ def main(root, attempt):
         # The workflow path must still work alongside both local witnesses and the refused package.
         proof.execute()
         final = proof.inventory('final-inventory')
+        json_package = next(x for x in json.loads((root / 'package-closure.json').read_text()) if x['id'] == 'Elsa.Workflows.Design.Reconciliation.Json')
+        final_pins = dict(declared)
+        final_pins[json_package['id'].lower()] = dict(id=json_package['id'], version=json_package['version'], feed='elsa-4')
+        check_remote_inventory([x for x in final if x['feed'] != 'directory-witness'], final_pins)
+        proof.save('remote-pin-validation', dict(coldCount=len(cold), finalRemoteCount=len(final_pins), undeclared=[], versionOrSourceMismatches=[], capabilityPins=[x for x in declared.values() if 'contribution' in x]))
         witness = proof.request('/fr2/directory')
         proof.save('final-directory-witness', witness)
         assert witness['status'] == 200 and 'JsonWorkflowReconciliation' in witness['body']['features'], witness
@@ -80,9 +103,7 @@ def main(root, attempt):
         (receipts / 'sha256.json').write_text(json.dumps(hashes, indent=2) + '\n')
         print('PASS:', (receipts / 'summary.json').read_text())
     finally:
-        if not (receipts / 'summary.json').exists():
-            proof.snapshot()
-        subprocess.run(['docker', 'stop', proof.host['name']], check=True, stdout=subprocess.DEVNULL)
+        stop_owned_host(proof, receipts)
 
 
 if __name__ == '__main__':

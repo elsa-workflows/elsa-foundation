@@ -17,6 +17,10 @@ def configure(root):
         metadata = json.loads((root / 'restore/pkgs' / name.lower() / version.lower() / '.nupkg.metadata').read_text())
         provided = name.lower() in shared or (name.lower() in host and not name.startswith('Elsa.'))
         inventory.append(dict(id=name, version=version, source=metadata['source'], hostProvided=provided))
+    runtime_pins = json.loads(pathlib.Path(__file__).with_name('runtime-pins.json').read_text())
+    for pin in runtime_pins:
+        if not any(x['id'].lower() == pin['id'].lower() for x in inventory):
+            inventory.append(dict(pin, hostProvided=False))
     (root / 'package-closure.json').write_text(json.dumps(inventory, indent=2) + '\n')
     original = re.sub(r'^\s*//.*$', '', (root / 'host.appsettings.json').read_text(), flags=re.M)
     config = json.loads(original)
@@ -28,7 +32,8 @@ def configure(root):
     feeds.append(dict(Name='directory-witness', DirectoryPath='/proof/packages', IncludePatterns=['Fr2Proof.*'], Directory=dict(Watch=True, DebounceWindow='00:00:01')))
     nuplane['Setup'] = dict(AutomaticReconciliation=True, PollInterval='00:10:00', StateFilePath='/app/.nuplane/state.json', Feeds=feeds)
     nuplane['FeedResolution'] = dict(PackageInstallRoot='/app/.nuplane/packages')
-    nuplane['Capabilities'] = {'ef-provider': 'Sqlite'}
+    engine_version = host['microsoft.entityframeworkcore.sqlite']
+    nuplane['Capabilities'] = {'ef-provider': {'Option': 'Sqlite', 'Version': f'[{engine_version}]', 'Feed': 'nuget.org'}}
     nuplane['Loading']['DefaultLoadMode'] = 'HostIntegrated'
     nuplane['Convergence'] = dict(Manifest=dict(Enabled=True, Path='/proof/config/desired.json', SchemaVersion='1.0'))
     nuplane['LockFile'] = dict(Enabled=False)
@@ -37,6 +42,9 @@ def configure(root):
     config['Logging']['LogLevel']['Microsoft.EntityFrameworkCore.Database.Command'] = 'Warning'
     (root / 'config/appsettings.json').write_text(json.dumps(config, indent=2) + '\n')
     (root / 'config/desired.json').write_text(json.dumps(dict(SchemaVersion='1.0', Packages=[]), indent=2) + '\n')
+    declared = {x['id'].lower(): dict(id=x['id'], version=x['version'], feed='elsa-4' if x['source'] == feeds[0]['ServiceIndex'] else 'nuget.org') for x in inventory if not x['hostProvided'] and x['id'] != 'Elsa.Workflows.Design.Reconciliation.Json'}
+    declared['microsoft.entityframeworkcore.sqlite'] = dict(id='Microsoft.EntityFrameworkCore.Sqlite', version=engine_version, feed='nuget.org', contribution='ef-provider:Sqlite')
+    (root / 'declared-remote-pins.json').write_text(json.dumps(declared, indent=2) + '\n')
     print(f"Configured {sum(len(x['IncludePatterns']) for x in feeds[:-1])} remote pins; live Json reconciliation package excluded.")
 
 
