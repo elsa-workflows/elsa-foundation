@@ -50,6 +50,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     expect(await geometry(elements)).toEqual(settled);
     await toolbar.getByRole("button", { name: "Resume live updates", exact: true }).press("Enter");
     await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
+    expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
