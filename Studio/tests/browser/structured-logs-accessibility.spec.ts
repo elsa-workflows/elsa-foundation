@@ -25,6 +25,13 @@ for (const surface of ["logs", "logs-panel"]) {
     expect(violations).toEqual([]);
 
     const row = records.first();
+    const actionCell = row.getByRole("cell").last();
+    const alignment = await actionCell.evaluate(element => {
+      const button = element.querySelector("button")!;
+      return Math.abs(element.getBoundingClientRect().right - button.getBoundingClientRect().right);
+    });
+    expect(alignment, "the copy action remains aligned with the end of its column").toBeLessThanOrEqual(1);
+    await expect(row.getByRole("cell").first().getByRole("time")).toBeVisible();
     const message = await row.getByRole("cell").nth(4).innerText();
     const copy = row.getByRole("button", { name: /Copy structured log message/ });
     for (const key of ["Enter", "Space"]) {

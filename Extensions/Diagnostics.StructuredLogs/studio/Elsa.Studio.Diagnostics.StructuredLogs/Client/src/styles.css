@@ -198,7 +198,7 @@
 }
 
 .structured-log-row time,
-.structured-log-row > span:not(.structured-log-message):not(.structured-log-level) {
+.structured-log-row > span:not(.structured-log-message):not(.structured-log-level):not(.structured-log-actions) {
   min-width: 0;
   overflow: hidden;
   color: var(--sl-text-muted);
@@ -233,12 +233,18 @@
   padding: 2px 5px;
 }
 
+.structured-log-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .structured-log-copy-message {
   width: 24px;
   height: 24px;
   display: inline-grid;
   place-items: center;
-  justify-self: end;
   border: 1px solid transparent;
   border-radius: var(--radius-sm, 4px);
   background: transparent;

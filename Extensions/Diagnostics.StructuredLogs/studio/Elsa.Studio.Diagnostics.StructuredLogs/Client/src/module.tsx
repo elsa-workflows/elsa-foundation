@@ -503,7 +503,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
           aria-label={`Select ${row.level} structured log from ${row.category}`}
           key={row.id}
         >
-          <time role="cell" title={row.timestamp}>{formatLogTime(row.timestamp)}</time>
+          <span role="cell"><time dateTime={row.timestamp} title={row.timestamp}>{formatLogTime(row.timestamp)}</time></span>
           <LevelChip level={row.level} />
           <span role="cell" title={row.sourceId ?? undefined}>{row.sourceId ?? "local"}</span>
           <span role="cell" title={row.category}>{row.category}</span>
@@ -511,7 +511,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
             {row.exception ? <strong title={row.exception.message ?? undefined}>Exception</strong> : null}
             {row.message}
           </span>
-          <span role="cell">
+          <span role="cell" className="structured-log-actions">
             <button
               type="button"
               className="structured-log-copy-message"
