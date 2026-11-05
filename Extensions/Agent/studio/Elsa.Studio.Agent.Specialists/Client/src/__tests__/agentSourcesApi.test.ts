@@ -49,35 +49,35 @@ describe("Agent-owned source transport", () => {
       fingerprint: "original-fingerprint", content: copywriter() };
     const missing = new Error("Snapshot not found");
     const getJson = vi.fn().mockResolvedValueOnce(retained).mockResolvedValueOnce({ total: 2, items: [retained] }).mockRejectedValueOnce(missing);
-    const context = { http: { getJson } } as unknown as StudioEndpointContext;
+    const context = { baseUrl: "https://studio.test/", http: { getJson } } as unknown as StudioEndpointContext;
     const signal = new AbortController().signal;
     expect(await readAgentSourceRevision(context, "writer/one ", "S/old", signal)).toBe(retained);
     expect(await listAgentSourceRevisions(context, "writer/one ", { skip: 1, take: 1 }, signal)).toEqual({ total: 2, items: [retained] });
     await expect(readAgentSourceRevision(context, "writer/one ", "missing", signal)).rejects.toBe(missing);
     expect(getJson.mock.calls).toEqual([
-      ["/agent/definitions/writer%2Fone%20/revisions/S%2Fold", { signal }],
-      ["/agent/definitions/writer%2Fone%20/revisions?skip=1&take=1", { signal }],
-      ["/agent/definitions/writer%2Fone%20/revisions/missing", { signal }]
+      ["/agent/definitions/revision?agentId=writer%2Fone+&snapshotId=S%2Fold", { signal }],
+      ["/agent/definitions/revisions?agentId=writer%2Fone+&skip=1&take=1", { signal }],
+      ["/agent/definitions/revision?agentId=writer%2Fone+&snapshotId=missing", { signal }]
     ]);
   });
 
   it("preserves losing local edits on a CAS conflict without retrying or forwarding authority fields", async () => {
     const conflict = new Error("revision-conflict");
     const putJson = vi.fn().mockRejectedValue(conflict);
-    const context = { http: { putJson } } as unknown as StudioEndpointContext;
+    const context = { baseUrl: "https://studio.test/", http: { putJson } } as unknown as StudioEndpointContext;
     const draft = { agentId: "writer/one", draftId: "draft two", revision: 7, name: "Local edits", content: copywriter(),
       authority: "not-request-data", tenantId: "not-request-data" };
     const original = structuredClone(draft);
     await expect(saveAgentSource(context, draft)).rejects.toBe(conflict);
     expect(draft).toEqual(original);
-    expect(putJson.mock.calls).toEqual([["/agent/definitions/writer%2Fone/drafts/draft%20two",
-      { expectedRevision: 7, name: original.name, content: original.content }]]);
+    expect(putJson.mock.calls).toEqual([["/agent/definitions/draft",
+      { agentId: original.agentId, draftId: original.draftId, expectedRevision: 7, name: original.name, content: original.content }]]);
   });
 
   it("keeps an uncertain creation's original identities and typed source contract without manufacturing an activity draft", async () => {
     const unknown = new Error("Reply lost after write");
     const postJson = vi.fn().mockRejectedValue(unknown);
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = { baseUrl: "https://studio.test/", http: { postJson } } as unknown as StudioEndpointContext;
     const request = { agentId: "writer/one", draftId: "original draft", name: "Copywriter", content: copywriter(),
       authority: "not-request-data", tenantId: "not-request-data" };
     const original = structuredClone(request);
@@ -93,28 +93,28 @@ describe("Agent-owned source transport", () => {
     const retained: AgentRevision = { id: "S/1", sourceCopyId: "old draft", operationId: "original-capture", revision: 7,
       fingerprint: "original-fingerprint", content: copywriter() };
     const getJson = vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce(draft).mockResolvedValueOnce(retained);
-    const context = { http: { getJson } } as unknown as StudioEndpointContext;
+    const context = { baseUrl: "https://studio.test/", http: { getJson } } as unknown as StudioEndpointContext;
     const signal = new AbortController().signal;
     expect(await listAgentDefinitions(context, { search: " Copywriter ", skip: 1, take: 1 }, signal)).toBe(page);
     expect(await readAgentDraft(context, "writer/one", "new draft", signal)).toBe(draft);
     expect(await readAgentRevision(context, "writer/one", "old draft", "S/1", signal)).toBe(retained);
     expect(getJson.mock.calls).toEqual([
       ["/agent/definitions?skip=1&take=1&search=Copywriter", { signal }],
-      ["/agent/definitions/writer%2Fone/drafts/new%20draft", { signal }],
-      ["/agent/definitions/writer%2Fone/drafts/old%20draft/revisions/S%2F1", { signal }]
+      ["/agent/definitions/draft?agentId=writer%2Fone&draftId=new+draft", { signal }],
+      ["/agent/definitions/draft-revision?agentId=writer%2Fone&draftId=old+draft&snapshotId=S%2F1", { signal }]
     ]);
   });
 
   it("captures the observed revision under the caller's stable operation and discards only that copy", async () => {
     const snapshot = { id: "snapshot", sourceCopyId: "draft two", operationId: "review one", revision: 7, fingerprint: "fingerprint", content: copywriter() };
     const postJson = vi.fn().mockResolvedValueOnce(snapshot).mockResolvedValueOnce(true);
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = { baseUrl: "https://studio.test/", http: { postJson } } as unknown as StudioEndpointContext;
     const draft: AgentDraft = { agentId: "writer/one", draftId: "draft two", revision: 7, name: "Copywriter", content: copywriter() };
     expect(await captureAgentSource(context, draft, "review one")).toBe(snapshot);
     expect(await discardAgentSource(context, draft)).toBe(true);
     expect(postJson.mock.calls).toEqual([
-      ["/agent/definitions/writer%2Fone/drafts/draft%20two/captures", { expectedRevision: 7, operationId: "review one" }],
-      ["/agent/definitions/writer%2Fone/drafts/draft%20two/discard", { expectedRevision: 7 }]
+      ["/agent/definitions/captures", { agentId: "writer/one", draftId: "draft two", expectedRevision: 7, operationId: "review one" }],
+      ["/agent/definitions/discard", { agentId: "writer/one", draftId: "draft two", expectedRevision: 7 }]
     ]);
   });
 });

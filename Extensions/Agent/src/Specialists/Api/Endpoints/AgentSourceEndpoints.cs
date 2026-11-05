@@ -26,7 +26,7 @@ internal sealed class ListAgentSources(IAgentSourceReader sources) : ApiEndpoint
     public override Task<AgentDefinitionPage> HandleAsync(AgentSourceList request, CancellationToken cancellationToken) => sources.ListDefinitionsAsync(request.Search, request.Skip, request.Take, cancellationToken);
 }
 
-[Get("/agent/definitions/{agentId}/revisions")]
+[Get("/agent/definitions/revisions")]
 [RequirePermission(AgentSourcePermissions.Read)]
 internal sealed class ListAgentRevisions(IAgentSourceReader sources) : ApiEndpoint<AgentSourceAllHistory, AgentRevisionPage>
 {
@@ -35,7 +35,7 @@ internal sealed class ListAgentRevisions(IAgentSourceReader sources) : ApiEndpoi
         sources.SourceHistoryAsync(request.AgentId, request.Skip, request.Take, cancellationToken);
 }
 
-[Get("/agent/definitions/{agentId}/revisions/{snapshotId}")]
+[Get("/agent/definitions/revision")]
 [RequirePermission(AgentSourcePermissions.Read)]
 internal sealed class ReadAgentRevision(IAgentSourceReader sources) : ApiEndpoint<AgentSourceSnapshotRead, AgentSourceRevision>
 {
@@ -44,7 +44,7 @@ internal sealed class ReadAgentRevision(IAgentSourceReader sources) : ApiEndpoin
         await sources.FindSourceRevisionAsync(request.AgentId, request.SnapshotId, cancellationToken) ?? throw new Elsa.Persistence.Core.SourceRevisionException("not-found");
 }
 
-[Get("/agent/definitions/{agentId}/drafts/{draftId}")]
+[Get("/agent/definitions/draft")]
 [RequirePermission(AgentSourcePermissions.Read)]
 internal sealed class GetAgentSource(IAgentSourceReader sources) : ApiEndpoint<AgentSourceRead, AgentSourceDraft>
 {
@@ -66,7 +66,7 @@ internal sealed class CreateAgentSource(IAgentSourceWriter sources) : ApiEndpoin
     public override Task<AgentSourceDraft> HandleAsync(AgentSourceCreate request, CancellationToken cancellationToken) => sources.CreateAsync(request.AgentId, request.DraftId, request.Name, request.Content, cancellationToken);
 }
 
-[Put("/agent/definitions/{agentId}/drafts/{draftId}")]
+[Put("/agent/definitions/draft")]
 [RequirePermission(AgentSourcePermissions.Manage)]
 internal sealed class SaveAgentSource(IAgentSourceWriter sources) : ApiEndpoint<AgentSourceSave, AgentSourceDraft>
 {
@@ -82,7 +82,7 @@ internal sealed class SaveAgentSource(IAgentSourceWriter sources) : ApiEndpoint<
 
 }
 
-[Post("/agent/definitions/{agentId}/drafts/{draftId}/captures")]
+[Post("/agent/definitions/captures")]
 [RequirePermission(AgentSourcePermissions.Manage)]
 internal sealed class CaptureAgentSource(IAgentSourceWriter sources) : ApiEndpoint<AgentSourceCapture, AgentSourceRevision>
 {
@@ -96,7 +96,7 @@ internal sealed class CaptureAgentSource(IAgentSourceWriter sources) : ApiEndpoi
     public override Task<AgentSourceRevision> HandleAsync(AgentSourceCapture request, CancellationToken cancellationToken) => sources.CaptureAsync(request.AgentId, request.DraftId, request.ExpectedRevision, request.OperationId, cancellationToken);
 }
 
-[Get("/agent/definitions/{agentId}/drafts/{draftId}/revisions")]
+[Get("/agent/definitions/draft-revisions")]
 [RequirePermission(AgentSourcePermissions.Read)]
 internal sealed class ListAgentSourceHistory(IAgentSourceReader sources) : ApiEndpoint<AgentSourceHistory, IReadOnlyList<AgentSourceRevision>>
 {
@@ -104,7 +104,7 @@ internal sealed class ListAgentSourceHistory(IAgentSourceReader sources) : ApiEn
     public override Task<IReadOnlyList<AgentSourceRevision>> HandleAsync(AgentSourceHistory request, CancellationToken cancellationToken) => sources.HistoryAsync(request.AgentId, request.DraftId, request.Skip, request.Take, cancellationToken);
 }
 
-[Post("/agent/definitions/{agentId}/drafts/{draftId}/discard")]
+[Post("/agent/definitions/discard")]
 [RequirePermission(AgentSourcePermissions.Manage)]
 internal sealed class DiscardAgentSource(IAgentSourceWriter sources) : ApiEndpoint<AgentSourceDiscard, bool>
 {
@@ -122,7 +122,7 @@ internal sealed class DiscardAgentSource(IAgentSourceWriter sources) : ApiEndpoi
     }
 }
 
-[Post("/agent/definitions/{agentId}/drafts/{draftId}/fork")]
+[Post("/agent/definitions/forks")]
 [RequirePermission(AgentSourcePermissions.Manage)]
 internal sealed class ForkAgentSource(IAgentSourceWriter sources) : ApiEndpoint<AgentSourceFork, AgentSourceDraft>
 {
@@ -137,7 +137,7 @@ internal sealed class ForkAgentSource(IAgentSourceWriter sources) : ApiEndpoint<
         sources.ForkAsync(request.AgentId, request.DraftId, request.SnapshotId, request.NewAgentId, request.NewDraftId, request.Name, cancellationToken);
 }
 
-[Get("/agent/definitions/{agentId}/drafts/{draftId}/revisions/{snapshotId}")]
+[Get("/agent/definitions/draft-revision")]
 [RequirePermission(AgentSourcePermissions.Read)]
 internal sealed class GetAgentSourceRevision(IAgentSourceReader sources) : ApiEndpoint<AgentSourceRevisionRead, AgentSourceRevision>
 {

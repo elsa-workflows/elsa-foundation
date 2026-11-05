@@ -33,9 +33,15 @@ public class SpecialistsApiFeature : IWebShellFeature
         ], "SpecialistsApi"));
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-definitions", 1,
         [
-            new("agent-source-revisions", "agent/definitions/{agentId}/revisions", true),
-            new("agent-source-revision", "agent/definitions/{agentId}/revisions/{snapshotId}", true),
-            new("agent-source-definitions", "agent/definitions", true)
+            new("agent-source-revisions", "agent/definitions/revisions"),
+            new("agent-source-revision", "agent/definitions/revision"),
+            new("agent-source-draft", "agent/definitions/draft"),
+            new("agent-source-draft-revisions", "agent/definitions/draft-revisions"),
+            new("agent-source-draft-revision", "agent/definitions/draft-revision"),
+            new("agent-source-captures", "agent/definitions/captures"),
+            new("agent-source-discard", "agent/definitions/discard"),
+            new("agent-source-forks", "agent/definitions/forks"),
+            new("agent-source-definitions", "agent/definitions")
         ], "SpecialistsApi"));
     }
 

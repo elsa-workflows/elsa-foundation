@@ -89,30 +89,29 @@ public sealed partial class SpecialistsApiHttpTests
     public async Task Agent_source_wide_history_inspects_exact_content_after_draft_replacement()
     {
         const string root = "/agent/definitions";
-        const string source = root + "/copywriter";
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, SourceBody("Original instructions"), "agent/definitions:manage")).StatusCode);
-        var capture = await SendAsync(HttpMethod.Post, source + "/drafts/draft/captures", """{"expectedRevision":0,"operationId":"original"}""", "agent/definitions:manage");
+        var capture = await SendAsync(HttpMethod.Post, root + "/captures", """{"agentId":"copywriter","draftId":"draft","expectedRevision":0,"operationId":"original"}""", "agent/definitions:manage");
         using var captured = JsonDocument.Parse(await capture.Content.ReadAsStringAsync());
         var snapshotId = captured.RootElement.GetProperty("id").GetString()!;
         using var editedContent = JsonDocument.Parse(SourceBody("Edited original copy"));
-        var edit = JsonSerializer.Serialize(new { expectedRevision = 0, name = "Copywriter", content = editedContent.RootElement.GetProperty("content") });
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Put, source + "/drafts/draft", edit, "agent/definitions:manage")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, source + "/drafts/draft/discard", """{"expectedRevision":1}""", "agent/definitions:manage")).StatusCode);
+        var edit = JsonSerializer.Serialize(new { agentId = "copywriter", draftId = "draft", expectedRevision = 0, name = "Copywriter", content = editedContent.RootElement.GetProperty("content") });
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Put, root + "/draft", edit, "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/discard", """{"agentId":"copywriter","draftId":"draft","expectedRevision":1}""", "agent/definitions:manage")).StatusCode);
         var replacement = SourceBody("Replacement instructions").Replace("\"draftId\":\"draft\"", "\"draftId\":\"replacement\"", StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, replacement, "agent/definitions:manage")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, source + "/drafts/replacement/captures", """{"expectedRevision":0,"operationId":"replacement"}""", "agent/definitions:manage")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(HttpMethod.Get, source + "/revisions", null, "activities/design:read")).StatusCode);
-        var exact = await SendAsync(HttpMethod.Get, source + "/revisions/" + snapshotId, null, "agent/definitions:read");
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/captures", """{"agentId":"copywriter","draftId":"replacement","expectedRevision":0,"operationId":"replacement"}""", "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(HttpMethod.Get, root + "/revisions?agentId=copywriter", null, "activities/design:read")).StatusCode);
+        var exact = await SendAsync(HttpMethod.Get, root + "/revision?agentId=copywriter&snapshotId=" + snapshotId, null, "agent/definitions:read");
         Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
         using var original = JsonDocument.Parse(await exact.Content.ReadAsStringAsync());
         Assert.Equal("draft", original.RootElement.GetProperty("sourceCopyId").GetString());
         Assert.Equal("Original instructions", original.RootElement.GetProperty("content").GetProperty("instructions").GetString());
-        var history = await SendAsync(HttpMethod.Get, source + "/revisions", null, "agent/definitions:read");
+        var history = await SendAsync(HttpMethod.Get, root + "/revisions?agentId=copywriter", null, "agent/definitions:read");
         using var page = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
         Assert.Equal(2, page.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(2, page.RootElement.GetProperty("items").GetArrayLength());
-        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, source + "/revisions/missing", null, "agent/definitions:read")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, root + "/other/revisions/" + snapshotId, null, "agent/definitions:read")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, root + "/revision?agentId=copywriter&snapshotId=missing", null, "agent/definitions:read")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, root + "/revision?agentId=other&snapshotId=" + snapshotId, null, "agent/definitions:read")).StatusCode);
     }
 
     [Fact]
@@ -120,7 +119,7 @@ public sealed partial class SpecialistsApiHttpTests
     {
         const string root = "/agent/definitions";
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, SourceBody(), "agent/definitions:manage")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/copywriter/drafts/draft/discard", """{"expectedRevision":0}""", "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/discard", """{"agentId":"copywriter","draftId":"draft","expectedRevision":0}""", "agent/definitions:manage")).StatusCode);
         var listed = await SendAsync(HttpMethod.Get, root, null, "agent/definitions:read");
         Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
         using var body = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
@@ -153,23 +152,24 @@ public sealed partial class SpecialistsApiHttpTests
     public async Task Agent_source_saved_revision_capture_history_and_discard_use_shared_storage()
     {
         const string root = "/agent/definitions";
-        const string draft = root + "/copywriter/drafts/draft";
+        const string draft = root + "/draft";
+        const string draftRead = root + "/draft?agentId=copywriter&draftId=draft";
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root, SourceBody(), "agent/definitions:manage")).StatusCode);
         using var saved = JsonDocument.Parse(SourceBody("Edited"));
-        var body = JsonSerializer.Serialize(new { expectedRevision = 0, name = "Copywriter", content = saved.RootElement.GetProperty("content") });
+        var body = JsonSerializer.Serialize(new { agentId = "copywriter", draftId = "draft", expectedRevision = 0, name = "Copywriter", content = saved.RootElement.GetProperty("content") });
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Put, draft, body, "agent/definitions:manage")).StatusCode);
         var stale = await SendAsync(HttpMethod.Put, draft, body, "agent/definitions:manage");
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
-        var capture = await SendAsync(HttpMethod.Post, draft + "/captures", """{"expectedRevision":1,"operationId":"review-1"}""", "agent/definitions:manage");
+        var capture = await SendAsync(HttpMethod.Post, root + "/captures", """{"agentId":"copywriter","draftId":"draft","expectedRevision":1,"operationId":"review-1"}""", "agent/definitions:manage");
         Assert.Equal(HttpStatusCode.OK, capture.StatusCode);
-        var repeated = await SendAsync(HttpMethod.Post, draft + "/captures", """{"expectedRevision":1,"operationId":"review-1"}""", "agent/definitions:manage");
+        var repeated = await SendAsync(HttpMethod.Post, root + "/captures", """{"agentId":"copywriter","draftId":"draft","expectedRevision":1,"operationId":"review-1"}""", "agent/definitions:manage");
         Assert.Equal(await capture.Content.ReadAsStringAsync(), await repeated.Content.ReadAsStringAsync());
-        var history = await SendAsync(HttpMethod.Get, draft + "/revisions", null, "agent/definitions:read");
+        var history = await SendAsync(HttpMethod.Get, root + "/draft-revisions?agentId=copywriter&draftId=draft", null, "agent/definitions:read");
         Assert.Equal(HttpStatusCode.OK, history.StatusCode);
         using var versions = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
         Assert.Equal(1, versions.RootElement.GetArrayLength());
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, draft + "/discard", """{"expectedRevision":1}""", "agent/definitions:manage")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, draft, null, "agent/definitions:read")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Get, draft + "/revisions", null, "agent/definitions:read")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Post, root + "/discard", """{"agentId":"copywriter","draftId":"draft","expectedRevision":1}""", "agent/definitions:manage")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, draftRead, null, "agent/definitions:read")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(HttpMethod.Get, root + "/draft-revisions?agentId=copywriter&draftId=draft", null, "agent/definitions:read")).StatusCode);
     }
 }

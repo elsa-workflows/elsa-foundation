@@ -1,4 +1,4 @@
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { resolveBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 
 export interface AgentMember {
   key: string;
@@ -48,58 +48,60 @@ export interface AgentDefinition {
   revision: number | null;
 }
 
-const root = "/agent/definitions";
-const agentPath = (agentId: string) => `${root}/${encodeURIComponent(agentId)}`;
-const draftPath = (agentId: string, draftId: string) => `${agentPath(agentId)}/drafts/${encodeURIComponent(draftId)}`;
+const root = "agent/definitions";
+const sourcePath = (context: StudioEndpointContext, endpoint = "", parameters?: Record<string, string> | URLSearchParams) =>
+  resolveBackendPath(context.baseUrl, root + endpoint + (parameters ? "?" + new URLSearchParams(parameters).toString() : ""));
 
-/** Agent-owned source directory, including identities whose draft was discarded. Requires elsa.api.agent-definitions v1. */
+/** Agent-owned metadata directory. Requires elsa.api.agent-definitions v1 and its source relations. */
 export function listAgentDefinitions(context: StudioEndpointContext, query: { search?: string; skip?: number; take?: number } = {}, signal?: AbortSignal) {
   const parameters = new URLSearchParams({ skip: String(query.skip ?? 0), take: String(query.take ?? 25) });
   if (query.search?.trim()) parameters.set("search", query.search.trim());
-  return context.http.getJson<AgentPage<AgentDefinition>>(`${root}?${parameters}`, { signal });
+  return context.http.getJson<AgentPage<AgentDefinition>>(sourcePath(context, "", parameters), { signal });
 }
 
 export function readAgentDraft(context: StudioEndpointContext, agentId: string, draftId: string, signal?: AbortSignal) {
-  return context.http.getJson<AgentDraft>(draftPath(agentId, draftId), { signal });
+  return context.http.getJson<AgentDraft>(sourcePath(context, "/draft", { agentId, draftId }), { signal });
 }
 
 export function createAgentSource(context: StudioEndpointContext, request: { agentId: string; draftId: string; name: string; content: AgentContent }) {
-  return context.http.postJson<AgentDraft>(root, {
+  return context.http.postJson<AgentDraft>(sourcePath(context), {
     agentId: request.agentId, draftId: request.draftId, name: request.name, content: request.content
   });
 }
 
-/** The server owns CAS; a conflict is returned to the editor without retrying over newer content. */
+/** The server owns CAS; preserve the original copy, revision and losing local edits on refusal. */
 export function saveAgentSource(context: StudioEndpointContext, draft: AgentDraft) {
-  return context.http.putJson<AgentDraft>(draftPath(draft.agentId, draft.draftId), {
-    expectedRevision: draft.revision, name: draft.name, content: draft.content
+  return context.http.putJson<AgentDraft>(sourcePath(context, "/draft"), {
+    agentId: draft.agentId, draftId: draft.draftId, expectedRevision: draft.revision, name: draft.name, content: draft.content
   });
 }
 
-/** Discard exactly the observed working-copy revision; the caller owns confirmation and local recovery. */
+/** The caller owns discard confirmation and local recovery. */
 export function discardAgentSource(context: StudioEndpointContext, draft: AgentDraft) {
-  return context.http.postJson<boolean>(`${draftPath(draft.agentId, draft.draftId)}/discard`, { expectedRevision: draft.revision });
+  return context.http.postJson<boolean>(sourcePath(context, "/discard"), {
+    agentId: draft.agentId, draftId: draft.draftId, expectedRevision: draft.revision
+  });
 }
 
-/** Exact copy-scoped inspection; callers with only a retained snapshot use readAgentSourceRevision. */
 export function readAgentRevision(context: StudioEndpointContext, agentId: string, draftId: string, snapshotId: string, signal?: AbortSignal) {
-  return context.http.getJson<AgentRevision>(`${draftPath(agentId, draftId)}/revisions/${encodeURIComponent(snapshotId)}`, { signal });
+  return context.http.getJson<AgentRevision>(sourcePath(context, "/draft-revision", { agentId, draftId, snapshotId }), { signal });
 }
 
 /** Exact retained inspection is scoped to Agent identity, never its current editable copy. */
 export function readAgentSourceRevision(context: StudioEndpointContext, agentId: string, snapshotId: string, signal?: AbortSignal) {
-  return context.http.getJson<AgentRevision>(`${agentPath(agentId)}/revisions/${encodeURIComponent(snapshotId)}`, { signal });
+  return context.http.getJson<AgentRevision>(sourcePath(context, "/revision", { agentId, snapshotId }), { signal });
 }
 
 /** Stable snapshot identity order; revision counters remain local to each source copy. */
 export function listAgentSourceRevisions(context: StudioEndpointContext, agentId: string, query: { skip?: number; take?: number } = {}, signal?: AbortSignal) {
-  const parameters = new URLSearchParams({ skip: String(query.skip ?? 0), take: String(query.take ?? 50) });
-  return context.http.getJson<AgentPage<AgentRevision>>(`${agentPath(agentId)}/revisions?${parameters}`, { signal });
+  return context.http.getJson<AgentPage<AgentRevision>>(sourcePath(context, "/revisions", {
+    agentId, skip: String(query.skip ?? 0), take: String(query.take ?? 50)
+  }), { signal });
 }
 
-/** Capture a named immutable snapshot without allocating a release; retain operationId when its reply is unknown. */
+/** Capture without allocating a release; retain operationId when its reply is unknown. */
 export function captureAgentSource(context: StudioEndpointContext, draft: AgentDraft, operationId: string) {
-  return context.http.postJson<AgentRevision>(`${draftPath(draft.agentId, draft.draftId)}/captures`, {
-    expectedRevision: draft.revision, operationId
+  return context.http.postJson<AgentRevision>(sourcePath(context, "/captures"), {
+    agentId: draft.agentId, draftId: draft.draftId, expectedRevision: draft.revision, operationId
   });
 }
