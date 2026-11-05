@@ -1,4 +1,4 @@
-The owned acceptance runner builds normal Workbench/Studio from one clean commit and runs 12 primary cases followed by two diagnostics cases. Each phase stops all its processes before the next begins. Existing listeners and stores are never reused.
+The owned acceptance runner builds normal Workbench/Studio from one clean commit and runs 16 primary cases followed by two diagnostics cases. Each phase stops all its processes before the next begins. Existing listeners and stores are never reused.
 
 `diagnostics.py` creates a private enabled store per diagnostics project. Normal authenticated authoring, publishing, execution, task and diagnostics-settings APIs create the repeated/parallel/completed, structurally resolved fault, metadata-capture and 10,000-event fixtures. The browser uses bounded pages and indexed bookmark identities. It never downloads the long history to seed or sort the UI.
 
