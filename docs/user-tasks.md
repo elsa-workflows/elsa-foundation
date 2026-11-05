@@ -15,9 +15,11 @@ Actions must be unique, trimmed, nonempty names (maximum 20 actions, 100 charact
 
 ## Complete and manage work
 
+Open a task from the User Tasks collection to work on its dedicated page. **Back to task list** returns to the originating inbox, search and page; browser Back also preserves that collection context. An expired page offers **First page** while retaining the inbox and search. Leaving an unsent response requires confirmation through the return action; an unconfirmed completion stays protected until its result is resolved.
+
 **My tasks** contains direct assignments and claimed group work; **Group queue** contains available work for current groups. Claim group work before completing it. Only the current eligible claimant can release it. A direct assignee completes without a claim. Enter the form values and choose an action. Boolean fields explicitly distinguish unanswered, Yes and No.
 
-A recorded response can remain **Response pending** while Runtime delivery recovers. Keep the accepted receipt; repeating the same completion request ID with the same actor/action/data returns that receipt. A different response cannot overwrite it. After an ambiguous connection failure, Studio retries the original request ID and exact payload. On a conflict, refresh the task; Studio preserves unsent values for review.
+A recorded response can remain **Response pending** while Runtime delivery recovers. Once acceptance is confirmed, you can leave the task page; Runtime retains delivery responsibility. Keep the accepted receipt; repeating the same completion request ID with the same actor/action/data returns that receipt. A different response cannot overwrite it. After an ambiguous connection failure, Studio retries the original request ID and exact payload. On a conflict, refresh the task; Studio preserves unsent values for review.
 
 Managers can inspect the tenant's work and reassign an open/claimed task to an active tenant user or group. Reassignment clears the old claim. Management permission does not grant permission to complete somebody else's work. History records the trusted actor, operation/action and UTC instant. Completed/cancelled tasks refuse further action. Workflow cancellation/end retires unfinished work; missing state alone is not proof that a task has ended.
 

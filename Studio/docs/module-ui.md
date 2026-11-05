@@ -158,6 +158,8 @@ instead offers a way to clear the filters. Keep creation in a dialog or a separa
 view so the collection and creation form do not compete on the same screen. After
 creating a connection, close creation and refresh the collection; open details only
 when the user requests them.
+Keep resource detail and edit views separate from the collection, following Workflow
+Definitions, Templates and Agents; do not render them side by side with the list.
 
 Settings should explain policy differences when they affect the user's selection.
 Avoid duplicate summaries of an already visible selection, reserve warning colors
