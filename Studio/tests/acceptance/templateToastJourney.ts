@@ -79,7 +79,10 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     await toast.getByRole("button", { name: "View templates", exact: true }).press("Enter");
     await expect(page).toHaveURL(/\/workflows\/templates\?backend=legacy/);
     await expect(page.getByRole("heading", { name: "Workflow templates", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+    const savedTemplate = page.getByRole("button", { name, exact: true });
+    await expect(savedTemplate).toBeVisible();
+    await savedTemplate.scrollIntoViewIfNeeded();
+    await expect(savedTemplate).toBeInViewport();
     await capture(page, info, "template-list");
     const templateTabLabel = await page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true }).getAttribute("aria-label");
     expect(templateTabLabel, "The Templates workspace tab has an accessible name").toBeTruthy();
