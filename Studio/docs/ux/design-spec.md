@@ -81,7 +81,9 @@ The [module UI guide](../module-ui.md) owns public imports and composition examp
 Collections share a flat page, a 20px page title, 13px description/body, 12px
 sentence-case table headers, search before filters, 32px default controls, and a
 48px minimum row height. Longer content may grow a row. Use the shared footer for
-counts and pagination. The host owns the outer gutter; a module does not add a
+counts and pagination. The host's horizontal gutter scales with the viewport
+from 16px to 36px, preserving room for desktop tables beside folder navigation.
+A module does not add a
 second whole-page border or another page inset. Small row actions may use the
 shared small button size.
 

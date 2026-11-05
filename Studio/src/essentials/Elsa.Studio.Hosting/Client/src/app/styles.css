@@ -1145,7 +1145,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   flex: 1;
   min-height: 0;
   background: color-mix(in srgb, var(--background) 94%, var(--muted));
-  padding: 28px 36px;
+  padding: 28px clamp(16px, 2vw, 36px);
   overflow-y: auto;
 }
 

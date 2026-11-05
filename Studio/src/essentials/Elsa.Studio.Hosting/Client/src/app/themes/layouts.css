@@ -146,7 +146,7 @@
 
   html[data-theme-layout="editorial"] .content {
     background: var(--card);
-    padding: 28px 36px;
+    padding: 28px clamp(16px, 2vw, 36px);
   }
 
   html[data-theme-layout="editorial"] .bottom-panel {
