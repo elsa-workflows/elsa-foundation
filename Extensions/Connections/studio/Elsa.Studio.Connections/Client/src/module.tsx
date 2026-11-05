@@ -21,7 +21,7 @@ export function register(api: ElsaStudioModuleApi) {
       title: "Connections",
       path: "/security/connections",
       iconColor: "#64748b",
-      placement: "more",
+      placement: "integrations",
       order: 31
     },
     routes: [

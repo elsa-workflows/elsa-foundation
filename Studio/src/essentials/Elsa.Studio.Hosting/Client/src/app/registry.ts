@@ -137,7 +137,7 @@ function createNavigationContributions(featureArea: StudioFeatureAreaContributio
   }
 
   const children = featureArea.nav.items
-    .filter(item => item.path !== parent.path)
+    .filter(item => item.path !== parent.path || parent.childDisplay === "views")
     .map((item, index) => {
       const contribution = {
         id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
@@ -147,7 +147,7 @@ function createNavigationContributions(featureArea: StudioFeatureAreaContributio
         order: item.order ?? (featureArea.order ?? 500) + index + 1,
         iconColor: item.iconColor ?? parent.iconColor,
         icon: item.icon,
-        parentId: item.placement ? undefined : parent.id,
+        parentId: item.parentId ?? (item.placement ? undefined : parent.id),
         ...copyPlacementMetadata(item)
       };
       return contribution;
@@ -175,12 +175,18 @@ function createNavigationContribution(
 
 function copyPlacementMetadata(nav: {
   placement?: StudioFeatureAreaNavContribution["placement"];
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   requiresFeature?: StudioFeatureAreaNavContribution["requiresFeature"];
   requiresRole?: StudioFeatureAreaNavContribution["requiresRole"];
   requiresPermission?: StudioFeatureAreaNavContribution["requiresPermission"];
   requiresBackend?: StudioBackendAwareContribution["requiresBackend"];
 }) {
   return {
+    ...(nav.parentId ? { parentId: nav.parentId } : {}),
+    ...(nav.childDisplay ? { childDisplay: nav.childDisplay } : {}),
+    ...(nav.viewLabel ? { viewLabel: nav.viewLabel } : {}),
     ...(nav.placement ? { placement: nav.placement } : {}),
     ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
     ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),

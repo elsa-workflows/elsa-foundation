@@ -4,13 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ShellFrame } from "../app/App";
 import { ThemeProvider } from "../app/components/ThemeProvider";
-import { moreToolsStorageKey } from "../app/navigation/placement";
+import { navigationGroupsStorageKey } from "../app/navigation/placement";
 import { navModeStorageKey } from "../app/themes/navMode";
 import type { StudioNavigationContribution } from "../sdk";
 
 const navigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/home", placement: "main" },
-  { id: "reports", label: "Reports", path: "/reports", placement: "more" },
+  { id: "reports", label: "Reports", path: "/reports", placement: "build" },
   { id: "recent-reports", label: "Recent reports", path: "/reports/recent", parentId: "reports" }
 ];
 
@@ -20,7 +20,7 @@ let root: Root;
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem(navModeStorageKey, "top");
-  localStorage.setItem(moreToolsStorageKey, "true");
+  localStorage.setItem(navigationGroupsStorageKey, JSON.stringify({ build: true }));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -33,121 +33,117 @@ afterEach(async () => {
   document.documentElement.removeAttribute("data-nav-mode");
 });
 
-describe("top navigation More tools overlay", () => {
+describe("top navigation Build overlay", () => {
   it("keeps the sidebar preference without restoring it as an open overlay", async () => {
     await renderShell();
 
     expect(document.documentElement.getAttribute("data-nav-mode")).toBe("top");
-    expect(moreToolsButton().getAttribute("aria-expanded")).toBe("false");
-    expect(moreToolsPanel()).toBeNull();
+    expect(groupButton().getAttribute("aria-expanded")).toBe("false");
+    expect(groupPanel()).toBeNull();
 
-    await act(() => moreToolsButton().click());
-    expect(moreToolsPanel()).not.toBeNull();
-    expect(localStorage.getItem(moreToolsStorageKey)).toBe("true");
+    await act(() => groupButton().click());
+    expect(groupPanel()).not.toBeNull();
+    expect(localStorage.getItem(navigationGroupsStorageKey)).toBe(JSON.stringify({ build: true }));
   });
 
   it("closes and clears search after a panel link navigates", async () => {
     const onNavigate = vi.fn();
     await renderShell(onNavigate);
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
     setSearch(search, "e");
-    expect(moreToolsPanel()).not.toBeNull();
+    expect(groupPanel()).not.toBeNull();
 
-    await act(() => moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!.click());
+    await act(() => groupPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!.click());
 
     expect(onNavigate).toHaveBeenCalledWith("/reports");
-    expect(moreToolsPanel()).toBeNull();
+    expect(groupPanel()).toBeNull();
     expect(search.value).toBe("");
   });
 
   it("closes on path changes and keeps unchanged query results dismissed", async () => {
     await renderShell();
-    await act(() => moreToolsButton().click());
-    expect(moreToolsPanel()).not.toBeNull();
+    await act(() => groupButton().click());
+    expect(groupPanel()).not.toBeNull();
 
     await renderShell(vi.fn(), "/reports");
-    expect(moreToolsPanel()).toBeNull();
+    expect(groupPanel()).toBeNull();
 
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
     setSearch(search, "e");
-    expect(moreToolsPanel()).not.toBeNull();
+    expect(groupPanel()).not.toBeNull();
 
     await renderShell(vi.fn(), "/home");
 
-    expect(moreToolsPanel()).toBeNull();
+    expect(groupPanel()).toBeNull();
     expect(search.value).toBe("e");
 
     setSearch(search, "ec");
-    expect(moreToolsPanel()).not.toBeNull();
+    expect(groupPanel()).not.toBeNull();
   });
 
-  it("keeps focus within More tools open, then closes when focus leaves without swallowing navigation", async () => {
+  it("keeps focus within Build open, then closes when focus leaves without swallowing navigation", async () => {
     const onNavigate = vi.fn();
     await renderShell(onNavigate);
-    await act(() => moreToolsButton().click());
+    await act(() => groupButton().click());
 
-    const panelLink = moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
-    const moreButton = moreToolsButton();
+    const panelLink = groupPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
+    const moreButton = groupButton();
     const mainLink = container.querySelector<HTMLAnchorElement>('a[href="/home"]')!;
     await act(() => panelLink.focus());
     await act(() => moreButton.focus());
-    expect(moreToolsPanel()).not.toBeNull();
+    expect(groupPanel()).not.toBeNull();
 
     await act(() => mainLink.focus());
-    expect(moreToolsPanel()).toBeNull();
+    expect(groupPanel()).toBeNull();
     expect(document.activeElement).toBe(mainLink);
     await act(() => mainLink.click());
 
     expect(onNavigate).toHaveBeenCalledWith("/home");
   });
 
-  it("clears search when a main-section link navigates after focus leaves the overlay", async () => {
-    const onNavigate = vi.fn();
-    await renderShell(onNavigate);
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+  it("closes search results when focus leaves for a page control", async () => {
+    await renderShell();
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
     setSearch(search, "e");
-    expect(moreToolsPanel()).not.toBeNull();
-
-    const panelLink = moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
-    const mainLink = container.querySelector<HTMLAnchorElement>('a[href="/home"]')!;
+    const panelLink = groupPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
     await act(() => panelLink.focus());
-    await act(() => mainLink.focus());
-    expect(moreToolsPanel()).toBeNull();
-
-    await act(() => mainLink.click());
-
-    expect(onNavigate).toHaveBeenCalledWith("/home");
-    expect(search.value).toBe("");
+    const outside = document.createElement("button");
+    container.append(outside);
+    await act(() => outside.focus());
+    expect(groupPanel()).toBeNull();
+    expect(document.activeElement).toBe(outside);
+    expect(search.value).toBe("e");
+    outside.remove();
   });
 
-  it("closes on Escape and returns focus to the More tools button", async () => {
+  it("closes on Escape and returns focus to the Build button", async () => {
     await renderShell();
-    await act(() => moreToolsButton().click());
-    const link = moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
+    await act(() => groupButton().click());
+    const link = groupPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
     link.focus();
     const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
 
     await act(() => link.dispatchEvent(event));
 
     expect(event.defaultPrevented).toBe(true);
-    expect(moreToolsPanel()).toBeNull();
-    expect(document.activeElement).toBe(moreToolsButton());
+    expect(groupPanel()).toBeNull();
+    expect(document.activeElement).toBe(groupButton());
   });
 
   it("dismisses query-opened results outside the panel and reopens when the query changes", async () => {
     await renderShell();
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
     setSearch(search, "Reports");
-    expect(moreToolsPanel()).not.toBeNull();
+    expect(groupPanel()).not.toBeNull();
 
     await act(() => container.querySelector("#page-content")!.dispatchEvent(new Event("pointerdown", { bubbles: true })));
 
-    expect(moreToolsPanel()).toBeNull();
+    expect(groupPanel()).toBeNull();
     expect(search.value).toBe("Reports");
 
     setSearch(search, "Recent");
-    expect(moreToolsPanel()).not.toBeNull();
-    expect(moreToolsPanel()?.textContent).toContain("Recent reports");
+    expect(groupPanel()).not.toBeNull();
+    expect(groupPanel()?.textContent).toContain("Recent reports");
   });
 });
 
@@ -175,12 +171,12 @@ async function act(update: () => void) {
   }
 }
 
-function moreToolsButton() {
-  return container.querySelector<HTMLButtonElement>('button.nav-disclosure[aria-controls="studio-nav-more-tools"]')!;
+function groupButton() {
+  return container.querySelector<HTMLButtonElement>('nav[aria-label="Build"] button.nav-group-toggle')!;
 }
 
-function moreToolsPanel() {
-  return container.querySelector<HTMLElement>("#studio-nav-more-tools");
+function groupPanel() {
+  return container.querySelector<HTMLElement>('nav[aria-label="Build"] .nav-group-panel:not([hidden]), nav.nav-search-results:not([hidden])');
 }
 
 function setSearch(input: HTMLInputElement, value: string) {

@@ -154,12 +154,18 @@ export function testApi(): ElsaStudioModuleApi {
 
 function copyPlacementMetadata(nav: {
   placement?: string;
+  parentId?: string;
+  childDisplay?: "views";
+  viewLabel?: string;
   requiresFeature?: string;
   requiresRole?: string;
   requiresPermission?: string;
 }) {
   return {
     ...(nav.placement ? { placement: nav.placement } : {}),
+    ...(nav.parentId ? { parentId: nav.parentId } : {}),
+    ...(nav.childDisplay ? { childDisplay: nav.childDisplay } : {}),
+    ...(nav.viewLabel ? { viewLabel: nav.viewLabel } : {}),
     ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
     ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),
     ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {})
@@ -188,14 +194,14 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
         ...copyPlacementMetadata(featureArea.nav)
       });
       for (const [index, item] of (featureArea.nav.items ?? []).entries()) {
-        if (item.path === featureArea.nav.path) {
+        if (item.path === featureArea.nav.path && featureArea.nav.childDisplay !== "views") {
           continue;
         }
         navigation.add({
           id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
           label: item.title,
           path: item.path,
-          parentId: item.placement ? undefined : parentId,
+          parentId: item.parentId ?? (item.placement ? undefined : parentId),
           activePathPrefix: item.path,
           order: item.order ?? (featureArea.order ?? 500) + index + 1,
           iconColor: item.iconColor ?? featureArea.nav.iconColor,

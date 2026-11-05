@@ -230,7 +230,7 @@ it("keeps result feedback below an embedded page title in the heading outline", 
 describe("sidebar search filtering", () => {
   const navigation = [
     { id: "home", label: "Home", path: "/dashboard", placement: "main" as const },
-    { id: "extension-builder", label: "Extension Builder", path: "/extension-builder" },
+    { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", placement: "build" as const },
     { id: "modules", label: "Modules", path: "/modules", placement: "admin" as const },
     { id: "package-feeds", label: "Package feeds", path: "/package-feeds", placement: "admin" as const }
   ];
@@ -253,7 +253,7 @@ describe("sidebar search filtering", () => {
   }
 
   function searchInput() {
-    return container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    return container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
   }
 
   function navLinkLabels() {
@@ -329,17 +329,18 @@ describe("sidebar search filtering", () => {
   it("shows an empty-result state when nothing matches", () => {
     renderShell();
     type("zzzznomatch");
-    expect(container.querySelector(".sidebar-search-empty")?.textContent).toContain("No modules match");
+    expect(container.querySelector(".sidebar-search-empty")?.textContent).toContain("No destinations match");
     expect(container.querySelectorAll(".nav-section").length).toBe(0);
   });
 
-  it("keeps More tools items reachable from search while the group is collapsed", () => {
+  it("keeps Build destinations reachable from search while the group is collapsed", () => {
     renderShell();
-    expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(false);
+    flushSync(() => container.querySelector<HTMLButtonElement>('nav[aria-label="Build"] button')!.click());
+    expect(container.querySelector<HTMLElement>('nav[aria-label="Build"] .nav-group-panel')?.hidden).toBe(true);
 
     type("ext");
     expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(true);
-    expect(container.querySelector("[aria-controls='studio-nav-more-tools']")?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector('nav[aria-label="Build"] button')?.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("clears the query when Escape is pressed", () => {

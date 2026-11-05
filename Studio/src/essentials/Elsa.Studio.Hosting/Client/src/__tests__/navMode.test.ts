@@ -82,19 +82,19 @@ describe("navigation mode stylesheet", () => {
     expect(menubar).toMatch(/overflow:\s*visible;/);
   });
 
-  it("opens More tools out of flow and keeps nested links inside the scrollable dropdown", () => {
-    const overlay = ruleBody(desktopCss, `${topNav} :is(.nav-children, .nav-disclosure-panel)`);
-    const disclosure = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel`);
+  it("opens named groups out of flow and keeps nested links inside the scrollable dropdown", () => {
+    const overlay = ruleBody(desktopCss, `${topNav} :is(.nav-children, .nav-group-panel)`);
+    const disclosure = ruleBody(desktopCss, `${topNav} .nav-group-panel`);
 
-    expect(ruleBody(desktopCss, `${topNav} .nav-section-more`)).toMatch(/position:\s*relative;/);
-    expect(ruleBody(desktopCss, `${topNav} .nav-disclosure`)).toMatch(/width:\s*auto;/);
+    expect(ruleBody(desktopCss, `${topNav} .nav-section-group`)).toMatch(/position:\s*relative;/);
+    expect(ruleBody(desktopCss, `${topNav} .nav-group-toggle`)).toMatch(/width:\s*auto;/);
     expect(overlay).toMatch(/position:\s*absolute;/);
     expect(overlay).toMatch(/top:\s*100%;/);
     expect(zIndex(overlay)).toBeGreaterThan(0);
     expect(disclosure).toMatch(/max-height:\s*calc\(100dvh - 110px\);/);
     expect(disclosure).toMatch(/overflow-y:\s*auto;/);
-    const nestedChildren = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-children`);
-    const nestedChildLayout = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-item-group > .nav-children`);
+    const nestedChildren = ruleBody(desktopCss, `${topNav} .nav-group-panel .nav-children`);
+    const nestedChildLayout = ruleBody(desktopCss, `${topNav} .nav-group-panel .nav-item-group > .nav-children`);
     expect(nestedChildren).toMatch(/position:\s*static;/);
     expect(nestedChildLayout).toMatch(/display:\s*grid;/);
   });

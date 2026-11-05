@@ -212,16 +212,11 @@ export type StudioNavigationSection = "workspace" | "settings";
 
 /**
  * Where a nav contribution appears in the Studio sidebar.
- * Unset defaults to `more` at the top level (extensions land under More tools). A child with no
- * placement inherits its parent's resolved placement so it stays visible; a child that declares a
- * different placement is listed there instead of vanishing. `section: "settings"` still maps to
- * `admin` so older modules keep their Settings grouping until they declare `placement`.
- * `admin` and `settings` stay visible to anonymous/demo users because the server allows admin
- * calls when sign-in is off; authenticated users need host-control read.
+ * Top-level workspace destinations declare a named placement; there is no catch-all default.
+ * Children inherit their parent's placement. `admin` requires host-control read when signed in;
+ * authoring/runtime settings retain their own contributed role/permission requirements.
  */
-export type StudioNavigationPlacement = "main" | "more" | "settings" | "admin";
-
-export const defaultStudioNavigationPlacement: StudioNavigationPlacement = "more";
+export type StudioNavigationPlacement = "main" | "build" | "operate" | "integrations" | "settings" | "authoring" | "runtime" | "admin";
 export const defaultStudioNavigationOrder = 1000;
 
 export type StudioNavigationRequirement = string | readonly string[];
@@ -234,6 +229,10 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
   order?: number;
   iconColor?: string;
   parentId?: string;
+  /** Render children as local route views instead of nested sidebar links. */
+  childDisplay?: "views";
+  /** Include the parent's own route as a local view, such as Definitions or Overview. */
+  viewLabel?: string;
   /**
    * The sidebar section the item is listed under. When omitted the host infers it: its own settings-style paths
    * (modules, feeds, features, themes) land under Settings and everything else under Workspace.
@@ -241,11 +240,9 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
    */
   section?: StudioNavigationSection;
   /**
-   * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
-   * `settings` is a Settings shell section (Appearance; available to every session); `admin` is
-   * Settings › Administration and uses the host-control read gate. Unset defaults to `more` at the
-   * top level, or to the parent placement when this item is a child. The sidebar keeps one Settings
-   * entry.
+   * `main` contains direct workspace links such as Home. Named groups are `build`, `operate` and
+   * `integrations`. Settings groups are `settings` (Studio), `authoring`, `runtime` and `admin`.
+   * Omit only for children inheriting a parent's placement or route-only contributions.
    */
   placement?: StudioNavigationPlacement;
   /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */
@@ -458,6 +455,9 @@ export interface StudioFeatureAreaNavLeaf extends StudioBackendAwareContribution
   icon?: StudioNavigationContribution["icon"];
   placeholder?: boolean;
   placement?: StudioNavigationPlacement;
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   order?: number;
   requiresFeature?: StudioNavigationRequirement;
   requiresRole?: StudioNavigationRequirement;
@@ -473,6 +473,9 @@ export interface StudioFeatureAreaNavParent extends StudioBackendAwareContributi
   icon?: StudioNavigationContribution["icon"];
   items: StudioFeatureAreaNavLeaf[];
   placement?: StudioNavigationPlacement;
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   order?: number;
   requiresFeature?: StudioNavigationRequirement;
   requiresRole?: StudioNavigationRequirement;

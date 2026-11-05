@@ -21,7 +21,7 @@ export function register(api: ElsaStudioModuleApi) {
       title: "Secrets",
       path: "/security/secrets",
       iconColor: "#64748b",
-      placement: "more",
+      placement: "integrations",
       order: 30
     },
     routes: [

@@ -1,76 +1,99 @@
 import { expect, test } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
 
-const screenshotDir = resolve(process.cwd(), process.env.NAV_PLACEMENT_SCREENSHOT_DIR ?? "../docs/pr-assets/nav-placement");
+test.use({ viewport: { width: 1440, height: 1000 } });
 
-test.describe("navigation placement", () => {
-  test.use({
-    viewport: { width: 1600, height: 1000 },
-    deviceScaleFactor: 2
-  });
-
-  test("keeps Home, Workflows and Runs on main and hides More tools until opened", async ({ page }) => {
-    await page.goto("/?mode=nav-placement");
-    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Home" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Runs" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "More tools" })).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByRole("link", { name: "Executables" })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Settings" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Administration" })).toHaveCount(0);
-  });
-
-  test("expands More tools and keeps admin items out of the sidebar", async ({ page }) => {
-    await page.goto("/?mode=nav-placement&more=open");
-    await expect(page.getByRole("button", { name: "More tools" })).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByRole("link", { name: "Executables" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Activity definitions" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Secrets" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Diagnostics", exact: true })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Settings" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Features" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Theme builder" })).toHaveCount(0);
-  });
-
-  test("captures Classic light screenshots when asked", async ({ page }) => {
-    test.skip(!process.env.NAV_PLACEMENT_SCREENSHOTS, "Screenshot capture is opt-in.");
-    await mkdir(screenshotDir, { recursive: true });
-
-    await page.goto("/?mode=nav-placement");
-    await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
-    await page.screenshot({ path: resolve(screenshotDir, "after-more-collapsed.png"), fullPage: false });
-
-    await page.goto("/?mode=nav-placement&more=open");
-    await expect(page.getByRole("link", { name: "Executables" })).toBeVisible();
-    await page.screenshot({ path: resolve(screenshotDir, "after-more-expanded.png"), fullPage: false });
-
-    await page.goto("/?mode=nav-before");
-    await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Dashboard" })).toBeVisible();
-    await page.screenshot({ path: resolve(screenshotDir, "before.png"), fullPage: false });
-  });
+test("opens purpose groups and moves specialist destinations into local views", async ({ page }) => {
+  await page.goto("/?mode=nav-placement");
+  for (const name of ["Build", "Operate", "Integrations"]) await expect(page.getByRole("button", { name, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("link", { name: "User tasks", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "More tools" })).toHaveCount(0);
+  const sidebar = page.locator(".sidebar");
+  for (const name of ["Activity definitions", "Templates", "Executables", "Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
+  await sidebar.getByRole("link", { name: "Library", exact: true }).click();
+  await page.getByRole("navigation", { name: "Library views" }).getByRole("link", { name: "Templates", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Library", exact: true })).toHaveAttribute("aria-current", "page");
+  await sidebar.getByRole("link", { name: "Workflows", exact: true }).click();
+  await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("aria-current", "page");
+  await sidebar.getByRole("link", { name: "Diagnostics", exact: true }).click();
+  await page.getByRole("navigation", { name: "Diagnostics views" }).getByRole("link", { name: "Structured logs", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Diagnostics", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
-for (const width of [390, 768, 1024]) {
-  test(`More tools keeps narrow navigation height stable at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
-    await page.goto("/?mode=nav-placement");
-    const sidebar = page.locator(".sidebar");
-    const before = await sidebar.boundingBox();
-    await page.getByRole("button", { name: "More tools", exact: true }).click();
-    await expect(page.getByRole("link", { name: "Secrets", exact: true })).toBeVisible();
-    const after = await sidebar.boundingBox();
-    expect(before).not.toBeNull();
-    expect(after).not.toBeNull();
-    expect(Math.abs(after!.height - before!.height)).toBeLessThanOrEqual(1);
-    expect(after!.height).toBeLessThan(100);
-    await page.getByRole("button", { name: "More tools", exact: true }).focus();
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("link", { name: "Executables", exact: true })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    const secrets = page.getByRole("link", { name: "Secrets", exact: true });
-    await expect(secrets).toBeFocused();
-    await expect(secrets).toBeInViewport({ ratio: 1 });
-  });
-}
+test("remembers collapse choices and reveals matching local views through search", async ({ page }) => {
+  await page.goto("/?mode=nav-placement");
+  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Agents", exact: true })).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveAttribute("aria-expanded", "false");
+  const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await search.fill("Templates");
+  await expect(page.locator(".sidebar").getByRole("link", { name: "Templates", exact: true })).toBeVisible();
+  await search.fill("runtime evidence");
+  await expect(page.locator(".sidebar").getByRole("link", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  await search.fill("no-such-destination");
+  await expect(page.getByRole("status")).toContainText("No destinations match");
+  await search.press("Escape");
+  await expect(search).toHaveValue("");
+});
+
+for (const width of [390, 768, 1024]) test(`keeps navigation compact and keyboard reachable at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await page.goto("/?mode=nav-placement");
+  const before = await page.locator(".sidebar").boundingBox();
+  const trigger = page.getByRole("button", { name: "Build", exact: true });
+  await trigger.click();
+  await trigger.click();
+  await trigger.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Workflows", exact: true })).toBeFocused();
+  const after = await page.locator(".sidebar").boundingBox();
+  expect(Math.abs(after!.height - before!.height)).toBeLessThanOrEqual(1);
+  expect(after!.height).toBeLessThan(110);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+for (const theme of ["classic", "drift", "atelier", "schematic"]) for (const appearance of ["light", "dark"]) test(`${theme} ${appearance} keeps group labels and spacing readable`, async ({ page }, info) => {
+  await page.goto(`/?mode=nav-placement&theme=${theme}&appearance=${appearance}`);
+  const sidebar = page.locator(".sidebar");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", appearance);
+  await page.evaluate(() => document.fonts.ready);
+  await expect(sidebar.getByRole("link", { name: "Connections", exact: true })).toBeVisible();
+  const groups = await sidebar.getByRole("button", { name: "Build", exact: true }).boundingBox();
+  const item = await sidebar.getByRole("link", { name: "Workflows", exact: true }).boundingBox();
+  expect(groups!.height).toBeGreaterThanOrEqual(32);
+  expect(item!.height).toBeGreaterThanOrEqual(40);
+  await page.screenshot({ path: info.outputPath(`${theme}-${appearance}.png`), animations: "disabled" });
+});
+
+test("top search uses one results surface and Escape dismisses it with focus restored", async ({ page }) => {
+  await page.goto("/?mode=nav-placement&navigation=top");
+  const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await search.fill("e");
+  const results = page.getByRole("navigation", { name: "Search results", exact: true });
+  await expect(results).toBeVisible();
+  await expect(page.locator('.nav-group-panel:not([hidden])')).toHaveCount(0);
+  await expect(results.getByRole("link", { name: "Templates", exact: true })).toBeVisible();
+  await search.press("Tab");
+  await expect(results.locator("a").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(results).toBeHidden();
+  await expect(search).toBeFocused();
+  await search.fill("templates");
+  await results.getByRole("link", { name: "Templates", exact: true }).click();
+  await expect(search).toHaveValue("");
+  await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
+});
+
+test("a saved desktop rail preference does not lock narrow disclosure controls open", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem("elsa-studio-sidebar-collapsed", "true"));
+  await page.goto("/?mode=nav-placement");
+  const build = page.getByRole("button", { name: "Build", exact: true });
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("link", { name: "Agents", exact: true })).toBeHidden();
+  await build.press("Enter");
+  await expect(page.getByRole("link", { name: "Agents", exact: true })).toBeVisible();
+});

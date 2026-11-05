@@ -4,7 +4,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
-  await page.screenshot({ path: screenshot, fullPage: true });
+  await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
   await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
@@ -153,10 +153,69 @@ test("agent authoring and navigation", async ({ page }, info) => {
   if ((info.project.use.viewport?.width ?? 0) >= 1440) {
     for (const [label, icon] of [["Agents", "bot"], ["Secrets", "key-round"], ["Connections", "cable"]]) {
       const entry = page.getByRole("link", { name: label, exact: true });
-      if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+      if (!await entry.isVisible()) await page.getByRole("button", { name: label === "Agents" ? "Build" : "Integrations", exact: true }).click();
       await expect(entry.locator(`svg.lucide-${icon}`)).toBeVisible();
     }
   }
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
+  await capture(page, info, "completed");
+});
+
+test("grouped navigation and moved destinations", async ({ page }, info) => {
+  const sidebar = page.locator(".sidebar");
+  const navLink = (name: string) => sidebar.getByRole("link", { name, exact: true });
+  const desktop = (info.project.use.viewport?.width ?? 0) >= 1025;
+  for (const name of ["Build", "Operate", "Integrations"]) await expect(sidebar.getByRole("button", { name, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(sidebar.getByRole("button", { name: "More tools" })).toHaveCount(0);
+  await navLink("Connections").click();
+  await expect(navLink("Connections")).toHaveAttribute("aria-current", "page");
+  await capture(page, info, "groups");
+  await navLink("Workflows").click();
+  await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: /Workflow executables/i }).first()).toBeVisible();
+  await navLink("Library").click();
+  const libraryViews = page.getByRole("navigation", { name: "Library views" });
+  await libraryViews.getByRole("link", { name: "Templates", exact: true }).click();
+  await expect(navLink("Library")).toHaveAttribute("aria-current", "page");
+  await libraryViews.getByRole("link", { name: "Activity definitions", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
+  await capture(page, info, "library");
+  await page.locator(".studio-library-header").getByRole("link", { name: "Activity availability", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Workflow authoring");
+  await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
+  await capture(page, info, "workflow-authoring-settings");
+  // Existing bookmarked routes must resolve to their new Settings surface as well.
+  await page.goto("/workflows/runtime-diagnostics");
+  await expect(page.getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Runtime");
+  await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
+  await capture(page, info, "runtime-settings");
+  await navLink("Diagnostics").click();
+  const diagnostics = page.getByRole("navigation", { name: "Diagnostics views" });
+  for (const name of ["Console", "Structured logs", "OpenTelemetry"]) {
+    await diagnostics.getByRole("link", { name, exact: true }).click();
+    await expect(navLink("Diagnostics")).toHaveAttribute("aria-current", "page");
+    await expect(diagnostics.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByText("This route is unavailable.", { exact: true })).toHaveCount(0);
+  }
+  await capture(page, info, "diagnostic-views");
+  const search = sidebar.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await search.fill("templates");
+  await expect(navLink("Templates")).toBeVisible();
+  await capture(page, info, "search");
+  await search.press("Escape");
+  if (desktop) {
+    await sidebar.getByRole("button", { name: "Build", exact: true }).click();
+    await expect(navLink("Agents")).toBeHidden();
+    await page.reload();
+    await expect(sidebar.getByRole("button", { name: "Build", exact: true })).toHaveAttribute("aria-expanded", "false");
+    await sidebar.getByRole("button", { name: "Build", exact: true }).press("Enter");
+    await sidebar.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+    await expect(navLink("Library")).toBeVisible();
+    await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  }
+  await navLink("Connections").click();
   await capture(page, info, "completed");
 });

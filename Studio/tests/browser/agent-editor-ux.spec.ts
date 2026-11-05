@@ -59,8 +59,8 @@ test("module-owned icons reach all three main navigation entries", async ({ page
   await expect(page.getByTestId("specialist-editor")).toBeVisible();
   for (const [name, icon] of [["Agents", "bot"], ["Secrets", "key-round"], ["Connections", "cable"]]) {
     const entry = page.getByRole("link", { name, exact: true });
-    // More tools may start closed; the module icon must survive composition regardless.
-    if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+    // Named groups start open; preserved user choices can still close a section.
+    if (!await entry.isVisible()) await page.getByRole("button", { name: name === "Agents" ? "Build" : "Integrations", exact: true }).click();
     await expect(entry.locator(`svg.lucide-${icon}`)).toBeVisible();
   }
 });

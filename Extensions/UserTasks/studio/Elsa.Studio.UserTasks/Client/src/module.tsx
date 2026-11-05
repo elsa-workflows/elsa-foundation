@@ -16,7 +16,7 @@ function DetailRoute({ api }: { api: ElsaStudioModuleApi }) {
 export function register(api: ElsaStudioModuleApi) {
   api.userTaskForms?.add({ id: "user-tasks.basic", provider: basicProvider, component: BasicTaskForm });
   api.featureAreas.add({ id: "user-tasks", title: "User Tasks", navGroup: "Workspace", order: 30, description: "Assigned work, group queues and reusable forms.", ownedPaths: ["/user-tasks"], required: false, defaultEnabled: true,
-    nav: { title: "User Tasks", path: "/user-tasks", order: 30, requiresBackend: taskCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage", "user-task-forms:read", "user-task-forms:manage"] },
+    nav: { title: "User tasks", path: "/user-tasks", placement: "operate", order: 40, requiresBackend: taskCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage", "user-task-forms:read", "user-task-forms:manage"] },
     routes: [
       { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskCapability, component: () => <FormsPage api={api} /> },
       { id: "user-tasks.detail", path: "/user-tasks/:id", label: "Task", requiresBackend: taskCapability, component: () => <DetailRoute api={api} /> },

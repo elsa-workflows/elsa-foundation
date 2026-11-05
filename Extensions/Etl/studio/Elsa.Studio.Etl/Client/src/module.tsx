@@ -16,7 +16,7 @@ export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "proper
     description: "Author finite HTTP and file pipelines and inspect their durable execution.",
     ownedPaths: ["/etl/definitions", "/etl/connectors", "/etl/runs"], required: false, defaultEnabled: true,
     nav: {
-      title: "ETL pipelines", path: authoringAvailable ? "/etl/definitions" : "/etl/runs", placement: "more", order: 35,
+      title: "ETL pipelines", path: authoringAvailable ? "/etl/definitions" : "/etl/runs", placement: authoringAvailable ? "build" : "operate", order: 35,
       requiresBackend:authoringAvailable ? design : runtime,
       items: [
         { title: "File definitions", path: "/etl/definitions", requiresBackend:design },
