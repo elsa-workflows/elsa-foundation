@@ -116,3 +116,28 @@ test("top navigation finds Settings and closes a same-page group selection", asy
   await results.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(search).toHaveValue("");
 });
+
+for (const width of [360, 390]) for (const appearance of ["light", "dark"]) test(`top search exposes its full label and target at ${width}px in ${appearance}`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto(`/?mode=nav-placement&navigation=top&appearance=${appearance}`);
+  const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await search.fill("templates");
+  const results = page.getByRole("navigation", { name: "Search results", exact: true });
+  const target = results.getByRole("link", { name: "Templates", exact: true });
+  await expect(target).toBeInViewport({ ratio: 1 });
+  await expect(target.locator(".nav-label")).toBeInViewport({ ratio: 1 });
+  expect(await target.evaluate(node => {
+    const label = document.createRange(); label.selectNodeContents(node.querySelector(".nav-label")!);
+    const box = label.getBoundingClientRect();
+    return box.left >= 0 && box.right <= innerWidth && node.contains(document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2));
+  })).toBe(true);
+  await search.press("Tab");
+  await expect(target).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(results).toBeHidden();
+  await expect(search).toBeFocused();
+  await search.fill("");
+  await search.fill("templates");
+  await target.click();
+  await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
+});

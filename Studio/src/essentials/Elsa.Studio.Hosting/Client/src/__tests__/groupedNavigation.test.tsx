@@ -55,6 +55,21 @@ describe("grouped navigation", () => {
     expect(getSettingsSectionGroups(navigation, { authenticated: true, canReadAdmin: false, permissions: ["authoring:manage"] }).map(group => group.id)).toEqual(["authoring", "runtime"]);
   });
 
+  it.each(["/workflows/tags", "/workflows/tags/new", "/workflows/tags/region"])("reveals a saved collapsed Build group at %s", async path => {
+    localStorage.setItem("elsa-studio.ui.nav.groups", JSON.stringify({ build: false }));
+    const entries: StudioNavigationContribution[] = [
+      { id: "workflows", label: "Workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "build", childDisplay: "views" },
+      { id: "definitions", label: "Definitions", path: "/workflows/definitions", parentId: "workflows" }
+    ];
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(() => root.render(<ThemeProvider><ShellFrame navigation={getStudioNavigation(entries)} panels={[]} path={path} title="Workflow tags" backendBaseUrl="https://backend.example" onNavigate={vi.fn()}><p>Workflow tags</p></ShellFrame></ThemeProvider>));
+      expect(container.querySelector('nav[aria-label="Build"] button')?.getAttribute("aria-expanded")).toBe("true");
+      expect(container.querySelector('nav[aria-label="Build"] a[aria-label="Workflows"]')?.getAttribute("aria-current")).toBe("page");
+    } finally { await act(() => root.unmount()); container.remove(); }
+  });
+
   it("opens named groups and displays User tasks directly", async () => {
     const container = document.createElement("div");
     document.body.append(container);

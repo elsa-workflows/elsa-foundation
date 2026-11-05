@@ -136,10 +136,11 @@ export function filterAccessibleNavigation(
   const originalById = new Map(navigation.map(item => [item.id, item]));
   const visible = allowed.filter(item => ancestorsAreAccessible(item, allowedIds, originalById));
   // View-only parents link to their first accessible view, never a hidden child's route.
+  // Keep the default view's wider route ownership only while that view remains accessible.
   return visible.flatMap(item => {
     if (item.childDisplay !== "views" || item.viewLabel) return [item];
     const first = getChildNavigationItems(visible, item).sort(compareNavigationItems)[0];
-    return first ? [{ ...item, path: first.path, activePathPrefix: undefined }] : [];
+    return first ? [{ ...item, path: first.path, activePathPrefix: first.path === item.path ? item.activePathPrefix : undefined }] : [];
   });
 }
 
