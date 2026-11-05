@@ -106,11 +106,57 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
   await capture(page, info, "completed");
+  // A toast must not obscure the primary action or the shell chrome. Keyboard focus alone
+  // cannot detect the pointer obstruction caused by the former top-right placement.
+  const toastHost = page.locator(".studio-toast-host");
+  await expect(toastHost).toBeVisible();
+  const assertToastPlacement = async () => expect.poll(() => openConnection.evaluate(button => {
+    const action = button.getBoundingClientRect();
+    const stack = document.querySelector(".studio-toast-host")!.getBoundingClientRect();
+    const dock = document.querySelector(".bottom-panel")!.getBoundingClientRect();
+    const header = document.querySelector(".topbar")!.getBoundingClientRect();
+    const hit = document.elementFromPoint(action.x + action.width / 2, action.y + action.height / 2);
+    return {
+      clickable: hit !== null && button.contains(hit),
+      overlapsAction: stack.left < action.right && stack.right > action.left && stack.top < action.bottom && stack.bottom > action.top,
+      aboveDock: stack.bottom <= dock.top - 10,
+      belowHeader: stack.top >= header.bottom,
+      withinViewport: stack.left >= 0 && stack.right <= innerWidth && stack.top >= 0
+    };
+  })).toEqual({ clickable: true, overlapsAction: false, aboveDock: true, belowHeader: true, withinViewport: true });
+  await assertToastPlacement();
+  await capture(page, info, "primary-action-with-toasts");
+  await page.getByRole("button", { name: "Expand bottom panel", exact: true }).click();
+  await assertToastPlacement();
+  await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
+  await capture(page, info, "toasts-above-expanded-dock");
+  await page.getByRole("button", { name: "Collapse bottom panel", exact: true }).click();
+  await assertToastPlacement();
+  await openConnection.click();
+  await expect(dialog).toBeVisible();
+  await expect(name).toBeFocused();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const confirmation = page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` });
   await expect(page.locator('.studio-toast-live[aria-live="polite"]')).toContainText(`Connection 'qa-${stamp}' created.`);
-  await confirmation.getByRole("button", { name: "Dismiss notification", exact: true }).press("Enter");
+  await page.getByRole("button", { name: "Expand bottom panel", exact: true }).click();
+  await page.getByRole("button", { name: "Maximize bottom panel", exact: true }).click();
+  await expect(confirmation).toBeVisible();
+  await expect.poll(() => toastHost.evaluate(host => {
+    const stack = host.getBoundingClientRect();
+    const header = document.querySelector(".topbar")!.getBoundingClientRect();
+    return stack.top >= header.bottom && stack.bottom <= innerHeight && stack.left >= 0 && stack.right <= innerWidth;
+  })).toBe(true);
+  await capture(page, info, "toasts-over-maximized-dock");
+  while (await page.locator(".studio-toast").count()) {
+    await page.locator(".studio-toast").first().getByRole("button", { name: "Dismiss notification", exact: true }).press("Enter");
+  }
   await expect(confirmation).toHaveCount(0);
+  const restoreDock = page.getByRole("button", { name: "Restore bottom panel", exact: true });
+  await expect(restoreDock).toBeFocused();
+  await restoreDock.press("Enter");
+  await page.getByRole("button", { name: "Collapse bottom panel", exact: true }).click();
   await page.getByRole("button", { name: /^Notifications, \d+ unread$/ }).press("Enter");
   const history = page.getByRole("dialog", { name: "Notifications", exact: true });
   await expect(history).toBeVisible();

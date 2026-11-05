@@ -364,7 +364,7 @@ function InlinePackageUploads({
   registry: ModuleManagementRegistryResponse;
   busy: boolean;
   dragActive: boolean;
-  uploadInputRef: React.RefObject<HTMLInputElement>;
+  uploadInputRef: React.RefObject<HTMLInputElement | null>;
   onUploadFiles(files: FileList | File[]): void;
   onDragActiveChange(active: boolean): void;
   onDeleteDropFolderPackage(fileName: string): void;

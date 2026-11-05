@@ -242,6 +242,28 @@ describe("ToastHost", () => {
     expect(document.getElementById(toast.getAttribute("aria-labelledby")!)!.textContent).toBe("Hello");
   });
 
+  it("returns focus to the visible Restore control when the maximized dock hides the bell", () => {
+    vi.useFakeTimers();
+    const dock = document.createElement("section");
+    dock.className = "bottom-panel maximized";
+    const restore = document.createElement("button");
+    restore.setAttribute("aria-label", "Restore bottom panel");
+    dock.appendChild(restore);
+    document.body.appendChild(dock);
+    try {
+      const controller = createNotificationController();
+      const host = mount(controller);
+      run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+      const dismiss = host.querySelector<HTMLButtonElement>("button[aria-label='Dismiss notification']")!;
+      dismiss.focus();
+      run(() => dismiss.click());
+      expect(toasts(host)).toHaveLength(0);
+      expect(document.activeElement).toBe(restore);
+    } finally {
+      dock.remove();
+    }
+  });
+
   it("moves focus to the next toast, then the bell, when a focused toast closes", () => {
     vi.useFakeTimers();
     const controller = createNotificationController();
