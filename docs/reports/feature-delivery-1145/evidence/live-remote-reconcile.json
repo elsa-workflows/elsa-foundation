@@ -1,0 +1,30 @@
+{
+  "status": 200,
+  "body": {
+    "outcomeCode": "Completed",
+    "correlationId": "0616eb39287b4344b596e919690013be",
+    "reasonCode": null,
+    "runResult": {
+      "skipped": false,
+      "skipReason": 0,
+      "changeSet": {
+        "added": [
+          {
+            "id": "Elsa.Workflows.Design.Reconciliation.Json",
+            "version": "4.0.16-preview",
+            "feedName": "elsa-4",
+            "sourceName": "manifest:/proof/config/desired.json",
+            "installedAt": "2026-11-05T22:27:33.7525477+00:00"
+          }
+        ],
+        "updated": [],
+        "removed": [],
+        "correlationId": "0616eb39287b4344b596e919690013be",
+        "timestamp": "2026-11-05T22:27:33.8562983+00:00"
+      },
+      "failedPackages": [],
+      "isDegraded": false
+    }
+  },
+  "redirectLocation": null
+}

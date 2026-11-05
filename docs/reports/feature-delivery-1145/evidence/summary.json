@@ -1,0 +1,33 @@
+{
+  "issue": 1145,
+  "outcome": "passed",
+  "image": "elsaworkflows/elsa-foundation-host@sha256:f418270b598253020291c14eed175807440cc46049b5f945d5df3ddd668a8d43",
+  "timestampUtc": "2026-11-05T22:27:53.457102+00:00",
+  "coldPackages": 69,
+  "finalActivePackages": 72,
+  "sameProcess": true,
+  "containerId": "a20222dd836981cc1e9e6b95d18e65f4fcae05cd3a48bd9344cd527494b9682d",
+  "startedAt": "2026-11-05T22:27:13.930943039Z",
+  "containerHostPid": 868830,
+  "production": true,
+  "https": true,
+  "loadMode": "HostIntegrated",
+  "assemblyUnloadingClaimed": false,
+  "fixtureSha256": {
+    "run.py": "9764e42b59c76ca1e248becae7df2d7379ea038cde2de10710fca15698f85c5c",
+    "configure.py": "7eb3251e8273f0d74e0a553f33ef14df9a7880ba6bb084543f63eed539653dc9",
+    "exercise.py": "131def8ddb5851860cc4f55689de84a1978b79dbd5bf6312f519d653a8aa8abd",
+    "launch.py": "7b6065b03118fde95197ea07e2708abab515f05ab796a024bcc2620aeeda8d09",
+    "pins.json": "a5acc1aedc9cf7e96c307fd44d915fc6da3932b271be13bd6cfbe7c85bb2402b",
+    "prepare.py": "9fb7b2d1082ccbcdf1a23ced4e1346e933546549c6f7743fb9b639293865c361",
+    "fixtures.py": "b5b40521ff9f716225ce980b3fbca8ee55316c31e5477d065da35c51b9289ecc"
+  },
+  "criteria": {
+    "isolation": true,
+    "remoteAcquisition": true,
+    "fileReconciliationPublicationExecution": true,
+    "directoryCoexistence": true,
+    "compatibilityRefusalAndControl": true,
+    "reproducibleRunningHostPath": true
+  }
+}

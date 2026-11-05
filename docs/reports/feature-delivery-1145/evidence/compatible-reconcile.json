@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "outcomeCode": "Completed",
+    "correlationId": "c854a672a87342d885fd64eee8ccd1a4",
+    "reasonCode": null,
+    "runResult": {
+      "skipped": false,
+      "skipReason": 0,
+      "changeSet": {
+        "added": [],
+        "updated": [],
+        "removed": [],
+        "correlationId": "c854a672a87342d885fd64eee8ccd1a4",
+        "timestamp": "2026-11-05T22:27:46.8500042+00:00"
+      },
+      "failedPackages": [],
+      "isDegraded": false
+    }
+  },
+  "redirectLocation": null
+}
