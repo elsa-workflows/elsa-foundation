@@ -976,8 +976,11 @@ public sealed class CompensationScope : StructuralActivity,
         continuation.WithHistorySourceFacts(at => [NewHistoryFact(context, kind, at, entry, relatedActivity, reason)]);
 
     private static RuntimeStructuralContinuation ConfirmedHistory(RuntimeStructuralContinuation continuation, IRuntimeActivityExecutionContext context, CompensationScopeState state) =>
-        continuation.WithHistorySourceFacts(at => state.Entries.Where(IsConfirmable).Select(entry =>
-            NewHistoryFact(context, RuntimeHistorySourceFactKind.CompensationConfirmed, at, entry)));
+        // Confirm is one scope decision, even when the native journal contains thousands of eligible entries.
+        // Its exact entry set remains in the native confirmation journal; history never truncates that decision.
+        continuation.WithHistorySourceFacts(at => state.Entries.Any(IsConfirmable)
+            ? [NewHistoryFact(context, RuntimeHistorySourceFactKind.CompensationConfirmed, at, reason: "all-eligible-entries")]
+            : []);
 
     private static RuntimeHistorySourceFact NewHistoryFact(IRuntimeActivityExecutionContext context, RuntimeHistorySourceFactKind kind,
         DateTimeOffset at, CompensationEntry? entry = null, string? relatedActivity = null, string? reason = null) =>

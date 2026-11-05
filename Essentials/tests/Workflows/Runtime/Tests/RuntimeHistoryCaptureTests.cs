@@ -922,6 +922,46 @@ public sealed class RuntimeHistoryCaptureTests
         await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(missing).AsTask());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Bookmark_boundary_reports_activity_suspension_only_with_actual_continuation_proof(bool actualSuspension)
+    {
+        var fixture = new Fixture();
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, [.. Policy.SupportedKinds, "ActivityContinuationSuspended"]);
+        var workflow = Workflow() with { HistoryCapturePolicy = policy };
+        await fixture.Executions.SaveAsync(workflow);
+        var raw = Commit("waited-dispatch", RuntimeCheckpointNames.BookmarkCreated, workflow, Activity(ActivityExecutionStatus.Suspended),
+            [new("wait", RuntimeStateChangeOperation.Upsert, Bookmark("wait"), new Dictionary<string, string>())]) with
+        {
+            HistorySourceFacts = actualSuspension ? [new(RuntimeHistorySourceFactKind.ActivityContinuationSuspended, "actual-wait", At, "activity")] : null
+        };
+        var capture = new RuntimeHistoryCapture(fixture.Executions);
+        var enriched = await capture.EnrichAsync(raw);
+        var facts = enriched.HistoryBatches!.Single().Candidates.Select(candidate => candidate.Event).ToArray();
+        Assert.Single(facts, e => e.Name == "BookmarkCreated");
+        Assert.Equal(actualSuspension ? 1 : 0, facts.Count(e => e.Name == "ActivitySuspended"));
+        await fixture.Store.CommitAsync(enriched, new(RuntimeCheckpointPersistenceMode.Immediate));
+        var fresh = await new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(raw);
+        await fixture.Store.CommitAsync(fresh, new(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.Equal(facts.Length, (await fixture.Reader.ReadPageAsync(new("run"))).Items.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Workflow_cancellation_in_an_activity_or_alteration_checkpoint_requires_actual_control_proof(bool actualCancellation)
+    {
+        var fixture = new Fixture();
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, [.. Policy.SupportedKinds, "ControlApplied"]);
+        var workflow = Workflow() with { HistoryCapturePolicy = policy, Status = WorkflowExecutionStatus.Cancelled, CompletedAt = At };
+        await fixture.Executions.SaveAsync(workflow);
+        var raw = Commit("control-cancel", RuntimeCheckpointNames.ActivityCancelled, workflow) with
+        { HistorySourceFacts = actualCancellation ? [new(RuntimeHistorySourceFactKind.ControlApplied, "cancel-command", At, reasonCode: "workflow-cancelled")] : null };
+        var enriched = await new RuntimeHistoryCapture(fixture.Executions).EnrichAsync(raw);
+        Assert.Equal(actualCancellation ? 1 : 0, enriched.HistoryBatches!.Single().Candidates.Count(candidate => candidate.Event.Name == "WorkflowCancelled"));
+    }
+
     private static WorkflowExecutionState Workflow() => new("run", Executable, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null,
         "scope-a", new Dictionary<string, string>()) { HistoryCapturePolicy = Policy };
     private static ActivityExecutionState Activity(ActivityExecutionStatus status) => new(new("activity", "run", "node", "authored", "Test", "1"), status, null,

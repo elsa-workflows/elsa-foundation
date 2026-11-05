@@ -34,7 +34,8 @@ public enum RuntimeHistorySourceFactKind
     IncidentProjectionReconciled,
     IncidentSuppressed,
     IncidentDecisionApplied,
-    CompensationAbandoned
+    CompensationAbandoned,
+    DurableStateRecorded
 }
 
 /// <summary>Safe source data, never a payload, exception, capability or inferred snapshot transition.</summary>

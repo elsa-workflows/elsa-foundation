@@ -406,7 +406,9 @@ internal static class StructuralParentEvaluationSupport
         commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
             (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations))
                 .Concat((incidentChanges ?? []).Select(incident => RuntimeHistoryIncidentFacts.DecisionApplied(incident))), cancellationToken);
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        if (childControlContribution is not null)
+            commit = await childControlContribution.ApplyAsync(checkpointCommitter, commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     /// <summary>
@@ -528,7 +530,9 @@ internal static class StructuralParentEvaluationSupport
             Metadata: metadata);
 
         commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () => (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations)), cancellationToken);
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        if (childControlContribution is not null)
+            commit = await childControlContribution.ApplyAsync(checkpointCommitter, commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     // The cancellation planner owns these exact suppressions; fault absorption explicitly substitutes a resolution.

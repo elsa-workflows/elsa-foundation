@@ -51,7 +51,8 @@ internal static class ChildControlDelivery
         var decision = ChildControlInboxEvaluation.Accept(child, incoming);
         if (decision.AlreadyAccepted && (completionWorkItemId is null || ActivityAttemptActivationClaimer.WasParentCompletionProcessed(child)))
             return;
-        var contribution = new StructuralChildControlContribution(decision.CallingChild, completionWorkItemId);
+        var contribution = new StructuralChildControlContribution(decision.CallingChild, completionWorkItemId,
+            incoming, !decision.AlreadyAccepted, decision.Ready);
         if (decision.Ready.Count == 0)
         {
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(

@@ -116,7 +116,9 @@ public sealed class ActivityFaultIncidentRecorder
             () => (request.HistorySourceFacts ?? []).Append(RuntimeHistoryIncidentFacts.Created(incident,
                 new(CommandId: request.WorkItem.CommandId, SchedulerWorkItemId: request.WorkItem.WorkItemId))), cancellationToken);
 
-        await request.CheckpointCommitter.CommitAsync(request.ChildControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        if (request.ChildControlContribution is not null)
+            commit = await request.ChildControlContribution.ApplyAsync(request.CheckpointCommitter, commit, cancellationToken);
+        await request.CheckpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     /// <summary>
