@@ -254,7 +254,7 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await capture(page, info, "top-navigation");
   await page.goto("/settings/appearance");
   await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "High contrast", exact: true }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "high-contrast");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "high-contrast");
   await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
   await sidebar.getByRole("navigation", { name: "Integrations", exact: true }).getByRole("link", { name: "Connections", exact: true }).click();
   await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
