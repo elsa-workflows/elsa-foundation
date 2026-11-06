@@ -523,6 +523,7 @@ public sealed class GraphActivityProvider(
                 diagnostics.Add(diagnostic);
         }
 
+        ValidateBoundaryInputReads(graph, contract, subject, diagnostics);
         var outputKeys = contract.Outputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
         foreach (var mappingGroup in graph.OutputMappings.GroupBy(x => x.OutputReferenceKey, StringComparer.Ordinal))
         {
@@ -909,6 +910,29 @@ public sealed class GraphActivityProvider(
                         ["structureSchemaVersion"] = declared.SchemaVersion
                     }));
             }
+        }
+    }
+
+    private static void ValidateBoundaryInputReads(ActivityGraphManifest graph, DesignActivityContract contract,
+        ActivityDiagnosticSubject subject, ICollection<ActivityDiagnostic> diagnostics)
+    {
+        var inputs = contract.Inputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
+        for (var index = 0; index < graph.Variables.Count; index++)
+            Check(graph.Variables[index].InitialValue, $"/variables/{index}/initialValue", graph.Variables[index].ReferenceKey);
+        for (var index = 0; index < graph.OutputMappings.Count; index++)
+            Check(graph.OutputMappings[index].Source, $"/outputMappings/{index}/source", graph.OutputMappings[index].OutputReferenceKey);
+
+        void Check(ActivityInputDefault? source, string pointer, string referenceKey)
+        {
+            if (source is null || !StringComparer.OrdinalIgnoreCase.Equals(source.Syntax, "Input"))
+                return;
+            if (source.Value.ValueKind != JsonValueKind.Object || !source.Value.TryGetProperty("referenceKey", out var key) ||
+                key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
+                diagnostics.Add(Diagnostic("activity.graph.boundary-input-malformed",
+                    "A graph Input expression must name a declared public input by its reference key.", subject, pointer, referenceKey));
+            else if (!inputs.Contains(key.GetString()!))
+                diagnostics.Add(Diagnostic("activity.graph.boundary-input-unknown",
+                    "The graph Input expression names an undeclared public input.", subject, pointer, referenceKey));
         }
     }
 

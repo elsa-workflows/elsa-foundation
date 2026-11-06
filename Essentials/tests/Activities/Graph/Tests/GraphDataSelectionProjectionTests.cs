@@ -86,4 +86,23 @@ public sealed partial class GraphActivityProviderTests
         Assert.Same(provider.GetRequiredService<GraphActivityProvider>(), provider.GetRequiredService<IActivityDataSelectionDocumentProjector>());
         Assert.DoesNotContain(services, x => x.ServiceType == typeof(IActivityDataSelectionAnalyzer));
     }
+
+    [Theory]
+    [InlineData("public-ref", false)]
+    [InlineData("PublicName", true)]
+    public async Task Legacy_boundary_Input_reads_use_the_declared_reference_key(string read, bool rejected)
+    {
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            rootActivity = ParseJson("""{"nodeId":"body","activityVersionId":"exact-version","inputs":[],"outputs":[]}"""),
+            variables = Array.Empty<object>(),
+            outputMappings = new[] { new { outputReferenceKey = "reply", source = new { syntax = "Input", value = new { referenceKey = read } } } }
+        });
+        var contract = new ActivityContract("1", [new("public-ref", "PublicName", new("String"), false, true, null, "elsa.json")],
+            [new("reply", "Reply", new("String"), false, true, "elsa.json")], [new("done", "Done", true)]);
+        var diagnostics = await _provider.ValidateAsync(new(GraphActivityProvider.Key, "1", payload), contract);
+        Assert.Equal(rejected, diagnostics.Any(x => x.Code == "activity.graph.boundary-input-unknown"));
+        if (rejected)
+            Assert.Contains(diagnostics, x => x.Code == "activity.graph.boundary-input-unknown" && x.Location?.JsonPointer == "/outputMappings/0/source");
+    }
 }
