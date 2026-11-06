@@ -999,6 +999,7 @@ Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowHoldStateStore.SaveAs
 Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider
 Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider.Capabilities.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionActorCapabilities
 Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider.Dispose() -> void
+Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider.DisposeAsync() -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider.GetAgentAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionActorActivationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionActor!>
 Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider.InProcessWorkflowExecutionActorProvider() -> void
 Elsa.Workflows.Runtime.Services.Executions.InProcessWorkflowExecutionActorProvider.InProcessWorkflowExecutionActorProvider(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionCommandExecutor! commandProcessor) -> void

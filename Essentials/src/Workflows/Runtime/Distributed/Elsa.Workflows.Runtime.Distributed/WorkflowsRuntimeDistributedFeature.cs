@@ -160,7 +160,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         // the distributed provider still bounds the local mailbox registry, and the distributed PassivateAsync releases
         // the placement lease when the resumption reaper collects a lingering terminal execution.
         services.TryAddSingleton<RuntimeActorEvictionOptions>();
-        services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
+        InProcessWorkflowActorsLifecycle.AddTo(services);
         // Placement as a membership query: the gate both claim paths ask, what the pump reclaims and reports,
         // and the contracts through which the runtime's core and Attention consume them without referencing this leaf.
         services.TryAddSingleton(JoinSweepLedger.Process);

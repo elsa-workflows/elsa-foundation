@@ -13,7 +13,7 @@ using WhileActivity = Elsa.Activities.While.Activities.While;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
-public sealed class LongDrainCancellationTests
+public sealed partial class LongDrainCancellationTests
 {
     [Theory]
     [InlineData(PersistenceMode.Durable, false, false)]
@@ -215,6 +215,7 @@ public sealed class LongDrainCancellationTests
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         // When set, the second body call reports itself and holds until Stop.
         public TaskCompletionSource? Continued { get; init; }
+        public Action<CancellationToken>? OnContinued { get; init; }
         public TaskCompletionSource Stop { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Calls;
         public bool SafetyLimitReached;
@@ -233,6 +234,7 @@ public sealed class LongDrainCancellationTests
             }
             if (call > 1 && probe.Continued is { } continued)
             {
+                probe.OnContinued?.Invoke(context.CancellationToken);
                 continued.TrySetResult();
                 await probe.Stop.Task.WaitAsync(context.CancellationToken);
                 return ActivityTransition.Complete(ActivityUnit.Value);

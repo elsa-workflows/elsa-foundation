@@ -994,6 +994,8 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
         value.Deserialize<HttpRequestModel>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("Captured HTTP request resolved to null.");
 
+    public Task StopAsync(CancellationToken cancellationToken = default) => _host.StopAsync(cancellationToken);
+
     public async ValueTask DisposeAsync()
     {
         await _stopping.CancelAsync();
