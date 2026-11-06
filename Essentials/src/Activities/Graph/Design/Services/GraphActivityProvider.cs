@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
@@ -14,6 +15,9 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Expressions.Core.Models;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +31,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
 {
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
@@ -70,6 +74,48 @@ public sealed class GraphActivityProvider(
                 })
         ],
         new([]));
+
+    public ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(
+        ActivityProviderManifest manifest,
+        DesignActivityContract contract,
+        string resourceId,
+        string contractRevision,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(manifest);
+        if (!StringComparer.Ordinal.Equals(manifest.ProviderKey, Key))
+            return ValueTask.FromResult<ActivityDataSelectionDocument?>(null);
+        ArgumentNullException.ThrowIfNull(contract);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contractRevision);
+
+        var subject = new ActivityDiagnosticSubject("ActivityDefinition", resourceId);
+        var diagnostics = ReadManifest(manifest, subject, out var graph).ToList();
+        if (!StringComparer.Ordinal.Equals(contract.ContractSchemaVersion, "1"))
+            throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ContractSchema", "The activity contract schema is unsupported.")]);
+        if (graph is not null)
+            ValidateGraphNodes(graph, subject, diagnostics);
+        if (graph is null || diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+            throw new ActivityDataSelectionRejectedException(diagnostics.Select(x => new ValidationError(
+                x.Location?.JsonPointer ?? "$activity", "ActivityDataSelection/" + x.Code, x.Message)));
+
+        // The provider's parser and structure-owned node projection are the same ones used for compilation.
+        // This request-only view creates neither a workflow draft nor a second graph/document owner.
+        TryReadRootNode(graph.RootActivity, out var root);
+        return ValueTask.FromResult<ActivityDataSelectionDocument?>(new(
+            "ActivityDefinition", resourceId, contractRevision, root,
+            contract.Inputs.Select(x => new InputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
+                DefaultValue: x.Default?.Value, DefaultSyntax: x.Default?.Syntax)).ToImmutableArray(),
+            graph.Variables.Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
+            contract.Outputs.Select(x => new OutputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
+                SourceRepresentation: x.SourceRepresentation)).ToImmutableArray()));
+    }
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(
         ActivityProviderContractProposalRequest request,
@@ -365,12 +411,10 @@ public sealed class GraphActivityProvider(
         return ActivityDiagnosticOrderer.Order(diagnostics);
     }
 
-    private void ValidateGraph(
+    private (IReadOnlyList<NodeCandidate> Candidates, IReadOnlyList<GraphNode> Nodes) ValidateGraphNodes(
         ActivityGraphManifest graph,
-        DesignActivityContract contract,
         ActivityDiagnosticSubject subject,
-        ICollection<ActivityDiagnostic> diagnostics,
-        IReadOnlyList<GraphNode> completeNodes)
+        ICollection<ActivityDiagnostic> diagnostics)
     {
         var candidates = EnumerateNodeCandidates(graph.RootActivity);
         foreach (var candidate in candidates)
@@ -441,6 +485,18 @@ public sealed class GraphActivityProvider(
                     duplicate.Key));
             }
         }
+
+        return (candidates, nodes);
+    }
+
+    private void ValidateGraph(
+        ActivityGraphManifest graph,
+        DesignActivityContract contract,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics,
+        IReadOnlyList<GraphNode> completeNodes)
+    {
+        var (candidates, nodes) = ValidateGraphNodes(graph, subject, diagnostics);
 
         ValidateForbiddenCapabilities(candidates, subject, diagnostics);
 
