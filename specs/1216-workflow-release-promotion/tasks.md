@@ -46,6 +46,8 @@ T009 archive prerequisite: the consumer-context SQLite archive is implemented wi
 and bounded consistent reads, atomic capture/retry, scope isolation, pooled concurrency and killed-writer/reopen witnesses.
 It stores transport-only captures. Source acquisition/retention through complete capture and all owner import paths remain open.
 
+T009 source framework checkpoint: the shared builder, retained exact-source orchestration and bounded member-contributor fan-in pass 192 focused Linux cases (155 shared +37 capture), with actual durable SQLite archive commits. Full logs/TRX are independently verified at frozen tree `8dafe4cb27241942b61e92ad66ecb21d0b7423e0`; see `evidence/azure-capture-framework.json`. Earlier aborted/compile-failed phases remain recorded. These controlled source strategies do not qualify actual native/BPMN/ETL source acquisition, historical import, activation or retained-run journeys; T009–T015 remain open.
+
 ## Phase 4 — US2: Target mappings and preview/apply (P1; M2)
 
 Independent test: actual source plus two owned target hosts expose equivalent previews, different bindings and all refusal cases for the same immutable release.

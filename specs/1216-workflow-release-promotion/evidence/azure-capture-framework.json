@@ -1,0 +1,52 @@
+{
+  "verifiedAt": "2026-11-06T04:19:03.427882+00:00",
+  "status": "PASSED",
+  "sourceTree": "8dafe4cb27241942b61e92ad66ecb21d0b7423e0",
+  "fullArchiveBytes": 47110,
+  "fullArchiveSha256": "64600784e3df486fdd848095fe98c70bd0471fc3e824ec0aed4177e86ab47413",
+  "counts": {
+    "shared-builder.trx": 155,
+    "capture.trx": 37
+  },
+  "total": 192,
+  "failed": 0,
+  "skipped": 0,
+  "programComplete": false,
+  "scope": "Controlled owner source/contributor framework with actual shared verifier and durable SQLite archive; excludes actual native/BPMN/ETL source providers/import/activation/retained runs/UI.",
+  "baseHead": "2077ab11c33746fdb700429f48b70da1fc627d11",
+  "worker": "elsa-dev-17",
+  "sdk": "10.0.402",
+  "runnerSha256": "f2fa9ba4adf25802d7b6019d6379fac819112fd4acc87518eba1c97f7919ae50",
+  "sourceInventorySha256": "216eaada8b9b01546f25052d1bf4680e95bf3ff33516659e326ba4d73d125429",
+  "priorPhases": [
+    {
+      "phase": "capture-core-restore",
+      "status": "RESTORE_ONLY",
+      "generatedLocks": 2,
+      "beforeTree": "3db1cc1e9d2d38e9c3a8c54182b7ea228f6a1cb4",
+      "afterTree": "e71feddf7db778dec0adaaf7f45642b8140dd3c2"
+    },
+    {
+      "phase": "capture-core-tests-01",
+      "status": "FAILED",
+      "failure": "Manifest stream overload recursion aborted test process after45 partial tests; not suite acceptance.",
+      "archiveSha256": "e23203b6e271f258732f674d6206a44d5489fca1956e021d88143fcc93570ec5"
+    },
+    {
+      "phase": "capture-core-tests-02",
+      "status": "FAILED",
+      "sharedPassed": 155,
+      "captureStatus": "NOT_RUN_COMPILATION_FAILED",
+      "failure": "Missing Runtime namespaces in capture fixture; source fixed before final phase.",
+      "archiveSha256": "c4d27aa8227a0a2c0c2fc72a9c97dcda1eeed787dc76dec35619961e0546a92e"
+    }
+  ],
+  "limits": {
+    "cpuQuotaPercent": 200,
+    "memoryMiB": 7168,
+    "phaseSeconds": 1200,
+    "systemdMaxSeconds": 1320
+  },
+  "localFullEvidence": "/tmp/3590-remote-phase/capture-candidate/central-03/evidence",
+  "sourceFacts": "49-file closed framework overlay; actual before/after tree and all raw command logs/TRX independently verified. Subsequent workspace source is excluded."
+}

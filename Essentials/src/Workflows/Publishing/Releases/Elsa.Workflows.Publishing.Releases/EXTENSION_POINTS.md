@@ -28,6 +28,24 @@ from an archive store without re-encoding a ZIP. Those bytes remain transport-on
   propagates. A verified result grants no origin confidence, target readiness, catalog write or start authority.
 - **Known implementations:** `ReleaseSemanticVerifier` *(intra-domain — default)*.
 
+## IReleaseBundleBuilder
+
+- **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder`.
+- **Kind:** Replacement; exactly one selected builder per shell, registered by `WorkflowReleaseVerificationFeature`.
+- **Default and lifetime:** `ReleaseBundleBuilder`, internal, scoped.
+- **Purpose:** Freeze bounded member bytes, inspect them through the same exact owner registry and actual-fact rules,
+  then construct manifest declarations from those observed edges, resources and prerequisites. Validate root
+  content/action capabilities, complete reachability, cycles and bounds before returning a bundle.
+  The selected `IReleaseSemanticVerifier` then verifies the constructed transport; a replacement verifier's refusal
+  remains authoritative. Both passes enforce `MaxInspectionBytes`, separately from distinct expanded transport bytes.
+- **Failure:** Structural input throws value-free `ReleaseBundleFormatException`; owner refusal returns a result with
+  no bundle and explicit semantic status/diagnostics. Requested cancellation propagates.
+- **Known implementations:** `ReleaseBundleBuilder` *(intra-domain — default)*.
+
+This service does not acquire source retention or read missing members. Source owners must supply a complete retained
+closure and hold their acquisition boundary through durable archive creation. A returned bundle is not a created durable
+release, an authenticated publication or target admission. Attachments/evidence remain separate archive operations.
+
 ## IReleaseArtifactSemanticVerifier and IReleaseOccurrenceInspector
 
 - **Contracts:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier` and

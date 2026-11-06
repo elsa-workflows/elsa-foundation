@@ -151,3 +151,17 @@ Combine inventory with actual consumer/schema capabilities, storage-driver/type 
 Explicit provider `CompilerFingerprint` is producer provenance, not an assembly-version guess or a requirement to compile on target.
 Host-bundled/missing package metadata remains identified as such or unknown; never invent a NuGet version from assembly metadata.
 Unknown required package/provider provenance or capability is visible and follows the explicit prerequisite/policy contract; promotion installs nothing.
+
+## Source construction and inspection work bounds (source implementation; qualification pending)
+
+`IReleaseBundleBuilder` copies bounded content and discovers actual owner facts before constructing declarations.
+It then invokes the shell's selected `IReleaseSemanticVerifier`; replacement refusal remains authoritative.
+`MaxInspectionBytes` defaults to 256 MiB and charges every member, including aliases of one physical blob.
+It is separate from distinct expanded transport bytes. The verifier checks the actual captured manifest as well as
+the supplied transport wrapper before invoking adapters. Logical prerequisite/resource keys cannot conflict even
+when their full fact tuples differ.
+
+The optional capture package holds exact source callbacks through builder verification, bounded ZIP creation and
+confirmed durable archive acceptance. It requires a schema-ready durable selected archive and refuses incomplete
+source callbacks or conflicting shared content. No source adapter is installed implicitly. Native/BPMN/ETL owner
+acquisition, import and composed release acceptance remain separate open work.
