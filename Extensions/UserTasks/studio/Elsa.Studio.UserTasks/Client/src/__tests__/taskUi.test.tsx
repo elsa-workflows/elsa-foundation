@@ -93,7 +93,8 @@ it("takes forms-only users directly to their permitted form workspace without re
   await act(async () => root.render(<TasksPage api={api(get)} />));
   await act(async () => {});
   expect(container.textContent).toContain("Reusable task forms");
-  await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("Publish a basic form version"); });
+  await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("No reusable forms yet"); });
+  await click("Create form version"); expect(container.textContent).toContain("Publish a basic form version");
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
 });
 
@@ -151,6 +152,7 @@ it("publishes a reusable basic form through the structured field editor", async 
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [] });
   const post = vi.fn().mockResolvedValue({});
   await act(async () => root.render(<FormsPage api={api(get, post)} />));
+  await click("Create form version");
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
   await click("Add field"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
@@ -164,6 +166,56 @@ it("uses advertised operation relations and encodes opaque task identities", asy
   const capability = context.backendSession!.capabilities!.capabilities[0];
   capability.links.find(item => item.rel === "task")!.href = "custom/human-work/{id}";
   await read(context, "opaque/id"); expect(get).toHaveBeenCalledWith("/custom/human-work/opaque%2Fid");
+});
+
+it("clears validation only for response fields that the user corrects", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [
+    { key: "Note", label: "Note", kind: "multiline", required: true, readOnly: false },
+    { key: "Amount", label: "Amount", kind: "number", required: true, readOnly: false }
+  ] } };
+  const post = vi.fn().mockRejectedValue(new StudioHttpError(400, "Correct the response", null, { errors: { Note: "Enter a note", Amount: "Enter an amount" } }));
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} changed={vi.fn()} />));
+  await click("Approve");
+  expect(container.textContent).toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
+  await input(container.querySelector("textarea")!, "Reviewed");
+  expect(container.textContent).not.toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
+  expect(container.textContent).not.toContain("Correct the response");
+});
+
+it("keeps an empty inbox distinct from denied access and hides unavailable paging", async () => {
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : { items: [] });
+  await act(async () => root.render(<TasksPage api={api(get)} />));
+  expect(container.querySelector("aside")).toBeNull();
+  expect(container.textContent).toContain("No tasks here");
+  expect(container.textContent).toContain("0 tasks shown");
+  expect([...container.querySelectorAll("button")].some(button => button.textContent === "Next page")).toBe(false);
+  const denied = vi.fn().mockResolvedValue({ ...identity, canRead: false });
+  await act(async () => root.render(<TasksPage api={api(denied)} />));
+  expect(container.textContent).toContain("Task access unavailable");
+  expect(container.textContent).not.toContain("No tasks here");
+  expect(denied).toHaveBeenCalledTimes(1);
+});
+
+it("preserves opaque paging cursors and returns to the first page when searching", async () => {
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : { items: [task()], next: "opaque/+token" });
+  await act(async () => root.render(<TasksPage api={api(get)} />));
+  await click("Next page");
+  expect(get.mock.calls.some(([path]) => new URL(path, "http://owned").searchParams.get("after") === "opaque/+token")).toBe(true);
+  await input(container.querySelector('input[type="search"]')!, "Purchase");
+  const path = get.mock.calls.filter(([path]) => path.includes("?")).at(-1)![0];
+  expect(new URL(path, "http://owned").searchParams.get("search")).toBe("Purchase");
+  expect(new URL(path, "http://owned").searchParams.has("after")).toBe(false);
+});
+
+it("does not present the previous inbox after a different inbox fails to load", async () => {
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("view=queue") ? Promise.reject(new Error("Queue unavailable")) : { items: [task()] });
+  await act(async () => root.render(<TasksPage api={api(get)} />));
+  expect(container.textContent).toContain("Purchase");
+  const select = container.querySelector("select")!;
+  await act(async () => { select.value = "queue"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(container.textContent).toContain("Tasks unavailable");
+  expect(container.textContent).not.toContain("Purchase");
+  expect(container.textContent).not.toContain("tasks shown");
 });
 
 

@@ -42,7 +42,7 @@ Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse.SpecialistModelProvi
 Elsa.Agent.Specialists.Api.SpecialistsApi
 Elsa.Agent.Specialists.Api.SpecialistsApiFeature
 Elsa.Agent.Specialists.Api.SpecialistsApiFeature.SpecialistsApiFeature() -> void
-NativeEndpoints.Generated.ElsaAgentSpecialistsApiEndpoints
+MinimalEndpoints.Generated.ElsaAgentSpecialistsApiEndpoints
 override Elsa.Agent.Specialists.Api.SpecialistModelCapabilitiesRequest.Equals(object? obj) -> bool
 override Elsa.Agent.Specialists.Api.SpecialistModelCapabilitiesRequest.GetHashCode() -> int
 override Elsa.Agent.Specialists.Api.SpecialistModelCapabilitiesRequest.ToString() -> string!
@@ -64,6 +64,6 @@ static Elsa.Agent.Specialists.Api.SpecialistModelProviderView.operator ==(Elsa.A
 static Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse.operator !=(Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse? left, Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse? right) -> bool
 static Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse.operator ==(Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse? left, Elsa.Agent.Specialists.Api.SpecialistModelProvidersResponse? right) -> bool
 static Elsa.Agent.Specialists.Api.SpecialistsApi.MapSpecialistsApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
-static NativeEndpoints.Generated.ElsaAgentSpecialistsApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
+static MinimalEndpoints.Generated.ElsaAgentSpecialistsApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
 virtual Elsa.Agent.Specialists.Api.SpecialistsApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 virtual Elsa.Agent.Specialists.Api.SpecialistsApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

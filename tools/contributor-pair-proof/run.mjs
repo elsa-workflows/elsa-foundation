@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { observeEditor } from "./diagnostics.mjs";
 
 const images = {
   workbench: {
@@ -40,6 +41,7 @@ let browser;
 let cleanupError;
 let ownershipApproved = false;
 let ownedWorkbenchContainerId;
+let editorDiagnostics;
 
 function log(message) {
   console.log(`[published-pair] ${message}`);
@@ -445,6 +447,10 @@ async function runBrowserJourney() {
   stage = "browser-login";
   await signIn(page);
   log("Authenticated through the published Studio and Workbench sign-in flow");
+  editorDiagnostics = observeEditor(page, {
+    studioOrigin: studioUrl,
+    outputDir: path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), "published-pair-diagnostics")
+  });
 
   stage = "workflow-create";
   const createButton = page.locator('button[title="Create workflow"]');
@@ -458,9 +464,10 @@ async function runBrowserJourney() {
   assert.ok(definitionId, "created workflow definition ID is missing from the Studio URL");
   log(`Created workflow definition ${definitionId} through the Studio UI`);
 
-  stage = "activity-picker-trigger";
+  stage = "activity-picker-trigger-visible";
   const addActivity = page.getByRole("button", { name: "Add activity", exact: true });
   await addActivity.waitFor({ state: "visible" });
+  stage = "activity-picker-trigger-click";
   await addActivity.click();
   stage = "activity-picker-open";
   const menu = page.locator(".wf-connect-menu:visible");
@@ -740,9 +747,16 @@ async function main() {
 try {
   await main();
 } catch (error) {
+  try {
+    const result = await editorDiagnostics?.captureFailure(stage, safeFailureClass(error));
+    if (result && result !== "not-applicable") log(`Editor failure diagnostics: ${result}`);
+  } catch {
+    log("Editor failure diagnostics: capture-unavailable");
+  }
   console.error(`[published-pair] failed during ${stage} (${safeFailureClass(error)})`);
   process.exitCode = 1;
 } finally {
+  try { editorDiagnostics?.dispose(); } catch {}
   if (browser) await browser.close().catch(() => {});
   try {
     await cleanupOwnedResources();

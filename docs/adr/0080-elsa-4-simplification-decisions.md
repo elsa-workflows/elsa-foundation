@@ -42,6 +42,37 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 6 November 2026:** [Entity-aware integrations #3608](../program-goals/entity-aware-integrations.md)
+is authorized for research, necessary product/architecture design and specification, scoped implementation,
+verification, applicable review/merge and resulting-main qualification. The [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671902429)
+supersedes its intake-only delivery state. Entity-aware integrations come first, with external applications
+retaining record authority. The owner selected service connections first and, after the bounded assessment,
+the optional business-record backend as an explicit [follow-on #3916](https://github.com/elsa-workflows/elsa-foundation/issues/3916).
+The current production scope is external entity-aware integration; no record store is claimed. Domain
+applications remain separate compositions. Follow the [staged critical path](../plans/entity-aware-integrations.md):
+assessment/source proof and applicable design/spec agreement precede production implementation. Run beside
+active programs, preserve consolidation's priority one, coordinate shared ownership and keep one active
+implementation leaf. This authorization reactivates no unrelated paused/parked work and approves no unresolved
+architecture. Production/shared-system deployment, production credentials, package release, mandatory CRM,
+wholesale mirroring, arbitrary database access and an unbounded application platform are outside scope.
+
+**Owner amendment, 5 November 2026:** [Activity Data Selection #3882](../program-goals/activity-data-selection.md)
+is authorized for scoped program establishment, a bounded real-Studio customer proof, reviewed production
+contracts/specification and delivery through the normal implementation and acceptance gates. After reviewing
+the research, interaction direction and [delivery plan](../plans/activity-data-selection.md), the owner instructed:
+"Proceed as proposed". Authors select available whole outputs or nested fields at eligible consuming inputs,
+with readable references and optional explicit expression composition, without intermediate variable ceremony.
+Sequencing: M0 establishment #3883, M1 Flowchart/Sequence proof #3884, M2 reviewed contracts/specification #3885,
+then small picker/binding, expression/editing and integrated qualification slices. Reuse feature #3094 and
+preserve its compensation relationship and independently deliverable whole-output scope; #2310 retains text
+expression-authoring ownership. Run beside active programs, preserve consolidation's priority one, coordinate
+shared Studio/runtime paths and reactivate no unrelated work. Keep one integration lane; parallel workers use
+separate leaves/worktrees only after their shared contracts are committed. Basic data selection is language-neutral;
+authorized test-run examples follow the metadata-first core journey as a separately scheduled increment.
+Accepted ADR 0045 causal semantics remain; this does not settle draft activity-reference/coercion proposals or
+approve unresolved architecture. Establishment and the research proof are not product acceptance. Releases,
+deployment, credentials, provider purchases and publisher activation are excluded. The remaining decisions apply.
+
 **Owner amendment, 4 November 2026:** [Elsa 4 StateMachine #3815](../program-goals/state-machine.md)
 is authorized for interactive design, program establishment and delivery once the applicable design/spec
 agreement gates allow it. The owner explicitly selected both hierarchical states and parallel regions for

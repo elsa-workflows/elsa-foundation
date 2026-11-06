@@ -25,7 +25,7 @@ public class SpecialistsApiFeature : IWebShellFeature
         ArgumentNullException.ThrowIfNull(services);
         services.AddElsaEndpoints();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Elsa.Foundation.Identity.Core.Authorization.IPermissionContributor, AgentSourcePermissions>());
-        services.TryAddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, SpecialistsApiFaultRenderer>(SpecialistsApi.OwnerId);
+        services.TryAddKeyedSingleton<MinimalEndpoints.IEndpointFaultRenderer, SpecialistsApiFaultRenderer>(SpecialistsApi.OwnerId);
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-specialists", 1,
         [
             new("agent-specialist-model-providers", SpecialistsApi.ModelProvidersRoute, true),
