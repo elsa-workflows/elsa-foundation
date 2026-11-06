@@ -414,9 +414,11 @@ per connection string, through `EfSqliteSerialOpenInterceptor` (#2209). Microsof
 connection to two opens of the same connection string that check out at once (dotnet/efcore#39008, fixed upstream in
 10.0.13). The two then share one handle, and a host start whose module migrators, finalization gates and backfills open
 connections to `elsa.db` together fails with "unable to delete/modify user-function due to active statements". Only the
-checkout waits, not the connection's use, and the other providers do not carry the interceptor. A context bound to
-SQLite outside the binding does not take the gate. Until Elsa pins 10.0.13, such a context must not share a module's
-connection string. The gate is removed once that version is pinned (#2220); a test fails as soon as it is.
+checkout waits, not the connection's use, and the other providers do not carry the interceptor. An ordinary consumer
+using its own SQLite options can call `EfRelationalProviderBinding.ConfigureSqliteConnectionSafety(builder)` to join
+that same gate without changing its provider, connection or migration settings. Every opener sharing a pool must use
+the binding or helper; an unmitigated context must not share that connection string while this pinned version remains.
+The gate is removed once the fixed version is pinned (#2220); a test fails as soon as it is.
 
 ## Shared transactions
 

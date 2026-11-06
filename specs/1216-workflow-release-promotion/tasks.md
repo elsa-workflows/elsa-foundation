@@ -35,6 +35,10 @@ Independent test: create/export/import a native/BPMN/ETL release with a shared t
 - [ ] T014 [US1] Add release creation/export/import/inspection API and source Studio selection/download, including all owner root roles, in release API and `Studio/src/essentials/Elsa.Studio.Workflows/`.
 - [ ] T015 [US1] Qualify exact owner round-trip, arbitrary retained ETL version, same-identity/different-content, source capture/GC races and dependency-only independent-start refusal using existing domain suites and `tools/releases/`.
 
+T009 archive prerequisite: the consumer-context SQLite archive is implemented with 44 passing local cases, raw-byte integrity
+and bounded consistent reads, atomic capture/retry, scope isolation, pooled concurrency and killed-writer/reopen witnesses.
+It stores transport-only captures. Source acquisition/retention through complete capture and all owner import paths remain open.
+
 ## Phase 4 — US2: Target mappings and preview/apply (P1; M2)
 
 Independent test: actual source plus two owned target hosts expose equivalent previews, different bindings and all refusal cases for the same immutable release.
@@ -48,7 +52,7 @@ Independent test: actual source plus two owned target hosts expose equivalent pr
 
 T017 prerequisite checkpoint: Connections exposes creation identity/revision observations and same-read guards, while
 store saves fence creation identity plus revision to prevent a stale save restoring a deleted incarnation. Local core/API
-and SQLite suites pass 175 and 50 cases; native relational-provider checks remain pending. Release mapping/context,
+and SQLite suites pass 175 and 50 cases; owned PostgreSQL, SQL Server and MySQL provider journeys also pass without skips. Release mapping/context,
 Secrets and ETL owner integration remain open; this is not target-preview or retained-run acceptance.
 
 ## Phase 5 — US3: Durable activation, recovery and rollback (P1; M3)
