@@ -103,7 +103,7 @@ internal static class JobsNativeBoundary
     internal static void ValidatePin(JobWorkflowHandlerPin pin)
     {
         if (pin is null || pin.FormatVersion != Version || pin.Handler is null || pin.Policy is null || pin.Policy.Retry is not { } retry ||
-            pin.AssociationMode != JobAssociationMode.Awaited) throw Invalid();
+            !Enum.IsDefined(pin.AssociationMode)) throw Invalid();
         Name(pin.Handler.JobType); Name(pin.Handler.Version); Name(pin.Queue); Schema(pin.InputSchema); Schema(pin.ResultSchema);
         if (retry.MaximumAttempts is < 1 or > 1000 || retry.InitialBackoff < TimeSpan.Zero ||
             retry.MaximumBackoff < retry.InitialBackoff || retry.MaximumBackoff > TimeSpan.FromDays(365) ||
@@ -116,7 +116,8 @@ internal static class JobsNativeBoundary
     internal static void ValidateInvocation(RunJobInvocation value)
     {
         if (value is null || value.FormatVersion != Version || value.Contract is null || value.Owner is null || value.HandlerPin is null ||
-            value.Input is null || value.Input.Schema != value.HandlerPin.InputSchema) throw Invalid();
+            value.Input is null || value.Input.Schema != value.HandlerPin.InputSchema ||
+            value.HandlerPin.AssociationMode != JobAssociationMode.Awaited) throw Invalid();
         Scope(value.Scope); ValidatePin(value.HandlerPin);
         Pin(value.Executable);
         foreach (var field in new[] { value.WorkflowExecutionId, value.InvocationId, value.OperationKey, value.InitialAttemptId,

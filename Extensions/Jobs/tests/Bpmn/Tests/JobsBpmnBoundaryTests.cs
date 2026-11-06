@@ -94,7 +94,7 @@ public sealed class JobsBpmnBoundaryTests
     {
         var f = new Fixture(outcome);
         var query = new QueryState();
-        var validator = new JobsBpmnResultValidator(f.Consumer(), new Inspector(f.Evidence), query.Port());
+        var validator = new JobsBpmnResultValidator(f.Consumer(), new Inspector(f.Evidence), query.Port(), new SubmissionInspector(null));
         var missing = await Assert.ThrowsAsync<JobException>(() => validator.ValidateAsync(f.Context).AsTask());
         Assert.Equal("jobs.bpmn.invalid", missing.Code);
         Assert.Equal(1, query.Reads);
@@ -115,10 +115,10 @@ public sealed class JobsBpmnBoundaryTests
     {
         var f = new Fixture();
         var query = new QueryState { Error = new JobPersistenceException("find-continuation", new IOException("owned test fault")) };
-        await new JobsBpmnResultValidator(f.Consumer(), new Inspector(null), query.Port()).ValidateAsync(f.Context);
+        await new JobsBpmnResultValidator(f.Consumer(), new Inspector(null), query.Port(), new SubmissionInspector(null)).ValidateAsync(f.Context);
         Assert.Equal(0, query.Reads);
         var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
-            new JobsBpmnResultValidator(f.Consumer(), new Inspector(f.Evidence), query.Port()).ValidateAsync(f.Context).AsTask());
+            new JobsBpmnResultValidator(f.Consumer(), new Inspector(f.Evidence), query.Port(), new SubmissionInspector(null)).ValidateAsync(f.Context).AsTask());
         Assert.Equal("jobs.bpmn.result-unavailable", failure.Code);
         Assert.Same(query.Error, failure.InnerException);
     }
@@ -131,7 +131,7 @@ public sealed class JobsBpmnBoundaryTests
         var sourceFailure = new JobException("jobs.native.evidence-unavailable", "The native evidence read is temporarily unavailable.",
             new IOException("owned test read failure"));
         var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
-            new JobsBpmnResultValidator(f.Consumer(), new UnavailableInspector(sourceFailure), query.Port()).ValidateAsync(f.Context).AsTask());
+            new JobsBpmnResultValidator(f.Consumer(), new UnavailableInspector(sourceFailure), query.Port(), new SubmissionInspector(null)).ValidateAsync(f.Context).AsTask());
         Assert.Equal("jobs.bpmn.result-unavailable", failure.Code);
         Assert.Same(sourceFailure, failure.InnerException);
         Assert.Equal(0, query.Reads);
@@ -147,7 +147,7 @@ public sealed class JobsBpmnBoundaryTests
         var f = new Fixture();
         var settlement = new Settlement();
         var context = f.Delivery(disposition, lifecycle);
-        await new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(f.Evidence), settlement).CompleteAsync(context);
+        await new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(f.Evidence), settlement, new SubmissionInspector(null)).CompleteAsync(context);
         Assert.Equal(1, settlement.Calls);
         Assert.Same(f.Context.Worker, settlement.Worker);
     }
@@ -163,7 +163,7 @@ public sealed class JobsBpmnBoundaryTests
             malformedTerminal ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.Running,
             omitTerminalProof: malformedTerminal);
         var error = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(() =>
-            new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(f.Evidence), settlement).CompleteAsync(context).AsTask());
+            new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(f.Evidence), settlement, new SubmissionInspector(null)).CompleteAsync(context).AsTask());
         Assert.Equal(PostCommitFailureKind.Transient, error.Kind);
         Assert.Equal("jobs.bpmn.settlement-pending", error.Code);
         Assert.Equal(0, settlement.Calls);
@@ -174,7 +174,7 @@ public sealed class JobsBpmnBoundaryTests
     {
         var f = new Fixture();
         var settlement = new Settlement { Error = new JobException("jobs.native.settlement-unavailable", "The exact origin proof remains owed.") };
-        var contributor = new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(null), settlement);
+        var contributor = new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(null), settlement, new SubmissionInspector(null));
         var context = f.Delivery(BpmnNativeWorkInputDisposition.Rejected, RuntimeModelLifecycle.Running);
         var error = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(() => contributor.CompleteAsync(context).AsTask());
         Assert.Equal(PostCommitFailureKind.Transient, error.Kind);
@@ -199,6 +199,136 @@ public sealed class JobsBpmnBoundaryTests
             new(f.Projected.Completion.InvocationId, f.Projected.Completion.AttemptId, f.Projected.Completion.ContractFingerprint,
                 "Done", f.Projected.Completion.ResultType, null, true), null);
         JobsBpmnBoundary.RequireEvidence(f.Address, f.Evidence, hidden);
+    }
+
+    [Theory]
+    [InlineData(RuntimeModelLifecycle.Running)]
+    [InlineData(RuntimeModelLifecycle.WaitingIncident)]
+    public async Task Independent_submission_lifetime_remains_active_without_positive_root_terminal_proof(RuntimeModelLifecycle lifecycle)
+    {
+        var f = new SubmissionControl();
+        var source = new JobsBpmnAssociationSource(f.Consumer(new(f.Address, BpmnNativeWorkObservationKind.NotConsumed, 2, lifecycle, null, null, null)));
+        var proof = await source.InspectSubmissionLifetimeAsync(f.Evidence.Owner);
+        Assert.Equal(JobWorkflowSubmissionLifetimeStatus.Active, proof.Status);
+        Assert.Null(proof.ModelReceiptId);
+    }
+
+    [Theory]
+    [InlineData("Completed", JobWorkflowSubmissionLifetimeStatus.Completed)]
+    [InlineData("Faulted", JobWorkflowSubmissionLifetimeStatus.Faulted)]
+    [InlineData("Cancelled", JobWorkflowSubmissionLifetimeStatus.Cancelled)]
+    public async Task Independent_submission_lifetime_uses_exact_terminal_root_receipt(string status, JobWorkflowSubmissionLifetimeStatus expected)
+    {
+        var f = new SubmissionControl();
+        var source = new JobsBpmnAssociationSource(f.Consumer(new(f.Address, BpmnNativeWorkObservationKind.RootTerminal,
+            3, RuntimeModelLifecycle.TerminalPendingSettlement, status, null, null, "root-terminal-proof")));
+        var proof = await source.InspectSubmissionLifetimeAsync(f.Evidence.Owner);
+        Assert.Equal(expected, proof.Status);
+        Assert.Equal("root-terminal-proof", proof.ModelReceiptId);
+        await Assert.ThrowsAsync<JobException>(() => source.InspectSubmissionLifetimeAsync(f.Evidence.Owner with { MaterialId = "other" }).AsTask());
+        var missing = new JobsBpmnAssociationSource(f.Consumer(new(f.Address, BpmnNativeWorkObservationKind.RootTerminal,
+            3, RuntimeModelLifecycle.TerminalPendingSettlement, status, null, null)));
+        await Assert.ThrowsAsync<JobException>(() => missing.InspectSubmissionLifetimeAsync(f.Evidence.Owner).AsTask());
+    }
+
+    [Fact]
+    public async Task Submission_requires_positive_canonical_admission_before_live_root_progression_without_a_result_grant()
+    {
+        var f = new SubmissionControl();
+        var query = new QueryState();
+        await new JobsBpmnResultValidator(f.Consumer(), new Inspector(null), query.Port(), new SubmissionInspector(f.Evidence)).ValidateAsync(f.Context);
+        Assert.Equal(0, query.Reads);
+        var wrongCanonical = f.Evidence with { Acceptance = f.Evidence.Acceptance! with { JobId = "other-canonical-job" } };
+        await Assert.ThrowsAsync<JobException>(() => new JobsBpmnResultValidator(f.Consumer(), new Inspector(null), query.Port(),
+            new SubmissionInspector(wrongCanonical)).ValidateAsync(f.Context).AsTask());
+        var wrongAttempt = f.Evidence with { NativeAttemptId = "other-attempt" };
+        await Assert.ThrowsAsync<JobException>(() => new JobsBpmnResultValidator(f.Consumer(), new Inspector(null), query.Port(),
+            new SubmissionInspector(wrongAttempt)).ValidateAsync(f.Context).AsTask());
+        var unavailable = new JobException("jobs.native.submission-unavailable", "Admission remains owed.");
+        var deferred = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => new JobsBpmnResultValidator(f.Consumer(),
+            new Inspector(null), query.Port(), new SubmissionInspector(null, unavailable)).ValidateAsync(f.Context).AsTask());
+        Assert.Same(unavailable, deferred.InnerException);
+        Assert.Equal(0, query.Reads);
+    }
+
+    [Fact]
+    public async Task Cancelled_before_admission_completed_submission_cannot_advance_live_root_but_can_settle_exact_terminal_root()
+    {
+        var f = new SubmissionControl();
+        var cancelled = f.Evidence with { Disposition = JobNativeSubmissionDisposition.CancelledBeforeAdmission, Acceptance = null };
+        await Assert.ThrowsAsync<JobException>(() => new JobsBpmnResultValidator(f.Consumer(), new Inspector(null), new QueryState().Port(),
+            new SubmissionInspector(cancelled)).ValidateAsync(f.Context).AsTask());
+        var settlement = new Settlement();
+        var contributor = new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(null), settlement, new SubmissionInspector(cancelled));
+        await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(() => contributor.CompleteAsync(f.Delivery(false)).AsTask());
+        Assert.Equal(0, settlement.Calls);
+        await contributor.CompleteAsync(f.Delivery(true));
+        Assert.Equal(1, settlement.Calls);
+        var beforeHandoff = cancelled with { NativeStatus = ActivityExecutionStatus.Cancelled, NativeAttemptId = null,
+            Completion = null, JobId = null, RequestSha256 = null, Origin = null, NativeCancellationReceiptId = "exact-native-cancellation-proof" };
+        var physicalCancellation = new BpmnNativeWorkResultSnapshot("actual-cancellation-source", WorkflowExecutionStatus.Cancelled, null, null);
+        JobsBpmnBoundary.RequireSubmissionEvidence(f.Address, beforeHandoff, physicalCancellation, terminalCleanup: true);
+        Assert.Throws<JobException>(() => JobsBpmnBoundary.RequireSubmissionEvidence(f.Address, beforeHandoff, physicalCancellation));
+        Assert.Throws<JobException>(() => JobsBpmnBoundary.RequireSubmissionEvidence(f.Address,
+            beforeHandoff with { NativeCancellationReceiptId = null }, physicalCancellation, terminalCleanup: true));
+    }
+
+    [Fact]
+    public void Positive_submission_pre_admission_fault_uses_native_phase_proof_and_matching_fault_projection()
+    {
+        var f = new SubmissionControl();
+        var rejected = f.Evidence with { NativeStatus = ActivityExecutionStatus.Faulted, Completion = null,
+            Disposition = JobNativeSubmissionDisposition.RejectedBeforeAdmission, JobId = null, RequestSha256 = null, Origin = null, Acceptance = null };
+        var result = new BpmnNativeWorkResultSnapshot("actual-fault-source", WorkflowExecutionStatus.Faulted, null, "jobs.native.admission-invalid");
+        JobsBpmnBoundary.RequireSubmissionEvidence(f.Address, rejected, result);
+        Assert.Throws<JobException>(() => JobsBpmnBoundary.RequireSubmissionEvidence(f.Address, rejected,
+            new("actual-fault-source", WorkflowExecutionStatus.Faulted, null, "generic-fault")));
+        Assert.Throws<JobException>(() => JobsBpmnBoundary.RequireSubmissionEvidence(f.Address, rejected, f.Context.Result));
+    }
+
+    [Fact]
+    public async Task Rejected_submission_transport_receipt_with_live_root_cannot_release_owed_admission()
+    {
+        var f = new SubmissionControl();
+        var settlement = new Settlement();
+        var contributor = new JobsBpmnResultDeliveryContributor(f.Consumer(), new Inspector(null), settlement, new SubmissionInspector(f.Evidence));
+        await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(() => contributor.CompleteAsync(f.Delivery(false)).AsTask());
+        Assert.Equal(0, settlement.Calls);
+        await contributor.CompleteAsync(f.Delivery(true));
+        Assert.Equal(1, settlement.Calls);
+    }
+
+    private sealed class SubmissionControl
+    {
+        private readonly Fixture original = new();
+        internal BpmnNativeWorkAddress Address { get; }
+        internal JobNativeSubmissionEvidence Evidence { get; }
+        internal BpmnNativeWorkResultValidation Context { get; }
+        internal SubmissionControl()
+        {
+            var prior = original.Address;
+            var contract = new ActivityInvocationContractIdentity(SubmitJob.ActivityType, "1.0.0", new string('c', 64));
+            Address = new(1, prior.Origin, null, prior.LogicalDefinitionId, prior.ElementId, "submit-job-root", SubmitJob.ActivityType,
+                "1.0.0", contract, new(1, BpmnServiceFaultDisposition.FinalFault, 1));
+            var completion = new SubmitJobResult(1, "canonical-submitted-job", "PendingAdmission", JsonSerializer.SerializeToElement(new { handoff = "opaque" }));
+            Evidence = new(JobsBpmnBoundary.Owner(Address), prior.Origin.WorkerExecutable, prior.Origin.WorkerExecutionId,
+                "submit-invocation", Address.WorkerRootNodeId, contract, "submit-initial-attempt", ActivityExecutionStatus.Completed,
+                completion, JobNativeSubmissionDisposition.Accepted, completion.JobId, new string('d', 64),
+                new("submission-provider", prior.Origin.ExecutionId, "submission-origin", new string('d', 64)),
+                new(completion.JobId, Fixture.At, Fixture.At.AddDays(30), 1));
+            var result = new BpmnNativeWorkResultSnapshot("actual-result-source", WorkflowExecutionStatus.Completed,
+                new(Evidence.InvocationId, Evidence.NativeAttemptId, contract.SchemaFingerprint, "Done", new(typeof(SubmitJobResult).FullName!),
+                    JsonSerializer.SerializeToElement(completion), false), null);
+            Context = new(prior.Origin, prior.Origin.ResultInputId, new string('e', 64), result, original.Context.Worker);
+        }
+        internal IBpmnNativeWorkConsumer Consumer(BpmnNativeWorkObservation? observation = null) => new ConsumerReader(Address,
+            observation ?? new(Address, BpmnNativeWorkObservationKind.NotConsumed, 1, RuntimeModelLifecycle.Running, null, null, null));
+        internal BpmnNativeWorkResultDelivery Delivery(bool terminal)
+        {
+            var prior = original.Delivery(BpmnNativeWorkInputDisposition.Rejected, terminal ? RuntimeModelLifecycle.TerminalPendingSettlement : RuntimeModelLifecycle.Running);
+            return new(Context.Origin, Context.Worker, Context.Result, prior.InputReceipt, prior.Disposition, prior.ModelRevision,
+                prior.Lifecycle, prior.TerminalStatus, prior.TerminalReceiptId);
+        }
     }
 
     private sealed class Fixture
@@ -268,6 +398,12 @@ public sealed class JobsBpmnBoundaryTests
     {
         public ValueTask<BpmnNativeWorkAddress> ResolveAsync(RuntimeModelNativeWorkOrigin origin, CancellationToken cancellationToken = default) => ValueTask.FromResult(address);
         public ValueTask<BpmnNativeWorkObservation> InspectAsync(RuntimeModelNativeWorkOrigin origin, CancellationToken cancellationToken = default) => ValueTask.FromResult(observation);
+    }
+
+    private sealed class SubmissionInspector(JobNativeSubmissionEvidence? evidence, JobException? error = null) : IJobNativeSubmissionInspector
+    {
+        public ValueTask<JobNativeSubmissionEvidence?> InspectSubmissionWorkerAsync(WorkflowExecutionState worker, CancellationToken cancellationToken = default) =>
+            error is null ? ValueTask.FromResult(evidence) : ValueTask.FromException<JobNativeSubmissionEvidence?>(error);
     }
 
     private sealed class Inspector(JobNativeDeliveryEvidence? evidence) : IJobNativeDeliveryInspector

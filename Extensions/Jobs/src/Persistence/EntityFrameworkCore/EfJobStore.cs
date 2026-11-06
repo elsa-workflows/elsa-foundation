@@ -136,9 +136,12 @@ internal sealed partial class EfJobStore(IDbContextFactory<JobsDbContext> contex
         if (row.Digest != digest) throw new JobException("jobs.operation.conflict", "The operation identity recognizes different immutable content.");
         return JobStoreCodec.ReadRetained<T>(row.ResultJson);
     }
-    private static void Remember<T>(JobsDbContext db, JobScope scope, JobOperation operation, string digest, T result)
+    private static void Remember<T>(JobsDbContext db, JobScope scope, JobOperation operation, string digest, T result,
+        JobOperationKind kind, long now, JobOperationTarget target)
     {
         var row = JobStoreCodec.New<JobOperationRecord>(scope, "operation", operation.OperationId);
-        row.Digest = digest; row.ResultJson = JobStoreCodec.Json(result); db.Operations.Add(row);
+        row.Digest = digest; row.ResultJson = JobStoreCodec.Json(result);
+        row.AuditJson = WriteAudit(new(1, scope, operation, kind, JobStoreCodec.At(now), digest, target, OperationConfirmation(result)));
+        db.Operations.Add(row);
     }
 }

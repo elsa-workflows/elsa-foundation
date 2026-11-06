@@ -298,6 +298,28 @@ public sealed class JobsHandlerPinPublicationTests
             .EnrichCompilationAsync(Request(), Source(), node);
     }
 
+    [Theory]
+    [InlineData(JobAssociationMode.Independent)]
+    [InlineData(JobAssociationMode.Detached)]
+    public async Task Submission_publication_pins_only_explicit_nonawaiting_modes_without_a_handler(JobAssociationMode mode)
+    {
+        var bindings = Bindings(); bindings[nameof(SubmitJob.AssociationMode)] = Literal(nameof(SubmitJob.AssociationMode), mode);
+        var node = new ExecutableNode("submit-node", "authored-submit", SubmitJob.ActivityType, "1.0.0", Descriptor(SubmitJob.ActivityType),
+            bindings, new Dictionary<string, string> { ["other-domain"] = "preserved" });
+        var enriched = await EnrichAsync(node);
+        var pin = JobWorkflowHandlerPin.Parse(enriched.RootActivity.Metadata[SubmitJob.PinMetadataKey]);
+        Assert.Equal(mode, pin.AssociationMode); Assert.Equal(Pin().Handler, pin.Handler); Assert.Empty(enriched.Dependencies);
+        Assert.Equal("preserved", enriched.RootActivity.Metadata["other-domain"]);
+    }
+
+    [Fact]
+    public async Task Submission_publication_refuses_awaited_mode_instead_of_creating_a_hidden_wait()
+    {
+        var node = new ExecutableNode("submit-node", "authored-submit", SubmitJob.ActivityType, "1.0.0", Descriptor(SubmitJob.ActivityType),
+            Bindings(), new Dictionary<string, string>());
+        await Assert.ThrowsAsync<ArgumentException>(() => EnrichAsync(node));
+    }
+
     private static ServiceCollection PublicationServices()
     {
         var services = new ServiceCollection();

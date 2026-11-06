@@ -1,4 +1,5 @@
 using Elsa.Jobs.Core;
+using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Jobs;
 
 internal sealed class JobClient(IServiceProvider services, JobRuntimeSettings settings) : IJobClient
@@ -12,6 +13,7 @@ internal sealed class JobClient(IServiceProvider services, JobRuntimeSettings se
         if (submission.Request.Association is not null)
             throw new JobException("jobs.association.untrusted", "Ordinary job submission cannot supply a trusted workflow association.");
         var request = submission.Request;
+        foreach (var policy in services.GetServices<IJobDataPolicy>()) policy.ValidateAdmission(scope, request);
         var admission = new JobAdmission(scope, Guid.NewGuid().ToString("N"), submission.IdempotencyKey,
             JobRequestDigest.Compute(request), request, null);
         var result = await JobAuthority.Commands(services).AdmitAsync(admission, cancellationToken);

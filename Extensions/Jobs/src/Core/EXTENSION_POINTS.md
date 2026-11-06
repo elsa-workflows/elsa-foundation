@@ -81,3 +81,15 @@ The [README](README.md) specifies each command's responsibility and the distinct
 permission, physical execution, selected result and model consumption. The
 [lifecycle contract](../../../../specs/1218-standalone-jobs/contracts/job-lifecycle.md) is the
 reviewed integration target; model adapters do not transfer their continuation policy into this package.
+
+
+### Operation audit inspection
+
+The existing `IJobQueries` replacement includes
+`ValueTask<JobOperationAuditSnapshot?> FindOperationAuditAsync(JobScope scope, string operationId, CancellationToken cancellationToken = default)`
+and `ValueTask<JobPage<JobOperationAuditSnapshot>> ListOperationAuditsAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default)`.
+The EF authority retains the original first operation metadata atomically with each of its eight
+existing administrative receipts. A replacement preserves original actor/reason/time and exact
+receipt replay, bounded scope/keyset paging, typed target/confirmation metadata without payloads,
+and explicit legacy/corrupt-unavailable projections. Hosts authorize these reads; the contract grants
+no global or cross-tenant authority and makes no complete per-job history promise.

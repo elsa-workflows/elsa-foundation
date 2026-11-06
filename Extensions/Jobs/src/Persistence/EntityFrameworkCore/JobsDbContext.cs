@@ -39,7 +39,7 @@ internal abstract class JobsDbContext(DbContextOptions options) : DbContext(opti
         modelBuilder.Entity<JobClaimCursorRecord>().ToTable("elsa_jobs_claim_cursors");
         modelBuilder.Entity<JobClaimGrantRecord>().ToTable("elsa_jobs_claim_grants");
         modelBuilder.Entity<JobPhysicalReceiptRecord>().ToTable("elsa_jobs_receipts").HasIndex(x => new { x.ScopeKey, x.JobKey, x.Key });
-        modelBuilder.Entity<JobOperationRecord>().ToTable("elsa_jobs_operations");
+        modelBuilder.Entity<JobOperationRecord>().ToTable("elsa_jobs_operations").HasIndex(x => new { x.ScopeKey, x.Key });
         modelBuilder.Entity<JobScheduleRecord>().ToTable("elsa_jobs_schedules").HasIndex(x => new { x.ScopeKey, x.Enabled, x.NextOccurrence, x.Key });
         modelBuilder.Entity<JobOccurrenceRecord>().ToTable("elsa_jobs_occurrences");
         modelBuilder.Entity<JobDeliveryRecord>().ToTable("elsa_jobs_deliveries").HasIndex(x => new { x.ScopeKey, x.Acknowledged, x.Key });

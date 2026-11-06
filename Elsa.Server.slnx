@@ -188,6 +188,8 @@
     <Project Path="Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj" />
     <Project Path="Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj" />
     <Project Path="Extensions/Jobs/src/Tooling/Elsa.Jobs.Tooling.csproj" />
+    <Project Path="Extensions/Jobs/src/Api/Elsa.Jobs.Api.csproj" />
+    <Project Path="Extensions/Jobs/src/Secrets/Elsa.Jobs.Secrets.csproj" />
   </Folder>
   <Folder Name="/Extensions/Jobs/src/Persistence/">
     <Project Path="Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj" />
@@ -208,6 +210,12 @@
   <Folder Name="/Extensions/Jobs/tests/Workflows/">
     <Project Path="Extensions/Jobs/tests/Workflows/Runtime/Tests/Elsa.Jobs.Workflows.Runtime.Tests.csproj" />
     <Project Path="Extensions/Jobs/tests/Workflows/Design/Elsa.Jobs.Workflows.Design.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Jobs/tests/Api/">
+    <Project Path="Extensions/Jobs/tests/Api/Tests/Elsa.Jobs.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Jobs/tests/Secrets/">
+    <Project Path="Extensions/Jobs/tests/Secrets/Tests/Elsa.Jobs.Secrets.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Jobs/tests/Bpmn/">
     <Project Path="Extensions/Jobs/tests/Bpmn/Tests/Elsa.Jobs.Bpmn.Tests.csproj" />

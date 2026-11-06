@@ -57,10 +57,14 @@ internal sealed class JobAttemptSession(JobAttemptLease lease) : IDisposable
 }
 
 internal sealed class JobProgressReporter(JobAttemptSession session, IServiceScopeFactory scopes,
-    JobRuntimeSettings settings) : IJobProgressReporter
+    JobRuntimeSettings settings, IReadOnlyList<IJobDataPolicy>? dataPolicies = null,
+    Func<JobExecutionContext>? invocationContext = null) : IJobProgressReporter
 {
     public async ValueTask ReportAsync(JobProgress progress, CancellationToken cancellationToken = default)
     {
+        if (session.Exited || session.OwnershipLost)
+            throw new JobException("jobs.progress.lease-lost", "This physical attempt no longer owns progress reporting.");
+        ValidateData(progress);
         JobValidation.Progress(progress, settings);
         if (!await session.Reports.WaitAsync(0, cancellationToken))
             throw new JobException("jobs.progress.busy", "Only one progress report may be in flight for an attempt.");
@@ -71,6 +75,7 @@ internal sealed class JobProgressReporter(JobAttemptSession session, IServiceSco
             {
                 if (session.Exited || session.OwnershipLost)
                     throw new JobException("jobs.progress.lease-lost", "This physical attempt no longer owns progress reporting.");
+                ValidateData(progress);
                 await using var scope = scopes.CreateAsyncScope();
                 // Observational progress must not consume the renewal slack or build an unbounded
                 // waiter backlog in front of the heartbeat. At most one report is in flight.
@@ -92,5 +97,12 @@ internal sealed class JobProgressReporter(JobAttemptSession session, IServiceSco
             finally { session.Commands.Release(); }
         }
         finally { session.Reports.Release(); }
+    }
+
+    private void ValidateData(JobProgress progress)
+    {
+        if (dataPolicies is not { Count: > 0 }) return;
+        var context = invocationContext?.Invoke() ?? throw new JobDataPolicyException();
+        foreach (var policy in dataPolicies) policy.ValidateProgress(context, progress);
     }
 }

@@ -1,6 +1,6 @@
 # Jobs native workflow adapter
 
-This optional package adds an awaited `RunJob` saved boundary. Standalone Jobs Core, client, worker and
+This optional package adds an awaited `RunJob` saved boundary and an independent `SubmitJob` checkpoint boundary. Standalone Jobs Core, client, worker and
 EF provider keep their standalone package closure. This adapter references public native runtime
 contracts and adds no runtime-to-Design dependency or handler implementation selection.
 
@@ -13,8 +13,7 @@ unqualified. See [the feature tasks](../../../../../specs/1218-standalone-jobs/t
 literal handler/version, input/result schemas, queue, execution policy and association mode. Runtime
 compares the same literal selections with the descriptor without resolving an installed handler.
 Materialized `Input` and `NotBefore` are captured once. Inputs copied into this durable request refuse
-direct Secret binding; fixed selections refuse it at publication. The initial activity supports only
-Awaited. Independent, detached and submission-only semantics require their separate reviewed scope.
+direct Secret binding; fixed selections refuse it at publication. `RunJob` supports only Awaited. `SubmitJob` requires an explicit Independent or Detached pin.
 
 The activity suspends first. `BookmarkCreated` enrichment captures the actual bookmark, registration,
 opaque resume target, full native executable and invocation contract. The same checkpoint freezes
@@ -100,3 +99,33 @@ and read-only before native claim/activation. A shared startup validator contrib
 and `IHostedService`; the optional delivery worker contributes `IBackgroundTask` and `IHostedService`
 through one instance. See the [native runtime catalog](../../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md)
 and [Tasks catalog](../../../../../Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md).
+
+
+`SubmitJob` completes without a bookmark or result-delivery registration. It returns a typed
+`SubmitJobResult` whose stable `JobId` is a submission address and whose `AdmissionState` explicitly
+remains `PendingAdmission`; it is not `JobAcceptance`. The bounded opaque `Submission` field retains
+the once-materialized input, logical handler/policy pin, full executable/contract and actual nested
+invocation owner. The same native completion checkpoint freezes `jobs.native.submission.v1` and a
+required `Elsa.Jobs.Submit.v1` outbox source. A handler result is never needed to continue this parent.
+
+The sender rechecks its actual physical source and retained completion, then admits the origin-protected
+request even after normal parent completion. Actual acceptance must name that deterministic JobId;
+a different canonical winner is an owed conflict rather than a substituted success. The public
+`IJobNativeSubmissionInspector` proves canonical Jobs acceptance from the exact protected origin,
+retained request and native final completion chain. Missing state or a pending origin never becomes
+acceptance. A model bridge must prove that acceptance before consuming the helper's completion.
+
+Independent submission inherits explicit parent cancellation and survives normal completion/fault.
+Its additional required `Elsa.Jobs.SubmissionOwnership.v1` source remains owed while the exact owning
+parent is active, preserving native history through the existing required-source deletion fence even
+when admission is already Delivered. Explicit cancellation creates or replays the exact CancelOrigin
+responsibility; normal terminality releases that lifetime responsibility after admission is confirmed.
+Detached submission keeps the same exact model/definition/version/invocation pause association but
+has no inherited cancellation or owner-lifetime source. Both modes use null continuation and create no
+Jobs result-delivery/ACK obligation. A model-owned helper's completion is not its root's lifetime:
+its selected association source must additionally implement `IJobWorkflowSubmissionLifetimeSource`.
+
+A positive native owner-cancellation phase also covers cancellation before the first invocation.
+It records the exact full pinned cancellation marker; a missing submission alone never proves zero
+admission. Source controls for these paths are unexecuted until the immutable native/BPMN qualification
+runs. The public inspector's phase classification and cancellation receipt do not grant model authority.

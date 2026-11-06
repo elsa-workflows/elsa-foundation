@@ -36,3 +36,18 @@ before live native-result advancement. Both use public owner projections; neithe
 BPMN documents or writes a second model result ledger.
 `JobsBpmnResultDeliveryContributor` consumes the public native settlement authority from the existing
 BPMN result-delivery source; it adds no independent worker ACK intent.
+
+Independent and detached service submissions use a closed pinned `SubmitJob` worker. Its typed
+`PendingAdmission` completion is a durable model handoff rather than a Jobs acceptance receipt.
+Before live service-result progression, the optional adapter requires the native submission inspector
+to prove the exact canonical protected origin, request and returned JobId. A missing or conflicting
+admission remains owed. These submissions have no selected-result wait or continuation grant.
+
+An independent submission keeps the genuine BPMN root as its lifecycle owner after the helper
+completes. The public model consumer supplies exact Active/Completed/Faulted/Cancelled observations;
+terminal observations require its retained terminal receipt. Explicit cancellation propagates to
+independent work, while detached work retains its association without inheriting cancellation.
+The existing result delivery contributor settles only the submission admission responsibility, so
+the owning root can complete before the separate independent-lifetime responsibility retires.
+A rejected transport receipt alone does not release that responsibility. A completed helper whose
+submission was cancelled before admission can settle only with positive root-terminal proof.

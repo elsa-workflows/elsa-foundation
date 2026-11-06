@@ -9,13 +9,14 @@ namespace Elsa.Jobs.Workflows.Runtime.Tests;
 public sealed class JobsNativeSourceTests
 {
     [Fact]
-    public async Task All_three_sender_kinds_require_a_real_durable_source_without_a_stimulus_recipient_protocol()
+    public async Task All_sender_kinds_require_a_real_durable_source_without_a_stimulus_recipient_protocol()
     {
         var services = new ServiceCollection(); services.AddJobsWorkflowsRuntime();
         await using var provider = services.BuildServiceProvider();
         var contributions = provider.GetServices<RuntimePostCommitIntentHandlerContribution>().ToArray();
-        Assert.Equal(3, contributions.Length);
-        Assert.Equal(new[] { JobsNativeBoundary.CancelKind, JobsNativeBoundary.SettlementKind, JobsNativeBoundary.StartKind },
+        Assert.Equal(6, contributions.Length);
+        Assert.Equal(new[] { JobsNativeBoundary.CancelKind, JobsNativeBoundary.SettlementKind, JobsNativeBoundary.StartKind,
+                JobsNativeSubmissionBoundary.OwnershipKind, JobsNativeSubmissionBoundary.CancelKind, JobsNativeSubmissionBoundary.StartKind }.Order(StringComparer.Ordinal),
             contributions.Select(item => item.IntentKind).Order(StringComparer.Ordinal));
         Assert.All(contributions, item => { Assert.True(item.RequiresDurableSource); Assert.Null(item.StimulusDeliveryProtocolVersion); });
     }

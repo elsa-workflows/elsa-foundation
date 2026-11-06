@@ -749,6 +749,16 @@
       "project": "Extensions/Jobs/tests/Bpmn/Tests/Elsa.Jobs.Bpmn.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Jobs/tests/Secrets/Tests/Elsa.Jobs.Secrets.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Jobs/tests/Api/Tests/Elsa.Jobs.Api.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     }
   ],
   "splits": {
@@ -925,7 +935,9 @@
           "Extensions/Jobs/tests/Tests/Elsa.Jobs.Tests.csproj",
           "Extensions/Jobs/tests/Workflows/Runtime/Tests/Elsa.Jobs.Workflows.Runtime.Tests.csproj",
           "Extensions/Jobs/tests/Workflows/Design/Elsa.Jobs.Workflows.Design.Tests.csproj",
-          "Extensions/Jobs/tests/Bpmn/Tests/Elsa.Jobs.Bpmn.Tests.csproj"
+          "Extensions/Jobs/tests/Bpmn/Tests/Elsa.Jobs.Bpmn.Tests.csproj",
+          "Extensions/Jobs/tests/Secrets/Tests/Elsa.Jobs.Secrets.Tests.csproj",
+          "Extensions/Jobs/tests/Api/Tests/Elsa.Jobs.Api.Tests.csproj"
         ]
       }
     ],

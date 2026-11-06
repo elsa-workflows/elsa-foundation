@@ -19,7 +19,15 @@ internal sealed class JobsNativeResultSettlement(IJobQueries queries, JobsResult
             await using var scope = await scopes.CreateAsync(new(worker.Partition?.Value ?? throw JobsNativeBoundary.Invalid()), cancellationToken);
             var inspector = scope.ServiceProvider.GetRequiredService<JobsNativeDeliveryInspector>();
             var root = await inspector.FindRootInScopeAsync(worker, cancellationToken);
-            if (root is null) return; // A genuine non-RunJob worker contributes no Jobs responsibility.
+            if (root is null)
+            {
+                // Submission completion has no JobResult responsibility. Its exact canonical
+                // admission/cancellation proof is sufficient; the independent owner-lifetime
+                // source remains separately owed and must not form a model completion cycle.
+                _ = await scope.ServiceProvider.GetRequiredService<JobsNativeSubmissionInspector>()
+                    .InspectInScopeAsync(worker, cancellationToken);
+                return;
+            }
             if (!root.Metadata.ContainsKey(JobsNativeBoundary.AdmissionMetadataKey))
             {
                 if (JobsNativeDeliveryInspector.PreAdmissionFailure(worker, root)) return;

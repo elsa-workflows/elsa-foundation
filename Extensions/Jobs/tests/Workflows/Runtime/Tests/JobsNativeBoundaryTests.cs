@@ -127,8 +127,11 @@ public sealed class JobsNativeBoundaryTests
     [Theory]
     [InlineData(JobAssociationMode.Independent)]
     [InlineData(JobAssociationMode.Detached)]
-    public void Awaited_activity_does_not_silently_invent_independent_or_detached_semantics(JobAssociationMode mode) =>
-        Assert.Throws<JobException>(() => (NativeFixture.Pin with { AssociationMode = mode }).Serialize());
+    public void Awaited_activity_does_not_silently_invent_independent_or_detached_semantics(JobAssociationMode mode)
+    {
+        var invocation = JobsNativeBoundary.ReadState(NativeFixture.Activity()) with { HandlerPin = NativeFixture.Pin with { AssociationMode = mode } };
+        Assert.Throws<JobException>(() => JobsNativeBoundary.ValidateInvocation(invocation));
+    }
 
     [Fact]
     public void Handler_descriptor_is_bounded_and_preserves_logical_selection_without_a_handler_registry()

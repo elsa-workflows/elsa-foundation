@@ -32,14 +32,21 @@ public sealed class RunJob : StatefulActivity<RunJobResult, RunJobState, RunJobC
     private readonly IPersistenceAccessContextAccessor _access;
     private readonly JobsNativeOwnerResolver _owners;
     private readonly JobsNativeResultValidator _results;
+    private readonly IReadOnlyList<IJobDataPolicy> _dataPolicies;
     private static readonly JsonSerializerOptions LiteralJson = new(JsonSerializerDefaults.Web);
 
     public RunJob(IWorkflowExecutionStateStore workflows, IWorkflowExecutableStore executables,
         IActivityExecutionStateStore activities, IPersistenceAccessContextAccessor access,
         IEnumerable<Contracts.IJobWorkflowAssociationSource> associations, IJobQueries jobs)
+        : this(workflows, executables, activities, access, associations, jobs, []) { }
+
+    public RunJob(IWorkflowExecutionStateStore workflows, IWorkflowExecutableStore executables,
+        IActivityExecutionStateStore activities, IPersistenceAccessContextAccessor access,
+        IEnumerable<Contracts.IJobWorkflowAssociationSource> associations, IJobQueries jobs, IEnumerable<IJobDataPolicy> dataPolicies)
     {
         _workflows = workflows; _executables = executables; _activities = activities; _access = access;
         _owners = new(associations); _results = new(jobs);
+        _dataPolicies = dataPolicies.ToArray();
     }
 
     [ActivityInput(Key = nameof(Handler), Order = 0), Required]
@@ -83,7 +90,8 @@ public sealed class RunJob : StatefulActivity<RunJobResult, RunJobState, RunJobC
         try
         {
             pin = JobWorkflowHandlerPin.Parse(descriptor);
-            if (!JobsNativeBoundary.Equivalent(pin, new JobWorkflowHandlerPin(1, Handler, InputSchema, ResultSchema, Queue, Policy, AssociationMode)))
+            if (AssociationMode != JobAssociationMode.Awaited ||
+                !JobsNativeBoundary.Equivalent(pin, new JobWorkflowHandlerPin(1, Handler, InputSchema, ResultSchema, Queue, Policy, AssociationMode)))
                 throw JobsNativeBoundary.Invalid();
             Fixed(node, nameof(Handler), Handler); Fixed(node, nameof(InputSchema), InputSchema); Fixed(node, nameof(ResultSchema), ResultSchema);
             Fixed(node, nameof(Queue), Queue); Fixed(node, nameof(Policy), Policy); Fixed(node, nameof(AssociationMode), AssociationMode);
@@ -97,8 +105,10 @@ public sealed class RunJob : StatefulActivity<RunJobResult, RunJobState, RunJobC
         {
             input = new(InputSchema, Input);
             if (JobPayloadLimits.GetByteCount(input) > JobPayloadLimits.MaximumBytes) throw JobsNativeBoundary.Invalid();
+            var prepared = new JobRequest(Handler, input, ResultSchema, Queue, Policy, NotBefore?.ToUniversalTime(), null);
+            foreach (var policy in _dataPolicies) policy.ValidateAdmission(new(partition.Value, parent.TenantId), prepared);
         }
-        catch (Exception error) when (error is ArgumentException || error is JobException { Code: "jobs.payload.invalid" or "jobs.native.invalid" })
+        catch (Exception error) when (error is ArgumentException or JobDataPolicyException || error is JobException { Code: "jobs.payload.invalid" or "jobs.native.invalid" })
         {
             // Positive initial-phase failure. No saved wait/start source or JobId has ever been created.
             return Fault(new(JobsNativeBoundary.PreAdmissionFaultCode, "The Jobs input cannot be accepted by the supported payload contract.",

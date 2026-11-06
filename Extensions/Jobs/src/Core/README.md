@@ -182,3 +182,17 @@ checkpoint/outbox/consumption contracts. They must preserve model semantics with
 the dependency boundary, and `JobSubmissionConflictException` distinguishes protected-key content
 conflicts. Normal caller-requested cancellation remains cancellation rather than a persistence failure.
 
+
+
+Operation audit inspection is part of `IJobQueries`: `FindOperationAuditAsync` reads one exact
+operation and `ListOperationAuditsAsync` pages all receipts in an explicit scope. The first persisted
+`JobOperationAudit` retains its original actor/reason, command kind, provider transaction time,
+existing command fingerprint, bounded typed target and confirmation. Retry targets name the source
+job; its confirmation names the actual accepted job. Replay never restamps this metadata. Audit
+records contain no request/template/input/result/continuation/progress payload.
+
+`JobOperationAuditSnapshot.Audit` is null with an explicit diagnostic when old receipts have no audit
+metadata or retained audit metadata is unreadable/unsupported. Missing identity, actor, reason or time
+is never invented. This query is scoped metadata, not authorization; API hosts must authorize it.
+The list uses stable key order, not chronological order or complete per-job history. A dedicated
+indexed job-history query would need a separate explicit contract.

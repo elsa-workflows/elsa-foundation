@@ -71,6 +71,8 @@
     <ProjectReference Include="../../../../Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Extensions/Jobs/src/Tooling/Elsa.Jobs.Tooling.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../Extensions/Jobs/src/Workflows/Runtime/Elsa.Jobs.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Jobs/src/Api/Elsa.Jobs.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Jobs/src/Secrets/Elsa.Jobs.Secrets.csproj" />
     <ProjectReference Include="../../../../Extensions/Jobs/src/Workflows/Design/Elsa.Jobs.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Jobs/src/Bpmn/Elsa.Jobs.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />

@@ -75,12 +75,53 @@ internal static class JobsBpmnBoundary
             throw Invalid();
     }
 
+    internal static void RequireSubmissionEvidence(BpmnNativeWorkAddress address, JobNativeSubmissionEvidence evidence,
+        BpmnNativeWorkResultSnapshot result, bool terminalCleanup = false)
+    {
+        RequireOwner(evidence.Owner, address);
+        if (address.WorkerRootActivityType != SubmitJob.ActivityType || evidence.WorkerExecutionId != address.Origin.WorkerExecutionId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(evidence.WorkerExecutable, address.Origin.WorkerExecutable) ||
+            evidence.NodeId != address.WorkerRootNodeId || evidence.Contract != address.WorkerRootContract ||
+            string.IsNullOrWhiteSpace(evidence.InvocationId) ||
+            string.IsNullOrWhiteSpace(result.SourceOutboxItemId) || !Enum.IsDefined(evidence.Disposition)) throw Invalid();
+        if (evidence.Disposition == JobNativeSubmissionDisposition.CancelledBeforeAdmission && !terminalCleanup) throw Invalid();
+        if (string.IsNullOrWhiteSpace(evidence.NativeAttemptId) &&
+            (evidence.NativeStatus != ActivityExecutionStatus.Cancelled || string.IsNullOrWhiteSpace(evidence.NativeCancellationReceiptId))) throw Invalid();
+        var completedCancellation = terminalCleanup && evidence.Disposition == JobNativeSubmissionDisposition.CancelledBeforeAdmission &&
+            evidence.NativeStatus == ActivityExecutionStatus.Completed;
+        if (evidence.Disposition == JobNativeSubmissionDisposition.Accepted || completedCancellation)
+        {
+            var submitted = evidence.Completion;
+            if (evidence.NativeStatus != ActivityExecutionStatus.Completed || result.Status != WorkflowExecutionStatus.Completed ||
+                submitted is not { FormatVersion: 1, AdmissionState: "PendingAdmission" } ||
+                string.IsNullOrWhiteSpace(submitted.JobId) || evidence.JobId != submitted.JobId ||
+                evidence.RequestSha256 is not { Length: 64 } digest || evidence.Origin is not { } origin || origin.PayloadSha256 != digest ||
+                result.Completion is not { } completion || completion.InvocationId != evidence.InvocationId ||
+                completion.AttemptId != evidence.NativeAttemptId || completion.ContractFingerprint != evidence.Contract.SchemaFingerprint ||
+                completion.OutcomeKey != "Done" || completion.ResultType != new ValueTypeDescriptor(typeof(SubmitJobResult).FullName!)) throw Invalid();
+            if (completedCancellation ? evidence.Acceptance is not null : evidence.Acceptance?.JobId != submitted.JobId) throw Invalid();
+            if (completion.IsRedacted)
+            {
+                if (completion.Result is not null) throw Invalid();
+            }
+            else if (completion.Result is not { } value || !JsonElement.DeepEquals(value, Write(submitted))) throw Invalid();
+            return;
+        }
+        if (evidence.Completion is not null || evidence.Acceptance is not null || result.Completion is not null) throw Invalid();
+        if (evidence.Disposition == JobNativeSubmissionDisposition.RejectedBeforeAdmission)
+        {
+            if (evidence.NativeStatus != ActivityExecutionStatus.Faulted || result.Status != WorkflowExecutionStatus.Faulted ||
+                result.FaultCode != "jobs.native.admission-invalid") throw Invalid();
+        }
+        else if (evidence.NativeStatus != ActivityExecutionStatus.Cancelled || result.Status != WorkflowExecutionStatus.Cancelled) throw Invalid();
+    }
+
     internal static void ValidateAddress(BpmnNativeWorkAddress address)
     {
         if (address is null || address.FormatVersion != 1 || address.Origin is null ||
             address.Origin.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) ||
-            address.WorkerRootActivityType != RunJob.ActivityType || address.WorkerRootContract is null ||
-            address.WorkerRootContract.ActivityTypeKey != RunJob.ActivityType || address.FaultPolicy is not
+            address.WorkerRootActivityType is not (RunJob.ActivityType or SubmitJob.ActivityType) || address.WorkerRootContract is null ||
+            address.WorkerRootContract.ActivityTypeKey != address.WorkerRootActivityType || address.FaultPolicy is not
                 { FormatVersion: 1, Disposition: BpmnServiceFaultDisposition.FinalFault, MaxAttempts: 1 }) throw Invalid();
         foreach (var value in new[] { address.Origin.Scope.Value, address.LogicalDefinitionId, address.Origin.Executable.DefinitionVersionId,
                      address.Origin.ExecutionId, address.Origin.InvocationId, address.Origin.Executable.ArtifactId })

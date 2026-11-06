@@ -39,7 +39,8 @@ internal sealed class JobsNativeDeliveryInspector(IWorkflowExecutionStateStore w
         return root is null ? null : await EvidenceAsync(worker, root, cancellationToken);
     }
 
-    internal async ValueTask<ActivityExecutionState?> FindRootInScopeAsync(WorkflowExecutionState worker, CancellationToken cancellationToken)
+    internal async ValueTask<ActivityExecutionState?> FindRootInScopeAsync(WorkflowExecutionState worker, CancellationToken cancellationToken,
+        string activityType = JobsNativeBoundary.ActivityType)
     {
         access.Current.EnsureScope(new(worker.Partition?.Value ?? throw JobsNativeBoundary.Invalid()));
         var retained = await workflows.FindAsync(worker.WorkflowExecutionId, cancellationToken) ?? throw JobsNativeBoundary.Invalid();
@@ -49,7 +50,7 @@ internal sealed class JobsNativeDeliveryInspector(IWorkflowExecutionStateStore w
             retained.ModelWorkOrigin is { } origin && !origin.IsEquivalentTo(worker.ModelWorkOrigin)) throw JobsNativeBoundary.Invalid();
         var executable = await executables.FindAsync(worker.PinnedExecutable.ArtifactId, cancellationToken) ?? throw JobsNativeBoundary.Invalid();
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(executable.Identity, worker.PinnedExecutable)) throw JobsNativeBoundary.Invalid();
-        if (executable.RootActivity.ActivityType != JobsNativeBoundary.ActivityType) return null;
+        if (executable.RootActivity.ActivityType != activityType) return null;
         ActivityExecutionState? root = null; string? after = null;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         do

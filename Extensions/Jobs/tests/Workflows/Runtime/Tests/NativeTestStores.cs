@@ -59,6 +59,8 @@ internal sealed class JobTransport : IJobCommands, IJobQueries
         var delivery = Delivery;
         return ValueTask.FromResult(delivery is not null && scope == NativeFixture.Scope && delivery.JobId == jobId ? delivery : null);
     }
+    public ValueTask<JobOperationAuditSnapshot?> FindOperationAuditAsync(JobScope scope, string operationId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: FindOperationAuditAsync.");
+    public ValueTask<JobPage<JobOperationAuditSnapshot>> ListOperationAuditsAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: ListOperationAuditsAsync.");
     public ValueTask<JobPage<JobSnapshot>> ListJobsAsync(JobScope scope, JobListQuery query, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: ListJobsAsync.");
     public ValueTask<JobPage<JobAttemptSnapshot>> ListAttemptsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: ListAttemptsAsync.");
     public ValueTask<JobPage<JobPhysicalReceipt>> ListPhysicalReceiptsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: ListPhysicalReceiptsAsync.");

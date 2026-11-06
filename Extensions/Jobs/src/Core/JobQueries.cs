@@ -65,5 +65,9 @@ public interface IJobQueries
     ValueTask<JobContinuationPermission?> FindContinuationAsync(JobScope scope, string jobId, string continuationId, CancellationToken cancellationToken = default);
     ValueTask<JobDeliveryStatusSnapshot?> FindDeliveryAsync(JobScope scope, string jobId, CancellationToken cancellationToken = default);
     ValueTask<JobOriginSnapshot?> FindOriginAsync(JobScope scope, JobOrigin origin, CancellationToken cancellationToken = default);
+    /// <summary>Reads one exact retained operation. Null means no receipt; legacy or unreadable audit metadata has an explicit unavailable projection.</summary>
+    ValueTask<JobOperationAuditSnapshot?> FindOperationAuditAsync(JobScope scope, string operationId, CancellationToken cancellationToken = default);
+    /// <summary>Pages scoped operation receipts in stable key order, including unavailable metadata. This is not a chronological or complete per-job history query.</summary>
+    ValueTask<JobPage<JobOperationAuditSnapshot>> ListOperationAuditsAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobQueueSnapshot>> ListQueuesAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default);
 }

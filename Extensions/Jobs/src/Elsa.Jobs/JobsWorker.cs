@@ -173,6 +173,14 @@ internal sealed class JobsWorker(IServiceScopeFactory scopes, JobRuntimeSettings
             }
             JobValidation.Request(request, settings.MaximumPayloadBytes);
             var registration = handlers.Resolve(request, lease.ImplementationIdentity);
+            var dataPolicies = executionScope.ServiceProvider.GetServices<IJobDataPolicy>().ToArray();
+            foreach (var policy in dataPolicies) policy.ValidateAdmission(lease.Scope, request);
+            JobExecutionContext? invocationContext = null;
+            var reporter = new JobProgressReporter(session, scopes, settings, dataPolicies,
+                () => invocationContext ?? throw new JobDataPolicyException());
+            invocationContext = new(lease.Scope, lease.JobId, lease.AttemptId, lease.AttemptNumber, InvocationKey(lease), reporter)
+                { Handler = request.Handler };
+            foreach (var policy in dataPolicies) policy.BeginInvocation(invocationContext, request);
             if (!await RenewAsync(session)) return;
             if (session.HandlerCancellation.IsCancellationRequested)
             {
@@ -193,10 +201,10 @@ internal sealed class JobsWorker(IServiceScopeFactory scopes, JobRuntimeSettings
                 }
                 physicalStarted = true;
                 renewing = KeepRenewingAsync(session, stopRenewing.Token);
-                var context = new JobExecutionContext(lease.Scope, lease.JobId, lease.AttemptId, lease.AttemptNumber,
-                    InvocationKey(lease), new JobProgressReporter(session, scopes, settings));
-                payload = await registration.InvokeAsync(executionScope.ServiceProvider, request.Input, context,
+                var result = await registration.InvokeAsync(executionScope.ServiceProvider, request.Input, invocationContext,
                     settings, session.HandlerCancellation.Token);
+                foreach (var policy in dataPolicies) policy.ValidateResult(invocationContext, result);
+                payload = result;
                 outcome = JobAttemptOutcome.Succeeded;
                 retryable = false;
             }
@@ -205,6 +213,18 @@ internal sealed class JobsWorker(IServiceScopeFactory scopes, JobRuntimeSettings
         {
             outcome = CancelledOutcome(session);
             diagnostic = StopDiagnostic(session);
+        }
+        catch (JobDataUnavailableException)
+        {
+            payload = null;
+            diagnostic = new("jobs.data-policy.unavailable", "The Jobs data policy is temporarily unavailable.");
+            retryable = true;
+        }
+        catch (JobDataPolicyException)
+        {
+            payload = null;
+            diagnostic = new("jobs.data-policy.refused", "The Jobs data policy refused this operation.");
+            retryable = false;
         }
         catch (JobPayloadException error)
         {

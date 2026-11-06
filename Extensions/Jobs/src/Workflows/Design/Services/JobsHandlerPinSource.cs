@@ -24,7 +24,8 @@ internal sealed class JobsHandlerPinSource : IExecutableCompilationSource
         cancellationToken.ThrowIfCancellationRequested();
         var claims = new List<ExecutableNodeMetadataClaim>();
         foreach (var node in context.RootActivity.DescendantsAndSelf()
-                     .Where(node => StringComparer.Ordinal.Equals(node.ActivityType, RunJob.ActivityType))
+                     .Where(node => StringComparer.Ordinal.Equals(node.ActivityType, RunJob.ActivityType) ||
+                         StringComparer.Ordinal.Equals(node.ActivityType, SubmitJob.ActivityType))
                      .OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -36,6 +37,8 @@ internal sealed class JobsHandlerPinSource : IExecutableCompilationSource
             var mode = ReadLiteral<JobAssociationMode>(node, nameof(RunJob.AssociationMode));
             try
             {
+                if (node.ActivityType == RunJob.ActivityType ? mode != JobAssociationMode.Awaited
+                    : mode is not (JobAssociationMode.Independent or JobAssociationMode.Detached)) throw new JobException("jobs.native.invalid", "Unsupported Jobs activity association mode.");
                 var pin = new JobWorkflowHandlerPin(1, handler, inputSchema, resultSchema, queue, policy, mode);
                 claims.Add(new(node.ExecutableNodeId, RunJob.PinMetadataKey, pin.Serialize()));
             }
@@ -69,5 +72,5 @@ internal sealed class JobsHandlerPinSource : IExecutableCompilationSource
     }
 
     private static ArgumentException Refused(ExecutableNode node, string reason) =>
-        new($"RunJob node '{node.ExecutableNodeId}' {reason}");
+        new($"{(node.ActivityType == SubmitJob.ActivityType ? nameof(SubmitJob) : nameof(RunJob))} node '{node.ExecutableNodeId}' {reason}");
 }

@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Jobs.Bpmn;
 
-/// <summary>Connects awaited Jobs native workers to their actual BPMN model owner and retained root input.</summary>
+/// <summary>Connects Jobs native workers to their actual BPMN model owner, admission and retained root input.</summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Jobs")]
 [ManifestFeatureCategory("Runtime")]

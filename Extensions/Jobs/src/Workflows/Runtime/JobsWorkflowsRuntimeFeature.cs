@@ -19,7 +19,7 @@ namespace Elsa.Jobs.Workflows.Runtime;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Jobs"), ManifestFeatureCategory("Runtime")]
 [ShellFeature(name: "JobsWorkflowsRuntime", DisplayName = "Jobs Native Workflows",
-    Description = "Awaits durable Jobs through native saved waits.", DependsOn = new object[] { "Tasks", "WorkflowsRuntimeResumption" })]
+    Description = "Awaits or independently submits durable Jobs through native checkpoints.", DependsOn = new object[] { "Tasks", "WorkflowsRuntimeResumption" })]
 public class JobsWorkflowsRuntimeFeature : IShellFeature
 {
     public string PersistencePartition { get; set; } = "default";
@@ -47,13 +47,19 @@ public static class JobsWorkflowsRuntimeServiceCollectionExtensions
         var options = new JobWorkflowRuntimeOptions(); configure?.Invoke(options);
         var settings = JobWorkflowRuntimeSettings.Capture(options); services.AddSingleton(settings); services.TryAddSingleton(TimeProvider.System); services.AddLogging();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, JobsCheckpointEnricher>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, JobsSubmissionCheckpointEnricher>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IEventHandler<ActivityResumeValidating>, JobsNativeResumeValidator>());
         services.AddRuntimePostCommitIntentHandler<JobsNativeIntentHandler>(JobsNativeBoundary.StartKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true);
         services.AddRuntimePostCommitIntentHandler<JobsNativeIntentHandler>(JobsNativeBoundary.CancelKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true);
         services.AddRuntimePostCommitIntentHandler<JobsNativeSettlementIntentHandler>(JobsNativeBoundary.SettlementKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true);
+        services.AddRuntimePostCommitIntentHandler<JobsNativeSubmissionIntentHandler>(JobsNativeSubmissionBoundary.StartKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true);
+        services.AddRuntimePostCommitIntentHandler<JobsNativeSubmissionIntentHandler>(JobsNativeSubmissionBoundary.CancelKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true);
+        services.AddRuntimePostCommitIntentHandler<JobsNativeSubmissionIntentHandler>(JobsNativeSubmissionBoundary.OwnershipKind, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true);
         services.TryAddScoped<JobsNativeSourceVerifier>();
         services.TryAddScoped<JobsNativeDeliveryInspector>();
         services.TryAddScoped<IJobNativeDeliveryInspector>(provider => provider.GetRequiredService<JobsNativeDeliveryInspector>());
+        services.TryAddScoped<JobsNativeSubmissionInspector>();
+        services.TryAddScoped<IJobNativeSubmissionInspector>(provider => provider.GetRequiredService<JobsNativeSubmissionInspector>());
         services.TryAddScoped<JobsResultDeliveryExecution>();
         services.TryAddScoped<JobsNativeResultSettlement>();
         services.TryAddScoped<IJobNativeResultSettlement>(provider => provider.GetRequiredService<JobsNativeResultSettlement>());
@@ -78,6 +84,7 @@ internal sealed class JobsNativeConfigurationValidator(IServiceScopeFactory scop
         await using var scope = scopes.CreateAsyncScope(); cancellationToken.ThrowIfCancellationRequested();
         if (scope.ServiceProvider.GetServices<IJobCommands>().Take(2).Count() != 1 || scope.ServiceProvider.GetServices<IJobQueries>().Take(2).Count() != 1 ||
             scope.ServiceProvider.GetServices<IJobNativeDeliveryInspector>().Take(2).Count() != 1 ||
+            scope.ServiceProvider.GetServices<IJobNativeSubmissionInspector>().Take(2).Count() != 1 ||
             scope.ServiceProvider.GetServices<IJobNativeResultSettlement>().Take(2).Count() != 1)
             throw new JobException("jobs.native.authority-invalid", "Jobs native integration requires exactly one command, query, native-evidence and settlement authority.");
     }

@@ -78,3 +78,18 @@ SQLite and PostgreSQL source bindings and migrations are not provider qualificat
 suite under `tests/Persistence/ProviderTests` applies and validates retained migrations, exercises durable
 identity/receipt/pause/concurrency/recurrence controls, and keeps unavailable PostgreSQL distinct from a
 passing engine. Packaged consumers and independent-process recovery remain separate acceptance evidence.
+
+
+Operation receipts additionally retain a nullable `AuditJson` envelope, atomically with the original
+command/result: cancel, cancel-origin, retry-as-new-run, pause, release-hold, capacity, save-schedule
+and schedule-enabled. The envelope is limited to 32 KiB UTF-8/depth 16 and contains only original
+`JobOperation`, provider transaction time, command fingerprint/kind, bounded typed targets and the
+first confirmation. It stores no whole request, input, result, continuation or progress payload.
+Replay still uses the original receipt digest/result and never reads, repairs or restamps audit
+metadata. The new reads explicitly retain legacy-unavailable and corrupt-unavailable entries while
+healthy rows on the same page remain readable; an unprovable receipt address fails safely.
+
+Audit listing uses the operations `(ScopeKey, Key)` index and the existing scope-bound keyset cursor.
+It is global within the supplied authorized scope, not a chronological or complete per-job query.
+The additive audit migration, real-engine controls and API/Studio integration require M4
+qualification; audit source work is not migration/application or acceptance evidence.

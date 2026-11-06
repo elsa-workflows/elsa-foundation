@@ -8,12 +8,21 @@ namespace Elsa.Jobs.Bpmn.Services;
 
 /// <summary>Checks the prior durable Jobs grant; it never creates permission or changes either authority.</summary>
 internal sealed class JobsBpmnResultValidator(IBpmnNativeWorkConsumer consumer, IJobNativeDeliveryInspector inspector,
-    IJobQueries queries) : IBpmnNativeWorkResultValidator
+    IJobQueries queries, IJobNativeSubmissionInspector submissions) : IBpmnNativeWorkResultValidator
 {
     public async ValueTask ValidateAsync(BpmnNativeWorkResultValidation context, CancellationToken cancellationToken = default)
     {
         try
         {
+            var submission = await submissions.InspectSubmissionWorkerAsync(context.Worker, cancellationToken);
+            if (submission is not null)
+            {
+                var submissionAddress = await consumer.ResolveAsync(context.Origin, cancellationToken);
+                JobsBpmnBoundary.RequireSubmissionEvidence(submissionAddress, submission, context.Result);
+                if (context.InputId != context.Origin.ResultInputId || string.IsNullOrWhiteSpace(context.ContentFingerprint))
+                    throw JobsBpmnBoundary.Invalid();
+                return;
+            }
             var evidence = await inspector.InspectWorkerAsync(context.Worker, cancellationToken);
             // Unrelated workers and native/root cancellation without a consumed selected JobResult
             // retain BPMN's existing physical settlement checks and require no Jobs continuation.
@@ -32,7 +41,7 @@ internal sealed class JobsBpmnResultValidator(IBpmnNativeWorkConsumer consumer, 
         { throw new JobException("jobs.bpmn.invalid", "The Jobs result's retained BPMN owner is invalid.", error); }
         catch (NotSupportedException error)
         { throw new RuntimeSchedulerWorkUnavailableException("jobs.bpmn.result-unavailable", "The selected BPMN owner proof provider is unavailable.", error); }
-        catch (JobException error) when (error.Code is "jobs.persistence.unavailable" or "jobs.bpmn.unavailable" or "jobs.native.evidence-unavailable")
+        catch (JobException error) when (error.Code is "jobs.persistence.unavailable" or "jobs.bpmn.unavailable" or "jobs.native.evidence-unavailable" or "jobs.native.submission-unavailable")
         { throw new RuntimeSchedulerWorkUnavailableException("jobs.bpmn.result-unavailable", "The existing Jobs continuation permission is temporarily unavailable.", error); }
     }
 }

@@ -14,7 +14,11 @@ public sealed record JobExecutionContext(
     string AttemptId,
     int AttemptNumber,
     string IdempotencyKey,
-    IJobProgressReporter Progress);
+    IJobProgressReporter Progress)
+{
+    /// <summary>Accepted logical handler identity supplied by the worker; not a caller-selected tenant or CLR type.</summary>
+    public JobHandlerIdentity? Handler { get; init; }
+}
 
 /// <summary>Bounded redacted informational progress; never authoritative completion.</summary>
 public sealed record JobProgress(

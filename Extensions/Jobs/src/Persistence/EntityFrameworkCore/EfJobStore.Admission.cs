@@ -136,7 +136,7 @@ internal sealed partial class EfJobStore
             if (await Replay<JobTransition>(db, request.Scope, request.Operation, digest, ct) is { } replay) return replay with { Status = replay.Status == JobCommandStatus.Applied ? JobCommandStatus.Replayed : replay.Status };
             var job = await Find(db, request.Scope, request.JobId, ct);
             var result = job is null ? Transition(JobCommandStatus.NotFound) : await Cancel(db, request.Scope, job, now, ct);
-            Remember(db, request.Scope, request.Operation, digest, result);
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.Cancel, now, new(JobId: request.JobId));
             return result;
         }, cancellationToken);
     }
@@ -189,7 +189,7 @@ internal sealed partial class EfJobStore
                     result = job is null ? Transition(JobCommandStatus.OriginCancelled) : await Cancel(db, request.Scope, job, now, ct);
                 }
             }
-            Remember(db, request.Scope, request.Operation, digest, result); return result;
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.CancelOrigin, now, new(Origin: request.Origin)); return result;
         }, cancellationToken);
     }
 
@@ -211,7 +211,7 @@ internal sealed partial class EfJobStore
                     ? association with { Mode = JobAssociationMode.Independent, Continuation = null } : null };
                 result = await Admit(db, new(request.Scope, request.ProposedNewJobId, request.IdempotencyKey, JobRequestDigest.Compute(retry), retry, null), now, ct, job.JobId);
             }
-            Remember(db, request.Scope, request.Operation, digest, result); return result;
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.RetryAsNewRun, now, new(JobId: request.JobId, ExpectedRevision: request.ExpectedTerminalRevision)); return result;
         }, cancellationToken);
     }
 }

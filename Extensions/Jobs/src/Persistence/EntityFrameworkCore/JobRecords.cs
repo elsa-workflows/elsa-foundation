@@ -183,6 +183,7 @@ internal sealed class JobOperationRecord : IJobRecord
     public string SchemaVersion { get; set; } = JobsEfModule.Version;
     public string Digest { get; set; } = null!;
     public string ResultJson { get; set; } = null!;
+    public string? AuditJson { get; set; }
 }
 
 internal sealed class JobScheduleRecord : IJobRecord

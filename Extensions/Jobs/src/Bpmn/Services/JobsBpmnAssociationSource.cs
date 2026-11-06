@@ -7,7 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Jobs.Bpmn.Services;
 
-internal sealed class JobsBpmnAssociationSource(IBpmnNativeWorkConsumer consumer) : IJobWorkflowAssociationSource
+internal sealed class JobsBpmnAssociationSource(IBpmnNativeWorkConsumer consumer) : IJobWorkflowAssociationSource, IJobWorkflowSubmissionLifetimeSource
 {
     public bool Supports(RuntimeModelNativeWorkOrigin origin) =>
         origin.Protocol == new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version);
@@ -45,6 +45,36 @@ internal sealed class JobsBpmnAssociationSource(IBpmnNativeWorkConsumer consumer
                 throw JobsBpmnBoundary.Invalid();
             JobsBpmnBoundary.RequireEvidence(observation.Address, evidence, input.Result);
             return new(JobWorkflowOwnerDisposition.AcceptedInput, observation.ModelReceiptId, evidence.Result.ResultId, evidence.Result.PayloadSha256);
+        }
+        catch (BpmnModelValidationException error) { throw Invalid(error); }
+        catch (RuntimeSchedulerWorkUnavailableException error) { throw Unavailable(error); }
+        catch (NotSupportedException error) { throw Unavailable(error); }
+    }
+
+    public async ValueTask<JobWorkflowSubmissionLifetime> InspectSubmissionLifetimeAsync(JobWorkflowOwner owner,
+        CancellationToken cancellationToken = default)
+    {
+        if (owner.Origin is not { } origin || !Supports(origin)) throw JobsBpmnBoundary.Invalid();
+        try
+        {
+            var observation = await consumer.InspectAsync(origin, cancellationToken);
+            JobsBpmnBoundary.RequireOwner(owner, observation.Address);
+            if (!Enum.IsDefined(observation.Kind) || !Enum.IsDefined(observation.Lifecycle)) throw JobsBpmnBoundary.Invalid();
+            if (observation.Lifecycle is RuntimeModelLifecycle.Running or RuntimeModelLifecycle.WaitingIncident)
+            {
+                if (observation.TerminalStatus is not null || observation.TerminalReceiptId is not null ||
+                    observation.Kind == BpmnNativeWorkObservationKind.RootTerminal) throw JobsBpmnBoundary.Invalid();
+                return new(JobWorkflowSubmissionLifetimeStatus.Active, null);
+            }
+            if (string.IsNullOrWhiteSpace(observation.TerminalReceiptId)) throw JobsBpmnBoundary.Invalid();
+            var status = observation.TerminalStatus switch
+            {
+                "Completed" => JobWorkflowSubmissionLifetimeStatus.Completed,
+                "Faulted" => JobWorkflowSubmissionLifetimeStatus.Faulted,
+                "Cancelled" => JobWorkflowSubmissionLifetimeStatus.Cancelled,
+                _ => throw JobsBpmnBoundary.Invalid()
+            };
+            return new(status, observation.TerminalReceiptId);
         }
         catch (BpmnModelValidationException error) { throw Invalid(error); }
         catch (RuntimeSchedulerWorkUnavailableException error) { throw Unavailable(error); }

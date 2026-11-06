@@ -169,7 +169,7 @@ internal sealed partial class EfJobStore
                 }
                 result = new(JobCommandStatus.Applied, row.Revision, null, null);
             }
-            Remember(db, frozen.Scope, frozen.Operation, digest, result); return result;
+            Remember(db, frozen.Scope, frozen.Operation, digest, result, JobOperationKind.SaveSchedule, now, new(ScheduleId: frozen.Definition.ScheduleId, ExpectedRevision: frozen.ExpectedRevision)); return result;
         }, cancellationToken);
     }
 
@@ -190,7 +190,7 @@ internal sealed partial class EfJobStore
                 if (row.Revision != request.ExpectedRevision) result = new(JobCommandStatus.Conflict, row.Revision, null, null);
                 else { row.Enabled = request.Enabled; row.Revision = checked(row.Revision + 1); row.UpdatedAt = now; result = new(JobCommandStatus.Applied, row.Revision, null, null); }
             }
-            Remember(db, request.Scope, request.Operation, digest, result); return result;
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.SetScheduleEnabled, now, new(ScheduleId: request.ScheduleId, ExpectedRevision: request.ExpectedRevision, Enabled: request.Enabled)); return result;
         }, cancellationToken);
     }
 

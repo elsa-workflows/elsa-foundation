@@ -31,7 +31,7 @@ internal sealed partial class EfJobStore
                 gate.ActiveHolds = checked(gate.ActiveHolds + 1); Touch([gate]);
                 result = new(JobCommandStatus.Applied, hold.Revision, null, null);
             }
-            Remember(db, request.Scope, request.Operation, digest, result); return result;
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.Pause, now, new(Gate: request.Gate, HoldId: request.HoldId)); return result;
         }, cancellationToken);
     }
 
@@ -61,7 +61,7 @@ internal sealed partial class EfJobStore
                     gate.ActiveHolds--; Touch([gate]); result = new(JobCommandStatus.Applied, hold.Revision, null, null);
                 }
             }
-            Remember(db, request.Scope, request.Operation, digest, result); return result;
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.ReleaseHold, now, new(Gate: request.Gate, HoldId: request.HoldId, ExpectedRevision: request.ExpectedRevision)); return result;
         }, cancellationToken);
     }
 
@@ -81,7 +81,7 @@ internal sealed partial class EfJobStore
                 gate.Capacity = request.Limit; gate.CapacityRevision = checked(gate.CapacityRevision + 1); Touch([gate]);
                 result = new(JobCommandStatus.Applied, gate.CapacityRevision, null, null);
             }
-            Remember(db, request.Scope, request.Operation, digest, result); return result;
+            Remember(db, request.Scope, request.Operation, digest, result, JobOperationKind.SetCapacity, now, new(Gate: request.Gate, ExpectedRevision: request.ExpectedRevision, CapacityLimit: request.Limit)); return result;
         }, cancellationToken);
     }
 }

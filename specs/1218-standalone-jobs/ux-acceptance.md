@@ -1,6 +1,7 @@
 # Jobs operations UX acceptance before implementation
 
-Status: proposed acceptance record. No UI is implemented or accepted. Apply the repository's
+Status: acceptance record defined before implementation. API/Studio/audit/secrets source now exists,
+but SDK, actual composed journeys and independent visual acceptance remain open. Apply the repository's
 [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) and
 [module controls](../../Studio/docs/module-ui.md).
 
@@ -30,7 +31,8 @@ implementation details into the operator flow.
 The copy must explain that Pause blocks future start permissions and allows already granted work to
 finish. Show all current hold reasons; resume feedback must not claim eligibility when another hold
 applies. Distinguish retained result from model consumption and cooperative stop request from physical exit.
-Proposed continuation grant semantics require architecture review before final copy is approved.
+The reviewed continuation grant cutoff is recorded in the [lifecycle contract](contracts/job-lifecycle.md).
+Actual model and operator journeys must still qualify that behavior before final copy is accepted.
 
 ## Smallest disproof journeys
 
