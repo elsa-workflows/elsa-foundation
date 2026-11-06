@@ -1,11 +1,68 @@
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext } from "../../../sdk";
-import { collectAgentContext } from "../agentContext";
+import { collectAgentContext, isAgentContextCollectionCurrent } from "../agentContext";
+import { beginAgentModuleRegistration, retireAgentModuleRegistration, retireAgentRegistryGeneration } from "../agentRegistrationOrigins";
 
 const attachment = { id: "one", source: "Sample", label: "Selected sample", contentType: "sample", sensitivity: "internal" as const, scope: "selection" };
 function registry() { return createStudioRegistry({ ...createEndpointContext("https://example.test/"), hostVersion: "1", sdkVersion: "1" }); }
 describe("module context collection", () => {
+  it("does not invoke a retired satellite provider even when its resource owner remains present", async () => {
+    const api = registry(); const collect = vi.fn(async () => [attachment]);
+    const registration = beginAgentModuleRegistration(api, "Sample.Satellite");
+    registration.api.agent.contextProviders.add({ id: "sample", moduleId: "Sample.Resource", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect });
+    registration.complete(); retireAgentModuleRegistration(api, "Sample.Satellite");
+    expect(await collectAgentContext(api, { route: "/" }, "explain")).toEqual({ attachments: [], diagnostics: [] });
+    expect(collect).not.toHaveBeenCalled();
+  });
+
+  it("rechecks registration before the deferred contributor callback begins", async () => {
+    const api = registry(); const collect = vi.fn(async () => [attachment]);
+    const registration = beginAgentModuleRegistration(api, "Sample.Satellite");
+    registration.api.agent.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect });
+    registration.complete();
+    const operation = collectAgentContext(api, { route: "/" }, "explain");
+    const refusal = expect(operation).rejects.toThrow("Module context changed");
+    retireAgentModuleRegistration(api, "Sample.Satellite");
+    await refusal;
+    expect(collect).not.toHaveBeenCalled();
+  });
+
+  it.each(["module", "generation"] as const)("rejects a late snapshot after its %s is retired", async kind => {
+    const api = registry(); let release!: (value: typeof attachment[]) => void;
+    let enter!: () => void; const entered = new Promise<void>(resolve => { enter = resolve; });
+    const registration = beginAgentModuleRegistration(api, "Sample.Satellite");
+    registration.api.agent.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: () => { enter(); return new Promise(resolve => { release = resolve; }); } });
+    registration.complete();
+    const refusal = expect(collectAgentContext(api, { route: "/" }, "explain")).rejects.toThrow("Module context changed");
+    await entered;
+    if (kind === "module") retireAgentModuleRegistration(api, "Sample.Satellite");
+    else retireAgentRegistryGeneration(api);
+    release([attachment]); await refusal;
+  });
+
+  it("rejects an earlier completed source retired while an independent source is awaiting", async () => {
+    const api = registry(); let release!: (value: typeof attachment[]) => void;
+    let enter!: () => void; const entered = new Promise<void>(resolve => { enter = resolve; });
+    const first = beginAgentModuleRegistration(api, "Sample.First");
+    first.api.agent.contextProviders.add({ id: "first", displayName: "First", surfaces: ["*"], sensitivity: "internal", order: 1, collect: async () => [attachment] }); first.complete();
+    const second = beginAgentModuleRegistration(api, "Sample.Second");
+    second.api.agent.contextProviders.add({ id: "second", displayName: "Second", surfaces: ["*"], sensitivity: "internal", order: 2, collect: () => { enter(); return new Promise(resolve => { release = resolve; }); } }); second.complete();
+    const refusal = expect(collectAgentContext(api, { route: "/" }, "explain")).rejects.toThrow("Module context changed");
+    await entered; retireAgentModuleRegistration(api, "Sample.First"); release([]); await refusal;
+  });
+
+  it("binds an accepted snapshot to its actual registry and registration lifetime", async () => {
+    const api = registry(); const registration = beginAgentModuleRegistration(api, "Sample.Satellite");
+    registration.api.agent.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: async () => [attachment] }); registration.complete();
+    const collection = await collectAgentContext(api, { route: "/" }, "explain");
+    expect(collection.attachments).toEqual([attachment]);
+    expect(isAgentContextCollectionCurrent(api, collection)).toBe(true);
+    expect(isAgentContextCollectionCurrent(registry(), collection)).toBe(false);
+    retireAgentModuleRegistration(api, "Sample.Satellite");
+    expect(isAgentContextCollectionCurrent(api, collection)).toBe(false);
+  });
+
   it("preserves explicit content and typed optional limitations", async () => {
     const api = registry(); api.agent.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: [{ contributorId: "sample", code: "absent", message: "Optional evidence unavailable.", required: false }] }) });
     expect(await collectAgentContext(api, { route: "/arbitrary" }, "explain", undefined, [attachment])).toEqual({ attachments: [attachment], diagnostics: [expect.objectContaining({ required: false })] });

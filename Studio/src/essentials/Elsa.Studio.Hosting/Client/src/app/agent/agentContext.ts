@@ -1,9 +1,18 @@
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContextCollection, StudioAgentContextProviderContribution, StudioAgentMode, StudioAgentSurface } from "../../sdk";
+import { isAgentContributionCurrent, isAgentRegistryCurrent } from "./agentRegistrationOrigins";
 
 const DEFAULT_CONTRIBUTOR_TIMEOUT_MS = 10_000;
 const MAX_ATTACHMENTS = 32;
 const MAX_SUMMARY_LENGTH = 4096;
 const MAX_CONTENT_LENGTH = 32768;
+const collectionOrigins = new WeakMap<StudioAgentContextCollection, { agent: ElsaStudioModuleApi["agent"]; providers: StudioAgentContextProviderContribution[] }>();
+
+/** A collected snapshot cannot outlive the actual registration that supplied its evidence. */
+export function isAgentContextCollectionCurrent(api: ElsaStudioModuleApi, collection: StudioAgentContextCollection) {
+  const origin = collectionOrigins.get(collection);
+  return origin?.agent === api.agent && isAgentRegistryCurrent(api)
+    && origin.providers.every(provider => isAgentContributionCurrent(api, provider));
+}
 
 export async function collectAgentContext(
   api: ElsaStudioModuleApi,
@@ -17,6 +26,7 @@ export async function collectAgentContext(
   const timeoutMs = options.contributorTimeoutMs ?? DEFAULT_CONTRIBUTOR_TIMEOUT_MS;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("Context contributor deadline must be positive and finite.");
   signal?.throwIfAborted();
+  if (!isAgentRegistryCurrent(api)) throw new Error("Module context changed; try the request again.");
   const providers = api.agent.contextProviders.list()
     .filter(provider => provider.surfaces.includes("*") || provider.surfaces.some(item => surface.route === item || surface.route.startsWith(`${item}/`)))
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500));
@@ -24,13 +34,17 @@ export async function collectAgentContext(
   const candidateIds = new Set<string>();
   const attachments: StudioAgentContextAttachment[] = [];
   const diagnostics: StudioAgentContextCollection["diagnostics"] = [];
+  const observedProviders: StudioAgentContextProviderContribution[] = [];
   append(explicit, "request", true);
   for (const provider of providers) {
     signal?.throwIfAborted();
+    if (!isAgentContributionCurrent(api, provider)) continue;
     if (providerIds.has(provider.id)) throw new Error(`Duplicate context contributor '${provider.id}'.`);
     providerIds.add(provider.id);
+    observedProviders.push(provider);
     const outcome = await collectBounded(provider);
     signal?.throwIfAborted();
+    if (!isAgentContributionCurrent(api, provider)) throw new Error("Module context changed; try the request again.");
     if (!outcome) continue;
     const collected = outcome.collection;
     if (Array.isArray(collected)) append(collected, provider.id, provider.required === true);
@@ -40,7 +54,10 @@ export async function collectAgentContext(
       diagnostics.push(...JSON.parse(JSON.stringify(collected.diagnostics)));
     }
   }
-  return { attachments, diagnostics };
+  const collection = { attachments, diagnostics };
+  collectionOrigins.set(collection, { agent: api.agent, providers: observedProviders });
+  if (!isAgentContextCollectionCurrent(api, collection)) throw new Error("Module context changed; try the request again.");
+  return collection;
 
   function append(candidates: StudioAgentContextAttachment[], contributorId: string, required: boolean) {
     // JSON is the transport boundary. Copy it now so module-owned late mutations cannot change
@@ -71,7 +88,11 @@ export async function collectAgentContext(
       });
       // The race settles independently of cooperation. The losing promise is observed but never
       // appended, so a late resolution/rejection cannot mutate this collection or become unhandled.
-      return { collection: await Promise.race([Promise.resolve().then(() => { signal?.throwIfAborted(); return provider.collect({ surface, mode, sessionId, signal: controller.signal }); }), interrupted]) };
+      return { collection: await Promise.race([Promise.resolve().then(() => {
+        signal?.throwIfAborted();
+        if (!isAgentContributionCurrent(api, provider)) return [];
+        return provider.collect({ surface, mode, sessionId, signal: controller.signal });
+      }), interrupted]) };
     } catch {
       signal?.throwIfAborted();
       diagnostics.push({ contributorId: provider.id, code: deadline ? "agent.context.deadline" : "agent.context.contributor_failed", message: deadline ? "Context contributor did not finish within its deadline." : "Context contributor could not provide evidence.", required: provider.required === true });

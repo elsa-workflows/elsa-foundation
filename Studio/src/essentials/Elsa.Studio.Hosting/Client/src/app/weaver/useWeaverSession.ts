@@ -2,7 +2,7 @@ import { readAgentProposalStatus } from "../agent/agentProposalStatus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContributionDiagnostic, StudioAgentMode, StudioAgentPromptRequest, StudioAgentSurface, StudioAgentToolResult } from "../../sdk";
 import { AgentExecutionError, classifyAutonomyFailure, classifyRecoveryFailure, createAgentClient, getAgentErrorCode, getAgentRetryAfterSeconds, POLICY_CHANGED, type AgentClient } from "../agent/agentClient";
-import { collectAgentContext } from "../agent/agentContext";
+import { collectAgentContext, isAgentContextCollectionCurrent } from "../agent/agentContext";
 import { getActiveAgentCapabilities, getActivePromptStarters } from "../agent/agentContributions";
 import { getAgentErrorMessage } from "../agent/agentErrors";
 import { subscribeAgentSessionStream, type AgentStreamSubscription } from "../agent/agentStream";
@@ -673,6 +673,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       const activeSessionId = await ensureSession(generation);
       if (turnGenerationRef.current !== generation) return settle("cancelled");
+      if (!isAgentContextCollectionCurrent(api, collection)) throw new Error("Module context changed; try the request again.");
       const response = await agentClient.sendMessage(activeSessionId, { message, mode, activeSurface: surface, contextAttachments: collected, capabilityId: capabilities[0]?.id, requestId: deliveryId, source: request.source, promptMode: request.mode });
       // A stopped/superseded response cannot mutate or finish the current conversation.
       if (turnGenerationRef.current !== generation) return settle("cancelled");

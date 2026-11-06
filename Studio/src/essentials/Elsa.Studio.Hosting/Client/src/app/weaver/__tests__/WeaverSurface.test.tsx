@@ -9,8 +9,28 @@ import type { AgentAutonomyMode, AgentProposalStatus, AgentSessionPolicy, AgentS
 import { WeaverSurface } from "../WeaverSurface";
 import { useWeaverSession } from "../useWeaverSession";
 import { AgentContextChips } from "../../agent/AgentContextChips";
+import { beginAgentModuleRegistration, retireAgentModuleRegistration } from "../../agent/agentRegistrationOrigins";
 
 describe("WeaverSurface", () => {
+  it("refuses disclosure when a contributing module retires during session creation", async () => {
+    const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
+    api.agent.onPromptResult(result => results.push(result));
+    const registration = beginAgentModuleRegistration(api, "Sample.Satellite");
+    registration.api.agent.contextProviders.add({ id: "sample-context", displayName: "Sample context", surfaces: ["*"], sensitivity: "internal", collect: async () => [{ id: "sample", source: "Sample", label: "Sample", contentType: "sample", sensitivity: "internal", scope: "screen" }] });
+    registration.complete();
+    let finish!: (value: Awaited<ReturnType<AgentClient["createSession"]>>) => void;
+    client.createSession = vi.fn<AgentClient["createSession"]>(() => new Promise(resolve => { finish = resolve; }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} incomingPrompt={{ id: "retired-context", requestId: "retired-context", message: "Inspect" }} />);
+    try {
+      await flushPromises(); expect(client.createSession).toHaveBeenCalledTimes(1);
+      retireAgentModuleRegistration(api, "Sample.Satellite");
+      finish({ sessionId: "agt_1", status: "active", contextAttachments: [] }); await flushPromises();
+      expect(client.sendMessage).not.toHaveBeenCalled();
+      expect(results).toEqual([expect.objectContaining({ requestId: "retired-context", status: "failed" })]);
+      expect(container.textContent).toContain("Module context changed; try the request again.");
+    } finally { unmount(); }
+  });
+
   it.each((["dock", "full"] as const).flatMap(variant => Array.from({ length: 9 }, (_, index) => ({ variant, index }))))(
     "shows the reported host privileges read-only in $variant (combination $index)", async ({ variant, index }) => {
       const api = readyApi(); const client = readyClient();
