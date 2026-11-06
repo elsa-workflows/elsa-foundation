@@ -28,7 +28,7 @@ CAPTURES = {
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
-    'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed'],
+    'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
 }
 HISTORY_JOURNEY = 'durable run timeline across a native task resume and owned process restart'
 CAPTURES[HISTORY_JOURNEY] = ['reference', 'minimal-controls', 'bookmark-waiting', 'after-restart', 'retained-bookmark-consumed', 'resumed-event', 'bookmark-consumed', 'activity-journal-context', 'activity-journal', 'causal-delivery', 'causal-successors', 'recording-coverage', 'atomic-group', 'activity-data', 'recorded-value', 'no-matches', 'faulted-timeline', 'diagram', 'stale-history', 'reconnected-history']

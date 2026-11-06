@@ -39,7 +39,7 @@ class VerdictTests(unittest.TestCase):
                     'executable designer parity', acceptance.HISTORY_JOURNEY,
                     'compact runtime Inputs retain exact captured values and accessible technical details'}
         self.assertTrue(required <= acceptance.JOURNEYS)
-        self.assertEqual(['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed'],
+        self.assertEqual(['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
                          acceptance.CAPTURES['compact runtime Inputs retain exact captured values and accessible technical details'])
 
     def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):

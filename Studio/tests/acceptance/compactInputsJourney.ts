@@ -24,7 +24,12 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
   const formId = `compact-inputs-${stamp}`;
   await api("/runtime/user-task-forms", "POST", {
     id: formId, version: "1", name: "Compact Inputs acceptance", provider: "elsa.basic-forms/1",
-    fields: [{ key: "Note", label: "Note", kind: "text", required: true }]
+    fields: [
+      { key: "Note", label: "Note", kind: "text", required: true },
+      { key: "Rush", label: "Rush", kind: "boolean" },
+      { key: "Quantity", label: "Quantity", kind: "number" },
+      { key: "Extra", label: "Extra", kind: "text" }
+    ]
   });
   const literal = (referenceKey: string, value: unknown) => ({ referenceKey, value: { expressionType: "Literal", value } });
   const submitted = await api<{ definition: { id: string }; version: { id: string } }>("/design/workflows/definitions/submit", "POST", {
@@ -37,7 +42,7 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
           literal("Title", title), literal("AssigneeId", identity.userId),
           literal("Actions", ["Approve", "Reject", "Request changes"]),
           literal("FormId", formId), literal("FormVersion", "1"), literal("OptionalFormActions", []),
-          literal("Prefill", { Note: "", Rush: false, Quantity: 0, Extra: null, Items: [] })
+          literal("Prefill", { Note: "", Rush: false, Quantity: 0, Extra: null })
         ]
       }
     }
@@ -48,6 +53,10 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
     let owner = "";
     await expect.poll(async () => {
       const history = await api<RuntimeHistoryPage>(`/runtime/workflows/instances/${run.workflowExecutionId}/history?limit=100`);
+      if (history.items.some(event => event.name === "ActivityFaulted")) {
+        await info.attach("task-seed-fault.json", { body: JSON.stringify(history, null, 2), contentType: "application/json" });
+        throw new Error("The owned task seed faulted before creating its expected bookmark; inspect task-seed-fault.json.");
+      }
       owner = history.items.find(event => event.name === "BookmarkCreated")?.activityExecutionId ?? "";
       return owner;
     }, { timeout: 30_000 }).not.toBe("");
@@ -96,9 +105,14 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
 
     const prefill = row("Prefill").locator(".wf-input-inspection-value");
     await prefill.locator("details > summary").first().press("Enter");
-    for (const text of ['""', "false", "0", "null", "[]"]) {
+    for (const text of ['""', "false", "0", "null"]) {
       await expect(prefill.getByText(text, { exact: true })).toBeVisible();
     }
+    // Basic forms deliberately have no array field kind; retain a real captured empty-array input.
+    const optionalActions = inspector.locator(".wf-input-inspection-row").filter({
+      has: page.getByRole("button", { name: /^Technical details for optional\s*form\s*actions$/i })
+    });
+    await expect(optionalActions.locator(".wf-input-inspection-value")).toHaveText("[]");
     await prefill.scrollIntoViewIfNeeded();
     await capture(page, info, "nested-values");
     await page.reload();
@@ -109,6 +123,21 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
     expect(after.valueSnapshots.find(snapshot => snapshot.evidenceId === titleEvidence!.evidenceId)).toEqual(titleEvidence);
     await titleRow.scrollIntoViewIfNeeded();
     await capture(page, info, "details-closed");
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(`/workflows/instances/${run.workflowExecutionId}?selected=${encodeURIComponent(owner)}`);
+    await inspector.getByRole("tab", { name: "Data", exact: true }).press("Enter");
+    await expect(titleRow.locator(".wf-input-inspection-value")).toHaveText(title);
+    await titleRow.scrollIntoViewIfNeeded();
+    await details.focus();
+    await details.press("Enter");
+    await expect(technical).toBeVisible();
+    expect(await titleRow.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await capture(page, info, "technical-details-320");
+    await details.press("Escape");
+    await expect(technical).toBeHidden();
+    await expect(details).toBeFocused();
+    await capture(page, info, "compact-values-320");
   } finally {
     await api(`/design/workflows/definitions/${encodeURIComponent(submitted.definition.id)}`, "DELETE");
   }
