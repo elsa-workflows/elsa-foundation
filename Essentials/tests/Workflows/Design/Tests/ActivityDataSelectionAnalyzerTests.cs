@@ -294,8 +294,11 @@ public sealed class ActivityDataSelectionAnalyzerTests
         var definition = Definition("CustomerId") with { IsCredential = syntax == "Secret" ? true : null,
             ConnectionType = syntax == "Connection" ? "test-connection" : null };
         using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(business, syntax))))));
+        // Keep the original CLR instance: the JSON-backed Sequence fixture serializes its children.
+        var document = Document(Node("consumer", Input(new(business, syntax))));
+        var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Contains(result.Findings, finding => finding.Type == (syntax == "Secret" ? CredentialInputBinding.RuleId : ConnectionInputBinding.RuleId));
+        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         Assert.Equal(0, business.Reads);
     }
 
@@ -310,15 +313,25 @@ public sealed class ActivityDataSelectionAnalyzerTests
             ? SecretReferencePayload.Read(JsonSerializer.SerializeToElement(new { name = "test-secret" })).Reference!
             : ConnectionReferencePayload.Read(JsonSerializer.SerializeToElement(new { connection = "test-connection" })).Reference!;
         using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(reference, syntax))))))).Findings);
+        // A typed ConnectionReferenceMembers has Name, whereas its canonical JSON payload has connection.
+        // Test the actual admitted record before any structure fixture turns it into a different JSON shape.
+        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Node("consumer", Input(new(reference, syntax)))))).Findings);
     }
 
-    [Fact]
-    public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions()
+    [Theory]
+    [InlineData("literal")]
+    [InlineData("Object")]
+    [InlineData("Default")]
+    [InlineData("CustomProvider")]
+    public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions(string syntax)
     {
         using var provider = Provider();
-        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(new ThrowingBusinessValue(), "literal"))))));
+        var business = new ThrowingBusinessValue();
+        var document = Document(Node("consumer", Input(new(business, syntax))));
+        var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Empty(result.Findings);
+        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
+        Assert.Equal(0, business.Reads);
     }
 
     [Theory]
@@ -384,7 +397,11 @@ public sealed class ActivityDataSelectionAnalyzerTests
     }
     private static int Count(ActivitySerializedShape shape) => shape.Members.Sum(member => 1 + Count(member.Shape))
         + (shape.Element is { } element ? 1 + Count(element) : 0) + (shape.MapValue is { } map ? 1 + Count(map) : 0);
-    private sealed class ThrowingBusinessValue { public string Value => throw new InvalidOperationException("Business getter must not run."); }
+    private sealed class ThrowingBusinessValue
+    {
+        public int Reads;
+        public string Value { get { Reads++; throw new InvalidOperationException("Business getter must not run."); } }
+    }
     private sealed class ReferenceGetterTrap
     {
         public int Reads;
