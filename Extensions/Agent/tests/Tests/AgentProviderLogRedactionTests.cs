@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Elsa.Testing;
 using Elsa.Agent.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Tests;
 
@@ -22,8 +23,18 @@ namespace Elsa.Agent.Tests;
 /// inner exceptions) and prove the secret never reaches it on any provider Debug-log path, while
 /// the redaction marker does.
 /// </summary>
-public sealed class AgentProviderLogRedactionTests
+public sealed class AgentProviderLogRedactionTests : IDisposable
 {
+    private readonly ServiceProvider _services = AgentTestServices.Create();
+    private readonly Task<AgentSession> _ownedSession;
+
+    public AgentProviderLogRedactionTests()
+    {
+        _ownedSession = _services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "fixture",
+            GitHubCopilotAgentProvider.Id, "explain", "Logging fixture", AgentPolicy.Default, new Dictionary<string, string>()));
+    }
+
+    public void Dispose() => _services.Dispose();
     private const string AnthropicSecret = "sk-ant-SECRET-4242";
     private const string CopilotSecret = "ghp_SECRETTOKEN4242";
     private const string RedactionMarker = "[redacted]";
@@ -56,7 +67,7 @@ public sealed class AgentProviderLogRedactionTests
     public async Task Copilot_resume_failure_on_the_provider_path_does_not_leak_the_token_to_the_log_sink()
     {
         var (provider, logger, _) = BuildCopilot(resumeException: SecretfulCopilotException());
-        var context = AgentTurnContext.ForMessage("s1", "Hi", []);
+        var context = AgentTurnContext.ForMessage((await _ownedSession).Id, "Hi", []);
 
         await Collect(provider.ContinueTurnAsync(context));
 
@@ -69,7 +80,7 @@ public sealed class AgentProviderLogRedactionTests
     public async Task Copilot_resume_failure_on_the_harness_path_does_not_leak_the_token_to_the_log_sink()
     {
         var (provider, logger, _) = BuildCopilot(resumeException: SecretfulCopilotException());
-        var request = new AgentHarnessTurnRequest("s1", "actor-1", [new(AgentRole.User, "do it")], [], [], AgentPolicy.Default);
+        var request = new AgentHarnessTurnRequest("s1", "actor-1", [new(AgentRole.User, "do it")], [], [], AgentPolicy.Default) { TenantId = "tenant-1" };
 
         await Collect(provider.RunTurnAsync(request));
 
@@ -190,7 +201,7 @@ public sealed class AgentProviderLogRedactionTests
 
     // --- Builders ---
 
-    private static (GitHubCopilotAgentProvider Provider, RecordingLogger<GitHubCopilotAgentProvider> Logger, ScriptableCopilotClient Client) BuildCopilot(
+    private (GitHubCopilotAgentProvider Provider, RecordingLogger<GitHubCopilotAgentProvider> Logger, ScriptableCopilotClient Client) BuildCopilot(
         Exception? resumeException = null,
         Exception? pingException = null)
     {
@@ -200,14 +211,15 @@ public sealed class AgentProviderLogRedactionTests
         return (provider, logger, client);
     }
 
-    private static GitHubCopilotAgentProvider BuildCopilotProvider(
+    private GitHubCopilotAgentProvider BuildCopilotProvider(
         GitHubCopilotAgentOptions options,
         RecordingLogger<GitHubCopilotAgentProvider> logger,
         ScriptableCopilotClient client)
     {
         // This suite exercises the SDK logging boundary without executing tools/effects.
         var invoker = new AgentTestToolInvoker();
-        return new GitHubCopilotAgentProvider(new ScriptableCopilotClientFactory(client), Options.Create(options), invoker, logger);
+        return new GitHubCopilotAgentProvider(new ScriptableCopilotClientFactory(client), Options.Create(options), invoker, logger,
+            _services.GetRequiredService<IAgentSessionService>());
     }
 
     private static async Task<List<AgentStreamEvent>> Collect(IAsyncEnumerable<AgentStreamEvent> events)

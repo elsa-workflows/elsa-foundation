@@ -7,6 +7,7 @@ using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Dashboard.Core.Resources;
+using Elsa.Studio.Dashboard.Core.Contracts;
 using Elsa.Studio.Dashboard.Management.Resources;
 using Elsa.Studio.Dashboard.Management;
 using Microsoft.AspNetCore.Routing;
@@ -36,6 +37,7 @@ public class DashboardResourcesApiFeature : DashboardManagementFeature, IWebShel
             throw new InvalidOperationException("Exactly one Dashboard actor context must be registered.");
         services.TryAddScoped<IDashboardActorContext, HttpDashboardActorContext>();
         services.AddDashboardResources();
+        services.TryAddSingleton<DashboardAudienceCursors>();
         services.TryAddScoped<IDashboardAudienceDirectory, DashboardAudienceDirectory>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DashboardResourceCompositionGuard>());
         services.AddPermissionContributor<DashboardResourcePermissionContributor>();
@@ -54,6 +56,8 @@ internal sealed class DashboardResourceCompositionGuard(IServiceProvider provide
     {
         using var scope = provider.CreateScope();
         RequireOne(scope.ServiceProvider.GetServices<IDashboardActorContext>());
+        RequireOne(scope.ServiceProvider.GetServices<IDashboardQueryService>());
+        RequireOne(scope.ServiceProvider.GetServices<IDashboardResourceService>());
         RequireOne(scope.ServiceProvider.GetServices<IDashboardResourceStore>());
         RequireOne(scope.ServiceProvider.GetServices<IDashboardDefinitionValidator>());
         RequireOne(scope.ServiceProvider.GetServices<IDashboardAudienceDirectory>());

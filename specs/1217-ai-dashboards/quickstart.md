@@ -1,13 +1,13 @@
 # Dashboard qualification guide
 
-**Status:** Draft validation plan. The feature is not implemented. Commands for new feature projects/probes must be added with those projects; none is implied to exist or have passed.
+**Status:** Active qualification guide. Native/Weaver implementation and source tests exist; composed UX, actual provider behavior and final delivery gates remain tracked separately in the evidence index.
 
 ## Prerequisites
 
 - Use this issue's isolated checkout and current committed revision. Read [plan.md](plan.md), [contracts](contracts/query.md) and [UX acceptance](ux-acceptance.md).
 - Use owned temporary hosts/content roots, allocated local ports and disposable stores. Preserve existing listeners and databases. Never target a shared or production host.
 - Install the repository-pinned SDK/Node tooling and Studio dependencies. Respect the shared-machine `dotnet` build-slot wrapper.
-- Obtain the selected provider/access decision before provider-dependent implementation or live calls. Use Connections/Secrets and the applicable credential/setup skill. A local login, environment variable or connection name alone is not authorization.
+- The owner selected the existing Copilot SDK adapter with backend options/configuration. Supply a supported backend token through configured options/environment; keep it out of source, prompts, screenshots and browser configuration. Qualify actual Copilot entitlement/policy; file presence alone is not model access.
 - Prepare controlled real Workflow runs and an independently packaged Acme.Processing module. Do not substitute a prebuilt widget or invented workflow variable for a declared business dataset.
 
 ## Documentation checkpoint
@@ -30,7 +30,7 @@ Use an independent oracle for values and included/excluded groups. Cover no deno
 
 ## Composed Studio proof
 
-Extend the existing actual-host runner with the Dashboard journeys before using it as feature evidence. The committed runner currently supplies the owned-host foundation and does not call external models:
+The extended actual-host runner includes Dashboard/native-sharing and Home regression journeys in four display projects, with independent numerical oracles and no external model calls:
 
 ```sh
 pnpm --dir Studio install --frozen-lockfile
@@ -38,13 +38,17 @@ pnpm --dir Studio exec playwright install chromium
 python3 tools/ux-acceptance/run.py --output /tmp/studio-ux-dashboard-UNIQUE
 ```
 
-Choose a new output directory for each run. Final evidence needs a clean committed checkout. Retain `report.json`, Playwright report/screenshots/accessibility snapshots/traces, source and PR-head identities, all failures and skipped states. Publish evidence through existing downloadable Actions artifacts and link the precise run/artifact from the PR. An independent reviewer opens the captures and inspects the entire affected journey, including light/dark/narrow/keyboard and meaningful empty/error/read-only states.
+The runner explicitly builds the owned QA profile with `ElsaDashboardQualification=true`: ordinary product composition plus predeclared native Identity users/grants for isolated multi-user controls. Standard builds contain no qualification bootstrap or fixed-profile routes. Readiness captures the root host bootstrap because request services are shell-scoped. Choose a new output directory for each run. Final evidence needs a clean committed checkout. Retain `report.json`, Playwright report/screenshots/accessibility snapshots/traces, source and PR-head identities, all failures and skipped states. Publish evidence through existing downloadable Actions artifacts and link the precise run/artifact from the PR. An independent reviewer opens the captures and inspects the entire affected journey, including light/dark/narrow/keyboard and meaningful empty/error/read-only states.
+
+## Independent package witness
+
+Run `python3 tools/studio/Dashboard.Conformance.Probe/qualify.py --output /absolute/new-owned-proof --version 4.0.0-dashboard3604.UNIQUE` from a clean committed checkout. See its README for package/archive/published/loaded-byte and offline-restore controls. Private fixture tokens stay in the owned output; publish only redacted receipts. This witness does not claim production authentication, Studio UX or live models.
 
 ## Live-model journey
 
 On an owned host with the selected authorized provider, ask the workflow failure-rate question, clarify its meaning, refine current-folder grouping/test exclusion, preview numerical results, save/arrange/reopen/refresh/share/drill. Repeat with processing time by the reference business module's declared customer category.
 
-Record actual provider/model and safe connection metadata, tool invocation correlation, saved native definitions/revisions, numerical oracle and native refresh request-count evidence. Distinguish a real model run from deterministic provider factories. Do not include credentials, private production data or unsafe trace payloads in evidence.
+Record actual provider/model and safe backend configuration metadata, tool invocation correlation, saved native definitions/revisions, numerical oracle and native refresh request-count evidence. Distinguish a real model run from deterministic provider factories. Do not include credentials, private production data or unsafe trace payloads in evidence.
 
 ## Authorization and lifecycle matrix
 

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
@@ -7,20 +8,28 @@ using Elsa.Agent.GitHubCopilot.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Elsa.Agent.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Tests;
 
-public sealed class GitHubCopilotAgentProviderTests
+public sealed class GitHubCopilotAgentProviderTests : IDisposable
 {
+    private readonly ServiceProvider _services = AgentTestServices.Create();
+    private readonly Task<AgentSession> _ownedSession;
     private readonly FakeCopilotClientFactory _factory = new();
-    private readonly GitHubCopilotAgentOptions _options = new();
+    private readonly GitHubCopilotAgentOptions _options = new() { GitHubTokenEnvironmentVariable = "ELSA_COPILOT_TEST_TOKEN_NOT_SET" };
     private readonly GitHubCopilotAgentProvider _provider;
 
     public GitHubCopilotAgentProviderTests()
     {
         var invoker = new AgentTestToolInvoker();
-        _provider = new(_factory, Options.Create(_options), invoker, NullLogger<GitHubCopilotAgentProvider>.Instance);
+        var sessions = _services.GetRequiredService<IAgentSessionService>();
+        _ownedSession = sessions.CreateAsync(new("tenant-1", "actor-1", "fixture-conversation", GitHubCopilotAgentProvider.Id,
+            "explain", "Provider fixture", AgentPolicy.Default, new Dictionary<string, string>()));
+        _provider = new(_factory, Options.Create(_options), invoker, NullLogger<GitHubCopilotAgentProvider>.Instance, sessions);
     }
+
+    public void Dispose() => _services.Dispose();
 
     [Fact]
     public async Task Diagnostics_reports_disabled_by_default()
@@ -121,7 +130,33 @@ public sealed class GitHubCopilotAgentProviderTests
         Assert.Equal("session-1", providerSession.Id);
         Assert.Equal("session-1", _factory.Client.CreatedSessionRequest?.SessionId);
         Assert.Equal("gpt-5", _factory.Client.CreatedSessionRequest?.Model);
+        Assert.Equal(session.TenantId, _factory.Client.LastClientRequest?.TenantId);
+        Assert.Empty(_factory.Client.CreatedSessionRequest!.AvailableTools);
         Assert.Equal("session-1", providerSession.Metadata["sessionId"]);
+    }
+
+    [Fact]
+    public async Task Session_creation_failure_redacts_all_configured_secrets_without_retaining_the_raw_exception()
+    {
+        _options.Enabled = true; _options.GitHubToken = "fixture-github-token"; _options.RuntimeConnectionToken = "fixture-runtime-token";
+        _factory.Client.CreateException = new InvalidOperationException("SDK creation failed: fixture-github-token fixture-runtime-token");
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => _provider.CreateSessionAsync(CreateSession("session-1")));
+        Assert.DoesNotContain("fixture-github-token", failure.ToString()); Assert.DoesNotContain("fixture-runtime-token", failure.ToString());
+        Assert.Contains("[redacted]", failure.Message); Assert.Null(failure.InnerException);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Continue_refuses_missing_session_owner_before_touching_any_sdk_state(bool servicePresent)
+    {
+        _options.Enabled = true; _options.GitHubToken = "fixture-token";
+        var provider = new GitHubCopilotAgentProvider(_factory, Options.Create(_options), new AgentTestToolInvoker(),
+            NullLogger<GitHubCopilotAgentProvider>.Instance, servicePresent ? _services.GetRequiredService<IAgentSessionService>() : null);
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in provider.ContinueTurnAsync(AgentTurnContext.ForMessage("unknown-session", "read", []))) events.Add(item);
+        Assert.Equal("agent.provider.github_copilot.session_owner_unavailable", Assert.Single(events).Error!.Code);
+        Assert.Null(_factory.Client.LastClientRequest); Assert.False(_factory.Client.Started);
     }
 
     [Fact]
@@ -245,6 +280,100 @@ public sealed class GitHubCopilotAgentProviderTests
         Assert.Equal(AgentStreamEventKind.Error, error.Kind);
         Assert.Equal("sdk.error", error.Error?.Code);
         Assert.Equal("SDK failed for [redacted]", error.Error?.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Both_turn_paths_redact_raw_sdk_error_codes_as_well_as_messages(bool harness)
+    {
+        ConfigureSecretCanaries();
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Error,
+            ErrorCode: "sdk.test-token.runtime-fixture-secret", ErrorMessage: "failed test-token runtime-fixture-secret"));
+        var events = await CollectTurnAsync(harness);
+        AssertRedacted(events);
+        Assert.Contains("[redacted]", Assert.Single(events).Error!.Code);
+    }
+
+    [Fact]
+    public async Task Fallback_structured_error_code_cannot_disclose_configured_credentials()
+    {
+        ConfigureSecretCanaries();
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.MessageDelta,
+            """{"resultKind":"error","errorCode":"sdk.test-token.runtime-fixture-secret","errorMessage":"failed test-token runtime-fixture-secret"}"""));
+        var events = await CollectTurnAsync(false);
+        AssertRedacted(events);
+        Assert.Contains("[redacted]", Assert.Single(events).Error!.Code);
+    }
+
+    [Theory]
+    [InlineData(false, "factory")]
+    [InlineData(true, "factory")]
+    [InlineData(false, "stream")]
+    [InlineData(true, "stream")]
+    [InlineData(false, "session-dispose")]
+    [InlineData(true, "session-dispose")]
+    [InlineData(false, "client-dispose")]
+    [InlineData(true, "client-dispose")]
+    [InlineData(false, "both-dispose")]
+    [InlineData(true, "both-dispose")]
+    public async Task Complete_sdk_turn_lifetime_converts_secretful_faults_into_safe_typed_events(bool harness, string stage)
+    {
+        ConfigureSecretCanaries();
+        var failure = new InvalidOperationException("failed test-token runtime-fixture-secret", new Exception("inner test-token runtime-fixture-secret"));
+        if (stage == "factory") _factory.ConstructionException = failure;
+        if (stage == "stream") _factory.Client.Session.StreamException = failure;
+        if (stage is "session-dispose" or "both-dispose") _factory.Client.Session.DisposeException = failure;
+        if (stage is "client-dispose" or "both-dispose") _factory.Client.DisposeException = failure;
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Completed));
+        var events = await CollectTurnAsync(harness);
+        var error = Assert.Single(events, item => item.Kind == AgentStreamEventKind.Error);
+        Assert.Equal("agent.provider.github_copilot.turn_failed", error.Error!.Code);
+        AssertRedacted(events);
+        Assert.DoesNotContain(events, item => item.Kind == AgentStreamEventKind.Completed);
+        if (stage != "factory") Assert.Equal(1, _factory.Client.DisposeCalls);
+        if (stage is "session-dispose" or "both-dispose") Assert.Equal(1, _factory.Client.Session.DisposeCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Requested_cancellation_survives_secretful_session_and_client_cleanup_faults(bool harness)
+    {
+        ConfigureSecretCanaries();
+        _factory.Client.Session.WaitForCancellation = true;
+        _factory.Client.Session.DisposeException = new Exception("session test-token runtime-fixture-secret");
+        _factory.Client.DisposeException = new Exception("client test-token runtime-fixture-secret");
+        using var cancellation = new CancellationTokenSource();
+        var running = CollectTurnAsync(harness, cancellation.Token);
+        await _factory.Client.Session.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        cancellation.Cancel();
+        var stopped = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        Assert.DoesNotContain("test-token", stopped.ToString());
+        Assert.DoesNotContain("runtime-fixture-secret", stopped.ToString());
+        Assert.Equal(1, _factory.Client.Session.DisposeCalls);
+        Assert.Equal(1, _factory.Client.DisposeCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Early_consumer_disposal_cleans_owned_sdk_objects_without_leaking_cleanup_faults(bool harness)
+    {
+        ConfigureSecretCanaries();
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.MessageDelta, "partial"));
+        _factory.Client.Session.HoldAfterEvent = harness;
+        _factory.Client.Session.DisposeException = new Exception("session test-token runtime-fixture-secret");
+        _factory.Client.DisposeException = new Exception("client test-token runtime-fixture-secret");
+        var owned = await _ownedSession;
+        await using var iterator = Turn(harness, owned).GetAsyncEnumerator();
+        Assert.True(await iterator.MoveNextAsync());
+        Assert.Equal("partial", iterator.Current.Content);
+        if (harness) await _factory.Client.Session.HeldAfterEvent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await iterator.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(1, _factory.Client.Session.DisposeCalls);
+        Assert.Equal(1, _factory.Client.DisposeCalls);
+        if (harness) Assert.True(_factory.Client.Session.CancellationObserved);
     }
 
     [Fact]
@@ -382,19 +511,45 @@ public sealed class GitHubCopilotAgentProviderTests
 
     private async Task<List<AgentStreamEvent>> StreamTurnAsync(AgentTurnContext turn, CancellationToken cancellationToken = default)
     {
+        var owned = await _ownedSession;
+        turn = turn with { SessionId = owned.Id, ProviderSessionId = owned.Id };
         var events = new List<AgentStreamEvent>();
         await foreach (var item in _provider.ContinueTurnAsync(turn, cancellationToken))
             events.Add(item);
         return events;
     }
 
+    private void ConfigureSecretCanaries()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        _options.RuntimeConnectionToken = "runtime-fixture-secret";
+    }
+
+    private IAsyncEnumerable<AgentStreamEvent> Turn(bool harness, AgentSession owned, CancellationToken cancellationToken = default) => harness
+        ? _provider.RunTurnAsync(new(owned.Id, owned.ActorId, [new(AgentRole.User, "read")], [], [], AgentPolicy.Default)
+            { TenantId = owned.TenantId }, cancellationToken)
+        : _provider.ContinueTurnAsync(AgentTurnContext.ForMessage(owned.Id, "read", []), cancellationToken);
+
+    private async Task<List<AgentStreamEvent>> CollectTurnAsync(bool harness, CancellationToken cancellationToken = default)
+    {
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in Turn(harness, await _ownedSession, cancellationToken)) events.Add(item);
+        return events;
+    }
+
+    private static void AssertRedacted(IReadOnlyList<AgentStreamEvent> events)
+    {
+        var serialized = JsonSerializer.Serialize(events);
+        Assert.Contains("[redacted]", serialized);
+        Assert.DoesNotContain("test-token", serialized);
+        Assert.DoesNotContain("runtime-fixture-secret", serialized);
+    }
+
     private async Task<List<AgentStreamEvent>> StreamAsync(AgentProviderMessage message, CancellationToken cancellationToken = default)
     {
         var turn = AgentTurnContext.ForMessage(message.SessionId, message.Content, message.Context);
-        var events = new List<AgentStreamEvent>();
-        await foreach (var item in _provider.ContinueTurnAsync(turn, cancellationToken))
-            events.Add(item);
-        return events;
+        return await StreamTurnAsync(turn, cancellationToken);
     }
 
     private static AgentSession CreateSession(string id) => new(
@@ -432,9 +587,11 @@ public sealed class GitHubCopilotAgentProviderTests
     private sealed class FakeCopilotClientFactory : IGitHubCopilotClientFactory
     {
         public FakeCopilotClient Client { get; } = new();
+        public Exception? ConstructionException { get; set; }
 
         public IGitHubCopilotClient Create(GitHubCopilotClientRequest request)
         {
+            if (ConstructionException is { } failure) throw failure;
             Client.LastClientRequest = request;
             return Client;
         }
@@ -455,6 +612,9 @@ public sealed class GitHubCopilotAgentProviderTests
         public bool Pinged { get; private set; }
 
         public Exception? PingException { get; set; }
+        public Exception? CreateException { get; set; }
+        public Exception? DisposeException { get; set; }
+        public int DisposeCalls { get; private set; }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
@@ -474,6 +634,7 @@ public sealed class GitHubCopilotAgentProviderTests
         public Task<IGitHubCopilotSession> CreateSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
         {
             CreatedSessionRequest = request;
+            if (CreateException is { } failure) return Task.FromException<IGitHubCopilotSession>(failure);
             Session.SessionId = request.SessionId;
             return Task.FromResult<IGitHubCopilotSession>(Session);
         }
@@ -484,7 +645,11 @@ public sealed class GitHubCopilotAgentProviderTests
             return Task.FromResult<IGitHubCopilotSession>(Session);
         }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            DisposeCalls++;
+            return DisposeException is { } failure ? ValueTask.FromException(failure) : ValueTask.CompletedTask;
+        }
     }
 
     private sealed class FakeCopilotSession : IGitHubCopilotSession
@@ -500,6 +665,12 @@ public sealed class GitHubCopilotAgentProviderTests
         public bool WaitForCancellation { get; set; }
 
         public bool CancellationObserved { get; private set; }
+        public Exception? StreamException { get; set; }
+        public Exception? DisposeException { get; set; }
+        public int DisposeCalls { get; private set; }
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool HoldAfterEvent { get; set; }
+        public TaskCompletionSource HeldAfterEvent { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // When set, computes the events for a given prompt instead of replaying the static Events list. Lets a test
         // simulate a multi-step turn where each send (prompt) yields a different response.
@@ -508,6 +679,8 @@ public sealed class GitHubCopilotAgentProviderTests
         public async IAsyncEnumerable<GitHubCopilotStreamEvent> SendAsync(string prompt, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             LastPrompt = prompt;
+            Entered.TrySetResult();
+            if (StreamException is { } failure) throw failure;
             if (WaitForCancellation)
             {
                 try
@@ -525,11 +698,21 @@ public sealed class GitHubCopilotAgentProviderTests
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return item;
+                if (HoldAfterEvent)
+                {
+                    HeldAfterEvent.TrySetResult();
+                    try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                    catch (OperationCanceledException) { CancellationObserved = true; throw; }
+                }
             }
         }
 
         public Task AbortAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            DisposeCalls++;
+            return DisposeException is { } failure ? ValueTask.FromException(failure) : ValueTask.CompletedTask;
+        }
     }
 }

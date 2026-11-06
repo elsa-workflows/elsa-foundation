@@ -10,6 +10,13 @@ namespace Elsa.Studio.Dashboard.Api;
 
 internal static class DashboardApiActor
 {
+    internal static ValueTask<DashboardActor> CurrentAsync(HttpContext context)
+    {
+        var sources = context.RequestServices.GetServices<IDashboardActorContext>().Take(2).ToArray();
+        return sources.Length == 1 ? sources[0].GetAsync(context.RequestAborted) :
+            ValueTask.FromException<DashboardActor>(new DashboardResourceException("unavailable", "Exactly one current Dashboard identity source is required."));
+    }
+
     public static async ValueTask<DashboardActor> ResolveAsync(HttpContext context)
     {
         var validator = context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>();
@@ -23,9 +30,14 @@ internal static class DashboardApiActor
         if (context.RequestServices.GetService<IUserStore>() is { } users)
         {
             var user = await users.FindAsync(tenant, userId, context.RequestAborted);
-            if (user is null || user.Status != UserStatus.Active)
+            if (user is null || user.Id != userId || user.TenantId != tenant || user.Status != UserStatus.Active)
                 throw new DashboardResourceException("denied", "The current user is unavailable or inactive.");
-            roles.UnionWith(user.RoleIds);
+            if (context.RequestServices.GetService<IRoleStore>() is { } roleStore)
+                foreach (var roleId in user.RoleIds)
+                {
+                    var role = await roleStore.FindAsync(tenant, roleId, context.RequestAborted);
+                    if (role?.Id == roleId && role.TenantId == tenant) roles.Add(roleId);
+                }
         }
         var authority = context.RequestServices.GetRequiredService<IPermissionAuthorizationService>();
         var permissions = new HashSet<string>(StringComparer.Ordinal);

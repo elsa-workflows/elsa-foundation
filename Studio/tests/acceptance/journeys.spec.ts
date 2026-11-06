@@ -3,6 +3,8 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
+import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
+import { dashboardHomeJourney } from "./dashboardHomeJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -27,6 +29,8 @@ const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
+test("existing home widgets and layout defaults", async ({ page }, info) => dashboardHomeJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.

@@ -1,23 +1,26 @@
 # Dashboard delivery evidence
 
-**Status:** Stopped native implementation checkpoint. See [the detailed handoff](2026-11-06-native-checkpoint.md). No product/provider/UX acceptance, implementation merge or resulting-main qualification exists.
+**Status:** Active implementation after the owner's 6 November resume. The [earlier stopped checkpoint](2026-11-06-native-checkpoint.md) is historical; its failed/unrun outcomes are retained there. No composed product/live-provider/independent UX acceptance, implementation merge or resulting-main qualification is claimed yet.
 
 | Obligation | Current evidence | State |
-|---|---|---|
-| Canonical scope/authorization/claim | #3604 and linked owner comments in [spec.md](../spec.md) | Recorded |
-| Navigation | Owner selected separate Dashboards with Mine/Shared with me, alongside unchanged Home | Confirmed |
-| Current gaps and interaction research | [research](../research.md), [data](../research-data.md), [Weaver](../research-weaver.md) | Draft research complete |
-| Product/query/resource/Weaver/UX design | [spec](../spec.md), [plan](../plan.md), [contracts](../contracts/query.md), [UX](../ux-acceptance.md) | Native design review clean after corrections; provider-specific design/access open |
-| Provider/access | Current owner card | Awaiting selection; no credential inspected or provider called |
-| Novel native Workflow query/numerical oracle | Not implemented/run | Not run |
-| Independent business-module contribution | Planned Acme.Processing witness | Not run |
-| Durable resources/identity/sharing/authorization | Planned contracts and test matrix | Not run |
-| Ordinary editing/refresh with zero model requests | Native UI/API code written; actual backend journey and provider count not run | Incomplete |
-| Live-provider behavior | No deterministic substitute counted as live proof | Not run |
-| Actual composed Studio/independent UX | UX-01–UX-11 in acceptance record | Incomplete |
-| Required current-head checks/review | Attach actual PR/head/run evidence when available | Not established |
-| Merge and resulting main | None | Not run |
+| --- | --- | --- |
+| Scope/claim/resume | #3604 owner resume; one model-agnostic author over Weaver/existing Copilot adapter | Active |
+| Provider configuration | Owner selected backend options/configuration (appsettings/environment), superseding draft mandatory Connections/Secrets | Selected; usable live access not established |
+| Query foundation | Whole query suite23/23; DST fixture corrected without changing period semantics | Local pass |
+| Workflow source | Whole source suite27/27; authorized retained source reads, comparisons/exact ratios/current folders/drill | Local pass; composed journey pending |
+| Independent Acme source | Whole source/native-record/authority/oracle/composition suite21/21 | Local pass; preliminary independent package witness18/18 native cases, final frozen rerun pending |
+| Durable resources/native HTTP | SQLite actual migrations/native resource/API suite53/53 including ordinary consumer DbContext, current-actor boundary and error contracts | Local pass |
+| Relational providers | Actual owned PostgreSQL/MySQL/SQLServer migration/restart/concurrent keyed-create/CAS/history/copy/revocation3/3, no skips | Local pass |
+| Native UI/Weaver controls | TypeScript + whole Dashboard127/127; lint/stylelint/module build pass | Local pass; composed/visual acceptance pending |
+| Existing Agent/Copilot boundary | Whole affected Agent suite1234/1234 after server mode/tool-list/state partition changes | Local pass; actual SDK/model pending |
+| Inspection extraction | Whole Runtime API302/302 at earlier checkpoint | Historical local pass; final-head recheck required |
+| Weaver generic-engine integration | Whole authoring/native engine suite57/57 with no-ID admission controls | Local pass |
+| Ordinary native edit/refresh with no model calls | Native paths implemented; actual composed host/count witness pending | Incomplete |
+| Actual provider clarification/refinement | Actual SDK model listing reached GitHub and returned403 due current account feature entitlement. No model prompt sent; deterministic tests are separate. | Externally unavailable, user configuration action pending |
+| Actual composed Studio/independent UX | UX acceptance record and current-head downloadable screenshots/traces | Incomplete |
+| Current-head gates/review/merge | Required affected/architecture/map/CI/review outcomes | Not established |
+| Resulting-main | CI and feature journeys | Not run |
 
-Supporting local results: unchanged inspection-contract extraction builds; whole Runtime API tests **302/302 passed**. Native query tests **22 passed, 1 failed** (DST overflow case); resource test project builds, but its nine tests have not run. Frontend **86/86 passed** and TypeScript passed before final query-control/drill edits; those are not final-source passes. These results do not establish composed product or security acceptance.
+Safe local logs are preliminary receipts, not downloadable/current-head acceptance artifacts. Counts above identify whole projects and distinguish protocol/source tests from live model evidence. The first Workbench build lost child nodes at load58 on15cores; bounded-parallel retry passed and the owned normal host reached Ready200. The owned QA bootstrap also reached Ready200 after correcting root-vs-shell singleton observation; failed setup/readiness probes are retained in local logs. The example/test/package paths now follow the tree convention. Final locked Release+Debug graph restore is being checked; no existing package versions changed. Architecture, final frozen package and composed browser proof remain pending.
 
-Document guards and independent draft reviews may be recorded on the PR. They do not advance product evidence rows. Retain passed/failed/skipped/cancelled/unavailable/incomplete distinctly. Final screenshots/traces must be downloadable and match the reviewed source/head; local paths alone do not establish shared UX evidence.
+Never include credentials or protected production data. Final evidence must identify exact source/head, owned hosts/stores, provider/model/configuration and actual observed call boundaries. Keep failed/skipped/cancelled/unavailable/incomplete obligations visible.

@@ -33,6 +33,8 @@ internal static class DashboardQueriesApi
             typeof(DashboardQueryResult), 200, null, Drill).RequirePermission("studio/questions:read");
         group.MapUnboundOperation("POST", Root + "questions/{id}/execute", "ExecuteSavedDashboardQuestion",
             typeof(DashboardQueryResult), 200, null, ExecuteSaved).RequirePermission("studio/questions:read");
+        group.MapUnboundOperation("POST", Root + "questions/{id}/preview", "PreviewSavedDashboardQuestionDraft",
+            typeof(DashboardQueryResult), 200, null, PreviewSavedDraft).RequirePermission("studio/questions:read");
         group.MapUnboundOperation("POST", Root + "questions/{id}/drill", "DrillSavedDashboardQuestion",
             typeof(DashboardQueryResult), 200, null, DrillSaved).RequirePermission("studio/questions:read");
         group.MapUnboundOperation("POST", Root + "dashboards/{dashboardId}/tiles/{tileId}/execute", "ExecuteDashboardTile",
@@ -79,6 +81,17 @@ internal static class DashboardQueriesApi
         var request = Merge(definition, null, input.ParameterValues);
         http.Response.Headers.ETag = Quote(question.Revision);
         await Write(http, await Queries(http).ExecuteAsync(Scope(http, actor), request, http.RequestAborted));
+    });
+
+    private static Task PreviewSavedDraft(HttpContext http) => Boundary(http, async actor =>
+    {
+        var question = await Resources(http).GetAuthorizedQuestionAsync(actor, RequiredRoute(http, "id"), http.RequestAborted);
+        RequireRevision(http, question.Revision);
+        var draft = await Read(http, DashboardQueriesJsonContext.Default.DashboardQueryRequest);
+        // The bound saved-resource authority is re-read even though this preview executes an unsaved
+        // proposal. Source authority is independently re-evaluated by the native query service.
+        http.Response.Headers.ETag = Quote(question.Revision);
+        await Write(http, await Queries(http).ExecuteAsync(Scope(http, actor), draft, http.RequestAborted));
     });
 
     private static Task ExecuteTile(HttpContext http) => Boundary(http, async actor =>
@@ -153,7 +166,7 @@ internal static class DashboardQueriesApi
     {
         try
         {
-            var actor = await DashboardApiActor.ResolveAsync(http);
+            var actor = await DashboardApiActor.CurrentAsync(http);
             http.Response.Headers.CacheControl = "no-store";
             await action(actor);
         }
@@ -163,13 +176,23 @@ internal static class DashboardQueriesApi
             {
                 "notFound" => 404, "forbidden" or "denied" => 403, "unauthenticated" => 401,
                 "conflict" => 412, "preconditionRequired" => 428, "tooLarge" => 413, "validation" => 422,
-                "unavailable" => 503, _ => 400
+                "unavailable" or "schemaIncompatible" => 503, _ => 400
             };
             await Problem(http, status, error.Code, error.Message);
         }
         catch (DashboardQueryException error)
         {
-            await Problem(http, error.Code is "unavailable" or "ownerUnavailable" ? 503 : 400, error.Code, error.Message);
+            var status = error.Code switch
+            {
+                "DATASET_UNAVAILABLE" => 404,
+                "QUERY_SOURCE_FAILED" or "DATASET_OWNER_CONFLICT" or "INVALID_DATASET_DECLARATION" or "INVALID_SOURCE_RESULT" or
+                    "INVALID_QUERY_LIMITS" or "unavailable" or "ownerUnavailable" => 503,
+                "QUERY_TIMEOUT" => 504,
+                "QUERY_CONCURRENCY_LIMIT" => 429,
+                "QUERY_SCOPE_REQUIRED" => 403,
+                _ => 422
+            };
+            await Problem(http, status, error.Code, error.Message);
         }
         catch (JsonException)
         {

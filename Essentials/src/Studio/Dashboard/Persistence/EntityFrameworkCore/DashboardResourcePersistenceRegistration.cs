@@ -11,12 +11,11 @@ public static class DashboardResourcePersistenceRegistration
     private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(DashboardResourceDbContext));
 
     public static IServiceCollection AddDashboardResourcesEntityFrameworkCore<TContext>(this IServiceCollection services)
-        where TContext : DashboardResourceDbContext
+        where TContext : DbContext
     {
         if (services.Any(descriptor => descriptor.ServiceType == typeof(IDashboardResourceStore)))
             throw new InvalidOperationException("Exactly one Dashboard resource store must be configured.");
-        services.AddScoped<DashboardResourceDbContext>(provider => provider.GetRequiredService<TContext>());
-        services.AddScoped<IDashboardResourceStore, EfDashboardResourceStore>();
+        services.AddScoped<IDashboardResourceStore, EfDashboardResourceStore<TContext>>();
         return services;
     }
 
@@ -34,6 +33,7 @@ public static class DashboardResourcePersistenceRegistration
     {
         Binding.AddContext<TContext>(services, false, (provider, builder) => Binding.Apply(builder, provider,
             options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
+        services.AddScoped<DashboardResourceDbContext>(provider => provider.GetRequiredService<TContext>());
         services.AddDashboardResourcesEntityFrameworkCore<TContext>();
     }
 }

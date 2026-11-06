@@ -72,6 +72,12 @@
           "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
           "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
           "WorkflowsDashboardEntityFrameworkCore": {},
+          "StudioDashboardApi": {},
+          "StudioDashboardEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-studio-dashboards.db"
+          },
+          "WorkflowDashboardQueries": {},
+          "StudioDashboardWeaver": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},

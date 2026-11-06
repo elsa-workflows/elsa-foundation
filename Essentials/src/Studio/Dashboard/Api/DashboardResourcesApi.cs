@@ -56,7 +56,8 @@ public static class DashboardResourcesApi
         }
         group.MapUnboundOperation("GET", "/_elsa/studio/dashboard-audience-candidates", "DashboardAudienceCandidates", typeof(DashboardAudienceCandidatePage), 200, null,
             http => ExecuteAsync(http, async actor => await http.RequestServices.GetRequiredService<IDashboardAudienceDirectory>()
-                .SearchAsync(actor, http.Request.Query["kind"].FirstOrDefault() ?? "user", http.Request.Query["search"].FirstOrDefault(), http.RequestAborted)), containFailures: false)
+                .SearchAsync(actor, http.Request.Query["kind"].FirstOrDefault() ?? "user", http.Request.Query["search"].FirstOrDefault(),
+                    http.Request.Query["continuationToken"].FirstOrDefault(), http.RequestAborted)), containFailures: false)
             .RequireAnyPermission("*", "studio/questions:share", "studio/dashboards:share");
     }
 
@@ -65,7 +66,7 @@ public static class DashboardResourcesApi
         context.Response.Headers.CacheControl = "no-store";
         try
         {
-            var result = await action(await DashboardApiActor.ResolveAsync(context));
+            var result = await action(await DashboardApiActor.CurrentAsync(context));
             if (result is null) { context.Response.StatusCode = 204; return; }
             if (result is DashboardResourceView resource) context.Response.Headers.ETag = $"\"{resource.Revision}\"";
             await context.Response.WriteAsJsonAsync(result, Json, context.RequestAborted);

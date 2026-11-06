@@ -63,7 +63,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
         var content = await NormalizeAsync(actor, kind, input, null, cancellationToken);
         var now = clock.GetUtcNow();
         var document = new DashboardResourceDocument($"{kind}-{Guid.NewGuid():N}", kind, actor.TenantId, actor.UserId,
-            NewRevision(), content, [], [], now, now);
+            NewRevision(), content, [], [], now, now) { UpdatedBy = actor.UserId };
         var saved = await WriteAsync(new(document, null, key, fingerprint), cancellationToken);
         return await ProjectAsync(actor, saved, cancellationToken);
     }
@@ -83,7 +83,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
     {
         var current = await ReadAsync(actor, kind, id, cancellationToken);
         RequireOwner(actor, current, "delete"); CheckRevision(current, expectedRevision);
-        await WriteAsync(new(current, current.Revision, Delete: true), cancellationToken);
+        await WriteAsync(new(Next(current, current.Content, actor.UserId), current.Revision, Delete: true), cancellationToken);
     }
 
     public async ValueTask<DashboardAudiencePage> GetAudienceAsync(DashboardActor actor, string kind, string id, CancellationToken cancellationToken = default)
@@ -97,7 +97,8 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
     {
         var current = await ReadAsync(actor, kind, id, cancellationToken);
         RequireOwner(actor, current, "share"); CheckRevision(current, expectedRevision);
-        if (audience is null || audience.Count > 100 || audience.Select(grant => (grant.Kind, grant.Id)).Distinct().Count() != audience.Count)
+        if (audience is null || audience.Count > 100 || audience.Any(grant => grant is null) ||
+            audience.Select(grant => (grant.Kind, grant.Id)).Distinct().Count() != audience.Count)
             Invalid("An audience has at most 100 distinct user or role entries.");
         foreach (var grant in audience)
         {
@@ -125,14 +126,14 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
             Tiles = source.Content.Tiles.Select(tile => tile with { Id = $"tile-{Guid.NewGuid():N}" }).ToArray() };
         var now = clock.GetUtcNow();
         var copy = new DashboardResourceDocument($"{kind}-{Guid.NewGuid():N}", kind, actor.TenantId, actor.UserId, NewRevision(),
-            content, [], [], now, now);
+            content, [], [], now, now) { UpdatedBy = actor.UserId };
         return await ProjectAsync(actor, await WriteAsync(new(copy, null, key, fingerprint), cancellationToken), cancellationToken);
     }
 
     public async ValueTask<DashboardHistoryPage> HistoryAsync(DashboardActor actor, string kind, string id, CancellationToken cancellationToken = default)
     {
         var current = await ReadAsync(actor, kind, id, cancellationToken);
-        return new(new[] { new DashboardHistoryItem(current.Revision, current.Content.Name, current.Content.Description, current.OwnerId, current.UpdatedAt) }
+        return new(new[] { new DashboardHistoryItem(current.Revision, current.Content.Name, current.Content.Description, LastModifier(current), current.UpdatedAt) }
             .Concat(current.History.Select(item => new DashboardHistoryItem(item.Revision, item.Content.Name, item.Content.Description, item.ActorId, item.UpdatedAt))).ToArray());
     }
 
@@ -160,7 +161,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
     private async ValueTask<DashboardResourceContent> NormalizeAsync(DashboardActor actor, string kind, DashboardResourceInput input,
         DashboardResourceDocument? current, CancellationToken cancellationToken)
     {
-        if (input.Tiles is null) Invalid("Tiles must be a collection.");
+        if (input.Tiles is null || input.Tiles.Any(tile => tile is null)) Invalid("Tiles must be a collection of tile definitions.");
         var name = Name(input.Name); var description = Description(input.Description);
         DashboardQueryRequest? definition = null; var tiles = new List<DashboardTile>();
         if (kind == DashboardResourceKinds.Question)
@@ -174,6 +175,9 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
             else
             {
                 definition = input.Definition ?? throw new DashboardResourceException("validation", "A question definition is required.");
+                if (definition.Query is null || definition.Visualization is null || definition.ParameterValues is null ||
+                    definition.Query.Parameters is null || definition.Query.Parameters.Any(parameter => parameter is null))
+                    Invalid("A question requires a query, visualization and typed parameter collections.");
                 await definitions.ValidateAsync(actor, definition, cancellationToken);
                 definition = definition with { Query = definition.Query with { Parameters = definition.Query.Parameters.Select(parameter =>
                     definition.ParameterValues.TryGetValue(parameter.Name, out var accepted) ? parameter with { Default = accepted } : parameter).ToArray() } };
@@ -199,9 +203,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
                 {
                     var question = await GetAuthorizedQuestionAsync(actor, tile.QuestionId ?? "", cancellationToken);
                     var original = question.Content.Definition!;
-                    var values = original.ParameterValues.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-                    foreach (var value in tile.Parameters ?? new Dictionary<string, DashboardValue>()) values[value.Key] = value.Value;
-                    var effective = original with { Visualization = tile.Presentation ?? original.Visualization, ParameterValues = values };
+                    var effective = EffectiveDefinition(original, tile.Presentation, tile.Parameters);
                     await definitions.ValidateAsync(actor, effective, cancellationToken);
                     tiles.Add(new(tile.Id, question.Id, tile.Size, tile.Presentation, tile.Parameters));
                 }
@@ -232,7 +234,8 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
         {
             var question = await store.FindAsync(actor.TenantId, DashboardResourceKinds.Question, tile.QuestionId, cancellationToken);
             var available = question is not null && CanRead(actor, question) && question.Content.Definition is { } content &&
-                await definitions.CanDiscloseAsync(actor, content, cancellationToken);
+                await definitions.CanDiscloseAsync(actor, content, cancellationToken) &&
+                await definitions.CanDiscloseAsync(actor, EffectiveDefinition(content, tile.Presentation, tile.Parameters), cancellationToken);
             tiles.Add(available ? new(tile.Id, tile.QuestionId, tile.Size, "available", tile.Presentation, tile.Parameters)
                 : new(tile.Id, null, tile.Size, "unavailable"));
         }
@@ -244,8 +247,11 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
     }
 
     private DashboardResourceDocument Next(DashboardResourceDocument current, DashboardResourceContent content, string actorId) =>
-        current with { Content = content, Revision = NewRevision(), UpdatedAt = clock.GetUtcNow(),
-            History = new[] { new DashboardResourceRevision(current.Revision, current.Content, actorId, current.UpdatedAt) }.Concat(current.History).Take(20).ToArray() };
+        current with { Content = content, Revision = NewRevision(), UpdatedAt = clock.GetUtcNow(), UpdatedBy = actorId,
+            History = new[] { new DashboardResourceRevision(current.Revision, current.Content, LastModifier(current), current.UpdatedAt) }.Concat(current.History).Take(20).ToArray() };
+
+    private static string LastModifier(DashboardResourceDocument document) => !string.IsNullOrWhiteSpace(document.UpdatedBy)
+        ? document.UpdatedBy : document.History.Count == 0 && document.CreatedAt == document.UpdatedAt ? document.OwnerId : "unknown";
 
     private async ValueTask<DashboardResourceDocument> WriteAsync(DashboardResourceWrite write, CancellationToken cancellationToken)
     {
@@ -282,6 +288,41 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
     private static DashboardResourceException Missing() => new("notFound", "This resource is unavailable.");
     [DoesNotReturn]
     private static void Invalid(string message) => throw new DashboardResourceException("validation", message);
-    private static string Fingerprint(object value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
+    private static DashboardQueryRequest EffectiveDefinition(DashboardQueryRequest definition, DashboardVisualization? presentation,
+        IReadOnlyDictionary<string, DashboardValue>? parameters)
+    {
+        var values = definition.ParameterValues.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var value in parameters ?? new Dictionary<string, DashboardValue>()) values[value.Key] = value.Value;
+        return definition with { Visualization = presentation ?? definition.Visualization, ParameterValues = values };
+    }
+
+    private static string Fingerprint(object value)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteCanonical(writer, JsonSerializer.SerializeToElement(value));
+        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
+    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var member in value.EnumerateObject().OrderBy(member => member.Name, StringComparer.Ordinal))
+                { writer.WritePropertyName(member.Name); WriteCanonical(writer, member.Value); }
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in value.EnumerateArray()) WriteCanonical(writer, item);
+                writer.WriteEndArray();
+                break;
+            default:
+                value.WriteTo(writer);
+                break;
+        }
+    }
     private sealed record Cursor(string Scope, string Id);
 }

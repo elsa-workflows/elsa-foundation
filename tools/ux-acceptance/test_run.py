@@ -25,7 +25,7 @@ class VerdictTests(unittest.TestCase):
                 {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
                     {'status': 'passed', 'attachments': [
                         {'name': name, 'path': str(self.artifact)} for name in
-                        ['trace'] + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
+                        ['trace'] + sorted(acceptance.ADDITIONAL_ARTIFACTS.get(journey, set())) + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
                 for project in acceptance.PROJECTS]}
             for journey in acceptance.JOURNEYS]}]}
 
@@ -79,6 +79,21 @@ class VerdictTests(unittest.TestCase):
         destination = self.root / 'private'
         acceptance.prepare_host(project, destination)
         self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
+
+    def test_native_qualification_has_exact_private_grants_and_no_inference(self):
+        settings = {}
+        shells = {'CShells': {'Shells': {'default': {'Features': {'GitHubCopilotAgent': {'Enabled': True}}}}}}
+        acceptance.configure_dashboard_qualification(settings, shells)
+        qualification = settings['Qualification']
+        self.assertEqual(1, len(qualification['Principals']))
+        self.assertEqual('default', qualification['Principals'][0]['tenant'])
+        profiles = qualification['GrantProfiles']
+        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source'}, set(profiles))
+        self.assertEqual({'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'},
+                         set(profiles['dashboard-native-reader']) - set(profiles['dashboard-native-no-source']))
+        self.assertFalse(any('*' in grant or 'agent' in grant or grant.endswith(':manage') or grant.endswith(':share')
+                             for grant in qualification['Principals'][0]['exactDirectPermissions']))
+        self.assertFalse(shells['CShells']['Shells']['default']['Features']['GitHubCopilotAgent']['Enabled'])
 
     def test_exited_leader_does_not_hide_a_term_resistant_descendant(self):
         with patch.object(acceptance.os, 'killpg') as kill:

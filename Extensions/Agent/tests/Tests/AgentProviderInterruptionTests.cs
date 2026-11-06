@@ -90,7 +90,7 @@ public sealed class AgentProviderInterruptionTests
             : [new(AgentRole.User, "now")];
 
         var events = new List<AgentStreamEvent>();
-        await foreach (var item in provider.RunTurnAsync(new AgentHarnessTurnRequest("session-1", "actor-1", history, [], [], AgentPolicy.Default)))
+        await foreach (var item in provider.RunTurnAsync(new AgentHarnessTurnRequest("session-1", "actor-1", history, [], [], AgentPolicy.Default) { TenantId = "tenant-1" }))
             events.Add(item);
 
         Assert.True(client.Created);
@@ -119,7 +119,7 @@ public sealed class AgentProviderInterruptionTests
         IReadOnlyList<AgentTurnMessage> history = [new(AgentRole.User, "failed first"), new(AgentRole.User, "now")];
 
         var events = new List<AgentStreamEvent>();
-        await foreach (var item in provider.RunTurnAsync(new AgentHarnessTurnRequest("session-1", "actor-1", history, [], [], AgentPolicy.Default)))
+        await foreach (var item in provider.RunTurnAsync(new AgentHarnessTurnRequest("session-1", "actor-1", history, [], [], AgentPolicy.Default) { TenantId = "tenant-1" }))
             events.Add(item);
 
         Assert.True(client.Created);

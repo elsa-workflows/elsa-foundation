@@ -2,7 +2,7 @@
 
 **Branch**: `agent/codex/3604-ai-dashboards` | **Date**: 2026-11-06 | **Spec**: [spec.md](spec.md)
 
-**Status**: Native design reviewed for implementation; provider-dependent work remains gated by the unresolved provider/access choice. No runtime qualification is claimed.
+**Status**: Owner resumed implementation: one SDK-free dashboard author over Weaver and the existing Copilot SDK adapter, configured through backend options/appsettings/environment. Native and provider qualification remain explicit gates.
 
 ## Summary
 
@@ -13,7 +13,7 @@ Full delivery includes Workflow data, an independently packaged business-dimensi
 ## Technical Context
 
 - **Language/Version:** repository-pinned .NET SDK 10.0.300; existing C# conventions; TypeScript, React 19 and pnpm 11.9.0.
-- **Dependencies:** CShells, named Elsa Events, Foundation Identity authorization/IAM, Connections/Secrets, domain read contracts, NativeEndpoints, Studio SDK/public UI controls and delivered resource-agnostic Weaver contracts. Provider unresolved; no OpenAI-specific implementation before selection and applicable credential setup.
+- **Dependencies:** CShells, named Elsa Events, Foundation Identity authorization/IAM, domain read contracts, NativeEndpoints, Studio SDK/public UI controls and delivered resource-agnostic Weaver contracts. Existing Copilot SDK adapter; no new provider/model loop or OpenAI-specific implementation.
 - **Storage:** Dashboard-owned provider-neutral definition/revision/audience contracts and EF Core persistence. Home stays in Studio Preferences. Qualification uses disposable owned stores, preserving existing hosts/stores.
 - **Testing:** whole affected .NET projects, Vitest, composed Playwright journeys, independently packaged module probe, numerical oracle, actual selected-provider trace and independent visual review.
 - **Platform:** Foundation hosts/composed Studio and independently packaged/custom-host composition; preserve Design-only/Runtime-only deployments.
@@ -41,7 +41,7 @@ Read both [framework v6.1.0](../../.specify/memory/constitution-framework.md) an
 
 A necessary seam is being extracted: runtime inspection authorization currently lives in the Runtime API implementation assembly. The new contracts-only `Elsa.Workflows.Runtime.Inspection.Core` contains the unchanged interface, referencing Runtime Core and Identity Core while keeping those dependencies out of baseline Runtime Core. The HTTP implementation remains in Runtime API. Dashboard consumes this seam, with no copied permission rules or Dashboard→Runtime.Api implementation reference. Design's existing `IWorkflowDefinitionAuthorizer` protects current-folder enrichment. Raise any discovered ADR conflict before production changes.
 
-Pre-design result: selected scope fits existing ownership. Post-design result: independent data/authorization, standards and UX-design retests found no remaining concrete native-design blocker after corrections. Native work may proceed; provider-specific design/access and all executed architecture/runtime/UX proof remain open. No constitutional exception or unrecorded owner decision is assumed.
+Pre-design result: selected scope fits existing ownership. Post-design result: independent data/authorization, standards and UX-design retests found no remaining concrete native-design blocker after corrections. Native work may proceed; provider configuration is selected; usable live access and final architecture/runtime/UX proof remain open. No constitutional exception or unrecorded owner decision is assumed.
 
 ## Project Structure
 
@@ -56,12 +56,12 @@ Proposed source placement; refine exact identities during public-surface review 
 | `Essentials/src/Studio/Dashboard/Api/` | Authorized discovery/query/resource transport |
 | `Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/` | Definitions, immutable revisions, audiences and concurrency |
 | `Essentials/src/Workflows/Dashboard/Queries/` | Workflow satellite over Runtime/Design Core; current folder is a declared enrichment |
-| `Essentials/src/Workflows/Runtime/Core/` and `Api/` | Minimal reusable inspection seam only |
-| `Extensions/Weaver/src/Dashboard/` and its Studio satellite | Dashboard-owned context/tools/result controls through existing orchestration |
-| Selected existing provider adapter | Connections/Secrets acquisition once selected; preserve single active harness |
+| `Essentials/src/Workflows/Runtime/Inspection/Core/` and `Api/` | Minimal reusable inspection seam only |
+| `Extensions/Agent/src/Dashboard/` with owning Dashboard Studio SDK contributions | Dashboard-owned context/tools/result controls through existing orchestration |
+| Selected existing provider adapter | Existing backend token/environment/runtime options; preserve single active harness and SDK Empty-mode boundary |
 | `Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/` | Collections, native editor/layout/renderers alongside Home |
 | `Essentials/tests/Studio/` | Query/resource/persistence behavior and composition |
-| `tools/studio/Dashboard.Conformance.Probe/fixtures/` | Separately packaged Acme.Processing reference module |
+| `Extensions/Examples/src/Acme.Processing/` + `tools/studio/Dashboard.Conformance.Probe/` | Separately packaged module and package-only qualification consumer |
 | `Studio/tests/acceptance/` | Actual composed product journeys |
 
 Use the existing module architecture and `.Core` boundaries. Domain-authoritative metric calculation and authorized traversal remain source owned; generic orchestration must not branch on dataset identity.
@@ -77,7 +77,7 @@ Use the existing module architecture and `.Core` boundaries. Domain-authoritativ
 | D4 | Weaver clarification/refinement/preview through native capabilities and selected provider integration | Actual provider turns/tools, exact saved artifact, retained-disclosure denial and zero provider calls on native refresh |
 | D5 | Complete user/integrator docs and full qualification | Exact-head correctness/standards/spec/independent UX review, required CI, permitted merge and resulting-main proof |
 
-D1–D3 can use native APIs independently of provider implementation after applicable design agreement. D4 waits for the selected provider/access. Use one active implementation integration lane; independent review/module qualification may run concurrently. Do not widen/reparent Weaver #3443 or reactivate paused programs.
+D1–D3 can use native APIs independently of provider implementation after applicable design agreement. D4 uses the selected existing Copilot adapter and waits only for configured usable live access. Use one active implementation integration lane; independent review/module qualification may run concurrently. Do not widen/reparent Weaver #3443 or reactivate paused programs.
 
 ## Validation strategy
 
@@ -91,6 +91,6 @@ D1–D3 can use native APIs independently of provider implementation after appli
 
 ## Open decisions
 
-Confirmed: separate Dashboards with Mine/Shared with me alongside unchanged Home; the four selected #3604 directions remain authoritative. Provider/access is pending the current owner card. Reviewable defaults include current-question propagation, owner-controlled sharing/delete, tenant users/roles, explicit shallow/deep-copy behavior, and honest current-folder/started-cohort/equal-elapsed-week semantics. Resolve routine engineering details in review; do not treat an unanswered card as approval.
+Confirmed: separate Dashboards with Mine/Shared with me alongside unchanged Home; the four selected #3604 directions remain authoritative. Copilot adapter and backend configuration are selected; usable live access remains to be demonstrated. Reviewable defaults include current-question propagation, owner-controlled sharing/delete, tenant users/roles, explicit shallow/deep-copy behavior, and honest current-folder/started-cohort/equal-elapsed-week semantics. Resolve routine engineering details in review; do not treat an unanswered card as approval.
 
-Proceed with reviewed native foundation while the provider decision is pending. Provider-specific design is still Draft. D0's provider portion and every product acceptance outcome remain open; these documents do not deliver #3604.
+Proceed through native and Weaver implementation using the selected Copilot adapter. Runtime, live access, product acceptance, review and resulting-main evidence remain separate; these documents alone do not deliver #3604.

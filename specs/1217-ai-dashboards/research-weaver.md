@@ -2,7 +2,7 @@
 
 **Feature:** [#3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604).
 **Observed:** 6 November 2026, source baseline `e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`.
-**Status:** Research and proposed integration; no implementation, provider selection or runtime qualification is established by this document.
+**Status:** Historical source inventory at the baseline above. Superseding 6 November owner decisions select one model-agnostic Dashboard author over Weaver, the existing Copilot SDK adapter and backend options/configuration. The current [implementation contract](contracts/weaver.md) governs; the historical alternatives/gaps below do not require a Connections integration. No live-provider qualification is established by research.
 
 ## Existing ownership and delivery boundary
 

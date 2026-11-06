@@ -1,24 +1,24 @@
 # Tasks: AI-authored personal and shared dashboards
 
-**Status:** Draft dependency-ordered delivery plan. No production task is complete. Native work requires the applicable reviewed contracts; provider-dependent work additionally requires the pending provider/access decision. This list is not feature acceptance.
+**Status:** Active dependency-ordered delivery plan after owner resume. Native and Weaver implementation is in progress; Copilot/options configuration is selected, usable live access remains unqualified. Completed code tasks are not feature acceptance.
 
 **Cadence:** ADR 0080 risk-based behavior tests apply. The constitutions do not mandate greenfield TDD; use test-after or test-first where useful, and retain red/green bite-proof for behavior claims before completion. Do not add mirror tests or unrelated runtime runs for this docs checkpoint.
 
 ## Phase 1 — Setup and design gates
 
-- [ ] T001 Confirm owner decisions, applicable native contract review and unresolved provider/access in specs/1217-ai-dashboards/spec.md and checklists/requirements.md.
-- [ ] T002 Refresh claim/open PR/base health and source ownership on #3604; record the exact baseline in specs/1217-ai-dashboards/research.md.
-- [ ] T003 Finalize distinct project/package identities and dependency graph in specs/1217-ai-dashboards/plan.md, preserving the existing Elsa.Studio.Dashboard RCL.
-- [ ] T004 Finalize the query/resource/Weaver contracts and pre-code observable states in specs/1217-ai-dashboards/contracts/ and ux-acceptance.md.
+- [x] T001 Confirm owner decisions, applicable native contract review and current provider/access status in specs/1217-ai-dashboards/spec.md and checklists/requirements.md.
+- [x] T002 Refresh claim/open PR/base health and source ownership on #3604; record the exact baseline in specs/1217-ai-dashboards/research.md.
+- [x] T003 Finalize distinct project/package identities and dependency graph in specs/1217-ai-dashboards/plan.md, preserving the existing Elsa.Studio.Dashboard RCL.
+- [x] T004 Finalize the query/resource/Weaver contracts and pre-code observable states in specs/1217-ai-dashboards/contracts/ and ux-acceptance.md.
 
 ## Phase 2 — Shared native foundation
 
-- [ ] T005 Create public typed dataset/query/result/resource contracts and domain failures in Essentials/src/Studio/Dashboard/Core/ with tracked public API.
-- [ ] T006 Implement named declaration/validation/execution/drill fan-in and duplicate/missing-owner checks in Essentials/src/Studio/Dashboard/Management/.
-- [ ] T007 Implement bounded structural/visualization/parameter validation and operational cancellation/concurrency in Essentials/src/Studio/Dashboard/Management/.
-- [ ] T008 Create provider-neutral command/query definition persistence contracts in Essentials/src/Studio/Dashboard/Core/ and EF mappings in Persistence/EntityFrameworkCore/.
-- [ ] T009 Implement trusted tenant/canonical actor/identity audience mapping and coarse/resource capability evaluation in Essentials/src/Studio/Dashboard/Management/.
-- [ ] T010 Wire native API capabilities/error contracts in Essentials/src/Studio/Dashboard/Api/; never accept a saved author principal.
+- [x] T005 Create public typed dataset/query/result/resource contracts and domain failures in Essentials/src/Studio/Dashboard/Core/ with tracked public API.
+- [x] T006 Implement named declaration/validation/execution/drill fan-in and duplicate/missing-owner checks in Essentials/src/Studio/Dashboard/Management/.
+- [x] T007 Implement bounded structural/visualization/parameter validation and operational cancellation/concurrency in Essentials/src/Studio/Dashboard/Management/.
+- [x] T008 Create provider-neutral command/query definition persistence contracts in Essentials/src/Studio/Dashboard/Core/ and EF mappings in Persistence/EntityFrameworkCore/.
+- [x] T009 Implement trusted tenant/canonical actor/identity audience mapping and coarse/resource capability evaluation in Essentials/src/Studio/Dashboard/Management/.
+- [x] T010 Wire native API capabilities/error contracts in Essentials/src/Studio/Dashboard/Api/; never accept a saved author principal.
 - [ ] T011 Add risk-based query/auth/composition tests in Essentials/tests/Studio/ and classify new projects in tools/ci/test-tiers.json; registration tests only for logic-bearing wiring.
 - [ ] T012 Update extension-point catalogs, root EXTENSION_POINTS.md, package manifests and solution entries for the new contracts/features.
 
@@ -26,14 +26,14 @@
 
 **Independent test:** use the corresponding story scenarios in [spec.md](spec.md) and [UX record](ux-acceptance.md); a fixture/build alone cannot satisfy them.
 
-- [ ] T013 [US1] Extract the minimal Runtime-owned reusable inspection contract in Essentials/src/Workflows/Runtime/Core/ and adapt Api/ without copying authorization logic or changing fail-closed semantics.
-- [ ] T014 [US1] Implement Workflow dataset declaration and bounded authorized started-cohort reads/current-folder enrichment in Essentials/src/Workflows/Dashboard/Queries/.
-- [ ] T015 [US1] Implement module-authoritative metrics/comparison-result predicates and exact no-denominator/duration/run-kind/time meaning in Essentials/src/Workflows/Dashboard/Queries/.
-- [ ] T016 [US1] Implement durable saved-question create/edit/readback and native validation/preview/save transport in Essentials/src/Studio/Dashboard/Management/ and Api/.
-- [ ] T017 [US1] Add the native question editor and all supported field/filter/group/metric/sort/time/parameter/presentation controls in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
-- [ ] T018 [US1] Implement Dashboard context/discovery/preview tools and retained-disclosure admission in Extensions/Weaver/src/Dashboard/ through existing generic contracts.
-- [ ] T019 [US1] Implement typed preview/proposal/Use control with safe refinement continuity and accepted parameter defaults in Extensions/Weaver/studio/Elsa.Studio.Weaver.Dashboard/.
-- [ ] T020 [US1] Resolve provider/access and applicable credential skill, then implement Connections/Secrets acquisition in the selected existing provider boundary under Extensions/Agent/; no API-dependent code before that decision.
+- [x] T013 [US1] Extract the minimal Runtime-owned reusable inspection contract in Essentials/src/Workflows/Runtime/Inspection/Core/ and adapt Api/ without copying authorization logic or changing fail-closed semantics.
+- [x] T014 [US1] Implement Workflow dataset declaration and bounded authorized started-cohort reads/current-folder enrichment in Essentials/src/Workflows/Dashboard/Queries/.
+- [x] T015 [US1] Implement module-authoritative metrics/comparison-result predicates and exact no-denominator/duration/run-kind/time meaning in Essentials/src/Workflows/Dashboard/Queries/.
+- [x] T016 [US1] Implement durable saved-question create/edit/readback and native validation/preview/save transport in Essentials/src/Studio/Dashboard/Management/ and Api/.
+- [x] T017 [US1] Add the native question editor and all supported field/filter/group/metric/sort/time/parameter/presentation controls in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
+- [x] T018 [US1] Implement Dashboard context/discovery/preview tools and retained-disclosure admission in Extensions/Agent/src/Dashboard/ through existing generic contracts.
+- [x] T019 [US1] Implement typed preview/proposal/Use control with safe refinement continuity and accepted parameter defaults in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/.
+- [ ] T020 [US1] Use owner-selected existing Copilot backend options/configuration under Extensions/Agent/; enforce the SDK server tool/context boundary and qualify configured live access without exposing credentials.
 - [ ] T021 [US1] Verify novel query numerical results and aggregate/comparison membership independently in Essentials/tests/Studio/ and Studio/tests/acceptance/.
 - [ ] T022 [US1] Qualify actual selected-provider clarification/refinement/preview/native Save and record safe exact-source evidence under specs/1217-ai-dashboards/evidence/.
 
@@ -41,11 +41,11 @@
 
 **Independent test:** use the corresponding story scenarios in [spec.md](spec.md) and [UX record](ux-acceptance.md); a fixture/build alone cannot satisfy them.
 
-- [ ] T023 [US2] Implement named Dashboard resources/tile identity/current question revisions/validated overrides in Essentials/src/Studio/Dashboard/Management/.
-- [ ] T024 [US2] Implement EF durable definitions/revisions/keyed creates/CAS/retention in Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/.
-- [ ] T025 [US2] Add Dashboards Mine/Shared collection, Questions collection and layout controls alongside unchanged Home in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
-- [ ] T026 [US2] Implement private copy, reuse impact/Save copy, history/restore and incompatible override recovery in Essentials/src/Studio/Dashboard/Api/ and Dashboard/Client/src/.
-- [ ] T027 [US2] Implement cancellable native refresh/reopen/revision-aware outdated states and provider-unavailable native operation in Dashboard/Client/src/.
+- [x] T023 [US2] Implement named Dashboard resources/tile identity/current question revisions/validated overrides in Essentials/src/Studio/Dashboard/Management/.
+- [x] T024 [US2] Implement EF durable definitions/revisions/keyed creates/CAS/retention in Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/.
+- [x] T025 [US2] Add Dashboards Mine/Shared collection, Questions collection and layout controls alongside unchanged Home in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
+- [x] T026 [US2] Implement private copy, reuse impact/Save copy, history/restore and incompatible override recovery in Essentials/src/Studio/Dashboard/Api/ and Dashboard/Client/src/.
+- [x] T027 [US2] Implement cancellable native refresh/reopen/revision-aware outdated states and provider-unavailable native operation in Dashboard/Client/src/.
 - [ ] T028 [US2] Verify native edits of every query facet, duplicate tiles, concurrent saves, restart persistence and zero provider-call increment in Essentials/tests/Studio/ and Studio/tests/acceptance/.
 - [ ] T029 [US2] Run existing whole Home/Dashboard frontend suites and composed saved-layout/default/widget regression in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/ and tests/acceptance/.
 
@@ -53,19 +53,19 @@
 
 **Independent test:** use the corresponding story scenarios in [spec.md](spec.md) and [UX record](ux-acceptance.md); a fixture/build alone cannot satisfy them.
 
-- [ ] T030 [US3] Implement selected same-tenant user/role grants and owner/editor/viewer/copy rights in Essentials/src/Studio/Dashboard/Management/ with current store ACL checks.
-- [ ] T031 [US3] Implement protected projections, tile-ID/revision preserve-reference updates and metadata-only preservation of withheld definitions in Essentials/src/Studio/Dashboard/Api/.
-- [ ] T032 [US3] Add audience review, read-only/editor actions, question dependency sharing and revocation recovery to Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
-- [ ] T033 [US3] Verify cross-tenant/nonexistence behavior, ACL revoke/downgrade concurrency, history/copy and hidden-reference preservation in Essentials/tests/Studio/.
+- [x] T030 [US3] Implement selected same-tenant user/role grants and owner/editor/viewer/copy rights in Essentials/src/Studio/Dashboard/Management/ with current store ACL checks.
+- [x] T031 [US3] Implement protected projections, tile-ID/revision preserve-reference updates and metadata-only preservation of withheld definitions in Essentials/src/Studio/Dashboard/Api/.
+- [x] T032 [US3] Add audience review, read-only/editor actions, question dependency sharing and revocation recovery to Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
+- [x] T033 [US3] Verify cross-tenant/nonexistence behavior, ACL revoke/downgrade concurrency, history/copy and hidden-reference preservation in Essentials/tests/Studio/.
 - [ ] T034 [US3] Qualify distinct users/tenants/field-record-aggregate scopes and declared IAM permission propagation on the actual host in Studio/tests/acceptance/; record forbidden-data controls.
 
 ## Phase 6 — US4: Interpret and investigate results
 
 **Independent test:** use the corresponding story scenarios in [spec.md](spec.md) and [UX record](ux-acceptance.md); a fixture/build alone cannot satisfy them.
 
-- [ ] T035 [US4] Implement accessible chart/table/list/metric rendering and authoritative interpretation/coverage/refresh provenance in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
-- [ ] T036 [US4] Implement current-access native drill and supported bounded export through source-owned contracts in Essentials/src/Studio/Dashboard/Api/ and Workflows/Dashboard/Queries/.
-- [ ] T037 [US4] Implement distinct zero/empty/no-denominator/unknown-incomplete/stale/failed/cancelled/source-incompatible states in native API and Dashboard/Client/src/.
+- [x] T035 [US4] Implement accessible chart/table/list/metric rendering and authoritative interpretation/coverage/refresh provenance in Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/.
+- [x] T036 [US4] Implement current-access native drill and supported bounded export through source-owned contracts in Essentials/src/Studio/Dashboard/Api/ and Workflows/Dashboard/Queries/.
+- [x] T037 [US4] Implement distinct zero/empty/no-denominator/unknown-incomplete/stale/failed/cancelled/source-incompatible states in native API and Dashboard/Client/src/.
 - [ ] T038 [US4] Verify source/module/schema removal, permission/scope changes, superseded reads, cost bounds and historical evidence refusal in Essentials/tests/Studio/ and Studio/tests/acceptance/.
 - [ ] T039 [US4] Inspect keyboard/focus, empty/populated/read-only/error, all supported renderers and relevant theme/narrow states under specs/1217-ai-dashboards/ux-acceptance.md.
 
@@ -73,8 +73,8 @@
 
 **Independent test:** use the corresponding story scenarios in [spec.md](spec.md) and [UX record](ux-acceptance.md); a fixture/build alone cannot satisfy them.
 
-- [ ] T040 [US5] Create separately packaged Acme.Processing record/store/dataset/metric fixtures under tools/studio/Dashboard.Conformance.Probe/fixtures/ with explicit customer category and duration.
-- [ ] T041 [US5] Implement its declaration/validation/execution/drill/disclosure contributions through the same public contracts in tools/studio/Dashboard.Conformance.Probe/fixtures/.
+- [x] T040 [US5] Create separately packaged Acme.Processing record/store/dataset/metric fixtures under Extensions/Examples/src/Acme.Processing/ with explicit customer category and duration.
+- [x] T041 [US5] Implement its declaration/validation/execution/drill/disclosure contributions through the same public contracts in Extensions/Examples/src/Acme.Processing/.
 - [ ] T042 [US5] Build/install the independent package into an owned host and prove processing-time grouping with independent math, tenant/field/aggregate controls and no generic dataset branch in tools/studio/Dashboard.Conformance.Probe/.
 - [ ] T043 [US5] Qualify the actual-provider business question and native save/reopen/refresh/drill journey in Studio/tests/acceptance/ with safe numerical evidence.
 

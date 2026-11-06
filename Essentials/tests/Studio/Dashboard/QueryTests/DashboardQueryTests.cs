@@ -181,8 +181,7 @@ public sealed class DashboardQueryTests
     [Fact]
     public async Task Dst_week_overflow_requires_an_explicit_alternative()
     {
-        using var host = new Host(new ExampleSource());
-        host.Clock.SetUtcNow(new(2026, 10, 25, 22, 30, 0, TimeSpan.Zero));
+        using var host = new Host(new DateTimeOffset(2026, 10, 25, 22, 30, 0, TimeSpan.Zero), new ExampleSource());
         var validation = await host.Service.ValidateAsync(Caller, WeeklyQuestion());
         Assert.False(validation.IsValid);
         Assert.Contains(validation.Problems, problem => problem.Code == "INVALID_TIME");
@@ -323,11 +322,14 @@ public sealed class DashboardQueryTests
     {
         private readonly ServiceProvider _provider;
         private readonly IServiceScope _scope;
-        public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2026, 11, 6, 12, 0, 0, TimeSpan.Zero));
+        public FakeTimeProvider Clock { get; }
         public IDashboardQueryService Service { get; }
 
-        public Host(params ExampleSource[] sources)
+        public Host(params ExampleSource[] sources) : this(new DateTimeOffset(2026, 11, 6, 12, 0, 0, TimeSpan.Zero), sources) { }
+
+        public Host(DateTimeOffset now, params ExampleSource[] sources)
         {
+            Clock = new FakeTimeProvider(now);
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddSingleton<TimeProvider>(Clock);

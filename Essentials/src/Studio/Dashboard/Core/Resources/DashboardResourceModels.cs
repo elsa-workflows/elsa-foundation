@@ -40,7 +40,10 @@ public sealed record DashboardResourceRevision(string Revision, DashboardResourc
 
 public sealed record DashboardResourceDocument(string Id, string Kind, string TenantId, string OwnerId,
     string Revision, DashboardResourceContent Content, IReadOnlyList<DashboardAudienceGrant> Audience,
-    IReadOnlyList<DashboardResourceRevision> History, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    IReadOnlyList<DashboardResourceRevision> History, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt)
+{
+    public string? UpdatedBy { get; init; }
+}
 
 public sealed record DashboardResourceView(string Id, string Kind, string OwnerId, string Revision, string Name,
     string? Description, DashboardResourceCapabilities Capabilities, DashboardQueryRequest? Definition,

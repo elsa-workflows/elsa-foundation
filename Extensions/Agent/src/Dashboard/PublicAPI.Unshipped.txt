@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Agent.Dashboard.DashboardWeaverFeature
+Elsa.Agent.Dashboard.DashboardWeaverFeature.DashboardWeaverFeature() -> void
+override Elsa.Agent.Dashboard.DashboardWeaverFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

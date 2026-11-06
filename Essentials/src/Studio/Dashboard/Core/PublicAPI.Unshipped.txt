@@ -1,6 +1,134 @@
 #nullable enable
 const Elsa.Studio.Dashboard.Core.Resources.DashboardResourceKinds.Dashboard = "dashboard" -> string!
 const Elsa.Studio.Dashboard.Core.Resources.DashboardResourceKinds.Question = "question" -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.DashboardAuthoringChoice(string! Id, string! Label, string! Description) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Deconstruct(out string! Id, out string! Label, out string! Description) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Description.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Description.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Id.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Label.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Label.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Choices.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!>!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Choices.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.DashboardAuthoringClarification(string! Question, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!>! Choices) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Deconstruct(out string! Question, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!>! Choices) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Question.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Question.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.ClientId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.ClientId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.DashboardAuthoringClient(string! ClientId, string! GenerationId) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.Deconstruct(out string! ClientId, out string! GenerationId) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.GenerationId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.GenerationId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanEdit.get -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanEdit.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanSave.get -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanSave.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.DashboardAuthoringContext(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>! Datasets, bool CanEdit, bool CanSave, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>! Problems) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Datasets.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Datasets.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Deconstruct(out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>! Datasets, out bool CanEdit, out bool CanSave, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>! Problems) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Draft.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Draft.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Problems.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Problems.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Client.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Client.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.ConfirmedInterpretation.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.ConfirmedInterpretation.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.DashboardAuthoringDraft(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, string! WorkingRevision, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, string? Name = null, bool Dirty = true, string? ConfirmedInterpretation = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Deconstruct(out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, out string! WorkingRevision, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, out string? Name, out bool Dirty, out string? ConfirmedInterpretation) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Dirty.get -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Dirty.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Name.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Name.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Target.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Target.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.WorkingRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.WorkingRevision.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Clarification.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Clarification.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Code.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Code.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.ConversationId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.ConversationId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.DashboardAuthoringEvent(string! Kind, string! ConversationId, string? Message = null, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? Proposal = null, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? Clarification = null, string? Code = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Deconstruct(out string! Kind, out string! ConversationId, out string? Message, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? Proposal, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? Clarification, out string? Code) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Message.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Message.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Proposal.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Proposal.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Client.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Client.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.DashboardAuthoringProposal(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, string! WorkingRevision, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Definition, string! DefinitionFingerprint, Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? Preview, string! Interpretation) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Deconstruct(out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, out string! WorkingRevision, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Definition, out string! DefinitionFingerprint, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? Preview, out string! Interpretation) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.DefinitionFingerprint.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.DefinitionFingerprint.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Interpretation.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Interpretation.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Preview.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Preview.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Target.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Target.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.WorkingRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.WorkingRevision.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.ConversationId.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.ConversationId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.DashboardAuthoringRequest(string! Message, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, string? ConversationId = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Deconstruct(out string! Message, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, out string? ConversationId) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Draft.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Draft.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Message.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Message.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.DashboardAuthoringTarget(string! ModuleId, string! ResourceType, string! ResourceId, string! Revision, string? DisplayName = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Deconstruct(out string! ModuleId, out string! ResourceType, out string! ResourceId, out string! Revision, out string? DisplayName) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.DisplayName.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.DisplayName.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ModuleId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ModuleId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceType.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceType.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.IDashboardAuthoringService
+Elsa.Studio.Dashboard.Core.Authoring.IDashboardAuthoringService.AuthorAsync(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent!>!
+Elsa.Studio.Dashboard.Core.Authoring.IDashboardAuthoringService.PrepareAsync(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! draft, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext!>
 Elsa.Studio.Dashboard.Core.Contracts.IDashboardDatasetExtension
 Elsa.Studio.Dashboard.Core.Contracts.IDashboardDatasetExtension.CollectAsync(Elsa.Studio.Dashboard.Core.Events.DashboardDatasetsCollecting! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Studio.Dashboard.Core.Contracts.IDashboardDatasetExtension.Ownership.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner!>!
@@ -645,6 +773,8 @@ Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.TenantId.get -> s
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.TenantId.init -> void
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedAt.get -> System.DateTimeOffset
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedBy.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedBy.init -> void
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceException
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceException.Code.get -> string!
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceException.DashboardResourceException(string! code, string! message, System.Exception? inner = null) -> void
@@ -799,7 +929,7 @@ Elsa.Studio.Dashboard.Core.Resources.IDashboardActorContext
 Elsa.Studio.Dashboard.Core.Resources.IDashboardActorContext.GetAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardActor!>
 Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory
 Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory.IsValidAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant! grant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
-Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory.SearchAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string? search, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory.SearchAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string? search, string? continuationToken = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage!>
 Elsa.Studio.Dashboard.Core.Resources.IDashboardDefinitionValidator
 Elsa.Studio.Dashboard.Core.Resources.IDashboardDefinitionValidator.CanDiscloseAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! definition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Studio.Dashboard.Core.Resources.IDashboardDefinitionValidator.ValidateAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! definition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
@@ -821,6 +951,33 @@ Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.FindAsync(string! t
 Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.FindCreatedAsync(string! tenantId, string! actorId, string! kind, string! operationKey, string! fingerprint, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument?>
 Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.ListAsync(string! tenantId, string! kind, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument!>!>
 Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.WriteAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite! write, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult!>
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ToString() -> string!
 override Elsa.Studio.Dashboard.Core.Models.DashboardComparison.Equals(object? obj) -> bool
 override Elsa.Studio.Dashboard.Core.Models.DashboardComparison.GetHashCode() -> int
 override Elsa.Studio.Dashboard.Core.Models.DashboardComparison.ToString() -> string!
@@ -971,6 +1128,24 @@ override Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.ToString() -> s
 override Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Equals(object? obj) -> bool
 override Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.GetHashCode() -> int
 override Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.ToString() -> string!
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? right) -> bool
 static Elsa.Studio.Dashboard.Core.Models.DashboardComparison.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardComparison? left, Elsa.Studio.Dashboard.Core.Models.DashboardComparison? right) -> bool
 static Elsa.Studio.Dashboard.Core.Models.DashboardComparison.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardComparison? left, Elsa.Studio.Dashboard.Core.Models.DashboardComparison? right) -> bool
 static Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? left, Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? right) -> bool

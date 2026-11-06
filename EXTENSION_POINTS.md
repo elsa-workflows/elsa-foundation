@@ -237,5 +237,7 @@ not automatic constitution violations.
 
 ## Studio
 
+- [Dashboard native queries/resources/authoring contracts](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
+
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

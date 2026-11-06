@@ -4,11 +4,11 @@
 
 **Created**: 2026-11-06
 
-**Status**: In progress — implementation checkpoint stopped under the org three-failed-check rule; provider/access also remains unresolved. No delivery acceptance.
+**Status**: In progress — owner resumed #3604 on 6 November; one model-agnostic author over Weaver with the existing Copilot SDK adapter and backend options/configuration. No delivery acceptance yet.
 
 **Input**: [Feature request #3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604), activated by [owner authorization of 6 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3604#issuecomment-6671863823).
 
-The owner requests complete delivery through reviewed implementation, real provider and composed Studio qualification, merge and resulting-main verification. Independent specification, data/authorization, standards and UX-design reviews found no remaining native-design blockers after two correction rounds. Native implementation proceeds within that reviewed scope under the owner's delivery authorization; provider-specific work still waits for the pending provider/access decision. This is not delivered behavior or acceptance evidence. Program-goal state: `none/free-flow` feature delivery. No parent Initiative was present at intake. Existing [Weaver ownership](../../docs/program-goals/weaver-across-studio.md) is preserved.
+The owner requests complete delivery through reviewed implementation, real provider and composed Studio qualification, merge and resulting-main verification. Independent specification, data/authorization, standards and UX-design reviews found no remaining native-design blockers after two correction rounds. Native implementation proceeds within that reviewed scope under the owner's delivery authorization; provider selection and configuration approach are now resolved by the owner; usable live credentials and product qualification remain open. This is not delivered behavior or acceptance evidence. Program-goal state: `none/free-flow` feature delivery. No parent Initiative was present at intake. Existing [Weaver ownership](../../docs/program-goals/weaver-across-studio.md) is preserved.
 
 ## User Scenarios & Testing
 
@@ -126,7 +126,7 @@ An integrator deliberately exposes a typed business dataset, customer category a
 - **FR-018**: Re-admit retained context/results before provider disclosure. If current authority for retained evidence cannot be established, withhold it and require fresh evidence rather than redisclosing previously broader aggregates.
 - **FR-019**: Preserve existing Home contributed widgets, feature/permission gates, saved preferences, hidden/missing contribution references and administrator defaults.
 - **FR-020**: Demonstrate a real workflow dataset and a deliberately exposed independent business dataset/dimension through the same public extension path, with independently checked numerical results.
-- **FR-021**: Integrate the selected supported provider using existing Elsa Connections/Secrets and Weaver ownership. Preserve credential secrecy, current connection access and provider lifecycle. Record actual supported provider behavior separately from deterministic fixtures.
+- **FR-021**: Integrate the existing Copilot SDK adapter through backend options/configuration (appsettings/environment) and Weaver ownership, as selected by the owner on 6 November. Preserve credential secrecy, configured provider availability and lifecycle. Record actual supported provider behavior separately from deterministic fixtures.
 - **FR-022**: Provide practical user and integrator documentation covering authoring, interpretation, sharing, access, extension contracts, source coverage, limits and recovery.
 - **FR-023**: Qualify the actual composed Studio ask → clarify/refine → preview → save → arrange → reopen → refresh → share → drill-down journey; retain current-commit downloadable screenshots/traces and obtain independent UX acceptance under the existing review loop.
 
@@ -157,6 +157,6 @@ An integrator deliberately exposes a typed business dataset, customer category a
 - First-profile recommendations to review: one module-owned dataset per question; declared module-owned enrichments only; current-folder grouping; started-cohort current-status failure rates; explicit comparison of equal elapsed durations from local-week starts, refusing DST overflow rather than silently clipping; role/user audiences within one tenant; owners alone manage sharing/delete, editors change content, authorized viewers may copy definitions.
 - Current retained runtime records do not prove complete collection history. Unknown coverage remains explicit until the owning source can attest a range.
 - No server result cache is proposed initially. Fresh viewer-scoped execution is the default; this reduces an otherwise substantial permission-revocation boundary.
-- Provider selection/access is unresolved. No production key or existing login is assumed authorized. OpenAI setup, if selected, follows its applicable credential skill before API-dependent work; selection of OpenAI is not implied by this specification.
+- The owner selected the existing Copilot SDK adapter with backend options/configuration. Usable live credentials/entitlement still require qualification; no production key or existing local login is assumed authorized. No OpenAI API implementation is selected.
 - The referenced Home/Weaver decisions and module/domain ownership rules remain authoritative. This feature does not ratify draft constitution sections, amend unrelated execution semantics, resume paused streams or depend on unmerged Weaver M4 effects.
 - Custom widget code generation, external database/business-system queries, runtime-mutating actions, general BI scope and proactive monitoring remain separate follow-ups. No deployment or package release is authorized.

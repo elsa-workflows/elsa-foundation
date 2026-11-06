@@ -12,29 +12,7 @@ public abstract class DashboardResourceDbContext(DbContextOptions options) : DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasElsaDefaultSchema(this);
-        modelBuilder.Entity<DashboardResourceRow>(entity => {
-            entity.ToTable("elsa_studio_dashboard_resources"); entity.HasKey(row => row.Id);
-            entity.Property(row => row.Id).HasMaxLength(64);
-            entity.Property(row => row.ScopeId).HasMaxLength(64).IsRequired();
-            entity.Property(row => row.OwnerKey).HasMaxLength(64).IsRequired();
-            entity.Property(row => row.Kind).HasMaxLength(16).IsRequired();
-            entity.Property(row => row.Revision).HasMaxLength(64).IsConcurrencyToken();
-            entity.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
-            entity.Property(row => row.DocumentJson).IsRequired();
-            entity.HasIndex(row => new { row.ScopeId, row.Kind, row.Deleted });
-            entity.HasIndex(row => new { row.ScopeId, row.OwnerKey, row.Kind, row.Deleted });
-        });
-        modelBuilder.Entity<DashboardResourceScopeRow>(entity => {
-            entity.ToTable("elsa_studio_dashboard_scopes"); entity.HasKey(row => row.Id);
-            entity.Property(row => row.Id).HasMaxLength(64);
-            entity.Property(row => row.Revision).HasMaxLength(64).IsConcurrencyToken();
-        });
-        modelBuilder.Entity<DashboardResourceOperationRow>(entity => {
-            entity.ToTable("elsa_studio_dashboard_operations"); entity.HasKey(row => row.Id);
-            entity.Property(row => row.Id).HasMaxLength(64);
-            entity.Property(row => row.ResourceKey).HasMaxLength(64).IsRequired();
-            entity.Property(row => row.Fingerprint).HasMaxLength(64).IsRequired();
-        });
+        modelBuilder.AddDashboardResourcesModel(Database.ProviderName!);
         modelBuilder.MapSchemaFinalization(DashboardResourcesEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();

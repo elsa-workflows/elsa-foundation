@@ -5,10 +5,14 @@ using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Studio.Dashboard.Core.Resources;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore;
 
-internal sealed class EfDashboardResourceStore(DashboardResourceDbContext context) : IDashboardResourceStore
+internal sealed class EfDashboardResourceStore<TContext>(TContext configuredContext, IServiceProvider services) : IDashboardResourceStore
+    where TContext : DbContext
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -16,8 +20,9 @@ internal sealed class EfDashboardResourceStore(DashboardResourceDbContext contex
     {
         try
         {
+            await using var context = CreateContext();
             var key = Hash(tenantId, kind, id);
-            var row = await context.Resources.AsNoTracking().SingleOrDefaultAsync(item => item.Id == key && !item.Deleted, cancellationToken);
+            var row = await context.Set<DashboardResourceRow>().AsNoTracking().SingleOrDefaultAsync(item => item.Id == key && !item.Deleted, cancellationToken);
             return row is null ? null : Read(row, tenantId, kind, id);
         }
         catch (Exception error) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(error)) { throw Unavailable(error); }
@@ -27,8 +32,9 @@ internal sealed class EfDashboardResourceStore(DashboardResourceDbContext contex
     {
         try
         {
+            await using var context = CreateContext();
             var scope = Hash(tenantId);
-            var rows = await context.Resources.AsNoTracking().Where(row => row.ScopeId == scope && row.Kind == kind && !row.Deleted)
+            var rows = await context.Set<DashboardResourceRow>().AsNoTracking().Where(row => row.ScopeId == scope && row.Kind == kind && !row.Deleted)
                 .OrderBy(row => row.Id).ToArrayAsync(cancellationToken);
             return rows.Select(row => Read(row, tenantId, kind, null)).ToArray();
         }
@@ -40,11 +46,12 @@ internal sealed class EfDashboardResourceStore(DashboardResourceDbContext contex
     {
         try
         {
+            await using var context = CreateContext();
             var key = Hash(tenantId, actorId, kind, operationKey);
-            var operation = await context.Operations.AsNoTracking().SingleOrDefaultAsync(row => row.Id == key, cancellationToken);
+            var operation = await context.Set<DashboardResourceOperationRow>().AsNoTracking().SingleOrDefaultAsync(row => row.Id == key, cancellationToken);
             if (operation is null) return null;
             if (operation.Fingerprint != fingerprint) throw new DashboardResourceException("conflict", "This operation key was already used for a different request.");
-            var row = await context.Resources.AsNoTracking().SingleOrDefaultAsync(item => item.Id == operation.ResourceKey, cancellationToken);
+            var row = await context.Set<DashboardResourceRow>().AsNoTracking().SingleOrDefaultAsync(item => item.Id == operation.ResourceKey, cancellationToken);
             if (row is null || row.Deleted) throw new DashboardResourceException("notFound", "The resource created by this operation is unavailable.");
             var document = Read(row, tenantId, kind, null);
             if (document.OwnerId != actorId) throw new DashboardResourceException("notFound", "This resource is unavailable.");
@@ -60,27 +67,28 @@ internal sealed class EfDashboardResourceStore(DashboardResourceDbContext contex
         {
             try
             {
+                await using var context = CreateContext();
                 if (write.OperationKey is { } repeatedKey && await FindCreatedAsync(document.TenantId, document.OwnerId,
                     document.Kind, repeatedKey, write.OperationFingerprint!, cancellationToken) is { } repeated)
                     return new("replayed", repeated);
                 await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
                 var scopeKey = Hash(document.TenantId);
-                var scope = await context.Scopes.SingleOrDefaultAsync(row => row.Id == scopeKey, cancellationToken);
-                if (scope is null) context.Scopes.Add(scope = new() { Id = scopeKey, Revision = Guid.NewGuid().ToString("N") });
+                var scope = await context.Set<DashboardResourceScopeRow>().SingleOrDefaultAsync(row => row.Id == scopeKey, cancellationToken);
+                if (scope is null) context.Set<DashboardResourceScopeRow>().Add(scope = new() { Id = scopeKey, Revision = Guid.NewGuid().ToString("N") });
                 else scope.Revision = Guid.NewGuid().ToString("N");
                 var key = Hash(document.TenantId, document.Kind, document.Id);
-                var row = await context.Resources.SingleOrDefaultAsync(item => item.Id == key, cancellationToken);
+                var row = await context.Set<DashboardResourceRow>().SingleOrDefaultAsync(item => item.Id == key, cancellationToken);
                 if (write.ExpectedRevision is null)
                 {
                     if (row is not null) return Status("conflict");
                     var ownerKey = Hash(document.TenantId, document.OwnerId);
                     var ownerMaximum = document.Kind == DashboardResourceKinds.Question ? 100 : 50;
                     var tenantMaximum = document.Kind == DashboardResourceKinds.Question ? 5_000 : 2_000;
-                    if (await context.Resources.CountAsync(item => item.ScopeId == scopeKey && item.Kind == document.Kind && !item.Deleted, cancellationToken) >= tenantMaximum ||
-                        await context.Resources.CountAsync(item => item.ScopeId == scopeKey && item.OwnerKey == ownerKey && item.Kind == document.Kind && !item.Deleted, cancellationToken) >= ownerMaximum)
+                    if (await context.Set<DashboardResourceRow>().CountAsync(item => item.ScopeId == scopeKey && item.Kind == document.Kind && !item.Deleted, cancellationToken) >= tenantMaximum ||
+                        await context.Set<DashboardResourceRow>().CountAsync(item => item.ScopeId == scopeKey && item.OwnerKey == ownerKey && item.Kind == document.Kind && !item.Deleted, cancellationToken) >= ownerMaximum)
                         throw new DashboardResourceException("validation", "The resource capacity has been reached. Remove an owned resource or contact the administrator.");
                     row = new() { Id = key, ScopeId = scopeKey, OwnerKey = ownerKey, Kind = document.Kind };
-                    context.Resources.Add(row);
+                    context.Set<DashboardResourceRow>().Add(row);
                 }
                 else
                 {
@@ -92,39 +100,84 @@ internal sealed class EfDashboardResourceStore(DashboardResourceDbContext contex
                 row.DocumentJson = JsonSerializer.Serialize(document, Json);
                 row.Deleted = write.Delete;
                 if (write.OperationKey is { } operationKey)
-                    context.Operations.Add(new() { Id = Hash(document.TenantId, document.OwnerId, document.Kind, operationKey), ResourceKey = key,
+                    context.Set<DashboardResourceOperationRow>().Add(new() { Id = Hash(document.TenantId, document.OwnerId, document.Kind, operationKey), ResourceKey = key,
                         Fingerprint = write.OperationFingerprint! });
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                context.ChangeTracker.Clear();
                 return new("saved", document);
             }
             catch (Exception error) when (EfRelationalExceptionClassifier.IsWriteConflict(error, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient))
             {
-                context.ChangeTracker.Clear();
                 if (attempt == 2) return new("conflict");
             }
+            catch (DashboardResourceException error)
+            {
+                if (error.Code == "validation" && write.OperationKey is { } operationKey &&
+                    await FindCreatedAsync(document.TenantId, document.OwnerId, document.Kind, operationKey,
+                        write.OperationFingerprint!, cancellationToken) is { } winner)
+                    return new("replayed", winner);
+                throw;
+            }
+            catch (OperationCanceledException)
+            { throw; }
             catch (Exception error) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(error))
-            { context.ChangeTracker.Clear(); throw Unavailable(error); }
+            { throw Unavailable(error); }
         }
         return new("conflict");
     }
 
+
+    private DbContext CreateContext()
+    {
+        try
+        {
+            var options = (DbContextOptions)configuredContext.GetService<IDbContextOptions>();
+            if (System.Transactions.Transaction.Current is not null ||
+                options.Extensions.OfType<RelationalOptionsExtension>().Any(extension => extension.Connection is not null))
+                throw new InvalidOperationException("Dashboard resource operations require independently owned connection-string options outside an ambient transaction.");
+            var provider = configuredContext.Database.ProviderName;
+            if (provider is not (EfProviderNames.Sqlite or EfProviderNames.SqlServer or EfProviderNames.PostgreSql or EfProviderNames.MySql))
+                throw new InvalidOperationException("Dashboard resources require a supported relational provider.");
+            foreach (var entity in new[] { typeof(DashboardResourceRow), typeof(DashboardResourceScopeRow), typeof(DashboardResourceOperationRow) })
+                if (configuredContext.Model.FindEntityType(entity) is null)
+                    throw new InvalidOperationException("Install the Dashboard resource model in the consumer context before using its store.");
+            var builder = new DbContextOptionsBuilder(options);
+            EfSchemaWriteGateInterceptor.EnsureAdded(builder);
+            // The same provider, model, connection and host dependencies, with an owned tracker and
+            // transaction. A store operation never saves, clears or enlists the caller's unit of work.
+            return (DbContext)ActivatorUtilities.CreateInstance(services, configuredContext.GetType(), builder.Options);
+        }
+        catch (Exception error) when (error is InvalidOperationException or ArgumentException)
+        { throw Unavailable(error); }
+    }
+
     private static DashboardResourceDocument Read(DashboardResourceRow row, string tenantId, string kind, string? id)
     {
-        if (!EfSchemaVersion.Readable(DashboardResourcesEfModule.Chain, row.SchemaVersion))
-            throw new DashboardResourceException("unavailable", "The resource schema is unavailable.");
+        try { EfSchemaVersion.EnsureReadable(DashboardResourcesEfModule.Chain, row.SchemaVersion); }
+        catch (EfSchemaVersionSkewException error)
+        {
+            throw new DashboardResourceException("schemaIncompatible",
+                "This resource uses a storage schema this backend cannot read. Run a compatible backend build before retrying.", error);
+        }
         var text = DashboardResourcesEfModule.Chain.Upcast<DashboardResourceRow>(row.SchemaVersion,
             (nameof(DashboardResourceRow.DocumentJson), row.DocumentJson))[nameof(DashboardResourceRow.DocumentJson)]!;
-        var document = JsonSerializer.Deserialize<DashboardResourceDocument>(text, Json)
-            ?? throw new DashboardResourceException("unavailable", "The stored resource is invalid.");
-        if (document.TenantId != tenantId || document.Kind != kind || id is not null && document.Id != id ||
-            row.Id != Hash(document.TenantId, document.Kind, document.Id) || row.ScopeId != Hash(tenantId) || row.OwnerKey != Hash(tenantId, document.OwnerId))
+        DashboardResourceDocument document;
+        try
+        {
+            document = JsonSerializer.Deserialize<DashboardResourceDocument>(text, Json)
+                ?? throw new DashboardResourceException("unavailable", "The stored resource is invalid.");
+        }
+        catch (JsonException error) { throw new DashboardResourceException("unavailable", "The stored resource is invalid.", error); }
+        if (document.Content is null || string.IsNullOrWhiteSpace(document.Content.Name) || document.Content.Tiles is null ||
+            document.Audience is null || document.History is null ||
+            document.TenantId != tenantId || document.Kind != kind || id is not null && document.Id != id ||
+            row.Id != Hash(document.TenantId, document.Kind, document.Id) || row.ScopeId != Hash(tenantId) ||
+            row.Kind != kind || row.Revision != document.Revision || row.OwnerKey != Hash(tenantId, document.OwnerId))
             throw new DashboardResourceException("unavailable", "The stored resource scope is invalid.");
         return document;
     }
 
     private static string Hash(params string[] parts) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(parts.Select(part => $"{part.Length}:{part}")))));
-    private DashboardResourceWriteResult Status(string status) { context.ChangeTracker.Clear(); return new(status); }
+    private static DashboardResourceWriteResult Status(string status) => new(status);
     private static DashboardResourceException Unavailable(Exception inner) => new("unavailable", "Dashboard resource persistence is unavailable. Retry or contact the administrator.", inner);
 }

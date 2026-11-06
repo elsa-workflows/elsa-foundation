@@ -2,11 +2,16 @@ import React, { lazy, Suspense } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { registerCoreHomeWidgets } from "./widgets/registerCoreHomeWidgets";
 import "./styles.css";
+import { createDashboardAuthoringController } from "./native/authoring";
+import { registerDashboardWeaver } from "./native/weaverAuthoring";
+export type { DashboardAuthoringController, DashboardAuthoringSnapshot, DashboardAuthoringProposal, DashboardAuthoringApplyResult } from "./native/authoring";
 
 const HomePage = lazy(() => import("./HomePage").then(module => ({ default: module.HomePage })));
 const NamedDashboardsRoute = lazy(() => import("./native/NamedDashboards").then(module => ({ default: module.NamedDashboardsRoute })));
 
 export function register(api: ElsaStudioModuleApi) {
+  const dashboardAuthoring = createDashboardAuthoringController(api.agent?.clientId ?? crypto.randomUUID());
+  registerDashboardWeaver(api, dashboardAuthoring);
   registerCoreHomeWidgets(api);
   const component = () => (
     <Suspense fallback={<section className="dashboard-page home-page"><div role="status">Loading Home…</div></section>}>
@@ -32,7 +37,7 @@ export function register(api: ElsaStudioModuleApi) {
     for (const [view, path] of [["list", collection], ["create", `${collection}/new`], ["detail", `${collection}/:resourceId`]] as const) {
       api.routes.add({ id: `saved-${kind}:${view}`, label: view === "list" ? `${kind === "dashboard" ? "Dashboards" : "Questions"}` : view === "create" ? `Create ${kind}` : `Saved ${kind}`, path, requiresBackend,
         workspace: view === "detail" ? { resourceKey: location => `${kind}:${location.pathname.split("/").pop()}` } : undefined,
-        component: ({ navigate }) => <Suspense fallback={<section role="status">Loading {kind}…</section>}><NamedDashboardsRoute api={api} kind={kind} view={view} navigate={navigate} /></Suspense>
+        component: ({ navigate }) => <Suspense fallback={<section role="status">Loading {kind}…</section>}><NamedDashboardsRoute api={api} kind={kind} view={view} authoring={dashboardAuthoring} navigate={navigate} /></Suspense>
       });
     }
   }

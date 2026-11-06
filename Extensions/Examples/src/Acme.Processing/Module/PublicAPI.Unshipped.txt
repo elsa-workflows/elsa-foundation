@@ -1,0 +1,10 @@
+#nullable enable
+Acme.Processing.ProcessingFeature
+Acme.Processing.ProcessingFeature.ProcessingFeature() -> void
+Acme.Processing.ProcessingPermissions
+const Acme.Processing.ProcessingPermissions.CategoryRead = "acme/processing/category:read" -> string!
+const Acme.Processing.ProcessingPermissions.Create = "acme/processing:create" -> string!
+const Acme.Processing.ProcessingPermissions.Query = "acme/processing-questions:read" -> string!
+const Acme.Processing.ProcessingPermissions.Read = "acme/processing:read" -> string!
+virtual Acme.Processing.ProcessingFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Acme.Processing.ProcessingFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

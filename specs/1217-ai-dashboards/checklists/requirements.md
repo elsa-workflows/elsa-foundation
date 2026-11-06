@@ -26,8 +26,9 @@
 - [x] Novel query and independent business-dimension witnesses are required.
 - [x] Mocked/provider-protocol evidence is distinguished from actual provider proof.
 - [x] Applicable native contracts ready for scoped implementation under owner delivery authorization.
-- [ ] Provider-dependent design/access resolved; actual provider work may begin.
+- [x] Provider design/configuration selected: one Weaver author, existing Copilot SDK, backend options/appsettings/environment.
+- [ ] Usable configured credentials and actual live provider behavior qualified.
 
 ## Notes
 
-Draft created after current-source and live issue inventory. No runtime behavior is claimed. Navigation is confirmed; the provider/access choice is required before provider-dependent implementation and real qualification. This checklist is deliberately incomplete while remaining inputs and independent review are outstanding.
+Draft created after current-source and live issue inventory. No runtime behavior is claimed. Navigation, provider adapter and configuration approach are confirmed; usable live access and executed qualification remain open. This checklist is deliberately incomplete while remaining inputs and independent review are outstanding.

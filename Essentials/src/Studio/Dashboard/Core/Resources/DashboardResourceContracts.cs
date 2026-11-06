@@ -27,7 +27,7 @@ public interface IDashboardAudienceDirectory
 {
     ValueTask<bool> IsValidAsync(DashboardActor actor, DashboardAudienceGrant grant, CancellationToken cancellationToken = default);
     ValueTask<DashboardAudienceCandidatePage> SearchAsync(DashboardActor actor, string kind, string? search,
-        CancellationToken cancellationToken = default);
+        string? continuationToken = null, CancellationToken cancellationToken = default);
 }
 
 public interface IDashboardResourceService

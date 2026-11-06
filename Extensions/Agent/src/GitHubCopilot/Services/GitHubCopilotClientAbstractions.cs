@@ -37,7 +37,11 @@ public sealed record GitHubCopilotClientRequest(
     string? RuntimeUrl,
     string? RuntimeConnectionToken,
     string? BaseDirectory,
-    string? WorkingDirectory);
+    string? WorkingDirectory)
+{
+    /// <summary>Trusted server tenant partition, never a model or Studio argument.</summary>
+    public string? TenantId { get; init; }
+}
 
 public sealed record GitHubCopilotSessionRequest(
     string SessionId,
