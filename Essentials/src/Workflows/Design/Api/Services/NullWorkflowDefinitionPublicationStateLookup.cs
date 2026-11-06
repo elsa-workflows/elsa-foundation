@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Api.Services;
 
 /// <summary>
 /// Design-only default: returns no states so definition views leave <c>publicationState</c> unset.
-/// NativeEndpoints' generated <c>Map()</c> resolves every constructor argument with
+/// MinimalEndpoints' generated <c>Map()</c> resolves every constructor argument with
 /// <c>GetRequiredService</c>; registering this keeps those hosts from failing when Publishing is absent.
 /// Publishing replaces this registration.
 /// </summary>

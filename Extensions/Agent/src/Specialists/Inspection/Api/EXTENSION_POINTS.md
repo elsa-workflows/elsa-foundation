@@ -3,7 +3,7 @@
 Owner project: `Elsa.Agent.Specialists.Inspection.Api`
 Domain: `Elsa.Agent`
 
-Two NativeEndpoints endpoints with capability `elsa.api.agent-specialist-inspection` v1. Feature
+Two MinimalEndpoints endpoints with capability `elsa.api.agent-specialist-inspection` v1. Feature
 `SpecialistsInspectionApi` depends on `SpecialistsRuntime`, `WorkflowsPublishingApi` and `ApiCapabilities`; it is a
 separate project so the authoring API stays composable without the runtime.
 

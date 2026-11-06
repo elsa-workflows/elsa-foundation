@@ -2,7 +2,7 @@ using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Agent.Specialists.Api.Endpoints;
 

@@ -1,3 +1,8 @@
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Primitives.Exceptions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Services;
@@ -664,6 +669,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         CancellationToken cancellationToken,
         IReadOnlyCollection<WorkflowExecutableLayoutRecord>? draftLayout = null)
     {
+        var tenantId = accessContextAccessor?.Current.Scope?.Value;
+        var authority = CaptureExecutionAuthority(tenantId);
         WorkflowExecutable executable;
         try
         {
@@ -765,7 +772,6 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
         var partition = partitionAccessor?.Current ??
                         new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
-        var tenantId = accessContextAccessor?.Current.Scope?.Value;
         var testScope = new WorkflowTestScope(testRunId, expiresAt, tenantId, partition);
         var runtimeScopeStore = testScopeStore ?? TestRunCompatibilityScope.Store;
         await runtimeScopeStore.CreateAsync(testScope, now, cancellationToken);
@@ -786,6 +792,17 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 unavailableValidationAcknowledged,
                 cancellationToken);
 
+        var startMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["runtime.scope"] = "test-run",
+            ["runtime.testRunId"] = testRunId,
+            ["runtime.sourceReferenceId"] = reference.SourceReferenceId,
+            ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
+            ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
+        };
+        if (authority is not null)
+            authority = new WorkflowExecutionAuthoritySnapshot(authority.SystemIdentity, authority.RootInitiator,
+                startMetadata.Concat(authority.Metadata).ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal));
         WorkflowExecutionStartDispatchResult dispatch;
         try
         {
@@ -795,14 +812,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     requestedBy: RequestedBy,
                     workflowExecutionId: null,
                     idempotencyKey: null,
-                    metadata: new Dictionary<string, string>
-                    {
-                        ["runtime.scope"] = "test-run",
-                        ["runtime.testRunId"] = testRunId,
-                        ["runtime.sourceReferenceId"] = reference.SourceReferenceId,
-                        ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
-                        ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
-                    },
+                    metadata: startMetadata,
                     variables: variables,
                     inputs: ToInputValues(normalizedInputs),
                     stimulusInput: null,
@@ -814,7 +824,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     correlationId: null,
                     tenantId: tenantId,
                     partition: partition,
-                    authority: null,
+                    authority: authority,
                     startAuthority: null,
                     dispatchNestingDepth: 0,
                     testScope: testScope),
@@ -1165,6 +1175,27 @@ public sealed class StartWorkflowTestRunRequestHandler(
         inputs is not { Count: > 0 }
             ? EmptyInputs
             : inputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal);
+
+    private WorkflowExecutionAuthoritySnapshot? CaptureExecutionAuthority(string? tenantId)
+    {
+        var http = ambientServices?.GetService<IHttpContextAccessor>()?.HttpContext;
+        if (http is null) return null;
+        var validator = ambientServices?.GetService<NormalizedPrincipalValidator>();
+        if (validator is null || !validator.TryGetNormalizedPrincipal(http.User, out var principal))
+            throw new EntityNotFoundException("The publishing identity was not found.");
+        var tenants = principal.FindAll(IdentityClaimTypes.TenantId).ToArray();
+        var subjects = principal.FindAll(IdentityClaimTypes.UserId).ToArray();
+        if (tenants.Length > 1 || tenants.Any(claim => string.IsNullOrWhiteSpace(claim.Value)) ||
+            !StringComparer.Ordinal.Equals(tenants.SingleOrDefault()?.Value, tenantId) ||
+            subjects.Length > 1 || subjects.Any(claim => string.IsNullOrWhiteSpace(claim.Value)))
+            throw new EntityNotFoundException("The publishing identity was not found.");
+        if (subjects.Length == 0) return null;
+        return new WorkflowExecutionAuthoritySnapshot(RequestedBy, RequestedBy, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["elsa.identity.subject-kind"] = "persisted-user",
+            ["elsa.identity.subject-id"] = subjects[0].Value
+        });
+    }
 
     private static readonly IReadOnlyDictionary<string, JsonElement> EmptyJsonInputs =
         new Dictionary<string, JsonElement>(StringComparer.Ordinal);

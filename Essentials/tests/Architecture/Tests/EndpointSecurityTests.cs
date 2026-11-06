@@ -25,7 +25,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Xunit;
