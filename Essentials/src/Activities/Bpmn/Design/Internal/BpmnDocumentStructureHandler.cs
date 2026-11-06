@@ -103,8 +103,7 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
         {
             if (!IdentityNamespaces.Contains(element.Name.NamespaceName) || element.Attribute("id") is not { } id)
                 continue;
-            try { XmlConvert.VerifyNCName(id.Value); }
-            catch (XmlException exception) { throw new InvalidOperationException("Invalid BPMN XML identity.", exception); }
+            if (!BpmnXmlIdentity.IsValid(id.Value)) throw new InvalidOperationException("Invalid BPMN XML identity.");
             if (!identities.TryAdd(id.Value, element))
                 throw Invalid($"XML identity '{id.Value}' is duplicated");
         }

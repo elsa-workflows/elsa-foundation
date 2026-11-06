@@ -391,6 +391,11 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
         await expect(page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
         await expect(page.getByRole("heading", { name: "Run", exact: true })).toBeVisible();
         await expect(page.locator(".wf-activity-overview")).toContainText("Inline");
+        // Await the resolved runtime input and execution browser before capturing.
+        // The Completed badge can precede these asynchronous evidence requests.
+        await expect(page.locator(".wf-activity-overview-status")).toHaveText("Completed");
+        await expect(page.locator('.wf-input-inspection-value[aria-label="Expression runtime value"]')).toHaveText(expected);
+        await expect(page.getByRole("status").filter({ hasText: /^(?:Loading visible execution evidence|Loading recorded executions|Loading captured value|Resolving captured value|Some visible execution evidence could not be loaded|Execution history (?:could not be loaded|is unavailable)|Execution browsing is unavailable)/ })).toHaveCount(0);
         await capture(page, info, `actual-run-inspection-${route.toLowerCase()}`);
       }
       expect(browserErrors, "Uncaught real-host browser errors").toEqual([]);
