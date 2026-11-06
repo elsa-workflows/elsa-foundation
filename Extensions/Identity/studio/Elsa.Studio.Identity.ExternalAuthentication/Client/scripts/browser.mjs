@@ -200,7 +200,17 @@ try {
   }
   async function connectionMode(mode) {
     if (!settings.studioUrl) return;
-    await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: mode === "dark" ? "Dark" : "Light", exact: true }).click();
+    const label = mode === "dark" ? "Dark" : "Light";
+    const quickMode = page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: label, exact: true });
+    if (await quickMode.isVisible()) await quickMode.click();
+    else {
+      // Narrow Studio hides its quick toggle; use the same public appearance menu as a person.
+      const picker = page.getByRole("button", { name: "Select theme", exact: true });
+      await picker.click();
+      await page.getByRole("group", { name: "Appearance", exact: true }).getByRole("menuitemradio", { name: label, exact: true }).click();
+      await page.keyboard.press("Escape");
+      await expect(picker).toBeFocused();
+    }
     await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", mode);
     await page.evaluate(() => Promise.all(globalThis.document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations)).map(animation => animation.finished.catch(() => {}))));
   }

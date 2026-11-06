@@ -99,7 +99,7 @@ async function subject(providers, provider, value, controlKey) {
   assert.equal(response.status, 200, "owned upstream account selection");
 }
 try {
-  const settings = { provider: sqlite ? "Sqlite" : "PostgreSql", databaseManagement: managed, provisioning: true, publicBaseUrl: base };
+  const settings = { databaseProvider: sqlite ? "Sqlite" : "PostgreSql", databaseManagement: managed, provisioning: true, publicBaseUrl: base };
   if (!sqlite) {
     const image = "postgres@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab";
     docker(["image", "inspect", image], { stdio: "ignore" });

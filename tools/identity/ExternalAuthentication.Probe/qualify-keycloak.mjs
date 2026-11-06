@@ -63,7 +63,7 @@ try {
       await new Promise(done => setTimeout(done, 500));
     }
   }
-  writeFileSync(join(root, "probe-settings.json"), JSON.stringify({ provider: "Keycloak", listen: `http://127.0.0.1:${backendPort}`,
+  writeFileSync(join(root, "probe-settings.json"), JSON.stringify({ provider: "Keycloak", databaseProvider: "Sqlite", listen: `http://127.0.0.1:${backendPort}`,
     companyIssuer: issuers.company, partnerIssuer: issuers.partner, clientId, clientSecretFile: "client-secret.txt" }), { mode: 0o600 });
   const log = openSync(join(root, "keycloak-journey.log"), "w", 0o600);
   let code;

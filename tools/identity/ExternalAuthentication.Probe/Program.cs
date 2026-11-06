@@ -111,7 +111,7 @@ if (settings.StudioUrl is not null)
     services.Configure<AspNetCoreIdentityOptions>(options => options.AllowedReturnUrlOrigins.Add(settings.StudioUrl));
 }
 services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(ownedRoot, "keys"))).SetApplicationName("elsa-3579-owned-probe");
-if (settings.Provider is not ("Sqlite" or "PostgreSql")) throw new InvalidOperationException("The owned probe qualifies SQLite or PostgreSQL only.");
+if (settings.DatabaseProvider is not ("Sqlite" or "PostgreSql")) throw new InvalidOperationException("The owned probe qualifies SQLite or PostgreSQL only.");
 string PostgreSqlConnection(string? file)
 {
     if (file is null) throw new InvalidOperationException("PostgreSQL needs an owned connection file.");
@@ -121,12 +121,12 @@ string PostgreSqlConnection(string? file)
         throw new InvalidOperationException("Refusing a PostgreSQL target outside the owned loopback fixture namespace.");
     return value;
 }
-var database = settings.Provider == "Sqlite" ? $"Data Source={Path.Combine(ownedRoot, "identity.db")};Pooling=False" : PostgreSqlConnection(settings.ConnectionStringFile);
-services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
+var database = settings.DatabaseProvider == "Sqlite" ? $"Data Source={Path.Combine(ownedRoot, "identity.db")};Pooling=False" : PostgreSqlConnection(settings.ConnectionStringFile);
+services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new() { Provider = settings.DatabaseProvider, ConnectionString = database }, TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
 if (!Enum.TryParse<OwnershipMode>(settings.OwnershipMode, out var ownershipMode) || !Enum.IsDefined(ownershipMode)) throw new InvalidOperationException("Invalid owned fixture ownership mode.");
 services.Configure<FoundationIdentityOptions>(options => options.OwnershipMode = ownershipMode);
-if (settings.DatabaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
-if (settings.SessionStore) services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = settings.Provider, ConnectionString = database });
+if (settings.DatabaseManagement) services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = settings.DatabaseProvider, ConnectionString = database });
+if (settings.SessionStore) services.AddExternalAuthenticationEntityFrameworkCore(new() { Provider = settings.DatabaseProvider, ConnectionString = database });
 services.AddSingleton<ISecretValueResolver>(new ProbeSecrets(clientSecret, settings.SecretsAvailable));
 services.AddFoundationExternalOidc(options => options.AllowLoopbackHttpForDevelopment = true);
 services.AddFoundationExternalAuthentication(options =>
@@ -140,7 +140,7 @@ if (settings.ManagedApi) services.AddFoundationExternalAuthenticationApi();
 services.AddFoundationIdentityApi();
 services.AddOpenIddictVendorForTests(options =>
 {
-    if (settings.Provider == "Sqlite") options.UseSqlite($"Data Source={Path.Combine(ownedRoot, "tokens.db")};Pooling=False");
+    if (settings.DatabaseProvider == "Sqlite") options.UseSqlite($"Data Source={Path.Combine(ownedRoot, "tokens.db")};Pooling=False");
     else options.UseNpgsql(PostgreSqlConnection(settings.TokenConnectionStringFile));
 });
 var signingPath = Path.Combine(ownedRoot, "signing.pk8");
@@ -308,7 +308,7 @@ internal sealed class ProbeSettings
     public string ClientId { get; init; } = ControlledOidcServer.ClientId;
     public string? ClientSecretFile { get; init; }
     public string? StudioUrl { get; init; }
-    public string Provider { get; init; } = "Sqlite";
+    public string DatabaseProvider { get; init; } = "Sqlite";
     public string? ConnectionStringFile { get; init; }
     public string? TokenConnectionStringFile { get; init; }
     public string? PublicBaseUrl { get; init; }
