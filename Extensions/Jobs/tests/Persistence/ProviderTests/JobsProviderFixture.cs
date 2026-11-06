@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Elsa.Jobs;
@@ -16,6 +17,7 @@ public sealed class JobsPostgreSqlFixture : IAsyncLifetime
     private PostgreSqlContainer? _container;
     private readonly string _ownershipRun = Guid.NewGuid().ToString("N");
     private Dictionary<string, string>? _ownershipLabels;
+    private string? _qualificationCgroupParent;
     internal string? ConnectionString { get; private set; }
     internal string? Unavailable { get; private set; }
     public async Task InitializeAsync()
@@ -24,6 +26,9 @@ public sealed class JobsPostgreSqlFixture : IAsyncLifetime
         {
             var owner = Environment.GetEnvironmentVariable("ELSA_JOBS_QUALIFICATION_OWNER") ?? "local-elsa-3586";
             if (!Regex.IsMatch(owner, "^[A-Za-z0-9_.-]{1,128}$")) throw new InvalidOperationException("The Jobs qualification owner label is invalid.");
+            _qualificationCgroupParent = Environment.GetEnvironmentVariable("ELSA_JOBS_QUALIFICATION_CGROUP_PARENT");
+            if (_qualificationCgroupParent is not null && !Regex.IsMatch(_qualificationCgroupParent, "^[A-Za-z0-9_]{1,64}\\.slice$"))
+                throw new InvalidOperationException("The Jobs qualification parent slice is invalid.");
             _ownershipLabels = new()
             {
                 ["elsa.qualification.namespace"] = "background-workflows",
@@ -33,6 +38,8 @@ public sealed class JobsPostgreSqlFixture : IAsyncLifetime
             };
             var builder = new PostgreSqlBuilder("postgres:16-alpine").WithDatabase("jobs_tests").WithUsername("postgres").WithPassword("postgres");
             foreach (var label in _ownershipLabels) builder = builder.WithLabel(label.Key, label.Value);
+            if (_qualificationCgroupParent is not null)
+                builder = builder.WithCreateParameterModifier(parameters => parameters.HostConfig.CgroupParent = _qualificationCgroupParent);
             _container = builder.Build();
             try { await _container.StartAsync(); }
             finally { RecordOwnership(); }
@@ -53,9 +60,30 @@ public sealed class JobsPostgreSqlFixture : IAsyncLifetime
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "owned-container-" + _ownershipRun + ".json");
         var temporary = path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(new { id, labels = _ownershipLabels, image = "postgres:16-alpine", source = nameof(JobsPostgreSqlFixture) }));
+        File.WriteAllText(temporary, JsonSerializer.Serialize(new { id, labels = _ownershipLabels, image = "postgres:16-alpine", source = nameof(JobsPostgreSqlFixture), expectedCgroupParent = _qualificationCgroupParent }));
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         File.Move(temporary, path, overwrite: true);
+        if (_qualificationCgroupParent is not null)
+        {
+            if (!OperatingSystem.IsLinux()) throw new InvalidOperationException("Aggregate qualification membership proof requires Linux.");
+            using var inspect = Process.Start(new ProcessStartInfo("docker")
+            {
+                RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
+                ArgumentList = { "inspect", "--format", "{{.State.Pid}}", id }
+            }) ?? throw new InvalidOperationException("Cannot inspect the owned container parent membership.");
+            if (!inspect.WaitForExit(10_000)) { inspect.Kill(entireProcessTree: true); throw new InvalidOperationException("Owned container membership inspection timed out."); }
+            var output = inspect.StandardOutput.ReadToEnd().Trim();
+            if (inspect.ExitCode != 0 || !int.TryParse(output, out var pid) || pid <= 0)
+                throw new InvalidOperationException("Owned container PID is unavailable for parent membership proof.");
+            var actual = File.ReadAllText("/proc/" + pid + "/cgroup");
+            File.WriteAllText(temporary, JsonSerializer.Serialize(new { id, labels = _ownershipLabels,
+                image = "postgres:16-alpine", source = nameof(JobsPostgreSqlFixture),
+                expectedCgroupParent = _qualificationCgroupParent, containerPid = pid, actualCgroup = actual }));
+            File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            File.Move(temporary, path, overwrite: true);
+            if (!actual.Split('\n').Any(line => line.StartsWith("0::/" + _qualificationCgroupParent + "/", StringComparison.Ordinal)))
+                throw new InvalidOperationException("The owned container is outside the admitted aggregate parent slice.");
+        }
     }
 }
 

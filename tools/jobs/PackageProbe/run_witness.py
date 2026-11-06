@@ -69,6 +69,9 @@ class Witness:
                                  'elsa.qualification.program': '3586',
                                  'elsa.qualification.owner': self.owner,
                                  'elsa.qualification.run': self.run_id}
+        self.cgroup_parent = os.environ.get('ELSA_JOBS_QUALIFICATION_CGROUP_PARENT')
+        if self.cgroup_parent is not None and re.fullmatch(r'[A-Za-z0-9_]{1,64}\.slice', self.cgroup_parent) is None:
+            raise ValueError('The Jobs qualification aggregate parent slice is invalid.')
         self.base = {'provider': 'Sqlite' if provider == 'sqlite' else 'PostgreSql',
                      'scope': {'persistencePartition': 'package-' + self.run_id, 'tenantId': 'tenant-a'}}
 
@@ -89,11 +92,20 @@ class Witness:
             # of a pre-existing container. Only retain the returned container ID.
             labels = [argument for key, value in sorted(self.container_labels.items())
                       for argument in ('--label', key + '=' + value)]
-            self.container = self.docker(['run', '--detach', '--rm', '--name', name, *labels,
+            parent = ['--cgroup-parent', self.cgroup_parent] if self.cgroup_parent is not None else []
+            self.container = self.docker(['run', '--detach', '--rm', '--name', name, *labels, *parent,
                                           '--publish', '127.0.0.1::5432', '--env-file', str(env_file),
                                           'postgres:16-alpine'])
             write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name,
-                       'labels': self.container_labels, 'image': 'postgres:16-alpine'})
+                       'labels': self.container_labels, 'image': 'postgres:16-alpine', 'expectedCgroupParent': self.cgroup_parent})
+            if self.cgroup_parent is not None:
+                pid = int(self.docker(['inspect', '--format', '{{.State.Pid}}', self.container]))
+                actual = (Path('/proc') / str(pid) / 'cgroup').read_text()
+                write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name,
+                           'labels': self.container_labels, 'image': 'postgres:16-alpine',
+                           'expectedCgroupParent': self.cgroup_parent, 'containerPid': pid, 'actualCgroup': actual})
+                if not any(line.startswith('0::/' + self.cgroup_parent + '/') for line in actual.splitlines()):
+                    raise RuntimeError('Owned PostgreSQL container is outside the admitted aggregate slice.')
             deadline = time.monotonic() + 45
             while True:
                 # The official image starts a temporary socket-only server during
