@@ -70,11 +70,12 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                 throw Pending("bpmn.native-cancel.result-pending", "The actual native terminal result has not settled the model cancellation.");
             return;
         }
-        if (source.Intent.Kind == BpmnNativeWorkBoundary.StartKind)
+        if (BpmnNativeWorkBoundary.IsStartKind(source.Intent.Kind))
         {
             var origin = source.Intent.Payload?.Deserialize<RuntimeModelNativeWorkOrigin>(BpmnNativeWorkBoundary.Web)
                 ?? throw new BpmnModelValidationException("The native work start address is missing.");
-            if (origin.SourceOutboxItemId != source.SourceOutboxItemId || origin.SourceIntentId != source.Intent.IntentId ||
+            if (!BpmnNativeWorkBoundary.MatchesStartKind(source.Intent.Kind, origin) ||
+                origin.SourceOutboxItemId != source.SourceOutboxItemId || origin.SourceIntentId != source.Intent.IntentId ||
                 origin.Scope != source.Scope || origin.ExecutionId != source.Intent.WorkflowExecutionId)
                 throw new BpmnModelValidationException("The native work start does not belong to this actual source.");
             if (await boundary.FindWorkerAsync(origin, cancellationToken) is not null) return;
@@ -96,7 +97,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                 var cleanup = new RuntimeModelExecutionCommand(retainedModel.Executable, retainedModel.MaterialIncarnationId,
                     "settle-faulted-work:" + BpmnModelIdentity.Create(retainedModel.ExecutionId), "cancel",
                     JsonSerializer.SerializeToElement(new { reason = "Settle native work retained by the final model fault." }, BpmnNativeWorkBoundary.Web),
-                    retainedModel.Authority, retainedModel.TenantId);
+                    retainedModel.Authority, retainedModel.TenantId) { IngressOrigin = retainedModel.IngressOrigin };
                 await QueueModelAsync(cleanup, retainedModel.ExecutionId, source, cancellationToken);
                 throw Pending("bpmn.native-start.fault-settlement-pending", "The faulted model's original native work remains owed until its cancellation decision.");
             }
@@ -105,9 +106,9 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
             if (identity.WorkflowExecutionId != origin.WorkerExecutionId)
                 throw new BpmnModelValidationException("The native worker identity is not deterministic for this model attempt.");
             await starts.DispatchAsync(new WorkflowExecutionStartDispatchRequest(origin.WorkerExecutable.ArtifactId, model.Authority.SystemIdentity,
-                origin.WorkerExecutionId, identity.StartKey, null, null, null, null, null, WorkflowRunKind.PublishedRun,
+                origin.WorkerExecutionId, identity.StartKey, null, null, origin.Inputs?.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal), null, null, WorkflowRunKind.PublishedRun,
                 null, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, null, null, model.TenantId,
-                new(origin.Scope.Value), model.Authority, WorkflowExecutableStartAuthority.FromModelWork(origin)),
+                model.Partition ?? new(origin.Scope.Value), model.Authority, WorkflowExecutableStartAuthority.FromModelWork(origin)),
                 cancellationToken: cancellationToken);
             if (await boundary.FindWorkerAsync(origin, cancellationToken) is null)
                 throw Pending("bpmn.native-start.pending", "Native worker admission remains owed.");
@@ -125,7 +126,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         if (!result.Origin.MatchesModel(current)) throw new BpmnModelValidationException("The native result model pin changed.");
         var inputId = BpmnNativeWorkBoundary.ResultInputId(result.Origin);
         var command = new RuntimeModelExecutionCommand(current.Executable, current.MaterialIncarnationId, inputId, "native-result",
-            JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId);
+            JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId) { IngressOrigin = current.IngressOrigin };
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeModelInput(command);
         if (await reader.FindInputAsync(current.ExecutionId, inputId, cancellationToken) is { } accepted)
         {

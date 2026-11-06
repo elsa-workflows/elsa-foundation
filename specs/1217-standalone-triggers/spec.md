@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Approved — scoped M0 correctness, standards and acceptance design review converged on 6 November 2026; implementation and product qualification remain outstanding
+**Status**: In progress — M0 reviewed at f064e47b7/PR #3912 on 6 November 2026; implementation underway and product qualification outstanding
 
 **Input**: [Canonical feature #3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582), with [owner delivery authorization and milestone record](https://github.com/elsa-workflows/elsa-foundation/issues/3582#issuecomment-6671646417), 5 November 2026.
 

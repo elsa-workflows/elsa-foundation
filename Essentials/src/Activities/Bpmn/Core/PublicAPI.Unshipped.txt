@@ -366,3 +366,44 @@ override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.GetHashCode() -> int
 override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ToString() -> string!
 static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator !=(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
 static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator ==(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.VersionId.get -> string!
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.PreparePublicationAsync(Elsa.Activities.Bpmn.Core.BpmnModelDefinition! definition, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract! inputContract, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping!>! workerInputMappings, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.BpmnModelPublication(string! PublicationId, string! DefinitionId, string! VersionId, string! SlotName, long SlotRevision, string! Status) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.PublicationId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Publication.get -> Elsa.Activities.Bpmn.Core.BpmnModelPublication?
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.DefinitionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.Status.init -> void
+override Elsa.Activities.Bpmn.Core.BpmnModelPublication.Equals(object? obj) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnModelPublication.operator ==(Elsa.Activities.Bpmn.Core.BpmnModelPublication? left, Elsa.Activities.Bpmn.Core.BpmnModelPublication? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.PublicationId.get -> string!
+override Elsa.Activities.Bpmn.Core.BpmnModelPublication.ToString() -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnModelPublication!
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.InputsProfile = "foundation-inputs-v1" -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.VersionId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelInputSource.Value.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Bpmn.Core.BpmnModelInputSource.Name.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.SlotRevision.get -> long
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Publication.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.DefinitionId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelPublication
+Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping.Inputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Activities.Bpmn.Core.BpmnModelInputSource!>!
+Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnInputModelDefinition.WorkerInputMappings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping!>!
+Elsa.Activities.Bpmn.Core.BpmnInputModelDefinition.BpmnInputModelDefinition(int formatVersion, Elsa.Activities.Bpmn.Core.BpmnModelDefinition! baseDefinition, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping!>! workerInputMappings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.Status.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnInputModelDefinition.FormatVersion.get -> int
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.SlotRevision.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.SlotName.get -> string!
+override Elsa.Activities.Bpmn.Core.BpmnModelPublication.GetHashCode() -> int
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.SlotName.init -> void
+Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping.WorkerInputContract.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract?
+Elsa.Activities.Bpmn.Core.BpmnInputModelDefinition
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.Equals(Elsa.Activities.Bpmn.Core.BpmnModelPublication? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnWorkerInputMapping.BpmnWorkerInputMapping(string! bindingId, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Activities.Bpmn.Core.BpmnModelInputSource!>! inputs, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract? workerInputContract = null) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelInputSource
+Elsa.Activities.Bpmn.Core.BpmnInputModelDefinition.BaseDefinition.get -> Elsa.Activities.Bpmn.Core.BpmnModelDefinition!
+Elsa.Activities.Bpmn.Core.BpmnModelPublication.Deconstruct(out string! PublicationId, out string! DefinitionId, out string! VersionId, out string! SlotName, out long SlotRevision, out string! Status) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelInputSource.Kind.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelInputSource.BpmnModelInputSource(string! kind, string? name = null, System.Text.Json.JsonElement? value = null) -> void
+static Elsa.Activities.Bpmn.Core.BpmnModelPublication.operator !=(Elsa.Activities.Bpmn.Core.BpmnModelPublication? left, Elsa.Activities.Bpmn.Core.BpmnModelPublication? right) -> bool

@@ -22,7 +22,25 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore
     /// <summary>Commits one immutable live source root with native/model full-closure lease fencing.</summary>
     /// <exception cref="InvalidOperationException">Caller writes/transactions are pending, or full root/source identity conflicts.</exception>
     /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">Provider/IO failure or unrequested cancellation; preserves source identity and original cause.</exception>
-    public async ValueTask<WorkflowExecutableSourceReference> SaveWithRootWriteLeasesAsync(WorkflowExecutableSourceReference reference,
+    public ValueTask<WorkflowExecutableSourceReference> SaveWithRootWriteLeasesAsync(WorkflowExecutableSourceReference reference,
+        WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        if (reference.PublicationScope is not null) throw new NotSupportedException("Generic fenced sources cannot assert logical publication scope.");
+        return SaveRootAsync(reference, root, leases, cancellationToken);
+    }
+
+    public ValueTask<WorkflowExecutableSourceReference> SaveScopedPublicationAsync(WorkflowExecutableSourceReference reference,
+        WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        var physical = access.Current.RequireScope();
+        if (reference.PublicationScope is not null && reference.PublicationScope != physical)
+            throw new InvalidDataException("The logical publication cannot replace its actual physical source scope.");
+        return SaveRootAsync(reference with { PublicationScope = physical }, root, leases, cancellationToken);
+    }
+
+    private async ValueTask<WorkflowExecutableSourceReference> SaveRootAsync(WorkflowExecutableSourceReference reference,
         WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference); ArgumentNullException.ThrowIfNull(root); ArgumentNullException.ThrowIfNull(leases);
@@ -62,7 +80,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore
             if (!closure.Select(value => value.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal)
                     .SetEquals(grants.Select(grant => grant.ArtifactId)))
                 throw new ArgumentException("The source publication requires exactly its complete closure grants.", nameof(leases));
-            var source = await captured.StageCreateOrAdoptAsync(reference, cancellationToken, timeProvider);
+            var source = await captured.StageCreateOrAdoptAsync(reference, cancellationToken, timeProvider, reference.PublicationScope is not null);
             await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(context, "publishing source", reference.SourceReferenceId,
                 () => context.Database.BeginTransactionAsync(cancellationToken));
             var deadlines = await artifacts.FenceRootWriteLeasesAsync(grants, timeProvider, cancellationToken);

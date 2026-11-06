@@ -80,6 +80,7 @@ describe("studio registry", () => {
     api.workflowDesigner.registerActivityIcons?.({});
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
+    expect(api.triggerConfigurationEditors?.slot.id).toBe(studioSlotIds.triggerConfigurationEditors);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
     expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);

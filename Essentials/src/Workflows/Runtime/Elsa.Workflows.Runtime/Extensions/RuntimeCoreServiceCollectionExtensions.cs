@@ -67,6 +67,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.ClaimWorkflowAlterationProvider(typeof(InMemoryWorkflowAlterationStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
+        StandaloneTriggerRuntimeRegistration.AddServices(services);
+        services.TryAddScoped<IAuthoredModelAdmission, AuthoredModelAdmission>();
         Elsa.Workflows.Runtime.UserTasks.UserTaskRegistration.AddUserTasks(services);
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 

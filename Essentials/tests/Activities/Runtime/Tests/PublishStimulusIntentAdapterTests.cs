@@ -27,6 +27,18 @@ public sealed class PublishStimulusIntentAdapterTests
         Assert.Equal(local ? StimulusRoutingMode.ResumeOnly : StimulusRoutingMode.StartAndResume, request.Mode);
         Assert.Equal(local ? "publisher" : null, request.TargetWorkflowExecutionId); Assert.True(request.ResumeAllMatchingBookmarks);
         Assert.Null(request.MatchedTriggerBindings); Assert.Null(request.DispatchOptions); Assert.Null(request.PayloadType); Assert.Null(request.ProviderId);
+        var independent = adapter.CreateSubscriptionSource(intent);
+        if (local) Assert.Null(independent);
+        else
+        {
+            Assert.Equal("event", independent!.TriggerTypeKey);
+            Assert.Equal(1, independent.TriggerSchemaVersion);
+            Assert.Equal("eventName", independent.ConfigurationField);
+            Assert.Equal("hello", independent.ConfigurationValue);
+            Assert.Equal("retained-value", independent.Payload.GetProperty("value").GetString());
+            Assert.Equal("hello", independent.Metadata.GetProperty("eventName").GetString());
+            Assert.Equal("correlation", independent.Metadata.GetProperty("correlationId").GetString());
+        }
     }
 
     [Fact]

@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// to make recurring schedules survive restarts.
 /// </summary>
 [RuntimeDefaultRegistration]
-public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore, IInMemoryActivationProjection
+public sealed partial class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore, IInMemoryActivationProjection
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string ProjectionName = "recurring-schedule";

@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "CShells.Abstractions": {
+        "type": "Direct",
+        "requested": "[0.0.31, )",
+        "resolved": "0.0.31",
+        "contentHash": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
+        "dependencies": {
+          "JetBrains.Annotations": "2025.2.4"
+        }
+      },
+      "JetBrains.Annotations": {
+        "type": "Transitive",
+        "resolved": "2025.2.4",
+        "contentHash": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
+      },
+      "elsa.events.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.pipelines.core": {
+        "type": "Project"
+      },
+      "elsa.studio.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )"
+        }
+      }
+    }
+  }
+}

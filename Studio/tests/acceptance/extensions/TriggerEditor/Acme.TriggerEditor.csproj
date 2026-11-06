@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <PackageVersion>0.0.1-ux</PackageVersion>
+    <StaticWebAssetBasePath>_content/Acme.TriggerEditor</StaticWebAssetBasePath>
+    <Description>Independent source consumer of the public Studio trigger configuration editor Slot.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.Abstractions" />
+    <ProjectReference Include="../../../../src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

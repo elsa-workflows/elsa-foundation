@@ -160,9 +160,9 @@ public sealed class PublishStimulusSourcePipelineTests
     internal sealed class Observed(string state) : IObservedSchemaFinalization
     {
         public SchemaFamilyObservation? Find(string family) => family != "RuntimePostCommitOutbox" ? null :
-            new(family, "runtime", ["1.0.0", "2.0.0"], state is "held" or "seed" ? "1.0.0" : "2.0.0",
-                state is "held" or "seed" or "not-adopted" ? "1.0.0" : "2.0.0", false, null,
-                state == "held" ? [new("2.0.0", true, [new("2.0.0", "Constructed operator hold.", "component-owner", Now)], null)] : [], null, Now);
+            new(family, "runtime", ["1.0.0", "2.0.0", "3.0.0"], state is "held" or "seed" ? "1.0.0" : "3.0.0",
+                state is "held" or "seed" or "not-adopted" ? "1.0.0" : "3.0.0", false, null,
+                state == "held" ? [new("3.0.0", true, [new("3.0.0", "Constructed operator hold.", "component-owner", Now)], null)] : [], null, Now);
         public IReadOnlyList<SchemaFamilyObservation> Observe() => [Find("RuntimePostCommitOutbox")!];
         public ValueTask RefreshAsync(string family, TimeSpan maxAge, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask<IReadOnlyList<SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Observe());

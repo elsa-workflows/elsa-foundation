@@ -1355,3 +1355,20 @@ static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.o
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.ToString() -> string!
+static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest!
+static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference!
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.GetHashCode() -> int
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, out Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.get -> Elsa.Workflows.Publishing.Core.Models.PublicationRecord!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.init -> void
+Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator.ActivateMaterialAsync(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult!>
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(object? obj) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.PublicationMaterialActivationRequest(Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void

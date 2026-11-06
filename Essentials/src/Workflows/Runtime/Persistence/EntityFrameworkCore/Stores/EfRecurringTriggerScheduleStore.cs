@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// generation. Closing that would need a per-generation column.
 /// </para>
 /// </remarks>
-public sealed class EfRecurringTriggerScheduleStore(
+public sealed partial class EfRecurringTriggerScheduleStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec,
@@ -63,7 +63,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
             if (SchedulesEqual(current, schedule))
                 return schedule;
-            var updated = ToEntity(current, scope, id, checked(existing.Revision + 1));
+            var updated = ToEntity(current, scope, id, checked(existing.Revision + 1), existing.SchemaVersion);
             Copy(updated, schedule, scope, updated.Revision);
             context.RecurringTriggerSchedules.Attach(updated);
             context.Entry(updated).Property(x => x.Revision).OriginalValue = existing.Revision;
@@ -526,6 +526,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         context.RecurringTriggerSchedules.Attach(row);
         context.Entry(row).Property(x => x.Revision).OriginalValue = originalRevision;
         context.Entry(row).State = EntityState.Modified;
+        row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion);
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -700,11 +701,11 @@ public sealed class EfRecurringTriggerScheduleStore(
     private static string Id(string scope, string scheduleId) => EfRuntimeOperationalStoreSupport.CompositeId(scope, scheduleId);
     private static string ProjectionId(string scope, string activationId) => EfRuntimeOperationalStoreSupport.CompositeId(scope, ProjectionKind, activationId);
 
-    private static RecurringTriggerScheduleEntity ToEntity(RecurringTriggerSchedule schedule, string scope, string id, long revision) { var row = new RecurringTriggerScheduleEntity { Id = id }; Copy(row, schedule, scope, revision); return row; }
-    private static void Copy(RecurringTriggerScheduleEntity row, RecurringTriggerSchedule schedule, string scope, long revision)
+    private RecurringTriggerScheduleEntity ToEntity(RecurringTriggerSchedule schedule, string scope, string id, long revision, string? storedVersion = null) { var row = new RecurringTriggerScheduleEntity { Id = id, SchemaVersion = storedVersion! }; Copy(row, schedule, scope, revision); return row; }
+    private void Copy(RecurringTriggerScheduleEntity row, RecurringTriggerSchedule schedule, string scope, long revision)
     {
         Validate(schedule);
-        row.ScopeKey = Encode(scope); row.ScopeKeyHash = Hash(scope); row.ScheduleId = Encode(schedule.ScheduleId); row.ScheduleIdHash = Hash(schedule.ScheduleId); row.ScheduleIdOrderKey = ScheduleOrder(schedule.ScheduleId); row.ArtifactId = Encode(schedule.ArtifactId); row.ArtifactIdHash = Hash(schedule.ArtifactId); row.ArtifactIdOrderKey = Order(schedule.ArtifactId); row.ExecutableNodeId = Encode(schedule.ExecutableNodeId); row.StimulusType = Encode(schedule.StimulusType); row.StimulusHash = Encode(schedule.StimulusHash); row.Kind = (int)schedule.Kind; row.Expression = schedule.Expression; row.NextOccurrenceUtcTicks = schedule.NextOccurrence.UtcTicks; row.NextOccurrenceOffsetMinutes = (int)schedule.NextOccurrence.Offset.TotalMinutes; row.CreatedAtUtcTicks = schedule.CreatedAt.UtcTicks; row.CreatedAtOffsetMinutes = (int)schedule.CreatedAt.Offset.TotalMinutes; row.ActivationId = schedule.ActivationId is null ? null : Encode(schedule.ActivationId); row.ActivationIdHash = schedule.ActivationId is null ? null : Hash(schedule.ActivationId); row.ActivationIdOrderKey = schedule.ActivationId is null ? null : Order(schedule.ActivationId); row.SlotId = schedule.SlotId is null ? null : Encode(schedule.SlotId); row.IsActive = schedule.IsActive; row.ContentJson = RuntimeArtifactJson.Serialize(schedule); row.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion; row.Revision = revision;
+        row.ScopeKey = Encode(scope); row.ScopeKeyHash = Hash(scope); row.ScheduleId = Encode(schedule.ScheduleId); row.ScheduleIdHash = Hash(schedule.ScheduleId); row.ScheduleIdOrderKey = ScheduleOrder(schedule.ScheduleId); row.ArtifactId = schedule.ArtifactId is null ? null : Encode(schedule.ArtifactId); row.ArtifactIdHash = schedule.ArtifactId is null ? null : Hash(schedule.ArtifactId); row.ArtifactIdOrderKey = schedule.ArtifactId is null ? null : Order(schedule.ArtifactId); row.ExecutableNodeId = schedule.ExecutableNodeId is null ? null : Encode(schedule.ExecutableNodeId); row.StimulusType = schedule.StimulusType is null ? null : Encode(schedule.StimulusType); row.StimulusHash = schedule.StimulusHash is null ? null : Encode(schedule.StimulusHash); row.Kind = (int)schedule.Kind; row.Expression = schedule.Expression; row.NextOccurrenceUtcTicks = schedule.NextOccurrence.UtcTicks; row.NextOccurrenceOffsetMinutes = (int)schedule.NextOccurrence.Offset.TotalMinutes; row.CreatedAtUtcTicks = schedule.CreatedAt.UtcTicks; row.CreatedAtOffsetMinutes = (int)schedule.CreatedAt.Offset.TotalMinutes; row.ActivationId = schedule.ActivationId is null ? null : Encode(schedule.ActivationId); row.ActivationIdHash = schedule.ActivationId is null ? null : Hash(schedule.ActivationId); row.ActivationIdOrderKey = schedule.ActivationId is null ? null : Order(schedule.ActivationId); row.SlotId = schedule.SlotId is null ? null : Encode(schedule.SlotId); row.IsActive = schedule.IsActive; row.ContentJson = RuntimeArtifactJson.Serialize(schedule); row.SchemaVersion = RecurringScheduleWriteVersion.For(context, schedule, row.SchemaVersion); row.Revision = revision;
     }
 
     private static RecurringTriggerSchedule Read(RecurringTriggerScheduleEntity row, string scope, string? expectedId = null)
@@ -717,7 +718,8 @@ public sealed class EfRecurringTriggerScheduleStore(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
         { throw new InvalidDataException("The persisted EF recurring-trigger schedule content is not valid current JSON.", exception); }
         Validate(schedule);
-        if (schedule.ScheduleId != Decode(row.ScheduleId) || schedule.ArtifactId != Decode(row.ArtifactId) || schedule.ExecutableNodeId != Decode(row.ExecutableNodeId) || schedule.StimulusType != Decode(row.StimulusType) || schedule.StimulusHash != Decode(row.StimulusHash) || schedule.Kind != (RecurringScheduleKind)row.Kind || schedule.Expression != row.Expression || schedule.NextOccurrence.UtcTicks != row.NextOccurrenceUtcTicks || (int)schedule.NextOccurrence.Offset.TotalMinutes != row.NextOccurrenceOffsetMinutes || schedule.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || (int)schedule.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes || schedule.ActivationId != Optional(row.ActivationId) || schedule.SlotId != Optional(row.SlotId) || schedule.IsActive != row.IsActive || row.ScheduleIdHash != Hash(schedule.ScheduleId) || row.ScheduleIdOrderKey != ScheduleOrder(schedule.ScheduleId) || row.ArtifactIdHash != Hash(schedule.ArtifactId) || row.ArtifactIdOrderKey != Order(schedule.ArtifactId) || schedule.ActivationId is not null && (row.ActivationIdHash != Hash(schedule.ActivationId) || row.ActivationIdOrderKey != Order(schedule.ActivationId)) || schedule.ActivationId is null && (row.ActivationIdHash is not null || row.ActivationIdOrderKey is not null))
+        if (schedule.Resource is { } resource && resource.Scope.Value != scope) throw new InvalidDataException("The resource recurrence belongs to another persistence scope.");
+        if (schedule.ScheduleId != Decode(row.ScheduleId) || schedule.ArtifactId != Optional(row.ArtifactId) || schedule.ExecutableNodeId != Optional(row.ExecutableNodeId) || schedule.StimulusType != Optional(row.StimulusType) || schedule.StimulusHash != Optional(row.StimulusHash) || schedule.Kind != (RecurringScheduleKind)row.Kind || schedule.Expression != row.Expression || schedule.NextOccurrence.UtcTicks != row.NextOccurrenceUtcTicks || (int)schedule.NextOccurrence.Offset.TotalMinutes != row.NextOccurrenceOffsetMinutes || schedule.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || (int)schedule.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes || schedule.ActivationId != Optional(row.ActivationId) || schedule.SlotId != Optional(row.SlotId) || schedule.IsActive != row.IsActive || row.ScheduleIdHash != Hash(schedule.ScheduleId) || row.ScheduleIdOrderKey != ScheduleOrder(schedule.ScheduleId) || row.ArtifactIdHash != (schedule.ArtifactId is null ? null : Hash(schedule.ArtifactId)) || row.ArtifactIdOrderKey != (schedule.ArtifactId is null ? null : Order(schedule.ArtifactId)) || schedule.ActivationId is not null && (row.ActivationIdHash != Hash(schedule.ActivationId) || row.ActivationIdOrderKey != Order(schedule.ActivationId)) || schedule.ActivationId is null && (row.ActivationIdHash is not null || row.ActivationIdOrderKey is not null))
             throw new InvalidDataException("The persisted EF recurring-trigger schedule content does not match its authoritative projections.");
         ValidateClaimProjection(row);
         return schedule;
@@ -760,7 +762,16 @@ public sealed class EfRecurringTriggerScheduleStore(
     private static void Validate(RecurringTriggerSchedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        ValidateScheduleId(schedule.ScheduleId, nameof(schedule.ScheduleId)); ValidateIdentity(schedule.ArtifactId, nameof(schedule.ArtifactId)); ValidateIdentity(schedule.ExecutableNodeId, nameof(schedule.ExecutableNodeId));
+        ValidateScheduleId(schedule.ScheduleId, nameof(schedule.ScheduleId));
+        if (schedule.Resource is { } owner)
+        {
+            if (schedule.ScheduleId != RecurringTriggerSchedule.BuildResourceId(owner.Scope, owner.TriggerId, owner.TenantId) ||
+                schedule.ArtifactId is not null || schedule.ExecutableNodeId is not null || schedule.StimulusType is not null || schedule.StimulusHash is not null ||
+                schedule.ActivationId is not null || schedule.SlotId is not null || !Enum.IsDefined(schedule.Kind) || string.IsNullOrWhiteSpace(schedule.Expression))
+                throw new ArgumentException("A resource recurrence cannot carry workflow publication or stimulus ownership.", nameof(schedule));
+            return;
+        }
+        ValidateIdentity(schedule.ArtifactId!, nameof(schedule.ArtifactId)); ValidateIdentity(schedule.ExecutableNodeId!, nameof(schedule.ExecutableNodeId));
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule.StimulusType); ArgumentException.ThrowIfNullOrWhiteSpace(schedule.StimulusHash); ArgumentException.ThrowIfNullOrWhiteSpace(schedule.Expression);
         if (schedule.StimulusHash.Length > RuntimeOperationalStateEfModule.IdentityMaximumLength) throw new ArgumentException($"Runtime identity cannot exceed {RuntimeOperationalStateEfModule.IdentityMaximumLength} UTF-16 code units.", nameof(schedule.StimulusHash));
         if (!Enum.IsDefined(schedule.Kind)) throw new ArgumentOutOfRangeException(nameof(schedule.Kind));
@@ -798,18 +809,18 @@ public sealed class EfRecurringTriggerScheduleStore(
         public long Revision { get => Entity.Revision; set => Entity.Revision = value; }
     }
 
-    private static ProjectionStateSnapshot CreateProjectionState(string scope, string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, bool active, string? retainedArtifact = null)
+    private ProjectionStateSnapshot CreateProjectionState(string scope, string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, bool active, string? retainedArtifact = null)
     {
         var ordered = schedules.OrderBy(x => x.ScheduleId, StringComparer.Ordinal).ToArray(); var artifacts = ordered.Select(x => x.ArtifactId).Distinct(StringComparer.Ordinal).ToArray();
         if (artifacts.Length > 1 || retainedArtifact is not null && artifacts.Length > 0 && artifacts[0] != retainedArtifact) throw new InvalidDataException($"Recurring-schedule activation '{activationId}' contains multiple artifacts.");
         var artifact = artifacts.SingleOrDefault() ?? retainedArtifact; var ids = ordered.Select(x => x.ScheduleId).ToArray(); var fps = ordered.ToDictionary(x => x.ScheduleId, ImmutableFingerprint, StringComparer.Ordinal);
-        var entity = new RecurringTriggerScheduleProjectionStateEntity { Id = ProjectionId(scope, activationId), ScopeKey = Encode(scope), ScopeKeyHash = Hash(scope), ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId), ArtifactId = artifact is null ? null : Encode(artifact), ArtifactIdHash = artifact is null ? null : Hash(artifact), ArtifactIdOrderKey = artifact is null ? null : Order(artifact), IsActive = active, ScheduleCount = ids.Length, ProjectionFingerprint = ProjectionFingerprint(ordered), ScheduleIdsJson = JsonSerializer.Serialize(ids, JsonOptions), ScheduleFingerprintsJson = JsonSerializer.Serialize(fps, JsonOptions), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = ActivationProjectionStateLifecycle.CreationRevision };
+        var entity = new RecurringTriggerScheduleProjectionStateEntity { Id = ProjectionId(scope, activationId), ScopeKey = Encode(scope), ScopeKeyHash = Hash(scope), ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId), ArtifactId = artifact is null ? null : Encode(artifact), ArtifactIdHash = artifact is null ? null : Hash(artifact), ArtifactIdOrderKey = artifact is null ? null : Order(artifact), IsActive = active, ScheduleCount = ids.Length, ProjectionFingerprint = ProjectionFingerprint(ordered), ScheduleIdsJson = JsonSerializer.Serialize(ids, JsonOptions), ScheduleFingerprintsJson = JsonSerializer.Serialize(fps, JsonOptions), SchemaVersion = RuntimeSchemaWriteVersion.Operational(context), Revision = ActivationProjectionStateLifecycle.CreationRevision };
         entity.ContentJson = JsonSerializer.Serialize(new ProjectionStateContent(ProjectionKind, activationId, artifact, active, ids.Length, entity.ProjectionFingerprint, ids, fps), JsonOptions);
         return new ProjectionStateSnapshot { Entity = entity, Scope = scope, ActivationId = activationId, ArtifactId = entity.ArtifactId, IsActive = active, ScheduleCount = ids.Length, ProjectionFingerprint = entity.ProjectionFingerprint, ScheduleIds = ids, ScheduleFingerprints = fps };
     }
 
     private static RecurringTriggerScheduleProjectionStateEntity ToStateEntity(ProjectionStateSnapshot state, string scope, long revision) { state.Entity.Revision = revision; return state.Entity; }
-    private static void UpdateStateContent(ProjectionStateSnapshot state, string scope)
+    private void UpdateStateContent(ProjectionStateSnapshot state, string scope)
     {
         state.Entity.IsActive = state.IsActive;
         state.Entity.ContentJson = JsonSerializer.Serialize(new ProjectionStateContent(ProjectionKind, state.ActivationId, state.ArtifactId is null ? null : Decode(state.ArtifactId), state.IsActive, state.ScheduleCount, state.ProjectionFingerprint, state.ScheduleIds, state.ScheduleFingerprints), JsonOptions);
@@ -817,7 +828,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         // row's old stamp once SchemaVersion moves to the current version (#2144).
         state.Entity.ScheduleIdsJson = JsonSerializer.Serialize(state.ScheduleIds, JsonOptions);
         state.Entity.ScheduleFingerprintsJson = JsonSerializer.Serialize(state.ScheduleFingerprints, JsonOptions);
-        state.Entity.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion;
+        state.Entity.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, state.Entity.SchemaVersion);
     }
 
     private static ProjectionStateSnapshot ReadState(RecurringTriggerScheduleProjectionStateEntity entity, string scope, string? expectedActivation = null)

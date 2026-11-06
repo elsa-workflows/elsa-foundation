@@ -144,9 +144,15 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
     }
 
+    public bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) =>
+        sourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint || sourceKind == RuntimeDeliverySourceKind.StandaloneIngress &&
+        _claimStore is not null && _outboxStore is IPostCommitOutboxLookupStore &&
+        _persistenceAccessContextAccessor is not null && _intentDispatcher.SupportsSourceKind(sourceKind);
+
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
+        item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDeliveryProtocolVersion is not null ||
         item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
-        _requiredSourceKinds.Contains(item.Intent.Kind) || _intentDispatcher.RequiresDurableSource(item.Intent.Kind);
+        _requiredSourceKinds.Contains(item.DeliveryKind) || _intentDispatcher.RequiresDurableSource(item.DeliveryKind);
 
     public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
         RuntimePostCommitOutboxProcessRequest request,
@@ -211,7 +217,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         claims.Where(IsContinuation).Concat(claims.Where(claim => !IsContinuation(claim)));
 
     private static bool IsContinuation(RuntimePostCommitOutboxClaim claim) =>
-        StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+        StringComparer.Ordinal.Equals(claim.Item.DeliveryKind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
 
     // The live-drain fast path engages only when a live drain owns this exact execution's delivery, the request targets
     // EnqueueSchedulerWork intents (every other kind stays on the durable claim path), and the drain's session has
@@ -230,12 +236,12 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         CancellationToken cancellationToken)
     {
         if (RequiresDurableSource(item))
-            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.Intent.Kind,
+            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.DeliveryKind,
                 new NotSupportedException("Required-source delivery needs the provider's fenced claim path."), false);
         try
         {
             using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
-            await _intentDispatcher.DispatchAsync(item.Intent, cancellationToken);
+            await _intentDispatcher.DispatchAsync(item.RequireWorkflowIntent(), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -265,9 +271,15 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             {
                 using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
                 if (RequiresDurableSource(item))
-                    await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
+                {
+                    var source = await OpenDurableSourceAsync(claim, dispatchCancellationToken);
+                    if (source.SourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint)
+                        await _intentDispatcher.DispatchAsync(new PostCommitDeliveryContext(source.Claim, source.Scope), dispatchCancellationToken);
+                    else
+                        await _intentDispatcher.DispatchAsync(source, dispatchCancellationToken);
+                }
                 else
-                    await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
+                    await _intentDispatcher.DispatchAsync(item.RequireWorkflowIntent(), dispatchCancellationToken);
                 return true;
             },
             cancellationToken);
@@ -285,7 +297,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             LogClaimLost(item, dispatched: false, run.Exception);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
-                item.Intent.IntentId,
+                item.LogicalIntentId,
                 RuntimePostCommitOutboxStatus.Delivering,
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
@@ -310,14 +322,14 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             LogClaimLost(item, dispatched: true, stale);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
-                item.Intent.IntentId,
+                item.LogicalIntentId,
                 run.Exception is { } failure ? EffectiveFailureStatus(item, failure) : RuntimePostCommitOutboxStatus.Delivered,
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
         }
     }
 
-    private async ValueTask<PostCommitDeliveryContext> OpenDurableSourceAsync(RuntimePostCommitOutboxClaim claim,
+    private async ValueTask<RuntimeDeliverySourceContext> OpenDurableSourceAsync(RuntimePostCommitOutboxClaim claim,
         CancellationToken cancellationToken)
     {
         try
@@ -330,8 +342,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             var current = await lookup.FindDurableAsync(claim.OutboxItemId, cancellationToken) ??
                 throw new InvalidDataException("The physically committed source does not exist.");
             if (current.OutboxItemId != claim.OutboxItemId ||
-                RuntimeCheckpointCommitFingerprint.ComputeIntent(current.Intent) != RuntimeCheckpointCommitFingerprint.ComputeIntent(claim.Item.Intent) ||
-                current.StimulusDeliverySourceScope is { } committedScope && committedScope != scope)
+                current.SourceKind != claim.Item.SourceKind || current.SourceFingerprint != claim.Item.SourceFingerprint ||
+                current.SourceScope is { } committedScope && committedScope != scope)
                 throw new InvalidDataException("The durable source identity, intent or committed scope differs from the claim.");
             if (current.Status != RuntimePostCommitOutboxStatus.Delivering || current.DeliveringOwnerId != claim.OwnerId ||
                 current.DeliveryFencingToken != claim.FencingToken || current.DeliveryVisibleAfter is null ||
@@ -346,7 +358,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception)
         {
-            throw new RuntimePostCommitSourceBoundaryException(claim.OutboxItemId, claim.Item.Intent.Kind, exception,
+            throw new RuntimePostCommitSourceBoundaryException(claim.OutboxItemId, claim.Item.DeliveryKind, exception,
                 exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException));
         }
     }
@@ -373,7 +385,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             cancellationToken);
 
         if (recordingException is not null)
-            throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
+            throw new OutboxProcessingException(item.OutboxItemId, item.LogicalIntentId, exception, recordingException);
 
         // H2: this enum has no exhaustive switch anywhere and the build is warnings-only, so a new value reaches here
         // silently. Superseded is handled FIRST and explicitly — falling through would log this item with the failure
@@ -383,7 +395,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             LogDeliverySuperseded(item);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
-                item.Intent.IntentId,
+                item.LogicalIntentId,
                 effectiveStatus,
                 failureMessage,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
@@ -396,7 +408,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
         return new RuntimePostCommitOutboxProcessedItem(
             item.OutboxItemId,
-            item.Intent.IntentId,
+            item.LogicalIntentId,
             effectiveStatus,
             failureMessage);
     }
@@ -415,7 +427,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             LogDeliverySuperseded(item);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
-                item.Intent.IntentId,
+                item.LogicalIntentId,
                 RuntimePostCommitOutboxStatus.Delivered,
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
@@ -425,7 +437,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
         return new RuntimePostCommitOutboxProcessedItem(
             item.OutboxItemId,
-            item.Intent.IntentId,
+            item.LogicalIntentId,
             RuntimePostCommitOutboxStatus.Delivered,
             FailureMessage: null);
     }
@@ -509,12 +521,12 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxDeliveryResult result,
         CancellationToken cancellationToken)
     {
-        if (!WillBecomeFinalFailure(item, result))
+        if (item.Intent is null || !WillBecomeFinalFailure(item, result))
             return null;
         if (_deliveryFailureProjector is not null)
             return await _deliveryFailureProjector.ProjectAsync(item, result, cancellationToken);
-        if (!StringComparer.Ordinal.Equals(item.Intent.Kind, WorkflowDispatchLifecycle.StartChildIntentKind) ||
-            !item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId))
+        if (!StringComparer.Ordinal.Equals(item.DeliveryKind, WorkflowDispatchLifecycle.StartChildIntentKind) ||
+            !item.DeliveryMetadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId))
             return null;
         if (_workflowDispatchStore is null)
             throw new InvalidOperationException("A workflow dispatch store is required to project final child-start delivery failure.");
@@ -525,13 +537,13 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             record.ParentWorkflowExecutionId,
             record.ParentActivityExecutionId);
         if (!StringComparer.Ordinal.Equals(record.DispatchId, identity.DispatchId) ||
-            !StringComparer.Ordinal.Equals(item.Intent.IntentId, identity.StartIntentId) ||
+            !StringComparer.Ordinal.Equals(item.LogicalIntentId, identity.StartIntentId) ||
             !StringComparer.Ordinal.Equals(item.Intent.IdempotencyKey, identity.StartIdempotencyKey) ||
             !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, record.ParentWorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(item.Intent.ActivityExecutionId, record.ParentActivityExecutionId))
         {
             throw new InvalidOperationException(
-                $"Child-start intent '{item.Intent.IntentId}' conflicts with workflow dispatch '{record.DispatchId}'.");
+                $"Child-start intent '{item.LogicalIntentId}' conflicts with workflow dispatch '{record.DispatchId}'.");
         }
         if (record.Status == WorkflowDispatchStatus.DispatchFailed)
             return new PostCommitFailureProjection(record);
@@ -594,7 +606,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             return;
         }
 
-        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        item.DeliveryMetadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount);
         var failureCode = classification?.Code ?? GenericFailureCode;
         var failureKind = classification?.Kind.ToString() ?? PostCommitFailureKind.Transient.ToString();
@@ -603,8 +615,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             exception,
             "Runtime post-commit delivery attempt failed. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} FailureCode={FailureCode} FailureKind={FailureKind} EffectiveStatus={EffectiveStatus} RecordedAt={RecordedAt}",
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatchId,
             attemptCount,
             failureCode,
@@ -619,8 +631,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 exception,
                 "Runtime post-commit delivery became final. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} FailureCode={FailureCode} FailureKind={FailureKind} EffectiveStatus={EffectiveStatus} RecordedAt={RecordedAt}",
                 item.OutboxItemId,
-                item.Intent.IntentId,
-                item.Intent.Kind,
+                item.LogicalIntentId,
+                item.DeliveryKind,
                 dispatchId,
                 attemptCount,
                 failureCode,
@@ -639,8 +651,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             exception,
             "Runtime post-commit delivery retry scheduled. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} FailureCode={FailureCode} FailureKind={FailureKind} EffectiveStatus={EffectiveStatus} NextAvailableAt={NextAvailableAt}",
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatchId,
             attemptCount,
             failureCode,
@@ -651,7 +663,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
     private void LogDelivered(RuntimePostCommitOutboxItem item)
     {
-        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        item.DeliveryMetadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
         // Debug, not Information (#2613): a delivery succeeding is the expected path of every checkpoint, and at
         // Information it was ~99% of all persisted structured-log volume, each line a commit on the diagnostics store.
         // Failures, retries and supersessions keep their levels.
@@ -659,8 +671,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             new EventId(68104, "RuntimePostCommitDeliverySucceeded"),
             "Runtime post-commit delivery succeeded. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} EffectiveStatus={EffectiveStatus}",
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatchId,
             RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount),
             RuntimePostCommitOutboxStatus.Delivered);
@@ -668,15 +680,15 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
     private void LogDeliverySuperseded(RuntimePostCommitOutboxItem item)
     {
-        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        item.DeliveryMetadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
         // Information, not Warning: losing this race is the designed behaviour of a claim-less live drain running
         // alongside the resumption sweep, not a fault. The owning deliverer records the item's real terminal state.
         _logger.LogInformation(
             new EventId(68110, "RuntimePostCommitDeliverySuperseded"),
             "Runtime post-commit delivery was superseded by another owner; nothing was persisted by this deliverer. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId}",
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatchId);
     }
 
@@ -687,15 +699,15 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     /// </remarks>
     private void LogClaimLost(RuntimePostCommitOutboxItem item, bool dispatched, Exception? exception)
     {
-        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        item.DeliveryMetadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
         _logger.LogWarning(
             new EventId(68113, "RuntimePostCommitClaimLost"),
             exception,
             "Runtime post-commit delivery lost its claim on an outbox item and left the item to the claimant that holds it; nothing was recorded by this deliverer. Dispatched={Dispatched} OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId}",
             dispatched,
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatchId);
     }
 
@@ -711,8 +723,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             deliveryFailure,
             "Workflow dispatch delivery incident recorded. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryGeneration={DeliveryGeneration} DeliveryAttemptCount={DeliveryAttemptCount} DeliveryIncidentId={DeliveryIncidentId} DeliveryDeadLetterId={DeliveryDeadLetterId} EffectiveStatus={EffectiveStatus} RecordedAt={RecordedAt}",
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatch.DispatchId,
             WorkflowDispatchLifecycle.ReadDeliveryGeneration(dispatch),
             WorkflowDispatchLifecycle.ReadDeliveryAttemptCount(dispatch),
@@ -742,7 +754,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         if (!item.RetryPolicy.RetryUntilAcknowledged)
             return;
 
-        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        item.DeliveryMetadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount);
         var nextAvailableAt = recordedAt.Add(item.RetryPolicy.Delay!.Value);
         _logger.LogWarning(
@@ -750,8 +762,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             exception is IRuntimePostCommitDeferral ? null : exception,
             "Runtime post-commit intent retry deferred. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} NextAvailableAt={NextAvailableAt}",
             item.OutboxItemId,
-            item.Intent.IntentId,
-            item.Intent.Kind,
+            item.LogicalIntentId,
+            item.DeliveryKind,
             dispatchId,
             attemptCount,
             nextAvailableAt);

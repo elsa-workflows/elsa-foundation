@@ -1,0 +1,20 @@
+.wf-trigger-page { min-width: 0; }
+.wf-trigger-form, .wf-trigger-subscription-editor, .wf-trigger-review, .wf-trigger-subscriptions, .wf-trigger-mappings { display: grid; gap: var(--studio-space-4, 16px); min-width: 0; }
+.wf-trigger-form { max-width: 760px; }
+.wf-trigger-form input:not([type="checkbox"]), .wf-trigger-form select, .wf-trigger-form textarea, .wf-trigger-mappings input, .wf-trigger-mappings select, .wf-trigger-mappings textarea { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; }
+.wf-trigger-form textarea, .wf-trigger-mappings textarea { min-height: 100px; resize: vertical; }
+.wf-trigger-form fieldset, .wf-trigger-mapping { margin: 0; min-width: 0; padding: var(--studio-space-3, 12px); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); }
+.wf-trigger-mapping { display: grid; gap: var(--studio-space-3, 12px); }
+.wf-trigger-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--studio-space-3, 12px); }
+.wf-trigger-muted { display: block; color: var(--studio-text-muted); font-weight: normal; overflow-wrap: anywhere; }
+.wf-trigger-findings { padding-inline-start: 20px; margin: 0; overflow-wrap: anywhere; }
+.wf-trigger-facts { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr); gap: var(--studio-space-2, 8px) var(--studio-space-4, 16px); }
+.wf-trigger-facts dt { color: var(--studio-text-muted); }
+.wf-trigger-fact-row { display: contents; }
+.wf-trigger-facts dd { margin: 0; overflow-wrap: anywhere; }
+.wf-trigger-check { display: flex; align-items: flex-start; gap: var(--studio-space-2, 8px); }
+.wf-trigger-check input { flex: none; }
+.wf-trigger-parameter { display: grid; gap: var(--studio-space-2, 8px); padding: var(--studio-space-3, 12px); background: var(--studio-surface); }
+.wf-trigger-recipient { display: grid; gap: var(--studio-space-3, 12px); padding-block: var(--studio-space-4, 16px); border-block-start: 1px solid var(--studio-border); }
+.wf-trigger-page th, .wf-trigger-page td { overflow-wrap: anywhere; }
+@media (width <= 480px) { .wf-trigger-facts { grid-template-columns: minmax(0, 1fr); gap: var(--studio-space-1, 4px); } .wf-trigger-facts dd { margin-block-end: var(--studio-space-3, 12px); } }

@@ -2,6 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -20,15 +21,32 @@ internal static class RuntimeSchedulerWorkWriteVersion
         if (state is { WritesRefused: true })
             throw new EfSchemaFamilyWritesRefusedException(RuntimeSchedulerWorkEfModule.SchemaFamily,
                 state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
-        var minimum = IsModelWorker(item) ? RuntimeSchedulerWorkEfModule.SchemaVersion :
+        var minimum = IsIngress(item) ? RuntimeSchedulerWorkEfModule.IngressSchemaVersion : IsModelWorker(item) ? RuntimeSchedulerWorkEfModule.SchemaVersion :
             item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel ? RuntimeSchedulerWorkEfModule.ModelSchemaVersion : "1.0.0";
         if (storedVersion is not null && Version.Parse(storedVersion) > Version.Parse(minimum)) minimum = storedVersion;
-        var version = state?.WriteVersion ?? (minimum == RuntimeSchedulerWorkEfModule.SchemaVersion ? minimum : RuntimeSchedulerWorkEfModule.ModelSchemaVersion);
+        var version = state?.WriteVersion ?? (minimum == RuntimeSchedulerWorkEfModule.IngressSchemaVersion || minimum == RuntimeSchedulerWorkEfModule.SchemaVersion
+            ? minimum : RuntimeSchedulerWorkEfModule.ModelSchemaVersion);
         if (Version.Parse(version) < Version.Parse(minimum))
             throw new EfSchemaWriteRefusedException(RuntimeSchedulerWorkEfModule.SchemaFamily, version,
                 minimum);
         return version;
     }
+
+    internal static bool IsIngress(RuntimeSchedulerWorkItem item)
+    {
+        if (item.CommandMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata) ||
+            item.EnvelopeMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata)) return true;
+        if (item.Payload is not { ValueKind: JsonValueKind.Object } payload) return false;
+        if (Defined(Property(payload, "ingressOrigin")) || Defined(Property(payload, "ingressWaitOrigin"))) return true;
+        if (Property(payload, "modelWorkOrigin") is { ValueKind: JsonValueKind.Object } work && Defined(Property(work, "ingressOrigin"))) return true;
+        var authority = Property(payload, "startAuthority");
+        if (authority.ValueKind != JsonValueKind.Object) return false;
+        var kind = Property(authority, "kind");
+        return Defined(Property(authority, "standaloneTrigger")) ||
+            kind.ValueKind == JsonValueKind.Number && kind.TryGetInt32(out var number) && number == (int)WorkflowExecutableStartAuthorityKind.StandaloneTrigger ||
+            kind.ValueKind == JsonValueKind.String && kind.GetString() == nameof(WorkflowExecutableStartAuthorityKind.StandaloneTrigger);
+    }
+    private static bool Defined(JsonElement value) => value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
 
     internal static bool IsModelWorker(RuntimeSchedulerWorkItem item)
     {

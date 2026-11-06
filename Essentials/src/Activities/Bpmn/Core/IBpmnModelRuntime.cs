@@ -11,8 +11,13 @@ public interface IBpmnModelRuntime
 {
     /// <summary>Current new-execution admission; accepted-work inspection and commands remain independent.</summary>
     bool AdmitNewExecutions => false;
+    /// <summary>Prepares immutable stored model material without granting publication/start authority.</summary>
+    ValueTask<RuntimeExecutionMaterial> PreparePublicationAsync(BpmnModelDefinition definition,
+        WorkflowExecutableInputContract inputContract, IReadOnlyList<BpmnWorkerInputMapping> workerInputMappings,
+        BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeExecutionMaterial>(new NotSupportedException("This BPMN host does not support authored material preparation."));
     ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
-    /// <summary>Publishes with trusted immutable authored provenance; raw publication keeps its existing identity and payload.</summary>
+    /// <summary>Compatibility publication with immutable provenance; new authored publication prepares material and activates its logical slot.</summary>
     ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationProvenance source,
         string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<BpmnPublishedModel>(new NotSupportedException("This BPMN host does not support authored-source publication."));
@@ -53,7 +58,15 @@ public interface IBpmnModelRuntime
 public sealed record BpmnModelCaller(string ActorId, string? TenantId);
 
 public sealed record BpmnPublishedModel(WorkflowExecutableIdentity Executable, string IncarnationId,
-    string SourceReferenceId, string Profile);
+    string SourceReferenceId, string Profile)
+{
+    /// <summary>Shared logical publication facts; raw model publication leaves these absent.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BpmnModelPublication? Publication { get; init; }
+}
+
+public sealed record BpmnModelPublication(string PublicationId, string DefinitionId, string VersionId,
+    string SlotName, long SlotRevision, string Status);
 
 /// <summary>A retained input result or durable admission still awaiting consumption.</summary>
 public sealed record BpmnModelCommandOutcome(string ExecutionId, string InputId, bool Replay, bool Pending, JsonElement? Result);

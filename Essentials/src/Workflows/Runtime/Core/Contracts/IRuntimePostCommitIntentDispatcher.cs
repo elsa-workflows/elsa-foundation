@@ -8,6 +8,12 @@ public interface IRuntimePostCommitIntentDispatcher
     ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default);
     /// <summary>Legacy dispatchers have no required-source contributions.</summary>
     bool RequiresDurableSource(string intentKind) => false;
+    bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) => sourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint;
+
+    /// <summary>Default refusal preserves legacy dispatchers without fabricating a workflow intent.</summary>
+    ValueTask DispatchAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.DeliveryKind,
+            new NotSupportedException("The selected dispatcher does not support this source family."), false));
 
     /// <summary>The additive context path requires explicit dispatcher support; legacy dispatchers retain their intent-only path.</summary>
     /// <remarks>The context is not independent authorization; a consumer revalidates its domain/provider boundary before effects.</remarks>

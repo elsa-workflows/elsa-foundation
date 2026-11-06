@@ -22,9 +22,12 @@ internal static class RuntimePostCommitOutboxWriteVersion
                 state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
         // Direct ungated provider construction is used by tools/tests; normal hosts always select their admitted gate.
         var version = state?.WriteVersion ?? RuntimePostCommitOutboxEfModule.SchemaVersion;
-        if ((item.StimulusDeliveryProtocolVersion is not null || item.StimulusDeliverySourceScope is not null) && version != RuntimePostCommitOutboxEfModule.SchemaVersion)
+        if ((item.StandaloneIngress is not null || item.SubscriptionDeliveryProtocolVersion is not null || item.SubscriptionDelivery is not null) && version != RuntimePostCommitOutboxEfModule.SchemaVersion)
             throw new EfSchemaWriteRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily, version,
                 RuntimePostCommitOutboxEfModule.SchemaVersion);
+        if ((item.StimulusDeliveryProtocolVersion is not null || item.StimulusDeliverySourceScope is not null) && version == "1.0.0")
+            throw new EfSchemaWriteRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily, version,
+                RuntimePostCommitOutboxEfModule.StimulusSchemaVersion);
         return version;
     }
 }

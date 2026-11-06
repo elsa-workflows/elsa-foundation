@@ -31,6 +31,7 @@ Read these roughly in order:
 
 ## Operate it
 
+- [Standalone triggers](standalone-triggers.md): configure shared HTTP, Event, Timer and Cron entry points, map declared inputs, review grants and serving slots, and inspect accepted delivery and recovery limits. Implementation candidate; qualification remains open.
 - [Foundation host package feeds](foundation-host-feeds.md): pointing `Elsa.Foundation.Host` at a directory or remote NuGet feed, and why a wildcard include pattern finds nothing on a remote feed.
 - [Secrets key rotation](secrets-key-rotation.md): rotating the key that protects stored secrets.
 

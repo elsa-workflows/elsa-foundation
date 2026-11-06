@@ -9,7 +9,7 @@ import { hasCapabilityLink } from "../api/capabilities";
 import { listPublicationSlots } from "../api/publishing";
 import { getExecutable } from "../api/runtime";
 import type { BpmnElement } from "../bpmn/bpmnTypes";
-import type { WorkflowExecutableDetails } from "../workflowTypes";
+import type { WorkflowExecutableDetails, WorkflowInput } from "../workflowTypes";
 
 vi.mock("../api/capabilities", () => ({ capabilityIds: { workflowDesign: "design", runtime: "runtime", bpmnPublishing: "bpmn-publishing" }, hasCapabilityLink: vi.fn() }));
 vi.mock("../api/publishing", () => ({ listPublicationSlots: vi.fn() }));
@@ -34,17 +34,19 @@ beforeEach(() => {
   vi.mocked(getExecutable).mockResolvedValue(executable());
 });
 
-function fixture() {
+function fixture(initialModelInputs: WorkflowInput[] = []) {
   let documentId = "process-draft-1";
   let session = { key: "session-1", profile: { id: "backend-1", baseUrl: "https://backend.example" }, context: { baseUrl: "https://backend.example" },
     identity: { status: "authenticated", subject: "author", tenantId: "tenant-1" }, disposed: false } as StudioBackendSession;
   let element: BpmnElement = { elementId: "service", elementType: "task", properties: { vendor: "keep" } };
   const onChange = vi.fn();
+  let modelInputs = initialModelInputs;
   const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container);
-  const render = (options: { session?: StudioBackendSession; element?: BpmnElement; readOnly?: boolean; documentId?: string } = {}) => {
+  const render = (options: { session?: StudioBackendSession; element?: BpmnElement; readOnly?: boolean; documentId?: string; modelInputs?: WorkflowInput[] } = {}) => {
     session = options.session ?? session; element = options.element ?? element;
     documentId = options.documentId ?? documentId;
-    flushSync(() => root.render(<BpmnServiceBindingEditor session={session} documentId={documentId} element={element} onChange={onChange} readOnly={options.readOnly} />));
+    modelInputs = options.modelInputs ?? modelInputs;
+    flushSync(() => root.render(<BpmnServiceBindingEditor session={session} documentId={documentId} element={element} onChange={onChange} readOnly={options.readOnly} modelInputs={modelInputs} />));
   };
   render();
   const click = (text: string) => flushSync(() => [...container.querySelectorAll("button")].find(button => button.textContent === text)!.click());
@@ -161,5 +163,66 @@ it("uses a single final-fault attempt even after an invalid retry budget was ent
     view.click("Use this service publication");
     await vi.waitFor(() => expect(view.onChange).toHaveBeenCalledOnce());
     expect(directServiceBinding({ ...view.element, ...view.onChange.mock.calls[0][0] })?.faultPolicy).toEqual({ formatVersion: 1, disposition: "FinalFault", maxAttempts: 1 });
+  } finally { view.dispose(); }
+});
+
+function modelInput(name: string): WorkflowInput { return { referenceKey: name, name, displayName: name, description: "", category: "", uiHint: "", storageDriverType: null, type: { alias: "String", collectionKind: "Single" }, isNullable: false, isRequired: true }; }
+function select(view: ReturnType<typeof fixture>, label: string, value: string) { const control = view.container.querySelector<HTMLSelectElement>(`[aria-label='${label}']`)!; flushSync(() => { control.value = value; control.dispatchEvent(new Event("change", { bubbles: true })); }); }
+function mappedExecutable() { return Object.assign(executable(), { inputContract: { version: 1, inputs: [{ name: "AccountId", type: { alias: "String", collectionKind: "Single" }, isRequired: true, defaultValue: null }] } }); }
+
+it("maps an actual working-document input to a declared worker input and restores it after reopening", async () => {
+  vi.mocked(getExecutable).mockResolvedValue(mappedExecutable());
+  const view = fixture([modelInput("ModelAccountId")]);
+  try {
+    await view.choose(); view.click("Use this service publication");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Map service workflow inputs"));
+    expect(view.onChange).not.toHaveBeenCalled();
+    select(view, "Service input AccountId source", "Input"); select(view, "Process input for service AccountId", "ModelAccountId");
+    view.click("Apply service input mapping");
+    await vi.waitFor(() => expect(view.onChange).toHaveBeenCalledOnce());
+    const updated = { ...view.element, ...view.onChange.mock.calls[0][0] };
+    expect(directServiceBinding(updated)).toMatchObject({ formatVersion: 2, inputs: { AccountId: { kind: "Input", name: "ModelAccountId" } }, sourceReferenceId: "source-1", businessErrorCode: "service-failure" });
+    view.render({ element: updated, readOnly: true });
+    expect(view.container.textContent).toContain("Process input: ModelAccountId");
+    expect(view.container.querySelector("button")).toBeNull();
+  } finally { view.dispose(); }
+});
+
+it("rejects missing/invalid mappings, cancels without mutation and restores publication-button focus", async () => {
+  vi.mocked(getExecutable).mockResolvedValue(mappedExecutable());
+  const view = fixture([modelInput("ModelAccountId")]);
+  try {
+    await view.choose(); view.click("Use this service publication");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Map service workflow inputs"));
+    expect(document.activeElement?.textContent).toBe("Map service workflow inputs");
+    view.click("Apply service input mapping");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Map this required service input"));
+    expect(view.onChange).not.toHaveBeenCalled();
+    select(view, "Service input AccountId source", "Literal");
+    const literal = view.container.querySelector<HTMLTextAreaElement>("[aria-label='JSON value for service AccountId']")!;
+    flushSync(() => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(literal, "{invalid"); literal.dispatchEvent(new Event("input", { bubbles: true })); });
+    view.click("Apply service input mapping");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Enter a valid JSON literal"));
+    view.click("Cancel input mapping");
+    await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("Use this service publication"));
+    expect(view.onChange).not.toHaveBeenCalled();
+  } finally { view.dispose(); }
+});
+
+it("writes configured JSON literals as v2 and retains a previous v2 mapping when inspected", async () => {
+  vi.mocked(getExecutable).mockResolvedValue(mappedExecutable());
+  const view = fixture();
+  try {
+    await view.choose(); view.click("Use this service publication");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Map service workflow inputs"));
+    select(view, "Service input AccountId source", "Literal");
+    const literal = view.container.querySelector<HTMLTextAreaElement>("[aria-label='JSON value for service AccountId']")!;
+    flushSync(() => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(literal, '"account-42"'); literal.dispatchEvent(new Event("input", { bubbles: true })); });
+    view.click("Apply service input mapping");
+    await vi.waitFor(() => expect(view.onChange).toHaveBeenCalledOnce());
+    const updated = { ...view.element, ...view.onChange.mock.calls[0][0] };
+    expect(directServiceBinding(updated)).toMatchObject({ formatVersion: 2, inputs: { AccountId: { kind: "Literal", value: "account-42" } } });
+    view.render({ element: updated });
+    expect(view.container.textContent).toContain('Configured JSON: "account-42"');
   } finally { view.dispose(); }
 });

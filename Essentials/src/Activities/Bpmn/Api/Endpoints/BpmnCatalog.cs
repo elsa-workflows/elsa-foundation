@@ -72,7 +72,7 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         cancellationToken.ThrowIfCancellationRequested();
         var identity = caller.Current();
         var scope = access.Current.RequireScope();
-        access.Current.EnsureTenantScope(identity.TenantId);
+        if (purpose != ExecutionsPurpose) access.Current.EnsureTenantScope(identity.TenantId);
         RuntimeStorePageRequest.ValidateLimit(request.Limit, nameof(request.Limit));
         RuntimeStorePageRequest.ValidateContinuationToken(request.ContinuationToken, nameof(request.ContinuationToken));
         if (request.ArtifactId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(request.ArtifactId);

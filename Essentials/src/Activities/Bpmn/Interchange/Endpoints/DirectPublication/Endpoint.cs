@@ -7,6 +7,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using NativeEndpoints;
@@ -21,7 +22,8 @@ internal static class BpmnDirectPublishingApi
         .MapEndpoint<Endpoint>();
 }
 
-internal sealed record PublishAuthoredBpmnRequest(string VersionId, string RequestId);
+internal sealed record PublishAuthoredBpmnRequest(string VersionId, string RequestId,
+    PublicationRequestIntent? PublicationIntent = null, long? ExpectedSlotRevision = null, string? ExpectedPublicationId = null);
 
 [Post("interchange/bpmn/versions/{versionId}/publish-direct")]
 [RequirePermission(BpmnAuthoredDirectPublisher.PublishPermission)]
@@ -36,7 +38,8 @@ internal sealed class Endpoint(BpmnAuthoredDirectPublisher publisher) : ApiEndpo
 
     public override Task<BpmnPublishedModel> HandleAsync(PublishAuthoredBpmnRequest request, CancellationToken cancellationToken) =>
         publisher.PublishAsync(HttpContext.Request.RouteValues["versionId"]?.ToString()
-            ?? throw new ArgumentException("The authored version identity is missing."), request.RequestId, HttpContext.User, cancellationToken);
+            ?? throw new ArgumentException("The authored version identity is missing."), request.RequestId, HttpContext.User, cancellationToken,
+            request.PublicationIntent, request.ExpectedSlotRevision, request.ExpectedPublicationId);
 }
 
 internal sealed class BpmnDirectPublishingFaultRenderer(IEndpointProblemWriter writer) : IEndpointFaultRenderer

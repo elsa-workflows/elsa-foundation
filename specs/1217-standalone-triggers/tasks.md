@@ -13,7 +13,7 @@
 - [x] T003 Resolve confirmed owner choices in `spec.md` and contracts: slot-following, retained accepted work, per-trigger async admission policy and resource-owned authority; coordinate existing #3583/#3590/#2892 records.
 - [x] T004 Draft `plan.md`, `data-model.md`, `contracts/`, `quickstart.md` and bounded proposed amendment in `docs/adr/0043-publication-slots-define-start-authority.md`.
 - [x] T005 Independently review correctness, repository standards and #3582 acceptance across these artifacts; fix concrete findings and complete `checklists/requirements.md` before production implementation.
-- [ ] T006 Record reviewed design status/authority amendment and pre-code acceptance on #3582, commit the M0 candidate and open the one draft PR when pushing its branch in the same session.
+- [x] T006 Record reviewed design status/authority amendment and pre-code acceptance on #3582, commit the M0 candidate and open the one draft PR when pushing its branch in the same session (f064e47b7; PR #3912).
 
 ## Phase 2 — Foundation shared by all stories (M1/M2)
 
