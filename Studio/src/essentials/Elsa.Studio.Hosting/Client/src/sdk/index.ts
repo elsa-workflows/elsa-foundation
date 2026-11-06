@@ -974,6 +974,8 @@ export interface StudioExpressionSymbol {
   parentId?: string;
   sortText?: string;
   signatures?: StudioExpressionSignature[];
+  /** Existing portable binding metadata; contains reference identity only, never a runtime value. */
+  parameterBinding?: Record<string, unknown>;
 }
 
 export interface StudioExpressionValueShapeMember {

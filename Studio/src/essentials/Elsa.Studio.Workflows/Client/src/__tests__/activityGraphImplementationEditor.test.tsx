@@ -406,6 +406,67 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     });
   });
 
+  it("persists a picked earlier result and a graph-variable capture through graph save/reopen", async () => {
+    expressionDescriptors = [{ type: "JavaScript", displayName: "JavaScript", editingMode: "text" }];
+    catalogItems = [sequenceCatalogItem(), { ...inputLeafCatalogItem("JavaScript"),
+      inputs: inputLeafCatalogItem("JavaScript").inputs.map(input => ({ ...input, referenceKey: "message" })),
+      outputs: [{ referenceKey: "result:key", name: "Result", displayName: "Result", typeName: "System.String" },
+        { referenceKey: "c", name: "C", typeName: "System.String" }, { referenceKey: "b:c", name: "BC", typeName: "System.String" }] }];
+    const envelope = (payload: unknown, revision: string, state = "Success") => ({ result: {
+      state, contractVersion: { major: 1, minor: 0 }, documentRevision: revision, contextRevision: "context-1", payload
+    } });
+    const postJson = vi.fn(async (path: string, request: { documentRevision: string }) => path.endsWith("/validate")
+      ? envelope({ diagnostics: [] }, request.documentRevision, "SupportedEmpty")
+      : envelope({ document: { workflowDraftId: "", owner: { kind: "activity-draft", id: "draft-1" }, nodeId: "consumer", propertyKey: "message", expressionType: "JavaScript", documentRevision: request.documentRevision }, contextRevision: "context-1", symbolCatalogRevision: "catalog-1", capabilities: {}, rootSymbols: [{
+        symbolId: "activity-result:a:b:c", name: "Other earlier result", kind: "ActivityResult",
+        parameterBinding: { kind: "ActivityResult", producerNodeId: "a:b", projectionKey: "c", isOptional: false }
+      }, { symbolId: "activity-result:a:b:c", name: "Earlier result", kind: "ActivityResult",
+        parameterBinding: { kind: "ActivityResult", producerNodeId: "a", projectionKey: "b:c", isOptional: false }
+      }, { symbolId: "invalid", name: "Unusable result", kind: "ActivityResult", parameterBinding: { kind: "Unknown" } }] }, request.documentRevision));
+    const context = { baseUrl: "test://graph-result-picker", http: { postJson, getJson: vi.fn(async () => ({ capabilities: [{
+      id: "activity-expressions.tooling.v1", contractVersion: "1", links: ["context", "validate"].map(operation => ({
+        rel: `expression-tooling-${operation}`, href: `design/activities/expression-tooling/${operation}`
+      }))
+    }] })) } } as unknown as StudioActivityDefinitionImplementationEditorProps["context"];
+    const value = sequenceImplementationValue([
+      { nodeId: "a:b", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+      { nodeId: "a", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+      { nodeId: "consumer", activityVersionId: "write-line-v1", inputs: [{ referenceKey: "message", value: { expressionType: "JavaScript", value: "args.result" } }], outputs: [], structure: null }
+    ]);
+    const graphValue = { ...value, payload: { ...value.payload, variables: [{ referenceKey: "running-total", name: "RunningTotal",
+      type: { alias: "String", collectionKind: "Single" }, storageDriverKey: "elsa.json" }] } };
+    const overrides = { context, expressionToolingIdentity: { backend: context.baseUrl, subject: "author", tenantId: "tenant" } };
+    const rendered = renderControlledDesigner(graphValue, overrides);
+    click(rendered.container.querySelector("[data-graph-node-id='consumer']")!);
+    const resultPicker = () => [...rendered.container.querySelectorAll<HTMLSelectElement>("select")].find(select =>
+      [...(select.labels ?? [])].some(label => label.textContent === "Earlier result bindings"))!;
+    await vi.waitFor(() => expect(resultPicker()).toBeTruthy());
+    flushSync(() => resultPicker().dispatchEvent(new FocusEvent("focusin", { bubbles: true })));
+    await vi.waitFor(() => expect([...resultPicker().options].map(option => option.textContent)).toContain("Earlier result"));
+    expect([...resultPicker().options].some(option => option.textContent === "Unusable result")).toBe(false);
+    expect(rendered.container.textContent).toContain("Some earlier results are unavailable.");
+    change(resultPicker(), [...resultPicker().options].find(option => option.textContent === "Earlier result")!.value);
+    await vi.waitFor(() => expect(rendered.container.querySelector("[aria-label='Bound earlier results']")?.textContent).toContain("args.result"));
+    expect(postJson.mock.calls[0][1]).toMatchObject({ activityDraftId: "draft-1", nodeId: "consumer", propertyKey: "message" });
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Outputs")!);
+    const capture = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Capture Result into a variable']")!;
+    expect([...capture.options].map(option => option.value)).toContain("workflow::running-total");
+    change(capture, "workflow::running-total");
+    const saved = JSON.parse(JSON.stringify(rendered.onChange.mock.calls.at(-1)![0])) as typeof graphValue;
+    const consumer = saved.payload.rootActivity.structure.payload.activities[2] as { inputs: { referenceKey: string; value: { value: { parameters: unknown } } }[]; outputs: unknown[] };
+    expect(consumer.inputs.find(input => input.referenceKey === "message")?.value.value.parameters).toEqual({
+      result: { kind: "ActivityResult", producerNodeId: "a", projectionKey: "b:c", isOptional: false }
+    });
+    expect(consumer.outputs).toContainEqual(expect.objectContaining({ referenceKey: "result:key", value: {
+      expressionType: "Variable", value: { referenceKey: "running-total", declaringScopeId: "workflow" }
+    } }));
+    const reopened = renderControlledDesigner(saved, overrides);
+    click(reopened.container.querySelector("[data-graph-node-id='consumer']")!);
+    await vi.waitFor(() => expect(reopened.container.querySelector("[aria-label='Bound earlier results']")?.textContent).toContain("a.b:c"));
+    click([...reopened.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Outputs")!);
+    expect(reopened.container.querySelector<HTMLSelectElement>("select[aria-label='Capture Result into a variable']")?.value).toBe("workflow::running-total");
+  });
+
   it("keeps the shared inspector read-only when the Activity Definition host is locked", () => {
     catalogItems = [flowchartCatalogItem()];
     const rendered = renderDesigner({ readOnly: true });
@@ -1084,7 +1145,7 @@ function renderEditor(overrides: Partial<StudioActivityDefinitionImplementationE
   return rendered;
 }
 
-function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementationEditorProps> = {}) {
+function renderDesigner(overrides: Partial<React.ComponentProps<typeof ActivityGraphImplementationEditor>> = {}) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -1095,7 +1156,7 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
   return rendered;
 }
 
-function designerProps(overrides: Partial<StudioActivityDefinitionImplementationEditorProps> = {}): StudioActivityDefinitionImplementationEditorProps {
+function designerProps(overrides: Partial<React.ComponentProps<typeof ActivityGraphImplementationEditor>> = {}): React.ComponentProps<typeof ActivityGraphImplementationEditor> {
   return {
     context: {
       baseUrl: "test://activity-graph",
@@ -1126,12 +1187,12 @@ function designerProps(overrides: Partial<StudioActivityDefinitionImplementation
   };
 }
 
-function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"]) {
+function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"], overrides: Partial<React.ComponentProps<typeof ActivityGraphImplementationEditor>> = {}) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   const onChange = vi.fn();
-  const props = designerProps({ value: initialValue });
+  const props = designerProps({ value: initialValue, ...overrides });
   let acknowledge: (value: typeof initialValue) => void;
   function ControlledDesigner() {
     const [value, setValue] = React.useState(initialValue);

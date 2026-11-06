@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Graph.Design.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,5 +27,6 @@ public sealed class GraphActivitiesDesignFeature : IShellFeature
         services.AddSingleton<IActivityTemplateDependencyDiscoverer>(sp => sp.GetRequiredService<GraphActivityProvider>());
         services.AddSingleton<IActivityProviderReferenceRewriter, GraphActivityProviderReferenceRewriter>();
         services.AddScoped<IDraftValidator, CompleteOutsideGraphDraftValidator>();
+        services.AddScoped<IActivityDraftExpressionGraphProjection, ActivityGraphExpressionProjection>();
     }
 }

@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import type { ExpressionToolingCacheIdentity } from "./expression-tooling/expressionToolingClient";
 import type { StudioActivityDefinitionImplementationEditorContribution } from "@elsa-workflows/studio-sdk";
 import { activityGraphDiagnosticFocusEvent, type ActivityGraphDiagnosticFocusEventDetail } from "./activityGraphDiagnosticFocus";
 
@@ -8,7 +9,7 @@ const ActivityGraphPublicInterfaceEditor = lazy(() => import("./ActivityGraphImp
 export const activityGraphImplementationEditorContribution = createActivityGraphContribution("1");
 export const activityGraphSchema2ImplementationEditorContribution = createActivityGraphContribution("2");
 
-function createActivityGraphContribution(schemaVersion: "1" | "2"): StudioActivityDefinitionImplementationEditorContribution {
+export function createActivityGraphContribution(schemaVersion: "1" | "2", expressionToolingIdentity?: ExpressionToolingCacheIdentity): StudioActivityDefinitionImplementationEditorContribution {
   return {
     id: `elsa.activity-graph.schema-${schemaVersion}`,
     providerKey: "elsa.activity-graph",
@@ -54,6 +55,8 @@ function createActivityGraphContribution(schemaVersion: "1" | "2"): StudioActivi
       });
     },
     publicInterfaceComponent: ActivityGraphPublicInterfaceEditor,
-    component: ActivityGraphImplementationEditor
+    component: expressionToolingIdentity
+      ? props => <ActivityGraphImplementationEditor {...props} expressionToolingIdentity={expressionToolingIdentity} />
+      : ActivityGraphImplementationEditor
   };
 }

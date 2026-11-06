@@ -70,6 +70,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IWorkflowDefinitionAuthorizer, HttpWorkflowDefinitionAuthorizer>();
         services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
+        services.TryAddScoped<IExpressionToolingOperations, ExpressionToolingOperations>();
         services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
             ActivatorUtilities.CreateInstance<PersistedExpressionAuthoringContextSource>(
                 serviceProvider,

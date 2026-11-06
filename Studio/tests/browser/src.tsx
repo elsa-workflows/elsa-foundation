@@ -54,7 +54,7 @@ import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefi
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
 import { flowchartStructureKind } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode";
 import { getDraft, updateDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
-import { createActivityNode, getActivityDisplay, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { createActivityNode, getActivityDisplay, sequenceStructureKind, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
 import { ActivityPalettePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
 import { InspectorPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
@@ -239,7 +239,8 @@ function ActivityDefinitionGraphAuthoringFixture() {
     manifestFingerprint: draft.provider.manifestFingerprint,
     contract: draft.contract,
     propertyEditors: [],
-    expressionEditors: [],
+    expressionEditors: expressionCodeEditors,
+    expressionToolingIdentity: { backend: endpointContext.baseUrl, subject: "browser-author", tenantId: "browser-tenant" },
     graphAuthoringPanels: [],
     historyResetKey: `${draft.draftId}:${draft.provider.schemaVersion}`,
     value: { payload: draft.provider.payload, layout: draft.layout },
@@ -378,14 +379,17 @@ function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
       payload: {
         rootActivity: {
           nodeId: "root",
-          activityVersionId: "flowchart-v1",
+          activityVersionId: searchParams.get("results") === "1" ? "sequence-v1" : "flowchart-v1",
           inputs: [],
           outputs: [],
           structure: {
             // `graph=flowchart` opts into the canonical Flowchart kind, whose scope supports connections.
-            kind: searchParams.get("graph") === "flowchart" ? flowchartStructureKind : "Flowchart",
+            kind: searchParams.get("results") === "1" ? sequenceStructureKind : searchParams.get("graph") === "flowchart" ? flowchartStructureKind : "Flowchart",
             schemaVersion: "1",
-            payload: { activities: [], connections: [] }
+            payload: { activities: searchParams.get("results") === "1" ? [
+              { nodeId: "first", activityVersionId: "write-line-v1", inputs: [], outputs: [] },
+              { nodeId: "later", activityVersionId: "write-line-v1", inputs: [{ referenceKey: "message", value: { expressionType: "JavaScript", value: "args.result" } }], outputs: [] }
+            ] : [], connections: [] }
           }
         },
         variables: [],

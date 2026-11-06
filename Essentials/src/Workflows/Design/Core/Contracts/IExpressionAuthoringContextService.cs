@@ -13,7 +13,10 @@ public sealed record ResolveExpressionAuthoringContextRequest(
     string? ContextRevision = null,
     string? Search = null,
     int Skip = 0,
-    int Take = 100);
+    int Take = 100)
+{
+    public ExpressionAuthoringDocumentOwner? Owner { get; init; }
+}
 
 /// <summary>Authorization result supplied by the host after it authenticates the caller.</summary>
 public sealed record ExpressionAuthoringAuthorization(

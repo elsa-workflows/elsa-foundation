@@ -21,6 +21,7 @@
           "ActivitiesRuntime": {},
           "ActivitiesScheduling": {},
           "ActivitiesSequence": {},
+          "ActivitiesScripting": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
             "Options": {

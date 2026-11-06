@@ -107,3 +107,25 @@ Activity definitions are populated by Activity Design reconciliation sources, no
 The catalog endpoint normalizes those stored definitions and applies availability evaluation. Context-sensitive input options deliberately belong to Workflow Design API because they require submitted workflow state and node context.
 
 Canonical ownership is defined in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+
+### Activity draft expression authoring (#3197)
+
+`IActivityDraftAuthoringReader` (`Elsa.Activities.Design.Core.Contracts`) is a scoped replacement authority.
+`ActivitiesDesignApiFeature` installs `ActivityDraftAuthoringReader` with `TryAddScoped`; a host can select its
+own implementation before feature composition. Consumers require exactly one reader; missing or duplicate
+registrations fail closed without a graph projection. The default reads only the current actor's persisted
+activity draft after activity-read, tenant and provider-payload visibility checks. Callers cannot supply a
+principal, tenant, policy or graph facts. Its authorization profile participates in context revisions.
+
+The activity-owned `expression-tooling/*` endpoints require `activities/design:read`, send `no-store`, and
+accept only `ActivityDraftId` and the expression location/source. They create an explicit `activity-draft`
+document owner; workflow wire requests cannot select this owner. Host expression policy and context/symbol
+filters still apply. A denied or unavailable source carries no partial catalog.
+
+`IExpressionToolingOperations` is a scoped replacement from `Elsa.Workflows.Design.Core.Contracts`.
+Its implementation remains in the Workflows Design API; this API consumes the Core contract only. Missing
+or duplicate implementations report `Unavailable`, so activity-only deployments remain valid. No workflow
+read permission is needed for activity tooling. `ActivityExpressionToolingCapabilitySource` is a scoped
+capability contributor; it advertises `activity-expressions.tooling.v1` only with one operation service, context
+service and source reader, plus a graph projection and language providers. Graph manifests are interpreted
+by their provider contribution, not by this API.

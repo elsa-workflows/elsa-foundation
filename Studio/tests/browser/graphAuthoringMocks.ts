@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 /** Backend routes the Activity Definition graph-authoring fixture needs (capabilities, catalog, create). */
-export async function mockGraphAuthoring(page: Page) {
+export async function mockGraphAuthoring(page: Page, resultBindings = false) {
   const requests: unknown[] = [];
   await page.route("**/capabilities", route => route.fulfill({
     status: 200,
@@ -17,6 +17,9 @@ export async function mockGraphAuthoring(page: Page) {
             { rel: "activity-catalog", href: "design/activities/catalog" }
           ]
         },
+        ...(resultBindings ? [{ id: "activity-expressions.tooling.v1", contractVersion: "1", links: ["context", "validate"].map(operation => ({
+          rel: `expression-tooling-${operation}`, href: `design/activities/expression-tooling/${operation}`
+        })) }] : []),
         {
           id: "elsa.api.expressions",
           contractVersion: "1",
@@ -76,15 +79,31 @@ export async function mockGraphAuthoring(page: Page) {
           schemaVersion: "1",
           payload: { activities: [], connections: [] }
         }),
-        catalogActivity("write-line-v1", "Elsa.WriteLine", "Write line", "Primitives")
+        { ...catalogActivity("write-line-v1", "Elsa.WriteLine", "Write line", "Primitives"),
+          inputs: resultBindings ? [{ referenceKey: "message", name: "Message", displayName: "Message", typeName: "System.String", type: "System.String", isWrapped: true, defaultSyntax: "JavaScript" }] : [],
+          outputs: resultBindings ? [{ referenceKey: "result", name: "Result", typeName: "System.String", type: "System.String" }] : [] }
       ]
     })
   }));
   await page.route("**/expressions/descriptors", route => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ items: [] })
+    body: JSON.stringify({ items: resultBindings ? [{ type: "JavaScript", displayName: "JavaScript", editingMode: "text" }] : [] })
   }));
+  if (resultBindings) await page.route("**/design/activities/expression-tooling/*", async route => {
+    const request = route.request().postDataJSON() as { documentRevision: string };
+    const validate = route.request().url().endsWith("/validate");
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: {
+      state: validate ? "SupportedEmpty" : "Success", contractVersion: { major: 1, minor: 0 }, documentRevision: request.documentRevision,
+      contextRevision: "activity-revision-3", payload: validate ? { diagnostics: [] } : {
+        document: { workflowDraftId: "", owner: { kind: "activity-draft", id: "activity-graph-authoring-draft" }, nodeId: "later", propertyKey: "message", expressionType: "JavaScript", documentRevision: request.documentRevision },
+        contextRevision: "activity-revision-3", symbolCatalogRevision: "activity-revision-3", capabilities: {}, rootSymbols: [{
+          symbolId: "opaque:earlier", name: "first.Result", kind: "ActivityResult",
+          parameterBinding: { kind: "ActivityResult", producerNodeId: "first", projectionKey: "result", isOptional: false }
+        }]
+      }
+    } }) });
+  });
   await page.route("**/design/activities/definitions", async route => {
     requests.push(route.request().postDataJSON());
     await route.fulfill({

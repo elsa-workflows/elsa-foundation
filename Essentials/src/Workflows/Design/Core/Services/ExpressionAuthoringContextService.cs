@@ -35,7 +35,9 @@ public sealed class ExpressionAuthoringContextService(IEnumerable<IExpressionAut
             return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Unauthorized, ExpressionToolingContractVersion.V1);
         if (!request.ContractVersion.IsCompatibleWith(ExpressionToolingContractVersion.V1))
             return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Incompatible, ExpressionToolingContractVersion.V1, "contract-version");
-        if (string.IsNullOrWhiteSpace(request.WorkflowDraftId) || string.IsNullOrWhiteSpace(request.NodeId) || string.IsNullOrWhiteSpace(request.PropertyKey) || string.IsNullOrWhiteSpace(request.ExpressionType))
+        var hasWorkflow = !string.IsNullOrWhiteSpace(request.WorkflowDraftId);
+        var validOwner = request.Owner is { } owner && !string.IsNullOrWhiteSpace(owner.Kind) && !string.IsNullOrWhiteSpace(owner.Id);
+        if ((request.Owner is null ? !hasWorkflow : hasWorkflow || !validOwner) || string.IsNullOrWhiteSpace(request.NodeId) || string.IsNullOrWhiteSpace(request.PropertyKey) || string.IsNullOrWhiteSpace(request.ExpressionType))
             return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Incompatible, ExpressionToolingContractVersion.V1, "invalid-location");
         if (request.Skip < 0 || request.Take is < 1 or > MaximumPageSize || request.Search?.Length > 256)
             return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Incompatible, ExpressionToolingContractVersion.V1, "invalid-page");
@@ -62,7 +64,8 @@ public sealed class ExpressionAuthoringContextService(IEnumerable<IExpressionAut
             }
             if (context is null)
                 continue;
-            if (!string.Equals(context.Document.WorkflowDraftId, request.WorkflowDraftId, StringComparison.Ordinal) ||
+            if (context.Document.Owner != request.Owner ||
+                !string.Equals(context.Document.WorkflowDraftId, request.WorkflowDraftId, StringComparison.Ordinal) ||
                 !string.Equals(context.Document.NodeId, request.NodeId, StringComparison.Ordinal) ||
                 !string.Equals(context.Document.PropertyKey, request.PropertyKey, StringComparison.Ordinal) ||
                 !string.Equals(context.Document.ExpressionType, request.ExpressionType, StringComparison.Ordinal))

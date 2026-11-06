@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioExpressionSymbol, StudioExpressionToolingState } from "@elsa-workflows/studio-sdk";
 import { readPortableExpressionDefinition, withLiteralValue, type PortableExpressionDefinitionValue, type WrappedActivityInputValue } from "./activityProperties";
 import type { WorkflowInput } from "./workflowTypes";
 
@@ -37,6 +37,37 @@ export function withWorkflowInputExpressionArgument(
   return existing != null && !isWorkflowRequestBinding(existing)
     ? null
     : { ...definition, parameters: { ...definition.parameters, [workflowInput.name]: { kind: "WorkflowRequest", memberKey: workflowInput.name } } };
+}
+
+interface ActivityResultBinding { kind: "ActivityResult"; producerNodeId: string; projectionKey: string; isOptional: boolean }
+
+function readActivityResultBinding(value: unknown): ActivityResultBinding | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const binding = value as Record<string, unknown>;
+  if (typeof binding.kind !== "string" || binding.kind.toLowerCase() !== "activityresult" ||
+      typeof binding.producerNodeId !== "string" || !binding.producerNodeId.trim() ||
+      typeof binding.projectionKey !== "string" || !binding.projectionKey.trim() ||
+      (binding.isOptional !== undefined && typeof binding.isOptional !== "boolean")) return null;
+  return { kind: "ActivityResult", producerNodeId: binding.producerNodeId, projectionKey: binding.projectionKey, isOptional: binding.isOptional === true };
+}
+
+function activityResultChoiceKey(symbol: StudioExpressionSymbol): string {
+  const binding = readActivityResultBinding(symbol.parameterBinding);
+  return binding ? JSON.stringify([binding.producerNodeId, binding.projectionKey, binding.isOptional]) : "";
+}
+
+export function withActivityResultExpressionArgument(
+  value: unknown, expressionType: string, activityInput: StudioActivityInputDescriptor, symbol: StudioExpressionSymbol
+): PortableExpressionDefinitionValue | null {
+  const binding = readActivityResultBinding(symbol.parameterBinding);
+  if (!binding) return null;
+  const existing = readPortableExpressionDefinition(value, expressionType);
+  if (!existing && value != null && typeof value === "object") return null;
+  const definition = existing ?? { language: expressionType, source: typeof value === "string" ? value : value == null ? "" : String(value),
+    resultType: portableResultType(activityInput), parameters: {}, options: {}, capabilityProfile: "binding-pure-v1" };
+  let name = "result", suffix = 1;
+  while (Object.prototype.hasOwnProperty.call(definition.parameters, name)) name = `result${++suffix}`;
+  return { ...definition, parameters: { ...definition.parameters, [name]: binding } };
 }
 
 export function withoutPortableExpressionParameter(
@@ -162,6 +193,9 @@ interface WorkflowInputArgumentBindingsProps {
   activityInput: StudioActivityInputDescriptor;
   wrapped: WrappedActivityInputValue;
   disabled: boolean;
+  resultSymbols?: StudioExpressionSymbol[];
+  resultState?: StudioExpressionToolingState | "loading";
+  onRequestResults?(): void;
   onChange(value: WrappedActivityInputValue): void;
 }
 
@@ -172,6 +206,9 @@ export function WorkflowInputArgumentBindings({
   activityInput,
   wrapped,
   disabled,
+  resultSymbols,
+  resultState,
+  onRequestResults,
   onChange
 }: WorkflowInputArgumentBindingsProps) {
   const selectId = useId();
@@ -180,7 +217,8 @@ export function WorkflowInputArgumentBindings({
 
   return (
     <div className="wf-js-input-bindings">
-      <label className="wf-section-label" htmlFor={selectId}>Workflow input bindings</label>
+      {inputs.length > 0 || arguments_.length > 0 ? <>
+      <label className="wf-section-label" htmlFor={selectId}>Public input bindings</label>
       <select
         id={selectId}
         value=""
@@ -192,7 +230,7 @@ export function WorkflowInputArgumentBindings({
           if (definition) onChange(withLiteralValue(wrapped, definition));
         }}
       >
-        <option value="">Add workflow input…</option>
+        <option value="">Add public input…</option>
         {inputs.map(workflowInput => {
           const alreadyBound = bindingsByArgumentName.has(workflowInput.name);
           const occupied = valueHasParameter(value, syntax, workflowInput.name) && !alreadyBound;
@@ -200,13 +238,13 @@ export function WorkflowInputArgumentBindings({
         })}
       </select>
       {arguments_.length > 0 ? (
-        <ul className="wf-reference-list" aria-label="Bound workflow inputs">
+        <ul className="wf-reference-list" aria-label="Bound public inputs">
           {arguments_.map(binding => {
-            const label = binding.memberKey || "Unknown workflow input";
+            const label = binding.memberKey || "Unknown public input";
             const missing = !binding.memberKey || !inputs.some(input => input.name === binding.memberKey);
             return (
               <li className="wf-reference-meta" key={binding.argumentName}>
-                <span>{label}{missing ? (binding.memberKey ? " (missing workflow input)" : " (invalid workflow input binding)") : ""} <span aria-hidden="true">→</span> <code>{formatArgumentReference(binding.argumentName)}</code></span>
+                <span>{label}{missing ? (binding.memberKey ? " (missing public input)" : " (invalid public input binding)") : ""} <span aria-hidden="true">→</span> <code>{formatArgumentReference(binding.argumentName)}</code></span>
                 <button
                   type="button"
                   className="wf-reference-toggle"
@@ -224,8 +262,63 @@ export function WorkflowInputArgumentBindings({
           })}
         </ul>
       ) : null}
+      </> : null}
+      {onRequestResults || hasActivityResultArguments(value, syntax) ? <ActivityResultArgumentBindings
+        value={value} syntax={syntax} activityInput={activityInput} wrapped={wrapped} disabled={disabled}
+        symbols={resultSymbols ?? []} state={resultState} onRequest={onRequestResults} onChange={onChange}
+      /> : null}
     </div>
   );
+}
+
+function hasActivityResultArguments(value: unknown, syntax: string) {
+  return Object.values(readPortableExpressionDefinition(value, syntax)?.parameters ?? {}).some(binding =>
+    binding && typeof binding === "object" && typeof (binding as Record<string, unknown>).kind === "string" &&
+    ((binding as Record<string, unknown>).kind as string).toLowerCase() === "activityresult");
+}
+
+function ActivityResultArgumentBindings({ value, syntax, activityInput, wrapped, disabled, symbols, state, onRequest, onChange }: {
+  value: unknown; syntax: string; activityInput: StudioActivityInputDescriptor; wrapped: WrappedActivityInputValue;
+  disabled: boolean; symbols: StudioExpressionSymbol[]; state?: StudioExpressionToolingState | "loading"; onRequest?(): void;
+  onChange(value: WrappedActivityInputValue): void;
+}) {
+  const selectId = useId();
+  const parameters = readPortableExpressionDefinition(value, syntax)?.parameters ?? {};
+  const bound = Object.entries(parameters).filter(([, binding]) => binding && typeof binding === "object" &&
+    typeof (binding as Record<string, unknown>).kind === "string" && ((binding as Record<string, unknown>).kind as string).toLowerCase() === "activityresult");
+  const ready = state === "ready" || state === "supported-empty";
+  const choices = ready ? symbols.filter(symbol => readActivityResultBinding(symbol.parameterBinding)) : [];
+  const incomplete = ready && choices.length !== symbols.length;
+  const same = (left: ActivityResultBinding | null, right: ActivityResultBinding | null) => left && right &&
+    left.producerNodeId === right.producerNodeId && left.projectionKey === right.projectionKey && left.isOptional === right.isOptional;
+  const placeholder = !state ? "Choose to load earlier results…" : state === "loading" ? "Loading earlier results…" : !ready
+    ? "Earlier results unavailable" : choices.length === 0 ? incomplete ? "Earlier results unavailable" : "No earlier results" : "Add earlier result…";
+  return <div className="wf-js-input-bindings">
+    <label className="wf-section-label" htmlFor={selectId}>Earlier result bindings</label>
+    <select id={selectId} value="" disabled={disabled} onFocus={onRequest} onChange={event => {
+      const selected = choices.find(symbol => activityResultChoiceKey(symbol) === event.currentTarget.value);
+      if (!selected) return;
+      const definition = withActivityResultExpressionArgument(value, syntax, activityInput, selected);
+      if (definition) onChange(withLiteralValue(wrapped, definition));
+    }}>
+      <option value="">{placeholder}</option>
+      {choices.map(symbol => <option key={activityResultChoiceKey(symbol)} value={activityResultChoiceKey(symbol)}
+        disabled={bound.some(([, binding]) => same(readActivityResultBinding(binding), readActivityResultBinding(symbol.parameterBinding)))}>{symbol.name}</option>)}
+    </select>
+    {incomplete && choices.length > 0 ? <p role="status">Some earlier results are unavailable.</p> : null}
+    {incomplete || state && !ready && state !== "loading" ? <button type="button" className="wf-reference-toggle" disabled={disabled || !onRequest} onClick={onRequest}>Retry earlier results</button> : null}
+    {bound.length > 0 ? <ul className="wf-reference-list" aria-label="Bound earlier results">{bound.map(([name, raw]) => {
+      const binding = readActivityResultBinding(raw);
+      const symbol = binding && symbols.find(candidate => same(binding, readActivityResultBinding(candidate.parameterBinding)));
+      return <li className="wf-reference-meta" key={name}>
+        <span>{symbol?.name ?? (binding ? `${binding.producerNodeId}.${binding.projectionKey}${ready ? " (unavailable)" : ""}` : "Invalid activity result binding")} <span aria-hidden="true">→</span> <code>{formatArgumentReference(name)}</code></span>
+        <button type="button" className="wf-reference-toggle" aria-label={`Remove ${name} result binding`} disabled={disabled} onClick={() => {
+          const definition = withoutPortableExpressionParameter(value, syntax, name);
+          if (definition) onChange(withLiteralValue(wrapped, definition));
+        }}>Remove</button>
+      </li>;
+    })}</ul> : null}
+  </div>;
 }
 
 export default WorkflowInputArgumentBindings;

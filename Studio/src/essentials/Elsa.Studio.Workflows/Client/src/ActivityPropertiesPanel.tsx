@@ -588,6 +588,10 @@ function PropertyRow({
     const record = asRecord(binding);
     return typeof record?.kind === "string" && record.kind.toLowerCase() === "workflowrequest";
   });
+  const hasActivityResultBinding = Object.values(portableDefinition?.parameters ?? {}).some(binding => {
+    const record = asRecord(binding);
+    return typeof record?.kind === "string" && record.kind.toLowerCase() === "activityresult";
+  });
   const editorValue = portableDefinition?.source ?? value;
   const expressionSource = valueMasked || secretOnly || editorValue == null ? "" : String(editorValue);
   const documentVersions = useRef(new Map<string, { source: string; version: number }>());
@@ -975,8 +979,8 @@ function PropertyRow({
   ) : dictionaryEditor ?? collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
     ? renderEditor(editor, effectiveInput, value, editorDisabled, context, setRaw, disclosureSignalKey, reportEditorValidation, reportEditorFallback)
     : <UnavailableExpressionEditor syntax={syntax} />);
-  const canEditWorkflowInputArguments = wrapped != null && !secretOnly && !valueMasked && editingMode === "text" &&
-    syntax.toLowerCase() === "javascript" && (workflowInputs.length > 0 || hasWorkflowInputBinding) &&
+  const canEditExpressionArguments = wrapped != null && !secretOnly && !valueMasked && editingMode === "text" &&
+    syntax.toLowerCase() === "javascript" && (workflowInputs.length > 0 || hasWorkflowInputBinding || hasActivityResultBinding || !!expressionTooling) &&
     (value == null || typeof value !== "object" || portableDefinition != null);
   // A single session must never be mounted into two editor engines at once. While the dialog owns the
   // text document, unmount the compact surface; closing remounts it from the same URI-scoped session.
@@ -1065,10 +1069,13 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
-      {canEditWorkflowInputArguments ? (
+      {canEditExpressionArguments ? (
         <Suspense fallback={null}>
           <WorkflowInputArgumentBindings
             inputs={workflowInputs}
+            resultSymbols={toolingSnapshot.authoringContext?.data?.visibleActivityOutputs}
+            resultState={toolingSnapshot.authoringContext?.state ?? (toolingActive ? "loading" : undefined)}
+            onRequestResults={expressionTooling ? () => { activateTooling(); toolingSnapshot.validateNow(); } : undefined}
             value={value}
             syntax={syntax}
             activityInput={input}

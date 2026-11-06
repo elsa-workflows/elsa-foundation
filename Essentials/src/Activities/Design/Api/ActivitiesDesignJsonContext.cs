@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Endpoints;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Activities.Design.Core.Options;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -59,7 +60,13 @@ internal static class ActivitiesDesignJsonOptions
     PropertyNameCaseInsensitive = true,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
-// Requests and commands accepted by the 38 registrations.
+// Requests and commands accepted by the module registrations.
+[JsonSerializable(typeof(ActivityExpressionToolingRequest))]
+[JsonSerializable(typeof(ActivityExpressionToolingResponse<ExpressionAuthoringContext>))]
+[JsonSerializable(typeof(ActivityExpressionToolingResponse<ExpressionToolingItems>))]
+[JsonSerializable(typeof(ActivityExpressionToolingResponse<ExpressionHover>))]
+[JsonSerializable(typeof(ActivityExpressionToolingResponse<ExpressionDiagnosticSet>))]
+[JsonSerializable(typeof(ActivityExpressionToolingResponse<IReadOnlyList<ActivityExpressionToolingDescriptor>>))]
 [JsonSerializable(typeof(GetActivityAvailabilitySettings))]
 [JsonSerializable(typeof(ListActivityAvailabilityDiagnostics))]
 [JsonSerializable(typeof(SaveActivityAvailabilitySettings))]

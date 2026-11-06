@@ -1,3 +1,4 @@
+import { activityGraphAddTwoNumbersJourney } from "./activityGraphAddTwoNumbersJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
@@ -26,6 +27,8 @@ async function signIn(page: Page) {
 
 const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
+
+test("activity graph Add two numbers", async ({ page }, info) => activityGraphAddTwoNumbersJourney(page, info, capture));
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));

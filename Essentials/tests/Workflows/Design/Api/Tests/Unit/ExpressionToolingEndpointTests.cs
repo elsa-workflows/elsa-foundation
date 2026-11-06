@@ -62,6 +62,23 @@ public sealed class ExpressionToolingEndpointTests
     }
 
     [Fact]
+    public async Task Workflow_wire_cannot_select_an_activity_owner_and_omits_null_owner_metadata()
+    {
+        await using var host = ExpressionToolingHost.Create(new RecordingProvider());
+        var response = await host.InvokeAsync("POST", "/design/workflows/expression-tooling/context", """
+            {"contractVersion":{"major":1,"minor":0},"workflowDraftId":"draft","nodeId":"node","propertyKey":"text","expressionType":"JavaScript","documentRevision":"document",
+            "owner":{"kind":"activity-draft","id":"private-activity"},"activityDraftId":"private-activity"}
+            """, "application/json");
+        using var json = JsonDocument.Parse(response.Body);
+        var document = json.RootElement.GetProperty("result").GetProperty("payload").GetProperty("document");
+        Assert.Equal("draft", document.GetProperty("workflowDraftId").GetString());
+        Assert.False(document.TryGetProperty("owner", out _));
+        Assert.Null(host.LastLocation!.Owner);
+        Assert.Equal("draft", host.LastLocation.WorkflowDraftId);
+        Assert.Equal("no-store", response.CacheControl);
+    }
+
+    [Fact]
     public async Task Mapped_completion_endpoint_preserves_full_catalog_and_provider_cache_contract()
     {
         var provider = new RecordingProvider();
@@ -273,6 +290,8 @@ public sealed class ExpressionToolingEndpointTests
 
     private sealed class ExpressionToolingHost(IServiceProvider services) : IAsyncDisposable
     {
+        public ResolveExpressionAuthoringContextRequest? LastLocation =>
+            ((RecordingContextService)services.GetRequiredService<IExpressionAuthoringContextService>()).LastRequest;
         public static ExpressionToolingHost Create(RecordingProvider? provider = null, IExpressionAuthoringAuthorizationPolicy? policy = null, ExpressionToolingOutcomeState? outcomeState = null)
         {
             var serviceCollection = new ServiceCollection()
@@ -282,6 +301,7 @@ public sealed class ExpressionToolingEndpointTests
                 .AddSingleton<IExpressionToolingProviderResolver>(new ProviderResolver(provider));
             if (provider is not null)
                 serviceCollection.AddSingleton<IExpressionToolingProvider>(provider);
+            new WorkflowsDesignApiFeature().ConfigureServices(serviceCollection);
             var services = serviceCollection.AddElsaEndpoints().BuildServiceProvider();
             return new(services);
         }
@@ -329,15 +349,25 @@ public sealed class ExpressionToolingEndpointTests
 
     private sealed class RecordingContextService(ExpressionAuthoringContext context, ExpressionToolingOutcomeState? outcomeState = null) : IExpressionAuthoringContextService
     {
+        public ResolveExpressionAuthoringContextRequest? LastRequest { get; private set; }
+
         public ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveAsync(
             ResolveExpressionAuthoringContextRequest request,
             ExpressionAuthoringAuthorization authorization,
-            CancellationToken cancellationToken) => ValueTask.FromResult(Result(authorization));
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return ValueTask.FromResult(Result(authorization));
+        }
 
         public ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveForProviderAsync(
             ResolveExpressionAuthoringContextRequest request,
             ExpressionAuthoringAuthorization authorization,
-            CancellationToken cancellationToken) => ValueTask.FromResult(Result(authorization));
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return ValueTask.FromResult(Result(authorization));
+        }
 
         private ExpressionToolingOutcome<ExpressionAuthoringContext> Result(ExpressionAuthoringAuthorization authorization) =>
             outcomeState is { } state

@@ -30,7 +30,8 @@ import {
   getExpressionCompletions,
   getExpressionHover,
   searchExpressionSymbols,
-  validateExpression
+  validateExpression,
+  type ExpressionToolingOwnerKind
 } from "../api/expressionTooling";
 
 const contractVersion = 1;
@@ -62,9 +63,10 @@ export interface ExpressionToolingCacheIdentity {
 export function createExpressionToolingClient(
   context: StudioEndpointContext,
   cacheIdentity: ExpressionToolingCacheIdentity,
-  authorizationScope?: string
+  authorizationScope?: string,
+  ownerKind: ExpressionToolingOwnerKind = "workflow"
 ): StudioExpressionToolingClient {
-  return new ExpressionToolingClient(context, cacheIdentity, authorizationScope);
+  return new ExpressionToolingClient(context, cacheIdentity, authorizationScope, ownerKind);
 }
 
 class ExpressionToolingClient implements StudioExpressionToolingClient {
@@ -78,7 +80,8 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
   constructor(
     private readonly context: StudioEndpointContext,
     private readonly cacheIdentity: ExpressionToolingCacheIdentity,
-    private readonly authorizationScope?: string
+    private readonly authorizationScope?: string,
+    private readonly ownerKind: ExpressionToolingOwnerKind = "workflow"
   ) {
   }
 
@@ -88,7 +91,7 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     const generation = this.authorizationGeneration;
     return this.observeAuthorization(await mapToolingRequest(
       "",
-      () => getExpressionToolingDescriptors(this.context, signal),
+      () => getExpressionToolingDescriptors(this.context, signal, this.ownerKind),
       parseDescriptorsOutcome
     ), generation);
   }
@@ -107,6 +110,7 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     const skip = parseCursor(cursor);
     const key = this.cacheKey(
       "symbols",
+      document.draftId, document.activityId, document.propertyKey, document.expressionType,
       document.id,
       String(document.sourceVersion),
       authoringContext.version,
@@ -122,11 +126,11 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     const response = await mapToolingRequest(
       expressionType,
       () => searchExpressionSymbols(this.context, {
-        ...locationRequest(document, authoringContext.version),
+        ...locationRequest(document, authoringContext.version, this.ownerKind),
         search: query || undefined,
         skip,
         take: 100
-      }, signal),
+      }, signal, this.ownerKind),
       value => parseItemsOutcome(value, expressionType, document, authoringContext.version)
     );
     const catalog = response.data
@@ -169,11 +173,7 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     this.ensureActive();
     if (this.authorizationRevoked) return result("unauthorized", document.expressionType);
     const generation = this.authorizationGeneration;
-    const response = await mapToolingRequest(
-      document.expressionType,
-      () => getExpressionAuthoringContext(this.context, locationRequest(document), signal),
-      value => parseContextOutcome(value, document)
-    );
+    const response = await this.resolveContextPages(document, signal);
     const observed = this.observeAuthorization(response, generation, true);
     if (observed.data) {
       const revisionIdentity = [
@@ -182,11 +182,76 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
         observed.data.permissionRevision ?? "",
         observed.data.hostPolicyRevision ?? ""
       ].join("\u001f");
-      const previous = this.contextRevisions.get(document.id);
+      const locationIdentity = JSON.stringify([this.ownerKind, document.draftId, document.activityId, document.propertyKey, document.expressionType]);
+      const previous = this.contextRevisions.get(locationIdentity);
       if (previous !== undefined && previous !== revisionIdentity) this.metadataCache.clear();
-      this.contextRevisions.set(document.id, revisionIdentity);
+      this.contextRevisions.set(locationIdentity, revisionIdentity);
     }
     return observed;
+  }
+
+  private async resolveContextPages(
+    document: StudioExpressionDocument,
+    signal?: AbortSignal
+  ): Promise<StudioExpressionToolingResult<StudioExpressionAuthoringContext>> {
+    const pageSize = 500;
+    // Persisted sources stop at 5,500 without an explicit truncation marker. At that limit we
+    // cannot certify availability; never turn a possibly truncated catalog into "no results".
+    const sourceSymbolLimit = 5_500;
+    const maximumPages = 12;
+    let first: StudioExpressionToolingResult<StudioExpressionAuthoringContext> | undefined;
+    const symbols: StudioExpressionSymbol[] = [];
+    const shapes = new Map<string, StudioExpressionValueShape>();
+    const bindings = new Set<string>();
+    for (let page = 0; page < maximumPages; page += 1) {
+      const response = await mapToolingRequest(
+        document.expressionType,
+        () => {
+          signal?.throwIfAborted();
+          return getExpressionAuthoringContext(this.context, {
+            ...locationRequest(document, first?.data?.version, this.ownerKind), skip: page * pageSize, take: pageSize
+          }, signal, this.ownerKind);
+        },
+        value => {
+          const parsed = parseContextOutcome(value, document);
+          const payload = asRecord(asRecord(asRecord(value)?.result)?.payload);
+          const roots = payload?.rootSymbols;
+          if (parsed.data && (!matchesDocumentLocation(payload?.document, document, this.ownerKind) ||
+              !Array.isArray(roots) || roots.length !== parsed.data.rootSymbols?.length || parsed.contextVersion !== parsed.data.version))
+            return result<StudioExpressionAuthoringContext>("incompatible", document.expressionType);
+          return parsed;
+        }
+      );
+      if (!response.data || (response.state !== "ready" && response.state !== "supported-empty")) return response;
+      const data = response.data as AuthoringContextWithShapes;
+      if (first?.data && (data.version !== first.data.version || data.catalogVersion !== first.data.catalogVersion ||
+          data.permissionRevision !== first.data.permissionRevision || data.hostPolicyRevision !== first.data.hostPolicyRevision))
+        return result<StudioExpressionAuthoringContext>("stale", document.expressionType, { contextVersion: data.version });
+      first ??= response;
+      const items = data.rootSymbols ?? [];
+      if (items.length > pageSize) return result("incompatible", document.expressionType);
+      for (const symbol of items) {
+        const reference = symbol.parameterBinding;
+        if (!reference) continue;
+        const identity = JSON.stringify([reference.producerNodeId, reference.projectionKey, reference.isOptional]);
+        if (bindings.has(identity)) return result("incompatible", document.expressionType);
+        bindings.add(identity);
+      }
+      symbols.push(...items);
+      if (symbols.length >= sourceSymbolLimit) return result<StudioExpressionAuthoringContext>("unavailable", document.expressionType);
+      for (const [id, shape] of data[valueShapesKey] ?? []) shapes.set(id, shape);
+      if (items.length < pageSize) {
+        const complete: AuthoringContextWithShapes = {
+          ...first.data!, rootSymbols: symbols,
+          workflowInputs: symbols.filter(symbol => symbol.kind === "value" && readWireKind(symbol.id) === "workflowinput"),
+          visibleVariables: symbols.filter(symbol => readWireKind(symbol.id) === "variable"),
+          visibleActivityOutputs: symbols.filter(symbol => readWireKind(symbol.id) === "activityresult"),
+          shapeReferences: [...shapes.keys()], [valueShapesKey]: shapes
+        };
+        return { ...first, data: complete };
+      }
+    }
+    return result<StudioExpressionAuthoringContext>("unavailable", document.expressionType, { contextVersion: first?.contextVersion });
   }
 
   async getCompletions(
@@ -201,9 +266,9 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     return this.observeAuthorization(await mapToolingRequest(
       document.expressionType,
       () => getExpressionCompletions(this.context, {
-        ...sourceRequest(document, authoringContext.version),
+        ...sourceRequest(document, authoringContext.version, this.ownerKind),
         cursor: { line: position.line, character: position.column }
-      }, signal),
+      }, signal, this.ownerKind),
       value => parseItemsOutcome(value, document.expressionType, document, authoringContext.version)
     ), generation);
   }
@@ -220,9 +285,9 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     return this.observeAuthorization(await mapToolingRequest(
       document.expressionType,
       () => getExpressionHover(this.context, {
-        ...sourceRequest(document, authoringContext.version),
+        ...sourceRequest(document, authoringContext.version, this.ownerKind),
         position: { line: position.line, character: position.column }
-      }, signal),
+      }, signal, this.ownerKind),
       value => parseHoverOutcome(value, document, authoringContext.version)
     ), generation);
   }
@@ -237,7 +302,7 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     const generation = this.authorizationGeneration;
     return this.observeAuthorization(await mapToolingRequest(
       document.expressionType,
-      () => validateExpression(this.context, sourceRequest(document, authoringContext.version), signal),
+      () => validateExpression(this.context, sourceRequest(document, authoringContext.version, this.ownerKind), signal, this.ownerKind),
       value => parseValidationOutcome(value, document, authoringContext.version)
     ), generation);
   }
@@ -271,13 +336,14 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
   }
 
   private cacheKey(kind: string, ...parts: string[]) {
-    return [
+    return JSON.stringify([
       kind,
+      this.ownerKind,
       this.cacheIdentity.backend,
       this.cacheIdentity.subject,
       this.cacheIdentity.tenantId,
       ...parts
-    ].join("\u001f");
+    ]);
   }
 
   private ensureActive() {
@@ -354,10 +420,10 @@ function unsupportedCapabilities() {
   };
 }
 
-function locationRequest(document: StudioExpressionDocument, contextRevision?: string) {
+function locationRequest(document: StudioExpressionDocument, contextRevision?: string, ownerKind: ExpressionToolingOwnerKind = "workflow") {
   return {
     contractVersion: wireContractVersion,
-    workflowDraftId: document.draftId,
+    ...(ownerKind === "activity-draft" ? { activityDraftId: document.draftId } : { workflowDraftId: document.draftId }),
     nodeId: document.activityId,
     propertyKey: document.propertyKey,
     expressionType: document.expressionType,
@@ -366,9 +432,9 @@ function locationRequest(document: StudioExpressionDocument, contextRevision?: s
   };
 }
 
-function sourceRequest(document: StudioExpressionDocument, contextRevision?: string) {
+function sourceRequest(document: StudioExpressionDocument, contextRevision?: string, ownerKind: ExpressionToolingOwnerKind = "workflow") {
   return {
-    ...locationRequest(document, contextRevision),
+    ...locationRequest(document, contextRevision, ownerKind),
     source: document.source
   };
 }
@@ -525,18 +591,41 @@ function parseSymbol(
   if (!record || !name) return undefined;
   const wireKind = wireEnumName(record.kind, symbolKindsV1) ?? "Value";
   const id = `${wireKind}:${readString(record, "symbolId") ?? name}`;
-  const shapeId = asRecord(record.valueShape) ? `symbol:${id}` : undefined;
+  const parameterBinding = parseActivityResultBinding(record.parameterBinding);
+  const referenceIdentity = parameterBinding ? JSON.stringify([parameterBinding.producerNodeId, parameterBinding.projectionKey, parameterBinding.isOptional]) : "";
+  const shapeId = asRecord(record.valueShape) ? `symbol:${id}${referenceIdentity ? `:${referenceIdentity}` : ""}` : undefined;
   if (shapeId && shapes) parseValueShape(record.valueShape, shapeId, shapes);
   return {
     id,
     name,
     kind: symbolKind(record.kind),
     documentation: readString(record, "documentation"),
+    parameterBinding,
     shapeId,
     signatures: Array.isArray(record.signatures)
       ? record.signatures.map(parseSignature).filter(isDefined)
       : undefined
   };
+}
+
+function matchesDocumentLocation(value: unknown, document: StudioExpressionDocument, kind: ExpressionToolingOwnerKind): boolean {
+  const location = asRecord(value);
+  const owner = asRecord(location?.owner);
+  const owns = kind === "activity-draft"
+    ? location?.workflowDraftId === "" && owner?.kind === "activity-draft" && owner?.id === document.draftId
+    : location?.workflowDraftId === document.draftId && location.owner == null;
+  return owns && location?.nodeId === document.activityId && location.propertyKey === document.propertyKey &&
+    location.expressionType === document.expressionType && location.documentRevision === String(document.sourceVersion);
+}
+
+function parseActivityResultBinding(value: unknown): Record<string, unknown> | undefined {
+  const binding = asRecord(value);
+  if (readString(binding, "kind")?.toLowerCase() !== "activityresult") return undefined;
+  const producerNodeId = readString(binding, "producerNodeId");
+  const projectionKey = readString(binding, "projectionKey");
+  if (!producerNodeId?.trim() || !projectionKey?.trim() ||
+      (binding!.isOptional !== undefined && typeof binding!.isOptional !== "boolean")) return undefined;
+  return { kind: "ActivityResult", producerNodeId, projectionKey, isOptional: binding!.isOptional === true };
 }
 
 function parseValueShape(

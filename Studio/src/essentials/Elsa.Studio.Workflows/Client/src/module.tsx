@@ -8,7 +8,7 @@ import "./workspaceAppearance.css";
 import { registerVariableReferenceContribution } from "./variableReferenceContribution";
 import { registerInputReferenceContribution } from "./inputReferenceContribution";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
-import { activityGraphImplementationEditorContribution, activityGraphSchema2ImplementationEditorContribution } from "./activityGraphContribution";
+import { createActivityGraphContribution } from "./activityGraphContribution";
 import { clearActivityDefinitionRecoveryForIdentity } from "./activityDefinitionRecovery";
 import {
   eventWorkflowTestStimulusEditor,
@@ -91,8 +91,8 @@ export function register(api: ElsaStudioModuleApi) {
   api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(schedulingWorkflowTestStimulusEditor);
-  api.activityEditors.add({...activityGraphImplementationEditorContribution, requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
-  api.activityEditors.add({...activityGraphSchema2ImplementationEditorContribution, requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
+  api.activityEditors.add({...createActivityGraphContribution("1", expressionToolingIdentity), requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
+  api.activityEditors.add({...createActivityGraphContribution("2", expressionToolingIdentity), requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
   latestModuleApi = api;
   if (typeof window !== "undefined") {
     window.addEventListener(authSessionEndedEvent, clearActivityDefinitionRecoveryOnAuthSessionEnded);

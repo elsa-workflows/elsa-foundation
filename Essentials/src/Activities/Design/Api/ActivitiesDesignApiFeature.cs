@@ -126,6 +126,8 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         // Rejected at configuration as well as at startup: the startup task runs only where the Tasks feature is composed.
         ActivityAuthoringCatalogStartupTask.Validate(services);
         services.TryAddScoped<IActivityAuthoringCatalog, HttpActivityAuthoringCatalog>();
+        services.TryAddScoped<IActivityDraftAuthoringReader, ActivityDraftAuthoringReader>();
+        services.TryAddScoped<ActivityExpressionToolingOperations>();
         AddCatalogValidator(services);
         services.TryAddScoped<IRecommendedActivityDefinitionReader>(sp => sp.GetRequiredService<RecommendedActivityDefinitionReader>());
         services.TryAddScoped<IActivityUpgradeOperations>(sp => sp.GetRequiredService<ActivityUpgradeOperations>());
@@ -142,6 +144,7 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
+        services.AddApiCapabilitySource<ActivityExpressionToolingCapabilitySource>();
         services.AddPermissionContributor<ActivityDesignPermissionContributor>();
         services.ConfigureHttpJsonOptions(options => ActivitiesDesignJsonOptions.Configure(options.SerializerOptions));
     }
