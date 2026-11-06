@@ -4,12 +4,12 @@ import {
   activityDescriptionMaxLength,
   activityDisplayNameMaxLength,
   copyActivityPresentation,
-  isTechnicalActivityLabel,
   normalizeActivityPresentation,
   removeActivityPresentation,
   resolveActivityLabel,
   updateActivityPresentation
 } from "../activityPresentation";
+import { isTechnicalActivityLabel } from "../technicalActivityLabel";
 import { createDraftSnapshotId, getDraftSignature } from "../workflow-editor/editorHelpers";
 import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
 
@@ -71,7 +71,7 @@ describe("activity presentation metadata", () => {
       activityTypeKey: "Elsa.Event",
       displayName: "Event"
     };
-    expect(resolveActivityLabel(
+    expect(resolveRuntimeActivityLabel(
       { nodeId: "event-1", displayName: "3fa85f64-5717-4562-b3fc-2c963f66afa6" },
       eventCatalog,
       eventCatalog.activityTypeKey
@@ -81,7 +81,7 @@ describe("activity presentation metadata", () => {
       eventCatalog,
       eventCatalog.activityTypeKey
     )).toBe("Event");
-    expect(resolveActivityLabel(undefined, undefined, "1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5"))
+    expect(resolveRuntimeActivityLabel(undefined, undefined, "1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5"))
       .toBe("Activity");
   });
 

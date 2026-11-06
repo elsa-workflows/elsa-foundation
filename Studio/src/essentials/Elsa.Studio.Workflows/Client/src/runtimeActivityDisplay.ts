@@ -1,5 +1,6 @@
 import type { ActivityCatalogItem, ActivityPresentationRecord } from "./workflowTypes";
-import { isTechnicalActivityLabel, resolveActivityLabel } from "./activityPresentation";
+import { resolveActivityLabel } from "./activityPresentation";
+import { isTechnicalActivityLabel } from "./technicalActivityLabel";
 
 // Engine-owned operations retain friendly names when a historical catalog is unavailable.
 export function getIntrinsicActivityDisplay(activityType: string): string | undefined {
@@ -20,5 +21,6 @@ export function resolveRuntimeActivityLabel(
     : undefined;
   const label = resolveActivityLabel(usablePresentation, catalogItem, activityType);
   if (!isTechnicalActivityLabel(label) && (catalogItem || usablePresentation)) return label;
-  return getIntrinsicActivityDisplay(activityType) ?? label;
+  return getIntrinsicActivityDisplay(activityType)
+    ?? (isTechnicalActivityLabel(label) ? "Activity" : label);
 }

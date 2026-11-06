@@ -8,7 +8,6 @@ import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 import { useWorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 import { readRunSelection } from "./runSelectionUrl";
-import { formatRunPageTitle } from "./definitionDisplayNames";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
@@ -210,8 +209,8 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;
   const requestedInspectorTab = searchParams.get("tab");
-  const [runTitleState, setRunTitleState] = useState({ id: workflowExecutionId, title: formatRunPageTitle(null) });
-  const runTitle = runTitleState.id === workflowExecutionId ? runTitleState.title : formatRunPageTitle(null);
+  const [runTitleState, setRunTitleState] = useState({ id: workflowExecutionId, title: "Run" });
+  const runTitle = runTitleState.id === workflowExecutionId ? runTitleState.title : "Run";
   const setRunTitle = useCallback((title: string) => {
     setRunTitleState({ id: workflowExecutionId, title });
   }, [workflowExecutionId]);

@@ -70,6 +70,17 @@ describe("SequenceDesigner", () => {
     expect(container.textContent).not.toContain("0+e26c11bd");
   });
 
+  it("replaces a GUID card title with the catalog type name", () => {
+    mount([workflowNode("event", "0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5", {
+      activityTypeKey: "Elsa.Event",
+      activityVersionId: "1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5"
+    })]);
+
+    expect(container.querySelector(".wf-sequence-title")?.textContent).toBe("Event");
+    expect(container.querySelector(".wf-sequence-type")).toBeNull();
+    expect(container.textContent).not.toContain("0+e26c11bd");
+  });
+
   it("keeps insertion boundaries and connectors in place when a card is selected", () => {
     const nodes = [workflowNode("first", "Start"), workflowNode("second", "Work"), workflowNode("third", "Finish")];
     const { render } = mount(nodes);

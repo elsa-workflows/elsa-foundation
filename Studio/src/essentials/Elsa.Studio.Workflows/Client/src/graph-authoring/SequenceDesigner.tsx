@@ -8,7 +8,7 @@ import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTy
 import { WorkflowNodeRuntimeBadges } from "../workflow-editor/WorkflowNodeRuntimeBadges";
 import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-editor/ExecutionMotionPulse";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
-import { isTechnicalActivityLabel } from "../activityPresentation";
+import { isTechnicalActivityLabel } from "../technicalActivityLabel";
 import { shortTypeName as formatShortTypeName } from "../workflowFormatting";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import "./sequenceDesigner.css";
@@ -226,6 +226,7 @@ function SequenceStep({
   const { icon, fallback, tone } = resolveNodeActivityVisual(data);
   const availability = availabilityLookup?.({ activityVersionId: data.activityVersionId, activityTypeKey: data.activityTypeKey }) ?? null;
   const availabilityLabel = data.ghost ? "Activity unavailable in this environment" : availability ? `No longer available for new use · ${getAvailabilityStateLabel(availability.state)}` : null;
+  const title = sequenceCardTitle(data);
   const typeLabel = sequenceTypeCaption(data);
   const summary = data.summary?.trim() || data.description?.trim();
 
@@ -274,7 +275,7 @@ function SequenceStep({
         data-selected={String(selected)}
         data-index={index}
         aria-pressed={selected}
-        aria-label={`${index + 1}. ${data.label}${availabilityLabel ? `, ${availabilityLabel}` : ""}`}
+        aria-label={`${index + 1}. ${title}${availabilityLabel ? `, ${availabilityLabel}` : ""}`}
         tabIndex={tabIndex}
         draggable={!readOnly}
         onClick={onSelect}
@@ -287,10 +288,10 @@ function SequenceStep({
         </span>
         <span className="wf-sequence-step-copy">
           <span className="wf-sequence-title-row">
-            <span className="wf-sequence-title">{data.label}</span>
+            <span className="wf-sequence-title">{title}</span>
             {availabilityLabel ? <span className="wf-sequence-availability" role="img" aria-label={availabilityLabel}><AlertTriangle size={14} aria-hidden="true" /></span> : null}
           </span>
-          {typeLabel ? <span className="wf-sequence-type">{typeLabel}</span> : null}
+          {typeLabel && typeLabel !== title ? <span className="wf-sequence-type">{typeLabel}</span> : null}
           {summary ? <span className="wf-sequence-summary">{summary}</span> : null}
         </span>
       </button>
@@ -350,6 +351,12 @@ function insertionLabel(nodes: Node<WorkflowNodeData>[], index: number) {
   if (index === 0) return `Insert step before ${nodes[0]?.data.label ?? "first step"}`;
   if (index === nodes.length) return `Insert step after ${nodes.at(-1)?.data.label ?? "last step"}`;
   return `Insert step between ${nodes[index - 1]?.data.label ?? "previous step"} and ${nodes[index]?.data.label ?? "next step"}`;
+}
+
+function sequenceCardTitle(data: WorkflowNodeData) {
+  if (!isTechnicalActivityLabel(data.label)) return data.label;
+  const fromType = formatShortTypeName(data.activityTypeKey);
+  return fromType && !isTechnicalActivityLabel(fromType) ? fromType : "Activity";
 }
 
 function sequenceTypeCaption(data: WorkflowNodeData) {

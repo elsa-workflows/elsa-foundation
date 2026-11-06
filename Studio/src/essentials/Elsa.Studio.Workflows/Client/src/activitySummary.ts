@@ -1,7 +1,7 @@
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
 import { getInputPropertyName, readWrappedInputValue } from "./activityProperties";
-import { isTechnicalActivityLabel } from "./activityPresentation";
+import { isTechnicalActivityLabel } from "./technicalActivityLabel";
 import { isMaskedInput, readSecretReference } from "./maskedInput";
 import { describeInferredSource } from "./conversionSource";
 import { isHttpEndpointType } from "./workflow-editor/httpTestRequest";
