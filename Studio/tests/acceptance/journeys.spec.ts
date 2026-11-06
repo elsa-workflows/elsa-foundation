@@ -4,6 +4,7 @@ import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
+import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -36,6 +37,7 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   });
 });
+test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
   const creations = createdWorkflows.get(page) ?? [];

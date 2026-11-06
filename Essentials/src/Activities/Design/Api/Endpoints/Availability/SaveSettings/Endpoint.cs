@@ -4,7 +4,7 @@ using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Availability.SaveSettings;
 

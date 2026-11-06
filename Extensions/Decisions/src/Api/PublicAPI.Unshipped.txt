@@ -1,0 +1,69 @@
+#nullable enable
+Elsa.Decisions.Api.DecisionAssetsResponse
+Elsa.Decisions.Api.DecisionAssetsResponse.<Clone>$() -> Elsa.Decisions.Api.DecisionAssetsResponse!
+Elsa.Decisions.Api.DecisionAssetsResponse.DecisionAssetsResponse(System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionAssetView!>! Items) -> void
+Elsa.Decisions.Api.DecisionAssetsResponse.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionAssetView!>! Items) -> void
+Elsa.Decisions.Api.DecisionAssetsResponse.Equals(Elsa.Decisions.Api.DecisionAssetsResponse? other) -> bool
+Elsa.Decisions.Api.DecisionAssetsResponse.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionAssetView!>!
+Elsa.Decisions.Api.DecisionAssetsResponse.Items.init -> void
+Elsa.Decisions.Api.DecisionCasesResponse
+Elsa.Decisions.Api.DecisionCasesResponse.<Clone>$() -> Elsa.Decisions.Api.DecisionCasesResponse!
+Elsa.Decisions.Api.DecisionCasesResponse.DecisionCasesResponse(System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionCaseView!>! Items) -> void
+Elsa.Decisions.Api.DecisionCasesResponse.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionCaseView!>! Items) -> void
+Elsa.Decisions.Api.DecisionCasesResponse.Equals(Elsa.Decisions.Api.DecisionCasesResponse? other) -> bool
+Elsa.Decisions.Api.DecisionCasesResponse.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionCaseView!>!
+Elsa.Decisions.Api.DecisionCasesResponse.Items.init -> void
+Elsa.Decisions.Api.DecisionProblem
+Elsa.Decisions.Api.DecisionProblem.<Clone>$() -> Elsa.Decisions.Api.DecisionProblem!
+Elsa.Decisions.Api.DecisionProblem.Code.get -> string!
+Elsa.Decisions.Api.DecisionProblem.Code.init -> void
+Elsa.Decisions.Api.DecisionProblem.DecisionProblem(string! Code, string! Message) -> void
+Elsa.Decisions.Api.DecisionProblem.Deconstruct(out string! Code, out string! Message) -> void
+Elsa.Decisions.Api.DecisionProblem.Equals(Elsa.Decisions.Api.DecisionProblem? other) -> bool
+Elsa.Decisions.Api.DecisionProblem.Message.get -> string!
+Elsa.Decisions.Api.DecisionProblem.Message.init -> void
+Elsa.Decisions.Api.DecisionRunsResponse
+Elsa.Decisions.Api.DecisionRunsResponse.<Clone>$() -> Elsa.Decisions.Api.DecisionRunsResponse!
+Elsa.Decisions.Api.DecisionRunsResponse.DecisionRunsResponse(System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionTestReceipt!>! Items) -> void
+Elsa.Decisions.Api.DecisionRunsResponse.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionTestReceipt!>! Items) -> void
+Elsa.Decisions.Api.DecisionRunsResponse.Equals(Elsa.Decisions.Api.DecisionRunsResponse? other) -> bool
+Elsa.Decisions.Api.DecisionRunsResponse.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionTestReceipt!>!
+Elsa.Decisions.Api.DecisionRunsResponse.Items.init -> void
+Elsa.Decisions.Api.DecisionVersionsResponse
+Elsa.Decisions.Api.DecisionVersionsResponse.<Clone>$() -> Elsa.Decisions.Api.DecisionVersionsResponse!
+Elsa.Decisions.Api.DecisionVersionsResponse.DecisionVersionsResponse(System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionVersionView!>! Items) -> void
+Elsa.Decisions.Api.DecisionVersionsResponse.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionVersionView!>! Items) -> void
+Elsa.Decisions.Api.DecisionVersionsResponse.Equals(Elsa.Decisions.Api.DecisionVersionsResponse? other) -> bool
+Elsa.Decisions.Api.DecisionVersionsResponse.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionVersionView!>!
+Elsa.Decisions.Api.DecisionVersionsResponse.Items.init -> void
+Elsa.Decisions.Api.DecisionsApi
+Elsa.Decisions.Api.DecisionsApiFeature
+Elsa.Decisions.Api.DecisionsApiFeature.DecisionsApiFeature() -> void
+override Elsa.Decisions.Api.DecisionAssetsResponse.Equals(object? obj) -> bool
+override Elsa.Decisions.Api.DecisionAssetsResponse.GetHashCode() -> int
+override Elsa.Decisions.Api.DecisionAssetsResponse.ToString() -> string!
+override Elsa.Decisions.Api.DecisionCasesResponse.Equals(object? obj) -> bool
+override Elsa.Decisions.Api.DecisionCasesResponse.GetHashCode() -> int
+override Elsa.Decisions.Api.DecisionCasesResponse.ToString() -> string!
+override Elsa.Decisions.Api.DecisionProblem.Equals(object? obj) -> bool
+override Elsa.Decisions.Api.DecisionProblem.GetHashCode() -> int
+override Elsa.Decisions.Api.DecisionProblem.ToString() -> string!
+override Elsa.Decisions.Api.DecisionRunsResponse.Equals(object? obj) -> bool
+override Elsa.Decisions.Api.DecisionRunsResponse.GetHashCode() -> int
+override Elsa.Decisions.Api.DecisionRunsResponse.ToString() -> string!
+override Elsa.Decisions.Api.DecisionVersionsResponse.Equals(object? obj) -> bool
+override Elsa.Decisions.Api.DecisionVersionsResponse.GetHashCode() -> int
+override Elsa.Decisions.Api.DecisionVersionsResponse.ToString() -> string!
+static Elsa.Decisions.Api.DecisionAssetsResponse.operator !=(Elsa.Decisions.Api.DecisionAssetsResponse? left, Elsa.Decisions.Api.DecisionAssetsResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionAssetsResponse.operator ==(Elsa.Decisions.Api.DecisionAssetsResponse? left, Elsa.Decisions.Api.DecisionAssetsResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionCasesResponse.operator !=(Elsa.Decisions.Api.DecisionCasesResponse? left, Elsa.Decisions.Api.DecisionCasesResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionCasesResponse.operator ==(Elsa.Decisions.Api.DecisionCasesResponse? left, Elsa.Decisions.Api.DecisionCasesResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionProblem.operator !=(Elsa.Decisions.Api.DecisionProblem? left, Elsa.Decisions.Api.DecisionProblem? right) -> bool
+static Elsa.Decisions.Api.DecisionProblem.operator ==(Elsa.Decisions.Api.DecisionProblem? left, Elsa.Decisions.Api.DecisionProblem? right) -> bool
+static Elsa.Decisions.Api.DecisionRunsResponse.operator !=(Elsa.Decisions.Api.DecisionRunsResponse? left, Elsa.Decisions.Api.DecisionRunsResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionRunsResponse.operator ==(Elsa.Decisions.Api.DecisionRunsResponse? left, Elsa.Decisions.Api.DecisionRunsResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionVersionsResponse.operator !=(Elsa.Decisions.Api.DecisionVersionsResponse? left, Elsa.Decisions.Api.DecisionVersionsResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionVersionsResponse.operator ==(Elsa.Decisions.Api.DecisionVersionsResponse? left, Elsa.Decisions.Api.DecisionVersionsResponse? right) -> bool
+static Elsa.Decisions.Api.DecisionsApi.MapDecisionsApi(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+virtual Elsa.Decisions.Api.DecisionsApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Decisions.Api.DecisionsApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
