@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using System.Security.Cryptography;
+using System.Text;
 using global::Nuplane.Abstractions.PackageStoreProtection;
 
 namespace Elsa.Studio.Tests.Administration;
@@ -21,8 +23,8 @@ internal static class PackageMaintenanceAssertions
 
     internal static string Describe(JsonObject result, PackageMaintenancePhase phase)
     {
-        // Only fixed test context and typed categories cross the test-output boundary.
-        // Native paths, graph/state identities, messages and arbitrary result fields stay private.
+        // Only fixed test context, typed categories and bounded SHA256 fingerprints cross the test-output boundary.
+        // Native paths, graph/state identities, raw messages and arbitrary result fields stay private.
         var context = phase switch
         {
             PackageMaintenancePhase.RecoverStaleUses => "phase=recover-stale-uses; seededVersions=1.0.0,2.0.0",
@@ -40,8 +42,16 @@ internal static class PackageMaintenanceAssertions
         var diagnostics = result["diagnostics"] as JsonArray;
         var codes = diagnostics?.Take(DiagnosticLimit).Select(AdmissionCode).Distinct().Order(StringComparer.Ordinal)
             ?? Enumerable.Empty<string>();
-        return $"{context}; status={status}; refusalCodes=[{string.Join(",", codes)}]; diagnosticsTruncated={diagnostics?.Count > DiagnosticLimit}; protectionKnowledge={knowledge}; inventoryComplete={complete}";
+        var fingerprints = diagnostics?.Take(DiagnosticLimit).Select(MessageFingerprint).Distinct().Order(StringComparer.Ordinal)
+            ?? Enumerable.Empty<string>();
+        return $"{context}; status={status}; refusalCodes=[{string.Join(",", codes)}]; refusalFingerprints=[{string.Join(",", fingerprints)}]; diagnosticsTruncated={diagnostics?.Count > DiagnosticLimit}; protectionKnowledge={knowledge}; inventoryComplete={complete}";
     }
+
+    private static string MessageFingerprint(JsonNode? diagnostic)
+        => AdmissionCode(diagnostic) is var code && code != "OtherOrMissing" && diagnostic is JsonObject item
+            && item["message"] is JsonValue value && value.TryGetValue<string>(out var message) && message is { Length: > 0 and <= 8192 }
+                ? code + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(message)))
+                : "OtherOrMissing";
 
     private static string AdmissionCode(JsonNode? diagnostic)
     {
