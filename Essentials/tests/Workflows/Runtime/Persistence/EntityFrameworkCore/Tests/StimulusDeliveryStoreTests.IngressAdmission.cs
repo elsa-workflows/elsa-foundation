@@ -103,7 +103,11 @@ public sealed partial class StimulusDeliveryStoreTests
             else if (change == "resource")
                 await fixture.Resources.WriteAsync(fixture.Request.Scope,
                     new("pause", "pause", "operator", 1, IngressResource(revision: 2, enabled: false), []));
-            else await harness.References.SaveAsync(fixture.Reference with { DeletedAt = Now, DeletedReason = "retired-before-admission" });
+            else
+            {
+                Assert.True(await harness.References.RetireAsync(fixture.Reference.SourceReferenceId, Now, "retired-before-admission"));
+                Assert.Equal(Now, (await harness.References.FindAsync(fixture.Reference.SourceReferenceId))!.DeletedAt);
+            }
         };
         await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Port.AdmitAsync(fixture.Request).AsTask());
         Assert.Null(await harness.Lookup.FindDurableAsync(fixture.Request.Candidate.OutboxItemId));
@@ -158,8 +162,13 @@ public sealed partial class StimulusDeliveryStoreTests
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Port.ReadCommittedRecipientAsync(origin).AsTask());
         Assert.Equal(RuntimeRecipientPhase.CancelledBeforeDispatch,
             Assert.Single((await harness.Lookup.FindDurableAsync(accepted.Item.OutboxItemId))!.SubscriptionDelivery!.Progress).Phase);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Port.CommitDispatchAsync(context,
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => fixture.Port.CommitDispatchAsync(context,
             NativeIngressSeal(accepted.Item, recipient)).AsTask());
+        var retained = (await harness.Lookup.FindDurableAsync(accepted.Item.OutboxItemId))!;
+        var progress = Assert.Single(retained.SubscriptionDelivery!.Progress);
+        Assert.Equal(RuntimeRecipientPhase.CancelledBeforeDispatch, progress.Phase);
+        Assert.Null(progress.Seal); Assert.Null(progress.Receipt);
+        Assert.Empty((await fixture.Queue.ListAsync(new(recipient.StartIdentity.WorkflowExecutionId))).Items);
     }
 
     [Theory]
@@ -217,8 +226,9 @@ public sealed partial class StimulusDeliveryStoreTests
     {
         var origin = new RuntimeIngressCommandOrigin(source.OutboxItemId, source.SourceFingerprint,
             source.SubscriptionDelivery!.SelectionFingerprint, Scope, recipient.RecipientId);
+        // Standalone subscribers enter the ordinary root through captured declared inputs, without a legacy trigger stimulus.
         var payload = new WorkflowExecutionStartCommandPayload(recipient.Material, recipient.Material.ArtifactId,
-            new Dictionary<string, JsonElement>(), recipient.Inputs, source.StandaloneIngress!.CanonicalPayload, null,
+            new Dictionary<string, JsonElement>(), recipient.Inputs, null, null,
             WorkflowRunKind.PublishedRun, recipient.SourceProvenance, null, null, recipient.TenantId, recipient.Partition,
             recipient.Authority, WorkflowExecutableStartAuthority.FromStandaloneTrigger(origin), 0);
         var command = new WorkflowExecutionCommand(recipient.StartIdentity.CommandId, recipient.StartIdentity.WorkflowExecutionId,

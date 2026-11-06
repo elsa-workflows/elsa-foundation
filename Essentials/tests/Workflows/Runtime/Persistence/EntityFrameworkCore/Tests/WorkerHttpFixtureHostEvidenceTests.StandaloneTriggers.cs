@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -130,6 +131,9 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
     {
         await using var scope = shell.CreateAsyncScope();
         var services = scope.ServiceProvider;
+        // EF activation switches both projection stores, including an intentionally empty schedule projection.
+        // The ordinary scheduling decorator prepares that projection; direct fixture writes cannot substitute for it.
+        Assert.IsType<RecurringTriggerScheduleIndexer>(services.GetRequiredService<IWorkflowTriggerIndexer>());
         var persistence = services.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
         var triggerScope = new TriggerScope(persistence, null);
         var now = DateTimeOffset.UtcNow;
@@ -148,7 +152,11 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
                 "WorkflowDefinition", definition + "-version", "1", definition, definition + "-version", "1", now, now, WorkflowExecutableReferenceScope.Published);
             var published = await services.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new(definition, material, source,
                 "default", publication, WorkflowActivationSource.Publishing, 0));
-            Assert.True(published.Succeeded);
+            Assert.True(published.Succeeded, $"Native HTTP recipient activation failed: {JsonSerializer.Serialize(published)}");
+            Assert.Equal(WorkflowActivationProjectionState.Active,
+                await services.GetRequiredService<IWorkflowTriggerBindingStore>().FindActivationStateAsync(publication));
+            Assert.Equal(WorkflowActivationProjectionState.Active,
+                await services.GetRequiredService<IRecurringTriggerScheduleStore>().FindActivationStateAsync(publication));
             if (index == 1) second = published;
             var id = "http-subscription-" + index;
             subscriptions.Add(new(id, "physical-http-trigger", definition, "default", "native", 1, 1, true,
@@ -162,8 +170,11 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         Assert.True(committer.CanActivateType("http", 1));
         await committer.CommitAsync(triggerScope, new("create-physical-http", "create-physical-http", "operator", null, trigger, subscriptions));
         if (second is not null)
-            Assert.True((await services.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateMaterialAsync(new(second.Slot.WorkflowDefinitionId,
-                material, "default", WorkflowActivationSource.Publishing, second.Slot.Revision))).Succeeded);
+        {
+            var unpublished = await services.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateMaterialAsync(new(second.Slot.WorkflowDefinitionId,
+                material, "default", WorkflowActivationSource.Publishing, second.Slot.Revision));
+            Assert.True(unpublished.Succeeded, $"Native HTTP recipient unpublication failed: {JsonSerializer.Serialize(unpublished)}");
+        }
         await services.GetRequiredService<IHttpEndpointRouteTableSynchronizer>().RefreshAsync();
         return new(triggerScope, trigger, material.Identity);
     }

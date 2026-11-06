@@ -25,6 +25,7 @@ internal sealed partial class TriggerManagement
             impact.Add(new("Associations", aggregate.Subscriptions.Count.ToString(), proposed.Subscriptions.Count.ToString()));
             AddConfigurationImpact(aggregate.Trigger, proposed.Trigger, impact);
             AddGrantImpact(aggregate, proposed, impact);
+            await AddScheduleImpactAsync(aggregate, proposed, impact, ct);
             foreach (var row in aggregate.Subscriptions.Concat(proposed.Subscriptions).DistinctBy(row => row.Id))
             {
                 impact.Add(await CanReadTargetAsync(row.DefinitionId, row.SlotName, ct)
@@ -213,10 +214,6 @@ internal sealed partial class TriggerManagement
             .Select(property => property.Name).Distinct(StringComparer.Ordinal).Any(key => !declared.Contains(key) &&
                 !SameConfigurationValue(ConfigurationValue(current.Configuration, key), ConfigurationValue(proposed.Configuration, key))))
             impact.Add(new("Other configuration", Description: "Additional configuration values changed; values without declared display metadata are not included in this preview."));
-        if (descriptor?.Family is "Timer" or "Cron")
-            impact.Add(new("Next firing", Description: proposed.DesiredState == TriggerDesiredState.Enabled
-                ? "The source recomputes the next firing when this reviewed change commits. Preview does not reserve a firing time."
-                : "The paused schedule retains its saved cursor. The source computes the next firing when enabled."));
     }
 
     private static JsonElement? ConfigurationValue(JsonElement configuration, string key)

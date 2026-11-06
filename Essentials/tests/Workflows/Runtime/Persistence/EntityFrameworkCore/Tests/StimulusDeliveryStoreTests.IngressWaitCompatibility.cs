@@ -214,11 +214,15 @@ public sealed partial class StimulusDeliveryStoreTests
     {
         await using var runtime = WorkflowExecutionHarness.Create().ConfigureServices(services =>
         {
+            // These physical native stores already coordinate with this fixture's checkpoint boundary.
+            // Reusing them requires the same owner state in the ordinary handler's service provider.
+            services.AddSingleton(harness.MemoryState);
             services.AddSingleton(harness.Artifacts);
             services.AddSingleton(harness.Executions);
             services.AddSingleton(harness.WaitActivities);
             services.AddSingleton(harness.WaitBookmarks);
         }).Build();
+        Assert.Same(harness.MemoryState, runtime.Services.GetRequiredService<Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointStoreState>());
         var execution = (await harness.Executions.FindAsync(bookmark.WorkflowExecutionId))!;
         var payload = new RuntimeResumeBookmarkCommandPayload(execution.PinnedExecutable, bookmark.BookmarkId,
             bookmark.ActivityExecutionId, bookmark.ExecutableNodeId, bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash,

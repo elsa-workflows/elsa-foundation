@@ -144,6 +144,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
     {
         const string schedulerFamily = "RuntimeSchedulerWork";
         await using var fixture = await Fixture.Create(schedulerFamily);
+        var operationalWriteVersion = fixture.Gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion;
         await using var context = fixture.Open();
         var store = new EfSchedulerWorkQueueStore(context, new Accessor(), new NoTokens());
         RuntimeSchedulerWorkItem Input(string id, WorkflowExecutionCommandKind kind) =>
@@ -159,7 +160,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
         await fixture.Finalize();
         await store.EnqueueAsync(Input("model", WorkflowExecutionCommandKind.ExecuteModel));
         Assert.Equal(RuntimeSchedulerWorkEfModule.Chain.CurrentVersion, (await context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
-        Assert.Equal("1.0.0", fixture.Gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion);
+        Assert.Equal(operationalWriteVersion, fixture.Gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion);
     }
 
     private sealed class NoTokens : IRuntimeRecoveryContinuationCodec

@@ -73,15 +73,30 @@ public sealed partial class StimulusDeliverySchemaGateTests
     {
         await using var fixture = await Fixture.Create(RuntimeOperationalStateEfModule.SchemaFamily);
         var timer = new DurableTimer("family-timer", "family-execution", "Delay", "delay", Now, Now);
-        var schedule = new RecurringTriggerSchedule("family-schedule", "artifact", "node", "Timer", "timer",
+        var schedule = new RecurringTriggerSchedule(RecurringTriggerSchedule.BuildId("artifact", "node"), "artifact", "node", "Timer", "timer",
             RecurringScheduleKind.Interval, "PT1M", Now, Now, null, null, true);
-        string timerContent; string scheduleContent;
+        // Frozen predecessor documents: the current writer only arranges the relational projections.
+        const string timerContent = """
+            {"timerId":"ZgBhAG0AaQBsAHkALQB0AGkAbQBlAHIA","workflowExecutionId":"ZgBhAG0AaQBsAHkALQBlAHgAZQBjAHUAdABpAG8AbgA=",
+             "stimulusType":"RABlAGwAYQB5AA==","stimulusHash":"ZABlAGwAYQB5AA==","dueTime":"2026-10-26T01:00:00+00:00",
+             "createdAt":"2026-10-26T01:00:00+00:00","input":null,"metadata":null,"payloadType":null,"providerId":null}
+            """;
+        const string scheduleContent = """
+            {"scheduleId":"YQByAHQAaQBmAGEAYwB0ADoAbgBvAGQAZQA=","artifactId":"YQByAHQAaQBmAGEAYwB0AA==","executableNodeId":"bgBvAGQAZQA=",
+             "stimulusType":"VABpAG0AZQByAA==","stimulusHash":"dABpAG0AZQByAA==","kind":"Interval","expression":"UABUADEATQA=",
+             "nextOccurrence":"2026-10-26T01:00:00+00:00","createdAt":"2026-10-26T01:00:00+00:00","activationId":null,"slotId":null,"isActive":true}
+            """;
         await using (var seed = fixture.Open())
         {
             await new EfDurableTimerStore(seed, new Accessor(), new NoTokens()).SaveAsync(timer);
             await new EfRecurringTriggerScheduleStore(seed, new Accessor(), new NoTokens()).SaveAsync(schedule);
-            timerContent = (await seed.DurableTimers.AsNoTracking().SingleAsync()).ContentJson;
-            scheduleContent = (await seed.RecurringTriggerSchedules.AsNoTracking().SingleAsync()).ContentJson;
+            var timerRow = await seed.DurableTimers.SingleAsync();
+            var scheduleRow = await seed.RecurringTriggerSchedules.SingleAsync();
+            Assert.Equal("1.0.0", timerRow.SchemaVersion);
+            Assert.Equal("1.0.0", scheduleRow.SchemaVersion);
+            timerRow.ContentJson = timerContent;
+            scheduleRow.ContentJson = scheduleContent;
+            await seed.SaveChangesAsync();
         }
         await fixture.Finalize();
         await using var context = fixture.Open();
@@ -99,7 +114,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
         Assert.Equal(scheduleContent, writtenSchedule.ContentJson);
 
         await schedules.PrepareActivationAsync("family-activation", [schedule with
-        { ScheduleId = "family-projection", ActivationId = "family-activation", SlotId = "family-slot", IsActive = false }]);
+        { ScheduleId = RecurringTriggerSchedule.BuildId("family-activation", "artifact", "node"), ActivationId = "family-activation", SlotId = "family-slot", IsActive = false }]);
         await schedules.ActivateAsync("family-activation", null);
         Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion,
             (await context.RecurringTriggerScheduleProjectionStates.AsNoTracking().SingleAsync()).SchemaVersion);

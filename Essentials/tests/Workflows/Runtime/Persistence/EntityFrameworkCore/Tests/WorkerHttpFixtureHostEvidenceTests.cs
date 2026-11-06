@@ -217,7 +217,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
 
     private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false)
     {
-        var selectedFeatures = standaloneHttp ? SelectedFeatureIds.Concat(["ActivitiesHttp", "StandaloneHttpTriggerAuthoring"]).ToArray() : SelectedFeatureIds;
+        var selectedFeatures = standaloneHttp ? SelectedFeatureIds.Concat(["ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : SelectedFeatureIds;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -260,6 +260,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(WorkflowsRuntimeTriggersFeature).Assembly,
+                typeof(Elsa.Workflows.Runtime.Scheduling.WorkflowsRuntimeRecurringTriggersFeature).Assembly,
                 typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
                 typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
                 typeof(Elsa.Http.HttpFeature).Assembly,

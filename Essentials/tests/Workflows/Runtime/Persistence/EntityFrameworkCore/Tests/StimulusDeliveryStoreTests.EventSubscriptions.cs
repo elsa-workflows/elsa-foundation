@@ -25,7 +25,9 @@ public sealed partial class StimulusDeliveryStoreTests
         Assert.Equal("publisher", row.RequireWorkflowIntent().WorkflowExecutionId);
         Assert.Equal(fixture.Source.IntentFingerprint, row.SourceFingerprint);
         Assert.Equal("workflow-broadcast:send", row.OutboxItemId);
-        Assert.Single(row.RecipientSnapshot!.Starts);
+        var ordinary = Assert.Single(row.RecipientSnapshot!.Starts);
+        Assert.Equal(EventStimulus.StimulusType, ordinary.Binding.StimulusType);
+        Assert.Equal(EventStimulus.Hash("orders"), ordinary.Binding.StimulusHash);
         Assert.True(fixture.Independent.Delivery.IsEquivalentTo(row.SubscriptionDelivery));
         Assert.Equal(["accepted", "refused"], Assert.Single(row.SubscriptionDelivery!.ResourceCaptures!).SubscriptionIds);
         Assert.Equal(2, (await harness.Delivery.ListPinnedExecutableArtifactIdsAsync()).Count);
@@ -114,7 +116,7 @@ public sealed partial class StimulusDeliveryStoreTests
         await harness.SavePending(pending);
         var source = new PostCommitDeliveryContext(Assert.Single(await harness.Claims.ClaimAsync(new("event-owner", Now, TimeSpan.FromMinutes(1), 10))), Scope);
         var ordinary = new StimulusDeliverySnapshot(1, source.SourceOutboxItemId, source.IntentFingerprint, StimulusDeliveryScope.From(publisher, Scope), Now,
-            EventStimulus.StimulusType, EventStimulus.Hash("orders"), local ? [] : [Start("ordinary-binding")], []);
+            EventStimulus.StimulusType, EventStimulus.Hash("orders"), local ? [] : [Start("ordinary-binding", EventStimulus.StimulusType, EventStimulus.Hash("orders"))], []);
         if (local) return new(composition.Port, composition.Resources, source, ordinary,
             new(scope, null, WorkflowStimulusSubscriptionSelector.Empty(source), []));
         var descriptor = Assert.Single(adapters).CreateSubscriptionSource(intent)!;

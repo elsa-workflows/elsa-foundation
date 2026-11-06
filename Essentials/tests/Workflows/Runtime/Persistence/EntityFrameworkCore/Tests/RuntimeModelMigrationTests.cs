@@ -102,8 +102,12 @@ public sealed partial class RuntimeModelMigrationTests
                 // Compare every original column; the newly added columns are verified separately above.
                 var columns = Enumerable.Range(0, reader.FieldCount).Where(i =>
                     (table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial") &&
-                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) is not ("ClaimDeliveredAtUtcTicks" or "SourceId" or "SourceKeyHash" or "SourceKind" or "TriggerIdHash"))).ToArray();
-                var row = columns.Select(i => reader.IsDBNull(i) ? null : reader.GetValue(i)).ToArray();
+                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) is not ("ClaimDeliveredAtUtcTicks" or "SourceId" or "SourceKeyHash" or "SourceKind" or "TriggerIdHash")))
+                    .OrderBy(reader.GetName, StringComparer.Ordinal).ToArray();
+                // SQLite rebuilds can change physical column ordinals. Bind every exact value to its original
+                // column name so reordered columns neither fabricate a mismatch nor hide swapped data.
+                var row = columns.Select(i => new KeyValuePair<string, object?>(reader.GetName(i),
+                    reader.IsDBNull(i) ? null : reader.GetValue(i))).ToArray();
                 rows.Add(JsonSerializer.Serialize(row));
             }
             rows.Sort(StringComparer.Ordinal);

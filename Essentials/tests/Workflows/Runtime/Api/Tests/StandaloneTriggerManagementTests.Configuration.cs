@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.DataProtection;
 using Xunit;
 
@@ -29,7 +31,10 @@ public sealed partial class StandaloneTriggerManagementTests
     [Fact]
     public async Task Cron_expression_and_timezone_edit_preserves_grants_and_previews_no_invented_due_time()
     {
-        var fixture = new ConfigurationFixture("cron", Element("""{"expression":"0 0 9 * * *","timezone":"UTC"}"""));
+        var schedules = new InMemoryRecurringTriggerScheduleStore();
+        var fixture = new ConfigurationFixture("cron", Element("""{"expression":"0 0 9 * * *","timezone":"UTC"}"""), schedules: schedules);
+        var cursor = ScheduleImpactCursor(fixture);
+        await schedules.SaveAsync(cursor);
         var before = fixture.Store.Resource;
         var command = ConfigurationCommand(Element("""{"expression":"0 0 10 * * *","timezone":"America/New_York"}"""));
 
@@ -38,8 +43,8 @@ public sealed partial class StandaloneTriggerManagementTests
         Assert.Contains(preview.Impact, item => item.Label == "Cron expression" && item.Before == "0 0 9 * * *" && item.After == "0 0 10 * * *");
         Assert.Contains(preview.Impact, item => item.Label == "Timezone" && item.Before == "UTC" && item.After == "America/New_York");
         var next = Assert.Single(preview.Impact.Where(item => item.Label == "Next firing"));
-        Assert.Null(next.Before); Assert.Null(next.After);
-        Assert.Contains("when this reviewed change commits", next.Description!, StringComparison.Ordinal);
+        Assert.Equal(ScheduleImpactText(cursor), next.Before); Assert.Null(next.After);
+        Assert.Contains("Advisory next firing unavailable: the source schedule planner is not installed.", next.Description!, StringComparison.Ordinal);
         await fixture.Apply(command, preview);
 
         AssertConfigurationScopeUnchanged(before, fixture.Store.Resource);
@@ -162,10 +167,12 @@ public sealed partial class StandaloneTriggerManagementTests
         internal FakeAccess Access { get; } = new() { CanGrant = false, TargetExecute = false };
         internal FakeStore Store { get; } = new();
         internal TriggerManagement Management { get; }
+        internal Clock Clock { get; } = new();
         internal IReadOnlyList<TriggerSubscription> OriginalSubscriptions { get; }
-        internal ConfigurationFixture(string type, JsonElement configuration, int count = 2, IReadOnlyList<TriggerConfigurationField>? fields = null)
+        internal ConfigurationFixture(string type, JsonElement configuration, int count = 2, IReadOnlyList<TriggerConfigurationField>? fields = null,
+            IRecurringTriggerScheduleStore? schedules = null, IEnumerable<IStandaloneSchedulePlanner>? planners = null)
         {
-            var clock = new Clock();
+            var clock = Clock;
             OriginalSubscriptions = Enumerable.Range(0, count).Select(index => new TriggerSubscription("subscription-" + index, "trigger-a",
                 "definition-" + index, "default", "native", 1, 1, true, [], new(TriggerManagementKind.Studio),
                 new("grant-" + index, "trigger-a", "subscription-" + index, "definition-" + index, "default", "native", type,
@@ -174,7 +181,7 @@ public sealed partial class StandaloneTriggerManagementTests
                 TriggerDesiredState.Enabled, new(TriggerManagementKind.Studio), clock.Now, clock.Now, "creator", hasActivated: true,
                 tenantId: Access.Scope.TenantId), OriginalSubscriptions);
             Management = new(Store, new ConfigurationCommitter(Store), Access, new ConfigurationCatalog(type, fields), new FakeDiscovery(),
-                new Mapper(), new Publisher(), new EphemeralDataProtectionProvider(), clock);
+                new Mapper(), new Publisher(), new EphemeralDataProtectionProvider(), clock, schedules: schedules, schedulePlanners: planners);
         }
         internal Task<TriggerPreview> Preview(JsonElement command) => Management.PreviewAsync("trigger-a",
             JsonSerializer.SerializeToElement(new { expectedRevision = Store.Resource.Trigger.Revision, command }), default).AsTask();

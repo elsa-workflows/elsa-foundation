@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
 import { TriggerJourney, configured, input, source, type Authored, type DispatchBoundary, type WorkflowState } from "./standaloneTriggersSupport";
-import type { DeliveryView, TriggerView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/types";
+import type { ChangePreview, DeliveryView, TriggerView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/types";
 
 type EchoTarget = Awaited<ReturnType<TriggerJourney["echo"]>>;
 type ScheduleActions = { pause(id: string, capture?: string): Promise<void>; replace(authored: Authored, state: WorkflowState): Promise<unknown> };
@@ -137,7 +137,56 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   await editSchedule(j, cron.id, { "Cron expression": "0 0 9 * * *", Timezone: "UTC" });
   await j.add(cron.id, targets[0].authored.definition.id, [configured("message", "Cron timezone qualification"), configured("count", 1)]); await j.enable(cron.id);
   const before = await j.read(cron.id); expect(before.schedule?.timezone).toBe("UTC");
-  await editSchedule(j, cron.id, { "Cron expression": "0 0 10 * * *", Timezone: "America/New_York" });
+  expect(before.schedule?.nextDueUtc).toBeTruthy(); expect(before.schedule?.offset).toBe("+00:00");
+  await j.open(cron.id); await j.page.getByRole("button", { name: "Edit configuration", exact: true }).click();
+  await j.page.getByLabel("Cron expression", { exact: true }).fill("0 0 10 * * *");
+  await j.page.getByLabel("Timezone", { exact: true }).fill("America/New_York");
+  const previewUrl = new URL(`${j.base}/runtime/standalone-triggers/${encodeURIComponent(cron.id)}/changes/preview`);
+  const previewResponse = j.page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === "POST" && url.origin === previewUrl.origin && url.pathname === previewUrl.pathname;
+  });
+  const previewRequestedAt = Date.now();
+  await j.page.getByRole("button", { name: "Review changes", exact: true }).click();
+  const response = await previewResponse;
+  expect(response.ok(), "The installed schedule module prepares the actual UI-issued next-firing review").toBe(true);
+  expect(response.request().postDataJSON()).toMatchObject({ expectedRevision: before.revision,
+    command: { kind: "SaveConfiguration", configuration: { expression: "0 0 10 * * *", timezone: "America/New_York" } } });
+  const preview = await response.json() as ChangePreview;
+  expect(preview.canApply).toBe(true); expect(preview.observedRevision).toBe(before.revision);
+  const nextFirings = preview.impact.filter(item => item.label === "Next firing"); expect(nextFirings).toHaveLength(1);
+  const nextFiring = nextFirings[0];
+  const cursor = (value: string | undefined, description: string) => {
+    expect(value, description).toBeTruthy();
+    const parts = value!.split(" | "); expect(parts, description).toHaveLength(3);
+    expect(parts[0], "The source module projects an explicit UTC instant").toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/);
+    expect(Number.isFinite(Date.parse(parts[0])), description).toBe(true);
+    expect(parts[1], "The source module includes the schedule timezone").not.toBe("");
+    expect(parts[2], "The source module includes the signed UTC offset").toMatch(/^[+-]\d{2}:\d{2}$/);
+    return { utc: parts[0], timezone: parts[1], offset: parts[2] };
+  };
+  const current = cursor(nextFiring.before, "Preview exposes the actual current persisted cursor");
+  const proposed = cursor(nextFiring.after, "Preview exposes the installed planner's proposed next firing");
+  expect(Date.parse(current.utc)).toBe(Date.parse(before.schedule!.nextDueUtc!));
+  expect(current.timezone).toBe(before.schedule!.timezone); expect(current.offset).toBe(before.schedule!.offset);
+  expect(proposed.timezone).toBe("America/New_York");
+  expect(Date.parse(proposed.utc)).toBeGreaterThan(previewRequestedAt);
+  expect(Date.parse(proposed.utc)).not.toBe(Date.parse(current.utc));
+  const proposedOffset = new Intl.DateTimeFormat("en-US", { timeZone: proposed.timezone, timeZoneName: "longOffset" })
+    .formatToParts(new Date(proposed.utc)).find(part => part.type === "timeZoneName")!.value.replace(/^GMT/, "");
+  expect(proposed.offset).toBe(proposedOffset);
+  expect(nextFiring.description).toMatch(/^Action: Replace\./);
+  const impactRow = j.page.getByRole("region", { name: "Change impact", exact: true }).getByRole("row").filter({ hasText: "Next firing" });
+  await expect(impactRow).toHaveCount(1);
+  await expect(impactRow.getByRole("cell").nth(0)).toHaveText(nextFiring.before!);
+  await expect(impactRow.getByRole("cell").nth(1)).toHaveText(nextFiring.after!);
+  await expect(impactRow).toContainText(nextFiring.description!);
+  const stillCurrent = await j.read(cron.id);
+  expect(stillCurrent.revision).toBe(before.revision); expect(stillCurrent.configuration).toEqual(before.configuration);
+  expect(stillCurrent.schedule?.nextDueUtc).toBe(before.schedule?.nextDueUtc); expect(stillCurrent.schedule?.generation).toBe(before.schedule?.generation);
+  j.requests.push({ kind: "actual-ui-cron-next-firing-preview", backendUrl: response.url(), status: response.status(), triggerId: cron.id,
+    persistedSchedule: before.schedule, current, proposed, impact: nextFiring, observedRevision: preview.observedRevision, previewDidNotMutateSchedule: true });
+  await j.review("cron-next-firing-preview");
   const changed = await j.read(cron.id);
   expect(changed.schedule?.timezone).toBe("America/New_York"); expect(changed.schedule!.generation).toBeGreaterThan(before.schedule!.generation!);
   expect(changed.schedule?.nextDueUtc).not.toBe(before.schedule?.nextDueUtc); expect(Date.parse(changed.schedule!.nextDueUtc!)).toBeGreaterThan(Date.now());
@@ -180,7 +229,7 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   expect(repaired.recipients.map(item => item.id)).toEqual(started.recipients.map(item => item.id));
   await j.open(timer.id); await j.page.reload(); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText("Paused");
   j.requests.push({ kind: "actual-old-due-consumed-then-one-future-cursor-and-frozen-independent-refusals", triggerId: timer.id, originalDueUtc: armed.schedule!.nextDueUtc, futureDueUtc: future.schedule!.nextDueUtc, original: started, afterTargetRepair: repaired });
-  j.observed.push("Actual Cron UI changed timezone and expression into a persisted future schedule generation", "With both serving targets unpublished, a real due timer retained one overdue cursor with failed-attempt backoff and no accepted delivery; API and Schedule UI explicitly reported waiting for eligible subscribers rather than admission unavailability", "Restoring one target consumed the original due-time input and advanced to one future cursor; restoring the other after pause did not add a recipient to the already partially accepted Independent cohort");
+  j.observed.push("Actual Cron UI preview matched the persisted current UTC cursor and showed the installed planner's proposed UTC instant, America/New_York timezone, signed offset and Replace action in the visible Next firing row before Apply; preview left resource and schedule unchanged", "Actual Cron UI changed timezone and expression into a persisted future schedule generation", "With both serving targets unpublished, a real due timer retained one overdue cursor with failed-attempt backoff and no accepted delivery; API and Schedule UI explicitly reported waiting for eligible subscribers rather than admission unavailability", "Restoring one target consumed the original due-time input and advanced to one future cursor; restoring the other after pause did not add a recipient to the already partially accepted Independent cohort");
 }
 
 export async function verifyBpmnInputRefusals(j: TriggerJourney, authored: Authored, validVersionId: string, validState: WorkflowState) {

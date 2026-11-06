@@ -1006,8 +1006,8 @@ public sealed partial class StimulusDeliveryStoreTests
     private static WorkflowExecutableSourceProvenance SelectedSource() => new("selected-reference", "definition", "selected-definition", "2",
         "selected-definition", "selected-publication-version", "selected-label", "activation", "slot");
 
-    private static StimulusStartRecipient Start(string id) => new(new(id, "artifact", "definition", "1.0.0", "hash",
-        "start", "event", "named", null, new Dictionary<string, string> { ["key\ud800"] = "value\udc00" }, Now,
+    private static StimulusStartRecipient Start(string id, string stimulusType = "event", string stimulusHash = "named") => new(new(id, "artifact", "definition", "1.0.0", "hash",
+        "start", stimulusType, stimulusHash, null, new Dictionary<string, string> { ["key\ud800"] = "value\udc00" }, Now,
         "activation", "slot"), Pin, SelectedSource());
 
     private static RuntimePostCommitOutboxItem Pending(string commit, bool protocol, string payload = "original", string kind = "publish") => new(
