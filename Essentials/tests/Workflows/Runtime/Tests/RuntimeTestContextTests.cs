@@ -335,6 +335,97 @@ public sealed class RuntimeTestContextTests
     }
 
     [Theory]
+    [InlineData(false, "sensitivity")]
+    [InlineData(true, "sensitivity")]
+    [InlineData(false, "redaction")]
+    [InlineData(true, "redaction")]
+    [InlineData(false, "retention")]
+    [InlineData(true, "retention")]
+    public async Task Canonical_root_capture_refuses_source_protection_that_its_actual_declaration_would_drop(bool sibling, string protection)
+    {
+        var source = protection switch
+        {
+            "sensitivity" => ActivityValuePolicy.Default with { IsSensitive = true },
+            "redaction" => ActivityValuePolicy.Default with { RedactionMode = "test-mask" },
+            _ => ActivityValuePolicy.Default with { RetentionPolicy = "test-retain" }
+        };
+        var selected = ResultLifecycleCaptureNode(sibling ? source : null, selectedPolicy: sibling ? null : source);
+        await using var fixture = await Fixture.CreateAsync(selected, workflowVariables: [CaptureDeclaration()]);
+        RegisterCaptureActivity(fixture);
+
+        var prepared = await fixture.PrepareAsync();
+        Assert.Empty(await fixture.ActivitiesAsync());
+        Assert.Null(await fixture.Harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(fixture.Harness.ExecutionId));
+        await Record.ExceptionAsync(() => fixture.StartAsync());
+        if (prepared.IsAvailable)
+        {
+            // The regression control must expose the actual privacy loss, rather than stop at an unexpected
+            // admission. The old validator executes and root writeback retains only the plain declaration.
+            var state = await fixture.StateAsync();
+            Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
+            Assert.Equal("selected", Assert.Single(await fixture.ActivitiesAsync()).Execution.ExecutableNodeId);
+            var stored = state.RootVariableFrame!.Values["captured"];
+            Assert.Equal(23, stored.InlineValue!.Value.GetInt32());
+            var required = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+                source.IsSensitive, source.RequiresEncryption, source.RedactionMode, source.RetentionPolicy);
+            Assert.True(stored.Policy.Satisfies(required),
+                $"Admitted capture dropped {protection}: stored={JsonSerializer.Serialize(stored.Policy)}, required={JsonSerializer.Serialize(required)}");
+        }
+        Assert.False(prepared.IsAvailable);
+        Assert.Equal(RuntimeTestContextFindingKind.Unavailable, Assert.Single(prepared.Findings).Kind);
+        Assert.Empty(await fixture.ActivitiesAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Canonical_root_capture_retains_matching_or_stronger_declared_protection_and_destination_metadata(bool strongerDestination)
+    {
+        var protectedSource = ActivityValuePolicy.Default with
+        { IsSensitive = true, RedactionMode = "test-mask", RetentionPolicy = "test-retain" };
+        var selected = ResultLifecycleCaptureNode(selectedPolicy: strongerDestination ? ActivityValuePolicy.Default : protectedSource);
+        var destination = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+            true, false, "test-mask", "test-retain", new Dictionary<string, string> { ["classification"] = "restricted" });
+        await using var fixture = await Fixture.CreateAsync(selected, workflowVariables: [CaptureDeclaration(destination)]);
+        RegisterCaptureActivity(fixture);
+
+        var prepared = await fixture.PrepareAsync();
+        Assert.True(prepared.IsAvailable, JsonSerializer.Serialize(prepared.Findings));
+        await fixture.StartAsync();
+
+        var state = await fixture.StateAsync();
+        Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
+        var captured = state.RootVariableFrame!.Values["captured"];
+        Assert.Equal(23, captured.InlineValue!.Value.GetInt32());
+        Assert.True(captured.Policy.IsSensitive);
+        Assert.Equal("test-mask", captured.Policy.RedactionMode);
+        Assert.Equal("test-retain", captured.Policy.RetentionPolicy);
+        Assert.Equal("restricted", captured.Policy.Metadata["classification"]);
+        Assert.Equal("selected", Assert.Single(await fixture.ActivitiesAsync()).Execution.ExecutableNodeId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capture_source_storage_profile_metadata_remains_unqualified_before_any_activity(bool sibling)
+    {
+        // ActivityValuePolicy exposes no arbitrary metadata. Its storage profile is the sole metadata
+        // source in ToProtectionPolicy and remains outside the existing qualified inline capture profile.
+        var source = ActivityValuePolicy.Default with { StorageProfile = "private-unqualified-profile" };
+        var selected = ResultLifecycleCaptureNode(sibling ? source : null, selectedPolicy: sibling ? null : source);
+        await using var fixture = await Fixture.CreateAsync(selected, workflowVariables: [CaptureDeclaration()]);
+        RegisterCaptureActivity(fixture);
+
+        var prepared = await fixture.PrepareAsync();
+
+        Assert.False(prepared.IsAvailable);
+        Assert.Equal(RuntimeTestContextFindingKind.Unavailable, Assert.Single(prepared.Findings).Kind);
+        Assert.DoesNotContain("private-unqualified-profile", JsonSerializer.Serialize(prepared), StringComparison.Ordinal);
+        await Record.ExceptionAsync(() => fixture.StartAsync());
+        Assert.Empty(await fixture.ActivitiesAsync());
+    }
+
+    [Theory]
     [InlineData("encryption")]
     [InlineData("external")]
     [InlineData("nonpersistable")]
@@ -542,16 +633,20 @@ public sealed class RuntimeTestContextTests
     private static RuntimeInputBinding Literal(int value) => new("value", IntType, ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.Literal, literal: Number(value));
     private static ValueEnvelope Number(int value) => ValueEnvelope.Inline(IntType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
-    private static RuntimeVariableDeclaration CaptureDeclaration() => new("captured", "captured", IntType,
-        ValueProtectionPolicy.InstanceInline, new RuntimeInputBinding("captured", IntType, ValueProtectionPolicy.InstanceInline,
-            RuntimeInputBindingSource.Literal, literal: Number(1)));
+    private static RuntimeVariableDeclaration CaptureDeclaration(ValueProtectionPolicy? policy = null)
+    {
+        policy ??= ValueProtectionPolicy.InstanceInline;
+        return new("captured", "captured", IntType, policy, new RuntimeInputBinding("captured", IntType, policy,
+            RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(IntType, JsonSerializer.SerializeToElement(1), policy)));
+    }
 
-    private static ExecutableNode ResultLifecycleCaptureNode(ActivityValuePolicy? siblingPolicy = null, ActivityValuePolicy? atomicPolicy = null)
+    private static ExecutableNode ResultLifecycleCaptureNode(ActivityValuePolicy? siblingPolicy = null,
+        ActivityValuePolicy? atomicPolicy = null, ActivityValuePolicy? selectedPolicy = null)
     {
         var descriptor = new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1",
             JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EchoActivity)))));
         var projections = new List<ActivityResultProjectionContract>
-        { new("value", "value", IntType, true, ActivityValuePolicy.Default) };
+        { new("value", "value", IntType, true, selectedPolicy ?? ActivityValuePolicy.Default) };
         if (siblingPolicy is not null)
             projections.Add(new("sibling", "value", IntType, true, siblingPolicy));
         // ExecutableNodeCompiler pins atomic results with Result lifetime. The destination variable remains Instance.

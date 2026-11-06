@@ -27,12 +27,15 @@ public class GraphSelectedTestContextTests
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     [Theory]
-    [InlineData(false, "total-key", false, false)]
-    [InlineData(false, "total-key", false, true)]
-    [InlineData(true, "total-key", false, false)]
-    [InlineData(true, "missing-key", false, false)]
-    [InlineData(true, "total-key", true, false)]
-    public async Task Selected_graph_body_uses_only_a_prepared_model_owned_context(bool clrCapture, string captureKey, bool wrongCaptureType, bool javaScript)
+    [InlineData(false, "total-key", false, false, false, false)]
+    [InlineData(false, "total-key", false, true, false, false)]
+    [InlineData(true, "total-key", false, false, false, false)]
+    [InlineData(true, "missing-key", false, false, false, false)]
+    [InlineData(true, "total-key", true, false, false, false)]
+    [InlineData(true, "total-key", false, false, true, false)]
+    [InlineData(true, "total-key", false, false, true, true)]
+    public async Task Selected_graph_body_uses_only_a_prepared_model_owned_context(bool clrCapture, string captureKey,
+        bool wrongCaptureType, bool javaScript, bool protectedResult, bool siblingProtection)
     {
         var source = new Setup();
         var executionId = KeyedWorkflowStartIdentity.For("graph-context", WorkflowExecutionHarness.Identity.ArtifactId).WorkflowExecutionId;
@@ -53,6 +56,7 @@ public class GraphSelectedTestContextTests
         types.RegisterType(typeof(Echo), TypeAliasConvention.CanonicalAlias(typeof(Echo)));
         types.RegisterType(typeof(EchoResult), TypeAliasConvention.CanonicalAlias(typeof(EchoResult)));
         var selected = Selected(clrCapture, captureKey, wrongCaptureType, javaScript);
+        if (protectedResult) selected = WithProtectedResult(selected, siblingProtection);
         var boundary = Boundary(selected);
         var outside = new[] { WorkflowExecutionHarness.NewProbeNode("before"), boundary, WorkflowExecutionHarness.NewProbeNode("after") };
         var root = new ExecutableNode("container", "container", typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!, "1", "test.sequence",
@@ -87,6 +91,15 @@ public class GraphSelectedTestContextTests
             return;
         }
         Assert.True(preparation.IsAvailable, string.Join("; ", preparation.Findings.Select(x => x.Code)));
+        if (protectedResult)
+        {
+            // The model declares an ordinary inline variable; this writer preserves the captured source
+            // protection, so canonical-root refusal rules must not be applied to this supplied frame.
+            var declared = preparation.Context!.Frames.Single().Frame.Values["total-key"].Policy;
+            Assert.False(declared.IsSensitive);
+            Assert.Null(declared.RedactionMode);
+            Assert.Null(declared.RetentionPolicy);
+        }
         var request = new WorkflowExecutionStartDispatchRequest(stored.Identity.ArtifactId, "tests", executionId,
             "graph-context", null, null, null, null, null, WorkflowRunKind.TestRun, new(reference.SourceReferenceId),
             WorkflowExecutableProvenanceRequirement.RequireLiveReference, null, null, null, scope.Partition, entry.Authority, null, 0, scope)
@@ -96,9 +109,34 @@ public class GraphSelectedTestContextTests
         Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
         Assert.Equal(clrCapture ? 23 : javaScript ? 8 : 7, state.TestContext!.Frames.Single().Frame.Values["total-key"].InlineValue!.Value.GetInt32());
         Assert.Equal(VariableFrameStatus.Closed, state.TestContext.Frames.Single().Frame.Status);
+        if (protectedResult)
+        {
+            var captured = state.TestContext.Frames.Single().Frame.Values["total-key"].Policy;
+            Assert.True(captured.IsSensitive);
+            Assert.Equal("test-mask", captured.RedactionMode);
+            Assert.Equal("test-retain", captured.RetentionPolicy);
+        }
         Assert.Empty(state.RootVariableFrame!.Values);
         Assert.Equal("selected", Assert.Single(await harness.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId)).Execution.ExecutableNodeId);
         Assert.Equal(original, JsonSerializer.Serialize(await harness.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(stored.Identity.ArtifactId)));
+    }
+
+    private static ExecutableNode WithProtectedResult(ExecutableNode node, bool sibling)
+    {
+        var policy = ActivityValuePolicy.Default with
+        { IsSensitive = true, RedactionMode = "test-mask", RetentionPolicy = "test-retain" };
+        var projections = new List<ActivityResultProjectionContract>
+        { new("value", "value", IntType, true, sibling ? ActivityValuePolicy.Default : policy) };
+        if (sibling) projections.Add(new("sibling", "value", IntType, true, policy));
+        var descriptor = new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1",
+            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(Echo)))));
+        var contract = new ActivityContract(typeof(Echo).FullName!, "1", typeof(ClrActivityDescriptor).FullName!, descriptor.Payload,
+            [new("value", "Value", IntType, false, false, false, null, ActivityValuePolicy.Default)],
+            new(new(TypeAliasConvention.CanonicalAlias(typeof(EchoResult))), true,
+                ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result }, projections),
+            ["Done"], new(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(typeof(Echo))));
+        return new(node.ExecutableNodeId, node.AuthoredActivityId, node.ActivityType, node.ActivityTypeVersion,
+            descriptor, node.InputBindings, node.OutputCaptures, node.Metadata, activityContract: contract);
     }
 
     private static ExecutableNode Selected(bool capture, string captureKey, bool wrongCaptureType, bool javaScript)

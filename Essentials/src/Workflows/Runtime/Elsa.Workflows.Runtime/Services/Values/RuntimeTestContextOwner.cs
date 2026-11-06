@@ -192,14 +192,15 @@ internal sealed class RuntimeTestContextOwner(
                     if (owner is null || owner.Frame.ScopeId != scope || !owner.Writable || key is null ||
                         HasOwnedClosedAncestor(node) || !owner.Frame.Values.TryGetValue(key, out var declaration))
                         throw Refused("Selected work requires a qualified writable enclosing capture owner before execution.");
-                    ValidateCapture(capture, node, declaration);
+                    ValidateCapture(capture, node, declaration, writesCanonicalRoot: false);
                 }
                 else if (!capture.Metadata.ContainsKey(RuntimeMetadataKeys.CaptureTargetScopeId) &&
                          capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal))
                 {
                     var key = capture.Metadata.GetValueOrDefault(RuntimeMetadataKeys.TargetVariableReferenceKey)
                         ?? throw Refused("A workflow-variable capture is missing its captured declaration key.");
-                    ValidateCapture(capture, node, RequireWriteTarget(node, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, key));
+                    ValidateCapture(capture, node, RequireWriteTarget(node, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, key),
+                        writesCanonicalRoot: true);
                 }
             }
             foreach (var binding in node.InputBindings.Values)
@@ -278,7 +279,7 @@ internal sealed class RuntimeTestContextOwner(
             return value;
         }
 
-        void ValidateCapture(RuntimeOutputCapture capture, ExecutableNode node, ValueEnvelope declaration)
+        void ValidateCapture(RuntimeOutputCapture capture, ExecutableNode node, ValueEnvelope declaration, bool writesCanonicalRoot)
         {
             var projection = node.ActivityContract?.Result.Projections.GetValueOrDefault(capture.OutputName);
             var resultType = capture.ConversionPlan?.TargetType ?? projection?.Type;
@@ -310,8 +311,10 @@ internal sealed class RuntimeTestContextOwner(
             var minimum = ValuePolicyCombiner.ToProtectionPolicy(sourcePolicy);
             var effective = new ValueProtectionPolicy(capture.Lifecycle, declaration.Policy.Storage, minimum.IsSensitive,
                 minimum.RequiresEncryption, minimum.RedactionMode, minimum.RetentionPolicy, minimum.Metadata);
-            if (!effective.Satisfies(declaration.Policy))
-                throw Refused("An enclosing capture would weaken its captured protection policy.");
+            // Canonical root writeback retains the declared destination policy. Supplied-frame writeback
+            // retains the rebased source policy. Validate the protection that the actual writer will persist.
+            if (writesCanonicalRoot ? !declaration.Policy.Satisfies(effective) : !effective.Satisfies(declaration.Policy))
+                throw Refused("The actual capture destination would weaken its required protection policy.");
         }
 
         async ValueTask RequireCompleteAmbientContextAsync(ExecutableNode node)
