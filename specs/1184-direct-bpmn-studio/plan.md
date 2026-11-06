@@ -12,7 +12,7 @@ Use the current BPMN canvas, workflow drafts/versions, model runtime, mailbox/ch
 
 **Language/Version**: Repository .NET SDK 10.0.300, C#, existing TypeScript/React toolchain.
 
-**Primary Dependencies**: Released BPMN 0.5.0 packages; existing NativeEndpoints, CShells, scoped Studio SDK HTTP/capability/navigation services, React Flow. No new third-party dependency or bpmn-js adoption.
+**Primary Dependencies**: Released BPMN 0.5.0 packages; existing MinimalEndpoints, CShells, scoped Studio SDK HTTP/capability/navigation services, React Flow. No new third-party dependency or bpmn-js adoption.
 
 **Storage**: Existing separate Design and Runtime stores. Immutable source references/material, model state and input receipts; no new claim table or global execution catalog. Whole SQLite stores provide owned-host upgrade evidence; existing provider contracts stay unchanged.
 

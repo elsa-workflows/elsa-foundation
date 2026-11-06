@@ -4,6 +4,7 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await assertToastPlacementHolds(page);
@@ -39,6 +40,7 @@ const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   await releaseToastPlacementHolds(page);

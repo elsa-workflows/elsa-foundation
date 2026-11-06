@@ -28,6 +28,7 @@ def export_failure_diagnostic(source, destination):
     allowed_stages = {"browser-" + case for name, cases in manifest.items()
                       if name.endswith("Cases") for case in cases}
     allowed_stages.update(manifest["autonomyStages"])
+    allowed_stages.update(case + "-browser" for case in manifest["workflowRunCases"])
     stage = report.get("stage")
     cases = report.get("cases")
     count = len(cases) if isinstance(cases, list) and len(cases) <= 1000000 else None

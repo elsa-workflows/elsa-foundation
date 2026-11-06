@@ -1,0 +1,34 @@
+{
+  "reference": {
+    "package": "ScratchyDisk.DmnEngine",
+    "version": "2.0.1",
+    "nuspecRepository": {
+      "type": "git",
+      "url": "https://github.com/Scratchydisk/ScratchyDisk.DmnEngine.git",
+      "commit": "67bae6927a28f77138aae98dcd35d93b1af39838"
+    },
+    "nupkgSha256": "c6b2b51548d6f56f1933908f2a18bdb7441007ac827a0c7db89e943d674a15b6"
+  },
+  "editor": {
+    "dmn-js": {
+      "version": "18.0.1",
+      "resolved": "https://registry.npmjs.org/dmn-js/-/dmn-js-18.0.1.tgz",
+      "integrity": "sha512-DKAid+pozxiBBBuAvGZ9ah4S4HvsuYuJ9uJLNghRO5XljM5jKUltwUr+wJ8nLc/1yFI8R/j+Fy47eKTG8wDtUA=="
+    },
+    "dmn-moddle": {
+      "version": "12.2.1",
+      "resolved": "https://registry.npmjs.org/dmn-moddle/-/dmn-moddle-12.2.1.tgz",
+      "integrity": "sha512-X0UmMGmF3klrDv3NPHq045InNBAE5whmK2GAmXZJ7QszsIWR2p/EHYcD4XiJSUr2n8F8VghY79yDY/eBeiAhxA=="
+    },
+    "playwright": {
+      "version": "1.56.1",
+      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.56.1.tgz",
+      "integrity": "sha512-aFi5B0WovBHTEvpM3DzXTUaeN6eN0qWnTkKx4NQaH4Wvcmc153PdaY2UBdSYKaGYw+UyWXSVyxDUg5DoPEttjw=="
+    },
+    "esbuild": {
+      "version": "0.25.11",
+      "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.25.11.tgz",
+      "integrity": "sha512-KohQwyzrKTQmhXDW1PjCv3Tyspn9n5GcY2RTDqeORIdIJY8yKIF7sTSopFmn/wpMPW4rdPXI0UE5LJLuq3bx0Q=="
+    }
+  }
+}
