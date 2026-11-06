@@ -63,6 +63,7 @@ for (const host of ["editor", "instance"]) test(`keeps the occurrence chooser sc
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
   }
+  if (host === "editor") await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
   const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true }) : page.getByLabel("Workflow canvas", { exact: true });
   if (host === "instance") await expect(page.getByRole("button", { name: "Diagram", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(canvas).toBeVisible();
