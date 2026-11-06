@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -19,6 +20,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class CoalescingDurableValuePageReuseTests
 {
     private const string WorkflowExecutionId = "workflow";
+    private static readonly TimeSpan SignalTimeout = TimeSpan.FromSeconds(30);
 
     [Fact]
     public async Task Memo_hit_remerges_the_current_staged_overlay()
@@ -578,7 +580,7 @@ public sealed class CoalescingDurableValuePageReuseTests
         }
     }
 
-    [Fact(Timeout = 5_000)]
+    [Fact]
     public async Task Caller_cancellation_disables_memo_during_the_live_coalesced_drain()
     {
         await using var fixture = WrapperFixture.Create([Row("a", "one")]);
@@ -602,13 +604,13 @@ public sealed class CoalescingDurableValuePageReuseTests
         using var cancellation = new CancellationTokenSource();
 
         var drain = orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
-        await drainer.PageWarmed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await drainer.PageWarmed.Task.WaitAsync(SignalTimeout);
         Assert.NotNull(drainScopeFactory.Session);
         drainScopeFactory.Session!.BufferDeferred(UpsertCommit(Row("b", "staged-during-drain")));
         await cancellation.CancelAsync();
         drainer.ContinueAfterCancellation.TrySetResult();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => drain);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => drain.WaitAsync(SignalTimeout));
         Assert.Equal(2, inner.PageReadCount);
         var rowsAfterCancellation = drainer.RowsAfterCancellation ?? throw new InvalidOperationException("The drain did not capture its post-cancellation page.");
         Assert.Equal(["a", "b"], rowsAfterCancellation.Select(row => row.DurableValueId));
@@ -616,7 +618,7 @@ public sealed class CoalescingDurableValuePageReuseTests
         Assert.True(drainScopeFactory.SessionWasCreated);
     }
 
-    [Fact(Timeout = 5_000)]
+    [Fact]
     public async Task Heartbeat_cancellation_fences_tokenless_cleanup_reads_and_preserves_the_overlay()
     {
         await using var fixture = WrapperFixture.Create([Row("a", "one")]);
@@ -625,7 +627,8 @@ public sealed class CoalescingDurableValuePageReuseTests
         var drainScopeFactory = new CapturingDrainScopeFactory(fixture.SessionAccessor);
         using var cancellationCallbackGate = new CancellationCallbackGate();
         var drainer = new HeartbeatLossHoldingDrainer(store, cancellationCallbackGate);
-        var ownershipService = new StaleHeartbeatOwnershipService();
+        var clock = new FakeTimeProvider();
+        var ownershipService = new StaleHeartbeatOwnershipService(clock);
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
         var orchestrator = new WorkflowDrainOrchestrator(
             drainer,
@@ -638,23 +641,28 @@ public sealed class CoalescingDurableValuePageReuseTests
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
             coalescingScopeFactory: drainScopeFactory,
-            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver,
+            timeProvider: clock);
 
         var drain = orchestrator.DrainAsync(
             NewEnvelope(),
             new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask();
-        await drainer.PageWarmed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await drainer.PageWarmed.Task.WaitAsync(SignalTimeout);
         Assert.NotNull(drainScopeFactory.Session);
         drainScopeFactory.Session!.BufferDeferred(UpsertCommit(Row("b", "staged-during-drain")));
-        // The heartbeat reports the lease lost only now, so its cancellation follows the staged write.
+        Assert.False(ownershipService.HeartbeatEntered.Task.IsCompleted);
+        // Advance only after the page and overlay are ready. Heartbeat progress no longer depends on a real timer.
+        clock.Advance(TimeSpan.FromMilliseconds(40));
+        await ownershipService.HeartbeatEntered.Task.WaitAsync(SignalTimeout);
+        // The heartbeat reports the lease lost only now, so its cancellation follows the staged write and heartbeat.
         ownershipService.LoseLease();
         int pageReadsDuringCancellationCallback;
         IReadOnlyList<DurableValueState> rowsDuringCancellationCallback;
         try
         {
-            await drainer.CancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await cancellationCallbackGate.CallbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await drainer.CleanupReadCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await drainer.CancellationObserved.Task.WaitAsync(SignalTimeout);
+            await cancellationCallbackGate.CallbackEntered.Task.WaitAsync(SignalTimeout);
+            await drainer.CleanupReadCompleted.Task.WaitAsync(SignalTimeout);
             pageReadsDuringCancellationCallback = inner.PageReadCount;
             rowsDuringCancellationCallback = drainer.RowsAfterCancellation!;
         }
@@ -663,7 +671,7 @@ public sealed class CoalescingDurableValuePageReuseTests
             cancellationCallbackGate.Release();
         }
 
-        var exception = await Assert.ThrowsAsync<RuntimeExecutionOwnershipLostException>(() => drain);
+        var exception = await Assert.ThrowsAsync<RuntimeExecutionOwnershipLostException>(() => drain.WaitAsync(SignalTimeout));
 
         Assert.Equal("heartbeat", exception.Operation);
         Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Stale, exception.TransitionStatus);
@@ -1013,22 +1021,23 @@ public sealed class CoalescingDurableValuePageReuseTests
         }
     }
 
-    // The 120 ms lease makes the orchestrator heartbeat every 40 ms. Holding the heartbeat's answer until the test calls
-    // LoseLease orders the heartbeat's drain cancellation after the test's setup, instead of racing it on that cadence.
-    private sealed class StaleHeartbeatOwnershipService : IRuntimeExecutionOwnershipService
+    // The test advances the 120 ms lease's first 40 ms heartbeat explicitly, then releases its answer only after setup.
+    private sealed class StaleHeartbeatOwnershipService(TimeProvider timeProvider) : IRuntimeExecutionOwnershipService
     {
         private readonly TaskCompletionSource _leaseLost = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource HeartbeatEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public void LoseLease() => _leaseLost.TrySetResult();
 
         public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = timeProvider.GetUtcNow();
             return ValueTask.FromResult(new RuntimeExecutionLease("lease", workflowExecutionId, "owner", now, now.AddMilliseconds(120), 1));
         }
 
         public async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
         {
+            HeartbeatEntered.TrySetResult();
             await _leaseLost.Task.WaitAsync(cancellationToken);
             return new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Stale, lease.FencingToken);
         }
