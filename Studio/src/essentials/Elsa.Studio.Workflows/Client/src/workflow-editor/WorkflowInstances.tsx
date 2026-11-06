@@ -1539,18 +1539,22 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       const scope = await loadExecutionScope(context, workflowExecutionId, execution, {
         graph: data?.executableGraph, includeSelf: true, labelFor: labelForExecution, signal: controller.signal, isCurrent
       });
+      if (!isCurrent()) return;
       const page = retainedNode && retainedNode !== execution.executableNodeId ? await browseActivityExecutions(context, workflowExecutionId,
         { executableNodeId: retainedNode, ancestorActivityExecutionId: execution.activityExecutionId, limit: 1 }, controller.signal) : undefined;
+      if (!isCurrent()) return;
       // A repeated child requires an explicit choice inside the new scope.
       const selected = page ? page.totalCount === 1 ? page.items[0]?.execution ?? null : null : execution;
       let prepared: PreparedAttachedExecution = { contextIdentity: runtimeValueContextId(context), workflowExecutionId,
         execution: null, inspection: null, values: new Map(), page };
       if (selected && data?.executableGraph) {
         const { prepareAttachedExecution } = await import("./prepareAttachedExecution");
+        if (!isCurrent()) return;
         const owner = selected.executableNodeId === execution.executableNodeId ? scope.scopes.at(-2)?.execution : execution;
         prepared = await prepareAttachedExecution(context, workflowExecutionId, selected, scope, data.executableGraph,
           selected.authoredActivityId, controller.signal, owner?.authoredActivityId, undefined, data.activityCatalog);
       }
+      if (!isCurrent()) return;
       const scopePage = scope.pages.get(execution.activityExecutionId) ?? await browseActivityExecutions(context, workflowExecutionId,
         { executableNodeId: execution.executableNodeId, parentActivityExecutionId: execution.parentActivityExecutionId ?? undefined,
           anchorActivityExecutionId: execution.activityExecutionId }, controller.signal);
