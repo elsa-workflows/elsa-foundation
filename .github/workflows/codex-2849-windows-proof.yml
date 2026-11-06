@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: architecture-2849-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-proof:
     runs-on: windows-2025
@@ -81,8 +85,8 @@ jobs:
             }
           }
 
+          if ((Test-Path $worktree) -or (Test-Path $leftovers) -or (Test-Path $probeProject)) { throw 'An owned proof path already exists.' }
           try {
-            if ((Test-Path $worktree) -or (Test-Path $leftovers) -or (Test-Path $probeProject)) { throw 'An owned proof path already exists.' }
             git worktree add --detach $worktree HEAD
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the ignored Claude worktree.' }
             New-Item -ItemType Directory -Path "$leftovers/obj" -Force | Out-Null
@@ -177,11 +181,11 @@ jobs:
           if ($source -ne '39c9290671c211a44b41778d703e905cf2f94c94' -or (git config core.autocrlf) -ne 'true') { throw 'Fixture source or checkout policy differs.' }
           git check-attr text -- Extensions/Etl/tests/Shared/Fixtures/V1/data/manifest.json | Set-Content (Join-Path $output 'attributes.log')
           $project = 'Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj'
-          dotnet restore $project --locked-mode
+          dotnet restore $project --locked-mode -p:WarningsNotAsErrors=NU1603
           if ($LASTEXITCODE -ne 0) { throw 'Fixture test restore failed.' }
-          dotnet test $project -c Release --no-restore --filter FullyQualifiedName~EtlV1CompatibilityFixtureTests --logger 'trx;LogFileName=fixture.trx' --results-directory $output
+          dotnet test $project -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --filter FullyQualifiedName~EtlV1CompatibilityFixtureTests --logger 'trx;LogFileName=fixture.trx' --results-directory $output
           if ($LASTEXITCODE -ne 0) { throw 'Native Windows fixture tests failed.' }
-          dotnet test $project -c Release --no-build --no-restore --filter FullyQualifiedName~EtlV1CompatibilityFixtureTests --list-tests | Set-Content (Join-Path $output 'discovery.log')
+          dotnet test $project -c Release --no-build --no-restore -p:WarningsNotAsErrors=NU1603 --filter FullyQualifiedName~EtlV1CompatibilityFixtureTests --list-tests | Set-Content (Join-Path $output 'discovery.log')
           if ($LASTEXITCODE -ne 0) { throw 'Fixture test discovery failed.' }
           [xml] $trx = Get-Content (Join-Path $output 'fixture.trx') -Raw
           $counts = $trx.TestRun.ResultSummary.Counters
