@@ -11,6 +11,55 @@ import { useWeaverSession } from "../useWeaverSession";
 import { AgentContextChips } from "../../agent/AgentContextChips";
 
 describe("WeaverSurface", () => {
+  it.each((["dock", "full"] as const).flatMap(variant => Array.from({ length: 9 }, (_, index) => ({ variant, index }))))(
+    "shows the reported host privileges read-only in $variant (combination $index)", async ({ variant, index }) => {
+      const api = readyApi(); const client = readyClient();
+      const privileges = index === 8 ? undefined : Object.freeze({ administrative: Boolean(index & 1), irrecoverable: Boolean(index & 2), activation: Boolean(index & 4) });
+      const baseline = await client.bootstrap();
+      client.bootstrap = vi.fn(async () => ({ ...baseline, privileges }));
+      const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant={variant} client={client} />);
+      try {
+        await flushPromises();
+        const policy = container.querySelector(".weaver-privilege-policy")!;
+        expect(policy.querySelector("summary")?.textContent).toBe("Host privilege policy");
+        expect(policy.querySelector("input,select,button,textarea")).toBeNull();
+        if (privileges) {
+          expect([...policy.querySelectorAll("dt")].map(item => item.textContent)).toEqual(["Administrative", "Irrecoverable", "Activation"]);
+          expect([...policy.querySelectorAll("dd")].map(item => item.textContent)).toEqual([privileges.administrative, privileges.irrecoverable, privileges.activation].map(value => value ? "Enabled" : "Disabled"));
+          expect(policy.textContent).toContain("Current host settings still apply");
+        } else {
+          expect(policy.textContent).toContain("Not reported by this backend.");
+          expect(policy.querySelector("dl")).toBeNull();
+        }
+        expect(client.updateAutonomy).not.toHaveBeenCalled(); expect(client.approveProposal).not.toHaveBeenCalled(); expect(client.executeProposal).not.toHaveBeenCalled();
+        expect(baseline.policy.defaultAutonomyMode).toBe("auto-read-only");
+      } finally { unmount(); }
+    }
+  );
+
+  it("waits for bootstrap before showing the host policy observation", async () => {
+    const api = readyApi(); const client = readyClient(); const baseline = await client.bootstrap();
+    let finish!: (value: Awaited<ReturnType<AgentClient["bootstrap"]>>) => void;
+    client.bootstrap = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} />);
+    try {
+      await flushPromises(); expect(container.querySelector(".weaver-privilege-policy")).toBeNull();
+      finish({ ...baseline, privileges: { administrative: false, irrecoverable: false, activation: false } }); await flushPromises();
+      expect([...container.querySelectorAll(".weaver-privilege-policy dd")].map(item => item.textContent)).toEqual(["Disabled", "Disabled", "Disabled"]);
+    } finally { unmount(); }
+  });
+
+  it.each(["dock", "full"] as const)("keeps a reported policy observable when the provider is unavailable (%s)", async variant => {
+    const api = readyApi(); const client = readyClient(); const baseline = await client.bootstrap();
+    client.bootstrap = vi.fn(async () => ({ ...baseline, providerStatus: "unavailable", privileges: { administrative: true, irrecoverable: false, activation: false } }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant={variant} client={client} />);
+    try {
+      await flushPromises(); expect(container.querySelector(".weaver-privilege-policy")?.textContent).toContain("AdministrativeEnabled");
+      expect(container.querySelector(".weaver-composer textarea")?.hasAttribute("disabled")).toBe(true);
+      expect(client.createSession).not.toHaveBeenCalled();
+    } finally { unmount(); }
+  });
+
   it("replaces displayed evidence on current disclosure and clears it on a terminal refusal", async () => {
     const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
     api.agent.onPromptResult(result => results.push(result));

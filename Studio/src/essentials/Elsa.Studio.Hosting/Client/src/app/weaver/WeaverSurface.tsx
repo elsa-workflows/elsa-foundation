@@ -6,6 +6,7 @@ import { AgentContextChips } from "../agent/AgentContextChips";
 import { AgentPromptStarters } from "../agent/AgentPromptStarters";
 import { AgentToolResults } from "../agent/AgentToolResults";
 import { AgentProposalReview } from "../agent/AgentProposalReview";
+import { AgentPrivilegePolicy } from "../agent/AgentPrivilegePolicy";
 import type { subscribeAgentSessionStream } from "../agent/agentStream";
 import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
 import type { AgentRecoveryMode, AgentSessionSummary } from "../agent/agentTypes";
@@ -109,6 +110,8 @@ export function WeaverSurface({
         <span>{providerStatus.label}</span>
         {session.activeProvider ? <small>{session.activeProvider.providerId} · {session.activeProvider.riskProfile}</small> : null}
       </div>
+
+      {session.bootstrap ? <AgentPrivilegePolicy privileges={session.bootstrap.privileges} /> : null}
 
       {autoApplyStatus ? (
         <div className="weaver-mode-status" id={autoApplyStatusId} role="status" aria-label="Auto-apply mode status" data-autonomy-state={session.autoApplyState}>

@@ -67,6 +67,9 @@ export function AgentProposalReview({
               <strong>{proposal.title}</strong>
             </header>
             <p>{proposal.summary}</p>
+            <dl className="agent-proposal-details" aria-label="Required host privileges">
+              <div><dt>Requires</dt><dd>{effectivePrivilegeLabels(proposal).join(", ")}</dd></div>
+            </dl>
             {proposal.resourceTarget ? <ResourceTargetDetails proposal={proposal} /> : null}
             {proposal.operations && proposal.operations.length > 0 ? (
               <ul aria-label="Proposal operations">
@@ -285,6 +288,30 @@ function normalizeRisk(risk: unknown): string | undefined {
     : typeof risk === "string" ? risk.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase() : undefined;
   // Keep the existing CSS/display aliases; they declare no new numeric ordinal or host privilege.
   return [...risks, "low", "medium", "high", "critical"].find(item => item === value);
+}
+
+/** Display the frozen approval basis; never retrofit classes into a legacy preparation or its digest. */
+function effectivePrivilegeLabels(proposal: AgentActionProposal): string[] {
+  const names = ["administrative", "irrecoverable", "activation"];
+  const classes: unknown = proposal.preparedInvocation?.requiredPrivilegeClasses;
+  const required = new Set<string>();
+  let unknown = false;
+  if (classes != null) {
+    if (!Array.isArray(classes)) unknown = true;
+    else for (const value of classes) {
+      const name = typeof value === "number" && Number.isInteger(value) ? names[value]
+        : typeof value === "string" ? names.find(name => name === value.toLowerCase()) : undefined;
+      if (name) required.add(name);
+      else unknown = true;
+    }
+  }
+  const risk = normalizeRisk(proposal.preparedInvocation?.risk ?? proposal.risk);
+  if (risk === "admin") required.add("administrative");
+  // Historical display aliases are not privilege declarations or new risk ordinals.
+  if (!risk || !["read-only", "review-required", "destructive", "admin"].includes(risk)) unknown = true;
+  const labels = names.filter(name => required.has(name)).map(name => name[0].toUpperCase() + name.slice(1));
+  if (unknown) labels.push("Unknown requirement");
+  return labels.length ? labels : ["None"];
 }
 
 function formatStatus(status: string) {
