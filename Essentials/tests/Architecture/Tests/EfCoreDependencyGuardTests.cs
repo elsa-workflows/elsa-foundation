@@ -632,11 +632,11 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs()
     {
-        var offenders = Directory.EnumerateFiles(RepoRoot, "*.*", SearchOption.AllDirectories)
+        var offenders = TrackedFiles()
             .Where(path => !IsBuildOutput(path) && IsMsBuildFile(path))
-            .SelectMany(path => FindConditionalDependencyElements(XDocument.Load(path))
-                .Where(element => !IsAdmittedConditionalDependency(Path.GetRelativePath(RepoRoot, path), element))
-                .Select(element => $"{Path.GetRelativePath(RepoRoot, path)}: {element.Name.LocalName}"))
+            .SelectMany(path => FindConditionalDependencyElements(XDocument.Load(Path.Join(RepoRoot, path)))
+                .Where(element => !IsAdmittedConditionalDependency(path, element))
+                .Select(element => $"{path}: {element.Name.LocalName}"))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
