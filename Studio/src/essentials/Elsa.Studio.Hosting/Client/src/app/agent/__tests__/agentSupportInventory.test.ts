@@ -6,7 +6,7 @@ import { beginAgentModuleRegistration, copyAgentPromptOrigin, isAgentPromptReque
 import { isStudioSupportSnapshotCurrent, refreshStudioSupportInventory, studioSupportAttachment } from "../agentSupportInventory";
 
 const contract = { data: { support: { completeness: "complete", contexts: [
-  { id: "host-support", moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"] }
+  { id: "host-support", moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"], admission: "availableHint" }
 ] } } };
 const row = (id: string, status = "available") => ({ id, displayName: id, status });
 function registry(host: unknown = { complete: true, modules: [] }, backend: unknown = contract) {
@@ -60,6 +60,24 @@ describe("prompt-time Studio support discovery", () => {
     const module = beginAgentModuleRegistration(api, "@custom/resource-owner"); module.complete();
     const snapshot = await refreshStudioSupportInventory(api);
     expect(snapshot.content.modules).toEqual([row("@custom/resource-owner")]); expect(snapshot.content.completeness).toBe("complete");
+  });
+
+  it.each(["https", "file", "unix", "windows", "relative"])("withholds %s location-shaped identities and preserves unknown rather than absence", async shape => {
+    const canary = `private-${Math.random()}`;
+    const identities: Record<string, string> = { https: `https://feed.example/${canary}?token=value`, file: `file:///private/${canary}`,
+      unix: `/var/private/${canary}`, windows: `C:\\private\\${canary}`, relative: `../private/${canary}` };
+    const unsafe = identities[shape];
+    const api = registry({ complete: true, modules: [row(unsafe), row("Healthy")] });
+    const unknown = beginAgentModuleRegistration(api, unsafe);
+    unknown.api.agent.contextProviders.add({ id: "source", moduleId: unsafe, displayName: "Unsafe owner", surfaces: ["*"], sensitivity: "internal", collect: async () => [] });
+    unknown.api.agent.contextProviders.add({ id: unsafe, displayName: "Unsafe identity", surfaces: ["*"], sensitivity: "internal", collect: async () => [] }); unknown.complete();
+    const healthy = beginAgentModuleRegistration(api, "Healthy");
+    healthy.api.agent.resultRenderers.add({ id: "renderer", moduleId: unsafe, resourceModuleIds: [unsafe], displayName: "Renderer", component: () => null }); healthy.complete();
+    const snapshot = await refreshStudioSupportInventory(api);
+    expect(snapshot.content.completeness).toBe("incomplete");
+    expect(snapshot.content.registrationCompleteness).toBe("incomplete");
+    expect(snapshot.content.modules).toEqual([row("Healthy")]);
+    expect(JSON.stringify(studioSupportAttachment(api, snapshot))).not.toContain(canary);
   });
 
   it.each([
@@ -135,6 +153,35 @@ describe("prompt-time Studio support discovery", () => {
     const collection = await collectAgentContext(api, { route: "/unknown" }, "explain", undefined, [], undefined, { support });
     expect(collection.attachments).toEqual([attachment]);
     expect(collection.diagnostics).toEqual([expect.objectContaining({ code: "agent.support.context_unavailable", required: false })]);
+  });
+
+  it.each([undefined, "unknown", "withheld", "unchecked", "future"])("preserves resource prompts when a matching source admission is %s", async admission => {
+    const api = registry({ complete: true, modules: [] }, { data: { support: { completeness: "complete",
+      contexts: [{ ...contract.data.support.contexts[0], admission }] } } });
+    api.agent.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: async () => [attachment] });
+    const support = await refreshStudioSupportInventory(api);
+    const collection = await collectAgentContext(api, { route: "/unknown" }, "explain", undefined, [], undefined, { support });
+    expect(support.disclosureSupported).toBe(false);
+    expect(collection.attachments).toEqual([attachment]);
+    expect(collection.diagnostics).toEqual([expect.objectContaining({ code: "agent.support.context_unavailable", required: false })]);
+  });
+
+  it("does not append support when another matching required source is withheld", async () => {
+    const api = registry({ complete: true, modules: [] }, { data: { support: { completeness: "complete", contexts: [
+      contract.data.support.contexts[0], { ...contract.data.support.contexts[0], id: "second", admission: "withheld" }
+    ] } } });
+    const support = await refreshStudioSupportInventory(api);
+    expect(support.disclosureSupported).toBe(false);
+    expect(studioSupportAttachment(api, support)).toBeUndefined();
+  });
+
+  it("does not append support when another matching source cannot admit this schema", async () => {
+    const api = registry({ complete: true, modules: [] }, { data: { support: { completeness: "complete", contexts: [
+      contract.data.support.contexts[0], { ...contract.data.support.contexts[0], id: "second", schemaVersions: ["2"] }
+    ] } } });
+    const support = await refreshStudioSupportInventory(api);
+    expect(support.disclosureSupported).toBe(false);
+    expect(studioSupportAttachment(api, support)).toBeUndefined();
   });
 
   it("keeps host failure unknown while accepting a separately known current context contract", async () => {

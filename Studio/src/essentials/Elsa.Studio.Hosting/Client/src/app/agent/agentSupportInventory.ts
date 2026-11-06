@@ -172,14 +172,19 @@ function projectRegistrations(api: ElsaStudioModuleApi, manifest: { completeness
 function supportsContext(input: unknown) {
   const support = record(record(input)?.data)?.support;
   const body = record(support);
-  return body?.completeness === "complete" && Array.isArray(body.contexts) && body.contexts.length <= MAX_ROWS
-    && body.contexts.some(value => { const item = record(value); return item?.moduleId === CONTEXT_OWNER
-      && Array.isArray(item.contextKinds) && item.contextKinds.includes(CONTEXT_KIND)
-      && Array.isArray(item.schemaVersions) && item.schemaVersions.includes(CONTEXT_SCHEMA); });
+  if (body?.completeness !== "complete" || !Array.isArray(body.contexts) || body.contexts.length > MAX_ROWS) return false;
+  const matching = body.contexts.map(record).filter(item => item?.moduleId === CONTEXT_OWNER
+    && Array.isArray(item.contextKinds) && item.contextKinds.includes(CONTEXT_KIND));
+  // Presence alone is insufficient: a matching required source withheld by feature/schema admission
+  // would refuse the entire prompt. This hint only selects a supported candidate; it grants no authority.
+  return matching.length > 0 && matching.every(item => item?.admission === "availableHint"
+    && Array.isArray(item.schemaVersions) && item.schemaVersions.includes(CONTEXT_SCHEMA));
 }
 
 function record(value: unknown): Record<string, unknown> | undefined { return !!value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
-function identifier(value: unknown) { return typeof value === "string" && value.trim() && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value) ? value : undefined; }
+// This is a disclosure projection, not a restriction on SDK registration. Scoped opaque IDs remain
+// opaque; URL/path-shaped or otherwise unrepresentable metadata makes discovery incomplete.
+function identifier(value: unknown) { return typeof value === "string" && value.length <= 160 && /^@?[A-Za-z0-9_-]+(?:[./:-][A-Za-z0-9_-]+)*$/.test(value) ? value : undefined; }
 function label(value: unknown) { return typeof value === "string" && value.trim() && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value) ? value : undefined; }
 function moduleStatus(value: unknown): ModuleStatus | undefined { return value === "available" || value === "disabled" || value === "failed" || value === "incompatible" || value === "unknown" ? value : undefined; }
 

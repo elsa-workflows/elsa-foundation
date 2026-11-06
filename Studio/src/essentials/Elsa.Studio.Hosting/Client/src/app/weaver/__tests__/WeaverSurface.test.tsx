@@ -15,7 +15,7 @@ describe("WeaverSurface", () => {
   it("refuses a queued module prompt whose fresh discovery removes its origin before explicit context disclosure", async () => {
     const api = readyApi(); const client = readyClient();
     vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [] });
-    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"] }] } } });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"], admission: "availableHint" }] } } });
     const module = beginAgentModuleRegistration(api, "Removed"); module.complete();
     const request = { id: "queued-removed", requestId: "queued-removed", message: "Inspect", attachments: [{ id: "old", source: "Removed", label: "Old", contentType: "removed", sensitivity: "internal" as const, scope: "screen", content: { private: Math.random() } }] };
     module.api.agent.dispatchPrompt(request);
@@ -30,7 +30,7 @@ describe("WeaverSurface", () => {
     const api = readyApi(); const client = readyClient(); const removed = vi.fn(async () => []);
     const canary = `private-${Math.random()}`;
     vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [{ id: "Healthy", displayName: "Healthy", status: "available", manifest: { entry: canary }, diagnostics: [{ reason: canary }] }] });
-    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"] }] } } });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"], admission: "availableHint" }] } } });
     const missing = beginAgentModuleRegistration(api, "Removed.Satellite");
     missing.api.agent.contextProviders.add({ id: "removed", moduleId: "Resource", displayName: "Removed", surfaces: ["*"], sensitivity: "internal", collect: removed }); missing.complete();
     const healthy = beginAgentModuleRegistration(api, "Healthy");
