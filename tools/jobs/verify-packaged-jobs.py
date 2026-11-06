@@ -128,13 +128,13 @@ def computed_versions(props):
 
 
 def public_nuget_config(source, destination, feed, package_ids):
-    config = ET.parse(source / 'NuGet.Config')
+    config = ET.parse(source / 'NuGet.config')
     if config.find('packageSourceCredentials') is not None:
         raise ValueError('The public local-package witness does not consume NuGet credentials.')
     sources = config.find('packageSources')
     mappings = config.find('packageSourceMapping')
     if sources is None or mappings is None or sources.find('clear') is None:
-        raise ValueError('Source NuGet.Config must clear sources and define source mappings.')
+        raise ValueError('Source NuGet.config must clear sources and define source mappings.')
     key = 'JobsLocalEvidence'
     if any(item.get('key') == key for item in sources.findall('add')):
         raise ValueError('Reserved local-package feed name already exists.')
