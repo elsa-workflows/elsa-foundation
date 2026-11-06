@@ -40,6 +40,8 @@ Independent test: create/export/import a native/BPMN/ETL release with a shared t
 - [ ] T014 [US1] Add release creation/export/import/inspection API and source Studio selection/download, including all owner root roles, in release API and `Studio/src/essentials/Elsa.Studio.Workflows/`.
 - [ ] T015 [US1] Qualify exact owner round-trip, arbitrary retained ETL version, same-identity/different-content, source capture/GC races and dependency-only independent-start refusal using existing domain suites and `tools/releases/`.
 
+Clean Linux qualification at `2077ab11c` passes all 337 focused cases (133 shared, 74 Runtime, 86 ETL, 44 archive), with full raw logs/TRX downloaded and independently hashed; see `evidence/azure-public2077.json`. This does not qualify subsequent source or complete product journeys.
+
 T009 archive prerequisite: the consumer-context SQLite archive is implemented with 44 passing local cases, raw-byte integrity
 and bounded consistent reads, atomic capture/retry, scope isolation, pooled concurrency and killed-writer/reopen witnesses.
 It stores transport-only captures. Source acquisition/retention through complete capture and all owner import paths remain open.

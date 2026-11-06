@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "subject": {
+    "head": "2077ab11c33746fdb700429f48b70da1fc627d11",
+    "tree": "65472d3690ae49b300c3302e2e16a7bb72d19c25",
+    "dirtyOverlay": false,
+    "sourceUnchangedBeforeAfter": true
+  },
+  "environment": {
+    "uid": 1001,
+    "gid": 1001,
+    "machineId": "5eb2920c628f478f8e884494a3cc829f",
+    "bootId": "449353b4-349b-4bc1-842e-dcb88b543918",
+    "vmId": "efc6c7ac-ad1e-499a-8683-14b879dd5921",
+    "resourceId": "/subscriptions/8e23037a-420f-4ad0-9594-9d194de29e84/resourceGroups/rg-elsa-codex-dev-20261106-0b262a/providers/Microsoft.Compute/virtualMachines/elsa-dev-17",
+    "name": "elsa-dev-17",
+    "logicalCpus": 2,
+    "toolHashes": {
+      "/opt/elsa-tools/dotnet/dotnet": "8b3d902364f618e31e029d4eba077d52c141dd641e375f4555715604806e44b6",
+      "/opt/elsa-tools/node/node-v22.23.4-linux-x64/bin/node": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90"
+    }
+  },
+  "scope": "shared transport/semantics, staged Runtime codecs, ETL verifier/native adapter, SQLite archive only",
+  "testProjects": [
+    {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj",
+      "log": "command-1.log",
+      "logBytes": 2148,
+      "logSha256": "bf5bc6ed1fe75e3de109744440dfa4f88a0557bc2bd8af76bb7566ec6fe08e3c",
+      "exitCode": 0,
+      "seconds": 16.879475000999946
+    },
+    {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj",
+      "log": "command-2.log",
+      "logBytes": 106677,
+      "logSha256": "8bdad5c438a4247e5300049ee1777b6e2222ad9f61d2a391beb783f8fd540695",
+      "exitCode": 0,
+      "seconds": 49.51120819800008
+    },
+    {
+      "project": "Extensions/Etl/tests/Releases/Tests/Elsa.Etl.Releases.Tests.csproj",
+      "log": "command-3.log",
+      "logBytes": 6497,
+      "logSha256": "42f8e18a30db3fb9dfb84242aa6619b9462cece7b04fe1575d0a217f31ec5135",
+      "exitCode": 0,
+      "seconds": 19.86628742799985
+    },
+    {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj",
+      "log": "command-4.log",
+      "logBytes": 5933,
+      "logSha256": "0a0d65588796b395c096a050189de7b79afa816f95859af1c395f1341065ca2e",
+      "exitCode": 0,
+      "seconds": 28.47998992199996
+    }
+  ],
+  "tests": [
+    {
+      "file": "phase-1.trx",
+      "counters": {
+        "total": "133",
+        "executed": "133",
+        "passed": "133",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "phase-2.trx",
+      "counters": {
+        "total": "74",
+        "executed": "74",
+        "passed": "74",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "phase-3.trx",
+      "counters": {
+        "total": "86",
+        "executed": "86",
+        "passed": "86",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "phase-4.trx",
+      "counters": {
+        "total": "44",
+        "executed": "44",
+        "passed": "44",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "totals": {
+    "passed": 337,
+    "failed": 0,
+    "skipped": 0
+  },
+  "evidence": {
+    "outerArchiveBytes": 86365,
+    "outerArchiveSha256": "a4258b6353e5d21a8ce1c5c3b201a5bd1215eeb18cce3ac4de9797c8a412f131",
+    "innerArchiveBytes": 85110,
+    "innerArchiveSha256": "010ab582f22db7e215a1c21d241dbce4d020a9e19ac8b05ddf2bd821fc39927f",
+    "fullOriginalLogsDownloadedAndHashesChecked": true,
+    "localCloseout": "/tmp/3590-remote-phase/public2077-corrected/full-closeout.tar.gz",
+    "localRawEvidence": "/tmp/3590-remote-phase/public2077-corrected/evidence",
+    "workerExport": "/opt/elsa-offload/release-capture/public2077-02/full-closeout.tar.gz"
+  },
+  "setupFailure": {
+    "attempt": "public2077-01",
+    "productStarted": false,
+    "reason": "codex lacked traversal through private transfer parent; job export moved into its owned /srv namespace",
+    "fullLogBytes": 90,
+    "fullLogSha256": "9a5448ab2d1600bfdb2d186e908bb11c0193d4de72ca915b84be0cbbaa296f5b",
+    "localRawLog": "/tmp/3590-remote-phase/public2077/original-setup-full.log"
+  },
+  "cleanup": {
+    "unit": "elsa-release-public2077-02",
+    "state": "inactive/dead",
+    "result": "success",
+    "exitCode": 0,
+    "controlGroup": "empty",
+    "ownedCheckoutRetainedForFollowup": true
+  },
+  "limits": {
+    "cpu": 2,
+    "memoryMiB": 7168,
+    "perProjectSeconds": 600,
+    "wholePhaseSeconds": 2400
+  },
+  "acceptanceLimit": "Foundation source qualification only. New native/structural/capture/historical-import source, packed current-head consumer, model activation, retained runs, API/CLI/Studio and complete release delivery remain open."
+}
