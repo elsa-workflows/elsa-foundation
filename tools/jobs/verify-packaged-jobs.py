@@ -48,8 +48,11 @@ def immutable_commit(value):
 
 
 def sha256(path):
+    digest = hashlib.sha256()
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        for block in iter(lambda: stream.read(1_048_576), b''):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def write_json(path, value):
