@@ -93,7 +93,7 @@ export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoT
     await j.host("arm-dispatch-boundary", { triggerId: timer.id });
     await j.enable(timer.id);
     const armed = await j.read(timer.id); expect(armed.schedule?.nextDueUtc).toBeTruthy();
-    await j.page.reload(); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText("Next firing:"); await j.capture("schedule-next-firing");
+    await j.page.reload(); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText("Next firing UTC:"); await j.capture("schedule-next-firing");
     const boundary = (await j.host("await-dispatch-boundary")).boundary as DispatchBoundary;
     const held = await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${boundary.deliveryId}`);
     expect(held).toMatchObject({ triggerId: timer.id, acceptedCount: 2, refusedCount: 0 });
@@ -227,7 +227,9 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   expect(repaired.acceptedCount).toBe(1); expect(repaired.refusedCount).toBe(1);
   expect(repaired.recipients.find(item => item.id === refused.id)).toEqual(refused);
   expect(repaired.recipients.map(item => item.id)).toEqual(started.recipients.map(item => item.id));
-  await j.open(timer.id); await j.page.reload(); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText("Paused");
+  await j.open(timer.id); await j.page.reload();
+  expect((await j.read(timer.id)).schedule?.isActive).toBe(false);
+  await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText("No firing is scheduled while this schedule is inactive.");
   j.requests.push({ kind: "actual-old-due-consumed-then-one-future-cursor-and-frozen-independent-refusals", triggerId: timer.id, originalDueUtc: armed.schedule!.nextDueUtc, futureDueUtc: future.schedule!.nextDueUtc, original: started, afterTargetRepair: repaired });
   j.observed.push("Actual Cron UI preview matched the persisted current UTC cursor and showed the installed planner's proposed UTC instant, America/New_York timezone, signed offset and Replace action in the visible Next firing row before Apply; preview left resource and schedule unchanged", "Actual Cron UI changed timezone and expression into a persisted future schedule generation", "With both serving targets unpublished, a real due timer retained one overdue cursor with failed-attempt backoff and no accepted delivery; API and Schedule UI explicitly reported waiting for eligible subscribers rather than admission unavailability", "Restoring one target consumed the original due-time input and advanced to one future cursor; restoring the other after pause did not add a recipient to the already partially accepted Independent cohort");
 }

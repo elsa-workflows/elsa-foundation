@@ -40,7 +40,7 @@ async function send(j: TriggerJourney, trigger: TriggerView, key: string, payloa
 }
 
 async function pauseThroughUi(j: TriggerJourney, id: string) {
-  await j.open(id); await j.page.getByRole("button", { name: "Pause trigger", exact: true }).click(); await j.review();
+  await j.open(id); await j.page.getByRole("button", { name: "Pause new starts", exact: true }).click(); await j.review();
   expect((await j.read(id)).desiredState).toBe("Paused");
 }
 async function inspectDelivery(j: TriggerJourney, delivery: DeliveryView) {
@@ -90,6 +90,7 @@ export async function verifyHttpAdmissionAndQueueFaults(j: TriggerJourney) {
     const successfulBefore = await outputs(j, successfulId, { message: "Durably accepted before actual actor refusal", count: 29 });
     await expect.poll(async () => (await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${shed.deliveryId}`)).transport?.state).toBe("WriteCompleted");
     await inspectDelivery(j, held!);
+    await j.capture("http-accepted-subscriber-owed");
     await pauseThroughUi(j, http.id);
     await j.host("release-trigger-fault"); // Waits the actual normal claim expiry; it changes no clock or stored lease.
     const recovered = await j.started(held!);
@@ -101,6 +102,7 @@ export async function verifyHttpAdmissionAndQueueFaults(j: TriggerJourney) {
     expect(successfulAfter.instance).toEqual(successfulBefore.instance);
     expect((await j.deliveries(http.id)).map(item => item.id).sort()).toEqual([refusal.deliveryId, shed.deliveryId].sort());
     await inspectDelivery(j, recovered);
+    await j.capture("http-accepted-subscriber-recovered");
     j.requests.push({ kind: "controlled-public-port-faults-with-real-composed-source-and-ordinary-recovery", storeRefusal: refusal,
       acceptedAfterRepair: repaired, postacceptShed: shed, held, recovered, successfulExecutionBefore: successfulBefore.instance,
       successfulExecutionAfter: successfulAfter.instance, productionDiskFailureClaim: false, productionCapacityLoadClaim: false });
@@ -173,7 +175,8 @@ export async function verifyHttpWriteFailure(j: TriggerJourney) {
       { timeout: 45_000 }).toBe("WriteFailed");
     expect(retained!.acceptedCount).toBe(1); expect(retained!.refusedCount).toBe(0);
     await inspectDelivery(j, retained!);
-    await expect(j.page.getByText("WriteFailed", { exact: false }).first()).toBeVisible();
+    await expect(j.page.getByText("HTTP transport", { exact: true }).locator("xpath=following-sibling::dd[1]")).toContainText("Write Failed");
+    await j.capture("http-response-write-failed");
     await j.host("release-trigger-fault");
     const completed = await j.started(retained!);
     await outputs(j, completed.recipients[0].executionReference!.id, { message: "Accepted despite failed response bytes", count: 37 });
