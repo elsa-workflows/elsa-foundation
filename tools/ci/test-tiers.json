@@ -692,6 +692,11 @@
       "medianMinutes": 0.02
     },
     {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Capture/Tests/Elsa.Workflows.Publishing.Releases.Capture.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.02
+    },
+    {
       "project": "Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.12
@@ -839,6 +844,7 @@
           "Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj#compensation-nesting",
           "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
           "Extensions/Etl/tests/Releases/Tests/Elsa.Etl.Releases.Tests.csproj",
+          "Essentials/tests/Workflows/Publishing/Releases/Capture/Tests/Elsa.Workflows.Publishing.Releases.Capture.Tests.csproj",
           "Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj",
           "Essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
           "Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj",
