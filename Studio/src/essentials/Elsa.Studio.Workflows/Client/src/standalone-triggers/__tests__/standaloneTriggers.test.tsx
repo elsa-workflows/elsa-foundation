@@ -10,7 +10,7 @@ import { DeliveryDetails, RecipientEvidence } from "../Deliveries";
 import { mappingDrafts, realizeMappings } from "../MappingEditor";
 import { parseLiteralJson, parseTriggerResponse, serializeTriggerPayload } from "../json";
 import { SubscriptionsSection } from "../Subscriptions";
-import { TriggersRoute } from "../TriggersRoute";
+import { ScheduleSummary, TriggersRoute } from "../TriggersRoute";
 import type { ActorView, ChangePreview, DeliveryView, InputMapping, RecipientView, SubscriptionView, TriggerTypeDescriptor, TriggerView } from "../types";
 
 const discovery = vi.hoisted(() => ({ document: { capabilities: [] as { id: string; contractVersion: string; links: { rel: string; href: string; templated?: boolean }[] }[] } }));
@@ -78,6 +78,27 @@ describe("standalone trigger API and literal handling", () => {
 });
 
 describe("mounted standalone trigger interactions (component evidence)", () => {
+  it.each([true, false])("distinguishes the saved inactive schedule cursor and failure history from current firing and retry (active: %s)", isActive => {
+    const { container } = mount(<ScheduleSummary schedule={{ isActive, nextDueUtc: "2026-11-07T09:00:00Z", timezone: "UTC", offset: "+00:00",
+      isOverdue: true, failureReason: "NoEligibleSubscribers", nextRetryAt: "2026-11-07T09:02:00Z" }} />);
+    expect(container.textContent).toContain("2026-11-07T09:00:00Z · UTC (+00:00)");
+    if (isActive) {
+      expect(container.textContent).toContain("Next firing UTC:");
+      expect(container.textContent).toContain("Recovery eligible after: 2026-11-07T09:02:00Z");
+      expect(container.textContent).toContain("will be retried");
+      expect(container.textContent).not.toContain("Last recorded");
+    } else {
+      expect(container.textContent).toContain("Saved cursor UTC:");
+      expect(container.textContent).toContain("No firing is scheduled while this schedule is inactive.");
+      expect(container.textContent).toContain("Last recorded failure: no eligible subscribers.");
+      expect(container.textContent).toContain("Last recorded retry time: 2026-11-07T09:02:00Z");
+      expect(container.textContent).not.toContain("Next firing");
+      expect(container.textContent).not.toContain("Recovery eligible after");
+      expect(container.textContent).not.toContain("overdue occurrence");
+      expect(container.textContent).not.toContain("will be retried");
+    }
+  });
+
   it("uses an exact public optional editor while preserving source-protected and unknown fields", () => {
     const submit = vi.fn();
     const descriptor: TriggerTypeDescriptor = { typeKey: "acme-event", schemaVersion: "1", displayName: "Acme Event", family: "Event", canCreate: true,

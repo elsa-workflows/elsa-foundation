@@ -48,6 +48,61 @@ public sealed partial class StandaloneTriggerManagementTests
         Assert.Equal(0, fixture.Store.Writes);
     }
 
+    [Fact]
+    public async Task Enable_preview_after_a_paused_configuration_edit_uses_saved_inactive_history_and_the_selected_plan()
+    {
+        var schedules = new InMemoryRecurringTriggerScheduleStore();
+        ConfigurationFixture fixture = null!;
+        RecurringTriggerSchedule cursor = null!;
+        RecurringTriggerSchedule replacement = null!;
+        var planner = new PreviewSchedulePlanner((scope, previous, write, current, now) =>
+        {
+            if (write.Trigger.DesiredState != TriggerDesiredState.Enabled) return new(StandaloneScheduleAction.Deactivate);
+            Assert.Equal(TriggerDesiredState.Paused, previous!.Trigger.DesiredState);
+            Assert.Same(cursor, current);
+            Assert.False(current!.IsActive);
+            Assert.True(current.Resource!.ConfigurationRevision < previous.Trigger.ConfigurationRevision);
+            Assert.Equal(previous.Trigger.ConfigurationRevision, write.Trigger.ConfigurationRevision);
+            Assert.Equal(fixture.Clock.Now, now);
+            replacement = ScheduleImpactReplacement(scope, write, now.AddHours(15), now);
+            return new(StandaloneScheduleAction.Replace, replacement);
+        });
+        fixture = new("cron", Element("""{"expression":"0 0 9 * * *","timezone":"UTC"}"""), schedules: schedules, planners: [planner]);
+        cursor = ScheduleImpactCursor(fixture);
+        await schedules.SaveAsync(cursor);
+        var pause = Element("""{"kind":"PauseTrigger"}""");
+        await fixture.Apply(pause, await fixture.Preview(pause));
+        // The API fixture writes resources only; seed the inactive cursor retained by physical Deactivate.
+        cursor = cursor with { IsActive = false };
+        await schedules.SaveAsync(cursor);
+        var edit = ConfigurationCommand(Element("""{"expression":"0 0 10 * * *","timezone":"America/New_York"}"""));
+        await fixture.Apply(edit, await fixture.Preview(edit));
+        var paused = fixture.Store.Resource;
+        var view = await fixture.Management.ReadAsync(paused.Trigger.Id, default);
+        Assert.Equal("Paused", view.EffectiveState);
+        Assert.NotNull(view.Schedule);
+        Assert.False(view.Schedule.IsActive);
+        Assert.False(view.Schedule.IsOverdue);
+        Assert.Equal(cursor.NextOccurrence, view.Schedule.NextDueUtc);
+        Assert.Equal("UTC", view.Schedule.Timezone);
+        Assert.Contains(view.Findings, finding => finding.Code == "ScheduleInactive" && finding.Message.Contains("no future firing is scheduled", StringComparison.Ordinal));
+        Assert.DoesNotContain(view.Findings, finding => finding.Code == "ScheduleGenerationChanged");
+        var calls = planner.Calls;
+
+        var preview = await fixture.Preview(Element("""{"kind":"EnableTrigger"}"""));
+
+        Assert.True(preview.CanApply);
+        var firing = Assert.Single(preview.Impact.Where(item => item.Label == "Next firing"));
+        Assert.Equal("Saved inactive cursor (no future firing scheduled): " + ScheduleImpactText(cursor), firing.Before);
+        Assert.Equal(ScheduleImpactText(replacement), firing.After);
+        Assert.EndsWith(" | America/New_York | -05:00", firing.After!, StringComparison.Ordinal);
+        Assert.StartsWith("Action: Replace.", firing.Description!, StringComparison.Ordinal);
+        Assert.Equal(calls + 1, planner.Calls);
+        Assert.Same(paused, fixture.Store.Resource);
+        Assert.Same(cursor, await schedules.FindAsync(cursor.ScheduleId));
+        Assert.Equal(2, fixture.Store.Writes);
+    }
+
     [Theory]
     [InlineData(StandaloneScheduleAction.Preserve, "SaveConfiguration")]
     [InlineData(StandaloneScheduleAction.Deactivate, "PauseTrigger")]
@@ -80,25 +135,29 @@ public sealed partial class StandaloneTriggerManagementTests
     }
 
     [Theory]
-    [InlineData("foreign-scope")]
-    [InlineData("foreign-tenant")]
-    [InlineData("foreign-type")]
-    [InlineData("old-configuration")]
-    public async Task Schedule_preview_refuses_to_display_or_plan_an_unowned_or_stale_cursor(string mismatch)
+    [InlineData("foreign-scope", false)] [InlineData("foreign-scope", true)]
+    [InlineData("foreign-tenant", false)] [InlineData("foreign-tenant", true)]
+    [InlineData("foreign-type", false)] [InlineData("foreign-type", true)]
+    [InlineData("newer-configuration", false)] [InlineData("newer-configuration", true)]
+    [InlineData("newer-generation", false)] [InlineData("newer-generation", true)]
+    [InlineData("old-configuration", false)]
+    [InlineData("inactive-enabled-old-configuration", false)]
+    public async Task Schedule_preview_refuses_to_display_or_plan_an_unowned_or_stale_cursor(string mismatch, bool paused)
     {
         var schedules = new InMemoryRecurringTriggerScheduleStore();
         var planner = new PreviewSchedulePlanner((_, _, _, _, _) => throw new InvalidOperationException("must not plan a foreign cursor"));
         var fixture = new ConfigurationFixture("cron", Element("""{"expression":"0 0 9 * * *","timezone":"UTC"}"""), schedules: schedules, planners: [planner]);
         var cursor = ScheduleImpactCursor(fixture);
         var owner = cursor.Resource!;
-        if (mismatch == "old-configuration")
-        {
-            var row = fixture.Store.Resource.Trigger;
-            fixture.Store.Resource = fixture.Store.Resource with { Trigger = new(row.Id, row.Name, row.TypeKey, row.SchemaVersion, row.Configuration,
-                row.Revision + 1, row.ConfigurationRevision + 1, row.AssociationRevision, row.DesiredState, row.Origin, row.CreatedAt, row.UpdatedAt,
-                row.CreatedBy, hasActivated: row.HasActivated, tenantId: row.TenantId) };
-        }
-        else cursor = cursor with { Resource = new(owner.TriggerId, owner.Generation, owner.ConfigurationRevision,
+        var row = fixture.Store.Resource.Trigger;
+        var oldConfiguration = mismatch is "old-configuration" or "inactive-enabled-old-configuration";
+        fixture.Store.Resource = fixture.Store.Resource with { Trigger = new(row.Id, row.Name, row.TypeKey, row.SchemaVersion, row.Configuration,
+            row.Revision + (oldConfiguration ? 1 : 0), row.ConfigurationRevision + (oldConfiguration ? 1 : 0), row.AssociationRevision,
+            paused ? TriggerDesiredState.Paused : row.DesiredState, row.Origin, row.CreatedAt, row.UpdatedAt,
+            row.CreatedBy, hasActivated: row.HasActivated, tenantId: row.TenantId) };
+        cursor = cursor with { IsActive = !paused && mismatch != "inactive-enabled-old-configuration",
+            Resource = new(owner.TriggerId, mismatch == "newer-generation" ? owner.Generation + 1 : owner.Generation,
+            mismatch == "newer-configuration" ? owner.ConfigurationRevision + 1 : owner.ConfigurationRevision,
             mismatch == "foreign-type" ? "timer" : owner.SourceTypeKey, owner.SourceFamily,
             mismatch == "foreign-scope" ? new("other-scope") : owner.Scope,
             mismatch == "foreign-tenant" ? "other-tenant" : owner.TenantId, owner.TimeZoneId) };
@@ -112,6 +171,9 @@ public sealed partial class StandaloneTriggerManagementTests
         Assert.Equal(0, planner.Calls);
         Assert.Same(cursor, await schedules.FindAsync(cursor.ScheduleId));
         Assert.Equal(0, fixture.Store.Writes);
+        var view = await fixture.Management.ReadAsync(row.Id, default);
+        Assert.Null(view.Schedule);
+        Assert.Contains(view.Findings, finding => finding.Code == "ScheduleGenerationChanged");
     }
 
     [Theory]

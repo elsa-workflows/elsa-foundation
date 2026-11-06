@@ -22,7 +22,8 @@ internal sealed partial class TriggerManagement
             cursor = await schedules.FindAsync(id, ct);
             if (cursor is not null && !OwnsSchedule(cursor, current.Trigger))
             { Unavailable("the stored schedule does not match this resource and scope."); return; }
-            before = cursor is null ? "Not scheduled (no current cursor)" : ScheduleCursorText(cursor);
+            before = cursor is null ? "Not scheduled (no current cursor)" : cursor.IsActive ? ScheduleCursorText(cursor)
+                : "Saved inactive cursor (no future firing scheduled): " + ScheduleCursorText(cursor);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception) { Unavailable("the actual schedule cursor or its timezone cannot be inspected."); return; }
@@ -57,10 +58,13 @@ internal sealed partial class TriggerManagement
         catch (Exception) { Unavailable("the source cannot calculate a supported proposed firing for these settings."); }
     }
 
+    // Deactivate retains the old owner facts. A paused edit may inspect that inactive history, never use it as current firing authority.
     private bool OwnsSchedule(RecurringTriggerSchedule schedule, StandaloneTrigger trigger) =>
         trigger.TenantId == access.Scope.TenantId && schedule.Resource is { } owner &&
         owner.TriggerId == trigger.Id && owner.SourceTypeKey == trigger.TypeKey && owner.Scope == access.Scope.Persistence &&
-        owner.TenantId == access.Scope.TenantId && owner.Generation <= trigger.Revision && owner.ConfigurationRevision == trigger.ConfigurationRevision &&
+        owner.TenantId == access.Scope.TenantId && owner.Generation <= trigger.Revision &&
+        (owner.ConfigurationRevision == trigger.ConfigurationRevision ||
+         trigger.DesiredState == TriggerDesiredState.Paused && !schedule.IsActive && owner.ConfigurationRevision < trigger.ConfigurationRevision) &&
         !string.IsNullOrWhiteSpace(owner.SourceFamily) && !string.IsNullOrWhiteSpace(owner.TimeZoneId) &&
         schedule.ScheduleId == RecurringTriggerSchedule.BuildResourceId(access.Scope.Persistence, trigger.Id, access.Scope.TenantId) &&
         schedule.ArtifactId is null && schedule.ExecutableNodeId is null && schedule.StimulusType is null && schedule.StimulusHash is null &&

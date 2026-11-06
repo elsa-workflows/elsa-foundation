@@ -224,7 +224,7 @@ public sealed partial class StandaloneTriggerManagementTests
         var clock = new Clock(); var schedules = new InMemoryRecurringTriggerScheduleStore(clock);
         var fixture = new Fixture(new RuntimeCapability(true, true), schedules);
         fixture.Store.Resource = new(new("trigger-a", "Scheduled", "cron", 1, Element("""{"expression":"* * * * *","timezone":"UTC"}"""),
-            1, 1, 0, TriggerDesiredState.Enabled, new(TriggerManagementKind.Studio), clock.Now, clock.Now, "operator", hasActivated: true, tenantId: "tenant-a"), []);
+            7, 1, 0, TriggerDesiredState.Enabled, new(TriggerManagementKind.Studio), clock.Now, clock.Now, "operator", hasActivated: true, tenantId: "tenant-a"), []);
         var due = clock.Now.AddMinutes(-5);
         await schedules.SaveAsync(RecurringTriggerSchedule.ForResource(new("trigger-a", 7, 1, "cron", "Cron", fixture.Access.Scope.Persistence,
             fixture.Access.Scope.TenantId, "UTC"), RecurringScheduleKind.Cron, "* * * * *", due, clock.Now.AddHours(-1)));

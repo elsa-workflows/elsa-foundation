@@ -101,12 +101,14 @@ internal sealed partial class TriggerManagement
                 findings.Add(new("ScheduleMissing", "No actual source schedule is available for this resource."));
             return null;
         }
-        if (schedule.Resource is not { } owner || owner.TriggerId != trigger.Id || owner.Scope != access.Scope.Persistence ||
-            owner.TenantId != access.Scope.TenantId || owner.SourceTypeKey != trigger.TypeKey || owner.ConfigurationRevision != trigger.ConfigurationRevision)
+        if (!OwnsSchedule(schedule, trigger))
         {
             findings.Add(new("ScheduleGenerationChanged", "The actual source schedule changed; reload the resource."));
             return null;
         }
+        var owner = schedule.Resource!;
+        if (!schedule.IsActive)
+            findings.Add(new("ScheduleInactive", "This saved cursor is inactive; no future firing is scheduled."));
         string? offset = null;
         try
         {
@@ -120,12 +122,17 @@ internal sealed partial class TriggerManagement
         if (overdue) findings.Add(new("ScheduleOverdue", "The persisted due occurrence is overdue and remains retained until accepted."));
         if (observation is { FailureCount: > 0 })
         {
-            findings.Add(new(observation.RetryAt > time.GetUtcNow() ? "ScheduleRetryBackoff" : "ScheduleRetryWaiting",
-                "The due occurrence has recorded failed attempts and remains retained for recovery."));
+            findings.Add(new(observation.RetryAt > time.GetUtcNow() ? "ScheduleRetryBackoff" : "ScheduleRetryWaiting", schedule.IsActive
+                ? "The due occurrence has recorded failed attempts and remains retained for recovery."
+                : "The saved cursor has recorded failed attempts. No retry is scheduled while it is inactive."));
             if (observation.FailureReason == RecurringTriggerScheduleFailureReason.NoEligibleSubscribers)
-                findings.Add(new("ScheduleNoEligibleSubscribers", "Waiting for eligible subscribers. The due occurrence is retained and will be retried."));
+                findings.Add(new("ScheduleNoEligibleSubscribers", schedule.IsActive
+                    ? "Waiting for eligible subscribers. The due occurrence is retained and will be retried."
+                    : "Last recorded failure: no eligible subscribers. No retry is scheduled while this cursor is inactive."));
             else if (observation.FailureReason == RecurringTriggerScheduleFailureReason.AdmissionUnavailable)
-                findings.Add(new("ScheduleAdmissionUnavailable", "Schedule admission is unavailable. The due occurrence is retained for retry."));
+                findings.Add(new("ScheduleAdmissionUnavailable", schedule.IsActive
+                    ? "Schedule admission is unavailable. The due occurrence is retained for retry."
+                    : "Last recorded failure: schedule admission was unavailable. No retry is scheduled while this cursor is inactive."));
         }
         return new(owner.Generation, owner.TimeZoneId, schedule.NextOccurrence.ToUniversalTime(), offset,
             "OneCatchUpThenFuture", "NextFutureOccurrence", schedule.IsActive, overdue,
