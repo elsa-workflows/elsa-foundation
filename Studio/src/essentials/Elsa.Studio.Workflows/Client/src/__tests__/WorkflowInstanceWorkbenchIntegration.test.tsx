@@ -473,7 +473,7 @@ describe("workflow run workbench incident navigation", () => {
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
-    await vi.waitFor(() => expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(true));
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
   });
 
   it("reframes and refocuses the same affected activity on each explicit activation", async () => {
@@ -813,7 +813,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
     click(buttonByText(container, "View input evidence"));
-    await vi.waitFor(() => expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(true));
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click([...container.querySelectorAll<HTMLButtonElement>(".wf-instance-incident-summary")]
@@ -823,8 +823,8 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "Data"));
 
     await vi.waitFor(() => expect(container.textContent).toContain("execution-second"));
-    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-row details")).toBeTruthy());
-    expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(false);
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")).toBeTruthy());
+    expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("clears a denied incident lookup message when a healthy activity is selected", async () => {

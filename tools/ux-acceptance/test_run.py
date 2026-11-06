@@ -34,6 +34,14 @@ class VerdictTests(unittest.TestCase):
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.EXPECTED_JOURNEYS), acceptance.verdict(self.report, self.root))
 
+    def test_compact_inputs_preserve_inherited_named_journeys(self):
+        required = {'collections and connection creation', 'agent authoring and navigation',
+                    'executable designer parity', acceptance.HISTORY_JOURNEY,
+                    'compact runtime Inputs retain exact captured values and accessible technical details'}
+        self.assertTrue(required <= acceptance.JOURNEYS)
+        self.assertEqual(['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
+                         acceptance.CAPTURES['compact runtime Inputs retain exact captured values and accessible technical details'])
+
     def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
         journey = sorted(acceptance.JOURNEYS)[0]
         report = copy.deepcopy(self.report)
