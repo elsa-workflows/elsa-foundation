@@ -117,5 +117,9 @@ indefinite ordinary-key recognition: its existing window and settled-obligation 
 Expired input cannot be manually retried; `PayloadExpired` is an explicit refusal. The original full
 physical-report query refuses `jobs.payload.expired`; `ListPhysicalReceiptInspectionsAsync` continues
 to expose exact report identity and original digests without inventing a successful null-valued report.
-Schema generation, real provider execution and the separate opt-in packaged retention witness remain
-required qualification; these source changes do not update prior milestone receipts.
+The retention migration's rollback validates payload availability before changing the schema. Expired
+markers or missing protected bytes refuse rollback without replacing JSON or discarding expiry proof.
+Unexpired rows can return to the older schema; upgrading them again treats them as legacy indefinite
+records because that older schema has no captured retention policy. Database application/rollback
+controls and the separate packaged retention witness remain required qualification; generated source
+does not update prior milestone receipts.

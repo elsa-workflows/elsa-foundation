@@ -4,8 +4,9 @@ This optional package adds an awaited `RunJob` saved boundary and an independent
 EF provider keep their standalone package closure. This adapter references public native runtime
 contracts and adds no runtime-to-Design dependency or handler implementation selection.
 
-Source implementation and source tests are being prepared for M3. They have not been built or
-executed. M2 remote qualification is a prerequisite for M3 qualification. Native/BPMN packaged
+Source implementation and source tests are prepared for M3. The native/Design/BPMN target builds
+passed at the recorded Generation E source; runtime cases remain unexecuted. M2 remote qualification
+is a prerequisite for M3 qualification. Native/BPMN packaged
 journeys, nested/independent/detached cases, interruption/recovery and UX acceptance remain
 unqualified. See [the feature tasks](../../../../../specs/1218-standalone-jobs/tasks.md).
 

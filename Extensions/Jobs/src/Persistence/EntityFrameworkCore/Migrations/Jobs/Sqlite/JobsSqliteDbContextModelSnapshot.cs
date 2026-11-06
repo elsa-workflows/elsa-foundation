@@ -586,8 +586,17 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MetadataSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("PayloadExpiredAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ReceiptJson")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ReceiptSha256")
@@ -702,6 +711,12 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                     b.Property<string>("ImplementationIdentity")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("InputExpiredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("InputExpiresAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("JobId")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -724,7 +739,13 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RequestJson")
-                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestMetadataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestMetadataSha256")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RequestSha256")
@@ -732,7 +753,24 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ResultExpiredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ResultExpiresAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ResultJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultMetadataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultMetadataSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RetentionPolicySha256")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RetriedFromJobId")
@@ -755,6 +793,12 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                     b.Property<int>("State")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("TerminalInputRetentionTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("TerminalResultRetentionTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<byte[]>("Token")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -769,6 +813,8 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "State", "EligibleAt", "Key");
+
+                    b.HasIndex("ScopeKey", "State", "InputExpiresAt", "ResultExpiresAt");
 
                     b.ToTable("elsa_jobs_jobs", (string)null);
                 });

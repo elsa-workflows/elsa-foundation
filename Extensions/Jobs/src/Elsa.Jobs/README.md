@@ -27,7 +27,7 @@ Complete progress envelopes default to a maximum of 16 KiB; `MaximumProgressByte
 Progress messages/data must already be safe for permitted
 inspection; handler authors must not include credentials or protected raw input. The runtime retains
 fixed safe diagnostics for handler/serialization failures and never logs raw exceptions or payloads.
-Secret-binding integration is outside this initial runtime slice.
+The optional [Secrets adapter](../Secrets/README.md) adds explicit declared-reference and literal-disclosure policies.
 
 The worker uses one slot per physical attempt, at most `MaximumConcurrentAttempts` (1–64). Polling
 rotates explicit scopes and named queues. Each slot retains one exact pull `RequestId` across
@@ -79,9 +79,8 @@ successor-owned permits. Handler exceptions are retryable by default; unreadable
 results are non-retryable. The accepted provider policy remains the sole retry/budget authority.
 
 This project implements standalone execution and the default schedule adapter/materialization loop.
-Native/BPMN adapters,
-operations API/Studio, provider/deployment guarantees and full #3586 qualification require their own
-implementation and evidence. See the [Core catalog](../Core/EXTENSION_POINTS.md) and
+Optional native/BPMN, Secrets and operations adapters have separate source and qualification gates;
+their presence does not qualify a provider/deployment or the complete #3586 product. See the [Core catalog](../Core/EXTENSION_POINTS.md) and
 [specification](../../../../specs/1218-standalone-jobs/spec.md).
 
 ## Cross-domain contributions

@@ -37,12 +37,12 @@ feature/program rollup is needed. Claim ownership and state transitions remain o
 |---|---|---|
 | M0 | Current-source/provider research, scoped domain admission, reviewed spec/plan/tasks and pre-code UX acceptance | Design reviewed; domain adopted 6 November; runtime contracts remain subject to concrete consumer proof |
 | M1 | Packaged standalone client/worker, handler/input/result identity, durable intake and recoverable attempts | Checkpoint passed at b706023ddd; [two-profile receipt](../../specs/1218-standalone-jobs/evidence/m1-packaged-standalone.json) |
-| M2 | Immediate/delayed/recurring jobs, retry/cancel/timeout, all four pauses and distributed concurrency/recovery | In progress; source and process controls under qualification |
-| M3 | Real native and BPMN invocation of the same handler, retained results and model-owned continuation | Source preparation in progress; qualification awaits the M2 gate |
-| M4 | Authorized API/Studio operations and integrator/operator documentation | Not started |
-| M5 | Complete packaged, multi-worker/provider and composed UX qualification; current-head review/checks/merge and resulting-main acceptance | Not started |
+| M2 | Immediate/delayed/recurring jobs, retry/cancel/timeout, all four pauses and distributed concurrency/recovery | Checkpoint passed with source boundaries in the [M2 receipt](../../specs/1218-standalone-jobs/evidence/m2-packaged-scheduling-recovery.json); final-source and application-clock witness still open |
+| M3 | Real native and BPMN invocation of the same handler, retained results and model-owned continuation | Source with 54 cases per provider prepared; runtime qualification remains unrun |
+| M4 | Authorized API/Studio operations and integrator/operator documentation | Source with 24 composed Jobs executions planned; API/security/UX acceptance remains unrun |
+| M5 | Complete packaged, multi-worker/provider and composed UX qualification; current-head review/checks/merge and resulting-main acceptance | In progress; final-source whole suites, packages, UX, CI, merge and main acceptance remain incomplete |
 
-M1 qualifies the eight-module standalone package boundary and five focused separate-process cases on SQLite/PostgreSQL. Source whole suites pass 45 runtime/Core and 68 provider tests. This is a delivery checkpoint, not complete Jobs, model, operations/UX or resulting-main acceptance. The [matrix](../../specs/1218-standalone-jobs/acceptance-matrix.md) retains every outstanding criterion.
+M1 qualifies the eight-module standalone package boundary and five focused separate-process cases on SQLite/PostgreSQL at its recorded source. M2 additionally qualifies 27 standalone scheduling/recovery cases per provider at 49a49d36b4, with the prior-source whole-suite and mutation boundaries recorded in its receipt. These checkpoints do not establish final-source Jobs, model, operations/UX or resulting-main acceptance. The [matrix](../../specs/1218-standalone-jobs/acceptance-matrix.md) retains every outstanding criterion.
 
 ## Shared work and agreement
 

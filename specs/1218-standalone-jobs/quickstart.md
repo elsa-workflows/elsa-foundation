@@ -1,8 +1,63 @@
 # Jobs validation quickstart
 
-The standalone Core/runtime and SQLite/PostgreSQL EF authority are implemented; their complete first
-release is still in progress. The commands below run the actual qualification host. Default scheduling and its current-source process qualification are in progress; native/BPMN adapters,
-operations API/Studio and complete failure/security qualification remain open.
+The first-release source includes standalone execution, schedules, native/BPMN adapters and operations
+API/Studio. Delivery remains incomplete: M1/M2 receipts qualify their recorded sources, while the final
+integration, security, retention, UX and resulting-main gates are still open. See the
+[acceptance matrix](acceptance-matrix.md) for the evidence boundary.
+
+## Compose a producer and worker
+
+Use exact computed package versions from the chosen feed. The qualification command below creates
+an owned temporary feed; this feature has not published a release. A standalone host needs
+`Elsa.Jobs` and its selected persistence adapter. Follow the
+[typed report implementation](../../tools/jobs/PackageProbe/Program.cs) and
+[runtime registration guide](../../Extensions/Jobs/src/Elsa.Jobs/README.md) for complete
+consumer source rather than adding workflow or Studio dependencies to the worker.
+
+Register `AddJobsEntityFrameworkCore` against the same durable database in producer and worker hosts.
+Use matching partition and tenant identities in the producer's `JobScope` and the worker's
+`WorkerScopes`. Configure the selected provider's migrations through the existing
+[persistence policy](../../Extensions/Jobs/src/Persistence/EntityFrameworkCore/README.md). Register
+`AddElsaJobs` in both: leave `EnableWorker=false` in the producer; enable it in the worker, add explicit
+trusted `WorkerScopes` and select the named queues it processes. Register each typed handler through
+`AddJobHandler<THandler,TInput,TResult>` with its exact logical handler/version, input/result schemas
+and semantic implementation identity.
+
+Resolve `IJobClient` in a service scope and call `SubmitAsync(jobScope, new JobSubmission(key, request))`.
+Keep that original producer key and immutable request after a lost response. The returned
+`JobAcceptance` contains the canonical JobId and minimum recognition deadline. A fresh
+`IJobQueries.FindAsync(jobScope, jobId)` reads the same retained invocation. Check its lifecycle and
+`UnavailableDiagnostic`; a missing result is not completion. After configured cleanup,
+`ResultPayloadState == JobPayloadState.Expired` exposes the original `ResultMetadata` instead of a
+fabricated payload. Do not keep polling an expired result as though its handler were still running.
+
+Choose [declared Secrets binding](../../Extensions/Jobs/src/Secrets/README.md) when a handler needs a
+secret reference or protected scalar input. Accepted input stores the reference. The worker resolves
+it through the exact accepted tenant and the scoped `IJobSecrets` contract. The
+[Connections composition controls](../../Extensions/Jobs/tests/Secrets/Tests/README.md) show the
+explicit tenant and declared-reference contract for an existing connection resolver.
+
+## Operate and integrate
+
+An operations host adds `JobsApiFeature`/`AddJobsApi`, current Foundation authentication and
+authorization, and the same Jobs authority. Enable `JobsStudio` in the Studio shell for its Jobs
+navigation. Use the [API routes and recovery rules](../../Extensions/Jobs/src/Api/README.md) for
+submission, schedules, holds, cancellation, linked retry and audit. Retain an operation's original
+ID, revision and reason when reconciling an unconfirmed response. Release the addressed hold and
+inspect the other effective reasons before treating work as eligible.
+
+Add the optional [native adapter](../../Extensions/Jobs/src/Workflows/Runtime/README.md), its Design
+pin contributor and, for genuine BPMN, [Jobs BPMN integration](../../Extensions/Jobs/src/Bpmn/README.md)
+to the model/coordinator host. `RunJob` awaits a retained result. `SubmitJob` uses an explicit
+Independent or Detached pin and returns a `PendingAdmission` submission receipt; only canonical Jobs
+acceptance proves admission. Keep handler execution in the separate worker if the coordinator should
+not execute business code.
+
+Payload retention defaults to indefinite. Optional `TerminalInputRetention`/`TerminalResultRetention`
+are captured at acceptance; changing host settings does not shorten an accepted promise. An owned
+maintenance process calls bounded `IJobCommands.ExpirePayloadsAsync`, continuing its returned cursor.
+Owed model delivery blocks expiry. See the persistence guide for cleanup, retained identities and
+migration limits; key recognition and payload expiry are separate operations.
 
 ## Run the packaged standalone witness
 
@@ -13,7 +68,7 @@ python3 tools/jobs/verify-packaged-jobs.py \
   --source-ref "$(git rev-parse HEAD)" \
   --publish-state-ref "$(git rev-parse origin/publish-state)" \
   --evidence-dir /tmp/elsa-jobs-package-evidence \
-  --provider sqlite --stage execute
+   --provider sqlite --stage execute --witness-group all
 ```
 
 Repeat with `--provider postgresql` to use an owned PostgreSQL container. Both commands create an

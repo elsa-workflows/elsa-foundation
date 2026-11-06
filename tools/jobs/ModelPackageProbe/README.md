@@ -37,7 +37,7 @@ The gate records `PRIOR_SOURCE_M2_SLICE_ONLY`; it grants no current-M3-source qu
 The default execution profile remains SQLite with separate retained Jobs and Runtime files. The
 `--provider postgresql` profile compiles a distinct external consumer against the centrally pinned
 Npgsql provider, requires the actual PostgreSQL M2 all-groups prerequisite, and runs the identical
-34-case oracle plus the new created-helper cancellation case. It accepts no external database or
+54-case oracle, preserving the first 48 cases and their order. It accepts no external database or
 connection string. Its owned `postgres:16-alpine` container has exact run labels, a loopback-only
 port, actual image ID and PostgreSQL 16 engine evidence. Jobs and Runtime use separate databases
 with verified C collation and a generated schema. An admitted aggregate cgroup parent, when supplied,
@@ -67,7 +67,7 @@ protocol `elsa.bpmn/1`; the probe refuses any native workflow header for that ro
 public BPMN graph/work/header projections and `IBpmnNativeWorkConsumer`, without parsing a private
 BPMN payload. `ProcessId` supplies the logical definition identity across two material versions.
 
-The reviewed twenty-case checkpoint is preserved separately. The extended thirty-five declared cases cover:
+The reviewed twenty-case checkpoint is preserved separately. The extended 54 declared cases cover:
 
 - Native/BPMN success and selected handler failure, retaining the useful selected result and exact
   native consumption/grant binding; a fresh inspector verifies one physical handler entry.
@@ -121,13 +121,60 @@ The reviewed twenty-case checkpoint is preserved separately. The extended thirty
   until the ordinary native cancellation path provides its exact committed pre-wait phase proof;
   missing admission state or a helper that never existed cannot satisfy it.
 
+- Four linked manual retry controls use real native/BPMN parents, both still waiting and already
+  terminal. A selected failure stays unchanged; one exact operation creates/replays a different
+  canonical JobId with the original model association and no continuation. Instance and definition
+  holds both apply to that independent run. Releasing one leaves it unstarted; releasing both runs
+  the same useful report once and never reattaches or resurrects the old parent. The real handler's
+  external failure-file condition is removed after the original failure; accepted input/pins remain fixed.
+- Two continuation cuts observe the actual public provider's successful durable grant before returning
+  to result dispatch. Another process verifies the same retained permission and adds both workflow
+  holds. After the controller kills the exact blocked sender, a clean successor consumes that same
+  already-started permission while both holds remain active, with one saved result and handler attempt.
+  A timeout or any exceptional hold exit writes a permanent failure marker, including delivery-token
+  cancellation. The controller refuses that marker before/after its exact kill and independently
+  rechecks the saved wait, unconsumed input and owed ACK after the kill before starting its successor.
+  All other public command/query methods forward to the selected provider.
+- Direct native cancellation uses the real initial-claim checkpoint cut before the first saved wait,
+  with no model origin. Independent inspection proves the existing invocation/attempt and zero Jobs;
+  after the exact process kill, ordinary cancellation must settle that same root and permit deletion.
+- Six genuine BPMN controls use actual selected Failed, TimedOut and Cancelled results. A read-only
+  public result-validator observer arms an exact provider-read intervention only after live root
+  validation starts. Its query decorator returns missing or wrong-result grant evidence without
+  changing stored state. A separate inspector must still see the canonical permission, unaccepted
+  root input, owed ACK/source and retained helper history. A clean successor must accept the original
+  input and ACK the same selected result once. The timeout case pins its explicit policy in the original
+  executable; it uses the same cooperative report handler. These controls qualify adverse reads at
+  BPMN consumption, not forged native resume payloads before native consumption.
+- Four native/BPMN awaited-owner cancellation controls cut at actual handler entry or at a retained
+  completed result before continuation. The running handler observes cancellation but deliberately
+  keeps running until its external barrier opens. Its actual later successful physical receipt is
+  retained while the authoritative result is Cancelled. A previously selected successful result stays
+  unchanged when its parent cancels before delivery. Each exact parent stays Cancelled, its result
+  responsibility settles through positive terminal proof, and one physical attempt remains visible.
+- Two admission response-loss controls pin a two-second ordinary recognition policy in the original
+  native executable. A public dispatcher observer retains the actual committed source context; the
+  real Jobs provider commits acceptance before the controller kills the producer before sender ACK.
+  The independent worker finishes while that sender stays offline. Actual parent consumption and
+  Jobs result ACK must then commit while the exact original admission source still remains Delivering
+  and owed. After the natural recognition deadline, a fresh exact protected-origin read must equal its
+  original receipt before any replay; a different ordinary key and proposal with that same origin
+  must independently replay the original JobId, eliminating old-key fallback as the explanation.
+  After old-source visibility expiry, a fresh process claims and dispatches the identical original outbox
+  intent under a new real fence. The exact protected origin still resolves its original acceptance,
+  JobId and result. The already-dispatched old context is refused at its stale fence before and after
+  semantic result consumption. No recognition time, accepted policy, outbox row or model state is edited.
+
 Every planned case is retained as Passed, Failed or Not Run. Failure and cleanup failures remain
 failures. `fullAcceptanceState` remains Incomplete even if this focused slice passes. The controller
-also records the finite remaining plan: linked retry association;
-pre-wait native cancellation; exact forged/missing-grant runtime mutations for selected
-failed/timed-out/cancelled results; grant-before-pause replay; stale process overlap; authoring
-publication/import; cross-tenant authorization; and the composed Studio experience. The source unit
-controls for exact missing/wrong grants do not become composed-runtime evidence here.
+also records five remaining plans. Forged/missing-grant native resumes before consumption and stale
+model-process overlap still need composed M3 controls (J36/J39/J40). Authoring publication/export/import
+needs its public authored-material evidence for J35; this Runtime-only host does not substitute it.
+Cross-tenant authorization belongs to the existing actual API/operations plan (J44/J45), including model
+associations and exact consumer authority; it is not automatically another model CLI feature. The
+composed Studio experience belongs to the separate mandatory UX plan (J49–J54), whose source already
+contains authored native and genuine BPMN journeys. Existing component, prior-source M2 and unrun UX
+sources support these obligations without passing any remaining journey.
 
 This trusted qualification host accepts only controller-created command files. It is not a product
 CLI or an HTTP service. These source-declared cases have not been compiled or executed; root owns remote qualification

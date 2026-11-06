@@ -47,7 +47,7 @@ public sealed partial class JobsProviderContracts
         {
             "outcome" => selected with { Outcome = (JobOutcome)987 },
             "null-payload" => selected with { Payload = null },
-            _ => selected with { Payload = selected.Payload! with { Schema = Handler.ResultSchema with { Alias = "wrong-result-schema" } } }
+            _ => selected with { Payload = new JobPayload(Handler.ResultSchema with { Alias = "wrong-result-schema" }, selected.Payload!.Value) }
         };
         changed = changed with { PayloadSha256 = JobPayloadDigest.Compute(changed.Payload) };
         var retained = JobStoreCodec.Json(changed);

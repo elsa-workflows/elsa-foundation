@@ -625,8 +625,17 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                         .HasColumnType("text")
                         .UseCollation("C");
 
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MetadataSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long?>("PayloadExpiredAt")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ReceiptJson")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("ReceiptSha256")
@@ -747,6 +756,12 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                     b.Property<string>("ImplementationIdentity")
                         .HasColumnType("text");
 
+                    b.Property<long?>("InputExpiredAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("InputExpiresAt")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("JobId")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -772,16 +787,39 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                         .UseCollation("C");
 
                     b.Property<string>("RequestJson")
-                        .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("RequestMetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestMetadataSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("RequestSha256")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<long?>("ResultExpiredAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ResultExpiresAt")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ResultJson")
                         .HasColumnType("text");
+
+                    b.Property<string>("ResultMetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResultMetadataSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RetentionPolicySha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("RetriedFromJobId")
                         .HasMaxLength(256)
@@ -804,6 +842,12 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                     b.Property<int>("State")
                         .HasColumnType("integer");
 
+                    b.Property<long?>("TerminalInputRetentionTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("TerminalResultRetentionTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<byte[]>("Token")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -818,6 +862,8 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "State", "EligibleAt", "Key");
+
+                    b.HasIndex("ScopeKey", "State", "InputExpiresAt", "ResultExpiresAt");
 
                     b.ToTable("elsa_jobs_jobs", (string)null);
                 });

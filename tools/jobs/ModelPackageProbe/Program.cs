@@ -103,6 +103,7 @@ internal static partial class ModelProbe
                 HierarchyCursorSigningKey = new string('h', 32)
             }).AddEfModuleMigrations<RuntimeDbContext>(command.Provider);
             if (command.PreWaitCut is { } cut) PreWaitCut.Register(builder.Services, cut);
+            SupplementalJobsControl.Register(builder.Services, command.ContinuationCut, command.GrantReadFault, command.AdmissionCut);
             // Force the actual CLR activity assembly into the ordinary startup registration scan.
             _ = typeof(Elsa.Jobs.Workflows.Runtime.Activities.RunJob).Assembly.GetName();
             using var host = builder.Build();
@@ -176,6 +177,18 @@ internal static partial class ModelProbe
                 .ProcessAsync(new(16, command.ExecutionId, BpmnStartKind), ct);
             case "sweep": return await services.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new(maxExecutionsPerSweep: 16), ct);
             case "inspect": return await InspectAsync(services, command, ct);
+            case "retry-new": return await commands.RetryAsNewRunAsync(new(command.Scope, command.JobId,
+                command.ExpectedRevision, command.ProposedJobId, command.IdempotencyKey,
+                new(command.OperationId, "model-package-witness", "Retry as a linked independent run")), ct);
+            case "cancel-job": return await commands.CancelAsync(new(command.Scope, command.JobId,
+                new(command.OperationId, "model-package-witness", "Select actual queued Jobs cancellation")), ct);
+            case "replay-source": return await SupplementalSourceCommands.ReplayAsync(services, command, ct);
+            case "old-source-duplicate": return await SupplementalSourceCommands.DuplicateAsync(services, command, ct);
+            case "replay-origin-fresh-key": return await SupplementalSourceCommands.ReplayOriginAsync(services, command, ct);
+            case "source-status": return await SupplementalSourceCommands.ReadAsync(services, command, ct);
+            case "origin":
+                var admission = command.SavedAdmission ?? throw new InvalidDataException("Exact captured admission required.");
+                return await jobs.FindOriginAsync(command.Scope, admission.Origin ?? throw new InvalidDataException("Exact protected origin required."), ct);
             case "pause": return await commands.PauseAsync(new(command.Scope, command.Gate ?? throw new InvalidDataException("Gate required."),
                 command.HoldId, new(command.OperationId, "model-package-witness", "Hold completed result continuation")), ct);
             case "holds": return await jobs.ListHoldsAsync(command.Scope, command.Gate, new(100, null), ct);
@@ -223,9 +236,11 @@ internal static partial class ModelProbe
         foreach (var job in page.Items)
         {
             var attempts = await jobs.ListAttemptsAsync(command.Scope, job.JobId, new(100, null), ct);
+            var physical = await jobs.ListPhysicalReceiptInspectionsAsync(command.Scope, job.JobId, new(100, null), ct);
             if (attempts.ContinuationToken is not null) throw new InvalidDataException("The owned witness exceeded its finite attempt page.");
+            if (physical.ContinuationToken is not null) throw new InvalidDataException("The owned witness exceeded its finite physical receipt page.");
             var delivery = await jobs.FindDeliveryAsync(command.Scope, job.JobId, ct);
-            deliveries.Add(new { job.JobId, delivery, attempts = attempts.Items,
+            deliveries.Add(new { job.JobId, delivery, attempts = attempts.Items, physicalReceipts = physical.Items,
                 retainedGrant = delivery?.Permission is { } grant ? await jobs.FindContinuationAsync(command.Scope, job.JobId, grant.ContinuationId, ct) : null });
         }
         var workerId = command.WorkerExecutionId ?? command.ExecutionId;
@@ -262,6 +277,8 @@ internal static partial class ModelProbe
         }
         var source = worker is null ? null : await services.GetRequiredService<IPostCommitOutboxLookupStore>()
             .FindUndeliveredDurableAsync(workerId, [], ct);
+        var rootSource = command.ModelKind != "bpmn" ? null : await services.GetRequiredService<IPostCommitOutboxLookupStore>()
+            .FindUndeliveredDurableAsync(command.ExecutionId, [], ct);
         var evidence = worker is not null && worker.Status.IsTerminal()
             ? await services.GetRequiredService<IJobNativeDeliveryInspector>().InspectWorkerAsync(worker, ct) : null;
         JobNativeSubmissionEvidence? submissionEvidence = null;
@@ -274,6 +291,7 @@ internal static partial class ModelProbe
         return new { jobs = page.Items, deliveries, worker, activities = activityPage.Items, jobActivities, submissionActivities, model, owner,
             nativeEvidence = evidence,
             submissionEvidence, submissionUnavailable,
+            pendingRootSource = rootSource is null ? null : new { rootSource.OutboxItemId, rootSource.Status, rootSource.Intent.Kind },
             pendingSource = source is null ? null : new { source.OutboxItemId, source.Status, source.Intent.Kind,
                 source.StimulusDeliverySourceScope, source.StimulusDeliveryProtocolVersion,
                 retainsPublisher = source.RetainsPublisherForRequiredDelivery(workerId) } };
@@ -287,4 +305,7 @@ internal sealed record ModelCommand(string Mode, string JobsConnectionString, st
     string HoldId = "", string OperationId = "", long ExpectedRevision = 0, int TimeoutSeconds = 150,
     AckFaultOptions? AckFault = null, string NativeStructure = "root",
     JobAssociationMode AssociationMode = JobAssociationMode.Awaited, bool KeepParentActive = false,
-    string Provider = "Sqlite", string? Schema = null, PreWaitCutOptions? PreWaitCut = null);
+    string Provider = "Sqlite", string? Schema = null, PreWaitCutOptions? PreWaitCut = null,
+    ContinuationCutOptions? ContinuationCut = null, GrantReadFaultOptions? GrantReadFault = null,
+    string JobId = "", string ProposedJobId = "", string IdempotencyKey = "", JobExecutionPolicy? Policy = null,
+    AdmissionCutOptions? AdmissionCut = null, PostCommitDeliveryContext? SavedSource = null, JobAdmission? SavedAdmission = null);

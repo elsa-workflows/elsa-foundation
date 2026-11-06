@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
-internal sealed record PreWaitCutOptions(string RootExecutionId, string WorkerExecutionId, string MarkerFile);
+internal sealed record PreWaitCutOptions(string RootExecutionId, string WorkerExecutionId, string MarkerFile, bool RequireModelOrigin = true);
 
 // Qualification observer around the selected public checkpoint contract. It forwards every capability and
 // reader qualification and returns the original transaction result. It never creates state or cancellation proof.
@@ -61,8 +61,9 @@ internal sealed class PreWaitCut(PreWaitCutOptions options)
             activity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ActivityAttemptActivationClaim) != attempt.AttemptId)
             throw new InvalidDataException("The observed claim is not a committed initial attempt before its first saved wait.");
         var worker = await workflows.FindAsync(options.WorkerExecutionId, cancellationToken) ?? throw new InvalidDataException("The real admitted worker is missing.");
-        if (worker.ModelWorkOrigin is not { } origin || origin.ExecutionId != options.RootExecutionId || origin.WorkerExecutionId != options.WorkerExecutionId ||
-            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, worker.PinnedExecutable))
+        if (options.RequireModelOrigin && (worker.ModelWorkOrigin is not { } origin || origin.ExecutionId != options.RootExecutionId || origin.WorkerExecutionId != options.WorkerExecutionId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, worker.PinnedExecutable)) ||
+            !options.RequireModelOrigin && (worker.ModelWorkOrigin is not null || options.RootExecutionId != options.WorkerExecutionId))
             throw new InvalidDataException("The exact admitted native helper has no matching genuine model origin.");
         if (Interlocked.CompareExchange(ref _entered, 1, 0) != 0) throw new InvalidDataException("The owned pre-wait cut was entered more than once.");
         await Probe.WriteAsync(options.MarkerFile, new { state = "CommittedBeforeBody", occurrence = 1, processId = Environment.ProcessId,

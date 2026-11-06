@@ -1,6 +1,6 @@
 # Jobs Studio contributions
 
-The [Jobs API catalog](../Api/EXTENSION_POINTS.md) owns the HTTP boundary. This package contributes
+The [Jobs API catalog](../../src/Api/EXTENSION_POINTS.md) owns the HTTP boundary. This package contributes
 presentation only and uses the [shared module controls](../../../../Studio/docs/module-ui.md).
 
 `JobsStudioFeature : IShellFeature` is the optional `JobsStudio` shell feature, annotated as Studio

@@ -21,6 +21,7 @@ The capability `elsa.api.jobs/1` supplies shell-relative links. Routes are:
 | `POST /jobs/schedules/{scheduleId}/enabled` | Enable/disable without deleting accepted jobs |
 | `GET/POST /jobs/holds`, `POST /jobs/holds/{holdId}/release` | Inspect/add independent holds; release one exact hold |
 | `GET/PUT /jobs/capacity` | Inspect/change revisioned live-permission limits |
+| `GET /jobs/operations`, `GET /jobs/operations/{operationId}` | Separately authorized operation audit pages and exact receipts |
 
 List requests use `limit` (1–100) and protected `after` (at most 16,384 characters); Jobs additionally
 accepts `queue`, `jobType` and `state`. Holds accept a complete `kind`, `name`, `modelKind` gate filter.

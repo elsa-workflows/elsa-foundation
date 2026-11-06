@@ -29,12 +29,22 @@ PLANNED = (
     'native-independent-inherits-explicit-cancellation', 'bpmn-independent-inherits-explicit-cancellation',
     'native-detached-survives-explicit-cancellation', 'bpmn-detached-survives-explicit-cancellation',
     'native-nested-independent-association', 'native-nested-detached-association',
-    'bpmn-created-helper-cancel-before-job-saved-wait')
+    'bpmn-created-helper-cancel-before-job-saved-wait',
+    'native-linked-manual-retry-waiting-parent', 'bpmn-linked-manual-retry-waiting-parent',
+    'native-linked-manual-retry-terminal-parent', 'bpmn-linked-manual-retry-terminal-parent',
+    'native-grant-before-instance-and-definition-pause-replay', 'bpmn-grant-before-instance-and-definition-pause-replay',
+    'native-cancel-after-initial-claim-before-saved-wait',
+    'bpmn-selected-failed-result-missing-grant-refused', 'bpmn-selected-failed-result-wrong-result-grant-refused',
+    'bpmn-selected-timedout-result-missing-grant-refused', 'bpmn-selected-timedout-result-wrong-result-grant-refused',
+    'bpmn-selected-cancelled-result-missing-grant-refused', 'bpmn-selected-cancelled-result-wrong-result-grant-refused',
+    'native-owner-cancel-running-handler-with-late-physical-result', 'bpmn-owner-cancel-running-handler-with-late-physical-result',
+    'native-owner-cancel-completed-result-before-continuation', 'bpmn-owner-cancel-completed-result-before-continuation',
+    'native-admission-response-loss-and-protected-origin-replay-after-key-expiry',
+    'bpmn-admission-response-loss-and-protected-origin-replay-after-key-expiry')
 REMAINING = (
-    'linked-retry-model-association', 'native-cancel-before-saved-wait',
-    'selected-failed-timedout-cancelled-result-forged-or-missing-grant-runtime-control',
-    'instance-and-definition-grant-before-pause-replay', 'model-host-stale-process-and-fenced-overlap',
-    'authoring-submit-publish-and-import', 'authorization-and-tenant-cross-scope-negative', 'composed-studio-experience')
+    'native-selected-non-success-result-forged-or-missing-grant-before-consumption',
+    'model-host-stale-process-and-fenced-overlap', 'authoring-submit-publish-and-import',
+    'authorization-and-tenant-cross-scope-negative', 'composed-studio-experience')
 
 
 def write_json(path, value):
@@ -161,12 +171,13 @@ class Models:
                 'entryDirectory': str(self.evidence / (name + '.entries')), 'failUntilAttempt': 1 if failure else 0,
                 'releaseDirectory': str(self.evidence / (name + '.releases')) if blocked else None}
 
-    def create(self, kind, suffix='', invalid=None, send=True, failure=False, definition=None, version='v1', blocked=False, structure='root', mode='Awaited', active=False):
+    def create(self, kind, suffix='', invalid=None, send=True, failure=False, definition=None, version='v1', blocked=False, structure='root', mode='Awaited', active=False, report_overrides=None, policy=None):
         name = self.active_case + suffix
         report = self.report(name, failure, blocked)
+        report.update(report_overrides or {})
         created = self.call('create', modelKind=kind, executionId='request-' + uuid.uuid4().hex,
             definitionId=definition or 'definition-' + self.active_case, definitionVersion=version,
-            report=report, invalidInput=invalid, sendBpmnStart=send, nativeStructure=structure, associationMode=mode, keepParentActive=active)
+            report=report, invalidInput=invalid, sendBpmnStart=send, nativeStructure=structure, associationMode=mode, keepParentActive=active, policy=policy)
         return {'modelKind': kind, 'executionId': created['executionId'], 'workerExecutionId': created['workerExecutionId'],
                 'created': created, 'report': report, 'nativeStructure': structure, 'associationMode': mode, 'keepParentActive': active, 'definitionId': definition or 'definition-' + self.active_case}
 
@@ -742,6 +753,8 @@ class Models:
         self.passed(rootExecutionId=run['executionId'], workerExecutionId=run['workerExecutionId'], canonicalJobs=0,
                     initialAttemptId=observed['initialAttemptId'], committedClaimId=observed['commitId'], killedProcessId=observer[0].pid,
                     successorProcessId=successor[0].pid, actualCancellation=cancellation, terminalReceiptId=final['owner']['terminalReceiptId'])
+
+        runpy.run_path(str(Path(__file__).with_name('supplemental_models.py')))['run_supplemental'](self)
 
     def close(self):
         errors = []

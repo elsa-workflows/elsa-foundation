@@ -26,7 +26,7 @@ internal static partial class ModelProbe
     {
         if (command.ModelKind is not ("native" or "bpmn") || string.IsNullOrWhiteSpace(command.DefinitionId))
             throw new InvalidDataException("Choose native/bpmn and an explicit logical definition identity.");
-        var policy = new JobExecutionPolicy(new(1, TimeSpan.FromMilliseconds(25), TimeSpan.FromSeconds(1), 2, 0, true),
+        var policy = command.Policy ?? new JobExecutionPolicy(new(1, TimeSpan.FromMilliseconds(25), TimeSpan.FromSeconds(1), 2, 0, true),
             TimeSpan.FromMinutes(2), TimeSpan.FromDays(30));
         var pin = new JobWorkflowHandlerPin(1, Probe.Support.Handler, Probe.Support.InputSchema, Probe.Support.ResultSchema,
             "default", policy, command.AssociationMode);

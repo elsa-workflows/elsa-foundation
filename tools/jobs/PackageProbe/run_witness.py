@@ -62,6 +62,8 @@ class Witness:
         self.container = None
         self.container_log = {'state': 'NOT APPLICABLE'}
         self.run_id = uuid.uuid4().hex
+        self.container_name = 'elsa-jobs-package-' + self.run_id
+        self.container_creation_attempted = False
         self.owner = os.environ.get('ELSA_JOBS_QUALIFICATION_OWNER', 'local-elsa-3586')
         if re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', self.owner) is None:
             raise ValueError('The Jobs qualification owner must be a bounded nonsecret label identity.')
@@ -72,38 +74,79 @@ class Witness:
         self.cgroup_parent = os.environ.get('ELSA_JOBS_QUALIFICATION_CGROUP_PARENT')
         if self.cgroup_parent is not None and re.fullmatch(r'[A-Za-z0-9_]{1,64}\.slice', self.cgroup_parent) is None:
             raise ValueError('The Jobs qualification aggregate parent slice is invalid.')
+        self.container_proof = {'name': self.container_name, 'labels': self.container_labels,
+                                'image': 'postgres:16-alpine', 'expectedCgroupParent': self.cgroup_parent,
+                                'creationState': 'NOT RUN', 'cleanupState': 'NOT RUN'}
         self.base = {'provider': 'Sqlite' if provider == 'sqlite' else 'PostgreSql',
                      'scope': {'persistencePartition': 'package-' + self.run_id, 'tenantId': 'tenant-a'}}
 
     def docker(self, arguments, timeout=60):
         return subprocess.check_output(['docker', *arguments], text=True, timeout=timeout).strip()
 
+    def write_container_proof(self):
+        write_json(self.evidence / 'owned-container.json', self.container_proof)
+
+    def verify_container_owner(self, container):
+        if re.fullmatch(r'[0-9a-f]{64}', container) is None:
+            raise RuntimeError('The owned Jobs container has no exact full identity.')
+        actual = json.loads(self.docker(['inspect', '--format', '{{json .Config.Labels}}', container]))
+        if not isinstance(actual, dict) or any(actual.get(key) != value for key, value in self.container_labels.items()):
+            raise RuntimeError('The exact Jobs container does not have all original owned labels.')
+        if self.docker(['inspect', '--format', '{{.Name}}', container]) != '/' + self.container_name:
+            raise RuntimeError('The exact Jobs container does not have its original owned name.')
+
+    def reconcile_container_creation(self):
+        # A failed CLI reply can follow durable daemon creation. A name alone grants no deletion authority.
+        identities = self.docker(['ps', '--all', '--no-trunc', '--filter', 'name=^/' + self.container_name + '$',
+                                  '--format', '{{.ID}}']).splitlines()
+        if len(identities) > 1 or any(re.fullmatch(r'[0-9a-f]{64}', identity) is None for identity in identities):
+            raise RuntimeError('The uncertain Jobs creation has no exact daemon identity proof.')
+        if not identities:
+            self.container_proof.update(creationReconciliation='CONFIRMED_ABSENT', exactContainerAbsent=True)
+            return
+        self.verify_container_owner(identities[0])
+        self.container = identities[0]
+        self.container_proof.update(id=self.container, creationReconciliation='EXACT_OWNED_CONTAINER_RECOVERED')
+
+    def container_absent(self):
+        # Only a successful daemon inventory can prove absence; an inspect error cannot.
+        identities = self.docker(['ps', '--all', '--no-trunc', '--format', '{{.ID}}']).splitlines()
+        if any(re.fullmatch(r'[0-9a-f]{64}', identity) is None for identity in identities):
+            raise RuntimeError('The Jobs daemon inventory did not return exact full identities.')
+        return self.container not in identities
+
     def initialize_store(self):
         if self.provider == 'sqlite':
             self.base['connectionString'] = 'Data Source=' + str(self.evidence / 'jobs.db')
             self.base['schema'] = None
         else:
-            name = 'elsa-jobs-package-' + self.run_id
+            name = self.container_name
             env_file = self.evidence / 'owned-postgres.env'
             password = uuid.uuid4().hex
             env_file.write_text('POSTGRES_DB=jobs\nPOSTGRES_USER=jobs\nPOSTGRES_PASSWORD=' + password + '\n')
             env_file.chmod(0o600)
-            # --name reserves this exact owned name; failure never causes removal
-            # of a pre-existing container. Only retain the returned container ID.
+            # Record the exact attempted reservation before Docker can create anything.
             labels = [argument for key, value in sorted(self.container_labels.items())
                       for argument in ('--label', key + '=' + value)]
             parent = ['--cgroup-parent', self.cgroup_parent] if self.cgroup_parent is not None else []
-            self.container = self.docker(['run', '--detach', '--rm', '--name', name, *labels, *parent,
-                                          '--publish', '127.0.0.1::5432', '--env-file', str(env_file),
-                                          'postgres:16-alpine'])
-            write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name,
-                       'labels': self.container_labels, 'image': 'postgres:16-alpine', 'expectedCgroupParent': self.cgroup_parent})
+            self.container_creation_attempted = True
+            self.container_proof.update(creationState='IN PROGRESS', creationAttempted=True)
+            self.write_container_proof()
+            try:
+                created = self.docker(['run', '--detach', '--rm', '--name', name, *labels, *parent,
+                                       '--publish', '127.0.0.1::5432', '--env-file', str(env_file),
+                                       'postgres:16-alpine'])
+            finally:
+                env_file.unlink(missing_ok=True)
+            self.verify_container_owner(created)
+            self.container = created
+            self.container_proof.update(id=self.container, creationState='CONFIRMED_OWNED')
+            self.write_container_proof()
             if self.cgroup_parent is not None:
                 pid = int(self.docker(['inspect', '--format', '{{.State.Pid}}', self.container]))
                 actual = (Path('/proc') / str(pid) / 'cgroup').read_text()
-                write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name,
-                           'labels': self.container_labels, 'image': 'postgres:16-alpine',
-                           'expectedCgroupParent': self.cgroup_parent, 'containerPid': pid, 'actualCgroup': actual})
+                self.container_proof.update(containerPid=pid, actualCgroup=actual)
+                self.write_container_proof()
                 if not any(line.startswith('0::/' + self.cgroup_parent + '/') for line in actual.splitlines()):
                     raise RuntimeError('Owned PostgreSQL container is outside the admitted aggregate slice.')
             deadline = time.monotonic() + 45
@@ -121,7 +164,6 @@ class Witness:
             port = self.docker(['port', self.container, '5432/tcp']).split(':')[-1]
             self.base['connectionString'] = f'Host=127.0.0.1;Port={port};Database=jobs;Username=jobs;Password={password}'
             self.base['schema'] = 'witness_' + self.run_id
-            env_file.unlink()
         self.call('initialize')
 
     def command(self, mode, **arguments):
@@ -343,24 +385,47 @@ class Witness:
                 errors.append(type(error).__name__)
             finally:
                 log.close()
+        if self.container is None and self.container_creation_attempted:
+            try:
+                self.reconcile_container_creation()
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                errors.append(type(error).__name__)
+                self.container_proof.update(creationReconciliation='UNRESOLVED', cleanupState='FAILED')
         if self.container is not None:
             try:
-                path = self.evidence / 'owned-postgres.log'
-                self.container_log = {'state': 'UNAVAILABLE', 'path': str(path)}
-                try:
-                    with path.open('w') as output:
-                        result = subprocess.run(['docker', 'logs', self.container], stdout=output,
-                                                stderr=subprocess.STDOUT, timeout=10)
-                    self.container_log.update(state='PASSED' if result.returncode == 0 else 'FAILED',
-                                              exitCode=result.returncode)
-                except (OSError, subprocess.SubprocessError) as error:
-                    self.container_log['diagnostic'] = type(error).__name__
+                if self.container_absent():
+                    self.container_proof['exactContainerAbsent'] = True
+                else:
+                    self.verify_container_owner(self.container)
+                    path = self.evidence / 'owned-postgres.log'
+                    self.container_log = {'state': 'UNAVAILABLE', 'path': str(path)}
+                    try:
+                        with path.open('w') as output:
+                            result = subprocess.run(['docker', 'logs', self.container], stdout=output,
+                                                    stderr=subprocess.STDOUT, timeout=10)
+                        self.container_log.update(state='PASSED' if result.returncode == 0 else 'FAILED',
+                                                  exitCode=result.returncode)
+                    except (OSError, subprocess.SubprocessError) as error:
+                        self.container_log['diagnostic'] = type(error).__name__
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                errors.append(type(error).__name__)
             finally:
                 # Log capture is useful evidence but never owns resource cleanup.
                 try:
-                    self.docker(['rm', '--force', self.container])
-                except (OSError, subprocess.SubprocessError) as error:
+                    if not self.container_absent():
+                        self.verify_container_owner(self.container)
+                        self.docker(['rm', '--force', self.container])
+                    if not self.container_absent():
+                        raise RuntimeError('The exact owned Jobs container remains present.')
+                    self.container_proof['exactContainerAbsent'] = True
+                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                     errors.append(type(error).__name__)
+        self.finish_cleanup(errors)
+
+    def finish_cleanup(self, errors):
+        if self.container_creation_attempted:
+            self.container_proof.update(cleanupState='FAILED' if errors else 'PASSED', cleanupErrors=errors)
+            self.write_container_proof()
         if errors:
             raise RuntimeError('Owned resource cleanup failed: ' + ', '.join(errors))
 

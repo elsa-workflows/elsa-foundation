@@ -30,6 +30,7 @@ internal static partial class Probe
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(command.TimeoutSeconds));
         try
         {
+            ValidateApplicationClock(command);
             if (command.Fault is { Event: "before-transaction" } && command.Mode != "claim")
                 throw new InvalidDataException("A pre-transaction barrier is only supported by the explicit direct claim probe.");
             using var faults = command.Fault is { } fault ? new ProbeEfFaults(fault) : null;
@@ -49,6 +50,7 @@ internal static partial class Probe
                 options.TerminalResultRetention = command.TerminalResultRetention;
             });
             var worker = command.Mode == "worker";
+            ConfigureApplicationClock(command, builder.Services);
             builder.Services.AddElsaJobs(options =>
             {
                 options.EnableWorker = worker;
@@ -200,7 +202,7 @@ internal static partial class Probe
                             payload, JobPayloadDigest.Compute(payload), null, false, DateTimeOffset.UtcNow), timeout.Token);
                     break;
                 case "worker":
-                    await WriteAsync(command.ReadyFile, new { ready = true, processId = Environment.ProcessId });
+                    await WriteAsync(command.ReadyFile, ApplicationClockReady(command, services));
                     while (!File.Exists(command.StopFile)) await Task.Delay(25, timeout.Token);
                     result = new { stopped = true };
                     break;
@@ -244,7 +246,8 @@ internal sealed record ProbeCommand(string Mode, string Provider, string Connect
     string[]? Queues = null, int MaximumConcurrentAttempts = 1, int LeaseSeconds = 3,
     int RenewalMilliseconds = 500, int ShutdownGraceMilliseconds = 250, ProbeFaultOptions? Fault = null,
     bool SubmitUnrelated = false, int BatchCount = 1, TimeSpan? TerminalInputRetention = null,
-    TimeSpan? TerminalResultRetention = null, int MaximumJobs = 100, string? ContinuationToken = null);
+    TimeSpan? TerminalResultRetention = null, int MaximumJobs = 100, string? ContinuationToken = null,
+    int ApplicationClockOffsetHours = 0);
 
 internal sealed record ReportLine(string Product, int Quantity, decimal UnitPrice);
 internal sealed record ReportInput(string Name, ReportLine[] Lines, string EntryDirectory, string? ReleaseFile = null);

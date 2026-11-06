@@ -1,6 +1,6 @@
 # Jobs Studio
 
-Optional Studio module for the [Jobs API](../Api/README.md). `JobsStudioFeature` contributes the `jobs`
+Optional Studio module for the [Jobs API](../../src/Api/README.md). `JobsStudioFeature` contributes the `jobs`
 module and its static assets; its client uses the shared Studio SDK/UI and the advertised
 `elsa.api.jobs/1` collection links. It references no Jobs runtime, provider or workflow library.
 

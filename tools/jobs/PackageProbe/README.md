@@ -1,5 +1,29 @@
 # Packaged standalone Jobs witness
 
+The separate application-clock skew slice uses the same published consumer:
+
+```sh
+python3 tools/jobs/PackageProbe/clock_skew_witness.py \
+  --entry-assembly /absolute/current-deployment/Jobs.PackageProbe.dll \
+  --evidence-dir /tmp/owned-jobs-clock-skew --provider sqlite
+```
+
+Select `postgresql` for the owned PostgreSQL 16 profile. Two simultaneous workers have opposing
+application wall-clock offsets of +48 and -48 hours and distinct queues. The qualification-only
+`applicationClockOffsetHours` command field is bounded to -48 through 48 and accepted only on workers
+when nonzero. Its `TimeProvider` overrides only `GetUtcNow`; timers and monotonic timestamps remain
+real. Readiness retains each actual PID and system/application UTC observation. Delayed reports must
+receive provider-committed permission at or after `NotBefore`, remain in the same physical attempt
+while blocked beyond the original lease with committed renewals, and produce one useful stable result
+across fresh inspectors. A shifted physical report timestamp and provider-selected completion time
+also prove the worker used the override. The controller owns a separate two-case plan and
+`clock-skew-receipt.json`; the original M1/M2 27-case plan and oracles stay unchanged. The shared
+controller has a cleanup-only change to reconcile uncertain Docker creation; its case body and
+assertions are preserved, and `m2_witness.py` remains byte-identical to the preceding source. Optimized Python
+is refused before argument parsing or resource creation. These cases remain source-only and unrun
+until actual execution and package provenance are retained; provider-time tests alone do not qualify
+application-clock skew.
+
 The separate opt-in payload-retention slice uses an already published current-source consumer:
 
 ```sh
@@ -117,3 +141,10 @@ nonsecret owner identity. Every owned PostgreSQL container records namespace/pro
 and its exact ID in `owned-container.json`. An abrupt-unit cleanup can use those recorded identities
 and verify their labels; the controller never performs broad container cleanup. The local default is
 `local-elsa-3586`.
+Before Docker creation the controller records the attempted unique name and all original labels.
+If the CLI response is lost, only a successful exact-name daemon inventory returning a full ID,
+followed by verification of that ID's original name and every original label, permits adoption.
+Cleanup verifies ownership again before removing that full ID and confirms its absence through a
+successful daemon inventory. Foreign names or labels, malformed IDs and unavailable inventory leave
+cleanup failed rather than claim resources were removed. Pure lifecycle controls are in
+`test_owned_package_store.py`; they launch no hosts or containers.

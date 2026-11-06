@@ -34,7 +34,8 @@ internal sealed class SecretJobHost(IHost host, string directory, bool ownsDirec
     internal string StorageDirectory => directory;
 
     internal static async Task<SecretJobHost> StartAsync(string? storageDirectory = null, bool worker = false, bool installSecrets = true,
-        SecretHandlerControl? control = null, Action<IServiceCollection>? configure = null)
+        SecretHandlerControl? control = null, Action<IServiceCollection>? configure = null,
+        Action<JobSecretsOptions>? additionalDeclarations = null, Action<IServiceCollection, string>? configureStorage = null)
     {
         var owned = storageDirectory is null; var directory = storageDirectory ?? Directory.CreateTempSubdirectory("elsa-jobs-secrets-").FullName;
         Directory.CreateDirectory(directory); var builder = Host.CreateApplicationBuilder(); builder.Logging.ClearProviders();
@@ -46,7 +47,7 @@ internal sealed class SecretJobHost(IHost host, string directory, bool ownsDirec
             builder.Services.AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=" + Path.Combine(directory, "secrets.db") + ";Pooling=False" });
         }
         builder.Services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.AutoMigrate);
-        AddDeclarations(builder.Services);
+        AddDeclarations(builder.Services, additionalDeclarations);
         var observations = control ?? new SecretHandlerControl(); builder.Services.AddSingleton(observations);
         builder.Services.AddElsaJobs(options =>
         {
@@ -56,14 +57,15 @@ internal sealed class SecretJobHost(IHost host, string directory, bool ownsDirec
             options.LeaseDuration = TimeSpan.FromSeconds(10); options.RenewalInterval = TimeSpan.FromSeconds(2); options.ShutdownGracePeriod = TimeSpan.FromSeconds(2);
         });
         if (worker) { builder.Services.AddJobHandler<SecretReportHandler, SecretJobInput, JsonElement>(Support); builder.Services.AddJobHandler<NullReportHandler, JsonElement, JsonElement>(NullSupport); }
-        configure?.Invoke(builder.Services); var host = builder.Build();
+        configureStorage?.Invoke(builder.Services, directory); configure?.Invoke(builder.Services); var host = builder.Build();
         try { await host.StartAsync(); return new(host, directory, owned, observations, logs); }
         catch { await ((IAsyncDisposable)host).DisposeAsync(); if (owned) Directory.Delete(directory, true); throw; }
     }
-    internal static void AddDeclarations(IServiceCollection services) => services.AddJobSecrets(options =>
+    internal static void AddDeclarations(IServiceCollection services, Action<JobSecretsOptions>? additionalDeclarations = null) => services.AddJobSecrets(options =>
     {
         options.Declarations.Add(new(Support.Handler, Support.InputSchema, [new("/credential", [Reference])], ["/protected"]));
         options.Declarations.Add(new(NullSupport.Handler, NullSupport.InputSchema, [new("/credential", [Reference], required: false)]));
+        additionalDeclarations?.Invoke(options);
     });
     internal async Task<T> UseAsync<T>(Func<IServiceProvider, Task<T>> action)
     { await using var scope = host.Services.CreateAsyncScope(); return await action(scope.ServiceProvider); }
