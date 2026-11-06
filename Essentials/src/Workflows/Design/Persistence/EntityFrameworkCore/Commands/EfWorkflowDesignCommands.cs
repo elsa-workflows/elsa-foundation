@@ -598,7 +598,7 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
     }
 }
 
-public sealed class EfSubmitWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IActivityStructureService activityStructureService) : EfDesignCommand(db, access, atomic), ISubmitWorkflowDefinitionCommand
+public sealed class EfSubmitWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IActivityStructureService activityStructureService, IInlineEventPublisher? inlineEvents = null) : EfDesignCommand(db, access, atomic), ISubmitWorkflowDefinitionCommand
 {
     public async Task<SubmittedWorkflowDefinition> Execute(DesignOperationKey key, string name, string? description, WorkflowDefinitionState state, CancellationToken ct = default)
     {
@@ -620,6 +620,19 @@ public sealed class EfSubmitWorkflowDefinitionCommand(WorkflowsDesignDbContext d
             [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.VersionLayouts],
             async (_, token) =>
             {
+                // Submit creates an immutable version directly, so it has the same validation precondition as
+                // promotion. Validate inside the atomic stage: a committed replay keeps its original result,
+                // while a refusal writes neither authored rows nor an operation marker.
+                if (inlineEvents is not null)
+                {
+                    var errors = await inlineEvents.DeriveValidationErrorsAsync(draft, token);
+                    var blocking = errors
+                        .Where(error => !string.Equals(error.Severity, ValidationSeverities.Warning, StringComparison.Ordinal))
+                        .ToArray();
+                    if (blocking.Length > 0)
+                        throw new DraftHasValidationErrorsException(draft.Id, blocking);
+                }
+
                 Db.Definitions.Add(definition);
                 Db.Drafts.Add(draft);
                 EfDesignSupport.SetLayout(Db, draftLayout, [], []);
@@ -627,7 +640,6 @@ public sealed class EfSubmitWorkflowDefinitionCommand(WorkflowsDesignDbContext d
                 Db.Versions.Add(version);
                 EfDesignSupport.SetLayout(Db, layout, [], []);
                 Db.VersionLayouts.Add(layout);
-                await Task.CompletedTask;
                 return DesignAtomicWriteStage<SubmittedWorkflowDefinition>.Accepted(
                     new SubmittedWorkflowDefinition(definition.Id, draft.Id, version.Id));
             },

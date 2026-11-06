@@ -277,6 +277,10 @@ failure, it prints the failing step, status and ProblemDetails body.
   and the health check is `GET /`.
 - **Create takes `{ name, description, state }`** at `POST /design/workflows/definitions/submit` (definition +
   version 1.0.0 in one call). The graph is `state.rootActivity`; composites nest children under `Structure`.
+- **Submit validates before storing** through the same composed draft gate as promotion. Blocking findings return
+  409 with node/input errors, and a corrected retry can reuse the refused operation key. Run
+  `design/Test-SubmitValidation.ps1` for the refusal/retry/replay journey; see the
+  [preview release note](../docs/release-notes/4.0-preview.md#workflow-submission-validates-drafts-2792).
 - **`referenceKey` casing is per-activity** - inspect it via `GET /publishing/activities/{versionId}/construct`.
   `WriteLine` uses lowercase `text`; `HttpEndpoint` uses `Path` / `SupportedMethods` / `CanStartWorkflow`.
 - **Execute route contains `executables/`**: `POST /runtime/workflows/executables/{artifactId}/execute`.

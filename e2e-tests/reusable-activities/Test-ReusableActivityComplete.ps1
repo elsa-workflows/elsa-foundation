@@ -114,10 +114,8 @@ Invoke-Step "Complete(unknown) is refused at publication" {
     if (-not $refused) { throw "A reusable activity with Complete(unknown) was published." }
 }
 
-# The headless submit endpoint creates a version without running draft validators (as for every IDraftValidator,
-# e.g. Switch duplicate cases), so the rule is asserted where it is enforced: the submitted draft's validation
-# errors, which also block promoting that draft. An unenclosed Complete that still runs faults at run time.
-Invoke-Step "Complete in a plain workflow fails draft validation" {
+# Headless submit applies the same validation gate as promotion (#2792), before storing any authored rows.
+Invoke-Step "Complete in a plain workflow is refused at submit" {
     $token = Get-Random -Max 999999
     $exit = New-ActivityNode -NodeId "exit" -VersionId $completeVersion -Inputs @(
         (New-LiteralInput -ReferenceKey "outcome" -Value "fail")
@@ -128,12 +126,17 @@ Invoke-Step "Complete in a plain workflow fails draft validation" {
         payload = @{ startNodeId = "exit"; activities = @($exit); connections = @() }
     }
     $root = New-ActivityNode -NodeId "root" -VersionId $flowchartVersion -Structure $structure
-    $definition = Submit-Workflow -Ctx $ctx -Name "CompleteOutsideGraph-$token" -RootActivity $root
-    $validations = Invoke-RestMethod "$($ctx.BaseUrl)/design/workflows/drafts/$($definition.draftId)/validations" -WebSession $ctx.Session
-    $errors = @($validations.errors | Where-Object { $_.code -eq "Graph/CompleteOutsideGraph" -and $_.nodeId -eq "exit" })
-    if ($errors.Count -ne 1) {
-        throw "Expected one Graph/CompleteOutsideGraph error on node 'exit'; got: $($validations.errors | ConvertTo-Json -Compress)"
+    $refused = $false
+    try {
+        Submit-Workflow -Ctx $ctx -Name "CompleteOutsideGraph-$token" -RootActivity $root | Out-Null
     }
+    catch {
+        if ([int]$_.Exception.Response.StatusCode -ne 409) { throw }
+        $problem = $_.ErrorDetails.Message | ConvertFrom-Json
+        if (-not ($problem.errors.exit -like "*only be placed inside a reusable activity's body*")) { throw }
+        $refused = $true
+    }
+    if (-not $refused) { throw "A plain workflow containing Complete was accepted by headless submit." }
 }
 
 Write-Host ""
