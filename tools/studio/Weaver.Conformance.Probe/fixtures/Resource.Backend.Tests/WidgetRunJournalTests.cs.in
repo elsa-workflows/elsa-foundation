@@ -1,0 +1,97 @@
+using Acme.Home.Weaver;
+using Elsa.Studio.Preferences.Core.Models;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetRunJournalTests
+{
+    [Fact]
+    public async Task A_fresh_module_journal_retains_actual_call_identity_verdict_and_duplicate_count_without_touching_the_widget()
+    {
+        using var files = new EffectFiles();
+        var settings = new WidgetEffectsSettings(files.Observations, "");
+        using var env = await EffectsEnvironment.CreateAsync(settings: settings);
+        var before = await env.Native.DocumentAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool, false)).Value!, tool);
+        Assert.True((await tool.ExecuteAsync(frozen)).Value!.Succeeded);
+        var restarted = new WidgetRunJournal(settings); // New object/file reader, not a real host restart witness.
+        var first = Assert.Single(restarted.Read(env.Native.Key));
+        Assert.Equal(frozen.InvocationId, first.InvocationId); Assert.Equal(frozen.ToolCallId, first.ToolCallId);
+        Assert.Equal(WidgetEffects.Check, first.ToolName); Assert.False(first.Passed); Assert.Equal(before.Revision, first.Revision);
+        Assert.Equal(2, restarted.Record(env.Native.Key, frozen, before.Revision, true).CallNumber);
+        Assert.Equal(new[] { false, true }, new WidgetRunJournal(settings).Read(env.Native.Key).Select(run => run.Passed));
+        Assert.Equal(2, env.Journal.Read(env.Native.Key).Count);
+        var after = await env.Native.DocumentAsync();
+        Assert.Equal(before.Revision, after.Revision);
+        Assert.True(System.Text.Json.JsonElement.DeepEquals(before.Value, after.Value));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("actor")]
+    [InlineData("tenant")]
+    [InlineData("host")]
+    public async Task Independent_owner_keys_never_share_observation_rows_or_counts(string difference)
+    {
+        using var files = new EffectFiles();
+        using var env = await EffectsEnvironment.CreateAsync(settings: new(files.Observations, ""));
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        var other = difference switch { "actor" => env.Native.Key with { SubjectId = "another-actor" },
+            "tenant" => env.Native.Key with { TenantId = "another-tenant" }, _ => env.Native.Key with { StudioHostId = "another-host" } };
+        env.Journal.Record(env.Native.Key, frozen, frozen.Target!.Revision!, true);
+        Assert.Empty(env.Journal.Read(other));
+        Assert.Equal(1, env.Journal.Record(other, frozen, frozen.Target.Revision!, false).CallNumber);
+        Assert.Single(env.Journal.Read(env.Native.Key));
+        Assert.False(Assert.Single(env.Journal.Read(other)).Passed);
+    }
+
+    [Theory]
+    [InlineData("json")]
+    [InlineData("count")]
+    [InlineData("tool")]
+    [InlineData("identity")]
+    [InlineData("missing-verdict")]
+    [InlineData("extra")]
+    [InlineData("duplicate")]
+    public async Task Corrupt_observations_fail_closed_without_overwriting_or_restarting_the_count(string fault)
+    {
+        using var files = new EffectFiles();
+        using var env = await EffectsEnvironment.CreateAsync(settings: new(files.Observations, ""));
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        var raw = fault == "json" ? "{" : System.Text.Json.JsonSerializer.Serialize(new WidgetRun(
+            fault == "identity" ? "" : env.Native.Key.SubjectId, env.Native.Key.TenantId, env.Native.Key.StudioHostId,
+            frozen.InvocationId, frozen.ToolCallId, fault == "tool" ? WidgetContract.WriteTool : WidgetEffects.Check,
+            frozen.Target!.Revision!, true, fault == "count" ? 2 : 1)) + "\n";
+        if (fault == "missing-verdict") raw = raw.Replace("\"Passed\":true,", "");
+        if (fault == "extra") raw = raw.Replace("\"Passed\":true,", "\"Passed\":true,\"Extra\":true,");
+        if (fault == "duplicate") raw = raw.Replace("\"Passed\":true,", "\"Passed\":true,\"Passed\":false,");
+        files.Write(files.Observations, raw);
+        Assert.Throws<WidgetFixtureException>(() => env.Journal.Read(env.Native.Key));
+        Assert.Throws<WidgetFixtureException>(() => env.Journal.Record(env.Native.Key, frozen, frozen.Target!.Revision!, true));
+        Assert.Equal(raw, File.ReadAllText(files.Observations));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("relative")]
+    [InlineData("public-directory")]
+    [InlineData("public-file")]
+    [InlineData("link")]
+    [InlineData("dangling-link")]
+    [InlineData("directory")]
+    public void Configured_files_require_private_regular_paths(string fault)
+    {
+        using var files = new EffectFiles();
+        var path = files.Observations;
+        if (fault == "relative") path = "checks.jsonl";
+        else if (fault == "public-directory") File.SetUnixFileMode(files.Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead);
+        else if (fault == "public-file") { files.Write(path, ""); File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.OtherRead); }
+        else if (fault is "link" or "dangling-link")
+        { if (fault == "link") files.Write(files.Control, ""); File.CreateSymbolicLink(path, files.Control); }
+        else Directory.CreateDirectory(path);
+        Assert.Throws<InvalidDataException>(() => WidgetFixtureFiles.Check(path));
+    }
+}

@@ -1,0 +1,409 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Agent.Core;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetEffectsTests
+{
+    [Theory]
+    [InlineData(WidgetEffects.Admin, AgentRisk.Admin, AgentRisk.Admin, "Administrative")]
+    [InlineData(WidgetEffects.Irrecoverable, AgentRisk.Admin, AgentRisk.Admin, "Administrative,Irrecoverable")]
+    [InlineData(WidgetEffects.OmittedAdmin, AgentRisk.Admin, AgentRisk.Admin, "Irrecoverable")]
+    [InlineData(WidgetEffects.RaisedRisk, AgentRisk.ReviewRequired, AgentRisk.Admin, "")]
+    [InlineData(WidgetEffects.Activation, AgentRisk.ReviewRequired, AgentRisk.ReviewRequired, "Activation")]
+    public async Task New_classed_tools_preserve_the_declared_risk_inputs_and_apply_only_the_reviewed_native_change(
+        string name, AgentRisk declared, AgentRisk prepared, string classes)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(name);
+        var before = await env.Native.DocumentAsync();
+        var preparation = await env.PrepareAsync(tool);
+        Assert.True(preparation.Succeeded);
+        Assert.Equal(declared, tool.Descriptor.Risk);
+        Assert.Equal(prepared, preparation.Value!.Risk);
+        Assert.Equal(classes, string.Join(",", preparation.Value.RequiredPrivilegeClasses ?? []));
+        Assert.True(preparation.Value.RequiresApproval);
+        Assert.False(tool.Descriptor.CanPerformWithoutPersistence);
+        Assert.NotNull(tool.Descriptor.ModuleCodes);
+        Assert.Null(env.Native.Write.Descriptor.ModuleCodes); // The old compatibility fixture is still undeclared.
+        var result = await tool.ExecuteAsync(env.Freeze(preparation.Value, tool));
+        Assert.True(result.Succeeded);
+        Assert.True(result.Value!.Succeeded);
+        Assert.Equal(AgentEffectScope.ServerPersisted, result.Value.Receipt!.Scope);
+        Assert.Equal(WidgetEffects.Changed, result.Value.Receipt.ModuleCode);
+        var after = await env.Native.DocumentAsync();
+        Assert.NotEqual(before.Revision, after.Revision);
+        Assert.True(JsonElement.DeepEquals(WidgetResource.WithVisibility(WidgetResource.Read(env.Native.Key, before), false), after.Value));
+        Assert.Equal(1, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task Check_runs_the_owner_business_condition_without_a_preference_write_and_exposes_its_actual_count(bool expected, bool passed)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var before = await env.Native.DocumentAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool, expected)).Value!, tool);
+        var result = await tool.ExecuteAsync(prepared);
+        Assert.True(result.Succeeded);
+        Assert.True(result.Value!.Succeeded); // The business verdict is payload data; the action did run.
+        Assert.True(tool.Descriptor.CanPerformWithoutPersistence);
+        var receipt = Assert.IsType<AgentEffectReceipt>(result.Value.Receipt);
+        Assert.Equal(AgentEffectScope.NoPersistedEffect, receipt.Scope);
+        Assert.Equal(receipt.Before, receipt.After);
+        Assert.Equal(passed ? WidgetEffects.Passed : WidgetEffects.Failed, receipt.ModuleCode);
+        Assert.True(result.Value.Payload!.Data.GetProperty("ran").GetBoolean());
+        Assert.Equal(passed, result.Value.Payload.Data.GetProperty("passed").GetBoolean());
+        Assert.Equal(1, result.Value.Payload.Data.GetProperty("callNumber").GetInt32());
+        var observation = JsonSerializer.SerializeToElement(await env.Owner.ChecksAsync(default));
+        Assert.Equal(1, observation.GetProperty("ranCount").GetInt32());
+        var run = Assert.Single(env.Journal.Read(env.Native.Key));
+        Assert.Equal(prepared.InvocationId, run.InvocationId);
+        Assert.Equal(prepared.ToolCallId, run.ToolCallId);
+        Assert.Equal(before.Revision, run.Revision);
+        Assert.Equal(passed, run.Passed);
+        var after = await env.Native.DocumentAsync();
+        Assert.Equal(before.Revision, after.Revision);
+        Assert.True(JsonElement.DeepEquals(before.Value, after.Value));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Observation_does_not_hide_a_duplicate_direct_owner_invocation()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        Assert.True((await tool.ExecuteAsync(prepared)).Value!.Succeeded);
+        Assert.True((await tool.ExecuteAsync(prepared)).Value!.Succeeded);
+        var runs = env.Journal.Read(env.Native.Key);
+        Assert.Equal(2, runs.Count);
+        Assert.All(runs, row => Assert.Equal(prepared.InvocationId, row.InvocationId));
+        Assert.Equal(new[] { 1, 2 }, runs.Select(row => row.CallNumber));
+        // Agent duplicate delivery must call this owner once; the observation cannot make a duplicate look green.
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task A_check_that_ran_without_confirmation_retains_owner_observation_and_never_fabricates_a_receipt()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        env.Native.Permissions.DenyRead = () => env.Journal.Read(env.Native.Key).Count > 0;
+        await Assert.ThrowsAsync<WidgetFixtureException>(() => tool.ExecuteAsync(frozen));
+        Assert.Single(env.Journal.Read(env.Native.Key));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("missing-principal", true)]
+    [InlineData("duplicate-principal", true)]
+    [InlineData("missing-permissions", true)]
+    [InlineData("duplicate-permissions", true)]
+    [InlineData("unauthenticated", true)]
+    [InlineData("missing-http", true)]
+    [InlineData("native-unauthenticated", true)]
+    [InlineData("native-missing-actor", true)]
+    [InlineData("native-missing-tenant", true)]
+    [InlineData("missing-current", true)]
+    [InlineData("reconstructed-principal", true)]
+    [InlineData("foreign-actor", false)]
+    [InlineData("foreign-tenant", false)]
+    [InlineData("foreign-host", false)]
+    [InlineData("denied-read", false)]
+    public async Task Direct_new_tools_and_context_fail_closed_without_exact_current_native_authority(string fault, bool unavailable)
+    {
+        foreach (var name in new[] { WidgetEffects.Admin, WidgetEffects.Check })
+        foreach (var phase in new[] { "prepare", "execute", "authorization", "context", "retained-context" })
+        {
+            using var env = await EffectsEnvironment.CreateAsync(
+                principalCount: fault == "missing-principal" ? 0 : fault == "duplicate-principal" ? 2 : 1,
+                permissionCount: fault == "missing-permissions" ? 0 : fault == "duplicate-permissions" ? 2 : 1);
+            var tool = env.Tool(name);
+            var state = await env.Native.Resource.ObserveAsync("actor-a", "tenant-a", false, default);
+            var attachment = WidgetEffectsContext.Snapshot(state);
+            // These are module-level direct-call controls, deliberately outside Agent's registration validator/facades.
+            var preparation = new AgentToolPreparation(WidgetContract.Target(state),
+                name == WidgetEffects.Check ? JsonSerializer.SerializeToElement(new { expectedVisible = true }) : JsonSerializer.SerializeToElement(new { visible = false }),
+                AgentRisk.Admin, name == WidgetEffects.Check
+                    ? new(WidgetEffects.CheckResult, "1", JsonSerializer.SerializeToElement(new { widgetId = WidgetContract.WidgetId, revision = state.Document.Revision, hostId = WidgetTestEnvironment.HostId, expectedVisible = true }))
+                    : WidgetContract.Preview(state, false), true) { RequiredPrivilegeClasses = [AgentPrivilegeClass.Administrative] };
+            switch (fault)
+            {
+                case "unauthenticated": env.Native.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity()); break;
+                case "missing-http": env.Native.Http.HttpContext = null; break;
+                case "native-unauthenticated": env.Native.Auth.Session = env.Native.Auth.Session with { Status = "anonymous" }; break;
+                case "native-missing-actor": env.Native.Auth.Session = env.Native.Auth.Session with { Subject = null }; break;
+                case "native-missing-tenant": env.Native.Auth.Session = env.Native.Auth.Session with { TenantId = null }; break;
+                case "missing-current": env.Principal.Missing = true; break;
+                case "reconstructed-principal": env.Principal.Reconstructed = true; break;
+                case "foreign-actor": env.Native.Auth.Session = env.Native.Auth.Session with { Subject = "other-actor" }; break;
+                case "foreign-tenant": env.Native.Auth.Session = env.Native.Auth.Session with { TenantId = "other-tenant" }; break;
+                case "foreign-host": env.Native.Http.HttpContext!.Request.Headers["X-Elsa-Studio-Host-Id"] = "other-host"; break;
+                case "denied-read": env.Native.Permissions.DeniedPermission = WidgetContract.ReadPermission; break;
+            }
+            AgentError? error;
+            if (phase == "prepare") error = (await tool.PrepareAsync(env.Invocation(tool, [attachment]))).Error;
+            else if (phase == "execute") error = (await tool.ExecuteAsync(env.Freeze(preparation, tool))).Error;
+            else if (phase == "authorization")
+            {
+                var decision = await ((IAgentToolAuthorization)tool).AuthorizeAsync("actor-a", "tenant-a", WidgetContract.Target(state));
+                Assert.False(decision.Allowed);
+                var violation = Assert.Single(decision.Violations);
+                error = new(violation.Code, violation.Message) { OwnerUnavailable = violation.OwnerUnavailable };
+            }
+            else
+            {
+                var contribution = phase == "context"
+                    ? await env.Context.CollectAsync(new("session-a", WidgetEffects.Scope, new Dictionary<string, string>()) { CallerAttachments = [attachment] })
+                    : await env.Context.AdmitDisclosureAsync(new("session-a", [attachment], [], false));
+                Assert.Empty(contribution.Attachments);
+                var diagnostic = Assert.Single(contribution.Diagnostics);
+                error = new(diagnostic.Code, diagnostic.Message) { OwnerUnavailable = diagnostic.OwnerUnavailable };
+            }
+            Assert.NotNull(error);
+            Assert.Equal(unavailable, error.OwnerUnavailable);
+            Assert.Equal(unavailable ? WidgetEffects.Unavailable : fault == "denied-read" ? WidgetEffects.Denied : WidgetEffects.Foreign, error.Code);
+            Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+            Assert.Empty(env.Journal.Read(env.Native.Key));
+        }
+    }
+
+    [Fact]
+    public async Task Write_permission_is_independent_from_context_read_permission()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(WidgetEffects.Admin);
+        var attachment = await env.AttachmentAsync();
+        env.Native.Permissions.DeniedPermission = WidgetContract.WritePermission;
+        Assert.Equal(WidgetEffects.Denied, (await tool.PrepareAsync(env.Invocation(tool, [attachment]))).Error!.Code);
+        var context = await env.Context.CollectAsync(new("session-a", WidgetEffects.Scope, new Dictionary<string, string>()) { CallerAttachments = [attachment] });
+        Assert.Empty(context.Diagnostics);
+        Assert.Contains(context.Attachments, item => item.ContentType == WidgetEffects.Context);
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Changed_principal_after_an_awaited_native_permission_is_not_reused()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var attachment = await env.AttachmentAsync();
+        env.Authorization.BeforeReturn = () => env.Native.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, "actor-a")], "replacement"));
+        var result = await env.Tool(WidgetEffects.Admin).PrepareAsync(env.Invocation(env.Tool(WidgetEffects.Admin), [attachment]));
+        Assert.Equal(WidgetEffects.Unavailable, result.Error!.Code);
+        Assert.True(result.Error.OwnerUnavailable);
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task A_fresh_scope_observes_its_current_principal_and_cancellation_never_runs_the_owner()
+    {
+        using var first = await EffectsEnvironment.CreateAsync();
+        using var second = await EffectsEnvironment.CreateAsync();
+        Assert.NotSame(first.Native.Http.HttpContext!.User, second.Native.Http.HttpContext!.User);
+        Assert.NotSame(first.Owner, second.Owner);
+        first.Principal.Missing = true;
+        Assert.False((await first.PrepareAsync(first.Tool(WidgetEffects.Check))).Succeeded);
+        Assert.True((await second.PrepareAsync(second.Tool(WidgetEffects.Check))).Succeeded);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var attachment = await second.AttachmentAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second.Tool(WidgetEffects.Check).PrepareAsync(
+            second.Invocation(second.Tool(WidgetEffects.Check), [attachment]), cancelled.Token));
+        Assert.Empty(second.Journal.Read(second.Native.Key));
+        Assert.Equal(0, second.Native.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_final_independent_owner_guard_refuses_changed_authority_or_cancellation_before_native_write(bool cancel)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(WidgetEffects.Admin);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        using var cancellation = new CancellationTokenSource();
+        var calls = 0;
+        env.Authorization.BeforeReturn = () =>
+        {
+            if (++calls != 7) return; // Independent owner read/write pairs: observe twice, apply, then the pre-write guard.
+            if (cancel) cancellation.Cancel();
+            else env.Native.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity());
+        };
+        if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tool.ExecuteAsync(frozen, cancellation.Token));
+        else Assert.True((await tool.ExecuteAsync(frozen)).Error!.OwnerUnavailable);
+        Assert.Equal(7, calls);
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
+    [InlineData("stale")]
+    [InlineData("foreign")]
+    [InlineData("duplicate")]
+    [InlineData("legacy-kind")]
+    public async Task New_context_never_admits_a_foreign_stale_duplicate_or_legacy_reference(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var attachment = await env.AttachmentAsync();
+        attachment = fault switch {
+            "stale" => attachment with { Target = attachment.Target! with { Revision = "stale" } },
+            "foreign" => attachment with { ModuleId = "Other.Module" },
+            "legacy-kind" => attachment with { ContentType = WidgetContract.ContextType }, _ => attachment };
+        var inputs = fault == "duplicate" ? new[] { attachment, attachment } : new[] { attachment };
+        var result = await env.Context.CollectAsync(new("session-a", WidgetEffects.Scope, new Dictionary<string, string>()) { CallerAttachments = inputs });
+        Assert.Empty(result.Attachments); Assert.True(Assert.Single(result.Diagnostics).Required);
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Installed_effects_context_rereads_owner_data_and_does_not_lower_secret_restrictions()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var attachment = (await env.AttachmentAsync()) with { Content = new { injected = true }, Summary = "Untrusted caller text.", Sensitivity = AgentContextSensitivity.SecretRedacted };
+        var result = await env.Context.CollectAsync(new("session-a", WidgetEffects.Scope, new Dictionary<string, string>()) { CallerAttachments = [attachment] });
+        Assert.Empty(result.Diagnostics);
+        var current = Assert.Single(result.Attachments, item => item.ContentType == WidgetEffects.Context);
+        Assert.Equal(AgentContextSensitivity.Secret, current.Sensitivity);
+        Assert.Equal(AgentContextOrigin.AuthoritativeRead, current.Origin);
+        Assert.True(JsonSerializer.SerializeToElement(current.Content).GetProperty("visible").GetBoolean());
+        Assert.False(JsonSerializer.SerializeToElement(current.Content).TryGetProperty("injected", out _));
+        Assert.Equal(AgentContextOrigin.InstalledGuidance, Assert.Single(result.Attachments, item => item.ContentType == WidgetEffects.Guidance).Origin);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("tool")]
+    [InlineData("contract")]
+    [InlineData("source")]
+    [InlineData("target")]
+    public async Task Retained_check_disclosure_requires_the_original_module_tool_contract_source_and_current_read_authority(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        var result = (await tool.ExecuteAsync(frozen)).Value! with {
+            Access = new(WidgetContract.Module, "1", frozen.Target) { DisclosureSourceId = WidgetEffects.Source, InvocationId = frozen.InvocationId } };
+        result = fault switch {
+            "tool" => result with { ToolName = WidgetContract.WriteTool },
+            "contract" => result with { Access = result.Access! with { ContractVersion = "other" } },
+            "source" => result with { Access = result.Access! with { DisclosureSourceId = "acme.home.widget-context" } },
+            "target" => result with { Access = result.Access! with { Target = frozen.Target! with { ResourceId = "other" } } }, _ => result };
+        var request = new AgentContextDisclosureRequest("session-a", [await env.AttachmentAsync()], [result], true);
+        var admitted = await env.Context.AdmitDisclosureAsync(request);
+        if (fault == "valid")
+        {
+            Assert.Empty(admitted.Diagnostics);
+            Assert.Equal(WidgetEffects.Guidance, Assert.Single(admitted.Attachments).ContentType);
+        }
+        else { Assert.Empty(admitted.Attachments); Assert.Equal(WidgetEffects.Invalid, Assert.Single(admitted.Diagnostics).Code); }
+        env.Native.Permissions.DeniedPermission = WidgetContract.ReadPermission;
+        var denied = await env.Context.AdmitDisclosureAsync(request);
+        Assert.Empty(denied.Attachments); Assert.Equal(WidgetEffects.Denied, Assert.Single(denied.Diagnostics).Code);
+        Assert.Single(env.Journal.Read(env.Native.Key)); // Disclosure never replays the actual check.
+    }
+
+    [Theory]
+    [InlineData("target")]
+    [InlineData("preview")]
+    [InlineData("expired")]
+    [InlineData("arguments")]
+    [InlineData("risk")]
+    public async Task Invalid_prepared_checks_never_run_or_persist(string change)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        frozen = change switch
+        {
+            "target" => frozen with { Target = frozen.Target! with { Revision = "stale" } },
+            "preview" => frozen with { Preview = frozen.Preview with { Data = JsonSerializer.SerializeToElement(new { foreign = true }) } },
+            "expired" => frozen with { ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) },
+            "arguments" => frozen with { Arguments = JsonSerializer.SerializeToElement(new { expectedVisible = true, extra = true }) },
+            _ => frozen with { Risk = AgentRisk.ReadOnly }
+        };
+        Assert.False((await tool.ExecuteAsync(frozen)).Succeeded);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+}
+
+internal sealed class EffectsEnvironment : IDisposable
+{
+    private readonly ServiceProvider provider;
+    private readonly IServiceScope scope;
+    internal WidgetTestEnvironment Native { get; }
+    internal EffectPrincipal Principal { get; }
+    internal EffectAuthorization Authorization { get; }
+    internal WidgetRunJournal Journal { get; }
+    internal WidgetEffectOwner Owner { get; }
+    internal WidgetFaultControl Faults { get; }
+    internal WidgetEffectsContext Context { get; }
+
+    private EffectsEnvironment(WidgetTestEnvironment native, int principalCount, int permissionCount, WidgetEffectsSettings settings)
+    {
+        Native = native;
+        Principal = new(native);
+        Authorization = new(native.Permissions);
+        var services = new ServiceCollection();
+        for (var i = 0; i < principalCount; i++) services.AddScoped<IAgentPrincipalSource>(_ => Principal);
+        for (var i = 0; i < permissionCount; i++) services.AddScoped<IPermissionAuthorizationService>(_ => Authorization);
+        provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        scope = provider.CreateScope();
+        Journal = new(settings);
+        Faults = new(settings);
+        Owner = new(scope.ServiceProvider, native.Http, native.Auth, native.Resource, new(WidgetTestEnvironment.HostId), Journal);
+        Context = new(Owner, native.Sessions, Faults);
+    }
+
+    internal static async Task<EffectsEnvironment> CreateAsync(int principalCount = 1, int permissionCount = 1, WidgetEffectsSettings? settings = null) =>
+        new(await WidgetTestEnvironment.CreateAsync(), principalCount, permissionCount, settings ?? new("", ""));
+
+    internal IAgentTool Tool(string name) => name switch
+    {
+        WidgetEffects.Admin => new WidgetAdminTool(Owner, Faults), WidgetEffects.Irrecoverable => new WidgetIrrecoverableTool(Owner, Faults),
+        WidgetEffects.OmittedAdmin => new WidgetOmittedAdminTool(Owner, Faults), WidgetEffects.RaisedRisk => new WidgetRaisedRiskTool(Owner, Faults),
+        WidgetEffects.Activation => new WidgetActivationTool(Owner, Faults), _ => new WidgetCheckTool(Owner, Faults)
+    };
+    internal async Task<AgentContextAttachment> AttachmentAsync() => WidgetEffectsContext.Snapshot(await Native.Resource.ObserveAsync("actor-a", "tenant-a", false, default));
+    internal AgentToolInvocation Invocation(IAgentTool tool, AgentContextAttachment[] context, bool expected = true) => Native.Invocation(tool.Descriptor.Name,
+        tool.Descriptor.Name == WidgetEffects.Check ? new Dictionary<string, object?> { ["expectedVisible"] = expected }
+            : new Dictionary<string, object?> { ["visible"] = false }, context);
+    internal async Task<AgentResult<AgentToolPreparation>> PrepareAsync(IAgentTool tool, bool expected = true) =>
+        await tool.PrepareAsync(Invocation(tool, [await AttachmentAsync()], expected));
+    internal AgentPreparedToolInvocation Freeze(AgentToolPreparation preparation, IAgentTool tool) =>
+        WidgetTestEnvironment.Freeze(preparation, tool.Descriptor.Name) with { RequiredPrivilegeClasses = preparation.RequiredPrivilegeClasses };
+    public void Dispose() { scope.Dispose(); provider.Dispose(); }
+}
+
+internal sealed class EffectPrincipal(WidgetTestEnvironment native) : IAgentPrincipalSource
+{
+    internal bool Missing, Reconstructed;
+    public ClaimsPrincipal? GetCurrent(string actorId, string tenantId) => Missing ? null : Reconstructed
+        ? new(new ClaimsIdentity(native.Http.HttpContext!.User.Claims, "reconstructed")) : native.Http.HttpContext?.User;
+}
+
+internal sealed class EffectAuthorization(FakePermissions native) : IPermissionAuthorizationService
+{
+    internal Action? BeforeReturn;
+    public async ValueTask<PermissionEvaluationResult> AuthorizeAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+    {
+        var result = await native.AuthorizeAsync(context, cancellationToken);
+        await Task.Yield();
+        BeforeReturn?.Invoke();
+        return result;
+    }
+}

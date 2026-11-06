@@ -236,7 +236,10 @@ internal sealed class WidgetResource(
         catch (Exception) { return Uncertain(invocation); }
     }
 
-    internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct)
+    internal Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct) =>
+        ApplyAsync(invocation, visible, ct, null);
+
+    internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct, Func<Task>? beforeWrite)
     {
         var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
         if (!WidgetContract.SameTarget(invocation.Target, before)) WidgetContract.Refuse("stale", "The reviewed personal layout revision has changed.");
@@ -245,6 +248,8 @@ internal sealed class WidgetResource(
             !JsonElement.DeepEquals(invocation.Preview.Data, WidgetContract.Preview(before, visible).Data))
             WidgetContract.Refuse("review_invalid", "The reviewed preview does not match this exact visibility change.");
         var value = WithVisibility(before, visible);
+        ct.ThrowIfCancellationRequested();
+        if (beforeWrite is not null) await beforeWrite();
         ct.ThrowIfCancellationRequested();
         StudioPreferenceDocument saved;
         try

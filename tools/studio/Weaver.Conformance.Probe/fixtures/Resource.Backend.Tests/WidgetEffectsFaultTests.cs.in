@@ -1,0 +1,144 @@
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetEffectsFaultTests
+{
+    [Theory]
+    [InlineData("authorization")]
+    [InlineData("preparation")]
+    [InlineData("execution")]
+    [InlineData("receipt")]
+    [InlineData("context")]
+    public async Task Each_typed_channel_emits_its_private_generated_fault_without_changing_legacy_contributions(string channel)
+    {
+        using var files = new EffectFiles();
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", files.Control));
+        var tool = env.Tool(WidgetEffects.Check);
+        var attachment = await env.AttachmentAsync();
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        var code = "outside." + Guid.NewGuid().ToString("N");
+        var message = "private-fault-" + Guid.NewGuid().ToString("N");
+        files.Fault(channel, code, message, true);
+        Assert.Null(tool.Descriptor.ModuleCodes!.FirstOrDefault(item => item == code));
+        if (channel == "authorization")
+        {
+            var decision = await ((IAgentToolAuthorization)tool).AuthorizeAsync("actor-a", "tenant-a", attachment.Target);
+            var violation = Assert.Single(decision.Violations);
+            Assert.False(decision.Allowed); Assert.Equal(code, violation.Code);
+            Assert.Equal(message, violation.Message); Assert.True(violation.OwnerUnavailable);
+        }
+        else if (channel == "preparation")
+        {
+            var result = await tool.PrepareAsync(env.Invocation(tool, [attachment]));
+            Assert.False(result.Succeeded); Assert.Equal(code, result.Error!.Code);
+            Assert.Equal(message, result.Error.Message); Assert.True(result.Error.OwnerUnavailable);
+        }
+        else if (channel == "context")
+        {
+            foreach (var contribution in new[] {
+                await env.Context.CollectAsync(new("session-a", WidgetEffects.Scope, new Dictionary<string, string>()) { CallerAttachments = [attachment] }),
+                await env.Context.AdmitDisclosureAsync(new("session-a", [attachment], [], false)) })
+            {
+                Assert.Empty(contribution.Attachments);
+                var diagnostic = Assert.Single(contribution.Diagnostics);
+                Assert.Equal(code, diagnostic.Code); Assert.Equal(message, diagnostic.Message); Assert.True(diagnostic.OwnerUnavailable);
+            }
+        }
+        else
+        {
+            var result = await tool.ExecuteAsync(frozen);
+            if (channel == "execution")
+            {
+                Assert.False(result.Succeeded); Assert.Equal(code, result.Error!.Code);
+                Assert.Equal(message, result.Error.Message); Assert.True(result.Error.OwnerUnavailable);
+            }
+            else
+            {
+                Assert.True(result.Succeeded); Assert.True(result.Value!.Succeeded);
+                Assert.Equal(code, result.Value.Receipt!.ModuleCode); Assert.Equal(message, result.Value.Content);
+                Assert.Equal(AgentEffectScope.NoPersistedEffect, result.Value.Receipt.Scope);
+            }
+        }
+        Assert.Equal(channel == "receipt" ? 1 : 0, env.Journal.Read(env.Native.Key).Count);
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        // These remain undeclared/unclassed, independently callable compatibility controls.
+        Assert.True((await env.Native.PrepareAsync()).Succeeded);
+        Assert.True((await env.Native.PrepareSizeAsync()).Succeeded);
+        Assert.NotEmpty((await env.Native.Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()))).Attachments);
+        Assert.Null(env.Native.Write.Descriptor.ModuleCodes);
+        Assert.Null(env.Native.Size.Descriptor.ModuleCodes);
+        Assert.Null(env.Native.Context.Descriptor.ModuleCodes);
+    }
+
+    [Theory]
+    [InlineData("extra")]
+    [InlineData("duplicate")]
+    [InlineData("unknown-channel")]
+    [InlineData("wrong-flag")]
+    [InlineData("oversize")]
+    [InlineData("malformed")]
+    public void Malformed_private_fault_controls_are_unavailable_instead_of_silently_inert(string fault)
+    {
+        using var files = new EffectFiles();
+        var raw = fault switch
+        {
+            "extra" => "{\"channel\":\"preparation\",\"code\":\"x\",\"message\":\"y\",\"ownerUnavailable\":true,\"extra\":true}",
+            "duplicate" => "{\"channel\":\"preparation\",\"code\":\"x\",\"code\":\"y\",\"message\":\"z\",\"ownerUnavailable\":true}",
+            "unknown-channel" => "{\"channel\":\"other\",\"code\":\"x\",\"message\":\"y\",\"ownerUnavailable\":true}",
+            "wrong-flag" => "{\"channel\":\"preparation\",\"code\":\"x\",\"message\":\"y\",\"ownerUnavailable\":\"true\"}",
+            "oversize" => new string(' ', 4097), _ => "{"
+        };
+        files.Write(files.Control, raw);
+        Assert.Throws<WidgetFixtureException>(() => new WidgetFaultControl(new("", files.Control)).Read("preparation"));
+    }
+
+    [Fact]
+    public void Private_fault_configuration_is_default_off_and_never_chooses_another_channel()
+    {
+        Assert.Null(new WidgetFaultControl(new("", "")).Read("preparation"));
+        using var files = new EffectFiles();
+        var control = new WidgetFaultControl(new("", files.Control));
+        Assert.Null(control.Read("preparation"));
+        files.Fault("execution", WidgetEffects.Unavailable, "Owner unavailable.", true);
+        Assert.Null(control.Read("preparation"));
+        Assert.True(control.Read("execution")!.OwnerUnavailable);
+    }
+
+    [Theory]
+    [InlineData("observation-fault")]
+    [InlineData("observation-control")]
+    [InlineData("fault-receipt")]
+    [InlineData("fault-claim")]
+    public void Feature_refuses_colliding_owner_observation_and_operator_control_paths(string collision)
+    {
+        using var files = new EffectFiles();
+        var feature = new AcmeHomeWidgetFeature { StudioHostId = WidgetTestEnvironment.HostId };
+        if (collision == "observation-fault") { feature.CheckObservationFile = files.Observations; feature.EffectFaultControlFile = files.Observations; }
+        else if (collision == "observation-control") { feature.CheckObservationFile = files.Control; feature.WriteRendezvousControlFile = files.Control; }
+        else if (collision == "fault-receipt") { feature.EffectFaultControlFile = files.Observations; feature.WriteRendezvousReceiptFile = files.Observations; }
+        else { feature.EffectFaultControlFile = files.Control + ".claimed"; feature.WriteRendezvousControlFile = files.Control; }
+        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+    }
+}
+
+internal sealed class EffectFiles : IDisposable
+{
+    internal string Root { get; } = Directory.CreateTempSubdirectory("acme-effects-").FullName;
+    internal string Control => Path.Combine(Root, "fault.json");
+    internal string Observations => Path.Combine(Root, "checks.jsonl");
+    internal EffectFiles()
+    {
+        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("These fixtures require the qualified POSIX private-file profile.");
+        File.SetUnixFileMode(Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+    internal void Fault(string channel, string code, string message, bool unavailable) => Write(Control,
+        JsonSerializer.Serialize(new { channel, code, message, ownerUnavailable = unavailable }));
+    internal void Write(string path, string value)
+    { File.WriteAllText(path, value); File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
+    public void Dispose() => Directory.Delete(Root, true);
+}

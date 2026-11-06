@@ -1,0 +1,163 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Elsa.Agent.Core;
+using Elsa.Agent.Core.Models;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Home.Weaver;
+
+internal static class WidgetEffects
+{
+    internal const string Scope = "acme-home-effects";
+    internal const string Source = "acme.home.effects-context";
+    internal const string Context = "acme.home.effects";
+    internal const string Guidance = "acme.home.effects-guidance";
+    internal const string CheckResult = "acme.home.check-result";
+    internal const string CheckRenderer = "acme.home.check-result-renderer";
+    internal const string ChecksEndpoint = WidgetContract.Endpoint + "/checks";
+    internal const string CheckSchema = """{"type":"object","required":["widgetId","revision","hostId","expectedVisible","actualVisible","passed","ran","callNumber"],"properties":{"widgetId":{"const":"acme.home:status"},"revision":{"type":"string","minLength":1},"hostId":{"type":"string","minLength":1},"expectedVisible":{"type":"boolean"},"actualVisible":{"type":"boolean"},"passed":{"type":"boolean"},"ran":{"const":true},"callNumber":{"type":"integer","minimum":1}},"additionalProperties":false}""";
+    internal const string Admin = "acme_home_admin_visibility";
+    internal const string Irrecoverable = "acme_home_irrecoverable_visibility";
+    internal const string OmittedAdmin = "acme_home_omitted_admin_visibility";
+    internal const string RaisedRisk = "acme_home_raised_risk_visibility";
+    internal const string Activation = "acme_home_activation_visibility";
+    internal const string Check = "acme_home_check_widget";
+    internal const string Unavailable = "acme.home.effects.owner_unavailable";
+    internal const string Denied = "acme.home.effects.permission_denied";
+    internal const string Foreign = "acme.home.effects.scope_denied";
+    internal const string Invalid = "acme.home.effects.invalid";
+    internal const string Stale = "acme.home.effects.stale";
+    internal const string Missing = "acme.home.effects.target_missing";
+    internal const string Changed = "acme.home.effects.changed";
+    internal const string Passed = "acme.home.effects.check_passed";
+    internal const string Failed = "acme.home.effects.check_failed";
+    internal static readonly string[] Codes = [Unavailable, Denied, Foreign, Invalid, Stale, Missing, Changed, Passed, Failed];
+    internal static readonly string[] Tools = [Admin, Irrecoverable, OmittedAdmin, RaisedRisk, Activation, Check];
+
+    internal static WidgetRefusal Refusal(string code, string message, int status = 409, bool unavailable = false) =>
+        new(new(code, message, status) { OwnerUnavailable = unavailable });
+
+    internal static WidgetRefusal Translate(WidgetRefusal error) => error.Error.Code.StartsWith("acme.home.effects.", StringComparison.Ordinal) ? error
+        : error.Error.StatusCode == 403 ? Refusal(Denied, "Current authority for this personal widget is required.", 403)
+        : error.Error.StatusCode == 404 ? Refusal(Missing, "The personal widget is unavailable.", 404)
+        : error.Error.Code is "acme.home.stale" or "acme.home.conflict" or "acme.home.context_stale"
+            ? Refusal(Stale, "The personal widget changed after preparation.")
+        : Refusal(Invalid, "The personal widget operation is invalid.", 400);
+}
+
+// New effects use the generic current-principal seam and independently repeat native owner authorization.
+// Legacy read/visibility/size and their undeclared context keep their original contracts.
+internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextAccessor http, IAuthSessionService auth,
+    WidgetResource resource, WidgetHost host, WidgetRunJournal journal)
+{
+    internal async Task<StudioPreferenceKey> AuthorizeAsync(string? actor, string? tenant, bool write, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var context = http.HttpContext;
+        var principal = context?.User;
+        if (principal?.Identity?.IsAuthenticated != true)
+            throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
+        bool Current() => ReferenceEquals(http.HttpContext, context) && ReferenceEquals(context!.User, principal);
+        var sources = services.GetServices<IAgentPrincipalSource>().ToArray();
+        var permissions = services.GetServices<IPermissionAuthorizationService>().ToArray();
+        if (sources.Length != 1 || permissions.Length != 1)
+            throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
+        AuthSession identity;
+        try { identity = await auth.GetAsync(principal, ct); }
+        catch (Exception error) when (error is not OperationCanceledException)
+        { throw new WidgetFixtureException("Native widget identity could not be read.", error); }
+        ct.ThrowIfCancellationRequested();
+        if (!Current() || identity.Status != "authenticated" || string.IsNullOrWhiteSpace(identity.Subject)
+            || string.IsNullOrWhiteSpace(identity.TenantId) || identity.Subject == StudioHomeLayout.DefaultSubjectId)
+            throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
+        if (actor is not null && actor != identity.Subject || tenant is not null && tenant != identity.TenantId)
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "The current personal owner must match the operation.", 403);
+        ClaimsPrincipal? supplied;
+        try { supplied = sources[0].GetCurrent(identity.Subject!, identity.TenantId!); }
+        catch (Exception error) when (error is not OperationCanceledException)
+        { throw new WidgetFixtureException("Current widget principal could not be read.", error); }
+        if (!Current() || !ReferenceEquals(supplied, principal) || supplied?.Identity?.IsAuthenticated != true)
+            throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
+        var suppliedHost = context!.Request.Headers["X-Elsa-Studio-Host-Id"];
+        if (suppliedHost.Count > 0 && (suppliedHost.Count != 1 || suppliedHost[0] != host.Id))
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "The configured widget host must match the operation.", 403);
+        var key = new StudioPreferenceKey(identity.Subject!, identity.TenantId!, host.Id, StudioPreferenceNamespaces.HomeLayout);
+        foreach (var permission in write ? new[] { WidgetContract.ReadPermission, WidgetContract.WritePermission } : new[] { WidgetContract.ReadPermission })
+        {
+            PermissionEvaluationResult decision;
+            try { decision = await permissions[0].AuthorizeAsync(new(principal, permission, key.TenantId, key) { CancellationToken = ct }, ct); }
+            catch (Exception error) when (error is not OperationCanceledException)
+            { throw new WidgetFixtureException("Native widget permission could not be read.", error); }
+            ct.ThrowIfCancellationRequested();
+            if (!Current()) throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
+            if (!decision.Succeeded) throw WidgetEffects.Refusal(WidgetEffects.Denied, "Current permission for this personal widget is required.", 403);
+        }
+        return key;
+    }
+
+    internal async Task<WidgetObservation> ObserveAsync(string? actor, string? tenant, bool write, CancellationToken ct)
+    {
+        var key = await AuthorizeAsync(actor, tenant, write, ct);
+        try
+        {
+            var state = await resource.ObserveAsync(key.SubjectId, key.TenantId, write, ct);
+            await AuthorizeAsync(key.SubjectId, key.TenantId, write, ct);
+            return state;
+        }
+        catch (WidgetRefusal error) { throw WidgetEffects.Translate(error); }
+    }
+
+    internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct)
+    {
+        await AuthorizeAsync(invocation.ActorId, invocation.TenantId, true, ct);
+        try
+        {
+            var result = await resource.ApplyAsync(invocation, visible, ct,
+                async () => { await AuthorizeAsync(invocation.ActorId, invocation.TenantId, true, ct); });
+            return result.Receipt is null ? result : result with { Receipt = result.Receipt with { ModuleCode = WidgetEffects.Changed } };
+        }
+        catch (WidgetRefusal error) { throw WidgetEffects.Translate(error); }
+    }
+
+    internal async Task<AgentToolResult> CheckAsync(AgentPreparedToolInvocation invocation, bool expectedVisible, CancellationToken ct)
+    {
+        var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
+        if (!WidgetContract.SameTarget(invocation.Target, before))
+            throw WidgetEffects.Refusal(WidgetEffects.Stale, "The personal widget changed after preparation.");
+        ct.ThrowIfCancellationRequested();
+        // This action evaluates the real owner state; a business false is still an action that ran.
+        var passed = before.Visible == expectedVisible;
+        var ran = journal.Record(before.Key, invocation, before.Document.Revision, passed);
+        WidgetObservation after;
+        try { after = await ObserveAsync(invocation.ActorId, invocation.TenantId, false, CancellationToken.None); }
+        catch (Exception error) when (error is not OperationCanceledException)
+        { throw new WidgetFixtureException("The widget check ran but confirmation is unavailable.", error); }
+        if (after.Document.Revision != before.Document.Revision || !JsonElement.DeepEquals(after.Document.Value, before.Document.Value))
+            return new(invocation.ToolCallId, invocation.ToolName, false, "The widget check ran but its original resource observation changed. Do not replay it.");
+        var payload = new AgentPayload(WidgetEffects.CheckResult, "1", JsonSerializer.SerializeToElement(new
+        {
+            widgetId = WidgetContract.WidgetId, revision = after.Document.Revision, hostId = host.Id,
+            expectedVisible, actualVisible = before.Visible, passed, ran = true, callNumber = ran.CallNumber
+        }));
+        return new(invocation.ToolCallId, invocation.ToolName, true, passed ? "The widget check ran and passed." : "The widget check ran and failed its business condition.", payload)
+        {
+            Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), AgentEffectScope.NoPersistedEffect,
+                new(WidgetEffects.CheckResult, "1", payload.Data.Clone())) { ModuleCode = passed ? WidgetEffects.Passed : WidgetEffects.Failed }
+        };
+    }
+
+    internal async Task<object> ChecksAsync(CancellationToken ct)
+    {
+        var state = await ObserveAsync(null, null, false, ct);
+        var runs = journal.Read(state.Key);
+        return new { widgetId = WidgetContract.WidgetId, revision = state.Document.Revision, hostId = host.Id,
+            ranCount = runs.Count, runs = runs.TakeLast(16).Select(run => new { run.InvocationId, run.ToolCallId, run.ToolName, run.Revision, run.Passed, run.CallNumber }) };
+    }
+}
+
+internal sealed class WidgetFixtureException(string message, Exception inner) : Exception(message, inner);
