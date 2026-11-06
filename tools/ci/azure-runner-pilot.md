@@ -5,6 +5,11 @@ worker. It does not replace any required check or establish product, browser or
 performance acceptance. Normal [CI and merge gates](../../docs/contributing/merging.md)
 still apply.
 
+The small pilot workflow uses JSON, a YAML subset, so the standard-library JSON
+parser can validate its actual fields without another dependency. The guard
+rejects duplicate fields and unsupported syntax; comments or display names cannot
+substitute for the immutable checkout, main-only dispatch and permission fields.
+
 ## Controller prerequisites
 
 1. Merge the reviewed workflow and guard source normally. Read current main and
@@ -64,6 +69,10 @@ The pilot verifies its server-provided context, actual checkout SHA, dispatch
 payload and external assignment before guard commands. It runs the fixed commands
 once, serially, each with a 60-second limit. A failure stops further commands;
 there is no retry, timeout relaxation, synthetic status or required-check mutation.
+The proof ledger predeclares all commands. Each attempted command retains its argv,
+elapsed time and `passed`, `failed`, `timed_out` or `start_failed` outcome; subsequent
+commands remain explicitly `not_run`. A timeout/start failure has no invented exit
+code, and its retained stdout/stderr hashes still accompany the failure report.
 
 ## Evidence and rollback
 

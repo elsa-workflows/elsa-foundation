@@ -27,6 +27,57 @@ COMMANDS = [
 ]
 
 
+def workflow_errors(text: str) -> list[str]:
+    """Check parsed workflow fields, accepting only the dependency-free JSON/YAML subset."""
+    def unique_mapping(pairs):
+        mapping = {}
+        for key, value in pairs:
+            if key in mapping:
+                raise ValueError("Duplicate workflow key")
+            mapping[key] = value
+        return mapping
+
+    def reject_constant(value):
+        raise ValueError("Non-JSON constant")
+
+    try:
+        document = json.loads(text, object_pairs_hook=unique_mapping, parse_constant=reject_constant)
+        job = document["jobs"]["pilot"]
+        steps = [{key: value for key, value in step.items() if key != "name"} for step in job["steps"]]
+        inputs = {key: {field: value for field, value in item.items() if field != "description"}
+                  for key, item in document["on"]["workflow_dispatch"]["inputs"].items()}
+        expected_steps = [
+            {"uses": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+             "with": {"ref": "${{ github.sha }}", "persist-credentials": False}},
+            {"env": {"PILOT_EXPECTED_SHA": "${{ inputs.trusted_sha }}", "PILOT_RUNNER_LABEL": "${{ inputs.runner_label }}"},
+             "run": 'python3 tools/ci/azure_runner_pilot.py --report-dir "$RUNNER_TEMP/ci-azure-pilot"'},
+            {"if": "always()", "uses": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+             "with": {"name": "ci-azure-pilot-${{ github.run_id }}-${{ github.run_attempt }}",
+                      "path": "${{ runner.temp }}/ci-azure-pilot", "if-no-files-found": "error", "retention-days": 7}},
+        ]
+        fields = [
+            ("workflow keys", sorted(document), ["concurrency", "jobs", "name", "on", "permissions"]),
+            ("workflow name", document["name"], "CI Azure runner pilot"),
+            ("triggers", sorted(document["on"]), ["workflow_dispatch"]),
+            ("dispatch keys", sorted(document["on"]["workflow_dispatch"]), ["inputs"]),
+            ("dispatch inputs", inputs, {key: {"required": True, "type": "string"} for key in ["trusted_sha", "runner_label"]}),
+            ("permissions", document["permissions"], {"contents": "read"}),
+            ("concurrency", document["concurrency"], {"group": "ci-azure-runner-pilot", "cancel-in-progress": False}),
+            ("jobs", sorted(document["jobs"]), ["pilot"]),
+            ("job keys", sorted(job), ["if", "runs-on", "steps", "timeout-minutes"]),
+            ("main gate", job["if"], f"github.repository == '{REPOSITORY}' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.repository.fork == false"),
+            ("runner policy", job["runs-on"], {"group": "elsa-foundation-ci-pilot", "labels": "${{ inputs.runner_label }}"}),
+            ("job bound", job["timeout-minutes"], 10),
+            ("steps", steps, expected_steps),
+        ]
+        # JSON comparison distinguishes booleans from integers as well as comparing
+        # complete objects: additional permissions/steps/inputs cannot hide here.
+        return [f"Unexpected {name}" for name, actual, expected in fields
+                if json.dumps(actual, sort_keys=True) != json.dumps(expected, sort_keys=True)]
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return ["Invalid structured workflow"]
+
+
 def context_errors(env: dict, event: dict, assignment: dict, actual_sha: str) -> list[str]:
     expected = {
         "GITHUB_REPOSITORY": REPOSITORY,
@@ -66,7 +117,11 @@ def load_assignment() -> dict:
 
 def qualify(report_dir: Path) -> int:
     report_dir.mkdir(parents=True, exist_ok=False)
-    report = {"scope": "source-only runner pilot; not product, browser, required-context or performance acceptance", "commands": [], "errors": []}
+    report = {
+        "scope": "source-only runner pilot; not product, browser, required-context or performance acceptance",
+        "commands": [{"argv": argv, "status": "not_run", "exit_code": None, "seconds": None} for argv in COMMANDS],
+        "errors": [],
+    }
     result = 1
     try:
         actual_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -77,10 +132,21 @@ def qualify(report_dir: Path) -> int:
         if report["errors"]:
             return result
         for index, argv in enumerate(COMMANDS):
+            attempt = report["commands"][index]
+            attempt["status"] = "starting"
             started = time.monotonic()
-            with (report_dir / f"{index}.stdout").open("w") as stdout, (report_dir / f"{index}.stderr").open("w") as stderr:
-                process = subprocess.run(argv, cwd=ROOT, stdout=stdout, stderr=stderr, timeout=60, check=False)
-            report["commands"].append({"argv": argv, "exit_code": process.returncode, "seconds": time.monotonic() - started})
+            try:
+                with (report_dir / f"{index}.stdout").open("w") as stdout, (report_dir / f"{index}.stderr").open("w") as stderr:
+                    process = subprocess.run(argv, cwd=ROOT, stdout=stdout, stderr=stderr, timeout=60, check=False)
+                attempt.update(status="passed" if process.returncode == 0 else "failed", exit_code=process.returncode)
+            except subprocess.TimeoutExpired:
+                attempt.update(status="timed_out", timeout_seconds=60)
+                raise
+            except OSError:
+                attempt["status"] = "start_failed"
+                raise
+            finally:
+                attempt["seconds"] = time.monotonic() - started
             if process.returncode:
                 return result
         result = 0

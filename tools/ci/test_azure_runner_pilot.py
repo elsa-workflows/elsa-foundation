@@ -74,15 +74,88 @@ class PilotTests(unittest.TestCase):
             # Bypass the input fixture's read_text patch to inspect the actual report.
             report = json.loads((directory / "proof.json").read_bytes())
             self.assertEqual(4, report["commands"][0]["exit_code"])
+            self.assertEqual("failed", report["commands"][0]["status"])
+            self.assertTrue(all(item["status"] == "not_run" for item in report["commands"][1:]))
             self.assertEqual(1, report["exit_code"])
             self.assertNotIn("unexpected_private_field", report["assignment"])
 
+    def attempt_failure(self, failure):
+        with tempfile.TemporaryDirectory() as temporary:
+            event_path = Path(temporary) / "event.json"
+            event_path.write_text(json.dumps(self.event))
+            directory = Path(temporary) / "proof"
+            env = dict(self.env, GITHUB_EVENT_PATH=str(event_path))
+            with patch.object(pilot.subprocess, "check_output", return_value=self.sha), patch.object(pilot, "load_assignment", return_value=self.assignment), patch.dict(pilot.os.environ, env), patch.object(pilot.subprocess, "run", side_effect=failure) as run:
+                self.assertEqual(1, pilot.qualify(directory))
+                run.assert_called_once()
+            report = json.loads((directory / "proof.json").read_text())
+            self.assertEqual(len(pilot.COMMANDS), len(report["commands"]))
+            self.assertEqual(pilot.COMMANDS[0], report["commands"][0]["argv"])
+            self.assertGreaterEqual(report["commands"][0]["seconds"], 0)
+            self.assertTrue(all(item["status"] == "not_run" for item in report["commands"][1:]))
+            self.assertEqual({"0.stdout", "0.stderr"}, set(report["files"]))
+            return report
+
+    def test_timeout_records_attempt_and_leaves_later_commands_unrun(self):
+        report = self.attempt_failure(pilot.subprocess.TimeoutExpired(pilot.COMMANDS[0], 60))
+        self.assertEqual("timed_out", report["commands"][0]["status"])
+        self.assertEqual(60, report["commands"][0]["timeout_seconds"])
+        self.assertIsNone(report["commands"][0]["exit_code"])
+        self.assertEqual(["TimeoutExpired"], report["errors"])
+
+    def test_start_failure_records_attempt_without_inventing_exit_code(self):
+        report = self.attempt_failure(FileNotFoundError("missing executable"))
+        self.assertEqual("start_failed", report["commands"][0]["status"])
+        self.assertIsNone(report["commands"][0]["exit_code"])
+        self.assertEqual(["FileNotFoundError"], report["errors"])
+
     def test_workflow_keeps_trust_and_failure_contract(self):
         text = (pilot.ROOT / ".github/workflows/ci-azure-pilot.yml").read_text()
-        for required in ["  workflow_dispatch:", "github.repository == 'elsa-workflows/elsa-foundation'", "github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", "github.event.repository.fork == false", "ref: ${{ github.sha }}", "group: elsa-foundation-ci-pilot", "contents: read", "persist-credentials: false", "timeout-minutes: 10", "if-no-files-found: error", "if: always()", "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"]:
-            self.assertIn(required, text)
-        for prohibited in ["pull_request:", "pull_request_target:", "push:", "schedule:", "secrets.", "contents: write", "continue-on-error", "Build & test", "Generated maps fresh", "name: Full tier"]:
-            self.assertNotIn(prohibited, text)
+        self.assertEqual([], pilot.workflow_errors(text))
+
+    def test_caller_checkout_rejected_despite_inert_immutable_ref_text(self):
+        document = json.loads((pilot.ROOT / ".github/workflows/ci-azure-pilot.yml").read_text())
+        checkout = document["jobs"]["pilot"]["steps"][0]
+        checkout["with"]["ref"] = "${{ inputs.trusted_sha }}"
+        checkout["name"] = "ref: ${{ github.sha }}"
+        self.assertTrue(pilot.workflow_errors(json.dumps(document)))
+
+    def test_workflow_comments_duplicate_keys_and_non_json_constants_rejected(self):
+        text = (pilot.ROOT / ".github/workflows/ci-azure-pilot.yml").read_text()
+        mutants = [
+            text.replace('"ref": "${{ github.sha }}"', '# ref: ${{ github.sha }}\n "ref": "${{ inputs.trusted_sha }}"'),
+            text.replace('"ref": "${{ github.sha }}"', '"ref": "${{ github.sha }}", "ref": "${{ inputs.trusted_sha }}"'),
+            text.replace('"timeout-minutes": 10', '"timeout-minutes": NaN'),
+        ]
+        for mutant in mutants:
+            self.assertNotEqual(text, mutant)
+            self.assertTrue(pilot.workflow_errors(mutant))
+
+    def test_structured_workflow_policy_mutations_rejected(self):
+        original = json.loads((pilot.ROOT / ".github/workflows/ci-azure-pilot.yml").read_text())
+        mutations = [
+            (["on", "pull_request"], {}),
+            (["permissions", "contents"], "write"),
+            (["jobs", "untrusted"], {"runs-on": "self-hosted"}),
+            (["jobs", "pilot", "if"], "true"),
+            (["jobs", "pilot", "runs-on", "group"], "Default"),
+            (["jobs", "pilot", "runs-on", "labels"], "self-hosted"),
+            (["jobs", "pilot", "continue-on-error"], True),
+            (["jobs", "pilot", "timeout-minutes"], 11),
+            (["jobs", "pilot", "steps", 0, "with", "persist-credentials"], True),
+            (["jobs", "pilot", "steps", 0, "uses"], "actions/checkout@main"),
+            (["jobs", "pilot", "steps", 1, "run"], "true"),
+            (["jobs", "pilot", "steps", 2, "if"], "success()"),
+            (["jobs", "pilot", "steps", 2, "with", "if-no-files-found"], "warn"),
+        ]
+        for path, value in mutations:
+            with self.subTest(path=path):
+                document = copy.deepcopy(original)
+                target = document
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] = value
+                self.assertTrue(pilot.workflow_errors(json.dumps(document)))
 
 
 if __name__ == "__main__":
