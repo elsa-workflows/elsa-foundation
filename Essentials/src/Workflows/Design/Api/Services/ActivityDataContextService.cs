@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Design.Api.Models;
@@ -39,6 +40,8 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             // Owning definition and current catalog authority precede every draft, target and metadata read.
             if (!await authorizer.CanReadAsync(request.DefinitionId, ct) || !await catalog.CanReadAsync(ct))
                 return Failure("denied", "denied");
+            var visibleCatalog = await catalog.ListAsync(ct);
+            if (!visibleCatalog.Allowed) return Failure("denied", "denied");
             var authorization = await ExpressionToolingApiHandlers.AuthorizationAsync(principal, policy, ct);
             if (!authorization.IsAuthorized) return Failure("denied", "denied");
             var drafts = Single<IWorkflowDefinitionDraftStore>();
@@ -58,8 +61,11 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             var document = new ActivityDataSelectionDocument("WorkflowDefinition", draft.Id,
                 WorkflowAuthoringRevision.Digest([baseline, snapshot.Hash]), snapshot.State.RootActivity,
                 [.. snapshot.State.Inputs], [.. snapshot.State.Variables], [.. snapshot.State.Outputs]);
+            if (!CatalogAllows(snapshot.State.RootActivity, structures, visibleCatalog, ct)) return Failure("denied", "denied");
+            var scopeRevision = CatalogScopeRevision(visibleCatalog);
             var catalogRevision = await CatalogRevisionAsync(snapshot.State.RootActivity, structures, lookup, ct);
             var analysis = await analyzer.AnalyzeAsync(document, new(request.NodeId, request.InputKey), request.Query, ct);
+            if (analysis.ContractRevision != document.ContractRevision) return Failure("unavailable", "invalid-analysis");
             if (analysis.Target is null || !analysis.Findings.IsEmpty)
                 return Failure("invalid", "invalid-source-or-target");
             var queryRevision = WorkflowAuthoringRevision.JsonDigest(JsonSerializer.SerializeToElement(
@@ -68,7 +74,7 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
                 analysis, WorkflowsDesignJsonOptions.WireContext.ActivityDataSelectionAnalysis));
             var contextRevision = WorkflowAuthoringRevision.Digest([
                 baseline, snapshot.Hash, request.DocumentRevision, request.NodeId, request.InputKey, queryRevision,
-                catalogRevision, metadataRevision, authorization.PermissionRevision ?? "", authorization.PolicyFingerprint ?? "",
+                scopeRevision, catalogRevision, metadataRevision, authorization.PermissionRevision ?? "", authorization.PolicyFingerprint ?? "",
                 ProviderRevision(services)
             ]);
             // A save or access change while metadata was awaited invalidates this result before disclosure.
@@ -79,6 +85,11 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             if (!currentAuthorization.IsAuthorized) return Failure("denied", "denied");
             if (currentAuthorization.PermissionRevision != authorization.PermissionRevision || currentAuthorization.PolicyFingerprint != authorization.PolicyFingerprint)
                 return Failure("stale", "authority-changed");
+            var currentCatalog = await catalog.ListAsync(ct);
+            if (!currentCatalog.Allowed || !CatalogAllows(snapshot.State.RootActivity, structures, currentCatalog, ct)) return Failure("denied", "denied");
+            if (CatalogScopeRevision(currentCatalog) != scopeRevision ||
+                await CatalogRevisionAsync(snapshot.State.RootActivity, structures, lookup, ct) != catalogRevision)
+                return Failure("stale", "catalog-changed");
             var current = await drafts.FindByIdAsync(request.DraftId, ct);
             if (current is null || current.Id != draft.Id || current.WorkflowDefinitionId != request.DefinitionId || current.TenantId != tenant)
                 return Failure("denied", "denied");
@@ -108,6 +119,34 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
         services.GetServices<IActivitySerializedShapeSource>().Select(source => source.GetType())
             .Concat(services.GetServices<IActivityInputSourceConstraintProvider>().Select(source => source.GetType()))
             .Select(type => $"{type.FullName}:{type.Module.ModuleVersionId}").Order(StringComparer.Ordinal));
+
+    internal static string CatalogScopeRevision(ActivityAuthoringCatalogResult catalog) => WorkflowAuthoringRevision.Digest(
+        catalog.Entries.Select(entry => WorkflowAuthoringRevision.Digest([
+            entry.ActivityVersionId, entry.ActivityTypeKey, entry.Version, entry.Available ? "1" : "0",
+            .. entry.Inputs.Select(input => WorkflowAuthoringRevision.Digest([input.ReferenceKey, input.Name, input.Type,
+                input.IsRequired ? "1" : "0", input.IsSensitive ? "1" : "0", input.IsCredential ? "1" : "0", input.UiHint ?? ""]))
+        ])).Order(StringComparer.Ordinal));
+
+    internal static bool CatalogAllows(ActivityNode? root, IActivityStructureService structures, ActivityAuthoringCatalogResult catalog, CancellationToken ct)
+    {
+        if (!catalog.Allowed) return false;
+        var permitted = catalog.Entries.Select(entry => entry.ActivityVersionId).ToHashSet(StringComparer.Ordinal);
+        if (permitted.Count != catalog.Entries.Count || permitted.Any(string.IsNullOrWhiteSpace)) return false;
+        var pending = new Stack<(ActivityNode Node, int Depth)>();
+        if (root is not null) pending.Push((root, 0));
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (pending.TryPop(out var item))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (visited.Count >= 10000 || item.Depth > 100 || !visited.Add(item.Node.NodeId)) return false;
+            // Check a node before projecting its private children. Addability is not read visibility.
+            if (item.Node.Intrinsic is null && !permitted.Contains(item.Node.ActivityVersionId)) return false;
+            if (item.Node.Structure is { } structure && !structures.HasHandler(structure))
+                throw new NotSupportedException("The owning structure contribution is unavailable.");
+            foreach (var child in structures.ProjectChildren(item.Node).SelectMany(slot => slot.Activities)) pending.Push((child, item.Depth + 1));
+        }
+        return true;
+    }
 
     private static bool Valid(ActivityDataContextRequest request) =>
         new[] { request.DefinitionId, request.DraftId, request.ExpectedBaseRevision, request.DocumentRevision, request.NodeId, request.InputKey }

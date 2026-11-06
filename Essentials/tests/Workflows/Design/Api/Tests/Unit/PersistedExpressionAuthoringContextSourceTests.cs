@@ -451,7 +451,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         var services = new ServiceCollection();
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         services.AddSingleton(structures);
-        services.AddSingleton<IActivityDefinitionLookup>(new StubActivityCatalog().Add("activity", [input], outputs));
+        services.AddSingleton<IActivityDefinitionLookup>(new StubActivityCatalog().Add("container").Add("activity", [input], outputs));
         services.AddSingleton<IActivityAuthoringCatalog, FixtureCatalogAuthority>();
         services.AddSingleton<IWorkflowDefinitionAuthorizer, FixtureDefinitionAuthority>();
         configure?.Invoke(services);
@@ -466,7 +466,8 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
     private sealed class FixtureCatalogAuthority : IActivityAuthoringCatalog
     {
         public ValueTask<bool> CanReadAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
-        public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(new ActivityAuthoringCatalogResult(true,
+            new[] { "activity", "container" }.Select(id => new ActivityAuthoringCatalogEntry(id, id, "1.0.0", id, null, null, true, null, [])).ToArray()));
     }
 
     private sealed class DenyContextFilter : IExpressionAuthoringContextFilter

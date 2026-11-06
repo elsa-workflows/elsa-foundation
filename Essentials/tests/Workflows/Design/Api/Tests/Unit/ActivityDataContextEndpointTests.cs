@@ -212,6 +212,55 @@ public sealed class ActivityDataContextEndpointTests
     }
 
     [Fact]
+    public async Task An_unsaved_hidden_version_is_denied_before_any_source_shape_query()
+    {
+        var calls = 0;
+        using var host = new Host(services => services.AddSingleton<IActivitySerializedShapeSource>(new CallbackShape(() => calls++)));
+        var hidden = Node("hidden") with { ActivityVersionId = "private-version" };
+        var result = await host.Invoke(host.Request() with { Snapshot = View(Sequence(hidden, Node("consumer"))), Query = new() { Source = Result("hidden") } });
+        Assert.Equal("denied", result.Body.State);
+        Assert.Null(result.Body.Analysis);
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public async Task A_visible_but_unavailable_catalog_entry_remains_readable()
+    {
+        using var host = new Host();
+        host.Catalog.Entries = host.Catalog.Entries.Select(entry => entry with { Available = false }).ToArray();
+        Assert.Equal("supported", (await host.Invoke(host.Request())).Body.State);
+    }
+
+    [Fact]
+    public async Task A_late_catalog_subset_change_refuses_metadata_even_when_general_read_stays_allowed()
+    {
+        Host? host = null;
+        using (host = new Host(services => services.AddSingleton<IActivitySerializedShapeSource>(new CallbackShape(() =>
+            host!.Catalog.Entries = host.Catalog.Entries.Where(entry => entry.ActivityVersionId != "test").ToArray()))))
+        {
+            var result = await host.Invoke(host.Request());
+            Assert.True(host.Catalog.Allowed);
+            Assert.Equal("denied", result.Body.State);
+            Assert.Null(result.Body.Analysis);
+        }
+    }
+
+    [Fact]
+    public async Task Analysis_for_a_different_canonical_revision_is_never_disclosed()
+    {
+        using var host = new Host(services => {
+            var owner = services.Single(descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
+            services.RemoveAll<IActivityDataSelectionAnalyzer>();
+            services.AddScoped<IActivityDataSelectionAnalyzer>(provider => new WrongRevisionAnalyzer(
+                (IActivityDataSelectionAnalyzer)ActivatorUtilities.CreateInstance(provider, owner.ImplementationType!)));
+        });
+        var result = await host.Invoke(host.Request());
+        Assert.Equal("unavailable", result.Body.State);
+        Assert.Equal("activity-data.invalid-analysis", result.Body.Code);
+        Assert.Null(result.Body.Analysis);
+    }
+
+    [Fact]
     public async Task Literal_member_metadata_is_unknown_and_its_real_metadata_revision_invalidates_the_context()
     {
         var shape = new CallbackShape(() => { });
@@ -263,7 +312,7 @@ public sealed class ActivityDataContextEndpointTests
             services.AddSingleton<IWorkflowDefinitionAuthorizer>(Owner);
             services.AddSingleton<IActivityAuthoringCatalog>(Catalog);
             services.AddSingleton<IWorkflowDefinitionDraftStore>(Drafts);
-            services.AddSingleton<IActivityDefinitionLookup>(new StubActivityCatalog().Add("sequence").Add("test", [
+            services.AddSingleton<IActivityDefinitionLookup>(new StubActivityCatalog().Add("sequence").Add("private-version").Add("test", [
                 new("CustomerId", "CustomerId", new("String"), null, "Customer ID", null, true)
             ]));
             configure?.Invoke(services);
@@ -298,8 +347,18 @@ public sealed class ActivityDataContextEndpointTests
     private sealed class CatalogAuthority : IActivityAuthoringCatalog
     {
         internal bool Allowed { get; set; } = true;
+        internal IReadOnlyList<ActivityAuthoringCatalogEntry> Entries { get; set; } = new[] { "test", "sequence" }.Select(id =>
+            new ActivityAuthoringCatalogEntry(id, id, "1.0.0", id, null, null, true, null, [])).ToArray();
         public ValueTask<bool> CanReadAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Allowed);
-        public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException("Only current catalog authority is requested.");
+        public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(new ActivityAuthoringCatalogResult(Allowed, Allowed ? Entries : []));
+    }
+    private sealed class WrongRevisionAnalyzer(IActivityDataSelectionAnalyzer owner) : IActivityDataSelectionAnalyzer
+    {
+        public async ValueTask<Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis> AnalyzeAsync(
+            Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionDocument document,
+            Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionTarget? target = null,
+            Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery? query = null,
+            CancellationToken cancellationToken = default) => (await owner.AnalyzeAsync(document, target, query, cancellationToken)) with { ContractRevision = "different-candidate" };
     }
     private sealed class DraftStore(WorkflowDefinitionDraft draft) : IWorkflowDefinitionDraftStore
     {

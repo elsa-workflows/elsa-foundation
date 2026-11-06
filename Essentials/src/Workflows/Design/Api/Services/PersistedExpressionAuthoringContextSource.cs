@@ -49,19 +49,24 @@ public sealed class PersistedExpressionAuthoringContextSource(
         var catalog = Single<IActivityAuthoringCatalog>();
         var lookup = Single<IActivityDefinitionLookup>();
         if (stores is not [var drafts] || analyzer is null || authorizer is null || catalog is null || lookup is null) return null;
+        if (!await catalog.CanReadAsync(cancellationToken)) return null;
+        var visibleCatalog = await catalog.ListAsync(cancellationToken);
+        if (!visibleCatalog.Allowed) return null;
         var draft = await drafts.FindByIdAsync(request.WorkflowDraftId, cancellationToken);
         if (draft is null || draft.Id != request.WorkflowDraftId ||
             !await authorizer.CanReadAsync(draft.WorkflowDefinitionId, cancellationToken) ||
             !await catalog.CanReadAsync(cancellationToken)) return null;
         var baseline = WorkflowAuthoringRevision.For(draft);
         var canonical = WorkflowAuthoringRevision.Snapshot(draft.State.ToStateView());
+        if (!ActivityDataContextService.CatalogAllows(canonical.State.RootActivity, structures, visibleCatalog, cancellationToken)) return null;
+        var scopeRevision = ActivityDataContextService.CatalogScopeRevision(visibleCatalog);
         var candidate = new ActivityDataSelectionDocument("WorkflowDefinition", draft.Id,
             WorkflowAuthoringRevision.Digest([baseline, canonical.Hash]), canonical.State.RootActivity,
             [.. canonical.State.Inputs], [.. canonical.State.Variables], [.. canonical.State.Outputs]);
         var target = new ActivityDataSelectionTarget(request.NodeId, request.PropertyKey);
         var catalogRevision = await ActivityDataContextService.CatalogRevisionAsync(canonical.State.RootActivity, structures, lookup, cancellationToken);
         var first = await analyzer.AnalyzeAsync(candidate, target, new() { IncludeSources = false }, cancellationToken);
-        if (first.Target is null || !first.Findings.IsEmpty) return null;
+        if (first.ContractRevision != candidate.ContractRevision || first.Target is null || !first.Findings.IsEmpty) return null;
         var document = new ExpressionAuthoringDocument(
             $"{draft.Id}:{request.NodeId}:{request.PropertyKey}:{request.ExpressionType}", draft.Id,
             request.NodeId, request.PropertyKey, request.ExpressionType, request.DocumentRevision, first.Target.Type.Alias);
@@ -84,7 +89,7 @@ public sealed class PersistedExpressionAuthoringContextSource(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var page = await analyzer.AnalyzeAsync(candidate, target, new() { Skip = skip, Take = 100, ShapeLimits = new(4, remainingMembers) }, cancellationToken);
-            if (page.Target is null || !page.Findings.IsEmpty) return null;
+            if (page.ContractRevision != candidate.ContractRevision || page.Target is null || !page.Findings.IsEmpty) return null;
             foreach (var source in page.Sources)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -105,11 +110,15 @@ public sealed class PersistedExpressionAuthoringContextSource(
         }
         // Re-read the actual baseline and authority before returning the filtered metadata.
         if (!await authorizer.CanReadAsync(draft.WorkflowDefinitionId, cancellationToken) || !await catalog.CanReadAsync(cancellationToken)) return null;
+        var currentCatalog = await catalog.ListAsync(cancellationToken);
+        if (!currentCatalog.Allowed || !ActivityDataContextService.CatalogAllows(canonical.State.RootActivity, structures, currentCatalog, cancellationToken) ||
+            ActivityDataContextService.CatalogScopeRevision(currentCatalog) != scopeRevision ||
+            await ActivityDataContextService.CatalogRevisionAsync(canonical.State.RootActivity, structures, lookup, cancellationToken) != catalogRevision) return null;
         var latest = await drafts.FindByIdAsync(draft.Id, cancellationToken);
         if (latest is null || latest.WorkflowDefinitionId != draft.WorkflowDefinitionId || WorkflowAuthoringRevision.For(latest) != baseline) return null;
         var permission = context.PermissionRevision ?? "authenticated";
         var policy = context.PolicyFingerprint ?? "default";
-        var revision = WorkflowAuthoringRevision.Digest([baseline, canonical.Hash, catalogRevision,
+        var revision = WorkflowAuthoringRevision.Digest([baseline, canonical.Hash, scopeRevision, catalogRevision,
             ActivityDataContextService.ProviderRevision(serviceProvider!), request.ExpressionType, permission, policy, .. revisions]);
         return context with { RootSymbols = symbols, ContextRevision = revision, SymbolCatalogRevision = revision,
             PermissionRevision = permission, PolicyFingerprint = policy };
