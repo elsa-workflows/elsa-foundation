@@ -33,6 +33,16 @@ class RetainedMigrationGeneratorTests(unittest.TestCase):
                     path = migrations / name
                     path.write_text(content)
                     self.originals[path] = content
+        jobs = self.root / "Extensions/Jobs/src/Persistence/EntityFrameworkCore"
+        jobs.mkdir(parents=True)
+        (jobs / "Elsa.Jobs.Persistence.EntityFrameworkCore.csproj").write_text("<Project />")
+        for provider in ("Sqlite", "PostgreSql"):
+            migrations = jobs / "Migrations/Jobs" / provider
+            migrations.mkdir(parents=True)
+            for name in (f"Jobs{provider}DbContextModelSnapshot.cs", "20261106000000_Initial.cs"):
+                path = migrations / name
+                path.write_text("retained Jobs history")
+                self.originals[path] = "retained Jobs history"
         shim = self.root / "shims"
         shim.mkdir()
         dotnet = shim / "dotnet"
@@ -48,6 +58,9 @@ if [[ "${1:-}" == "run" ]]; then
     for provider in Sqlite SqlServer PostgreSql MySql; do
       printf '%s%sDbContext|%s|%s|Elsa.Test\\n' "$module" "$provider" "$provider" "$assembly"
     done
+  done
+  for provider in Sqlite PostgreSql; do
+    printf 'Jobs%sDbContext|%s|Elsa.Jobs.Persistence.EntityFrameworkCore|Elsa.Jobs.Persistence.EntityFrameworkCore\\n' "$provider" "$provider"
   done
 fi
 ''')

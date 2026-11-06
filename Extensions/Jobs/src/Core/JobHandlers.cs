@@ -25,6 +25,9 @@ public sealed record JobProgress(
 /// <summary>Replacement contract: ordinary producer submission; one implementation per configured Jobs authority.</summary>
 public interface IJobClient
 {
+    /// <summary>Submits one validated immutable invocation and returns only confirmed durable acceptance.</summary>
+    /// <exception cref="JobException">The request is invalid, untrusted or unconfirmed by its authority; serialization/provider failures retain their original cause as <see cref="Exception.InnerException"/>.</exception>
+    /// <exception cref="JobSubmissionConflictException">The protected producer key already recognizes different immutable content.</exception>
     ValueTask<JobAcceptance> SubmitAsync(JobScope scope, JobSubmission submission, CancellationToken cancellationToken = default);
 }
 
@@ -37,5 +40,7 @@ public interface IJobHandler<TInput, TResult>
 /// <summary>Attempt-bound reporter supplied to a handler; implementations enforce current ownership and redaction.</summary>
 public interface IJobProgressReporter
 {
+    /// <summary>Reports one bounded safe observation while the exact physical attempt owns progress authority.</summary>
+    /// <exception cref="JobException">The report is invalid, unavailable or no longer owned; serialization/provider failures retain their original cause as <see cref="Exception.InnerException"/>.</exception>
     ValueTask ReportAsync(JobProgress progress, CancellationToken cancellationToken = default);
 }

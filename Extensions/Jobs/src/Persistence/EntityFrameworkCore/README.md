@@ -1,0 +1,71 @@
+# Jobs EF persistence
+
+This module owns Jobs admission, immutable invocation content, attempts, pause/capacity arbitration,
+physical receipts, authoritative results, schedules and owed model delivery. It uses the shared EF
+connection/schema/migration policy and bounded write retry support. It is not a generic store framework.
+The product package contains EF Core/Relational and shared Elsa EF infrastructure; the consuming host
+supplies the SQLite or PostgreSQL engine package. Other engines are refused.
+
+`services.AddJobsEntityFrameworkCore(options => { ... })` composes a plain .NET host. Register it before
+the Jobs worker: its existing `AddEfModuleHostMigrations` hook validates/applies schema before later
+hosted services start. `JobsEntityFrameworkCoreFeature` composes the same authority in a CShell using
+the normal shell migration hook. Both preserve the shared migrate-versus-validate configuration,
+provider validation, schema finalization and write admission. Production code never uses EnsureCreated.
+Provider contexts remain internal, with friendship only for same-domain tooling and provider tests.
+
+`IJobCommands` and `IJobQueries` are scoped replacement contracts. The default query registration follows
+the selected command provider if it also implements queries; a replacement must otherwise provide its
+own query implementation. Each authoritative write attempt uses a fresh factory context and one whole
+transaction. Retry never continues a partially failed transaction. Commands propagate caller cancellation
+and preserve provider failures behind `JobPersistenceException`; retained malformed content has a safe
+`JobException` code and preserved inner cause.
+
+Indexed keys are SHA-256 addresses over exact scope/identity framing, with residual identity checks.
+Strings use the shared provider ordinal collation. An admission recomputes the Core request digest;
+physical receipts recompute the Core payload digest. Ordinary producer recognition expires only after
+the advertised window and settled responsibilities; admission can then atomically replace that ordinary
+key. Durable-origin receipts and cancellation tombstones are separate and are never removed by ordinary
+key cleanup. Inputs, attempts, results, origins and deliveries are not purged by this implementation.
+Input, result and continuation envelopes share Core's 1 MiB limit with the runtime; complete requests
+are bounded to 3 MiB and physical receipts to 2 MiB. Payloads share Core's maximum JSON depth of 32,
+leaving room for durable record envelopes. Progress shares the entire UTF-8 envelope's 16 KiB bound.
+
+Claim discovery filters compatible support, implementation pins, active holds and exhausted live permit
+counts before its bounded selection. Queue/type gates have no model namespace. Workflow definition and
+instance gates require the exact model kind, so colliding model-local IDs remain independent. Every gate,
+including an allowed gate, participates in an atomic start CAS. Membership rows make held work skippable
+on the shared queue. A persisted per-worker scan cursor advances across examined candidates; a malformed
+current-schema request retains its bytes/JobId and receives an unavailable projection without spending an
+attempt. `Find` reports that malformed record as unavailable rather than manufacturing valid content.
+
+The first start pins a trusted host registration's implementation identity. Retries/recovery require that
+same pin. Missing old support stays accepted without an attempt. Start, renewal and capacity changes
+arbitrate through the same scope revisions; permits renew with their exact attempt. Provider time comes
+from SQLite integer seconds/milliseconds or PostgreSQL `clock_timestamp()`. Lease-authorized writes
+recheck live database time after all writes and roll back if authority expired while waiting. Ownership
+revision is separate from physical-start/progress observations. Completion replay cannot release a
+successor's permits. Late receipts retain evidence without selecting a result or reviving ownership.
+
+Deployment ceilings count valid authorized leases. A stale process may continue physical effects after
+lease loss; these limits are not a strict ceiling on every physical handler. External effects still need
+handler/integrator idempotency. Pause never cancels an already permitted attempt.
+
+Schedules use the host's `IJobRecurrenceCalculator` for arithmetic, with no workflow dependency or second
+scheduler authority. The provider accepts zero or one calculator and refuses multiple replacements when
+the authority resolves. Without a calculator, schedule arithmetic reports `jobs.recurrence.unavailable`;
+this provider does not install a calculator or a materialization pump. Materialization checks the same holds, commits origin-protected acceptance with
+cursor/occurrence receipt, and consumes no execution permit. Default coalescing counts long outages in
+persisted finite arithmetic slices; it accepts the oldest owed occurrence once counting reaches the
+persisted first-slice cutoff. Time elapsed during counting remains due for the next cycle. Explicit replay
+materializes bounded pages. Accepted JobIds are never coalesced.
+Updating a definition with already due responsibility is refused rather than silently discarding it.
+
+Awaited results create retained delivery responsibility in the result transaction. Workflow holds gate
+new continuation permission; queue/type holds do not. Replaying a prior grant resolves the same result
+and model input while paused. Only a trusted owning model adapter may assert consumption/terminal-parent
+proof; transport acknowledgements are insufficient. Native/BPMN integration remains separately qualified.
+
+SQLite and PostgreSQL source bindings and migrations are not provider qualification. The real-engine
+suite under `tests/Persistence/ProviderTests` applies and validates retained migrations, exercises durable
+identity/receipt/pause/concurrency/recurrence controls, and keeps unavailable PostgreSQL distinct from a
+passing engine. Packaged consumers and independent-process recovery remain separate acceptance evidence.

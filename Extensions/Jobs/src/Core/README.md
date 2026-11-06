@@ -36,6 +36,15 @@ ownership, eligibility, recovery or retention. Providers must distinguish unavai
 missing data and must validate trusted scope on every operation. An unknown command acknowledgement
 must be reconciled from the durable command identity before repeating effects.
 
+`JobSnapshot.Request` is null when a retained request is malformed or its format cannot be read.
+When validated envelope metadata remains readable, `FindAsync` and job pages return that metadata
+with `UnavailableDiagnostic`, a safe bounded code/summary, so one unavailable request does not poison
+the entire list. Keep its original bytes and lifecycle facts; do not invent a request, mark it terminal
+or expose raw malformed content through diagnostics. A diagnostic may also accompany a readable but
+unsupported request. Consumers must check both fields before treating a snapshot as executable; the
+mutation authority independently refuses new attempts for unavailable request material. A query must
+not change quarantine, ownership or retention state merely to display this condition.
+
 All strings used as identities compare ordinally, including tenant and partition. Provider hashes
 are indexed projections, never sufficient identity proof: validate full residual keys and immutable
 digests before returning or changing a row. Validate positive versions, limits and durations; bounded
@@ -55,6 +64,16 @@ array order and writes compact UTF-8 JSON. The SHA-256 preimage is the UTF-8 pre
 `elsa.jobs.request.v1` followed by one LF byte and that JSON. The result is lowercase hexadecimal.
 Every immutable request field, including retry/timeout/recognition policy and association, participates.
 If the wire model or framing changes, preserve the old reader/digest version for accepted records.
+
+`JobPayloadLimits.MaximumBytes` is 1 MiB for each complete schema/value envelope. Its `GetByteCount`
+uses that same fixed default BCL serialization, including JSON escaping and schema metadata, without
+host-provided options. It also enforces `MaximumDepth` of 32 for the complete payload envelope, leaving
+headroom inside ordinary request, admission, receipt and model wire envelopes. Supported JSON bytes
+are unchanged; values exceeding the supported depth receive a safe `JobException` with their original
+serialization exception retained as its inner cause. Client, typed handler result validation and persistence enforce this common
+ceiling. A host may configure a lower runtime limit, never a larger payload than its provider can retain.
+`JobPayloadLimits.MaximumProgressBytes` separately caps the full UTF-8 progress envelope at 16 KiB,
+also with runtime configuration permitted only to lower the shared ceiling.
 
 `JobPayloadDigest` uses the same framing with prefix `elsa.jobs.payload.v1` and one LF byte, over
 the declared schema/value payload object. An absent payload hashes that prefix followed by JSON
@@ -91,6 +110,16 @@ grants the attempt permission/lease and reserves all relevant queue/type/definit
 or grants nothing. Allowed and initially absent gate rows participate in the same arbitration as held
 rows so a newly created hold cannot race an unguarded read. A held same-queue job cannot hide unrelated eligible work.
 
+`JobClaimRequest.RequestId` is a required nonblank provider input despite its optional construction
+parameter. Every worker pull keeps the same `(JobScope, Owner, RequestId)` and complete request
+content until it receives a definite answer, including after a commit acknowledgement or disposal
+failure. Parallel physical slots use distinct request IDs; a later pull starts a new identity.
+The provider atomically stores the claim receipt/digest with its permission grant. Matching replay
+returns the original lease even if pause, expiry or terminal completion has since changed eligibility;
+it never selects a second job. Changed content under that identity is a conflict. Returning the old
+lease does not restore ownership: the worker must renew and validate its current authority before
+physical entry. Recognition must survive every supported unresolved pull/retry path.
+
 The committed permission is the start cutoff. A pause committed afterward cannot revoke that grant;
 the handler may physically enter later. Renewal compares exact owner incarnation, fence, revision and
 unexpired authority. A new attempt after lease loss needs a fresh permission and cannot bypass a pause.
@@ -117,6 +146,12 @@ different facts; no provider may claim that its persisted counter proves a stric
 Every active hold composes. A release changes only the named hold at its expected revision.
 Queue/job-type holds cover all versions and gate attempts. Workflow instance/definition holds also
 gate a new result-driven continuation permission, using the same authoritative hold set.
+`JobGateKey` includes `(Kind, Name, ModelKind)` inside the trusted `JobScope`. Workflow-instance
+and workflow-definition keys require a nonblank `ModelKind` matching the association's ordinal model
+identity. Queue/job-type keys require null `ModelKind`. Providers reject invalid combinations and
+include the complete key in durable identities, full residual checks, pause/capacity mutations and
+filtered queries. Equal native/BPMN definition or execution IDs therefore cannot alias a gate. Model
+kind is an opaque identity component, not a kernel instruction to select model semantics.
 
 `MaterializeDueAsync` is bounded and orders schedule cursor changes and matching pause gates in one
 transaction. A held schedule retains its due cursor and accepts no occurrence job. The default

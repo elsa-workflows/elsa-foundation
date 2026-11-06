@@ -186,9 +186,17 @@
   <Folder Name="/Extensions/Jobs/" />
   <Folder Name="/Extensions/Jobs/src/">
     <Project Path="Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj" />
+    <Project Path="Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj" />
+    <Project Path="Extensions/Jobs/src/Tooling/Elsa.Jobs.Tooling.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Jobs/src/Persistence/">
+    <Project Path="Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Extensions/Jobs/tests/">
     <Project Path="Extensions/Jobs/tests/Tests/Elsa.Jobs.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Jobs/tests/Persistence/">
+    <Project Path="Extensions/Jobs/tests/Persistence/ProviderTests/Elsa.Jobs.Persistence.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Rules/" />
   <Folder Name="/Extensions/Rules/src/">

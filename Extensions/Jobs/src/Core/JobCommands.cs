@@ -6,7 +6,7 @@ public interface IJobCommands
     /// <summary>Validates and atomically recognizes a producer key or protected durable origin before accepting new work.</summary>
     ValueTask<JobAdmissionResult> AdmitAsync(JobAdmission admission, CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically grants one new attempt permission with all matching hold and live-lease capacity checks.</summary>
+    /// <summary>Atomically grants/replays one per-pull permission identity. New grants check all matching holds/capacity; replay never selects a second job.</summary>
     ValueTask<JobClaimResult> ClaimAsync(JobClaimRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Renews only current unexpired ownership; returns its new ownership revision and stop signals.</summary>

@@ -14,4 +14,4 @@ Draft review record, 6 November 2026. Feature: [spec.md](../spec.md).
 
 The product names .NET/native/BPMN and package isolation because #3586 explicitly requires those
 consumer shapes. Algorithms, concrete API/schema and provider design live in the plan/contracts.
-No product behavior is implemented; checked content-quality items are not delivery evidence.
+Implementation is underway; checked content-quality items are not delivery evidence.

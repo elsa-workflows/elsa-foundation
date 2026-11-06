@@ -1,9 +1,10 @@
 namespace Elsa.Jobs.Core;
 
-/// <summary>Logical pause/capacity target inside an exact JobScope; names compare ordinally.</summary>
+/// <summary>Logical pause/capacity target inside an exact JobScope. Workflow gates require an ordinal model kind; queue/type gates require null. Providers validate the complete key.</summary>
 public sealed record JobGateKey(
     JobGateKind Kind,
-    string Name);
+    string Name,
+    string? ModelKind = null);
 
 /// <summary>One independently released durable hold; timestamps are authority-owned.</summary>
 public sealed record JobHold(

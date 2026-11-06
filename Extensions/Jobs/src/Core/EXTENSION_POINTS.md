@@ -1,16 +1,62 @@
 # Jobs extension points
 
-Contracts are in `Elsa.Jobs.Core`; implementation composition belongs to the Jobs module and provider.
-No contract below qualifies a provider or admits a duplicate lifecycle authority.
+This is the contract catalog linked by the [Jobs composition root](../Elsa.Jobs/EXTENSION_POINTS.md).
+All interfaces below are **Core — `Elsa.Jobs.Core`**. Implementation registration belongs to the
+[Jobs runtime](../Elsa.Jobs/README.md) or [EF provider](../Persistence/EntityFrameworkCore/README.md).
+These contracts do not qualify a provider or authorize a second lifecycle authority.
 
-| Contract | Kind and consumer | Lifetime/composition | Required guarantees |
-|---|---|---|---|
-| `IJobClient` | Replacement; ordinary standalone producer | Scoped by default; one configured authority | Durable accepted acknowledgement, bounded validated immutable input, protected-key replay/conflict. |
-| `IJobHandler<TInput,TResult>` | Registered contribution; standalone worker | Resolve one scoped handler for its explicit registered semantic identity | Exact declared schemas; cooperative cancellation; documented effect idempotency; no inferred CLR durable identity. |
-| `IJobProgressReporter` | Attempt-bound context collaborator; handler | Created/bound for one attempt | Current-lease check, bounded redacted progress, no completion authority. |
-| `IJobCommands` | Replacement; client, worker and trusted operations/model adapters | Scoped by default; exactly one durable mutation provider per configured authority | Atomic pause/start/capacity and occurrence acceptance; fenced replay-safe transitions; durable origin recognition; exact result/consumer identity. |
-| `IJobQueries` | Replacement; worker and code/API/Studio inspection | Scoped by default; same authority as commands | Read-only bounded exact-scope queries; cursor binding; missing/unavailable distinction. |
-| `IJobRecurrenceCalculator` | Replacement; schedule command implementation | Immutable calculator may be singleton | Pure UTC next-occurrence computation; no cursor writes, job acceptance or missed-occurrence policy. |
+## Overridable contracts
+
+| Contract and signature | Default implementation and owning project | When to override; consumers |
+|---|---|---|
+| `IJobClient`: `ValueTask<JobAcceptance> SubmitAsync(JobScope, JobSubmission, CancellationToken = default)` | Internal scoped `JobClient`, `Elsa.Jobs`; registered with `TryAddScoped` by `AddElsaJobs`. | Replace the ordinary producer facade while preserving bounded immutable admission, scope and protected-key replay. Used by standalone producers; trusted model adapters use their own saved-origin admission. |
+| [`IJobCommands`](JobCommands.cs): the linked declaration supplies every exact request/lease and `ValueTask<T>` command signature, with optional cancellation. | Internal scoped `EfJobStore`, `Elsa.Jobs.Persistence.EntityFrameworkCore`; registered by `AddJobsEntityFrameworkCore`. | Supply another durable authority implementing the complete atomic admission/gate/start/capacity/attempt/result/origin/delivery contract. Used by client, worker and trusted model/operations adapters. |
+| [`IJobQueries`](JobQueries.cs): the linked declaration supplies every exact scope/filter/page and `ValueTask<T>` query signature, with optional cancellation. | The same scoped `EfJobStore` selected as `IJobCommands`, unless explicitly replaced. | Supply read-only bounded inspection against the same durable authority. Used by workers and code/API/Studio inspection; cursors must bind exact scope and filters. |
+| `IJobRecurrenceCalculator`: `DateTimeOffset? Next(JobRecurrence, DateTimeOffset after)` | No runtime default in the M1 slice; the EF store accepts zero or one host contribution and refuses duplicates. | Supply pure UTC arithmetic for schedule materialization. The command provider depends on it; the calculator never owns schedule cursors, missed policy or job acceptance. The concrete default remains an M2 obligation. |
+
+An override is one explicit scoped service registration of the interface, replacing its prior
+registration rather than adding a second authority. `AddJobsEntityFrameworkCore` uses `TryAdd` so an
+explicit host replacement is retained; provider configuration itself may be composed only once.
+Startup refuses missing or duplicate command/query/client authorities. A replacement command provider
+also supplies queries or a matching explicit query provider; no last-registration choice is a lifecycle contract.
+
+### Attempt-bound progress collaborator
+
+`IJobProgressReporter` (**Core**) has signature
+`ValueTask ReportAsync(JobProgress progress, CancellationToken cancellationToken = default)`.
+Its current implementation is internal `JobProgressReporter` in `Elsa.Jobs`, created by `JobsWorker`
+for the exact attempt and supplied in `JobExecutionContext.Progress`; it is not an ambient DI replacement.
+Handlers depend on it. A custom worker supplies a reporter only when it preserves current fenced
+ownership, shared payload/progress bounds and safe progress; reporting never owns completion.
+
+## Implementable contributor interfaces
+
+### `IJobHandler<TInput,TResult>` — Core
+
+- **Kind:** registered handler contribution under one exact semantic `JobHandlerSupport`.
+- **Signature:** `ValueTask<TResult> ExecuteAsync(TInput input, JobExecutionContext context, CancellationToken cancellationToken)`.
+- **Registration:** `services.AddJobHandler<MyHandler, MyInput, MyResult>(support)` in `Elsa.Jobs`.
+  `MyHandler` is scoped per physical attempt; the immutable support descriptor is application-wide.
+- **Aggregation/consumption:** one internal `JobHandlerRegistry` in `Elsa.Jobs` collects contributions;
+  `JobsWorker` resolves exactly one compatible registration before entry. This is direct dispatch,
+  with no fan-in event or aggregating event handler.
+- **Known implementations:** no built-in production handler. `ReportHandler` in
+  [`tools/jobs/PackageProbe`](../../../../tools/jobs/PackageProbe/README.md) is a **cross-domain qualification-only**
+  consumer of the public API, not a shipped default handler.
+
+Handlers keep the exact declared schemas and implementation identity, observe cooperative cancellation,
+and document downstream effect idempotency. CLR type names are not durable semantic identity.
+
+## Events and lifecycle contributions
+
+Jobs currently publishes no domain events and registers no event handlers or fan-in contributor interfaces.
+Its runtime contributes `JobsConfigurationValidator` to `IStartupTask` (**cross-domain**, `Elsa.Tasks.Core`)
+and optionally `JobsWorker` to `IBackgroundTask` (**cross-domain**, `Elsa.Tasks.Core`). Both are also hosted
+services for plain .NET hosts; the shared instances start once. Validation runs before background startup;
+the worker polls at configured `JobsOptions.PollInterval` (default 250ms). See the
+[Tasks catalog](../../../../Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md) for those contracts.
+
+## Durable composition obligations
 
 Replacement registrations must reject duplicates rather than silently selecting the last provider.
 Handler registrations must reject duplicate `(JobType, Version)` and incompatible schema contracts
@@ -20,6 +66,12 @@ the semantic `JobHandlerSupport` crosses the provider boundary.
 `IJobCommands` and `IJobQueries` must address the same configured durable authority. A read-only
 operations deployment may omit the worker; an ordinary worker may omit API/Studio and workflow
 adapters. No workflow design/runtime assembly is required by these contracts.
+
+Workflow pause/capacity gates include the association's exact nonblank `ModelKind` in addition to
+the definition/execution name and trusted JobScope. Queue/job-type gates require null ModelKind.
+Providers validate this distinction and preserve the whole gate key in identity, arbitration and
+query filtering. Native and BPMN IDs may coincide without sharing holds or limits; no model-name
+dispatch switch is introduced by this identity component.
 
 The worker uses injected .NET `TimeProvider` for polling/resource waits. The provider supplies the
 authoritative time used in durable lease, due, timeout and pause transitions. Qualify the actual

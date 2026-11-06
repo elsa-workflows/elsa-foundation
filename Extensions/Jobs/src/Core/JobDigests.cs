@@ -7,19 +7,36 @@ namespace Elsa.Jobs.Core;
 /// <summary>Version-one durable identity framing of every immutable request field.</summary>
 public static class JobRequestDigest
 {
+    /// <summary>Computes the fixed version-one identity of every immutable accepted request field.</summary>
+    /// <exception cref="JobException">The request cannot be serialized in its durable format; the original serialization cause is retained as <see cref="Exception.InnerException"/>.</exception>
     public static string Compute(JobRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return JobDigestFrame.Compute("elsa.jobs.request.v1\n",
-            JsonSerializer.SerializeToElement(request with { NotBefore = request.NotBefore?.ToUniversalTime() }));
+        try
+        {
+            return JobDigestFrame.Compute("elsa.jobs.request.v1\n",
+                JsonSerializer.SerializeToElement(request with { NotBefore = request.NotBefore?.ToUniversalTime() }));
+        }
+        catch (Exception error) when (error is JsonException or NotSupportedException)
+        {
+            throw new JobException("jobs.request.invalid", "The Jobs request cannot be represented by its supported durable JSON format.", error);
+        }
     }
 }
 
 /// <summary>Version-one durable identity framing of a schema/value payload; null has its own framed digest.</summary>
 public static class JobPayloadDigest
 {
-    public static string Compute(JobPayload? payload) =>
-        JobDigestFrame.Compute("elsa.jobs.payload.v1\n", JsonSerializer.SerializeToElement(payload));
+    /// <summary>Computes the fixed version-one payload identity; absence and a present JSON null remain distinct.</summary>
+    /// <exception cref="JobException">The payload cannot be serialized in its durable format; the original serialization cause is retained as <see cref="Exception.InnerException"/>.</exception>
+    public static string Compute(JobPayload? payload)
+    {
+        try { return JobDigestFrame.Compute("elsa.jobs.payload.v1\n", JsonSerializer.SerializeToElement(payload)); }
+        catch (Exception error) when (error is JsonException or NotSupportedException)
+        {
+            throw new JobException("jobs.payload.invalid", "The Jobs payload cannot be represented by its supported durable JSON format.", error);
+        }
+    }
 }
 
 internal static class JobDigestFrame

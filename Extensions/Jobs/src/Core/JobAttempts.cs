@@ -1,12 +1,13 @@
 namespace Elsa.Jobs.Core;
 
-/// <summary>Claims one compatible due invocation; the store uses authoritative time and atomically checks all holds and capacity.</summary>
+/// <summary>Claims one compatible due invocation under a stable per-pull request identity. Providers require a nonblank RequestId and replay its original grant; workers renew before physical entry.</summary>
 public sealed record JobClaimRequest(
     JobScope Scope,
     string Owner,
     IReadOnlyList<string> Queues,
     IReadOnlyList<JobHandlerSupport> Handlers,
-    TimeSpan LeaseDuration);
+    TimeSpan LeaseDuration,
+    string? RequestId = null);
 
 /// <summary>One durable start permission and ownership revision. Only claim/renewal changes that revision; observational writes do not invalidate it. Expiry does not prove physical exit.</summary>
 public sealed record JobAttemptLease(

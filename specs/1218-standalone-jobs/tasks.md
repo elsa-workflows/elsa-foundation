@@ -4,7 +4,7 @@
 [data model](data-model.md), [lifecycle](contracts/job-lifecycle.md) and [acceptance matrix](acceptance-matrix.md).
 
 **Status**: M1 implementation underway after scoped domain adoption and clean independent design review.
-Concrete public ABI and provider/model guarantees still require qualification. Tests are risk-based; application TDD cadence is undeclared,
+Core/runtime source checks pass 45/45 and real SQLite/PostgreSQL provider checks pass 60/60, with exact discovery/execution identity matches. Packaged public ABI and deployment/model guarantees still require qualification. Tests are risk-based; application TDD cadence is undeclared,
 so the template does not invent it. Required behavioral red/green bite-proofs remain obligations.
 
 ## M0 — Setup and design gates
@@ -16,17 +16,17 @@ so the template does not invent it. Required behavioral red/green bite-proofs re
 
 ## Foundation — concrete contracts and package closure
 
-- [ ] T005 Define actual handler/client/result/store and inspection extension contracts under `Extensions/Jobs/src/Core/`, public API baselines and `EXTENSION_POINTS.md`; keep Core free of implementation/workflow/provider weight.
-- [ ] T006 Create justified runtime/EF/test projects under `Extensions/Jobs/`, composition features and locked references; add actual projects to `Elsa.Server.slnx`, `EXTENSION_POINTS.md` and `tools/ci/test-tiers.json`.
-- [ ] T007 Implement scoped canonical identities/serialization limits and guarded EF state transitions under `Extensions/Jobs/src/Persistence/EntityFrameworkCore/`, using existing retry/schema policy and host-selected engines.
+- [x] T005 Define actual handler/client/result/store and inspection extension contracts under `Extensions/Jobs/src/Core/`, public API baselines and `EXTENSION_POINTS.md`; keep Core free of implementation/workflow/provider weight.
+- [x] T006 Create justified runtime/EF/test projects under `Extensions/Jobs/`, composition features and locked references; add actual projects to `Elsa.Server.slnx`, `EXTENSION_POINTS.md` and `tools/ci/test-tiers.json`.
+- [x] T007 Implement scoped canonical identities/serialization limits and guarded EF state transitions under `Extensions/Jobs/src/Persistence/EntityFrameworkCore/`, using existing retry/schema policy and host-selected engines.
 - [ ] T008 Prove conditional registration/duplicates, trusted scope/cursors and package boundaries in `Extensions/Jobs/tests/Tests/` and existing `Essentials/tests/Architecture/Tests/`; preserve compatibility for any extracted renewal/recurrence mechanics.
 
 ## M1 — US1 standalone vertical slice
 
 **Goal**: one actual packaged producer/worker and useful recoverable result without workflow packages.
 
-- [ ] T009 [US1] Implement pinned handler registration, idempotent durable client and bounded request/result dispatch in `Extensions/Jobs/src/Elsa.Jobs/`.
-- [ ] T010 [US1] Implement independent worker hosting, fenced lease renewal, physical receipts and terminal/result responsibility in `Extensions/Jobs/src/Elsa.Jobs/` and its job-owned EF transitions.
+- [x] T009 [US1] Implement pinned handler registration, idempotent durable client and bounded request/result dispatch in `Extensions/Jobs/src/Elsa.Jobs/`.
+- [x] T010 [US1] Implement independent worker hosting, fenced lease renewal, physical receipts and terminal/result responsibility in `Extensions/Jobs/src/Elsa.Jobs/` and its job-owned EF transitions.
 - [ ] T011 [US1] Cover equal/conflicting ordinary-key replay/expiry/cleanup, pending-obligation extension, separately protected durable-origin receipts/tombstones, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
 - [ ] T012 [US1] Add immutable clean PackageReference producer/worker witness in `tools/jobs/`; record dependency closure, actual versions/hashes and useful result/restart evidence in `specs/1218-standalone-jobs/evidence/`.
 

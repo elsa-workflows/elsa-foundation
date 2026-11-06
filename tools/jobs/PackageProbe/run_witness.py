@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""Run owned, independent processes from a published Jobs PackageReference deployment.
+
+This is a focused standalone witness, not full Jobs, model or Studio acceptance.
+The PostgreSQL profile owns and removes a throwaway local container. No external
+connection string, shared database or production credential is accepted.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+import uuid
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
+
+
+def terminate_owned(process):
+    if process.poll() is not None:
+        return
+    # Every process passed here was started below with its own session. Never
+    # discover or signal a PID by port/name, and never stop an ambient host.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait(timeout=5)
+        return
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
+
+
+class Witness:
+    def __init__(self, entry, evidence, provider):
+        self.entry, self.evidence, self.provider = entry, evidence, provider
+        self.steps, self.processes = [], []
+        self.cases = []
+        self.number = 0
+        self.container = None
+        self.run_id = uuid.uuid4().hex
+        self.base = {'provider': 'Sqlite' if provider == 'sqlite' else 'PostgreSql',
+                     'scope': {'persistencePartition': 'package-' + self.run_id, 'tenantId': 'tenant-a'}}
+
+    def docker(self, arguments, timeout=60):
+        return subprocess.check_output(['docker', *arguments], text=True, timeout=timeout).strip()
+
+    def initialize_store(self):
+        if self.provider == 'sqlite':
+            self.base['connectionString'] = 'Data Source=' + str(self.evidence / 'jobs.db')
+            self.base['schema'] = None
+        else:
+            name = 'elsa-jobs-package-' + self.run_id
+            env_file = self.evidence / 'owned-postgres.env'
+            password = uuid.uuid4().hex
+            env_file.write_text('POSTGRES_DB=jobs\nPOSTGRES_USER=jobs\nPOSTGRES_PASSWORD=' + password + '\n')
+            env_file.chmod(0o600)
+            # --name reserves this exact owned name; failure never causes removal
+            # of a pre-existing container. Only retain the returned container ID.
+            self.container = self.docker(['run', '--detach', '--rm', '--name', name,
+                                          '--publish', '127.0.0.1::5432', '--env-file', str(env_file),
+                                          'postgres:16-alpine'])
+            write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name})
+            deadline = time.monotonic() + 45
+            while True:
+                ready = subprocess.run(['docker', 'exec', self.container, 'pg_isready', '-U', 'jobs', '-d', 'jobs'],
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+                if ready.returncode == 0:
+                    break
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Owned PostgreSQL did not become ready.')
+                time.sleep(0.1)
+            port = self.docker(['port', self.container, '5432/tcp']).split(':')[-1]
+            self.base['connectionString'] = f'Host=127.0.0.1;Port={port};Database=jobs;Username=jobs;Password={password}'
+            self.base['schema'] = 'witness_' + self.run_id
+            env_file.unlink()
+        self.call('initialize')
+
+    def command(self, mode, **arguments):
+        self.number += 1
+        prefix = f'{self.number:03d}-{mode}'
+        command = {**self.base, 'mode': mode, 'outputFile': str(self.evidence / (prefix + '-result.json')),
+                   **arguments}
+        path = self.evidence / (prefix + '-command.json')
+        write_json(path, command)
+        path.chmod(0o600)
+        log_path = self.evidence / (prefix + '.log')
+        log = log_path.open('w')
+        process = subprocess.Popen(['dotnet', str(self.entry), str(path)], cwd=self.entry.parent,
+                                   stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                   start_new_session=True)
+        self.processes.append((process, log))
+        self.steps.append({'mode': mode, 'processId': process.pid, 'log': str(log_path),
+                           'commandFile': str(path), 'outputFile': command['outputFile']})
+        return process, command
+
+    def call(self, mode, **arguments):
+        process, command = self.command(mode, **arguments)
+        try:
+            code = process.wait(timeout=45)
+        except subprocess.TimeoutExpired:
+            terminate_owned(process)
+            raise TimeoutError('Probe operation timed out: ' + mode)
+        result_path = Path(command['outputFile'])
+        result = json.loads(result_path.read_text()) if result_path.is_file() else None
+        self.steps[-1]['exitCode'] = code
+        if code or result is None:
+            raise RuntimeError('Probe operation failed: ' + mode + '; inspect owned log and result.')
+        return result
+
+    def worker(self, label, unrelated=False):
+        ready = self.evidence / (label + '-ready.json')
+        stop = self.evidence / (label + '-stop')
+        process, _ = self.command('worker', readyFile=str(ready), stopFile=str(stop),
+                                  unrelatedHandler=unrelated)
+        self.until(lambda: ready.is_file(), 'worker readiness', process=process)
+        return process, stop
+
+    def stop(self, worker):
+        process, stop = worker
+        stop.touch()
+        try:
+            if process.wait(timeout=10):
+                raise RuntimeError('Owned worker failed while stopping.')
+        except subprocess.TimeoutExpired:
+            terminate_owned(process)
+            raise TimeoutError('Owned worker did not drain.')
+
+    def until(self, predicate, label, timeout=35, process=None):
+        deadline = time.monotonic() + timeout
+        while True:
+            value = predicate()
+            if value:
+                return value
+            if process is not None and process.poll() is not None:
+                raise RuntimeError('Owned worker exited before ' + label)
+            if time.monotonic() >= deadline:
+                raise TimeoutError('Did not observe ' + label)
+            time.sleep(0.1)
+
+    def snapshot(self, job_id):
+        result = self.call('inspect', jobId=job_id)
+        assert result['ok'] and result['value'] is not None, 'Accepted JobId disappeared.'
+        return result['value']
+
+    def terminal(self, job_id):
+        def get():
+            current = self.snapshot(job_id)
+            return current if current['state'] == 'Terminal' else None
+        return self.until(get, 'terminal result for ' + job_id)
+
+    def attempts(self, job_id):
+        result = self.call('attempts', jobId=job_id)
+        assert result['ok'] and result['value']['continuationToken'] is None
+        return result['value']['items']
+
+    def report(self, label, blocked=False):
+        directory = self.evidence / (label + '-entries')
+        release = self.evidence / (label + '-release') if blocked else None
+        return {'name': label,
+                'lines': [{'product': 'Widgets', 'quantity': 3, 'unitPrice': 12.50},
+                          {'product': 'Service', 'quantity': 2, 'unitPrice': 7.25}],
+                'entryDirectory': str(directory), 'releaseFile': str(release) if release else None}
+
+    def submit(self, key, report, mode='submit'):
+        result = self.call(mode, clientKey=key, input=report)
+        assert result['ok'], result
+        return result['value']
+
+    def check_report(self, snapshot, report):
+        result = snapshot['result']
+        assert result['outcome'] == 'Succeeded'
+        assert result['payload']['schema'] == {'alias': 'package.report.result', 'version': 1}
+        value = result['payload']['value']
+        assert (value['name'], value['lines'], value['units'], value['subtotal']) == (report['name'], 2, 5, 52.0)
+        assert value['invocationKey'].startswith('elsa.jobs.invocation.v1:')
+        return result['resultId']
+
+    def run(self):
+        cases = self.cases
+        self.initialize_store()
+        provider_version = self.call('provider-version')
+        assert provider_version['ok'] and provider_version['value']['version']
+        self.provider_version = provider_version['value']
+        report = self.report('invoice-total')
+        assert self.submit('lost-response', report, 'submit-discard-ack')['responseDiscarded']
+        accepted = self.submit('lost-response', report)
+        job_id = accepted['jobId']
+        assert self.submit('lost-response', report)['jobId'] == job_id
+        listed = self.call('list')['value']['items']
+        assert len(listed) == 1 and listed[0]['jobId'] == job_id
+        conflict = self.call('submit', clientKey='lost-response', input={**report, 'name': 'different-content'})
+        assert not conflict['ok'] and conflict['code'] == 'jobs.submission.conflict'
+        cases.append({'name': 'durable-admission-replay-conflict', 'state': 'PASSED', 'jobId': job_id,
+                      'responseLoss': 'Producer deliberately discarded the successful acceptance response.'})
+
+        missing = self.worker('missing-handler', unrelated=True)
+        time.sleep(0.75)  # Deliberate observation window; a positive start is separately file-barrier controlled.
+        assert self.attempts(job_id) == []
+        assert self.snapshot(job_id)['state'] == 'Accepted'
+        self.stop(missing)
+        cases.append({'name': 'missing-handler-preserves-accepted-job', 'state': 'PASSED', 'jobId': job_id})
+
+        worker = self.worker('report-worker')
+        complete = self.terminal(job_id)
+        result_id = self.check_report(complete, report)
+        assert len(self.attempts(job_id)) == 1
+        self.stop(worker)
+        # A fresh inspector process and a fresh producer both observe retained responsibility/result.
+        assert self.check_report(self.snapshot(job_id), report) == result_id
+        assert self.submit('lost-response', report)['jobId'] == job_id
+        cases.append({'name': 'useful-typed-result-and-restart-inspection', 'state': 'PASSED',
+                      'jobId': job_id, 'resultId': result_id, 'subtotal': 52.0})
+
+        # A hold before permission prevents entry; a hold after durable permission
+        # allows the already-running report to finish and preserves the next JobId.
+        assert self.call('pause', holdId='before-start', operationId='pause-before')['value']['status'] == 'Applied'
+        held_report = self.report('held-report', blocked=True)
+        held = self.submit('held-report', held_report)['jobId']
+        worker = self.worker('pause-worker')
+        time.sleep(0.75)
+        assert self.attempts(held) == []
+        hold = next(item for item in self.call('holds')['value']['items'] if item['holdId'] == 'before-start')
+        assert self.call('release', holdId=hold['holdId'], expectedRevision=hold['revision'],
+                         operationId='release-before')['value']['status'] == 'Applied'
+        self.until(lambda: list(Path(held_report['entryDirectory']).glob('*.json')), 'physical handler entry')
+        granted = self.snapshot(held)['activeAttempt']
+        assert granted is not None
+        assert self.call('pause', holdId='after-start', operationId='pause-after')['value']['status'] == 'Applied'
+        Path(held_report['releaseFile']).touch()
+        self.check_report(self.terminal(held), held_report)
+        next_report = self.report('accepted-while-paused')
+        following = self.submit('accepted-while-paused', next_report)['jobId']
+        time.sleep(0.75)
+        assert self.attempts(following) == []
+        hold = next(item for item in self.call('holds')['value']['items'] if item['holdId'] == 'after-start')
+        assert self.call('release', holdId=hold['holdId'], expectedRevision=hold['revision'],
+                         operationId='release-after')['value']['status'] == 'Applied'
+        self.check_report(self.terminal(following), next_report)
+        self.stop(worker)
+        cases.append({'name': 'durable-pause-cutoff-and-accept-while-held', 'state': 'PASSED',
+                      'permittedJobId': held, 'laterJobId': following, 'grantedAttemptId': granted['attemptId']})
+
+        recovery_report = self.report('crash-recovery', blocked=True)
+        recover = self.submit('crash-recovery', recovery_report)['jobId']
+        crashed = self.worker('crashing-worker')
+        entries = Path(recovery_report['entryDirectory'])
+        self.until(lambda: list(entries.glob('*.json')), 'first physical entry')
+        old_lease = self.snapshot(recover)['activeAttempt']
+        assert old_lease is not None
+        # SIGKILL deliberately bypasses drain. We only signal this Popen-created session.
+        os.killpg(crashed[0].pid, signal.SIGKILL)
+        crashed[0].wait(timeout=5)
+        successor = self.worker('successor-worker')
+        self.until(lambda: len(list(entries.glob('*.json'))) >= 2, 'successor entry after lease expiry')
+        Path(recovery_report['releaseFile']).touch()
+        recovered = self.terminal(recover)
+        recovered_id = self.check_report(recovered, recovery_report)
+        attempts = self.attempts(recover)
+        assert len(attempts) == 2 and attempts[0]['lease']['attemptId'] != attempts[1]['lease']['attemptId']
+        keys = [json.loads(path.read_text())['idempotencyKey'] for path in entries.glob('*.json')]
+        assert len(keys) == 2 and len(set(keys)) == 1
+        stale = self.call('complete-stale', lease=old_lease, receiptId='stale-physical-receipt')
+        assert stale['ok'] and stale['value']['status'] == 'LeaseLost'
+        assert self.check_report(self.snapshot(recover), recovery_report) == recovered_id
+        self.stop(successor)
+        cases.append({'name': 'killed-worker-recovery-stale-fence-stable-effect-key', 'state': 'PASSED',
+                      'jobId': recover, 'resultId': recovered_id, 'attempts': 2,
+                      'oldAttemptId': old_lease['attemptId'], 'physicalEffectDeduplication': 'NOT RUN'})
+        return cases
+
+    def close(self):
+        errors = []
+        for process, log in reversed(self.processes):
+            try:
+                terminate_owned(process)
+            except (OSError, subprocess.SubprocessError) as error:
+                errors.append(type(error).__name__)
+            finally:
+                log.close()
+        if self.container is not None:
+            try:
+                self.docker(['rm', '--force', self.container])
+            except (OSError, subprocess.SubprocessError) as error:
+                errors.append(type(error).__name__)
+        if errors:
+            raise RuntimeError('Owned resource cleanup failed: ' + ', '.join(errors))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    if not __debug__:
+        parser.error('Python optimization disables witness assertions. Run without -O/PYTHONOPTIMIZE.')
+    parser.add_argument('--entry', required=True, type=Path)
+    parser.add_argument('--evidence-dir', required=True, type=Path)
+    parser.add_argument('--provider', required=True, choices=('sqlite', 'postgresql'))
+    args = parser.parse_args()
+    entry = args.entry.resolve(strict=True)
+    evidence = args.evidence_dir.resolve()
+    evidence.mkdir(parents=True, exist_ok=False)
+    witness = Witness(entry, evidence, args.provider)
+    def stop_requested(_signum, _frame):
+        raise RuntimeError('Witness controller received a stop request; cleaning owned resources.')
+    signal.signal(signal.SIGTERM, stop_requested)
+    receipt = {'schemaVersion': 1, 'provider': args.provider, 'entryAssembly': str(entry),
+               'entrySha256': hashlib.sha256(entry.read_bytes()).hexdigest(),
+               'controllerSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+               'state': 'NOT RUN', 'fullJobsAcceptanceState': 'NOT RUN', 'cases': []}
+    exit_code = 1
+    try:
+        receipt['cases'] = witness.run()
+        receipt['state'] = 'PASSED'
+        exit_code = 0
+    except (AssertionError, OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        receipt['state'] = 'FAILED'
+        receipt['error'] = str(error) or type(error).__name__
+        print(receipt['error'], file=sys.stderr)
+    finally:
+        try:
+            witness.close()
+            receipt['ownedResourcesCleaned'] = True
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            receipt['ownedResourcesCleaned'] = False
+            receipt['cleanupError'] = type(error).__name__
+            receipt['state'] = 'FAILED'
+            exit_code = 1
+        receipt['processes'] = witness.steps
+        receipt['cases'] = witness.cases
+        receipt['providerVersion'] = getattr(witness, 'provider_version', None)
+        write_json(evidence / 'witness-receipt.json', receipt)
+    return exit_code
+
+
+if __name__ == '__main__':
+    sys.exit(main())

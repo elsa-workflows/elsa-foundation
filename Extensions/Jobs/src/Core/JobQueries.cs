@@ -1,11 +1,11 @@
 namespace Elsa.Jobs.Core;
 
-/// <summary>Bounded inspection of accepted state; attempt and physical receipt histories are separately paged.</summary>
+/// <summary>Bounded inspection of accepted state. Unreadable/unsupported requests retain validated metadata and a safe unavailable diagnostic; reads never fabricate executable content.</summary>
 public sealed record JobSnapshot(
     JobScope Scope,
     string JobId,
     string RequestSha256,
-    JobRequest Request,
+    JobRequest? Request,
     JobState State,
     long Revision,
     DateTimeOffset AcceptedAt,
@@ -14,7 +14,8 @@ public sealed record JobSnapshot(
     JobResult? Result,
     JobProgress? Progress,
     bool CancellationRequested,
-    string? RetriedFromJobId);
+    string? RetriedFromJobId,
+    JobDiagnostic? UnavailableDiagnostic = null);
 
 /// <summary>Bounded cursor request; providers bind opaque cursors to exact scope and filters.</summary>
 public sealed record JobPageRequest(
