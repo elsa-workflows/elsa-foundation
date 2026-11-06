@@ -2209,7 +2209,6 @@ function resolveContributionAvailability<T>(
     return { state: "hidden", reason: `Feature ${featureId} is disabled.`, source: "feature" };
   }
 
-  const runtimeAvailability = normalizeContributionDecision(readContributionAvailability(contribution, listOptions.context), "runtime");
   const registryPolicyDecision = normalizeContributionDecision(registryOptions.hostPolicy?.(policyContext), "host-policy");
   if (registryPolicyDecision.state !== "available") {
     return registryPolicyDecision;
@@ -2220,7 +2219,8 @@ function resolveContributionAvailability<T>(
     return listPolicyDecision;
   }
 
-  return runtimeAvailability;
+  // A host veto is an admission boundary: unavailable modules must not run an availability callback.
+  return normalizeContributionDecision(readContributionAvailability(contribution, listOptions.context), "runtime");
 }
 
 function normalizeContributionDecision(

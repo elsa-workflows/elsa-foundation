@@ -26,6 +26,7 @@ import {
 } from "../sdk";
 import { dialogController } from "./dialogs";
 import { notificationController } from "./notifications";
+import { initializeAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
 
 type RegistryItem<T> = T extends StudioContributionRegistry<infer Item> ? Item : never;
 
@@ -56,6 +57,7 @@ export function createStudioRegistry(
   const dashboardWidgets = createDashboardWidgetRegistry({hostPolicy});
   // One dispatcher/availability instance serves both names during producer migration.
   const agent = createAgentRegistry({hostPolicy});
+  initializeAgentRegistryGeneration(agent);
   const ai = { dispatchPrompt: agent.dispatchPrompt, onPrompt: agent.onPrompt, publishPromptResult: agent.publishPromptResult, onPromptResult: agent.onPromptResult };
 
   return {

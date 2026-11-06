@@ -155,6 +155,17 @@ describe("studio registry", () => {
     });
   });
 
+  it.each(["registry", "list"])("does not invoke runtime availability after a %s host veto", veto => {
+    const availability = vi.fn(() => true);
+    const registry = createContributionRegistry<{ id: string; availability: () => boolean }>({ hostPolicy: () => veto !== "registry" });
+    registry.add({ id: "source", availability });
+    expect(registry.compose({ includeHidden: true, hostPolicy: () => veto !== "list" })[0].availability.state).toBe("hidden");
+    expect(availability).not.toHaveBeenCalled();
+    const allowed = createContributionRegistry<{ id: string; availability: () => boolean }>({ hostPolicy: () => true });
+    allowed.add({ id: "source", availability }); expect(allowed.list()).toHaveLength(1);
+    expect(availability).toHaveBeenCalledTimes(1);
+  });
+
   it("runs Slot Owner rules before Host Policy vetoes", () => {
     const registry = createContributionRegistry<{ id: string; moduleId: string; component?: () => null }>({
       slot: defineStudioSlot({

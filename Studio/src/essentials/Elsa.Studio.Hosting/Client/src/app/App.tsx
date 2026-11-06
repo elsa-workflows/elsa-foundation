@@ -52,6 +52,7 @@ import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { disposeStudioModuleInstance, initializeStudioModules, registerStudioModuleInstances, type StudioLoadedModule } from "./loader";
+import { isAgentRegistryCurrent, retireAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
 import type {StudioConnectionController, StudioManagedBackendSession, StudioShellContribution} from "../sdk";
 import {watchStudioModuleChanges} from "./moduleReset";
 import {ConfiguredBackendConnection,reloadConnectionOnPageRestore} from "./connection";
@@ -310,6 +311,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     if (!manifestResponse) return;
 
     let disposed = false;
+    let loadingRegistry: ElsaStudioModuleApi | undefined;
 
     async function loadRegistry(manifest: StudioModulesResponse) {
       try {
@@ -341,6 +343,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
             enabledFeatures
           }
         });
+        loadingRegistry = registry;
         registerBuiltInSettingEditors(registry);
 
         for (const diagnostic of manifest.diagnostics) {
@@ -348,6 +351,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         }
 
         await registerStudioModuleInstances(modules,registry);
+        if (disposed || !isAgentRegistryCurrent(registry)) { retireAgentRegistryGeneration(registry); return; }
         registerBuiltInContributions(registry);
 
         if (!disposed) {
@@ -356,6 +360,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
           setState("ready");
         }
       } catch (e) {
+        if (loadingRegistry) retireAgentRegistryGeneration(loadingRegistry);
         if (!disposed) {
           setError(e instanceof Error ? e.message : String(e));
           setState("failed");
@@ -367,6 +372,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
 
     return () => {
       disposed = true;
+      if (loadingRegistry) retireAgentRegistryGeneration(loadingRegistry);
     };
     // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
     // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.
