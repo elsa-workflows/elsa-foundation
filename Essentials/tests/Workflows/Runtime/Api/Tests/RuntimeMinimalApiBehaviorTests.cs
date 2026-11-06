@@ -22,7 +22,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -244,7 +244,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     /// gate as a bare 415, not as the 400 problem document every other required mode produces.
     /// <para>
     /// The coverage used to live in the in-tree framework's own suite, which went away when the
-    /// framework moved to NativeEndpoints. Without a test here, the five endpoints depend on a
+    /// framework moved to MinimalEndpoints. Without a test here, the five endpoints depend on a
     /// package behaviour that nothing in this repository checks, and a future package change could
     /// move them from 415 to 400 silently.
     /// </para>
