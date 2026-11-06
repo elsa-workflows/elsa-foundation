@@ -4,6 +4,13 @@ Canonical feature: [#3586](https://github.com/elsa-workflows/elsa-foundation/iss
 
 This register covers the complete first release. [The M1 receipt](evidence/m1-packaged-standalone.json) qualifies the standalone package boundary at `b706023ddd456f25a37e20d1d43d681c2d1597c5` on SQLite and PostgreSQL. J01 is passed at that exact source; partially exercised journeys are INCOMPLETE, and all other product journeys remain NOT RUN. Every final candidate still requires current-source qualification. Design review, test discovery, a passing fixture or an illustrative host cannot by itself pass a product journey.
 
+The [M2 checkpoint](evidence/m2-packaged-scheduling-recovery.json) additionally qualifies27standalone
+scheduling/recovery cases on each immutable profile at `49a49d36b4`. It records the exact source boundary,
+provider118whole, explicit prior-source wholes/mutation controls, four intended negative failures,
+package/deployed-byte inventories, original failed phase and separate cleanup remediation, and nonzero
+warnings. These are source-bounded milestone results. The broader rows below retain their full-product
+requirements, including actual models and operations; final candidate qualification is still required.
+
 The initial durable deployment profiles are PostgreSQL with separate worker processes for deployment-wide guarantees, and SQLite for a local host with restart recovery. The M1 receipt covers only its five named standalone cases on those profiles; broader guarantees require their own qualification. SQLite evidence must not be presented as multi-node qualification. Any additional provider or topology needs its own demonstrated result before documentation claims its guarantees.
 
 Each executed receipt must identify the exact source/commit, computed package versions, dependency closure, provider/version, database configuration, process topology, scenario inputs and durable identities, observed transitions, assertions and retained artifacts. Record passed, failed, skipped, cancelled, unavailable and incomplete outcomes separately. Retain mutation or interruption controls where required to show that the observed protection is effective.

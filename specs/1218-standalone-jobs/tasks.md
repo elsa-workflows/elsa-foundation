@@ -3,9 +3,18 @@
 **Input**: [spec](spec.md), [provisional plan](plan.md), [research](research.md),
 [data model](data-model.md), [lifecycle](contracts/job-lifecycle.md) and [acceptance matrix](acceptance-matrix.md).
 
-**Status**: M1 packaged standalone checkpoint passed at b706023ddd on both profiles; M2 scheduling and failure controls are implemented and awaiting current-candidate Azure qualification. Final feature delivery remains incomplete.
-Core/runtime source checks pass 45/45 and real SQLite/PostgreSQL provider checks pass 68/68, with exact discovery/execution identity matches. T011 ordinary-key expiry and pending-obligation controls remain open after independent checkpoint audit; durable-origin replay does not cover those branches. The eight-module packaged boundary and five standalone cases are qualified by evidence/m1-packaged-standalone.json; complete deployment/model guarantees remain open. Tests are risk-based; application TDD cadence is undeclared,
-so the template does not invent it. Required behavioral red/green bite-proofs remain obligations.
+**Status**: M2 standalone scheduling/recovery checkpoint passed with explicit source boundaries in
+[evidence/m2-packaged-scheduling-recovery.json](evidence/m2-packaged-scheduling-recovery.json).
+At `49a49d36b4`, both immutable PackageReference profiles passed27cases and the real-engine provider
+whole passed118/118. Tasks78, workflow scheduling108, Jobs runtime70 and three provider mutation
+controls remain executions at prior source `289fb17936`; the receipt records the exact two-file difference.
+Ordinary-key expiry and pending-obligation controls now pass on both engines, closing the reopened T011.
+The original failed phase, separate cleanup remediation, all raw artifacts and actual compiler/audit
+warnings remain explicit. M3 native/BPMN and M4 API/Studio/audit/secrets source is unqualified;
+final source acceptance, review, CI, merge and resulting-main remain incomplete. Tests are risk-based;
+application TDD cadence is undeclared, so the template does not invent it. T018 retains an explicit
+worker application-clock skew obligation; provider-time cases do not by themselves prove different
+application clocks on separate workers.
 
 ## M0 — Setup and design gates
 
@@ -27,18 +36,18 @@ so the template does not invent it. Required behavioral red/green bite-proofs re
 
 - [x] T009 [US1] Implement pinned handler registration, idempotent durable client and bounded request/result dispatch in `Extensions/Jobs/src/Elsa.Jobs/`.
 - [x] T010 [US1] Implement independent worker hosting, fenced lease renewal, physical receipts and terminal/result responsibility in `Extensions/Jobs/src/Elsa.Jobs/` and its job-owned EF transitions.
-- [ ] T011 [US1] Cover equal/conflicting ordinary-key replay/expiry/cleanup, pending-obligation extension, separately protected durable-origin receipts/tombstones, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
+- [x] T011 [US1] Cover equal/conflicting ordinary-key replay/expiry/cleanup, pending-obligation extension, separately protected durable-origin receipts/tombstones, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
 - [x] T012 [US1] Add immutable clean PackageReference producer/worker witness in `tools/jobs/`; record dependency closure, actual versions/hashes and useful result/restart evidence in `specs/1218-standalone-jobs/evidence/`.
 
 ## M2 — US1 schedules and US2 outage controls
 
 **Goal**: every attempt uses one durable pause/concurrency/retry authority; real nodes preserve work.
 
-- [ ] T013 [US1] Implement delayed/UTC interval/cron schedules and atomic occurrence/cursor responsibility under `Extensions/Jobs/src/Elsa.Jobs/` and `src/Persistence/EntityFrameworkCore/`; reuse agreed arithmetic without workflow activation state.
-- [ ] T014 [US1] Cover default catch-up, bounded explicit replay, pause/materialization/edit races and preservation of accepted jobs in `Extensions/Jobs/tests/Persistence/ProviderTests/`.
-- [ ] T015 [US2] Implement revisioned four-scope holds, atomic start permissions and leased queue/type/instance/definition limits under `Extensions/Jobs/src/Persistence/EntityFrameworkCore/`; index eligible discovery to skip held shared-queue work.
-- [ ] T016 [US2] Implement durable retry/backoff, cancellation/absolute timeouts, graceful shutdown and linked authorized manual retry in `Extensions/Jobs/src/Elsa.Jobs/`; retain late physical receipts and local slots until exit.
-- [ ] T017 [US2] Prove scope overlaps, every retry path, future/version coverage, pause/start ordering, capacity and unrelated same-queue progress in `Extensions/Jobs/tests/Persistence/ProviderTests/` with independent PostgreSQL processes and SQLite restart profile.
+- [x] T013 [US1] Implement delayed/UTC interval/cron schedules and atomic occurrence/cursor responsibility under `Extensions/Jobs/src/Elsa.Jobs/` and `src/Persistence/EntityFrameworkCore/`; reuse agreed arithmetic without workflow activation state.
+- [x] T014 [US1] Cover default catch-up, bounded explicit replay, pause/materialization/edit races and preservation of accepted jobs in `Extensions/Jobs/tests/Persistence/ProviderTests/`.
+- [x] T015 [US2] Implement revisioned four-scope holds, atomic start permissions and leased queue/type/instance/definition limits under `Extensions/Jobs/src/Persistence/EntityFrameworkCore/`; index eligible discovery to skip held shared-queue work.
+- [x] T016 [US2] Implement durable retry/backoff, cancellation/absolute timeouts, graceful shutdown and linked authorized manual retry in `Extensions/Jobs/src/Elsa.Jobs/`; retain late physical receipts and local slots until exit.
+- [x] T017 [US2] Prove scope overlaps, every retry path, future/version coverage, pause/start ordering, capacity and unrelated same-queue progress in `Extensions/Jobs/tests/Persistence/ProviderTests/` with independent PostgreSQL processes and SQLite restart profile.
 - [ ] T018 [US2] Prove stale-owner/lease/ackloss/clock-skew/timeout/cancel/shutdown failure controls and downstream idempotency witness in `tools/jobs/` and `Extensions/Jobs/tests/Integration/`; label physical-overlap limits precisely.
 
 ## M3 — US3 model-owned integration
@@ -56,7 +65,7 @@ so the template does not invent it. Required behavioral red/green bite-proofs re
 
 - [ ] T023 [US4] Implement bounded CQS operations endpoints, trusted tenant/permission checks and audit/idempotent mutations under `Extensions/Jobs/src/Api/`; update actual endpoint/public API baselines.
 - [ ] T024 [US4] Cover cross-tenant IDs/cursors/associations, denied mutations/results, shared-worker tenant/secret-binding isolation across retry/restart, redaction, retention and linked-JobId manual-retry recovery under `Extensions/Jobs/tests/Tests/` and `tests/Integration/`.
-- [ ] T025 [US4] Implement optional Jobs module collections/detail/schedule editor and pause/recovery flows under `Extensions/Jobs/src/Studio/` using current shared controls and `specs/1218-standalone-jobs/ux-acceptance.md`.
+- [ ] T025 [US4] Implement optional Jobs module collections/detail/schedule editor and pause/recovery flows under `Extensions/Jobs/studio/Elsa.Studio.Jobs/` using current shared controls and `specs/1218-standalone-jobs/ux-acceptance.md`.
 - [ ] T026 [US4] Add feature-specific actual composed journeys under `tools/ux-acceptance/`, including empty/populated/loading/failure/denied, all holds, result/parent links, keyboard/focus, themes and narrow states; retain downloadable current-head artifacts.
 - [ ] T027 [US4] Independently inspect the composed screenshots/traces and risky live interactions; fix/retest findings and post the exact UX receipt in the existing PR review loop.
 
