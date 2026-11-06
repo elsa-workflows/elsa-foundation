@@ -43,6 +43,21 @@
           "sha256": "59b77914f03278b7cd0ecb31177fd04155bcbb81dcdf05621e5d0f7650026f0f"
         }
       }
+    },
+    {
+      "name": "column-consistency",
+      "productSource": "559af440d039f3b7af761566fe77e36ea888a256",
+      "mutation": "Run the four new declaration/unique-symbol tests against pre-fix editor; then restore corrected editor.",
+      "failedAssertions": 4,
+      "restoredWholeSuitePassed": 40,
+      "logs": {
+        "column-consistency-red.log": {
+          "sha256": "173595e620529c26d0bbc318a35fb9f4a700d08e48a512ed3265720eb7286728"
+        },
+        "column-consistency-green.log": {
+          "sha256": "5e8fa4a6b193fa92de5e5404989f55716bd8c8b6d80f57cd5b20faf94889ac21"
+        }
+      }
     }
   ]
 }

@@ -1,6 +1,6 @@
 # Bounded DMN interchange and differential witness
 
-The committed fixture demonstrates actual editing in both directions and 56 finite evaluator cases. All 56 Elsa expectations passed on engine source `d9238f05e206dc0cda76afe2dbda0cdb7cad833b`; 27 reference outcomes were equivalent and 29 differed or fell outside the selected profile. These counts describe this fixture, not a DMN conformance level or TCK result. The independent engine is an investigative development dependency, never a product dependency or correctness oracle.
+The committed fixture demonstrates actual editing in both directions and 56 finite evaluator cases. All 56 Elsa expectations passed on engine/editor source `559af440d039f3b7af761566fe77e36ea888a256`; 27 reference outcomes were equivalent and 29 differed or fell outside the selected profile. These counts describe this fixture, not a DMN conformance level or TCK result. The independent engine is an investigative development dependency, never a product dependency or correctness oracle.
 
 ## Pinned tools and licenses
 
@@ -53,3 +53,7 @@ CHROMIUM_EXECUTABLE=/absolute/path/to/chromium python3 specs/1195-business-decis
 ```
 
 The script refuses to overwrite an existing output or write generated dependencies inside the checkout. It copies this fixture, runs `npm ci --ignore-scripts`, executes the actual browser mutations, restores the pinned reference project with `--locked-mode`, and runs the finite matrix against the checkout's actual engine. A clean private reproduction passed all 56 cases. Newly generated Studio IDs vary; compare behavior, covered identity preservation within each run and source/tool hashes instead of expecting random IDs to match earlier captures. A changed product source or browser is a new evidence identity.
+
+## Imported declaration mutation regression
+
+The actual browser-bundled Studio utility additionally produces five documents checked by the real compiler/evaluator in `editor-mutations.json`: input rename, input type change, output scalar type change, scalar-to-record output shape and unused-symbol generation after a rename. All five compile and evaluate successfully with exact expected results. These are editor/engine integration checks, separate from the 56-case reference differential. A declaration-backed input deletion explicitly refuses before producing changed XML, preserving its references/diagrams for editing in a DMN modeler. The unit control fails four tests with the earlier utility and passes the complete 40-test module suite after restoration.

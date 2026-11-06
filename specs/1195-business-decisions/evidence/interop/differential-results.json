@@ -2732,7 +2732,7 @@
     {
       "id": "roundtrip-product-1000",
       "file": "roundtrip/product.dmn",
-      "sourceSha256": "ff75466541c7b3800704e11050a00abdcbf4c13357c70d5b72d1bcd4b47c5cce",
+      "sourceSha256": "fe69934b7ff07402345c37acfdbba23209770c40b65603b12555fd965b200b61",
       "expectedStatus": "Success",
       "expectedResult": {
         "kind": "string",
@@ -2748,18 +2748,18 @@
         "diagnostics": [],
         "trace": [
           {
-            "ruleId": "decision_3481ded697484b41884d7d8a1394cdaa_rule",
+            "ruleId": "decision_68a9dd9ac6ac45c38e339c7470250b53_rule",
             "matched": true,
             "selected": true,
             "cells": [
               {
-                "inputId": "decision_3481ded697484b41884d7d8a1394cdaa_input",
+                "inputId": "decision_68a9dd9ac6ac45c38e339c7470250b53_input",
                 "truth": "true"
               }
             ]
           }
         ],
-        "contentHash": "da453b44a75c0340325cb349e0f74c1149cc9a3f7eb2fead1739886472b83142"
+        "contentHash": "1b1d6445cb5d633e229e7bf0a275d76ce9fc8a28a0da543782d8510b53f9bd61"
       },
       "elsaPasses": true,
       "reference": {
@@ -2778,7 +2778,7 @@
     {
       "id": "roundtrip-forward-1000",
       "file": "roundtrip/forward.dmn",
-      "sourceSha256": "e978ef2ec765a77daa73a535574c0fec678868661fd55b90fc61828a25a577ab",
+      "sourceSha256": "d1478e02fae7e87a3a185c4f3a3b0d68b41f7fdbd77886a7cd504321f1b34fdd",
       "expectedStatus": "Success",
       "expectedResult": {
         "kind": "string",
@@ -2794,18 +2794,18 @@
         "diagnostics": [],
         "trace": [
           {
-            "ruleId": "decision_3481ded697484b41884d7d8a1394cdaa_rule",
+            "ruleId": "decision_68a9dd9ac6ac45c38e339c7470250b53_rule",
             "matched": true,
             "selected": true,
             "cells": [
               {
-                "inputId": "decision_3481ded697484b41884d7d8a1394cdaa_input",
+                "inputId": "decision_68a9dd9ac6ac45c38e339c7470250b53_input",
                 "truth": "true"
               }
             ]
           }
         ],
-        "contentHash": "93e07353c53b2cdac4177bd2cd84ab0b7cf72c54cd6284e636e4a85f3a8b4a49"
+        "contentHash": "a845614f0b7e20c8f448961c823323cc717fcdd2839ae606a1f4fe529b70dda5"
       },
       "elsaPasses": true,
       "reference": {
@@ -2824,7 +2824,7 @@
     {
       "id": "roundtrip-forward-1000.01",
       "file": "roundtrip/forward.dmn",
-      "sourceSha256": "e978ef2ec765a77daa73a535574c0fec678868661fd55b90fc61828a25a577ab",
+      "sourceSha256": "d1478e02fae7e87a3a185c4f3a3b0d68b41f7fdbd77886a7cd504321f1b34fdd",
       "expectedStatus": "NoMatch",
       "expectedResult": {
         "kind": "null",
@@ -2840,18 +2840,18 @@
         "diagnostics": [],
         "trace": [
           {
-            "ruleId": "decision_3481ded697484b41884d7d8a1394cdaa_rule",
+            "ruleId": "decision_68a9dd9ac6ac45c38e339c7470250b53_rule",
             "matched": false,
             "selected": false,
             "cells": [
               {
-                "inputId": "decision_3481ded697484b41884d7d8a1394cdaa_input",
+                "inputId": "decision_68a9dd9ac6ac45c38e339c7470250b53_input",
                 "truth": "false"
               }
             ]
           }
         ],
-        "contentHash": "93e07353c53b2cdac4177bd2cd84ab0b7cf72c54cd6284e636e4a85f3a8b4a49"
+        "contentHash": "a845614f0b7e20c8f448961c823323cc717fcdd2839ae606a1f4fe529b70dda5"
       },
       "elsaPasses": true,
       "reference": {
@@ -2927,7 +2927,7 @@
     {
       "id": "roundtrip-nativeEdited-1000",
       "file": "roundtrip/nativeEdited.dmn",
-      "sourceSha256": "c79c0d0e3c296420c05b1887cfc97ac10f71b1b1949aeacb35c5610d6a70d7b2",
+      "sourceSha256": "a0099eeec3906ba2c1294b332625334a0770b5cd9fbff626489b3c1ff51a19cb",
       "expectedStatus": "Success",
       "expectedResult": {
         "kind": "string",
@@ -2984,7 +2984,7 @@
     {
       "id": "roundtrip-reverse-1000",
       "file": "roundtrip/reverse.dmn",
-      "sourceSha256": "179f522f59eb42e6d54d26c913b22a6927671012604e705b34b08dd5c19465e6",
+      "sourceSha256": "5c0a2ebd67e7bbeea9407f65716dc103c88ff91debc7efbb2c487609248d0815",
       "expectedStatus": "Success",
       "expectedResult": {
         "kind": "string",
@@ -3041,7 +3041,7 @@
     {
       "id": "roundtrip-reverse-1000.01",
       "file": "roundtrip/reverse.dmn",
-      "sourceSha256": "179f522f59eb42e6d54d26c913b22a6927671012604e705b34b08dd5c19465e6",
+      "sourceSha256": "5c0a2ebd67e7bbeea9407f65716dc103c88ff91debc7efbb2c487609248d0815",
       "expectedStatus": "Success",
       "expectedResult": {
         "kind": "string",
@@ -3129,7 +3129,7 @@
     {
       "id": "roundtrip-opaqueEdited",
       "file": "roundtrip/opaqueEdited.dmn",
-      "sourceSha256": "da64247a87659533a520c2995c256b123942a6116a27d29da9d9c8e2d2672ff7",
+      "sourceSha256": "1c8c91bc7c416e3a7d03e87df434a0d4fc0dfc8201335f321309ae46b71818c4",
       "expectedStatus": "CompilationRefused",
       "expectedResult": null,
       "normative": "Unknown opaque extension preserved by native edit but cannot execute/publish under closed profile",
@@ -3160,7 +3160,7 @@
     {
       "id": "roundtrip-opaqueExternal",
       "file": "roundtrip/opaqueExternal.dmn",
-      "sourceSha256": "e7094702529074153432759a5b0d80a6c77bfbce8349e87972fecfc5996b7b73",
+      "sourceSha256": "e6147cef6d941166a36670d8e9cbfa7e49afc7a82027979a3eb56d1d9d6575a9",
       "expectedStatus": "CompilationRefused",
       "expectedResult": null,
       "normative": "Unknown opaque extension preserved by native edit but cannot execute/publish under closed profile",
