@@ -13,12 +13,13 @@ public sealed class ActivityGraphExpressionProjectionTests
     [Theory]
     [InlineData("1")]
     [InlineData("2")]
-    public void Registered_graph_contribution_projects_only_public_inputs_graph_variables_and_authored_body(string schema)
+    public void Registered_graph_strategy_projects_only_public_inputs_graph_variables_and_authored_body(string schema)
     {
         var state = State("elsa.activity-graph", schema);
         using var services = Services();
         var projection = Assert.Single(services.GetServices<IActivityDraftExpressionGraphProjection>());
 
+        Assert.Equal("elsa.activity-graph", projection.ProviderKey);
         var graph = projection.TryProject(state);
 
         Assert.NotNull(graph);
@@ -35,7 +36,7 @@ public sealed class ActivityGraphExpressionProjectionTests
     [Theory]
     [InlineData("another-provider", "1")]
     [InlineData("elsa.activity-graph", "3")]
-    public void Other_providers_and_unsupported_schemas_do_not_contribute_a_graph(string provider, string schema)
+    public void Other_providers_and_unsupported_schemas_have_no_projection(string provider, string schema)
     {
         using var services = Services();
         Assert.Null(Assert.Single(services.GetServices<IActivityDraftExpressionGraphProjection>()).TryProject(State(provider, schema)));

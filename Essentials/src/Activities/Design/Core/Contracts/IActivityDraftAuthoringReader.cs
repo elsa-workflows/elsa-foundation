@@ -4,7 +4,8 @@ namespace Elsa.Activities.Design.Core.Contracts;
 
 /// <summary>
 /// Reads persisted draft source visible to the current actor, including provider-payload permission.
-/// This is a single implementation authority. Consumers fail closed when none or several are installed.
+/// This is a scoped single-implementation replacement authority; its owning feature rejects duplicates at startup.
+/// Optional absence is valid. Consumers fail closed when none or several are installed.
 /// No principal, permission, tenant or draft facts are accepted from a caller.
 /// </summary>
 public interface IActivityDraftAuthoringReader

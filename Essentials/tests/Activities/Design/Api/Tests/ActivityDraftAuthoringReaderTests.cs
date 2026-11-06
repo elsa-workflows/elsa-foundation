@@ -4,6 +4,8 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Tasks.Core;
 using System.Text.Json;
 using Xunit;
 
@@ -11,6 +13,52 @@ namespace Elsa.Activities.Design.Api.Tests;
 
 public sealed class ActivityDraftAuthoringReaderTests
 {
+    [Fact]
+    public void Duplicate_readers_fail_configuration_without_constructing_request_services()
+    {
+        var services = new ServiceCollection();
+        AddReader(services);
+        AddReader(services);
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivitiesDesignApiFeature().ConfigureServices(services));
+        Assert.Contains("IActivityDraftAuthoringReader has multiple registrations", error.Message);
+    }
+
+    [Fact]
+    public async Task Late_duplicate_readers_fail_startup_but_optional_absence_is_valid()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        AddReader(services);
+        var task = Validator(services);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => task.ExecuteAsync(CancellationToken.None));
+        Assert.Contains("IActivityDraftAuthoringReader has multiple registrations", error.Message);
+        services.RemoveAll<IActivityDraftAuthoringReader>();
+        await task.ExecuteAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Copied_child_shell_rebinds_reader_validation_to_its_own_collection()
+    {
+        var parent = new ServiceCollection();
+        new ActivitiesDesignApiFeature().ConfigureServices(parent);
+        var child = new ServiceCollection();
+        foreach (var descriptor in parent) ((IServiceCollection)child).Add(descriptor);
+        new ActivitiesDesignApiFeature().ConfigureServices(child);
+        new ActivitiesDesignApiFeature().ConfigureServices(child);
+        AddReader(parent);
+        await Validator(child).ExecuteAsync(CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Validator(parent).ExecuteAsync(CancellationToken.None));
+        AddReader(child);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Validator(child).ExecuteAsync(CancellationToken.None));
+    }
+
+    private static void AddReader(IServiceCollection services) => services.AddScoped<IActivityDraftAuthoringReader>(_ =>
+        throw new Xunit.Sdk.XunitException("Startup validation must not construct a request reader."));
+
+    private static IStartupTask Validator(IServiceCollection services) => services
+        .Where(descriptor => descriptor.ServiceType == typeof(IStartupTask)).Select(descriptor => descriptor.ImplementationInstance)
+        .OfType<IStartupTask>().Single(task => task.GetType().Name == "ActivityAuthoringCatalogStartupTask");
+
     [Theory]
     [InlineData(true, "tenant-1", true, true)]
     [InlineData(false, "tenant-1", true, false)]

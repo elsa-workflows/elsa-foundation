@@ -11,10 +11,11 @@ namespace Elsa.Activities.Graph.Design.Services;
 internal sealed class ActivityGraphExpressionProjection : IActivityDraftExpressionGraphProjection
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    public string ProviderKey => "elsa.activity-graph";
 
     public WorkflowDefinitionState? TryProject(ActivityDefinitionDraftState state)
     {
-        if (state.Provider.ProviderKey != "elsa.activity-graph" || state.Provider.SchemaVersion is not ("1" or "2") ||
+        if (state.Provider.ProviderKey != ProviderKey || state.Provider.SchemaVersion is not ("1" or "2") ||
             !ActivityGraphManifest.TryParse(state.Provider.SchemaVersion, state.Provider.Payload, out var graph, out _))
             return null;
         try

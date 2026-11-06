@@ -4,7 +4,8 @@ namespace Elsa.Workflows.Design.Core.Contracts;
 
 /// <summary>
 /// Single-implementation, scoped replacement for Design expression operations over an authoritative location.
-/// HTTP owners fail closed with Unavailable when no or multiple implementations are composed.
+/// The owning feature rejects duplicate registrations at startup; optional absence is valid.
+/// HTTP owners also fail closed with Unavailable when no or multiple implementations are composed.
 /// </summary>
 public interface IExpressionToolingOperations
 {

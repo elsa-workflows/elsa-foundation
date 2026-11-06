@@ -75,8 +75,8 @@ public sealed class ActivityExpressionToolingEndpointTests
         var operations = new Operations();
         var services = new ServiceCollection().AddLogging().AddRouting()
             .AddSingleton<IActivityAuthoringContextAsync>(new Actor()).AddSingleton<IExpressionAuthoringAuthorizationPolicy>(new Policy());
-        for (var index = 0; index < operationCount; index++) services.AddSingleton<IExpressionToolingOperations>(operations);
         new ActivitiesDesignApiFeature().ConfigureServices(services);
+        for (var index = 0; index < operationCount; index++) services.AddSingleton<IExpressionToolingOperations>(operations);
         await using var provider = services.BuildServiceProvider();
         var endpoint = Map(provider).Single(item => item.RoutePattern.RawText == "/design/activities/expression-tooling/context");
         var context = new DefaultHttpContext { RequestServices = provider };
@@ -154,6 +154,7 @@ public sealed class ActivityExpressionToolingEndpointTests
 
     private sealed class Projection : IActivityDraftExpressionGraphProjection
     {
+        public string ProviderKey => "elsa.activity-graph";
         public WorkflowDefinitionState? TryProject(ActivityDefinitionDraftState state) => throw new NotSupportedException();
     }
 

@@ -198,18 +198,23 @@ changing existing constructors or accepting activity ownership through workflow 
 source authority is required before reading metadata, and the returned document owner/location must match.
 
 `Elsa.Activities.Design.Core.Contracts.IActivityDraftAuthoringReader` is a scoped replacement authority with one selected
-implementation in `Elsa.Activities.Design.Api`. Missing or duplicate readers fail closed. Its source read checks
-the current actor's read permission, tenant and provider-payload visibility. The graph provider contributes
-`IActivityDraftExpressionGraphProjection` through `Elsa.Workflows.Design.Core`; only provider-owned supported
-manifests project to an in-memory scope shape. No workflow draft is persisted. Missing, unsupported or ambiguous
-projections offer no metadata. `PersistedExpressionAuthoringContextSource` reuses the existing target-shape,
+implementation in `Elsa.Activities.Design.Api`. Duplicate readers fail configuration/startup with a diagnostic;
+missing readers remain valid and request consumers fail closed. Its source read checks
+the current actor's read permission, tenant and provider-payload visibility. The graph provider registers the
+scoped keyed strategy
+`Elsa.Workflows.Design.Core.Contracts.IActivityDraftExpressionGraphProjection`. A registry selects only the
+authorized persisted provider key; blank/duplicate keys fail startup without projecting payloads. Only
+provider-owned supported manifests project to an in-memory scope shape. No workflow draft is persisted.
+Missing strategies or unsupported manifests offer no metadata. `PersistedExpressionAuthoringContextSource`
+reuses the existing target-shape,
 order, scope and host filters for the explicit activity owner.
 
 `IExpressionToolingOperations` is a scoped replacement contract in `Elsa.Workflows.Design.Core`, implemented
 by `Elsa.Workflows.Design.Api`. The activity API consumes this contract through its own protected endpoints
-and capability; missing or duplicate operations report unavailable. The capability is absent without the graph
+and capability; duplicate operations fail configuration/startup, while missing operations remain valid and
+request consumers report unavailable. The capability is absent without the graph
 projection, source authority, shared operations or language providers. No API-to-API reference is introduced.
-New seams are documented in both API extension catalogs and the graph provider contribution inventory;
+New seams are documented in both API extension catalogs and the graph provider strategy inventory;
 opted-in public API baselines are updated in the same change. No #3052 S5/S8 decision is implemented here.
 
 The editor uses the existing client and auth/session lifecycle with an activity-owned transport and cache
@@ -239,3 +244,10 @@ Workbench composes the existing canonical `ActivitiesScripting` feature alongsid
 feature so the accepted Add-two-numbers example is usable in the reference host. Its project, discovery and
 shell/lock metadata change together; no scripting/effect/outcome semantics change. Locked restore and the actual
 composed host remain required remote checks.
+
+Round-1 source review of `af92dec505c50fdbebde38fd721dffa20bfea21d` found an overlapping optional constructor
+and two composition gaps. The successor preserves the original optional seven-argument constructor, makes
+the activity-aware nine-argument path explicit in the composition-root factory, validates replacement duplicates
+against each configuring collection, and replaces graph projection fan-in with a keyed strategy registry. Controls
+cover late registrations, copied child shells, missing dependencies, invalid/duplicate keys, exact provider
+selection, legacy calls and actual DI activation. Native execution and composed UX remain pending.

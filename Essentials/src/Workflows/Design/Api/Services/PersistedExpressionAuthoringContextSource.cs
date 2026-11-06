@@ -21,15 +21,16 @@ public sealed class PersistedExpressionAuthoringContextSource(
     IEnumerable<IWorkflowDefinitionDraftStore> draftStores,
     IActivityStructureService structures,
     ScopedVariablePicker scopedVariables,
-    IActivityDefinitionVersionStore? activityVersions = null,
-    IEnumerable<IExpressionAuthoringContextFilter>? contextFilters = null,
-    IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters = null,
-    IServiceProvider? serviceProvider = null,
-    IEnumerable<IActivityDraftAuthoringReader>? activityDraftReaders = null,
-    IEnumerable<IActivityDraftExpressionGraphProjection>? activityGraphProjections = null) : IExpressionAuthoringContextSource
+    IActivityDefinitionVersionStore? activityVersions,
+    IEnumerable<IExpressionAuthoringContextFilter>? contextFilters,
+    IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters,
+    IServiceProvider? serviceProvider,
+    IEnumerable<IActivityDraftAuthoringReader>? activityDraftReaders,
+    IEnumerable<IActivityDraftExpressionGraphProjection>? activityGraphProjections) : IExpressionAuthoringContextSource
 {
     private const string SequenceStructureKind = "elsa.sequence.structure";
     private const int MaximumContextSymbols = 5_500;
+    private readonly ActivityDraftExpressionGraphProjectionRegistry _activityGraphProjections = new(activityGraphProjections ?? []);
     private IWellKnownTypeRegistry? WellKnownTypes =>
         serviceProvider?.GetService(typeof(IWellKnownTypeRegistry)) as IWellKnownTypeRegistry;
 
@@ -76,11 +77,10 @@ public sealed class PersistedExpressionAuthoringContextSource(
             var activityDraft = await readers[0].FindAsync(owner.Id, cancellationToken);
             if (activityDraft is null || activityDraft.DraftId != owner.Id)
                 return null;
-            var projections = (activityGraphProjections ?? []).Select(projection => projection.TryProject(activityDraft.State))
-                .OfType<WorkflowDefinitionState>().Take(2).ToArray();
-            if (projections.Length != 1)
+            var graphProjection = _activityGraphProjections.Find(activityDraft.State.Provider.ProviderKey);
+            if (graphProjection?.TryProject(activityDraft.State) is not { } activityGraph)
                 return null;
-            state = projections[0];
+            state = activityGraph;
             documentIdentity = $"{owner.Kind}:{Uri.EscapeDataString(owner.Id)}";
             draftRevision = $"{documentIdentity}:{activityDraft.Revision:x}:{activityDraft.AuthorizationRevision}";
         }
