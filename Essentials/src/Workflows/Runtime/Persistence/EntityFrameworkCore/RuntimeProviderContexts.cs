@@ -129,6 +129,15 @@ file static class RuntimeProviderModel
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("PendingPostCommitWorkIdsJson").HasColumnType(type);
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ConsumedSchedulerWorkItemIdsJson").HasColumnType(type);
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ContentJson").HasColumnType(type);
+        foreach (var entity in new[] { typeof(RuntimeIngressSourceEntity), typeof(RuntimeDeliveryWorkEntity) })
+        {
+            foreach (var property in new[] { "ScopeKey", "SourceFamily", "SourceId", "TenantId", "TestScopeId", "ContentJson", "OperationProofJson" })
+                modelBuilder.Entity(entity).Property(property).HasColumnType(type);
+        }
+        foreach (var property in new[] { "HeaderFingerprint", "AcceptanceOperationId", "AcceptanceOperationFingerprint" })
+            modelBuilder.Entity<RuntimeIngressSourceEntity>().Property(property).HasColumnType(type);
+        foreach (var property in new[] { "WorkId", "WorkKind", "OwnerId", "CompletionOperationId", "SourceHeaderFingerprint", "ContentFingerprint", "CompletionOperationFingerprint" })
+            modelBuilder.Entity<RuntimeDeliveryWorkEntity>().Property(property).HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ScopeKey").HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("OutboxItemId").HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("WorkflowExecutionId").HasColumnType(type);

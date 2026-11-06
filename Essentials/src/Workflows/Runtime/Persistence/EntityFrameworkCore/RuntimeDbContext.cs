@@ -15,6 +15,9 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
 {
     internal DbSet<UserTaskEntity> UserTasks => Set<UserTaskEntity>();
     internal DbSet<UserTaskFormEntity> UserTaskForms => Set<UserTaskFormEntity>();
+    // Canonical new families only. Existing C2 ingress and native outbox sources keep their own physical rows.
+    internal DbSet<RuntimeIngressSourceEntity> RuntimeIngressSources => Set<RuntimeIngressSourceEntity>();
+    internal DbSet<RuntimeDeliveryWorkEntity> RuntimeDeliveryWorks => Set<RuntimeDeliveryWorkEntity>();
 
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
@@ -55,6 +58,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new UserTaskConfiguration());
         modelBuilder.ApplyConfiguration(new UserTaskFormConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeIngressSourceEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeDeliveryWorkEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());
@@ -98,7 +103,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
             "ContentJson",
             "PayloadJson",
             "MetadataJson",
-            "CleanupSafeFailureJson");
+            "CleanupSafeFailureJson",
+            "OperationProofJson");
         modelBuilder.IndexSchemaVersionStamps();
     }
 

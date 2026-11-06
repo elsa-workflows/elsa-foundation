@@ -304,19 +304,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IWorkflowDispatchRedriveStore, ScopedWorkflowDispatchRedriveStore>();
         services.TryAddScoped<IRuntimePostCommitOutboxProcessor>(serviceProvider =>
-            new RuntimePostCommitOutboxProcessor(
-                serviceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
-                serviceProvider.GetRequiredService<IRuntimePostCommitIntentDispatcher>(),
-                serviceProvider.GetRequiredService<TimeProvider>(),
-                serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
-                serviceProvider.GetService<IWorkflowDispatchStore>(),
-                serviceProvider.GetServices<IPostCommitFailureProjector>(),
-                serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>(),
-                serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
-                serviceProvider.GetService<IPersistenceAccessContextAccessor>(),
-                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
-                serviceProvider.GetService<IRuntimeAdmissionLoadSignal>()));
+            new RuntimePostCommitOutboxProcessor(serviceProvider));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
