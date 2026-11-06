@@ -267,6 +267,10 @@
   margin: 8px 0 12px;
 }
 
+.wf-history-inspection code {
+  overflow-wrap: anywhere;
+}
+
 .wf-history-inspection > p,
 .wf-activity-history > p {
   margin: 10px 0;

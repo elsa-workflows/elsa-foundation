@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -1607,10 +1607,10 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
     const inspectionCalls = api.getActivityExecutionInspection.mock.calls.length;
     const browseCalls = api.browseActivityExecutions.mock.calls.length;
     const payloadCalls = valueApi.getActivityExecutionValuePayload.mock.calls.length;
-    await act(async () => {
-      pendingChild.resolve({ items: [{ execution: rows[4], position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
-      await pendingChild.promise;
-    });
+    pendingChild.resolve({ items: [{ execution: rows[4], position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
+    await pendingChild.promise;
+    // The production React bundle has no act; settle the detached navigation's lazy import before checking calls.
+    await vi.dynamicImportSettled();
     expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(inspectionCalls);
     expect(api.browseActivityExecutions).toHaveBeenCalledTimes(browseCalls);
     expect(valueApi.getActivityExecutionValuePayload).toHaveBeenCalledTimes(payloadCalls);
