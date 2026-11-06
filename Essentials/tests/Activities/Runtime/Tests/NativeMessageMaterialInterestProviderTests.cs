@@ -50,14 +50,37 @@ public sealed class NativeMessageMaterialInterestProviderTests
         Assert.Equal("fixed", Assert.Single(declaration.MessageNames)); Assert.False(declaration.CanStartWorkflow);
     }
 
-    [Fact]
-    public void All_authoritative_input_changes_affect_material_hash_and_declarations()
+    [Theory]
+    [InlineData("name")]
+    [InlineData("start")]
+    [InlineData("dynamic-set")]
+    public void Each_authoritative_input_independently_changes_material_hash_and_its_declaration(string change)
     {
-        var first = Node("wait", "first", false); var second = Node("wait", "second", true);
+        var first = Node("wait", "first", false);
+        var second = Node("wait", change == "name" ? "second" : "first", change == "start");
+        if (change == "dynamic-set")
+        {
+            var firstBindings = Bindings(null, false, JsonSerializer.SerializeToElement(new[] { "first" }));
+            var secondBindings = Bindings(null, false, JsonSerializer.SerializeToElement(new[] { "first", "second" }));
+            firstBindings[nameof(ReceiveMessage.MessageName)] = Expression(nameof(ReceiveMessage.MessageName));
+            secondBindings[nameof(ReceiveMessage.MessageName)] = Expression(nameof(ReceiveMessage.MessageName));
+            first = Node("wait", bindings: firstBindings); second = Node("wait", bindings: secondBindings);
+        }
         var hasher = new WorkflowExecutableHasher();
         Assert.NotEqual(hasher.ComputeHash(first), hasher.ComputeHash(second));
-        Assert.Equal("first", Assert.Single(Assert.Single(provider.Describe(Material(first)).Declarations).MessageNames));
-        Assert.True(Assert.Single(provider.Describe(Material(second)).Declarations).CanStartWorkflow);
+        var before = Assert.Single(provider.Describe(Material(first)).Declarations);
+        var after = Assert.Single(provider.Describe(Material(second)).Declarations);
+        if (change == "start")
+        {
+            Assert.Equal(before.MessageNames, after.MessageNames);
+            Assert.False(before.CanStartWorkflow); Assert.True(after.CanStartWorkflow);
+        }
+        else
+        {
+            Assert.Equal(before.CanStartWorkflow, after.CanStartWorkflow);
+            Assert.Equal(new[] { "first" }, before.MessageNames);
+            Assert.Equal(change == "name" ? new[] { "second" } : new[] { "first", "second" }, after.MessageNames);
+        }
     }
 
     [Theory]
@@ -118,7 +141,7 @@ public sealed class NativeMessageMaterialInterestProviderTests
     public void Event_and_model_material_are_not_reclassified_and_the_existing_feature_registers_no_Message_provider()
     {
         Assert.Empty(provider.Describe(Material(Node("event", "broadcast", false, type: Event.ActivityType))).Declarations);
-        var model = new RuntimeModelMaterial(1, Pin(), new("model", 1), "profile", JsonSerializer.SerializeToElement(new { }), new([]), [], [], []);
+        var model = new RuntimeModelMaterial(1, Pin(), new("model", 1), "profile", JsonSerializer.SerializeToElement(new { }), new(1, []), [], [], []);
         Assert.False(provider.Describe(new(model, "incarnation")).IsRecognized);
         var services = new ServiceCollection(); new ActivitiesPrimitivesFeature().ConfigureServices(services);
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IMessageMaterialInterestProvider));
