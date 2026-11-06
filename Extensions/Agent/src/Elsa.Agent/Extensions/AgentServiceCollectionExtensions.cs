@@ -59,6 +59,7 @@ public static class AgentServiceCollectionExtensions
         services.TryAddSingleton<IAgentFeedbackService, InMemoryAgentFeedbackService>();
         // Scoped so tools may depend on per-request services without being captured by a singleton.
         services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();
+        services.TryAddScoped<IAgentSupportSource>(AgentRegistrationValidator.Create<DefaultAgentSupportSource>);
         services.TryAddSingleton<IAgentTurnRegistry, AgentTurnRegistry>();
         // The default keeps the paused turn on the default owner's session record; any other session service gets a local map.
         services.TryAddSingleton<IAgentTurnStateStore>(sp => new InMemoryAgentTurnStateStore(sp.GetRequiredService<IAgentSessionService>() as InMemoryAgentSessionService));

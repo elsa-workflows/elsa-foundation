@@ -17,6 +17,10 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
 
     internal AgentEffectsSelection? GetEffectsSelection()
     {
+        var support = registrations.Where(descriptor => descriptor.ServiceType == typeof(IAgentSupportSource)
+            && !descriptor.IsKeyedService).ToArray();
+        if (support.Length > 1 || support.Any(descriptor => descriptor.Lifetime != ServiceLifetime.Scoped))
+            throw new InvalidOperationException("Agent replacement contract 'IAgentSupportSource' requires at most one scoped registration. Use services.Replace(...) to replace its existing implementation.");
         var principals = registrations.Where(descriptor => descriptor.ServiceType == typeof(IAgentPrincipalSource)
             && !descriptor.IsKeyedService).ToArray();
         if (principals.Length > 1)

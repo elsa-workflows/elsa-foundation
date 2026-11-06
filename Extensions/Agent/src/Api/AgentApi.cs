@@ -36,6 +36,8 @@ public static class AgentApi
 
         Map(api, "GET", $"{RoutePrefix}/bootstrap", "Bootstrap", AgentPermissionKeys.Use,
             null, typeof(AgentApiResponse<AgentBootstrapResponse>), HandleBootstrapAsync);
+        Map(api, "GET", $"{RoutePrefix}/support", "Support", AgentPermissionKeys.Use,
+            null, typeof(AgentApiResponse<AgentSupportResponse>), HandleSupportAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions", "CreateSession", AgentPermissionKeys.Use,
             typeof(AgentCreateSessionRequest), typeof(AgentApiResponse<AgentCreateSessionResponse>), HandleCreateSessionAsync);
         Map(api, "GET", $"{RoutePrefix}/sessions", "ListSessions", AgentPermissionKeys.Use,
@@ -127,6 +129,23 @@ public static class AgentApi
         if (ownership.RetryAt is not { } retryAt) return null;
         var now = (context.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow();
         return Math.Max(1, (long)Math.Ceiling((retryAt - now).TotalSeconds));
+    }
+
+    private static async Task HandleSupportAsync(HttpContext context)
+    {
+        var actorId = AgentEndpointActor.Resolve(context.User);
+        var tenantId = AgentEndpointActor.ResolveTenant(context.User);
+        if (context.User.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(tenantId))
+        {
+            await WriteAsync(context, AgentApiResponse<AgentSupportResponse>.Failure(new("agent.actor.unresolved",
+                "The current principal does not carry a resolvable authenticated actor and tenant identity.", 403)),
+                AgentJsonContext.Default.AgentApiResponseAgentSupportResponse, 403);
+            return;
+        }
+        var support = await context.RequestServices.GetRequiredService<IAgentSupportSource>()
+            .ReadAsync(actorId, tenantId, AgentPolicy.Default, context.RequestAborted);
+        await WriteAsync(context, AgentApiResponse<AgentSupportResponse>.Success(new("hostDefault", support)),
+            AgentJsonContext.Default.AgentApiResponseAgentSupportResponse);
     }
 
     private static async Task HandleBootstrapAsync(HttpContext context)

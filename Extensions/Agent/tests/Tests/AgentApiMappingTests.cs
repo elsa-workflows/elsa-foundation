@@ -99,7 +99,7 @@ public sealed class AgentApiMappingTests
     }
 
     [Fact]
-    public void Maps_exactly_seventeen_named_operations()
+    public void Maps_exactly_eighteen_named_operations()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var app = new TestEndpointRouteBuilder(services);
@@ -113,7 +113,7 @@ public sealed class AgentApiMappingTests
             .OrderBy(x => x)
             .ToArray();
 
-        Assert.Equal(17, names.Length);
+        Assert.Equal(18, names.Length);
         Assert.All(names, name => Assert.StartsWith("ElsaAgentApiEndpoints", name, StringComparison.Ordinal));
     }
 
@@ -127,6 +127,7 @@ public sealed class AgentApiMappingTests
         var permissions = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["ElsaAgentApiEndpointsBootstrap"] = AgentPermissionKeys.Use,
+            ["ElsaAgentApiEndpointsSupport"] = AgentPermissionKeys.Use,
             ["ElsaAgentApiEndpointsCreateSession"] = AgentPermissionKeys.Use,
             ["ElsaAgentApiEndpointsGetSession"] = AgentPermissionKeys.Use,
             ["ElsaAgentApiEndpointsChangeAutonomy"] = AgentPermissionKeys.Use,

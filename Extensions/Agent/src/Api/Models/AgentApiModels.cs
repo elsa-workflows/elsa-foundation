@@ -38,6 +38,9 @@ public sealed record AgentBootstrapResponse(
 /// <summary>Read-only host privilege configuration; session autonomy cannot change these limits.</summary>
 public sealed record AgentPrivilegePolicyView(bool Administrative, bool Irrecoverable, bool Activation);
 
+/// <summary>Sessionless support observation under the host default policy; it grants no resource or disclosure authority.</summary>
+public sealed record AgentSupportResponse(string PolicyScope, AgentSupportView Support);
+
 public sealed record AgentPolicySummaryResponse(
     bool ContextVisibility,
     string DefaultAutonomyMode,

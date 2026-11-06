@@ -13,6 +13,7 @@ internal sealed class AgentCamelCaseEnumConverter : JsonStringEnumConverter
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(AgentCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AgentApiResponse<AgentBootstrapResponse>))]
 [JsonSerializable(typeof(AgentPrivilegePolicyView))]
+[JsonSerializable(typeof(AgentApiResponse<AgentSupportResponse>))]
 [JsonSerializable(typeof(AgentApiResponse<AgentCreateSessionResponse>))]
 [JsonSerializable(typeof(AgentApiResponse<AgentSessionDetailsResponse>))]
 [JsonSerializable(typeof(AgentApiResponse<AgentSessionPolicyResponse>))]
