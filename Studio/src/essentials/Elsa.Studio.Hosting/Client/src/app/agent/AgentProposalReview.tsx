@@ -292,6 +292,7 @@ function normalizeRisk(risk: unknown): string | undefined {
 
 /** Display the frozen approval basis; never retrofit classes into a legacy preparation or its digest. */
 function effectivePrivilegeLabels(proposal: AgentActionProposal): string[] {
+  if (!isReviewable(proposal) || proposal.isLoading) return ["Not yet available"];
   const names = ["administrative", "irrecoverable", "activation"];
   const classes: unknown = proposal.preparedInvocation?.requiredPrivilegeClasses;
   const required = new Set<string>();

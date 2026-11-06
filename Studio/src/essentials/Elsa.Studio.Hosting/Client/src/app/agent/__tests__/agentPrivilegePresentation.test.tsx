@@ -27,7 +27,8 @@ describe("effective proposal privilege presentation", () => {
   ])("displays $expected from the frozen requirements ($risk / $classes)", ({ classes, risk, expected }) => {
     const prepared = preparation(classes, risk);
     const proposal = Object.freeze({ id: "review", title: "Review operation", summary: "Review the owner's operation.",
-      risk: "review-required" as const, revision: "r1", status: "awaiting-approval" as const, preparedInvocation: prepared });
+      risk: "review-required" as const, revision: "r1", status: "awaiting-approval" as const, preparedInvocation: prepared,
+      resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" } });
     const original = JSON.stringify(proposal);
     const approve = vi.fn(); const execute = vi.fn();
     const { container, unmount } = render(<AgentProposalReview proposals={[proposal]} onApprove={approve} onDeny={() => {}} onExecute={execute} />);
@@ -41,9 +42,21 @@ describe("effective proposal privilege presentation", () => {
 
   it("derives the legacy Admin requirement without a prepared payload", () => {
     const proposal: AgentActionProposal = Object.freeze({ id: "legacy", title: "Legacy operation", summary: "Review legacy operation.",
-      risk: "admin", revision: "r1", status: "awaiting-approval" });
+      risk: "admin", revision: "r1", status: "awaiting-approval",
+      resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" } });
     const { container, unmount } = render(<AgentProposalReview proposals={[proposal]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} />);
     try { expect(container.querySelector('[aria-label="Required host privileges"] dd')?.textContent).toBe("Administrative"); }
+    finally { unmount(); }
+  });
+
+  it.each([
+    { reviewReady: false }, { isLoading: true }, { revision: undefined }, { resourceTarget: undefined }
+  ])("does not claim an empty requirement set while review details are incomplete ($reviewReady / $isLoading / $revision)", incomplete => {
+    const proposal: AgentActionProposal = { id: "loading", title: "Weaver proposal", summary: "Review details are loading.",
+      risk: "review-required", revision: "r1", status: "awaiting-approval",
+      resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, ...incomplete };
+    const { container, unmount } = render(<AgentProposalReview proposals={[proposal]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} />);
+    try { expect(container.querySelector('[aria-label="Required host privileges"] dd')?.textContent).toBe("Not yet available"); }
     finally { unmount(); }
   });
 
