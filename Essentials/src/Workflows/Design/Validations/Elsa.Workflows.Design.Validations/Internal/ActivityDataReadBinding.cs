@@ -26,6 +26,9 @@ internal sealed record ActivityDataReadBinding(
             yield break;
         }
 
+        if (new[] { "Literal", "Object", "Default" }.Contains(argument.ExpressionType, StringComparer.OrdinalIgnoreCase))
+            yield break;
+
         if (argument.Value is ExpressionDefinition definition)
         {
             foreach (var parameter in definition.Parameters.Values)
@@ -36,8 +39,7 @@ internal sealed record ActivityDataReadBinding(
             yield break;
         }
 
-        if (new[] { "Literal", "Object", "Default" }.Contains(argument.ExpressionType, StringComparer.OrdinalIgnoreCase) ||
-            argument.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
+        if (argument.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
             !payload.TryGetProperty("language", out var language) || language.ValueKind != JsonValueKind.String ||
             !payload.TryGetProperty("parameters", out var parameters) || parameters.ValueKind != JsonValueKind.Object)
             yield break;

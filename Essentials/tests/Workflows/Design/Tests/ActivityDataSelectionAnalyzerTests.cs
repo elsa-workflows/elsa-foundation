@@ -244,6 +244,17 @@ public sealed class ActivityDataSelectionAnalyzerTests
         Assert.Empty(result.Findings);
     }
 
+    [Theory]
+    [InlineData("Literal")]
+    [InlineData("Object")]
+    public async Task A_typed_expression_definition_stored_as_data_does_not_bind_its_parameters(string syntax)
+    {
+        using var provider = Provider();
+        var businessData = Read("typed", "missing-producer").Value.Value;
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(businessData, syntax))))));
+        Assert.Empty(result.Findings);
+    }
+
     [Fact]
     public async Task Compensation_handler_keeps_its_own_and_prior_forward_results_and_nearest_first_rank()
     {
