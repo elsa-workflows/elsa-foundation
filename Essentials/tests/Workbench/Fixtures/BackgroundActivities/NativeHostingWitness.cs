@@ -278,7 +278,17 @@ internal sealed class NativeHostingOwnershipWitness(
         RuntimeExecutionLease lease;
         try
         {
-            lease = await Inner.AcquireAsync(workflowExecutionId, cancellationToken);
+            lease = await Services.GetRequiredService<NativeHostingConsumptionGate>().AcquireAsync(
+                () => Inner.AcquireAsync(workflowExecutionId, cancellationToken), cancellationToken,
+                token => NativeHostingWitnessRecorder.Write(Settings, new
+                {
+                    Stage = "ownership-admission-held",
+                    RecordedAt = DateTimeOffset.UtcNow,
+                    ProcessId = Environment.ProcessId,
+                    Role = Settings.Role,
+                    ExecutionId = workflowExecutionId,
+                    HoldToken = token
+                }));
         }
         catch (Exception exception)
         {
@@ -367,7 +377,8 @@ internal sealed class NativeHostingOwnershipWitness(
     }
 
     public ValueTask<RuntimeExecutionOwnershipTransitionResult> ReleaseAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
-        Inner.ReleaseAsync(lease, cancellationToken);
+        Services.GetRequiredService<NativeHostingConsumptionGate>().ReleaseAsync(lease,
+            () => Inner.ReleaseAsync(lease, cancellationToken));
 
     public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default) =>
         Inner.EnsureCurrentAsync(workflowExecutionId, fencingToken, cancellationToken);
@@ -417,6 +428,7 @@ internal sealed class NativeHostingPlacementStoreWitness(
     public async ValueTask<bool> ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
     {
         var released = await Inner.ReleaseAsync(lease, cancellationToken);
+        var releaseCommittedAt = DateTimeOffset.UtcNow;
         // This independent post-release snapshot describes the fleet, not the read that authorized the release.
         var membership = await NativeHostingWitnessRecorder.ReadFreshMembershipAsync(Services, cancellationToken);
         NativeHostingWitnessRecorder.Write(Settings, new
@@ -431,6 +443,7 @@ internal sealed class NativeHostingPlacementStoreWitness(
             PlacementToken = lease.PlacementToken,
             PlacementExpiresAt = lease.ExpiresAt,
             ReleaseResult = released,
+            ReleaseCommittedAt = releaseCommittedAt,
             FreshMembershipProviderType = membership.ProviderType,
             FreshMembershipProviderKind = membership.ProviderKind,
             FreshMembershipReadMode = membership.ReadMode,
