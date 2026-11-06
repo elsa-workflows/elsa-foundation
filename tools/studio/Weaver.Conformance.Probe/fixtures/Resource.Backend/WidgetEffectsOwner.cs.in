@@ -55,7 +55,31 @@ internal static class WidgetEffects
 internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextAccessor http, IAuthSessionService auth,
     WidgetResource resource, WidgetHost host, WidgetRunJournal journal)
 {
-    internal async Task<StudioPreferenceKey> AuthorizeAsync(string? actor, string? tenant, bool write, CancellationToken ct)
+    internal Task<StudioPreferenceKey> AuthorizeAsync(string? actor, string? tenant, bool write, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(actor) || string.IsNullOrWhiteSpace(tenant))
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "An explicit personal owner is required for this operation.", 403);
+        return AuthorizeCoreAsync(actor, tenant, write, ct);
+    }
+
+    // Only native observation and initial session-owner lookup may infer identity from the real current request.
+    internal Task<StudioPreferenceKey> AuthorizeCurrentAsync(CancellationToken ct) => AuthorizeCoreAsync(null, null, false, ct);
+
+    // This guard is local to one context operation across its awaited owner/session lookups; it is never retained.
+    internal Action CaptureCurrentRequest()
+    {
+        var context = http.HttpContext;
+        var principal = context?.User;
+        return () =>
+        {
+            if (principal?.Identity?.IsAuthenticated != true || !ReferenceEquals(http.HttpContext, context)
+                || !ReferenceEquals(context?.User, principal))
+                throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
+        };
+    }
+
+    private async Task<StudioPreferenceKey> AuthorizeCoreAsync(string? actor, string? tenant, bool write, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var context = http.HttpContext;
@@ -153,7 +177,8 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
 
     internal async Task<object> ChecksAsync(CancellationToken ct)
     {
-        var state = await ObserveAsync(null, null, false, ct);
+        var key = await AuthorizeCurrentAsync(ct);
+        var state = await ObserveAsync(key.SubjectId, key.TenantId, false, ct);
         var runs = journal.Read(state.Key);
         return new { widgetId = WidgetContract.WidgetId, revision = state.Document.Revision, hostId = host.Id,
             ranCount = runs.Count, runs = runs.TakeLast(16).Select(run => new { run.InvocationId, run.ToolCallId, run.ToolName, run.Revision, run.Passed, run.CallNumber }) };

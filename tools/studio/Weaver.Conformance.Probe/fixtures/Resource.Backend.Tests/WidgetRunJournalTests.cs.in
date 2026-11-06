@@ -6,6 +6,52 @@ namespace Acme.Home.Weaver.Tests;
 public sealed class WidgetRunJournalTests
 {
     [Fact]
+    public async Task A_valid_unterminated_observation_is_preserved_and_delimited_before_an_actual_second_run()
+    {
+        using var files = new EffectFiles();
+        var settings = new WidgetEffectsSettings(files.Observations, "");
+        using var env = await EffectsEnvironment.CreateAsync(settings: settings);
+        var before = await env.Native.DocumentAsync();
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        Assert.True((await tool.ExecuteAsync(frozen)).Value!.Succeeded);
+        var original = File.ReadAllText(files.Observations).TrimEnd('\n');
+        files.Write(files.Observations, original); // A complete row accepted at EOF without a line terminator.
+        Assert.Single(new WidgetRunJournal(settings).Read(env.Native.Key));
+        Assert.True((await tool.ExecuteAsync(frozen)).Value!.Succeeded);
+        Assert.StartsWith(original + "\n", File.ReadAllText(files.Observations));
+        var independent = new WidgetRunJournal(settings).Read(env.Native.Key);
+        Assert.Equal(new[] { 1, 2 }, independent.Select(run => run.CallNumber));
+        Assert.All(independent, run => Assert.Equal(frozen.InvocationId, run.InvocationId));
+        var observed = System.Text.Json.JsonSerializer.SerializeToElement(await env.Owner.ChecksAsync(default));
+        Assert.Equal(2, observed.GetProperty("ranCount").GetInt32());
+        var after = await env.Native.DocumentAsync();
+        Assert.Equal(before.Revision, after.Revision);
+        Assert.True(System.Text.Json.JsonElement.DeepEquals(before.Value, after.Value));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Required_append_delimiter_is_included_in_the_budget_before_any_original_byte_changes()
+    {
+        using var files = new EffectFiles();
+        using var env = await EffectsEnvironment.CreateAsync(settings: new(files.Observations, ""));
+        var tool = env.Tool(WidgetEffects.Check);
+        var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        var first = env.Journal.Record(env.Native.Key, frozen, frozen.Target!.Revision!, true);
+        var prefix = System.Text.Json.JsonSerializer.Serialize(first);
+        var second = System.Text.Json.JsonSerializer.Serialize(first with { CallNumber = 2 }) + "\n";
+        var remaining = 2 * 1024 * 1024 - System.Text.Encoding.UTF8.GetByteCount(prefix + second);
+        var original = prefix + new string(' ', remaining); // Valid final JSON row; no line terminator.
+        files.Write(files.Observations, original);
+        Assert.Single(env.Journal.Read(env.Native.Key));
+        Assert.Throws<WidgetFixtureException>(() => env.Journal.Record(env.Native.Key, frozen, frozen.Target.Revision!, true));
+        Assert.Equal(original, File.ReadAllText(files.Observations));
+        Assert.Single(new WidgetRunJournal(new(files.Observations, "")).Read(env.Native.Key));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
     public async Task A_fresh_module_journal_retains_actual_call_identity_verdict_and_duplicate_count_without_touching_the_widget()
     {
         using var files = new EffectFiles();

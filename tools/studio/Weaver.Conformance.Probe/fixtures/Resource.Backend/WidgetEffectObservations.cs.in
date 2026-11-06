@@ -38,8 +38,16 @@ internal sealed class WidgetRunJournal(WidgetEffectsSettings settings)
                 if (rows.Count >= 4096) throw new InvalidDataException("Widget observation limit reached.");
                 var recorded = Entry(rows, key, invocation, revision, passed);
                 var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(recorded) + "\n");
-                if (file.Length + bytes.Length > MaximumBytes) throw new InvalidDataException("Widget observation limit reached.");
+                var needsDelimiter = false;
+                if (file.Length > 0)
+                {
+                    file.Position = file.Length - 1;
+                    needsDelimiter = file.ReadByte() is not (10 or 13);
+                }
+                if (file.Length + bytes.Length + (needsDelimiter ? 1 : 0) > MaximumBytes)
+                    throw new InvalidDataException("Widget observation limit reached.");
                 file.Position = file.Length;
+                if (needsDelimiter) file.WriteByte((byte)'\n');
                 file.Write(bytes);
                 file.Flush(true);
                 return recorded;

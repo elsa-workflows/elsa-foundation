@@ -6,6 +6,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Home.Weaver.Tests;
@@ -285,6 +286,103 @@ public sealed class WidgetEffectsTests
     }
 
     [Theory]
+    [InlineData("fresh", "request")]
+    [InlineData("fresh", "principal")]
+    [InlineData("fresh", "permission")]
+    [InlineData("fresh", "none")]
+    [InlineData("retained", "request")]
+    [InlineData("retained", "principal")]
+    [InlineData("retained", "permission")]
+    [InlineData("retained", "none")]
+    public async Task Plain_owner_lookup_must_revalidate_the_same_request_and_native_permission_before_any_session_hydration(string phase, string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var attachment = await env.AttachmentAsync();
+        var sessions = new EffectLookupSessions(env.Native.Sessions);
+        var context = new WidgetEffectsContext(env.Owner, sessions, env.Faults);
+        var pending = phase == "fresh"
+            ? context.CollectAsync(new("session-a", WidgetEffects.Scope, new Dictionary<string, string>()) { CallerAttachments = [attachment] }).AsTask()
+            : context.AdmitDisclosureAsync(new("session-a", [attachment], [], false)).AsTask();
+        await Task.WhenAny(pending, sessions.LookupEntered.Task);
+        Assert.True(sessions.LookupEntered.Task.IsCompletedSuccessfully);
+        Assert.Equal(0, sessions.Hydrations);
+        if (fault == "request") env.Native.Http.HttpContext = new DefaultHttpContext { User = env.Native.Http.HttpContext!.User };
+        if (fault == "principal") env.Native.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, "actor-a")], "replacement"));
+        if (fault == "permission") env.Native.Permissions.DeniedPermission = WidgetContract.ReadPermission;
+        sessions.ReleaseLookup.SetResult();
+        var result = await pending;
+        Assert.Equal(1, sessions.PlainLookups);
+        Assert.Equal(fault == "none" ? 1 : 0, sessions.Hydrations);
+        if (fault == "none") { Assert.Empty(result.Diagnostics); Assert.NotEmpty(result.Attachments); }
+        else
+        {
+            Assert.Empty(result.Attachments);
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(fault == "permission" ? WidgetEffects.Denied : WidgetEffects.Unavailable, diagnostic.Code);
+        }
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
+    [InlineData("actor-null")]
+    [InlineData("actor-empty")]
+    [InlineData("actor-blank")]
+    [InlineData("tenant-null")]
+    [InlineData("tenant-empty")]
+    [InlineData("tenant-blank")]
+    public async Task Direct_agent_bound_calls_require_explicit_actor_and_tenant_before_any_native_action(string fault)
+    {
+        foreach (var name in new[] { WidgetEffects.Admin, WidgetEffects.Check })
+        foreach (var phase in new[] { "prepare", "authorization", "execute" })
+        {
+            using var env = await EffectsEnvironment.CreateAsync();
+            var tool = env.Tool(name);
+            var attachment = await env.AttachmentAsync();
+            var frozen = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+            string? invalid = fault.EndsWith("null", StringComparison.Ordinal) ? null : fault.EndsWith("empty", StringComparison.Ordinal) ? "" : " ";
+            var actor = fault.StartsWith("actor", StringComparison.Ordinal) ? invalid : "actor-a";
+            var tenant = fault.StartsWith("tenant", StringComparison.Ordinal) ? invalid : "tenant-a";
+            frozen = frozen with { ActorId = actor!, TenantId = tenant! };
+            env.Native.Permissions.Calls.Clear();
+            AgentError? error;
+            if (phase == "prepare") error = (await tool.PrepareAsync(env.Invocation(tool, [attachment]) with { ActorId = actor!, TenantId = tenant! })).Error;
+            else if (phase == "execute") error = (await tool.ExecuteAsync(frozen)).Error;
+            else
+            {
+                var decision = await ((IAgentToolAuthorization)tool).AuthorizeAsync(actor!, tenant!, attachment.Target);
+                Assert.False(decision.Allowed);
+                var violation = Assert.Single(decision.Violations);
+                error = new(violation.Code, violation.Message);
+            }
+            Assert.Equal(WidgetEffects.Foreign, error!.Code);
+            Assert.Empty(env.Native.Permissions.Calls); // Refused before native resource or permission work.
+            Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+            Assert.Empty(env.Journal.Read(env.Native.Key));
+            if (name == WidgetEffects.Check)
+            {
+                var refused = await Assert.ThrowsAsync<WidgetRefusal>(() => env.Owner.CheckAsync(frozen, true, default));
+                Assert.Equal(WidgetEffects.Foreign, refused.Error.Code);
+                Assert.Empty(env.Native.Permissions.Calls);
+                Assert.Empty(env.Journal.Read(env.Native.Key));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Native_owner_lookup_and_checks_observation_infer_only_the_real_current_authorized_owner()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        Assert.Equal(env.Native.Key, await env.Owner.AuthorizeCurrentAsync(default));
+        var observed = JsonSerializer.SerializeToElement(await env.Owner.ChecksAsync(default));
+        Assert.Equal(WidgetContract.WidgetId, observed.GetProperty("widgetId").GetString());
+        Assert.Equal(0, observed.GetProperty("ranCount").GetInt32());
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
     [InlineData("valid")]
     [InlineData("tool")]
     [InlineData("contract")]
@@ -406,4 +504,30 @@ internal sealed class EffectAuthorization(FakePermissions native) : IPermissionA
         BeforeReturn?.Invoke();
         return result;
     }
+}
+
+// Plain ownership is explicitly independent of FindAsync: reaching hydration is the protected boundary under test.
+internal sealed class EffectLookupSessions(FakeSessions native) : IAgentSessionService
+{
+    internal readonly TaskCompletionSource LookupEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal readonly TaskCompletionSource ReleaseLookup = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal int PlainLookups, Hydrations;
+    public async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        PlainLookups++;
+        var owner = native.Session is { } session && session.Id == sessionId ? new AgentSessionOwner(session.ActorId, session.TenantId) : null;
+        LookupEntered.SetResult();
+        await ReleaseLookup.Task.WaitAsync(cancellationToken);
+        return owner;
+    }
+    public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
+    { Hydrations++; return native.FindAsync(sessionId, cancellationToken); }
+    public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }

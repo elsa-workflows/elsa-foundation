@@ -72,17 +72,26 @@ internal sealed class WidgetEffectsContext(WidgetEffectOwner owner, IAgentSessio
 
     private async Task<AgentSession> SessionAsync(string id, CancellationToken ct)
     {
-        var key = await owner.AuthorizeAsync(null, null, false, ct);
+        var requireCurrentRequest = owner.CaptureCurrentRequest();
+        requireCurrentRequest();
+        var key = await owner.AuthorizeCurrentAsync(ct);
+        requireCurrentRequest();
         var identity = await sessions.FindOwnerAsync(id, ct);
         ct.ThrowIfCancellationRequested();
+        requireCurrentRequest();
         if (identity?.ActorId != key.SubjectId || identity?.TenantId != key.TenantId)
             throw WidgetEffects.Refusal(WidgetEffects.Foreign, "A current owned effects session is required.", 403);
+        // Plain owner lookup may await storage. Recheck native permission before any hydration/ownership/settlement.
+        await owner.AuthorizeAsync(key.SubjectId, key.TenantId, false, ct);
+        requireCurrentRequest();
         var session = await sessions.FindAsync(id, ct);
         ct.ThrowIfCancellationRequested();
+        requireCurrentRequest();
         if (session is not { Status: AgentSessionStatus.Active } || session.ActorId != key.SubjectId || session.TenantId != key.TenantId
             || session.ExpiresAt <= DateTimeOffset.UtcNow)
             throw WidgetEffects.Refusal(WidgetEffects.Foreign, "A current owned effects session is required.", 403);
         await owner.AuthorizeAsync(session.ActorId, session.TenantId, false, ct);
+        requireCurrentRequest();
         return session;
     }
 
