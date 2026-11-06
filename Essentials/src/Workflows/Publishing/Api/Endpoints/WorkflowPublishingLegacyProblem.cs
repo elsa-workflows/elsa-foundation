@@ -13,6 +13,8 @@ namespace Elsa.Workflows.Publishing.Api.Endpoints;
 /// <see cref="ErrorCode"/> is additive (issue #1699): it is populated only for the coded publishing
 /// failures <see cref="WorkflowPublishingFaultRenderer"/> renders, and omitted from the wire entirely
 /// for every uncoded problem, so existing clients see no difference.
+/// Placement refusals additionally carry node/composite pointers. These nullable fields are absent
+/// for every other failure and retain the established status, detail and error-list shape.
 /// </remarks>
 internal sealed record WorkflowPublishingLegacyProblem(
     string Type,
@@ -22,7 +24,15 @@ internal sealed record WorkflowPublishingLegacyProblem(
     string Instance,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode,
     string TraceId,
-    IReadOnlyList<WorkflowPublishingLegacyProblemError> Errors);
+    IReadOnlyList<WorkflowPublishingLegacyProblemError> Errors)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TriggerNodeId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CompositeNodeId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CompositeStructureKind { get; init; }
+}
 
 internal sealed record WorkflowPublishingLegacyProblemError(string Name, string Reason);
 

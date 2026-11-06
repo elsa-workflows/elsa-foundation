@@ -54,6 +54,30 @@ function flowchart(
 }
 
 describe("canStartWorkflow", () => {
+  it("recognizes renamed catalog trigger capability without activity-type heuristics", () => {
+    const descriptor = { executionType: "Trigger", inputs: [] };
+    expect(canStartWorkflow(node("renamed"), descriptor)).toBe(true);
+    expect(canStartWorkflow(node("Timer"), { executionType: "Action", inputs: [] })).toBe(false);
+    expect(canStartWorkflow(node("renamed"))).toBe(false);
+  });
+
+  it("honors optional start switch defaults, explicit false, and unknown dynamic values", () => {
+    const descriptor = { executionType: "Trigger", inputs: [{ referenceKey: "CanStartWorkflow", defaultValue: true, defaultSyntax: "Literal" }] };
+    expect(canStartWorkflow(node("optional"), descriptor)).toBe(true);
+    expect(canStartWorkflow(wireTrigger("optional", false), descriptor)).toBe(false);
+    expect(canStartWorkflow(node("optional", { inputs: [{ referenceKey: "CanStartWorkflow", value: { expressionType: "JavaScript", value: true } }] }), descriptor)).toBe(false);
+    expect(canStartWorkflow(node("optional"), { executionType: "Trigger", inputs: [{ referenceKey: "CanStartWorkflow" }] })).toBe(false);
+    expect(canStartWorkflow(node("optional"), { executionType: "Trigger", inputs: [{ referenceKey: "CanStartWorkflow", defaultValue: true, defaultSyntax: "JavaScript" }] })).toBe(false);
+  });
+
+  it("finds an inbound catalog trigger without moving an authored start node", () => {
+    const graph = flowchart([node("first"), node("renamed")], { startNodeId: "first", connections: [{ from: "first", to: "renamed" }] });
+    const catalog = new Map([["renamed-v", { executionType: "Trigger", inputs: [] }]]);
+    expect(findMisplacedStartTriggers(graph, catalog).map(activity => activity.nodeId)).toEqual(["renamed"]);
+    expect(readFlowchartStartNodeId(normalizeFlowchartStartNode(graph))).toBe("first");
+    expect(findMisplacedStartTriggers(flowchart([node("first"), node("renamed")], { startNodeId: "first" }), catalog)).toEqual([]);
+  });
+
   it("reads the designer's wrapped property and the wire's inputs entry", () => {
     expect(canStartWorkflow(trigger("http"))).toBe(true);
     expect(canStartWorkflow(wireTrigger("http"))).toBe(true);

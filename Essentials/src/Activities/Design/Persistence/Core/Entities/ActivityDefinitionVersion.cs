@@ -57,7 +57,8 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     /// The descriptor payload as opaque JSON. <see cref="NotMappedAttribute"/>: EF Core does not
     /// persist this directly. Hydrated by the loading handler by parsing
     /// <see cref="DescriptorPayloadSource"/>; written back to that string by the saving handler. The
-    /// design domain never deserializes it into a concrete descriptor type.
+    /// persistence boundary keeps it opaque. The authoring API may read a known CLR alias solely to
+    /// project registered authoring metadata; it never rewrites this payload or materializes an activity.
     /// </summary>
     [NotMapped]
     public JsonElement DescriptorPayload { get; set; }

@@ -8,6 +8,8 @@ using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Serialization.Core;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Design.Api.Tests;
 
@@ -18,20 +20,39 @@ namespace Elsa.Activities.Design.Api.Tests;
 /// </summary>
 internal static class CatalogReaderFixture
 {
-    public static Task<ActivityAuthoringCatalogView> ListAsync(
+    public static async Task<ActivityAuthoringCatalogView> ListAsync(
         IReadOnlyList<ActivityDefinition> definitions,
         IReadOnlyList<ActivityDefinitionVersion> versions,
         IActivityFeatureAttributionResolver? resolver = null,
         IActivityAvailabilityEvaluator? availabilityEvaluator = null,
-        IActivityAvailabilitySettingsStore? settingsStore = null) =>
-        new ActivityAuthoringCatalogReader(
-                new InMemoryDefinitionStore(definitions),
-                new InMemoryVersionStore(versions),
-                availabilityEvaluator ?? new AllAddableEvaluator(),
-                settingsStore ?? new NullSettingsStore(),
-                [new IntrinsicAuthoringDescriptorProvider()],
-                resolver ?? new NoFeatureAttribution())
+        IActivityAvailabilitySettingsStore? settingsStore = null,
+        IWellKnownTypeRegistry? wellKnownTypes = null,
+        bool resolveFromServices = false)
+    {
+        var definitionsStore = new InMemoryDefinitionStore(definitions);
+        var versionsStore = new InMemoryVersionStore(versions);
+        var evaluator = availabilityEvaluator ?? new AllAddableEvaluator();
+        var settings = settingsStore ?? new NullSettingsStore();
+        var attribution = resolver ?? new NoFeatureAttribution();
+        if (!resolveFromServices)
+            return await new ActivityAuthoringCatalogReader(definitionsStore, versionsStore, evaluator, settings,
+                [new IntrinsicAuthoringDescriptorProvider()], attribution, wellKnownTypes)
+                .ListAsync(new ListActivityAuthoringCatalog(), CancellationToken.None);
+
+        var services = new ServiceCollection()
+            .AddSingleton<IActivityDefinitionStore>(definitionsStore)
+            .AddSingleton<IActivityDefinitionVersionStore>(versionsStore)
+            .AddSingleton<IActivityAvailabilityEvaluator>(evaluator)
+            .AddSingleton<IActivityAvailabilitySettingsStore>(settings)
+            .AddSingleton<IBuiltInAuthoringDescriptorProvider, IntrinsicAuthoringDescriptorProvider>()
+            .AddSingleton<IActivityFeatureAttributionResolver>(attribution)
+            .AddScoped<ActivityAuthoringCatalogReader>();
+        if (wellKnownTypes is not null) services.AddSingleton(wellKnownTypes);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ActivityAuthoringCatalogReader>()
             .ListAsync(new ListActivityAuthoringCatalog(), CancellationToken.None);
+    }
 
     private sealed class InMemoryDefinitionStore(IReadOnlyList<ActivityDefinition> definitions) : IActivityDefinitionStore
     {

@@ -221,3 +221,80 @@ integration test project gains a Flowchart project reference, and its host gains
 ## Complexity Tracking
 
 No constitution violations to justify.
+
+
+## Studio follow-up plan — #2859 (6 November 2026)
+
+The coordinator reviewed this bounded implementation route before coding. This is the existing US5/D11 follow-up,
+`none/free-flow`; the runtime decisions and completed tasks above stay intact. Source investigation and acceptance
+record: [the specification follow-up](spec.md#studio-follow-up--2859-planned-6-november-2026), FR-031–FR-034.
+
+### Scope and design
+
+- `Activities.Design.Api/Services/ActivityAuthoringCatalogReader.cs`: retain the existing six-argument constructor
+  and add a constructor accepting `IWellKnownTypeRegistry`. For persisted CLR consumer rows only, read the existing
+  `ClrActivityDescriptor.TypeAlias` and reuse `ActivityTypeMetadata.IsTrigger` to project the existing view's
+  `ExecutionType`. The six-argument/registry-absent path preserves catalog reads. Undefined, null, malformed and
+  unresolved descriptor payloads preserve the prior stored value; unrelated registry/service failures are not hidden.
+  This never changes rows, hashes, reconciliation, visibility or version identity and never enumerates live types to
+  create catalog entries. Add only the direct existing `Activities.Runtime.Core` dependency and corresponding
+  project-only locked dependency metadata; no new package, facet or extension contract.
+- `Workflows.Publishing.Api/Endpoints/WorkflowPublishingLegacyProblem.cs` and the existing fault renderer: add
+  omitted-when-null trigger/composite/structure fields to the internal problem model and a Placement-only builder
+  with code `workflow.trigger.placement`. Preserve existing 400/detail/errors. Remove the superseded unstructured
+  Placement translation. Generic/coded and non-Placement preflight failures retain their existing shapes/statuses.
+- `flowchartStartNode.ts` and `draftValidation.ts`: optional descriptor/map inputs preserve current callers while
+  known trigger descriptors support potential starts and declared start-switch defaults. Explicit false and
+  dynamic values stay non-starting. Pass the current catalog from the editor and graph projection; preserve
+  no-inbound entry reachability and existing start assignments. Always-start warning copy does not offer a
+  nonexistent start switch. Catalog capability/default-based placement guidance is a Warning with conditional
+  copy, because BPMN/custom providers can be intentionally non-starting. Only a structured backend Placement
+  refusal adds an authoritative Error; a current server error suppresses its redundant local advisory for that node.
+- `workflow-editor/useWorkflowOperations.ts` and `WorkflowEditor.tsx`: parse the typed Placement fields, report
+  transient `ValidationError` entries through a callback, and combine them with existing validations. Bind to
+  document ID plus captured authored snapshot; only current errors open the existing validation panel. This panel
+  lives below the Designer canvas, not in a right-hand tab: select Designer and focus its accessible region. Close
+  a refused review so that it cannot trap focus above the guidance; retain accurate banner information when a
+  promoted version already exists. Clear on
+  edits/switches and reject delayed responses. Preflight, refreshed review and direct publication catches share the
+  same path; no persisted validation mutation or new panel.
+
+### Constitution check
+
+- Framework §2.1/§2.17 and Elsa §E2.2: Design.Api uses an existing Runtime.Core metadata contract/helper, with no
+  Runtime→Design or API→API edge. The small native descriptor read stays local rather than coupling to Publishing's
+  internal resolver. Its consumer/type-alias resolution follows that resolver's existing semantics.
+- Deployment shapes: no mandatory live registry is added; registry-absent DI and old constructor behavior are tested.
+  Pure Design-only hosts retain reads and no guessed local hint. Runtime-only composition and existing executables
+  are untouched.
+- Catalog ownership: all entries and availability remain from the persisted catalog/policy. Live registered metadata
+  only enriches an existing row, as feature attribution already does; it creates or hides no entries.
+- Compatibility/ADR 0080 D3: preserve the existing reader constructor; new problem fields are internal DTO additions,
+  absent for unrelated failures. New helpers stay private/internal. No new public seam or feature identity.
+- Framework §2.22: update the existing API catalogs' consumption/failure descriptions in the same unit; no new
+  domain or glossary explanation. The root extension index stays unchanged.
+- Framework §2.23/ADR 0080 D1: tests cover decisions, actual DI constructor selection, malformed/missing metadata,
+  untouched persisted identity/hash, real structured HTTP/no-write refusal and current-snapshot UI handling. No
+  source-text or documentation assertions. Existing valid tests remain unchanged unless a behavior is intentionally
+  superseded and named.
+- Draft/provisional material: no dependency on §2.24, Model X/version refresh or §E2.9. No same-version write-once
+  exception is introduced.
+
+### Validation and actual UI acceptance
+
+Before source changes, the current helper probe confirms a renamed descriptor with `ExecutionType=Trigger` and no
+start switch is neither recognised nor reported as misplaced. This is a lightweight source probe, not a suite run.
+Focused client tests must fail on that behavior and on the original structured-error handling, then pass with the fix.
+Server catalog and actual endpoint tests require the same causal proof on an admitted remote checkout; local heavy
+execution is held by the owner.
+
+Run whole touched `Activities.Design.Api.Tests`, `Workflows.Publishing.Api.Tests` and Workflows client suites, scoped
+Studio checks and the required architecture Release/Debug restores, whole Architecture and maps. A real owned
+Workbench+Studio journey covers catalog-based Timer/Cron warning and focus, optional false/no-inbound correctness,
+a Sequence child 1 backend refusal into node validation, corrected child 0 publication, stale-response/recovery and
+read-only. Retain source-bound desktop/narrow light/dark screenshots with ARIA/traces; independent reviewer opens
+all affected experience evidence. Required CI and normal review/merge gates remain.
+
+Every runtime, whole-suite and visual row for this follow-up is currently NOT RUN. Source freeze must provide exact
+head/tree, commands, finite budgets, expected discovery inventory, original controls, artifact and owned cleanup
+requirements before the coordinator admits a sequential remote phase. No local heavy fallback or shared store/host.

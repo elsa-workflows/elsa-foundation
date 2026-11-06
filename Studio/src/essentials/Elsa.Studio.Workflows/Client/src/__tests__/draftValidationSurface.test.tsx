@@ -145,6 +145,36 @@ describe("draft validations API capability handling", () => {
 });
 
 describe("start-trigger detection", () => {
+  it("keeps catalog/default capability advisory for a provider that may register no starts", () => {
+    const state = { rootActivity: flowchart([node("first"), node("process")], [{ from: "first", to: "process" }], "first") };
+    // A BPMN-shaped trigger has an enabled default but may contain no start events.
+    const catalog = new Map([["process-v", { executionType: "Trigger", inputs: [{ referenceKey: "CanStartWorkflow", defaultValue: true }] }]]);
+    const errors = detectStructuralValidationErrors(state, undefined, catalog);
+    const guidance = errors.find(error => error.type === STRUCTURAL_START_TRIGGER_TYPE);
+    expect(guidance).toMatchObject({ path: "process", severity: "Warning" });
+    expect(guidance?.message).toContain("If it registers a workflow start");
+  });
+
+  it("keeps an independent catalog trigger branch reachable and offers no nonexistent switch", () => {
+    const catalog = new Map([["timer-v", { executionType: "Trigger", inputs: [] }]]);
+    const state = { rootActivity: flowchart([node("first"), node("after-first"), node("timer"), node("after-timer")],
+      [{ from: "first", to: "after-first" }, { from: "timer", to: "after-timer" }], "first") };
+    expect(detectStructuralValidationErrors(state, undefined, catalog).filter(error =>
+      error.type === STRUCTURAL_START_TRIGGER_TYPE || error.type === STRUCTURAL_NO_START_TYPE)).toEqual([]);
+    const inbound = { rootActivity: flowchart([node("first"), node("timer")], [{ from: "first", to: "timer" }], "first") };
+    const warning = detectStructuralValidationErrors(inbound, undefined, catalog).find(error => error.type === STRUCTURAL_START_TRIGGER_TYPE);
+    expect(warning?.message).toContain("use a waiting activity");
+    expect(warning?.message).not.toContain("turn off");
+  });
+
+  it("shows one authoritative Placement error instead of redundant local guidance for that node", () => {
+    const errors = combineValidationErrors({
+      publicationErrors: [{ type: "workflow.trigger.placement", code: "workflow.trigger.placement", severity: "Error", path: "timer", message: "Move this trigger." }],
+      structuralErrors: [{ type: STRUCTURAL_START_TRIGGER_TYPE, severity: "Warning", path: "timer", message: "Potential trigger." }]
+    });
+    expect(errors).toEqual([expect.objectContaining({ path: "timer", severity: "Error" })]);
+  });
+
   const startTrigger = (nodeId: string) => node(nodeId, {
     canStartWorkflow: { typeName: "System.Boolean", expression: { type: "Literal", value: true } }
   });
