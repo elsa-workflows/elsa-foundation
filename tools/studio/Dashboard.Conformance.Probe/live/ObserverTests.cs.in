@@ -1,0 +1,122 @@
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Elsa.Agent.GitHubCopilot.Services;
+using Microsoft.Extensions.AI;
+using Xunit;
+
+public sealed class ObserverTests
+{
+    [Fact]
+    public async Task Both_session_paths_forward_every_send_and_retain_only_counts()
+    {
+        var underlying = new TestFactory();
+        var counts = new DashboardLiveCounters();
+        await using var client = new DashboardLiveFactory(underlying, counts).Create(new(null, false, null, null, null, null));
+        await client.StartAsync(default);
+        await client.PingAsync(default);
+        await client.ListModelsAsync(default);
+        var request = new GitHubCopilotSessionRequest("owned", "test", null, true, null, [], []);
+        await using var created = await client.CreateSessionAsync(request, default);
+        await using var resumed = await client.ResumeSessionAsync(request, default);
+        foreach (var session in new[] { created, resumed })
+            for (var index = 0; index < 2; index++)
+                await foreach (var item in session.SendAsync("synthetic private prompt never retained", default))
+                    Assert.Equal(GitHubCopilotStreamEventKind.Completed, item.Kind);
+        Assert.Equal(4, underlying.Client.Sends);
+        var snapshot = JsonSerializer.Serialize(counts.Snapshot());
+        Assert.DoesNotContain("synthetic private prompt", snapshot, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(snapshot);
+        var values = document.RootElement.GetProperty("counts");
+        Assert.Equal(4, values.GetProperty("session.send").GetInt32());
+        Assert.Equal(4, values.GetProperty("event.Completed").GetInt32());
+        Assert.Equal(1, values.GetProperty("session.create").GetInt32());
+        Assert.Equal(1, values.GetProperty("session.resume").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("source-id-canary-012345")]
+    [InlineData("Native source returned {\"rows\":[{\"count\":123}]} without record identifiers.")]
+    [InlineData("Nested result {\\\"rows\\\":[{\\\"count\\\":123}]}")]
+    public async Task Outbound_prompt_facts_are_refused_before_underlying_sdk_send(string content)
+    {
+        var underlying = new TestFactory();
+        var counts = new DashboardLiveCounters();
+        counts.Canaries(["source-id-canary-012345"]);
+        await using var client = new DashboardLiveFactory(underlying, counts).Create(new(null, false, null, null, null, null));
+        await using var session = await client.CreateSessionAsync(new("owned", null, null, true, null, [], []), default);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => {
+            await foreach (var _ in session.SendAsync(content, default)) { }
+        });
+        Assert.Equal(0, underlying.Client.Sends);
+        Assert.DoesNotContain(content, JsonSerializer.Serialize(counts.Snapshot()), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task System_context_facts_are_refused_on_create_and_resume()
+    {
+        var underlying = new TestFactory();
+        var counts = new DashboardLiveCounters();
+        await using var client = new DashboardLiveFactory(underlying, counts).Create(new(null, false, null, null, null, null));
+        var request = new GitHubCopilotSessionRequest("owned", null, null, true, "context {\"rows\":[{\"sum\":5}]}", [], []);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.CreateSessionAsync(request, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.ResumeSessionAsync(request, default));
+        Assert.Null(underlying.Client.LastRequest);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Custom_tool_result_facts_are_refused_before_returning_to_sdk(bool encoded)
+    {
+        var underlying = new TestFactory();
+        var counts = new DashboardLiveCounters();
+        await using var client = new DashboardLiveFactory(underlying, counts).Create(new(null, false, null, null, null, null));
+        var tool = AIFunctionFactory.Create(() => encoded ? (object)"{\"rows\":[{\"count\":999}]}" : new { rows = new[] { new { count = 999 } } }, "native_guarded_test");
+        await using var session = await client.ResumeSessionAsync(new("owned", null, null, true, null, [tool.Name], [], [tool]), default);
+        var installed = Assert.Single(underlying.Client.LastRequest!.CustomTools!);
+        Assert.Equal(tool.Name, installed.Name);
+        Assert.Equal(tool.JsonSchema.GetRawText(), installed.JsonSchema.GetRawText());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => { await installed.InvokeAsync(new AIFunctionArguments(), default); });
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(counts.Snapshot()));
+        Assert.Equal(1, document.RootElement.GetProperty("privacyFailures").GetInt32());
+        Assert.DoesNotContain("999", document.RootElement.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Live_feature_refuses_test_or_protocol_factory_replacements()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IGitHubCopilotClientFactory, TestFactory>();
+        Assert.Throws<InvalidOperationException>(() => new DashboardLiveQualificationFeature().ConfigureServices(services));
+    }
+
+    private sealed class TestFactory : IGitHubCopilotClientFactory
+    {
+        internal TestClient Client { get; } = new();
+        public IGitHubCopilotClient Create(GitHubCopilotClientRequest request) => Client;
+    }
+
+    private sealed class TestClient : IGitHubCopilotClient
+    {
+        internal GitHubCopilotSessionRequest? LastRequest { get; private set; }
+        internal int Sends { get; set; }
+        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyCollection<string>> ListModelsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<string>>(["offline-unit-test"]);
+        public Task<IGitHubCopilotSession> CreateSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
+        { LastRequest = request; return Task.FromResult<IGitHubCopilotSession>(new TestSession(this)); }
+        public Task<IGitHubCopilotSession> ResumeSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
+            => CreateSessionAsync(request, cancellationToken);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TestSession(TestClient client) : IGitHubCopilotSession
+    {
+        public string SessionId => "offline-unit-test";
+        public string? WorkspacePath => null;
+        public async IAsyncEnumerable<GitHubCopilotStreamEvent> SendAsync(string prompt, [EnumeratorCancellation] CancellationToken cancellationToken)
+        { client.Sends++; await Task.Yield(); yield return new(GitHubCopilotStreamEventKind.Completed); }
+        public Task AbortAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+}
