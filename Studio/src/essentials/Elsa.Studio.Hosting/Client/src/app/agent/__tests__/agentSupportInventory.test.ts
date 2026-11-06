@@ -62,10 +62,11 @@ describe("prompt-time Studio support discovery", () => {
     expect(snapshot.content.modules).toEqual([row("@custom/resource-owner")]); expect(snapshot.content.completeness).toBe("complete");
   });
 
-  it.each(["https", "file", "unix", "windows", "relative"])("withholds %s location-shaped identities and preserves unknown rather than absence", async shape => {
+  it.each(["https", "file", "unix", "windows", "relative", "ambiguous-segments"])("withholds %s location-shaped identities and preserves unknown rather than absence", async shape => {
     const canary = `private-${Math.random()}`;
     const identities: Record<string, string> = { https: `https://feed.example/${canary}?token=value`, file: `file:///private/${canary}`,
-      unix: `/var/private/${canary}`, windows: `C:\\private\\${canary}`, relative: `../private/${canary}` };
+      unix: `/var/private/${canary}`, windows: `C:\\private\\${canary}`, relative: `../private/${canary}`,
+      "ambiguous-segments": `${canary}${"-".repeat(110)}!` };
     const unsafe = identities[shape];
     const api = registry({ complete: true, modules: [row(unsafe), row("Healthy")] });
     const unknown = beginAgentModuleRegistration(api, unsafe);

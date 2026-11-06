@@ -184,7 +184,7 @@ function supportsContext(input: unknown) {
 function record(value: unknown): Record<string, unknown> | undefined { return !!value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
 // This is a disclosure projection, not a restriction on SDK registration. Scoped opaque IDs remain
 // opaque; URL/path-shaped or otherwise unrepresentable metadata makes discovery incomplete.
-function identifier(value: unknown) { return typeof value === "string" && value.length <= 160 && /^@?[A-Za-z0-9_-]+(?:[./:-][A-Za-z0-9_-]+)*$/.test(value) ? value : undefined; }
+function identifier(value: unknown) { return typeof value === "string" && value.length <= 160 && /^@?[A-Za-z0-9_-]+(?:[./:][A-Za-z0-9_-]+)*$/.test(value) ? value : undefined; }
 function label(value: unknown) { return typeof value === "string" && value.trim() && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value) ? value : undefined; }
 function moduleStatus(value: unknown): ModuleStatus | undefined { return value === "available" || value === "disabled" || value === "failed" || value === "incompatible" || value === "unknown" ? value : undefined; }
 

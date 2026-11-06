@@ -155,11 +155,13 @@ public sealed class HostSupportContextTests
     [InlineData("tooManyResources")]
     [InlineData("moduleUrl")]
     [InlineData("absolutePath")]
+    [InlineData("ambiguousSegments")]
     public async Task Malformed_or_oversized_claim_is_refused_before_native_support_read(string invalid)
     {
         var content = Content();
         switch (invalid)
         {
+            case "ambiguousSegments": content["modules"]![0]!["id"] = "a" + new string('-', 150) + "!"; break;
             case "side": content["side"] = "backend"; break;
             case "clientAsserted": content["clientAsserted"] = false; break;
             case "missingArray": content.Remove("loader"); break;
