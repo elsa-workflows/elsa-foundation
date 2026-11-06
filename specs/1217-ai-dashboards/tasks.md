@@ -2,7 +2,7 @@
 
 **Status:** Active dependency-ordered delivery plan after owner resume. Native and Weaver implementation is in progress; Copilot/options configuration is selected, usable live access remains unqualified. Completed code tasks are not feature acceptance.
 
-**Checkpoint:** Frozen 23058692a passed Architecture 618/618 and package 005 with 20 archives / 19 native cases. T011/T012 include the local R2 tier/catalog corrections; T042 is supported by that package witness. The R2 frontend passed 177/177 locally. These checkmarks do not claim a final correction commit, generator/current CI pass, composed UX or live-provider acceptance; native 004 remains failed with its checkbox fix underway. See the [evidence index](evidence/README.md) and [R2 checkpoint](evidence/2026-11-06-review-r2-checkpoint.md).
+**Checkpoint:** Frozen 23058692a passed Architecture 618/618 and package 005 with 20 archives / 19 native cases. T011/T012 include the local R2 tier/catalog corrections; T042 is supported by that package witness. The R2 frontend passed177/177; subsequent R3 corrections passed182/182. Query/Workflow/Acme suites after R3 passed42/42,39/39,31/31. These checkmarks do not claim a final correction commit, generator/current CI pass, composed UX or live-provider acceptance; native 004 remains failed with its checkbox fix underway. See the [evidence index](evidence/README.md) and [R2 checkpoint](evidence/2026-11-06-review-r2-checkpoint.md).
 
 **Cadence:** ADR 0080 risk-based behavior tests apply. The constitutions do not mandate greenfield TDD; use test-after or test-first where useful, and retain red/green bite-proof for behavior claims before completion. Do not add mirror tests or unrelated runtime runs for this docs checkpoint.
 

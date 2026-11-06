@@ -1,6 +1,12 @@
-# Studio Home
+# Studio Home, questions and dashboards
 
-`Elsa.Studio.Dashboard` hosts the customizable Home surface at `/`, `/dashboard`, and `/overview`. There is no separate Dashboard navigation entry.
+`Elsa.Studio.Dashboard` hosts the customizable Home surface at `/`, `/dashboard`, and `/overview`. Questions and Dashboards have separate navigation entries at `/questions` and `/dashboards`, with Mine and Shared with me collections. Named dashboards store saved question references independently of Home's widgets and layout preferences.
+
+## Saved questions and named dashboards
+
+Native question controls support the fields, metrics, filters, time ranges, parameters and visualizations declared by each installed dataset. Preview, Save, reopening, refresh and drill use the current viewer's source access. Optional Weaver authoring proposes a draft; applying it and saving remain explicit actions. Backend configuration selects the existing Copilot adapter.
+
+Named dashboards arrange saved questions as tiles. Sharing a dashboard retains its question references and leaves their audiences unchanged. The sharing and copy dialogs review included questions and offer separate private question copies; a dashboard copy retains the original references. See the [native domain guide](../../../../Essentials/src/Studio/Dashboard/README.md) for composition, permissions and recovery.
 
 ## Widgets
 
@@ -16,4 +22,4 @@ Signed-in users read and write `/_elsa/studio/home-layout`. Admins with `studio/
 
 When sign-in is off the client never calls the Home layout API. The layout is stored in `localStorage` under `elsa-studio:home-layout:` (scoped by host, tenant, and subject). If that key is missing, Home uses the built-in default. A reset clears the local key.
 
-See [Studio Preferences API](../../../Essentials/src/Studio/Preferences/Api/README.md) for the HTTP surface.
+See [Studio Preferences API](../../../../Essentials/src/Studio/Preferences/Api/README.md) for the HTTP surface.

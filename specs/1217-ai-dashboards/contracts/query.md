@@ -62,6 +62,8 @@ The first-profile proposal is one dataset per question, with at most two explici
 
 The same grammar powers conversation and ordinary editors. Native controls can change every supported field, filter, grouping, metric/aggregate, sort, window/comparison, parameter and presentation choice without a model call. The module validates combinations as well as individual members; syntactically valid unsupported combinations remain unavailable.
 
+A current metric may use its plain alias or `current.<alias>` in visualization bindings. Use one spelling consistently across that visualization's X and Y columns; combining both spellings for the same metric is rejected before saving or execution. Baseline and delta remain distinct outputs.
+
 For example, this illustrative definition asks for individual workflows with an increased failure rate and includes their current folder for presentation. Names/revisions below are proposed, not existing dataset identifiers:
 
 ```json

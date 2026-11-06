@@ -28,4 +28,6 @@ Drill integrity proofs use a private process-local signing key. A process restar
 
 ## Cross-domain contributions
 
-The module supplies `IDashboardDatasetExtension`, `IDashboardQueryValidationExtension`, `IDashboardQueryExecutionExtension` and `IDashboardQueryDrillExtension`, plus its Foundation permission contribution. Dashboard dispatches these through its named Sequential events and one aggregator per operation. Dataset computation and authorization stay here; the generic query service and Weaver require no workflow-specific branch.
+The module supplies `IDashboardDatasetExtension`, `IDashboardQueryValidationExtension`, `IDashboardQueryExecutionExtension` and `IDashboardQueryDrillExtension`. Dashboard dispatches these through its named Sequential events and one aggregator per operation. Dataset computation and authorization stay here; the generic query service and Weaver require no workflow-specific branch.
+
+`WorkflowDashboardQueryPermissionExtension` contributes `workflows/dashboard-queries:read` through Foundation Identity's `IPermissionContributor`; see the [owning permission catalog](../../../Foundation/Identity/Core/EXTENSION_POINTS.md#ipermissioncontributor).
