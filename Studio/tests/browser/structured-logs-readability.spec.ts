@@ -27,7 +27,7 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
           if (url.pathname.endsWith("/sources")) return route.fulfill({ json: [{ id: "server", displayName: "Server" }, { id: "studio", displayName: "Studio" }, { id: source, displayName: "Warehouse stream" }] });
           if (url.pathname.endsWith("/recent")) {
             const filter = url.searchParams.get("category") ?? "";
-            const sourceId = url.searchParams.get("sourceId") ?? "";
+            const sourceId = url.searchParams.get("source") ?? "";
             const level = url.searchParams.get("minLevel") ?? "Information";
             return route.fulfill({ json: entries.filter(entry => (!filter || entry.category.includes(filter)) && (!sourceId || entry.sourceId === sourceId) && ["", "Trace", "Debug", "Information"].includes(level)) });
           }
@@ -77,6 +77,17 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
         const exported = readFileSync((await download.path())!, "utf8").trim().split(/\r?\n/).map(line => JSON.parse(line));
         expect(exported).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: source, category, message })]));
         await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
+        const sourceFilter = page.getByRole("combobox", { name: "Structured log source", exact: true });
+        await sourceFilter.selectOption("server");
+        await expect(table.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(1);
+        await expect(table.getByRole("row", { name: "Select Information structured log from Orders", exact: true })).toBeVisible();
+        await sourceFilter.selectOption(source);
+        await expect(table.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(1);
+        await expect(table.getByRole("row", { name: `Select Information structured log from ${category}`, exact: true })).toBeVisible();
+        await sourceFilter.selectOption("studio");
+        await expect(table.getByText("No logs match these filters.", { exact: true })).toBeVisible();
+        await table.getByRole("button", { name: "Reset filters", exact: true }).click();
+        await expect(table.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(2);
         await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
         await page.getByRole("combobox", { name: "Minimum log level", exact: true }).selectOption("Warning");
         await page.getByRole("combobox", { name: "Structured log source", exact: true }).selectOption("studio");
