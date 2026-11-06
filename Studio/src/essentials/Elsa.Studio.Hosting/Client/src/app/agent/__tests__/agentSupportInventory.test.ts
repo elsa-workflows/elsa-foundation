@@ -62,6 +62,19 @@ describe("prompt-time Studio support discovery", () => {
     expect(snapshot.content.modules).toEqual([row("@custom/resource-owner")]); expect(snapshot.content.completeness).toBe("complete");
   });
 
+  it("withholds control-bearing labels without treating omitted modules as absent and preserves readable Unicode", async () => {
+    const controls = [...Array.from({ length: 32 }, (_, code) => code), 127];
+    const readable = { ...row("Healthy"), displayName: " Shared café 🙂 " };
+    const api = registry({ complete: true, modules: [readable, ...controls.map(code => ({ ...row(`module-${code}`), displayName: `label${String.fromCharCode(code)}private` }))] });
+    const module = beginAgentModuleRegistration(api, "Unlisted"); module.complete();
+    const snapshot = await refreshStudioSupportInventory(api);
+    expect(snapshot.content.modules).toEqual([readable]);
+    expect(snapshot.content.completeness).toBe("incomplete");
+    expect(isStudioSupportSnapshotCurrent(api, snapshot)).toBe(true);
+    expect(snapshot.content.loader).toContainEqual({ moduleId: "Unlisted", status: "loaded" });
+    expect(JSON.stringify(studioSupportAttachment(api, snapshot))).not.toContain("private");
+  });
+
   it.each(["https", "file", "unix", "windows", "relative", "ambiguous-segments"])("withholds %s location-shaped identities and preserves unknown rather than absence", async shape => {
     const canary = `private-${Math.random()}`;
     const identities: Record<string, string> = { https: `https://feed.example/${canary}?token=value`, file: `file:///private/${canary}`,
