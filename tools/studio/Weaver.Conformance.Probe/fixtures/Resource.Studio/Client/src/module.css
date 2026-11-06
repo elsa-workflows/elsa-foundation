@@ -44,3 +44,22 @@
   margin: 0;
   transition: none;
 }
+
+.acme-home-effects label {
+  flex-wrap: wrap;
+}
+
+.acme-home-effects select {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  flex: 1 1 14rem;
+}
+
+.acme-home-effects button {
+  white-space: normal;
+}
+
+.acme-home-check-result {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}

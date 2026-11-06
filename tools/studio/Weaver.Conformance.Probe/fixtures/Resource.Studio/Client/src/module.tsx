@@ -12,6 +12,7 @@ import {
   type StudioAgentResultRendererProps
 } from "@elsa-workflows/studio-sdk";
 import "./module.css";
+import { registerEffects } from "./effects";
 
 const moduleId = "Acme.Home";
 const widgetId = "acme.home:status";
@@ -336,4 +337,5 @@ export function register(api: ElsaStudioModuleApi) {
       sizeChoice.set(size);
       return { outcome: "applied", summary: `The unsaved size choice is now ${sizeLabel(size).toLowerCase()}.`, result: { typeId: previewResultType, schemaVersion: "1", data: { widgetId, size } } };
     } });
+  registerEffects(api);
 }
