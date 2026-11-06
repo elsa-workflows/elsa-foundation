@@ -67,4 +67,9 @@
     <EmbeddedResource Include="../../../Fixtures/legacy-set-v1.json" LogicalName="legacy-set-v1.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Canonical inline event pipeline used by the real source-analysis fixture. -->
+    <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
+  </ItemGroup>
+
 </Project>

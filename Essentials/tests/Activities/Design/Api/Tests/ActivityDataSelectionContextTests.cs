@@ -259,8 +259,8 @@ public sealed class ActivityDataSelectionContextTests
         var services = new ServiceCollection();
         services.AddSingleton<IActivityDraftValidator>(original);
         services.AddScoped<IActivityDataSelectionAnalyzer, UnusedAnalyzer>();
-        ActivityDataSelectionDraftValidationRegistration.Register(services);
-        ActivityDataSelectionDraftValidationRegistration.Register(services);
+        DataSelectionDraftValidationRegistration.Register(services);
+        DataSelectionDraftValidationRegistration.Register(services);
         using (var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
         {
             using var first = provider.CreateScope();
@@ -317,6 +317,7 @@ public sealed class ActivityDataSelectionContextTests
         {
             var services = new ServiceCollection();
             services.AddOptions();
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
             new WorkflowDesignValidationsFeature().ConfigureServices(services);
             services.AddSingleton<IActivityDefinitionLookup>(Lookup);
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 internal sealed record ActivityDataSelectionAnalyzerComposition(IServiceCollection Services);
 
 /// <summary>Rejects a missing, duplicate or non-scoped authority after every feature has registered.</summary>
-internal sealed class ActivityDataSelectionAnalyzerCompositionCheck(ActivityDataSelectionAnalyzerComposition composition) : IShellInitializer
+internal sealed class DataSelectionAnalyzerCompositionCheck(ActivityDataSelectionAnalyzerComposition composition) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -27,6 +27,6 @@ internal sealed class ActivityDataSelectionAnalyzerCompositionCheck(ActivityData
         foreach (var descriptor in existing) services.Remove(descriptor);
         services.AddSingleton(new ActivityDataSelectionAnalyzerComposition(services));
         if (existing.Length == 0)
-            services.AddShellInitializer<ActivityDataSelectionAnalyzerCompositionCheck>(LifecyclePhase.Prepare, 0);
+            services.AddShellInitializer<DataSelectionAnalyzerCompositionCheck>(LifecyclePhase.Prepare, 0);
     }
 }

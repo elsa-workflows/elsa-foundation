@@ -38,4 +38,9 @@
     <Compile Include="..\..\Tests\Unit\BaselineValidatorTests\StubActivityCatalog.cs" Link="Support\StubActivityCatalog.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Canonical inline event pipeline used by the real source-analysis fixture. -->
+    <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
+  </ItemGroup>
+
 </Project>

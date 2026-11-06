@@ -82,6 +82,7 @@ public sealed class Elsa3FlowchartValidationTests
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesControlFlowFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         services.AddSingleton<IActivityDefinitionLookup>(RealActivityCatalog.Create());
         await using var provider = services.BuildServiceProvider();

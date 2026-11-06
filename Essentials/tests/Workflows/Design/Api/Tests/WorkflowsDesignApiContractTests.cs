@@ -712,6 +712,7 @@ public sealed class WorkflowsDesignApiContractTests
                         DefinitionDomainFakes.Register(services);
                         // The credential-literal admission the state-writing routes take, as the feature's
                         // DependsOn composes it, judging against an activity catalog that declares a credential input.
+                        new Elsa.Events.EventsFeature().ConfigureServices(services);
                         new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
                         services.AddSingleton<IActivityDefinitionLookup>(CredentialLiteralTestSupport.Catalog());
                         services.AddFastEndpoints(options => options.Assemblies = [typeof(DesignRetainedFastEndpointsCanary).Assembly]);

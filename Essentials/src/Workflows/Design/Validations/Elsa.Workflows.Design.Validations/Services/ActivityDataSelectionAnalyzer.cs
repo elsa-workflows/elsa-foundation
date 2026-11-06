@@ -3,12 +3,14 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Internal;
 using Microsoft.Extensions.Options;
 
@@ -21,7 +23,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
     ScopedVariablePicker variables,
     ScopedVariableResolver variableResolver,
     IEnumerable<IActivitySerializedShapeSource> shapeSources,
-    IEnumerable<IActivityInputSourceConstraintProvider> constraintProviders,
+    IInlineEventPublisher events,
     IOptions<WorkflowDesignValidatorOptions> options) : IActivityDataSelectionAnalyzer
 {
     public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(
@@ -188,8 +190,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 "A connection input accepts only a connection reference."));
         }
         if (version is not null)
-            foreach (var provider in constraintProviders)
-                if (await provider.GetConstraintAsync(version, target.InputKey, ct) is { } constraint) constraints.Add(constraint);
+        {
+            var collecting = new InputConstraintsCollecting(version, target.InputKey);
+            // IInlineEventPublisher selects Sequential and awaits the canonical event pipeline.
+            await events.Publish(collecting, ct);
+            constraints.AddRange(collecting.Constraints);
+        }
         var merged = Intersect(constraints);
         return context.Targets[target] = new(target, definition.DisplayName, definition.Type, definition.IsNullable,
             definition.IsRequired, projection.Length > 0, merged, definition.IsSensitive, definition.IsCredential);

@@ -52,6 +52,7 @@ public sealed class DecisionDataSelectionTests
     {
         var services = new ServiceCollection();
         services.AddOptions();
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new DecisionsWorkflowsDesignFeature().ConfigureServices(services);
         services.AddSingleton<IActivityDefinitionLookup>(new Catalog());
