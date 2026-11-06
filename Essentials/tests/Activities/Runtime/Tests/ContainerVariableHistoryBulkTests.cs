@@ -54,7 +54,7 @@ public sealed class ContainerVariableHistoryBulkTests
         Assert.Equal(4097, values.Length);
         Assert.Equal(variables.Select(variable => variable.Name).Order(), values.Select(value => value.Name).Order());
         var writer = host.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
-        var completion = Assert.Single(writer.ListCommits(), record => record.Commit.StateChanges.ActivityExecutions.Any(change =>
+        var completion = Assert.Single(writer.ListCommits(), record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted && record.Commit.StateChanges.ActivityExecutions.Any(change =>
             change.StateId == owner.Execution.ActivityExecutionId && change.State.Status == ActivityExecutionStatus.Completed)).Commit;
         Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, completion.Checkpoint.Name);
         var projection = Assert.Single(completion.StateChanges.ActivityExecutionInspections,
