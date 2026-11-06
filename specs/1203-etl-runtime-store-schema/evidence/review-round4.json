@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "reviewRound": 4,
+  "reviewedHead": "b39de5ced4562803eb7a1825674002d1f52ba169",
+  "base": "6bc9562b573e2d11181df86ba2381d124c0c9345",
+  "findings": [
+    "Release allocated runtime test database on context/migration initialization failure, preserving the original failure even when cleanup fails.",
+    "Correct external README successor references and plan diagnostic description."
+  ],
+  "executingFiles": {
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlProviderRuntimeDatabase.cs": "eb75287a8263a808a955c0ceb4e8879db47d6eb7e520a6c64c03aaa2539bbf70",
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeDatabaseInitializationTests.cs": "36dd365d0a1b4ab885c8c955b7622a66814505055fc04817b8914c175b3b58d1"
+  },
+  "red": {
+    "total": "3",
+    "executed": "3",
+    "passed": "0",
+    "failed": "3",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "greenFocused": {
+    "total": "9",
+    "executed": "9",
+    "passed": "9",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "greenBreakdown": {
+    "controlledDesignAndRuntimeInitialization": 6,
+    "nativeRegistrationRefusal": 3
+  },
+  "trxHashes": {
+    "red": "9063868a5d6b96b203f3a9ac2a67645b7e56cc4dfe79dbc7f9f83eb1738b4d14",
+    "green": "5b23b785c291ca45e6241fbbb71200e6544e00c6360961decaa5340a1f82edd5"
+  },
+  "limits": [
+    "The three new runtime initialization controls inject a real EF pre-open failure/use unsupported provider selection; their cleanup callback is controlled, not a physical server database-deletion proof.",
+    "Prior whole804-provider count retains24bc source. A new807-case whole-project run and full review5 follow; neither is predeclared passed.",
+    "Final-main reconciliation, requiredCI, base-first delivery/resulting-main verification remain."
+  ]
+}

@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Text.Json;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints;

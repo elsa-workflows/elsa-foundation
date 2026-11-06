@@ -1,7 +1,7 @@
 # Extension points — API endpoint layer
 
 The endpoint-class bases, the module-local mapper, the request binder, and the module-owned failure
-pipeline ship in the [NativeEndpoints](https://www.nuget.org/packages/NativeEndpoints) package.
+pipeline ship in the [ValenceWorks.MinimalEndpoints](https://www.nuget.org/packages/ValenceWorks.MinimalEndpoints) package.
 `Elsa.Api.AspNetCore` carries what stays Elsa's: endpoint ownership, security disposition, authoring
 model, and host-credential enforcement, plus the operation convention that attaches them (see
 `ElsaEndpointConventions`). Everything below is attached by the owning module through standard DI or

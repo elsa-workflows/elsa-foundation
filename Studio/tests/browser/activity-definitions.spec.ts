@@ -1342,13 +1342,13 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   state.preflightMode = "invalid";
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Publication blocked")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish 1.0.0" })).toBeDisabled();
   expect(state.publicationWrites).toBe(0);
 
   state.preflightMode = "valid";
   state.publishMode = "stale";
-  await page.getByRole("button", { name: "Refresh review" }).click();
+  await page.getByRole("button", { name: "Check again" }).click();
   await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
