@@ -1,7 +1,7 @@
 # Implementation Plan: Workflow and activity testing
 
 **Branch**: `agent/codex/3588-regression-testing` | **Date**: 2026-11-05 | **Spec**: [spec.md](spec.md)
-**Input**: #3588 and #3892, coordinated by #3901. Design only; no production support or acceptance is asserted.
+**Input**: #3588 and #3892, coordinated by #3901. Approved design; implementation is in progress. Component proofs do not establish complete product support or acceptance.
 
 ## Summary
 
@@ -23,7 +23,7 @@ Follow [research.md](research.md), [data model](data-model.md), [contract](contr
 
 ## Constitution Check
 
-Loaded framework v6.1.0 and Elsa v6.3.0 Gate indexes and [review checklist](../../docs/contributing/review-checklist.md).
+Loaded framework v6.1.0 and Elsa v6.3.0 Gate indexes and [review checklist](../../docs/contributing/review-checklist.md). The scoped optional-domain addition in this delivery advances Elsa to v6.4.0 without changing the framework pin or ratifying provisional sections.
 
 - §2.1/§2.6/§2.6.4: `.Core` contains models/contracts/thin guards. Separate authoring discovery and runtime execution contributions. No concrete feature dependency or dependence on registration side effects.
 - §2.5/§2.11: public inheritable features with virtual configuration, scoped services, missing/duplicate provider diagnostics.
@@ -92,7 +92,7 @@ Timer due selection and claim visibility must use separate clocks: existing `Run
 
 Enforce ownership before `ListDueAsync`, `ClaimDueAsync` and `GetNextDueTimeAsync`, never after the wall pump claims a controlled timer. Qualify advancement between Delay's timer persistence and bookmark commit, with idempotent pending delivery rather than a lost wake-up. Clock/effect propagation uses context-aware module services: Delay resolves business time from its execution context; HTTP carries validated attempt identity in request options to the normal transport boundary and revalidates durable scope on resumed/background work. Fresh CLR activation scopes do not inherit parent-request substitutions; arbitrary constructor service replacement remains unavailable without a separately qualified activation capability.
 
-HTTP substitution is enforced at the normal module transport boundary with complete safe interaction identity. Integration explicitly maps chosen test-system connections and uses real time by default. A mixed configuration names each real/substituted boundary and is admitted only when each policy is qualified. No process-wide HTTP client, host clock or production connection default is changed.
+HTTP policy is enforced before request construction, connection resolution and credential access, with complete safe interaction identity. A transport handler alone is too late because connection authentication happens first. Integration explicitly maps both the safe destination and chosen test-system connection before the ordinary resolver runs, and uses real time by default. A mixed configuration names each real/substituted boundary and is admitted only when each policy is qualified. Secret-bound input policy and unknown-constructor refusal precede activation. Delayed event publication and User Task staging also require owner-level test isolation before ordinary routing or inbox records are created.
 
 BPMN discovery distinguishes native structural BPMN, bound task, direct model and `RunBpmn`. Advertise no model profile before model-owned test scope/run-kind propagation, native-work origin, timers and cleanup qualify it. Unsupported independent targets get precise unavailable reasons. This does not replace required native witnesses or resume paused BPMN/ETL work.
 

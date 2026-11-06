@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Workflows.Testing.WorkflowsTestingFeature
+Elsa.Workflows.Testing.WorkflowsTestingFeature.WorkflowsTestingFeature() -> void
+virtual Elsa.Workflows.Testing.WorkflowsTestingFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

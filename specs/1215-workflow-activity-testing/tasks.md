@@ -21,7 +21,7 @@ The early owned probes and internal pure runtime witnesses are not public test e
 - [ ] T008 Implement/prove runtime-owned lexical read/write/close/capture frames in `Elsa.Workflows.Runtime/Services/Values/`, with no fabricated predecessor/ancestor activity states and shared direct/expression protection-aware fixture resolution.
 - [ ] T009 Add selected leaf/composite/nested/reusable, missing/null/fixture-shadow, capture writeback and cancellation behavior controls in `Essentials/tests/Workflows/Runtime/Tests/` before advertising any profile.
 - [ ] T010 Prove owned controlled timer eligibility versus wall claims, timer-before-bookmark race and ordinary-pump isolation in `Runtime/Scheduling/` and its focused test project before library integration.
-- [ ] T011 Add the optional production domain purpose/pin to `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`; preserve `Elsa.Testing` test grouping and ratified dependency gates.
+- [x] T011 Add the optional production domain purpose/pin to `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`; preserve `Elsa.Testing` test grouping and ratified dependency gates.
 - [ ] T012 Create actual Testing Core/feature/API/provider projects in `Essentials/src/Workflows/Testing/`, plus public API files, solution entries and correct test tiers; do not create empty provider scaffolds.
 - [ ] T013 Implement immutable shared case/suite/candidate/target/setup/step/assertion/run/report models and provider-neutral CQS/contribution ports in `Testing/Core/` per `contracts/testing.md`.
 - [ ] T014 Implement typed source-revision authoring and exact revision capture/pins in `Testing/Elsa.Workflows.Testing/` and `Testing/Persistence/EntityFrameworkCore/`; preserve trusted scope and CAS.
@@ -92,6 +92,8 @@ The early owned probes and internal pure runtime witnesses are not public test e
 ## Dependencies and independent acceptance
 
 Numeric order is the backend critical path. T001–005 close artifact readiness before production. T006–010 prove the execution/context/timer boundary before library growth. Backend foundation tasks own reusable contracts, source/result stores, target preparation, closed effect policy, serial steps/assertions/settlement, lifecycle/fixtures, library resolution/import, controlled time and module adapters. These are prerequisites for safe public execution, not optional later polish.
+
+After the executed T006 primitive proof, the independent domain declaration and portable Core model portion of T011–013 may proceed alongside T007–010; they do not implement a library, advertise runtime support or activate public execution. Store/orchestrator integration still waits for the execution/context/timer witnesses. This keeps the stable cross-client data contract moving without assuming unproved runtime behavior.
 
 Normal host composition (T051) depends on the common API, durable provider, source/result stores and every advertised profile; it precedes actual composed acceptance (T038, T040, T045, T048, T050, T053). Those story tests may be written earlier but are checked complete only after that activation and their complete dependencies execute. Earlier focused backend tests can use owned hosts with explicitly qualified pure profiles. No ordinary host advertises an unfinished public runner.
 

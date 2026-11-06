@@ -612,6 +612,11 @@
       "medianMinutes": 0.25
     },
     {
+      "project": "Essentials/tests/Workflows/Testing/Tests/Elsa.Workflows.Testing.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",

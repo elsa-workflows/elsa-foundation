@@ -190,6 +190,7 @@ not automatic constitution violations.
 | Workflows runtime distributed EF Core placement persistence | [`Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
+| Workflow testing — deterministic assertions and shared report policy | [`Essentials/src/Workflows/Testing/Elsa.Workflows.Testing/EXTENSION_POINTS.md`](Essentials/src/Workflows/Testing/Elsa.Workflows.Testing/EXTENSION_POINTS.md) |
 
 ### Rules
 

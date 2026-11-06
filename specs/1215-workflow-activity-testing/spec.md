@@ -143,6 +143,7 @@ An author or CI job cancels a waiting/active case, sees the difference between c
 - **FR-032**: A workflow designer test captures the current editor content, including unsaved edits, as its exact candidate without silently saving the business draft. Never run an older persisted draft while labeling it current. Where another authoring surface requires a saved revision, require an explicit Save and identify that revision before running.
 - **FR-033**: Converting a manual run to a saved scenario includes author-confirmed supported interactive deliveries/time advances in their observed order, alongside setup and chosen assertions. Resolve run-specific wait identities to stable authored selectors with explicit ambiguity validation, never copy old runtime IDs as replay selectors.
 - **FR-034**: Pending or invalid unapplied code-editor changes block candidate capture until the author explicitly applies or resets them; preserve the buffer and identify the action required. With autosave disabled, testing an applied unsaved change uses that new content and leaves the persisted business draft unchanged.
+- **FR-035**: Infrastructure/control refusals, missing context/providers, lost authority, timer/effect capability failures and uncertain cleanup cannot satisfy an expected business-fault assertion. Fault checks identify the actual target/model business observation and retain its provenance; a failed preparation or unavailable execution remains unavailable/incomplete.
 
 ### Key Entities
 
