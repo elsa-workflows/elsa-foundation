@@ -27,9 +27,9 @@ CAPTURES = (
     'integrated-saved-same-process',
     'alternate-after-real-save-reload',
     'actual-run-inspection-high',
-    'actual-run-inspection-unknown',
+    'actual-run-inspection-done',
 )
-BRANCHES = {'High': ('Edited high', 'high'), 'Unknown': ('Nested low', 'low-inline')}
+BRANCHES = {'High': ('Edited high', 'high'), 'Done': ('Nested low', 'low-inline')}
 
 
 def owned_helpers() -> ModuleType:

@@ -316,13 +316,17 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
       receipt.publication = { ...published, definitionVersionId: promoted.id, version: promoted.version };
       const runs: Record<string, unknown>[] = [];
       receipt.runs = runs;
-      for (const [route, expected, producer, absent] of [["High", "Edited high", "high", "low-inline"], ["Unknown", "Nested low", "low-inline", "high"]]) {
+      for (const [route, expected, producer, absent] of [["High", "Edited high", "high", "low-inline"], ["Done", "Nested low", "low-inline", "high"]]) {
         const started = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${published.artifactId}/execute`, "POST", { sourceReferenceId: published.sourceReferenceId, inputs: { route } });
         let instance!: Instance;
         await expect.poll(async () => {
           instance = await api<Instance>(`/runtime/workflows/instances/${started.workflowExecutionId}`);
           return instance.instance.status;
-        }, { timeout: 60_000 }).toMatch(/^(Completed|Finished)$/);
+        }, { timeout: 60_000 }).toMatch(/^(Completed|Finished|Faulted|Cancelled|Aborted)$/);
+        if (!/^(Completed|Finished)$/.test(instance.instance.status)) {
+          await info.attach(`runtime-${route}-failure.json`, { body: JSON.stringify({ instance }, null, 2), contentType: "application/json" });
+        }
+        expect(instance.instance.status, `Actual ${route} run must complete without a runtime fault`).toMatch(/^(Completed|Finished)$/);
         expect(instance.instance.definitionId).toBe(submitted.definition.id);
         expect(instance.instance.definitionVersionId).toBe(promoted.id);
         expect(instance.instance.sourceReferenceId).toBe(published.sourceReferenceId);
