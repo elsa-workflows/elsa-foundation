@@ -171,11 +171,7 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
         if (!IsStructure(common, FlowchartStructureKind))
             return false;
 
-        var flow = graph.Flowchart(common);
-        return flow is not null &&
-               !flow.IsReachable(leftChild.Node.NodeId, rightChild.Node.NodeId) &&
-               !flow.IsReachable(rightChild.Node.NodeId, leftChild.Node.NodeId) &&
-               !flow.AreExclusive(leftChild.Node.NodeId, rightChild.Node.NodeId);
+        return graph.AssessChildResult(common, leftChild.Node.NodeId, rightChild.Node.NodeId).MayRunConcurrently == true;
     }
 
     private static bool CrossesOutOfScope(NodeInfo producer, NodeInfo consumer) =>
@@ -198,18 +194,9 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
         if (flowchart is null)
             return false;
 
-        var flow = graph.Flowchart(flowchart);
-        if (flow is null)
-            return false;
-
         var producerChild = ChildBelow(producer, flowchart).Node.NodeId;
         var consumerChild = ChildBelow(consumer, flowchart).Node.NodeId;
-        if (StringComparer.Ordinal.Equals(producerChild, consumerChild))
-            return flow.IsReachable(producerChild, producerChild, requireEdge: true);
-
-        return flow.IsReachable(producerChild, consumerChild) &&
-               flow.IsReachable(consumerChild, producerChild) &&
-               !flow.Dominates(producerChild, consumerChild);
+        return graph.AssessChildResult(flowchart, producerChild, consumerChild).IsCyclicBackEdge == true;
     }
 
     private static bool IsDefinitelyAvailable(NodeInfo producer, NodeInfo consumer, ValueFlowGraph graph)
@@ -226,14 +213,9 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
         if (ReferenceEquals(producerChild, consumerChild))
             return false;
 
-        if (IsStructure(common, SequenceStructureKind))
-            return producerChild.Order < consumerChild.Order;
-
-        if (IsStructure(common, FlowchartStructureKind))
-        {
-            var flow = graph.Flowchart(common);
-            return flow is not null && flow.Dominates(producerChild.Node.NodeId, consumerChild.Node.NodeId);
-        }
+        if (IsStructure(common, SequenceStructureKind) || IsStructure(common, FlowchartStructureKind))
+            return graph.AssessChildResult(common, producerChild.Node.NodeId, consumerChild.Node.NodeId).Availability ==
+                   ActivityChildResultAvailability.Definite;
 
         return false;
     }
@@ -393,7 +375,7 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
     private sealed class ValueFlowGraph
     {
         private readonly IActivityStructureService _structureService;
-        private readonly Dictionary<NodeInfo, FlowchartControlFlow?> _flowcharts = [];
+        private readonly Dictionary<(NodeInfo Container, string Producer, string Consumer), ActivityChildResultFacts> _childResultFacts = [];
         private readonly List<NodeInfo> _nodes = [];
         private readonly Dictionary<string, NodeInfo> _byNodeId = new(StringComparer.Ordinal);
 
@@ -409,18 +391,15 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
             return graph;
         }
 
-        public FlowchartControlFlow? Flowchart(NodeInfo container)
+        public ActivityChildResultFacts AssessChildResult(NodeInfo container, string producerChildNodeId, string consumerChildNodeId)
         {
-            if (_flowcharts.TryGetValue(container, out var cached))
+            var key = (container, producerChildNodeId, consumerChildNodeId);
+            if (_childResultFacts.TryGetValue(key, out var cached))
                 return cached;
 
-            var childNodeIds = _nodes
-                .Where(info => ReferenceEquals(info.Parent, container) && !string.IsNullOrWhiteSpace(info.Node.NodeId))
-                .Select(info => info.Node.NodeId)
-                .ToArray();
-            var flow = FlowchartControlFlow.TryCreate(container.Node.Structure?.Payload, childNodeIds);
-            _flowcharts[container] = flow;
-            return flow;
+            var facts = _structureService.AssessChildResult(container.Node, producerChildNodeId, consumerChildNodeId);
+            _childResultFacts[key] = facts;
+            return facts;
         }
 
         private void Add(ActivityNode root)
@@ -449,135 +428,4 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
     private sealed record NodeInfo(ActivityNode Node, NodeInfo? Parent, int Order);
     private readonly record struct VariableKey(string ScopeId, string ReferenceKey);
     private readonly record struct ActivityResultReference(string ProducerNodeId, bool IsOptional);
-
-    /// <summary>
-    /// The control flow of one Flowchart, rooted at every node where a run can begin: the start node, and every direct
-    /// child no connection targets. A run starts at exactly one of them (the trigger that fired, else the start node),
-    /// and a child without an inbound connection can only ever run as that entry, so treating it as one never hides
-    /// a real path.
-    /// </summary>
-    private sealed class FlowchartControlFlow(
-        IReadOnlyCollection<string> entryNodeIds,
-        IReadOnlyCollection<string> nodeIds,
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>> successors,
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>> predecessors)
-    {
-        public bool IsReachable(string source, string target, bool requireEdge = false)
-        {
-            var visited = new HashSet<string>(StringComparer.Ordinal);
-            var pending = new Stack<string>();
-            pending.Push(source);
-            while (pending.Count > 0)
-            {
-                var current = pending.Pop();
-                if (!visited.Add(current))
-                    continue;
-
-                foreach (var next in successors.GetValueOrDefault(current, []))
-                {
-                    if (StringComparer.Ordinal.Equals(next, target) && (!StringComparer.Ordinal.Equals(source, target) || requireEdge))
-                        return true;
-                    pending.Push(next);
-                }
-            }
-
-            return !requireEdge && StringComparer.Ordinal.Equals(source, target);
-        }
-
-        /// <summary>
-        /// Whether every path from every entry to <paramref name="node"/> passes <paramref name="candidate"/>: the
-        /// dominators of a virtual root above all entries. With one entry this is the single-root computation.
-        /// </summary>
-        public bool Dominates(string candidate, string node)
-        {
-            var entries = entryNodeIds.ToHashSet(StringComparer.Ordinal);
-            var reachable = nodeIds.Where(id => entries.Any(entry => IsReachable(entry, id))).ToHashSet(StringComparer.Ordinal);
-            if (!reachable.Contains(candidate) || !reachable.Contains(node))
-                return false;
-
-            var dominators = reachable.ToDictionary(
-                id => id,
-                id => entries.Contains(id)
-                    ? new HashSet<string>([id], StringComparer.Ordinal)
-                    : new HashSet<string>(reachable, StringComparer.Ordinal),
-                StringComparer.Ordinal);
-
-            var changed = true;
-            while (changed)
-            {
-                changed = false;
-                foreach (var current in reachable.Where(id => !entries.Contains(id)))
-                {
-                    var incoming = predecessors.GetValueOrDefault(current, []).Where(reachable.Contains).ToArray();
-                    var next = incoming.Length == 0
-                        ? []
-                        : new HashSet<string>(dominators[incoming[0]], StringComparer.Ordinal);
-                    foreach (var predecessor in incoming.Skip(1))
-                        next.IntersectWith(dominators[predecessor]);
-                    next.Add(current);
-                    if (dominators[current].SetEquals(next))
-                        continue;
-                    dominators[current] = next;
-                    changed = true;
-                }
-            }
-
-            return dominators[node].Contains(candidate);
-        }
-
-        /// <summary>
-        /// Whether no run can reach both nodes: each is reached from at least one entry, and no entry reaches both.
-        /// A node no entry reaches is never exclusive, so with one entry the answer is always false.
-        /// </summary>
-        public bool AreExclusive(string left, string right)
-        {
-            var leftEntries = EntriesReaching(left);
-            var rightEntries = EntriesReaching(right);
-            return leftEntries.Count > 0 && rightEntries.Count > 0 && !leftEntries.Overlaps(rightEntries);
-        }
-
-        private HashSet<string> EntriesReaching(string node) =>
-            entryNodeIds.Where(entry => IsReachable(entry, node)).ToHashSet(StringComparer.Ordinal);
-
-        public static FlowchartControlFlow? TryCreate(JsonElement? payload, IReadOnlyCollection<string> childNodeIds)
-        {
-            if (payload is not { ValueKind: JsonValueKind.Object } value ||
-                !TryGetArray(value, "connections", out var connections))
-                return null;
-
-            var startNodeId = TryGetString(value, "startNodeId");
-            if (string.IsNullOrWhiteSpace(startNodeId))
-                return null;
-
-            var edges = new List<(string Source, string Target)>();
-            foreach (var connection in connections.EnumerateArray())
-            {
-                if (!connection.TryGetProperty("source", out var source) ||
-                    !connection.TryGetProperty("target", out var target))
-                    continue;
-                var sourceId = TryGetString(source, "nodeId");
-                var targetId = TryGetString(target, "nodeId");
-                if (!string.IsNullOrWhiteSpace(sourceId) && !string.IsNullOrWhiteSpace(targetId))
-                    edges.Add((sourceId, targetId));
-            }
-
-            var targetIds = edges.Select(edge => edge.Target).ToHashSet(StringComparer.Ordinal);
-            var entryNodeIds = childNodeIds
-                .Where(id => !targetIds.Contains(id))
-                .Order(StringComparer.Ordinal)
-                .Prepend(startNodeId)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            var nodeIds = edges.SelectMany(edge => new[] { edge.Source, edge.Target }).Concat(entryNodeIds).ToHashSet(StringComparer.Ordinal);
-            var successors = nodeIds.ToDictionary(
-                id => id,
-                id => (IReadOnlyCollection<string>)edges.Where(edge => StringComparer.Ordinal.Equals(edge.Source, id)).Select(edge => edge.Target).Distinct(StringComparer.Ordinal).ToArray(),
-                StringComparer.Ordinal);
-            var predecessors = nodeIds.ToDictionary(
-                id => id,
-                id => (IReadOnlyCollection<string>)edges.Where(edge => StringComparer.Ordinal.Equals(edge.Target, id)).Select(edge => edge.Source).Distinct(StringComparer.Ordinal).ToArray(),
-                StringComparer.Ordinal);
-            return new FlowchartControlFlow(entryNodeIds, nodeIds, successors, predecessors);
-        }
-    }
 }

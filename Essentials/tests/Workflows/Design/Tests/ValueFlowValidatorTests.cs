@@ -250,19 +250,50 @@ public sealed class ValueFlowValidatorTests
         Assert.DoesNotContain(errors, item => item.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Switch_predicates_keep_their_projected_input_location_and_sequence_order(bool producerFirst)
+    {
+        var producer = Activity("flag");
+        var condition = ResultInput("ignored", "flag", "root");
+        var switchNode = new ActivityNode("switch", "switch@1",
+            [ResultInput("Value", "unused-value-producer", "root")], [],
+            new ActivityNodeStructure(Elsa.Activities.Switch.Activities.Switch.StructureKind,
+                Elsa.Activities.Switch.Activities.Switch.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new
+                {
+                    cases = new[] { new { caseId = "case-a", match = "Approved", condition, activity = Activity("branch") } },
+                    @default = (ActivityNode?)null
+                }, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+        var errors = await Validate(producerFirst ? Sequence("root", producer, switchNode) : Sequence("root", switchNode, producer));
+
+        Assert.DoesNotContain(errors, error => error.Path == "switch/inputs/Value");
+        if (producerFirst)
+            Assert.DoesNotContain(errors, error => error.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
+        else
+            Assert.Equal("switch/inputs/" + Elsa.Activities.Switch.Activities.Switch.ConditionInputKey("case-a"),
+                Assert.Single(errors, error => error.Type == "ValueFlow/UnavailableProducer").Path);
+    }
+
     private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root)
     {
-        var validator = new ValueFlowValidator(StructureService());
+        using var services = StructureProvider();
+        var validator = new ValueFlowValidator(services.GetRequiredService<IActivityStructureService>());
         var draft = new StubDraft(new WorkflowDefinitionState([], root, [], [], null));
         return [.. await validator.Validate(draft, CancellationToken.None)];
     }
 
-    private static IActivityStructureService StructureService() =>
-        new DefaultActivityStructureService([
-            new JsonStructureHandler("elsa.sequence.structure", StructureShape.Sequence),
-            new JsonStructureHandler("elsa.parallel.structure", StructureShape.Parallel),
-            new JsonStructureHandler("elsa.flowchart.structure", StructureShape.Flowchart)
-        ]);
+    private static ServiceProvider StructureProvider()
+    {
+        var services = new ServiceCollection();
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
+        new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityStructureService, DefaultActivityStructureService>();
+        return services.BuildServiceProvider();
+    }
 
     private static ActivityNode Activity(string nodeId, params ArgumentState[] inputs) =>
         new(nodeId, "test.activity@1", inputs, []);
@@ -359,44 +390,5 @@ public sealed class ValueFlowValidatorTests
         public WorkflowDefinitionState State { get; } = state;
         public DateTimeOffset CreatedAt => DateTimeOffset.UnixEpoch;
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UnixEpoch;
-    }
-
-    private enum StructureShape
-    {
-        Sequence,
-        Parallel,
-        Flowchart
-    }
-
-    private sealed class JsonStructureHandler(string kind, StructureShape shape) : IActivityStructureHandler
-    {
-        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-        public string Kind => kind;
-        public string SchemaVersion => "1.0.0";
-
-        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
-        {
-            var payload = activity.Structure!.Payload;
-            if (shape == StructureShape.Parallel)
-            {
-                return payload.GetProperty("branches")
-                    .EnumerateArray()
-                    .Select(branch => new ActivityChildProjection(
-                        branch.GetProperty("name").GetString() ?? string.Empty,
-                        branch.TryGetProperty("activity", out var child) && child.ValueKind != JsonValueKind.Null
-                            ? [child.Deserialize<ActivityNode>(JsonOptions)!]
-                            : []))
-                    .ToArray();
-            }
-
-            var activities = payload.GetProperty("activities").Deserialize<ActivityNode[]>(JsonOptions) ?? [];
-            return [new ActivityChildProjection("Activities", activities)];
-        }
-
-        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) =>
-            throw new NotSupportedException();
-
-        public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity) => activity.Structure!;
     }
 }
