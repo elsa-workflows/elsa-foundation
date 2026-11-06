@@ -32,7 +32,8 @@ public sealed class ModulePayloadColumnTests
         ["WorkflowsDesignDbContext"] = new(StringComparer.Ordinal)
         {
             ["ContentJson"] = 2,
-            ["StateSource"] = 2,
+            ["StateSource"] = 1,
+            ["Content"] = 2,
             ["RecordsJson"] = 2,
             ["ActivityPresentationJson"] = 2,
             ["ResultJson"] = 1,

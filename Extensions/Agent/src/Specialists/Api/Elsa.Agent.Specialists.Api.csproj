@@ -1,10 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../../Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../Core/Elsa.Agent.Specialists.Core.csproj" />
     <ProjectReference Include="../Connections/Elsa.Agent.Specialists.Connections.csproj" />

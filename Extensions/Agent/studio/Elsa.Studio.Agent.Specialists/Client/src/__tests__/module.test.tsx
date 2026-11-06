@@ -1,3 +1,4 @@
+import { Bot } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
@@ -18,7 +19,7 @@ describe("agent specialists module", () => {
 
     expect(featureAreas).toHaveBeenCalledTimes(1);
     const area = featureAreas.mock.calls[0][0];
-    expect(area).toMatchObject({ id: "agents", ownedPaths: ["/agents"], required: false, nav: { path: "/agents" } });
+    expect(area).toMatchObject({ id: "agents", ownedPaths: ["/agents"], required: false, nav: { path: "/agents", icon: Bot } });
     expect(area.routes).toEqual([expect.objectContaining({ path: "/agents", requiresBackend: [{ id: "elsa.api.activity-design", contractVersion: "1" }] })]);
   });
 

@@ -20,8 +20,9 @@ public static class LoginPage
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
 
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "");
-        var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" or "field-guide" ? options.Layout : "split";
-        var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" or "field-guide" ? options.Palette : "linen";
+        var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" or "field-guide" or "parcel-room" ? options.Layout : "parcel-room";
+        var palette = options.Palette is "pocket-orchestra" or "linen" or "tidal" or "daybreak" or "canopy" or "field-guide" or "parcel-room" ? options.Palette : "pocket-orchestra";
+        var lightPalette = palette is "field-guide" or "parcel-room" or "pocket-orchestra";
         var artwork = LoginArtwork.IsKnown(options.Artwork) ? options.Artwork : LoginArtwork.Default;
         var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
         var logoName = layout == "field-guide" ? "field-guide-logo.png" : "elsa-logo.png";
@@ -34,11 +35,11 @@ public static class LoginPage
         var focal = $"{Coordinate(options.FocalX)}% {Coordinate(options.FocalY)}%";
         return $$"""
         <!doctype html>
-        <html lang="en"{{(palette == "field-guide" ? " data-appearance=\"light\"" : "")}}>
+        <html lang="en"{{(lightPalette ? " data-appearance=\"light\"" : "")}}>
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <meta name="color-scheme" content="{{(palette == "field-guide" ? "light" : "light dark")}}" />
+          <meta name="color-scheme" content="{{(lightPalette ? "light" : "light dark")}}" />
           <title>Sign in · {{Encode(options.ProductName)}}</title>
           <style>
             :root { --ground:#f3f1ec; --paper:#fffefa; --ink:#34372f; --muted:#65685e; --line:#d9dbd0; --accent:#a64834; --on-accent:#fff; --wash:#eee9e1; color-scheme:light; }
@@ -76,6 +77,25 @@ public static class LoginPage
             [data-layout="immersive"] .welcome { position:relative; z-index:2; width:440px; border:1px solid var(--line); border-radius:24px; background:var(--paper); padding:40px; box-shadow:0 24px 80px rgba(10,20,16,.15); }
             [data-layout="editorial"] .entry { padding:5vh 6vw; gap:6vw; }
             [data-layout="editorial"] .visual { border-radius:45% 45% 24px 24px; }
+            /* Parcel Room: a small brand, clear form and full marker illustration on white. */
+            body[data-palette="parcel-room"] { --ground:#fff; --paper:#fff; --ink:#18212b; --muted:#626d79; --line:#8a939f; --accent:#58a4b5; --on-accent:#10262d; --wash:#f1f6f7; color-scheme:light; }
+            body[data-palette="pocket-orchestra"] { --ground:#faf8f5; --paper:#faf8f5; --ink:#2d3030; --muted:#686d6b; --line:#858c89; --accent:#8bbfc0; --on-accent:#183234; --wash:#eeefea; color-scheme:light; }
+            body[data-palette="pocket-orchestra"] :is(input,button,a):focus-visible { outline-color:var(--ink); }
+            [data-layout="parcel-room"] .entry { max-width:1600px; margin:auto; grid-template-columns:minmax(300px,.85fr) minmax(0,1.45fr); align-items:center; gap:clamp(32px,5vw,88px); padding:40px 5vw; }
+            [data-layout="parcel-room"] .welcome { order:0; min-width:0; padding:32px 0; }
+            [data-layout="parcel-room"] .form-wrap { max-width:380px; }
+            [data-layout="parcel-room"] .brand { gap:10px; font-size:18px; margin-bottom:44px; }
+            [data-layout="parcel-room"] .logo { width:32px; height:32px; }
+            [data-layout="parcel-room"] h1 { font-size:clamp(28px,3vw,40px); font-weight:650; line-height:1.15; }
+            [data-layout="parcel-room"] .subtitle { font-size:15px; margin-bottom:32px; overflow-wrap:anywhere; }
+            [data-layout="parcel-room"] label { font-size:14px; }
+            [data-layout="parcel-room"] input { padding:14px; font-size:16px; border-radius:9px; margin-bottom:24px; }
+            [data-layout="parcel-room"] button { min-height:48px; margin-top:8px; border-radius:9px; font-size:15px; }
+            [data-layout="parcel-room"] :is(input,button,a):focus-visible { outline-color:var(--ink); }
+            [data-layout="parcel-room"] .visual { order:1; min-height:0; border-radius:0; overflow:visible; background:transparent; color:var(--ink); }
+            [data-layout="parcel-room"] .visual>img { position:static; display:block; width:100%; height:auto; aspect-ratio:1; object-fit:contain; }
+            [data-layout="parcel-room"] .visual::after,[data-layout="parcel-room"] .story { display:none; }
+            [data-layout="parcel-room"] footer { margin-top:30px; font-size:12px; }
             /* Field Guide: the brochure's paper, sage ink, serif type and uncropped pencil plate. */
             body[data-palette="field-guide"] { --ground:#f5f2ea; --paper:#fdfbf5; --ink:#293c34; --muted:#626d63; --line:#d8dcd0; --accent:#293c34; --on-accent:#fdfbf5; --wash:#e6e9dd; color-scheme:light; }
             [data-layout="field-guide"] .entry { max-width:1500px; margin:auto; grid-template-columns:minmax(300px,.82fr) minmax(0,1.18fr); align-items:center; gap:5vw; padding:48px 6vw; }
@@ -116,11 +136,11 @@ public static class LoginPage
               [data-layout="field-guide"] footer { margin-top:26px; padding-top:18px; }
             }
             @media(prefers-color-scheme:dark) {
-              :root:where(:not([data-appearance="light"])),body[data-palette]:where(:not([data-palette="field-guide"])) { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
+              :root:where(:not([data-appearance="light"])),body[data-palette]:where(:not([data-palette="field-guide"],[data-palette="parcel-room"],[data-palette="pocket-orchestra"])) { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
               body[data-palette="tidal"] { --ground:#1d2729; --paper:#253338; --ink:#edf4f5; --muted:#b5c9cc; --line:#536b72; --accent:#acd3dc; --on-accent:#183239; }
               body[data-palette="daybreak"] { --ground:#2b242b; --paper:#362e35; --ink:#f5edf1; --muted:#d2bdc8; --line:#78636e; --accent:#dab2c4; --on-accent:#382630; }
               body[data-palette="canopy"] { --ground:#20271f; --paper:#2b3329; --ink:#eff4e9; --muted:#b6c5a7; --line:#5d6b53; --accent:#b4cd9e; --on-accent:#20301e; }
-              :where(body:not([data-palette="field-guide"])) .error { color:#ffb6ad; background:#422d2b; }
+              :where(body:not([data-palette="field-guide"],[data-palette="parcel-room"],[data-palette="pocket-orchestra"])) .error { color:#ffb6ad; background:#422d2b; }
               [data-layout="field-guide"]:not([data-palette="field-guide"]) .visual>img { mix-blend-mode:normal; }
               [data-layout="field-guide"]:not([data-palette="field-guide"]) .logo { mix-blend-mode:normal; background:#f5f2ea; border-radius:4px; }
             }
@@ -134,14 +154,20 @@ public static class LoginPage
               .brand { margin-bottom:32px; }
               [data-layout="immersive"] .story { display:none; }
               [data-layout="immersive"] .welcome { width:min(440px,100%); padding:32px 24px; }
+              [data-layout="parcel-room"] .entry { grid-template-columns:minmax(0,1fr); align-items:start; gap:28px; padding:28px 24px 40px; }
+              [data-layout="parcel-room"] .welcome { padding:0; }
+              [data-layout="parcel-room"] .form-wrap { max-width:420px; }
+              [data-layout="parcel-room"] .brand { margin-bottom:32px; }
+              [data-layout="parcel-room"] h1 { font-size:30px; }
+              [data-layout="parcel-room"] .visual { width:100%; max-width:520px; margin:auto; }
             }
             @media(forced-colors:active),(prefers-contrast:more) {
               :root,body[data-palette] { --ground:Canvas; --paper:Canvas; --ink:CanvasText; --muted:CanvasText; --line:CanvasText; --accent:Highlight; --on-accent:HighlightText; }
               .visual,[data-layout="field-guide"] .visual { display:none; }
-              .entry,[data-layout="editorial"] .entry,[data-layout="field-guide"] .entry { display:flex; justify-content:center; }
+              .entry,[data-layout="editorial"] .entry,[data-layout="field-guide"] .entry,[data-layout="parcel-room"] .entry { display:flex; justify-content:center; }
               .welcome { position:relative; width:100%; max-width:520px; box-shadow:none; }
               .error { color:CanvasText; background:Canvas; border-color:CanvasText; }
-              [data-layout="field-guide"] button { background:ButtonFace; color:ButtonText; border-color:ButtonText; }
+              [data-layout="field-guide"] button,[data-layout="parcel-room"] button { background:ButtonFace; color:ButtonText; border-color:ButtonText; }
             }
           </style>
         </head>
@@ -155,9 +181,9 @@ public static class LoginPage
               <div class="form-wrap">
                 <div class="brand">{{logo}}<span>{{Encode(options.ProductName)}}</span></div>
                 <h1 id="signin-heading">Welcome back</h1>
-                <p class="subtitle">Sign in to your workspace.</p>
+                <p class="subtitle">{{(layout == "parcel-room" ? $"Sign in to {Encode(options.ProductName)}." : "Sign in to your workspace.")}}</p>
                 {{form}}
-                <footer><span>{{Encode(options.ProductName)}}</span>{{links}}</footer>
+                {{(layout == "parcel-room" && links.Length == 0 ? "" : $"<footer><span>{Encode(options.ProductName)}</span>{links}</footer>")}}
               </div>
             </section>
           </main>

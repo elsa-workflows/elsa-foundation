@@ -1,11 +1,11 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-04
 ---
 
 # Agent-owned content uses shared revisions and provider-derived activities
 
-Status: Proposed — design-only for human review. Sipke approved drafting, then requested shared revision management for Workflow and Agent content and waived backward compatibility for pre-GA breaking changes on 4 November 2026. These instructions supersede the initial additive-adoption requirement; they do not approve the final text or authorize implementation or database deletion. [Design unit #3781](https://github.com/elsa-workflows/elsa-foundation/issues/3781), part of [Elsa Agents #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
+Status: Accepted for implementation of [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on Sipke’s explicit instruction, 4 November 2026, after PR #3783 merged as `4043cbfb1`. The owner authorized scoped implementation through reviewed PRs, coordination with existing work and waiting for any unfinished foundational capability owned by #2892. This records that action-specific owner authority; it does not assert previously requested reviewer approvals or implementation acceptance. Pre-GA database recreation is permitted for planned breaking delivery, but no current database reset is part of #3790.
 
 ## Context
 
@@ -82,4 +82,4 @@ The target reduces repeated authoring mechanics but retains necessary source-to-
 
 This ADR, the [revision contract](../../specs/1179-specialist-agents/contracts/revision-management.md) and [spec 1179](../../specs/1179-specialist-agents/spec.md) are proposed together. Workflow mappings describe required future adapters, not an amendment already implemented or approved across other specs. Prior delivery receipts remain historical evidence, not acceptance of this model. Future delivery must reconcile owning Workflow/activity specs and dependencies before changing them.
 
-Keep the PR draft for final-text human review from Sipke Schoorstra (owner/requester and Agent steward), Joey Barten and Frans van Ek (technical architects). Direction agreement, bot review and CI are distinct from final architectural agreement. This unit is outside an Initiative boundary. No production implementation, API/package rename, host change or database reset is authorized by this PR. Delivery requires final agreement and a separately authorized work unit. No constitution text is amended or draft/provisional activity-versioning/Model X provision ratified.
+PR #3783 merged and the owner subsequently authorized #3790 implementation through reviewed PRs. T064–T071 remain delivery tasks; this decision is not a claim they are implemented. Reconcile owning Workflow/activity specifications as their code is adapted. Missing foundational execution work under #2892 is a wait condition, not authority to duplicate its runtime or take over its active lane. Production changes require normal scoped review/test/CI evidence. No database reset, release or deployment is implied. No constitution text is amended or provisional versioning/Model X provision ratified.

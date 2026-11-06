@@ -1,3 +1,4 @@
+import { Bot } from "lucide-react";
 import React from "react";
 import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution } from "@elsa-workflows/studio-sdk";
 import { AgentsPage } from "./AgentsPage";
@@ -31,6 +32,26 @@ export const specialistEditorContributions: StudioActivityDefinitionImplementati
     payload: { ...initialSpecialistManifest(), ...(schemaVersion === continuitySchemaVersion ? { allowContinuity: false } : {}) },
     layout: []
   }),
+  focusDiagnosticLocation: ({ location, editorElement }) => {
+    const fields: Record<string, string> = {
+      "/instructions": "instructions", "/model": "model", "/model/providerKey": "model", "/model/connectionName": "model", "/model/modelId": "model",
+      "/settings": "model-group", "/settings/temperature": "temperature", "/limits": "calls", "/limits/maximumModelCalls": "calls",
+      "/limits/timeoutMilliseconds": "timeout", "/limits/maximumOutputTokens": "tokens"
+    };
+    const field = fields[location.jsonPointer ?? ""];
+    let target = field ? editorElement.querySelector<HTMLElement>(`[data-specialist-field="${field}"]`) : null;
+    if (!target && location.jsonPointer === "/settings") target = editorElement.querySelector<HTMLElement>("[data-specialist-field='model-group']");
+    if (!target) return { kind: "unsupported", announcement: "Return to Designer and review the agent settings described by this issue." };
+    const disclosure = target.closest<HTMLDetailsElement>("details");
+    if (disclosure) disclosure.open = true;
+    if (target.matches(":disabled")) {
+      target = target.closest<HTMLElement>(".studio-field") ?? target.parentElement ?? target;
+      target.tabIndex = -1;
+    }
+    target.focus();
+    target.scrollIntoView?.({ block: "center" });
+    return { kind: "focused", announcement: "Focused the agent setting that needs attention." };
+  },
   component: SpecialistEditor
 }));
 
@@ -43,7 +64,7 @@ export function register(api: ElsaStudioModuleApi) {
     id: "agents", title: "Agents", navGroup: "Workspace", order: 25,
     description: "Define agents with a model, instructions and typed inputs and results, and use them in workflows.",
     ownedPaths: ["/agents"], required: false, defaultEnabled: true,
-    nav: { title: "Agents", path: "/agents", order: 25, requiresBackend: activityDesign },
+    nav: { icon: Bot, title: "Agents", path: "/agents", order: 25, requiresBackend: activityDesign },
     routes: [
       { id: "agents", path: "/agents", label: "Agents", requiresBackend: activityDesign,
         component: ({ navigate }) => <AgentsPage context={api.backend} navigate={navigate} /> }

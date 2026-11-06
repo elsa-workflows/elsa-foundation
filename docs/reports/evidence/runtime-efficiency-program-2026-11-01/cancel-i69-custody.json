@@ -1,0 +1,32 @@
+{
+  "archive": "cancel-i69-evidence.tar.gz",
+  "bytes": 52962,
+  "sha256": "24448b6a591f8f007dc829eb2609705c5c319e4a110936036cef551c1bffcca9",
+  "files": 48,
+  "manifest": "manifest.json (SHA-256 of every file)",
+  "protectedValuesAbsent": true,
+  "protectedValuesCheck": "Every collected runner file and both worker tars were searched for the database password on the database host before download; node.env files were excluded. manifest.json was generated afterwards and holds only file hashes.",
+  "topology": {
+    "subscriptionRegion": "westeurope",
+    "resourceGroup": "rg-elsa-efficiency-i69 (task-owned, created 2026-11-03T21:32Z)",
+    "machines": {
+      "database": "vm-eff-i69-db Standard_D2s_v6, 10.238.2.4, PostgreSQL in Docker bound to 10.238.2.4:15432, controller runs here as root",
+      "nodeA": "vm-eff-i69-a Standard_D2s_v6, 10.238.2.5, owner eff-i68-node-a, no public IP, no outbound internet",
+      "nodeB": "vm-eff-i69-b Standard_D2s_v6, 10.238.2.6, sender eff-i68-node-b<n> with the cluster-control hook, no public IP, no outbound internet"
+    },
+    "image": "Canonical:ubuntu-24_04-lts:server:latest",
+    "network": "one private subnet 10.238.2.0/24; inbound SSH only to the database host, from the operator's /32",
+    "database": "postgres:16-alpine sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab; PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; data on the database VM's OS volume (Premium SSD, Docker default storage)",
+    "deviationFromTwoHostReadme": "The two-host README describes no public addresses; here the database host had one, with inbound SSH only from the operator's /32. The nodes had none."
+  },
+  "binaries": {
+    "source": "c6ba9b42db5f4780e7b74659da1e29ba9bfd9bb8; runtime source identical to main a1419b9c3 (only Markdown differs); contains #3669 (854667110)",
+    "workbench": "Release linux-x64 self-contained, Elsa.Workbench.dll cf410065654b1c23, Elsa.Workflows.Runtime.dll f6730d6b9fb1f7d1, Elsa.Workflows.Runtime.Distributed.dll a4fc6f66df4b65d1",
+    "clusterHook": "ElsaEfficiencyClusterHook.dll 4658158e16aaa8bc (frozen cluster-control templates)",
+    "payloadSha256": "fac1f2576067266a4930c28442dcbd1c19283d690f52f31bec5c4dabc923fa32",
+    "deployedHashesVerified": "Elsa.Workbench.dll and the hook DLL on both nodes matched the build"
+  },
+  "controller": "specs/1183-runtime-efficiency-program/evidence/two-host-qualification/cluster-controller.py and api.py, unchanged; series x1 (delay,loop), x2 (loop), x3 (loop)",
+  "note": "The controller names node logs node-<host>-<n>.log per series, so each series overwrote the previous one: the archive keeps node A's and the sender's x3 logs and the x1 second sender's log (node-b-1.log). Every case ledger and every sender receipt directory is kept.",
+  "timing": "secondsToSettledReceipt is measured by the controller from writing cancel.json over SSH, through one-second SSH polling for finished.json, to the two SSH reads of finished.json and dispatch.json that follow; it is an approximate measurement (the clock starts just after the request is written and stops after both reads), not a latency. The hook marks its output timingEligible: false."
+}

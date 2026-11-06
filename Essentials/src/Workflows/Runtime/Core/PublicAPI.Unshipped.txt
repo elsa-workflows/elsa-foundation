@@ -4343,7 +4343,10 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.IntentKind.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.Limit.get -> int
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.Matches(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem! item) -> bool
-Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.RuntimePostCommitOutboxClaimedQuery(string! workflowExecutionId, string! intentKind, int limit) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.RuntimePostCommitOutboxClaimedQuery(string! workflowExecutionId, string! intentKind, int limit, System.DateTimeOffset? deliveredByClaimSince = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.DeliveredByClaimSince.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.ExcludedDeliveredOutboxItemIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.RuntimePostCommitOutboxClaimedQuery(string! workflowExecutionId, string! intentKind, int limit, System.DateTimeOffset? deliveredByClaimSince, System.Collections.Generic.IReadOnlyCollection<string!>! excludedDeliveredOutboxItemIds) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimedQuery.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxDeliveryResult
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxDeliveryResult.FailureMessage.get -> string?
@@ -10338,4 +10341,6 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.operato
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?

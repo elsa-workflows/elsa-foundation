@@ -3,6 +3,8 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Persistence.EntityFramework;
+using Microsoft.Data.Sqlite;
 using Xunit;
 using static Elsa.Activities.Bpmn.Hosting.Tests.LegacyUpgradeInspection;
 
@@ -134,9 +136,51 @@ public sealed class LegacyControlsUpgradeTests
     }
     private static async Task<JsonNode> SendAsync(OwnedWorkbench host, string name, string id)
     {
-        var result = await host.PostAsync("/runtime/workflows/stimuli", new { stimulusType = "Event", stimulusHash = "sha256:" + Hash(Encoding.UTF8.GetBytes(name)), mode = "ResumeOnly", correlationId = id, input = new { eventName = name } });
-        Assert.Equal(0, result["startedCount"]!.GetValue<int>()); Assert.Equal(1, result["resumedCount"]!.GetValue<int>()); return result;
+        var stimulusHash = "sha256:" + Hash(Encoding.UTF8.GetBytes(name));
+        // Suspended inspection is committed before the separate CreateBookmark continuation. Wait for the durable
+        // routing precondition, then send once; the response below must still prove exactly one dispatched resume.
+        await WaitForEventBookmarkAsync(host.RuntimeDatabase, name, id, stimulusHash);
+        var result = await host.PostAsync("/runtime/workflows/stimuli", new { stimulusType = "Event", stimulusHash, mode = "ResumeOnly", correlationId = id, input = new { eventName = name } });
+        Assert.Equal(0, result["startedCount"]!.GetValue<int>());
+        Assert.True(result["resumedCount"]!.GetValue<int>() == 1,
+            $"Expected one dispatched resume for '{name}' on '{id}': {result.ToJsonString()}");
+        return result;
     }
+    private static async Task WaitForEventBookmarkAsync(string database, string name, string workflowExecutionId, string stimulusHash)
+    {
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = database, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        // Readiness only; the real stimulus API remains the checked routing and delivery assertion.
+        command.CommandText = """
+            SELECT EXISTS(SELECT 1 FROM elsa_runtime_bookmark_state
+              WHERE ScopeKey=$scope AND ScopeKeyHash=$scopeHash
+                AND WorkflowExecutionId=$workflow AND WorkflowExecutionIdHash=$workflowHash
+                AND StimulusType=$type AND StimulusHash=$hash
+                AND (ExpiresAtUtcTicks IS NULL OR ExpiresAtUtcTicks>$now))
+            """;
+        command.Parameters.AddWithValue("$scope", EfRelationalIdentity.Encode("default"));
+        command.Parameters.AddWithValue("$scopeHash", EfRelationalIdentity.Hash("default"));
+        command.Parameters.AddWithValue("$workflow", workflowExecutionId);
+        command.Parameters.AddWithValue("$workflowHash", EfRelationalIdentity.Hash(workflowExecutionId));
+        command.Parameters.AddWithValue("$type", "Event");
+        command.Parameters.AddWithValue("$hash", stimulusHash);
+        var now = command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.UtcTicks);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(40);
+        var waited = false;
+        while (true)
+        {
+            now.Value = DateTimeOffset.UtcNow.UtcTicks;
+            if ((long)(await command.ExecuteScalarAsync())! == 1) return;
+            if (!waited) Console.WriteLine($"Waiting for durable Event bookmark '{name}' on '{workflowExecutionId}'.");
+            waited = true;
+            Assert.True(DateTimeOffset.UtcNow < deadline,
+                $"The durable Event bookmark '{name}' on '{workflowExecutionId}' was not registered before delivery.");
+            await Task.Delay(100);
+        }
+    }
+
     private static void SetSelections(JsonNode receipt, JsonNode choices)
     {
         foreach (var item in receipt["cases"]!.AsArray())

@@ -1,8 +1,9 @@
 name: CI
 
 # All source validation lives here; publishing and trusted maintenance have separate tokens.
-# Required check names stay stable. Marking a PR ready runs the full tier without cancelling
-# or replacing its existing PR-tier checks. Focused manual runs select a suite below.
+# Required check names stay stable. Marking a PR ready runs both tiers and maps in one suite;
+# splitting the required contexts across draft/ready suites can block protected merges (#3708).
+# Focused manual runs select a suite below.
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
 
 on:
@@ -34,14 +35,15 @@ on:
 permissions:
   contents: read
 
-# A newer head supersedes its own PR, and a newer push to main supersedes an older main run (#2622): five
+# A ready transition or newer head supersedes its own PR; one group prevents stale ready runs
+# surviving a later push. A newer push to main supersedes an older main run (#2622): five
 # queued main runs once each ran the whole EF matrix for an hour. Manual and scheduled runs get a group of
 # their own and are never cancelled. A cancelled run is not a failure, so the alert job below stays quiet
 # for it, and the jobs that use always()-style conditions use !cancelled() so a cancellation cannot turn
 # into a red aggregate that files a "main is red" issue.
 concurrency:
   group: >-
-    ${{ github.event_name == 'pull_request' && format('ci-pr-{0}-{1}', github.event.pull_request.number, github.event.action == 'ready_for_review' && 'ready' || 'head')
+    ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number)
     || github.event_name == 'push' && format('ci-push-{0}', github.ref)
     || format('ci-run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
@@ -68,7 +70,7 @@ jobs:
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
   plan-tiers:
-    if: github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     name: Plan tiers
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -249,14 +251,25 @@ jobs:
   # The required context. It reports one result for the PR tier: the plan, every shard, the architecture guards and the
   # core-only leg. !cancelled() rather than always(): a superseded run must not turn into a red aggregate.
   build-and-test:
-    name: "${{ github.event.action == 'ready_for_review' && 'Build & test (already requested)' || github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Build & test (not requested)' || 'Build & test' }}"
-    needs: [plan-tiers, pr-shard, architecture-guards, core-only]
-    if: ${{ !cancelled() && github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
+    name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Build & test (not requested)' || 'Build & test' }}"
+    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       docs_only: ${{ needs.plan-tiers.outputs.docs_only }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify selected Studio proofs before the docs-only fast path
+        env:
+          STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}
+          STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}
+          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
+          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
+          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}
+        run: python3 tools/ci/studio_gate.py
       - name: Verify the PR tier passed
         env:
           PLAN: ${{ needs.plan-tiers.result }}
@@ -675,8 +688,8 @@ jobs:
   # The generator is built once and each check runs whenever that build succeeded, so one failing check does not
   # hide another.
   generated-maps:
-    name: "${{ github.event.action == 'ready_for_review' && 'Generated maps (already requested)' || github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Generated maps (not requested)' || 'Generated maps fresh' }}"
-    if: github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
+    name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Generated maps (not requested)' || 'Generated maps fresh' }}"
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -1032,6 +1045,42 @@ jobs:
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
 
+  studio-ux-acceptance:
+    name: UX acceptance (composed Studio)
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+      - name: Verify acceptance tooling and gate failure controls
+        run: |
+          python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+          python3 -m unittest discover -s tools/ci -p 'test_studio_gate.py'
+      - name: Exercise real composed hosts with disposable stores
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
+      - name: Qualify shared decision execution and runtime-only restart
+        run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
+      - name: Retain reviewable success and failure evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ux-acceptance
+          if-no-files-found: error
+          retention-days: 14
+
   studio-dotnet-build-and-test:
     needs: plan-scope
     if: needs.plan-scope.outputs.studio == 'true'
@@ -1113,6 +1162,7 @@ jobs:
 
       - name: Qualify actual Studio packages and causal controls
         run: |
+          python3 -m unittest discover -s tools/ci -p 'test_studio_native_scratch.py'
           python3 tools/ci/qualify_studio_consumers.py --self-test
           python3 tools/ci/qualify_studio_consumers.py \
             --packages "$RUNNER_TEMP/studio-nuget" \
@@ -1348,6 +1398,15 @@ jobs:
           --output "$RUNNER_TEMP/weaver-conformance"
           --version "$WEAVER_VERSION"
 
+      - name: Select safe primary failure diagnostics independently of full evidence
+        if: failure()
+        run: |
+          if test -f "$RUNNER_TEMP/weaver-conformance/report.json"; then
+            python3 tools/studio/Weaver.Conformance.Probe/export_failure_diagnostic.py \
+              --source "$RUNNER_TEMP/weaver-conformance" \
+              --destination "$RUNNER_TEMP/weaver-failure-diagnostic"
+          fi
+
       - name: Select evidence without private authentication or runtime state
         if: always()
         run: |
@@ -1365,6 +1424,15 @@ jobs:
           path: ${{ runner.temp }}/weaver-evidence/
           # The exporter already selects safe references, including hidden package metadata.
           include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Retain safe failed diagnostics without claiming qualification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-failure-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-failure-diagnostic/
           if-no-files-found: warn
           retention-days: 14
 
@@ -1391,12 +1459,27 @@ jobs:
         working-directory: tools/contributor-pair-proof
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Test bounded failure diagnostics without a browser
+        run: node --test tools/contributor-pair-proof/diagnostics.test.mjs
+
       - name: Install Chromium
         working-directory: tools/contributor-pair-proof
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Run the published image pair journey
+        id: published-pair-journey
         run: node tools/contributor-pair-proof/run.mjs
+
+      - name: Retain bounded published pair failure diagnostics
+        if: ${{ failure() && steps.published-pair-journey.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-pair-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/published-pair-diagnostics/diagnostic.json
+            ${{ runner.temp }}/published-pair-diagnostics/viewport.png
+          retention-days: 7
+          if-no-files-found: warn
 
   shuffled-unit-tests:
     needs: plan-scope

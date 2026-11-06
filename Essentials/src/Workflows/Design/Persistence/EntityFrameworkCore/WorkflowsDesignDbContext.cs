@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
@@ -31,6 +32,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     {
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
+        modelBuilder.AddSourceRevisions("elsa_workflow_sources", Database.ProviderName!);
         DesignEntityConfigurations.ConfigureDefinition(modelBuilder.Entity<WorkflowDefinition>());
         DesignEntityConfigurations.ConfigureVersion(modelBuilder.Entity<WorkflowDefinitionVersion>());
         DesignEntityConfigurations.ConfigureDraft(modelBuilder.Entity<WorkflowDefinitionDraft>());
@@ -45,6 +47,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         // encoder: with no codec configured these columns are written exactly as they were before.
         modelBuilder.UseElsaPayloadColumns(
             this,
+            "Content",
             "ContentJson",
             "StateSource",
             "RecordsJson",
@@ -106,6 +109,26 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     private void PrepareDefinitionKeys()
     {
+        // Existing domain commands/layouts remain atomic, but source content is stored once by the shared model.
+        foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraft>().Where(x => x.State == EntityState.Added).ToArray())
+        {
+            var draft = entry.Entity;
+            if (draft.Source is null)
+            {
+                draft.Source = EfSourceRevisions.NewCopy(WorkflowSourceRevisions.Scope(draft.TenantId), draft.WorkflowDefinitionId,
+                    draft.Id, draft.Id, WorkflowSourceRevisions.Profile, draft.StateSource ?? "");
+                draft.SourceKey = draft.Source.Key;
+                Add(draft.Source);
+            }
+            EfSourceRevisions.ValidateCopy(draft.Source, WorkflowSourceRevisions.Scope(draft.TenantId), draft.WorkflowDefinitionId, draft.Id);
+        }
+
+        foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraft>().Where(x => x.State == EntityState.Deleted).ToArray())
+        {
+            var draft = entry.Entity;
+            var source = draft.Source ?? throw new InvalidOperationException("Workflow draft source is unavailable.");
+            if (!source.Discarded) EfSourceRevisions.StageDiscard(this, source, WorkflowSourceRevisions.Scope(draft.TenantId), draft.WorkflowDefinitionId, draft.Id, source.Revision);
+        }
         EfSchemaVersionMaterializationInterceptor.StampWrites(this);
         foreach (var entry in ChangeTracker.Entries()
                      .Where(entry => entry.Entity is TenantEntity or DesignOperationEntity)
@@ -207,14 +230,14 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     protected static void ConfigureLongText(ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        foreach (var property in entityType.GetProperties().Where(x => x.Name is "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
+        foreach (var property in entityType.GetProperties().Where(x => x.Name is "Content" or "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
             property.SetColumnType("longtext");
     }
 
     protected static void ConfigureText(ModelBuilder modelBuilder, string columnType)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        foreach (var property in entityType.GetProperties().Where(x => x.Name is "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
+        foreach (var property in entityType.GetProperties().Where(x => x.Name is "Content" or "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
             property.SetColumnType(columnType);
     }
 }

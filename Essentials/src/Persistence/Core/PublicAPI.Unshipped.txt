@@ -1,0 +1,112 @@
+#nullable enable
+Elsa.Persistence.Core.ISourceRevisionReader
+Elsa.Persistence.Core.ISourceRevisionReader.FindAsync(string! sourceId, string! copyId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceWorkingCopy?>!
+Elsa.Persistence.Core.ISourceRevisionReader.HistoryAsync(string! sourceId, string! copyId, int skip = 0, int take = 100, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceSnapshot!>!>!
+Elsa.Persistence.Core.ISourceRevisionReader.ListAsync(string? search, int skip, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourcePage!>!
+Elsa.Persistence.Core.ISourceRevisionWriter
+Elsa.Persistence.Core.ISourceRevisionWriter.CaptureAsync(string! sourceId, string! copyId, long expectedRevision, string! operationId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceSnapshot!>!
+Elsa.Persistence.Core.ISourceRevisionWriter.CreateAsync(string! sourceId, string! copyId, string! name, string! profile, string! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceWorkingCopy!>!
+Elsa.Persistence.Core.ISourceRevisionWriter.DeleteSnapshotAsync(string! sourceId, string! copyId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Persistence.Core.ISourceRevisionWriter.DiscardAsync(string! sourceId, string! copyId, long expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Persistence.Core.ISourceRevisionWriter.ForkAsync(string! sourceId, string! copyId, string! snapshotId, string! newSourceId, string! newCopyId, string! name, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceWorkingCopy!>!
+Elsa.Persistence.Core.ISourceRevisionWriter.PinAsync(string! sourceId, string! copyId, string! snapshotId, string! owner, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Persistence.Core.ISourceRevisionWriter.UnpinAsync(string! sourceId, string! copyId, string! snapshotId, string! owner, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Persistence.Core.SourcePage
+Elsa.Persistence.Core.SourcePage.<Clone>$() -> Elsa.Persistence.Core.SourcePage!
+Elsa.Persistence.Core.SourcePage.Deconstruct(out int Total, out System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceWorkingCopy!>! Items) -> void
+Elsa.Persistence.Core.SourcePage.Equals(Elsa.Persistence.Core.SourcePage? other) -> bool
+Elsa.Persistence.Core.SourcePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceWorkingCopy!>!
+Elsa.Persistence.Core.SourcePage.Items.init -> void
+Elsa.Persistence.Core.SourcePage.SourcePage(int Total, System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceWorkingCopy!>! Items) -> void
+Elsa.Persistence.Core.SourcePage.Total.get -> int
+Elsa.Persistence.Core.SourcePage.Total.init -> void
+Elsa.Persistence.Core.SourceRevisionException
+Elsa.Persistence.Core.SourceRevisionException.Code.get -> string!
+Elsa.Persistence.Core.SourceRevisionException.SourceRevisionException(string! code, System.Exception? innerException = null) -> void
+Elsa.Persistence.Core.SourceScope
+Elsa.Persistence.Core.SourceScope.<Clone>$() -> Elsa.Persistence.Core.SourceScope!
+Elsa.Persistence.Core.SourceScope.Authority.get -> string!
+Elsa.Persistence.Core.SourceScope.Authority.init -> void
+Elsa.Persistence.Core.SourceScope.Deconstruct(out string! Partition, out string? TenantId, out string! Kind, out string! Authority) -> void
+Elsa.Persistence.Core.SourceScope.Equals(Elsa.Persistence.Core.SourceScope? other) -> bool
+Elsa.Persistence.Core.SourceScope.Kind.get -> string!
+Elsa.Persistence.Core.SourceScope.Kind.init -> void
+Elsa.Persistence.Core.SourceScope.Partition.get -> string!
+Elsa.Persistence.Core.SourceScope.Partition.init -> void
+Elsa.Persistence.Core.SourceScope.SourceScope(string! Partition, string? TenantId, string! Kind, string! Authority) -> void
+Elsa.Persistence.Core.SourceScope.TenantId.get -> string?
+Elsa.Persistence.Core.SourceScope.TenantId.init -> void
+Elsa.Persistence.Core.SourceSnapshot
+Elsa.Persistence.Core.SourceSnapshot.BaseSnapshotId.get -> string?
+Elsa.Persistence.Core.SourceSnapshot.BaseSnapshotId.set -> void
+Elsa.Persistence.Core.SourceSnapshot.Content.get -> string!
+Elsa.Persistence.Core.SourceSnapshot.Content.set -> void
+Elsa.Persistence.Core.SourceSnapshot.Fingerprint.get -> string!
+Elsa.Persistence.Core.SourceSnapshot.Fingerprint.set -> void
+Elsa.Persistence.Core.SourceSnapshot.Key.get -> string!
+Elsa.Persistence.Core.SourceSnapshot.Key.set -> void
+Elsa.Persistence.Core.SourceSnapshot.OperationId.get -> string!
+Elsa.Persistence.Core.SourceSnapshot.OperationId.set -> void
+Elsa.Persistence.Core.SourceSnapshot.Profile.get -> string!
+Elsa.Persistence.Core.SourceSnapshot.Profile.set -> void
+Elsa.Persistence.Core.SourceSnapshot.Revision.get -> long
+Elsa.Persistence.Core.SourceSnapshot.Revision.set -> void
+Elsa.Persistence.Core.SourceSnapshot.SourceSnapshot() -> void
+Elsa.Persistence.Core.SourceSnapshot.WorkingCopyKey.get -> string!
+Elsa.Persistence.Core.SourceSnapshot.WorkingCopyKey.set -> void
+Elsa.Persistence.Core.SourceSnapshotPin
+Elsa.Persistence.Core.SourceSnapshotPin.Key.get -> string!
+Elsa.Persistence.Core.SourceSnapshotPin.Key.set -> void
+Elsa.Persistence.Core.SourceSnapshotPin.Owner.get -> string!
+Elsa.Persistence.Core.SourceSnapshotPin.Owner.set -> void
+Elsa.Persistence.Core.SourceSnapshotPin.SnapshotKey.get -> string!
+Elsa.Persistence.Core.SourceSnapshotPin.SnapshotKey.set -> void
+Elsa.Persistence.Core.SourceSnapshotPin.SourceSnapshotPin() -> void
+Elsa.Persistence.Core.SourceWorkingCopy
+Elsa.Persistence.Core.SourceWorkingCopy.Authority.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Authority.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.BaseSnapshotId.get -> string?
+Elsa.Persistence.Core.SourceWorkingCopy.BaseSnapshotId.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Content.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Content.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.CopyId.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.CopyId.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Discarded.get -> bool
+Elsa.Persistence.Core.SourceWorkingCopy.Discarded.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Fence.get -> long
+Elsa.Persistence.Core.SourceWorkingCopy.Fence.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Key.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Key.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Kind.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Kind.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Name.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Name.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.NameSearchKey.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.NameSearchKey.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Partition.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Partition.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Profile.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.Profile.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.Revision.get -> long
+Elsa.Persistence.Core.SourceWorkingCopy.Revision.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.ScopeKey.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.ScopeKey.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.SourceId.get -> string!
+Elsa.Persistence.Core.SourceWorkingCopy.SourceId.set -> void
+Elsa.Persistence.Core.SourceWorkingCopy.SourceWorkingCopy() -> void
+Elsa.Persistence.Core.SourceWorkingCopy.TenantId.get -> string?
+Elsa.Persistence.Core.SourceWorkingCopy.TenantId.set -> void
+override Elsa.Persistence.Core.SourcePage.Equals(object? obj) -> bool
+override Elsa.Persistence.Core.SourcePage.GetHashCode() -> int
+override Elsa.Persistence.Core.SourcePage.ToString() -> string!
+override Elsa.Persistence.Core.SourceScope.Equals(object? obj) -> bool
+override Elsa.Persistence.Core.SourceScope.GetHashCode() -> int
+override Elsa.Persistence.Core.SourceScope.ToString() -> string!
+static Elsa.Persistence.Core.SourcePage.operator !=(Elsa.Persistence.Core.SourcePage? left, Elsa.Persistence.Core.SourcePage? right) -> bool
+static Elsa.Persistence.Core.SourcePage.operator ==(Elsa.Persistence.Core.SourcePage? left, Elsa.Persistence.Core.SourcePage? right) -> bool
+static Elsa.Persistence.Core.SourceScope.operator !=(Elsa.Persistence.Core.SourceScope? left, Elsa.Persistence.Core.SourceScope? right) -> bool
+static Elsa.Persistence.Core.SourceScope.operator ==(Elsa.Persistence.Core.SourceScope? left, Elsa.Persistence.Core.SourceScope? right) -> bool
+Elsa.Persistence.Core.SourceWorkingCopy.SourceIdentity.get -> string?
+Elsa.Persistence.Core.SourceWorkingCopy.SourceIdentity.set -> void
+Elsa.Persistence.Core.ISourceRevisionWriter.SaveAsync(string! sourceId, string! copyId, long expectedRevision, string! name, string! profile, string! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceWorkingCopy!>!
+Elsa.Persistence.Core.ISourceRevisionReader.FindSnapshotAsync(string! sourceId, string! copyId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceSnapshot?>!
