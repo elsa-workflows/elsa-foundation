@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import platform
-import shutil
 import subprocess
 import sys
 
@@ -111,6 +110,9 @@ class Runner:
         from focused_tests import run_focused_tests
         self.refresh_source(variant)
         run_focused_tests(self, variant)
+        record = self.state['variants'][variant]['focusedTests']
+        record['receiptSha256'] = sha(Path(record['receiptPath']).read_bytes())
+        self.save()
 
     def materialize(self):
         if self.state['variants']:
@@ -148,11 +150,14 @@ class Runner:
                 raise ValueError('The reviewed watcher signal seam differs')
             before = sha(launcher.read_bytes())
             launcher.write_text(content.replace(old, new))
+            from linux_source import adapt_linux_crash_identity
+            identity_adaptation = adapt_linux_crash_identity(source)
             commit(source, 'Use reviewed Linux exact-process signal primitive in hosted watcher')
             self.state['variants'][name] = {'worktree': str(source), 'inputCommit': entry['originalCommit'],
                 'verifiedInputTree': entry['resultTree'], 'materializedCommit': initial,
                 'commit': git(source, 'rev-parse', 'HEAD'), 'tree': git(source, 'rev-parse', 'HEAD^{tree}'),
                 'linuxAdaptation': {'path': str(launcher.relative_to(source)), 'beforeSha256': before, 'afterSha256': sha(launcher.read_bytes())},
+                'linuxIdentityAdaptation': identity_adaptation,
                 'buildStatus': 'NOT_RUN', 'qualificationStatus': 'NOT_RUN'}
             self.save()
 
@@ -211,13 +216,33 @@ def main():
     sub = parser.add_subparsers(dest='stage', required=True)
     sub.add_parser('materialize')
     sub.add_parser('sync-lock')
+    sub.add_parser('prepare-postgres')
+    sub.add_parser('provider-build')
+    sub.add_parser('provider-qualify')
     build = sub.add_parser('build')
     build.add_argument('--variant', choices=VARIANTS, required=True)
     focused = sub.add_parser('focused')
     focused.add_argument('--variant', choices=('runview', 'snapshot'), required=True)
+    from stages import SQLITE_CASES
+    proof = sub.add_parser('proof')
+    proof.add_argument('--variant', choices=VARIANTS, required=True)
+    proof.add_argument('--provider', choices=('Sqlite', 'PostgreSql'), required=True)
+    proof.add_argument('--case', choices=SQLITE_CASES, required=True)
+    proof.add_argument('--mode', choices=('Balanced', 'Durable'), required=True)
+    proof.add_argument('--leaves', type=int, choices=(1, 10, 100), default=10)
+    measure = sub.add_parser('measure')
+    measure.add_argument('--profile', choices=('count', 'timing'), required=True)
+    measure.add_argument('--mode', choices=('Balanced', 'Durable'), required=True)
+    measure.add_argument('--leaves', type=int, choices=(1, 10, 100), required=True)
+    measure.add_argument('--action', choices=('run', 'resume'), default='run')
+    measure.add_argument('--samples', type=int, choices=range(1, 101), default=20)
+    measure.add_argument('--concurrency', type=int, choices=(1, 4), default=1)
     args = parser.parse_args()
     runner = Runner(args.root)
-    name = args.stage + (('-' + args.variant) if hasattr(args, 'variant') else '')
+    name = '-'.join(str(value) for value in (args.stage, getattr(args, 'variant', None),
+        getattr(args, 'provider', None), getattr(args, 'case', None), getattr(args, 'profile', None),
+        getattr(args, 'mode', None), getattr(args, 'leaves', None), getattr(args, 'action', None),
+        ('c' + str(args.concurrency)) if hasattr(args, 'concurrency') else None) if value is not None)
     runner.state['stages'][name] = {'status': 'RUNNING'}
     runner.save()
     try:
@@ -227,8 +252,23 @@ def main():
             runner.sync_lock()
         elif args.stage == 'focused':
             runner.focused(args.variant)
-        else:
+        elif args.stage == 'build':
             runner.build(args.variant)
+        elif args.stage == 'prepare-postgres':
+            from postgres_source import prepare
+            prepare(runner)
+        elif args.stage == 'provider-build':
+            from stages import build_provider
+            build_provider(runner)
+        elif args.stage == 'provider-qualify':
+            from stages import proof
+            proof(runner, 'snapshot', 'PostgreSql', 'snapshot-provider-qualification', 'Balanced', 10)
+        elif args.stage == 'proof':
+            from stages import proof
+            proof(runner, args.variant, args.provider, args.case, args.mode, args.leaves)
+        elif args.stage == 'measure':
+            from stages import measure
+            measure(runner, args.profile, args.mode, args.leaves, args.action, args.samples, args.concurrency)
         runner.state['stages'][name] = {'status': 'PASSED'}
         return 0
     except BaseException as error:
