@@ -298,9 +298,25 @@ test("diagnose exact executions, long history, retention and restricted access",
       reader.page.on("pageerror", error => errors.push(error.message));
       const discovery = await reader.page.request.get(`${backend}/capabilities`);
       expect(discovery.status(), `${profile} reader must be able to discover the backend capabilities`).toBe(200);
-      const designCatalog = await reader.page.request.get(`${backend}/design/activities/catalog`);
-      expect(designCatalog.status(), `${profile} reader must retain its lack of Design authority`).toBe(403);
-      await reader.page.goto(`/workflows/instances/${protectedRun}?selected=${encodeURIComponent(protectedEvent.activityExecutionId!)}&historyEvent=${encodeURIComponent(protectedEvent.historyEventId)}`);
+      const designCatalog = await reader.page.request.get(`${backend}/design/activities/catalog`, { maxRedirects: 0 });
+      expect([403, 302], `${profile} reader must retain its lack of Design authority`).toContain(designCatalog.status());
+      if (designCatalog.status() === 302) {
+        const location = designCatalog.headers().location;
+        expect(location, "Cookie authorization denial must identify its destination").toBeTruthy();
+        const deniedLocation = new URL(location!, backend);
+        expect(deniedLocation.origin).toBe(new URL(backend).origin);
+        expect(deniedLocation.pathname).toBe("/Account/AccessDenied");
+      }
+      const runUrl = `/workflows/instances/${protectedRun}?selected=${encodeURIComponent(protectedEvent.activityExecutionId!)}&historyEvent=${encodeURIComponent(protectedEvent.historyEventId)}`;
+      if (profile === "denied") await reader.page.goto(runUrl);
+      else {
+        const [browserCatalog] = await Promise.all([
+          reader.page.waitForResponse(response => response.request().method() === "GET"
+            && new URL(response.url()).origin === new URL(backend).origin && new URL(response.url()).pathname === "/design/activities/catalog"),
+          reader.page.goto(runUrl)
+        ]);
+        expect(browserCatalog.status(), `${profile} browser must receive the actual Design denial`).toBe(403);
+      }
       const deniedPayload = await reader.page.request.get(`${backend}/runtime/workflows/instances/${protectedRun}/activity-executions/${protectedEvent.activityExecutionId}/value-evidence/${protectedEvidenceId}/payload`);
       if (profile === "denied") {
         expect([403, 404]).toContain(deniedPayload.status());
