@@ -13,6 +13,7 @@ public static class AgentApiServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.TryAddScoped<IAgentPrincipalSource, HttpAgentPrincipalSource>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, HostSupportContextSource>());
         services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer, HttpAgentToolAuthorizer>());
         services.AddPermissionContributor<AgentPermissionContributor>();
         return services;
