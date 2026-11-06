@@ -113,7 +113,18 @@ public sealed class ValueFlowValidator(
         if (!IsStructure(common, FlowchartStructureKind))
             return false;
 
-        return graph.AssessChildResult(common, leftChild.Node.NodeId, rightChild.Node.NodeId).MayRunConcurrently == true;
+        var forward = graph.AssessChildResult(common, leftChild.Node.NodeId, rightChild.Node.NodeId);
+        var reverse = graph.AssessChildResult(common, rightChild.Node.NodeId, leftChild.Node.NodeId);
+        if (forward.MayRunConcurrently == true || reverse.MayRunConcurrently == true)
+            return true;
+        if (forward.MayRunConcurrently == false || reverse.MayRunConcurrently == false)
+            return false;
+
+        // Legacy owners may supply only completion order. Unknown facts cannot certify two
+        // colliding writes as safe; explicit ordering or exclusion can establish that safety.
+        return forward.Availability != ActivityChildResultAvailability.Definite &&
+               reverse.Availability != ActivityChildResultAvailability.Definite &&
+               forward.AreMutuallyExclusive != true && reverse.AreMutuallyExclusive != true;
     }
 
     private static VariableReference? GetVariableWriteTarget(ActivityNode node)
