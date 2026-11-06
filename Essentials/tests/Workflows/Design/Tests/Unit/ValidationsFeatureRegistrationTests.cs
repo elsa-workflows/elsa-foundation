@@ -146,9 +146,21 @@ public sealed class ValidationsFeatureRegistrationTests
     [InlineData(false)]
     public async Task A_second_source_authority_fails_activation_in_either_registration_order(bool registeredBefore)
     {
-        using var provider = BuildProvider(_ => { }, services => services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>(), registeredBefore);
+        using var provider = BuildProvider(_ => { }, services => {
+            services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+            services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        }, registeredBefore);
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
         Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_pre_registered_scoped_source_authority_is_preserved_as_the_one_host_replacement()
+    {
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>(), hostRegistersFirst: true);
+        await InitializeShellAsync(provider);
+        using var scope = provider.CreateScope();
+        Assert.IsType<SecondAnalyzer>(Assert.Single(scope.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>()));
     }
 
     [Theory]
@@ -175,6 +187,7 @@ public sealed class ValidationsFeatureRegistrationTests
         IServiceCollection child = new ServiceCollection();
         foreach (var descriptor in parent) child.Add(descriptor);
         new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        if (invalid == "duplicate") child.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
         if (invalid != "duplicate") child.RemoveAll<IActivityDataSelectionAnalyzer>();
         if (invalid == "singleton") child.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
         using var parentProvider = parent.BuildServiceProvider();
@@ -193,13 +206,13 @@ public sealed class ValidationsFeatureRegistrationTests
         new WorkflowDesignValidationsFeature().ConfigureServices(parent);
         IServiceCollection child = new ServiceCollection();
         foreach (var descriptor in parent) child.Add(descriptor);
-        child.RemoveAll<IActivityDataSelectionAnalyzer>();
         new WorkflowDesignValidationsFeature().ConfigureServices(child);
         using var parentProvider = parent.BuildServiceProvider();
         using var childProvider = child.BuildServiceProvider();
 
         await SourceInitializer(parentProvider).InitializeAsync();
         await SourceInitializer(childProvider).InitializeAsync();
+        Assert.Single(child, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
     }
 
     private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
