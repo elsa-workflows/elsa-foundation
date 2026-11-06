@@ -42,6 +42,7 @@
 ## Notes
 
 - Validation iteration 1: the product choices are resolved. Remaining issues are explicitly assigned architecture/provider qualification gates, not questions requiring routine owner interruption.
+- Validation iteration 2: root review clarified interactive versus explicitly authorized workload access, untrusted snapshots versus legitimate retained Runtime grants, and the still-unagreed event grant policy. Fresh source reads/operations retain current authorization; accepted work cannot disappear silently.
 - The specification uses existing product/module names and an evidence table to preserve source provenance and dependency status. It does not prescribe a language, framework, endpoint schema, storage product or new Runtime contract.
 - Preliminary real-source, public input seam and synthetic catalog witnesses remain distinct. Private-tenant source publication is FAILED in the baseline; full independent packaged SDK/provider and production UX remain incomplete.
 - Checklist completion in the first three sections means specification quality is ready for review. It does not approve the specification, satisfy the open gates, or mark #3908/#3608 delivered.
