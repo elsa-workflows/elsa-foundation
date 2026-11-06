@@ -122,16 +122,18 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
 
   async function collect(stage, failureClass, active, signal) {
     let directoryCreated = false;
+    const generation = navigation;
     // Incomplete writes are never among the two files CI uploads. Abort is best
     // effort, so recheck the deadline after IO and remove any late publication.
-    async function retain(name, contents) {
+    async function retain(name, contents, admissible = async () => true, unchanged = () => true) {
       const pending = path.join(outputDir, `${name}.pending`);
       const target = path.join(outputDir, name);
       try {
         await writeFile(pending, contents, { mode: 0o600, flag: "wx", signal });
         if (!active()) return false;
+        if (!await admissible() || !active()) return false;
         await rename(pending, target);
-        if (!active()) { await rm(target, { force: true }); return false; }
+        if (!active() || !unchanged()) { await rm(target, { force: true }); return false; }
         return true;
       } finally {
         await rm(pending, { force: true }).catch(() => {});
@@ -144,15 +146,17 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
       const before = await inspectPage(page);
       if (!active()) return "capture-timeout";
       const receipt = { schema: 1, stage, failure: failureClasses.has(failureClass) ? failureClass : "other", events: events.slice(), screenshot: "suppressed" };
-      const location = classifyLocation(before.url, studioOrigin);
-      if (typeof creationState === "function" && before.sensitiveForms === 0 && before.frames === 0 && before.authFallback === 0
-        && (location.editor || location.location === `${studioOrigin}/workflows/definitions`)) {
+      const safeCreationPage = state => {
+        const location = classifyLocation(state.url, studioOrigin);
+        return state.sensitiveForms === 0 && state.frames === 0 && state.authFallback === 0
+          && (location.editor || location.location === `${studioOrigin}/workflows/definitions`);
+      };
+      if (typeof creationState === "function" && safeCreationPage(before)) {
         try { receipt.creation = projectCreationState(creationState()); } catch { receipt.creation = projectCreationState(null); }
       }
       if (!safeEditor(before, studioOrigin)) {
         receipt.capture = "suppressed-unsafe-page";
       } else {
-        const generation = navigation;
         receipt.location = classifyLocation(before.url, studioOrigin).location;
         receipt.state = {
           visibleDialogs: number(before.visibleDialogs), busyElements: number(before.busyElements), editorCanvases: number(before.editorCanvases),
@@ -198,9 +202,36 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
         }
       }
       if (!active()) return "capture-timeout";
+      let creationRejected = false;
+      const admissibleCreation = async () => {
+        try {
+          const current = await inspectPage(page);
+          if (generation === navigation && current.url === before.url && safeCreationPage(current)) return true;
+        } catch { /* An unavailable page cannot authorize creation evidence. */ }
+        creationRejected = true;
+        return false;
+      };
+      const creationUnmoved = () => {
+        if (generation === navigation) return true;
+        creationRejected = true;
+        return false;
+      };
+      const suppressCreation = async () => {
+        delete receipt.creation;
+        receipt.capture = "suppressed-navigation-or-page-change";
+        if (receipt.screenshot === "viewport.png") await rm(path.join(outputDir, "viewport.png"), { force: true });
+        receipt.screenshot = "suppressed";
+      };
+      if (receipt.creation && !await admissibleCreation()) await suppressCreation();
       const json = JSON.stringify(receipt, null, 2);
       if (Buffer.byteLength(json) > limits.jsonBytes) return "receipt-over-limit";
-      if (!await retain("diagnostic.json", json)) return "capture-timeout";
+      // Recheck across filesystem awaits too. A rejected publication is replaced
+      // once with the fixed summary, without creation metadata or screenshot.
+      if (!await retain("diagnostic.json", json, receipt.creation ? admissibleCreation : undefined, receipt.creation ? creationUnmoved : undefined)) {
+        if (!active() || !creationRejected) return "capture-timeout";
+        await suppressCreation();
+        if (!await retain("diagnostic.json", JSON.stringify(receipt, null, 2))) return "capture-timeout";
+      }
       return receipt.capture;
     } catch {
       // The original error is owned by the caller. Diagnostic errors are fixed

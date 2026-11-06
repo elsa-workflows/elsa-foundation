@@ -227,9 +227,10 @@ for (const [name, mutate] of [
   test(`screenshot bytes are discarded after ${name} during capture`, async t => {
     const page = new FakePage();
     page.screenshotImpl = async () => { mutate(page); return png; };
-    const f = await fixture(t, { page });
+    const f = await fixture(t, { page, creationState: () => ({ requestRoot: true }) });
     assert.equal(await f.observer.captureFailure(clickStage, "timeout"), "suppressed-navigation-or-page-change");
     assert.equal((await f.receipt()).screenshot, "suppressed");
+    assert.equal((await f.receipt()).creation, undefined);
     assert.deepEqual(await f.files(), ["diagnostic.json"]);
   });
 }
@@ -238,6 +239,97 @@ test("a page change before the image prevents screenshot invocation", async t =>
   const f = await fixture(t, { page: new FakePage({ states: [editorState(), editorState({ frames: 1 })] }) });
   assert.equal(await f.observer.captureFailure(clickStage, "error"), "suppressed-navigation-or-page-change");
   assert.ok(!f.page.calls.some(call => call[0] === "screenshot"));
+});
+
+for (const route of [editorUrl, `${origin}/workflows/definitions`]) {
+  test(`R2 creation evidence is suppressed after navigation during the first inspection at ${route === editorUrl ? "editor" : "list"}`, async t => {
+    const page = new FakePage({ states: [editorState({ url: route })] });
+    const inspect = page.evaluate.bind(page);
+    page.evaluate = async callback => {
+      const result = await inspect(callback);
+      page.emit("framenavigated", page.mainFrame());
+      page.evaluate = inspect;
+      return result;
+    };
+    const f = await fixture(t, { page, creationState: () => ({ requestRoot: true }) });
+    await f.observer.captureFailure("workflow-create", "timeout");
+    assert.equal((await f.receipt()).creation, undefined);
+    assert.equal((await f.receipt()).screenshot, "suppressed");
+  });
+}
+
+test("R2 creation evidence is suppressed when the definitions list becomes login before publication", async t => {
+  const page = new FakePage({ states: [editorState({ url: `${origin}/workflows/definitions` }), editorState({ url: `${origin}/_elsa/identity/login` })] });
+  const f = await fixture(t, { page, creationState: () => ({ requestRoot: true }) });
+  await f.observer.captureFailure("workflow-root-selection", "timeout");
+  assert.equal((await f.receipt()).creation, undefined);
+});
+
+test("R2 a stalled final creation inspection cannot publish metadata after the capture deadline", async t => {
+  const page = new FakePage({ states: [editorState({ url: `${origin}/workflows/definitions` })] });
+  const inspect = page.evaluate.bind(page); const gate = deferred(); let inspections = 0;
+  page.evaluate = async callback => {
+    if (++inspections === 3) await gate.promise;
+    return inspect(callback);
+  };
+  const f = await fixture(t, { page, captureMs: 20, creationState: () => ({ requestRoot: true }) });
+  assert.equal(await f.observer.captureFailure("workflow-create", "timeout"), "capture-timeout");
+  gate.resolve(); await delay(30);
+  assert.deepEqual(await f.files(), []);
+});
+
+for (const operation of ["writeFile", "rename"]) {
+  test(`R2 creation evidence is suppressed after navigation during diagnostic JSON ${operation}`, async t => {
+    const page = new FakePage({ states: [editorState({ url: `${origin}/workflows/definitions` })] });
+    let changed = false;
+    const observe = await observerWithFilesystem({
+      async [operation](filename, ...args) {
+        const result = await fs[operation](filename, ...args);
+        if (!changed && path.basename(filename) === "diagnostic.json.pending") {
+          changed = true;
+          page.states = [editorState({ url: `${origin}/_elsa/identity/login` })];
+          page.emit("framenavigated", page.mainFrame());
+        }
+        return result;
+      }
+    });
+    const f = await fixture(t, { page, observe, creationState: () => ({ requestRoot: true }) });
+    await f.observer.captureFailure("workflow-create", "timeout");
+    assert.equal(changed, true);
+    const receipt = await f.receipt();
+    assert.equal(receipt.creation, undefined); assert.equal(receipt.screenshot, "suppressed");
+    assert.deepEqual(await f.files(), ["diagnostic.json"]);
+  });
+}
+
+for (const failure of ["http-error", "malformed"]) {
+  for (const order of ["bound-first", "unrelated-first"]) {
+    for (const binding of ["before", "after"]) {
+      test(`R2 definition-read status stays bound for ${failure}/${order}/bind-${binding}`, async t => {
+        const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+        if (binding === "before") observer.bindEditor(secret);
+        const bound = response(request("GET", `${definitionRoute}/${secret}`), definitionDetails(rootedState));
+        const unrelated = response(request("GET", `${definitionRoute}/unrelated`), {}, failure !== "http-error");
+        unrelated.text = failure === "http-error" ? () => { throw new Error("failed body must not be read"); } : async () => "malformed";
+        for (const item of order === "bound-first" ? [bound, unrelated] : [unrelated, bound]) { page.emit("response", item); await tick(); }
+        if (binding === "after") observer.bindEditor(secret);
+        const value = observer.snapshot();
+        assert.equal(value.editorRead, "received"); assert.equal(value.editorRoot, true); assert.equal(value.readMatchesEditor, true);
+        assert.ok(!JSON.stringify(value).includes(secret));
+        observer.bindEditor("unrelated");
+        const other = observer.snapshot();
+        assert.equal(other.editorRead, failure === "http-error" ? "http-error" : "unavailable");
+        assert.equal(other.editorRoot, null); assert.equal(other.readMatchesEditor, null);
+      });
+    }
+  }
+}
+
+test("R2 an unrelated successful read cannot certify a never-observed editor read status", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  page.emit("response", response(request("GET", `${definitionRoute}/${secret}`), definitionDetails(rootedState))); await tick();
+  observer.bindEditor("unobserved-editor");
+  assert.equal(observer.snapshot().editorRead, "unobserved"); assert.equal(observer.snapshot().editorRoot, null);
 });
 
 test("authentication fallback appearing before the image prevents screenshot invocation", async t => {

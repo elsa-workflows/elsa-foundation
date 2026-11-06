@@ -64,7 +64,7 @@ export function observeWorkflowCreation(page, { backendOrigin }) {
   const editorReads = new Map();
   const editorReadsSeen = new Set();
   const cancellations = new Set();
-  const state = { catalog: "unobserved", createResponse: "unobserved", editorRead: "unobserved", createRequests: 0 };
+  const state = { catalog: "unobserved", createResponse: "unobserved", createRequests: 0 };
   const path = request => {
     const url = new URL(request.url());
     return url.origin === backendOrigin ? url.pathname : null;
@@ -117,6 +117,10 @@ export function observeWorkflowCreation(page, { backendOrigin }) {
     if (disposed || reads >= creationLimits.responseReads) return;
     let kind;
     let readId;
+    const setResponseState = (status, detail = null) => {
+      if (kind === "editorRead") editorReads.set(readId, { status, detail });
+      else state[kind] = status;
+    };
     try {
       const request = response.request();
       const route = path(request);
@@ -132,7 +136,7 @@ export function observeWorkflowCreation(page, { backendOrigin }) {
         kind = "editorRead";
       } else return;
       reads++;
-      if (!response.ok()) { state[kind] = "http-error"; return; }
+      if (!response.ok()) { setResponseState("http-error"); return; }
       const payload = await readResponse(response);
       if (disposed) return;
       if (kind === "catalog") {
@@ -144,12 +148,11 @@ export function observeWorkflowCreation(page, { backendOrigin }) {
         state.catalog = "received";
       } else {
         const projected = details(payload);
-        state[kind] = projected ? "received" : "unavailable";
+        setResponseState(projected ? "received" : "unavailable", projected);
         if (kind === "createResponse") created = projected;
-        else editorReads.set(readId, projected);
       }
     } catch {
-      if (!disposed && kind) state[kind] = "unavailable";
+      if (!disposed && kind) setResponseState("unavailable");
     }
   };
   try { page.on("request", onRequest); } catch { state.catalog = "unavailable"; }
@@ -165,13 +168,15 @@ export function observeWorkflowCreation(page, { backendOrigin }) {
     snapshot() {
       const candidates = selected && catalog ? catalog.filter(item => item.id === selected) : null;
       const read = editor ? editorReads.get(editor) : null;
+      const detail = read?.detail;
       return projectCreationState({ ...state,
         candidatePresent: candidates ? candidates.length > 0 : null,
         templatePresent: candidates?.length === 1 ? candidates[0].template : null,
         createRoot: created ? created.root : null,
         createMatchesEditor: created && editor ? created.id === editor : null,
-        editorRoot: read && read.id === editor ? read.root : null,
-        readMatchesEditor: read && editor ? read.id === editor : null
+        editorRead: read?.status ?? "unobserved",
+        editorRoot: detail && detail.id === editor ? detail.root : null,
+        readMatchesEditor: detail && editor ? detail.id === editor : null
       });
     },
     dispose() {
