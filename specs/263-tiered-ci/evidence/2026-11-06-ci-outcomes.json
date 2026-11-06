@@ -1,0 +1,734 @@
+{
+  "switch_merged_at": "2026-10-23T10:40:00Z",
+  "switch_commit": "4858b051fac957d608442751a09daae5d10cc159",
+  "quarantine_shipped_at": "2026-10-22T22:19:07Z",
+  "sc004_observation_end": "2026-11-21T22:19:07Z",
+  "collected_on": "2026-11-06",
+  "cohort": [
+    {
+      "pr": 3279,
+      "branch": "agent/claude/263-ci-diff-base",
+      "first_code_run_created_at": "2026-10-23T11:37:22Z",
+      "pr_run_id": 39947367572,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39947367572",
+      "pr_run_created_at": "2026-10-23T11:37:22Z",
+      "build_reported_at": "2026-10-23T11:50:46Z",
+      "build_conclusion": "success",
+      "build_minutes": 13.4,
+      "initial_job_queue_minutes": 0.05,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 39947367846,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39947367846",
+      "full_minutes": 22.8,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-23T12:00:11Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3264,
+      "branch": "agent/claude/3200-elsa3-null-input",
+      "first_code_run_created_at": "2026-10-23T12:04:18Z",
+      "pr_run_id": 39950593991,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39950593991",
+      "pr_run_created_at": "2026-10-23T12:04:18Z",
+      "build_reported_at": "2026-10-23T12:15:41Z",
+      "build_conclusion": "success",
+      "build_minutes": 11.383333,
+      "initial_job_queue_minutes": 0.083333,
+      "max_pr_shard_queue_minutes": 0.05,
+      "run_attempt": 1,
+      "full_run_id": 39950593777,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39950593777",
+      "full_minutes": 23.033333,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-23T12:27:20Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3294,
+      "branch": "agent/claude/3293-elsa3-by-name-null-warning",
+      "first_code_run_created_at": "2026-10-23T14:58:05Z",
+      "pr_run_id": 39974163343,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39974163343",
+      "pr_run_created_at": "2026-10-23T14:58:05Z",
+      "build_reported_at": "2026-10-23T15:08:29Z",
+      "build_conclusion": "success",
+      "build_minutes": 10.4,
+      "initial_job_queue_minutes": 0.05,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 39974955666,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39974955666",
+      "full_minutes": 22.75,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-23T15:26:12Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3298,
+      "branch": "ux/3034-import-publication-receipt",
+      "first_code_run_created_at": "2026-10-24T03:13:41Z",
+      "pr_run_id": 40057434417,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40057434417",
+      "pr_run_created_at": "2026-10-24T03:13:41Z",
+      "build_reported_at": "2026-10-24T03:30:06Z",
+      "build_conclusion": "success",
+      "build_minutes": 16.416667,
+      "initial_job_queue_minutes": 0.033333,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40057434389,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40057434389",
+      "full_minutes": 26.966667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T03:40:39Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3299,
+      "branch": "ux/code-review-lows-oct24",
+      "first_code_run_created_at": "2026-10-24T03:16:16Z",
+      "pr_run_id": 40057613724,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40057613724",
+      "pr_run_created_at": "2026-10-24T03:16:16Z",
+      "build_reported_at": "2026-10-24T03:36:17Z",
+      "build_conclusion": "success",
+      "build_minutes": 20.016667,
+      "initial_job_queue_minutes": 0.583333,
+      "max_pr_shard_queue_minutes": 6.816667,
+      "run_attempt": 1,
+      "full_run_id": 40057613761,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40057613761",
+      "full_minutes": 37.316667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T03:53:35Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3300,
+      "branch": "ux/operator-action-stale-dates",
+      "first_code_run_created_at": "2026-10-24T03:16:33Z",
+      "pr_run_id": 40057632335,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40057632335",
+      "pr_run_created_at": "2026-10-24T03:16:33Z",
+      "build_reported_at": "2026-10-24T03:39:47Z",
+      "build_conclusion": "success",
+      "build_minutes": 23.233333,
+      "initial_job_queue_minutes": 1.216667,
+      "max_pr_shard_queue_minutes": 6.966667,
+      "run_attempt": 1,
+      "full_run_id": 40057632647,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40057632647",
+      "full_minutes": 38.216667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T03:54:46Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3258,
+      "branch": "agent/codex/3070-list-consistency",
+      "first_code_run_created_at": "2026-10-24T05:07:37Z",
+      "pr_run_id": 40065035633,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40065035633",
+      "pr_run_created_at": "2026-10-24T05:07:37Z",
+      "build_reported_at": "2026-10-24T05:19:30Z",
+      "build_conclusion": "success",
+      "build_minutes": 11.883333,
+      "initial_job_queue_minutes": 0.05,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40073429368,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40073429368",
+      "full_minutes": 23.466667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T07:39:04Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3302,
+      "branch": "ux/3160-live-typecheck",
+      "first_code_run_created_at": "2026-10-24T07:40:32Z",
+      "pr_run_id": 40075068758,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40075068758",
+      "pr_run_created_at": "2026-10-24T07:40:32Z",
+      "build_reported_at": "2026-10-24T08:06:30Z",
+      "build_conclusion": "success",
+      "build_minutes": 25.966667,
+      "initial_job_queue_minutes": 0.033333,
+      "max_pr_shard_queue_minutes": 12.316667,
+      "run_attempt": 1,
+      "full_run_id": 40075068772,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40075068772",
+      "full_minutes": 28.3,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T08:08:50Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3304,
+      "branch": "agent/elsa-4-qa/persistence-modes-lows",
+      "first_code_run_created_at": "2026-10-24T07:43:19Z",
+      "pr_run_id": 40075251962,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40075251962",
+      "pr_run_created_at": "2026-10-24T07:43:19Z",
+      "build_reported_at": "2026-10-24T08:18:43Z",
+      "build_conclusion": "success",
+      "build_minutes": 35.4,
+      "initial_job_queue_minutes": 6.516667,
+      "max_pr_shard_queue_minutes": 11.25,
+      "run_attempt": 1,
+      "full_run_id": 40075251992,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40075251992",
+      "full_minutes": 44.283333,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T08:27:36Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3307,
+      "branch": "ux/3183-declaration-emit-gate",
+      "first_code_run_created_at": "2026-10-24T07:58:58Z",
+      "pr_run_id": 40076245803,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40076245803",
+      "pr_run_created_at": "2026-10-24T07:58:58Z",
+      "build_reported_at": "2026-10-24T08:39:21Z",
+      "build_conclusion": "success",
+      "build_minutes": 40.383333,
+      "initial_job_queue_minutes": 8.316667,
+      "max_pr_shard_queue_minutes": 15.883333,
+      "run_attempt": 1,
+      "full_run_id": 40076245750,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40076245750",
+      "full_minutes": 33.366667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T08:32:20Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3308,
+      "branch": "ux/1407-conflict-descriptor",
+      "first_code_run_created_at": "2026-10-24T08:02:05Z",
+      "pr_run_id": 40076452470,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40076452470",
+      "pr_run_created_at": "2026-10-24T08:02:05Z",
+      "build_reported_at": "2026-10-24T08:38:26Z",
+      "build_conclusion": "success",
+      "build_minutes": 36.35,
+      "initial_job_queue_minutes": 4.666667,
+      "max_pr_shard_queue_minutes": 14.25,
+      "run_attempt": 1,
+      "full_run_id": 40076452456,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40076452456",
+      "full_minutes": 31.383333,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T08:33:28Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3309,
+      "branch": "agent/codex/3306-test-run-readiness",
+      "first_code_run_created_at": "2026-10-24T08:16:17Z",
+      "pr_run_id": 40077381082,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40077381082",
+      "pr_run_created_at": "2026-10-24T08:16:17Z",
+      "build_reported_at": "2026-10-24T08:41:21Z",
+      "build_conclusion": "success",
+      "build_minutes": 25.066667,
+      "initial_job_queue_minutes": 2.166667,
+      "max_pr_shard_queue_minutes": 7.066667,
+      "run_attempt": 1,
+      "full_run_id": 40077701908,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40077701908",
+      "full_minutes": 31.283333,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T08:52:32Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3311,
+      "branch": "agent/codex/3310-activity-history-owner",
+      "first_code_run_created_at": "2026-10-24T08:56:51Z",
+      "pr_run_id": 40080012576,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40080012576",
+      "pr_run_created_at": "2026-10-24T08:56:51Z",
+      "build_reported_at": "2026-10-24T09:12:05Z",
+      "build_conclusion": "success",
+      "build_minutes": 15.233333,
+      "initial_job_queue_minutes": 0.05,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40080803189,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40080803189",
+      "full_minutes": 29.25,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-24T09:38:10Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / EF container shard (ef-3)\tUNKNOWN STEP\t2026-10-24T09:32:34.6651417Z Retrying the failed tests of 1 run(s) once."
+      ]
+    },
+    {
+      "pr": 3313,
+      "branch": "agent/codex/3071-resource-consistency",
+      "first_code_run_created_at": "2026-10-25T00:33:53Z",
+      "pr_run_id": 40147354688,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40147354688",
+      "pr_run_created_at": "2026-10-25T00:36:29Z",
+      "build_reported_at": "2026-10-25T00:48:55Z",
+      "build_conclusion": "success",
+      "build_minutes": 12.433333,
+      "initial_job_queue_minutes": 0.333333,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40152885465,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40152885465",
+      "full_minutes": 21.45,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T02:23:13Z",
+      "full_retry_observed": false,
+      "retry_marker_lines": []
+    },
+    {
+      "pr": 3315,
+      "branch": "agent/codex/3314-main-demo-removal-repair",
+      "first_code_run_created_at": "2026-10-25T03:53:30Z",
+      "pr_run_id": 40160480921,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40160480921",
+      "pr_run_created_at": "2026-10-25T04:03:28Z",
+      "build_reported_at": "2026-10-25T04:13:43Z",
+      "build_conclusion": "success",
+      "build_minutes": 10.25,
+      "initial_job_queue_minutes": 0.283333,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40161248854,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40161248854",
+      "full_minutes": 22.466667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T04:38:22Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T04:30:56.9422515Z Retrying the failed tests of 1 run(s) once."
+      ]
+    },
+    {
+      "pr": 3318,
+      "branch": "agent/codex/3316-set-variable",
+      "first_code_run_created_at": "2026-10-25T04:45:47Z",
+      "pr_run_id": 40163065228,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40163065228",
+      "pr_run_created_at": "2026-10-25T04:45:47Z",
+      "build_reported_at": "2026-10-25T04:59:38Z",
+      "build_conclusion": "success",
+      "build_minutes": 13.85,
+      "initial_job_queue_minutes": 2.133333,
+      "max_pr_shard_queue_minutes": 1.3,
+      "run_attempt": 1,
+      "full_run_id": 40164796361,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40164796361",
+      "full_minutes": 25.183333,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T05:39:33Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T05:34:51.6187966Z Retrying the failed tests of 1 run(s) once."
+      ]
+    },
+    {
+      "pr": 3319,
+      "branch": "agent/codex/3075-final-qualification",
+      "first_code_run_created_at": "2026-10-25T06:33:36Z",
+      "pr_run_id": 40169516720,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40169516720",
+      "pr_run_created_at": "2026-10-25T06:33:36Z",
+      "build_reported_at": "2026-10-25T06:44:24Z",
+      "build_conclusion": "success",
+      "build_minutes": 10.8,
+      "initial_job_queue_minutes": 0.05,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40190167614,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40190167614",
+      "full_minutes": 26.2,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T12:11:15Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T12:11:00.3163216Z Retrying the failed tests of 1 run(s) once."
+      ]
+    },
+    {
+      "pr": 2825,
+      "branch": "cursor/integrations-sdk-v1-af3f",
+      "first_code_run_created_at": "2026-10-25T07:45:08Z",
+      "pr_run_id": 40173957887,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40173957887",
+      "pr_run_created_at": "2026-10-25T07:45:08Z",
+      "build_reported_at": "2026-10-25T07:56:01Z",
+      "build_conclusion": "success",
+      "build_minutes": 10.883333,
+      "initial_job_queue_minutes": 0.05,
+      "max_pr_shard_queue_minutes": 0.316667,
+      "run_attempt": 1,
+      "full_run_id": 40173957813,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40173957813",
+      "full_minutes": 23.066667,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T08:08:12Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T07:57:06.9671267Z Retrying the failed tests of 1 run(s) once."
+      ]
+    },
+    {
+      "pr": 2728,
+      "branch": "cursor/generic-oauth2-connector-25db",
+      "first_code_run_created_at": "2026-10-25T08:15:23Z",
+      "pr_run_id": 40175898273,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40175898273",
+      "pr_run_created_at": "2026-10-25T08:15:23Z",
+      "build_reported_at": "2026-10-25T08:21:17Z",
+      "build_conclusion": "failure",
+      "build_minutes": 5.9,
+      "initial_job_queue_minutes": 0.033333,
+      "max_pr_shard_queue_minutes": 0.033333,
+      "run_attempt": 1,
+      "full_run_id": 40176537938,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40176537938",
+      "full_minutes": 23.1,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T08:48:19Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T08:37:43.6128965Z Retrying the failed tests of 1 run(s) once."
+      ]
+    },
+    {
+      "pr": 3324,
+      "branch": "cursor/slack-connector-v1-e764",
+      "first_code_run_created_at": "2026-10-25T08:58:33Z",
+      "pr_run_id": 40179538600,
+      "pr_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40179538600",
+      "pr_run_created_at": "2026-10-25T09:10:19Z",
+      "build_reported_at": "2026-10-25T09:33:02Z",
+      "build_conclusion": "failure",
+      "build_minutes": 22.716667,
+      "initial_job_queue_minutes": 6.583333,
+      "max_pr_shard_queue_minutes": 5.283333,
+      "run_attempt": 1,
+      "full_run_id": 40181328926,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40181328926",
+      "full_minutes": 28.15,
+      "full_conclusion": "success",
+      "full_reported_at": "2026-10-25T10:04:24Z",
+      "full_retry_observed": true,
+      "retry_marker_lines": [
+        "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T09:53:43.0820304Z Retrying the failed tests of 1 run(s) once."
+      ]
+    }
+  ],
+  "summary": {
+    "build_median_minutes": 14.5416665,
+    "full_median_minutes": 26.583333500000002,
+    "full_within_25_minutes": 8,
+    "build_within_13_minutes": 8,
+    "full_runs_with_observed_retries": [
+      40080803189,
+      40161248854,
+      40164796361,
+      40190167614,
+      40173957813,
+      40176537938,
+      40181328926
+    ],
+    "full_retry_unknown": [],
+    "initial_queue_median_minutes": 0.183333,
+    "max_shard_queue_median_minutes": 0.18333349999999998
+  },
+  "load_exposure": {
+    "ci_events": 52,
+    "known_matches": 45,
+    "ready": 17,
+    "draft": 28,
+    "unknown": 7,
+    "ready_share": 0.37777777777777777,
+    "matches": [
+      {
+        "pr_run_id": 39947367572,
+        "full_run_id": 39947367846,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 39950593991,
+        "full_run_id": 39950593777,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 39956562236,
+        "full_run_id": 39956562266,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 39958070098,
+        "full_run_id": 39958070035,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 39958905913,
+        "full_run_id": 39958905893,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 39959576235,
+        "full_run_id": 39959576385,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 39974163343,
+        "full_run_id": 39974163363,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40057434417,
+        "full_run_id": 40057434389,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40057613724,
+        "full_run_id": 40057613761,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40057632335,
+        "full_run_id": 40057632647,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40065035633,
+        "full_run_id": 40065035659,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40069149245,
+        "full_run_id": 40069149263,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40070492564,
+        "full_run_id": 40070492577,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40075068758,
+        "full_run_id": 40075068772,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40075251962,
+        "full_run_id": 40075251992,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40076245803,
+        "full_run_id": 40076245750,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40076452470,
+        "full_run_id": 40076452456,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40076761480,
+        "full_run_id": 40076761463,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40077381082,
+        "full_run_id": 40077381110,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40080012576,
+        "full_run_id": 40080012657,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40085647517,
+        "full_run_id": 40085647482,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40147186788,
+        "full_run_id": 40147186753,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40147354688,
+        "full_run_id": 40147354672,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40148558443,
+        "full_run_id": 40148558444,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40149669872,
+        "full_run_id": 40149669864,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40150097180,
+        "full_run_id": 40150097234,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40151211321,
+        "full_run_id": 40151211296,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40159871850,
+        "full_run_id": 40159871814,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40160480921,
+        "full_run_id": 40160480944,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40161248885,
+        "full_run_id": 40161248854,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40163065228,
+        "full_run_id": 40163065235,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40164070705,
+        "full_run_id": 40164070712,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40164440536,
+        "full_run_id": 40164440433,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40164600109,
+        "full_run_id": 40164600082,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40164653747,
+        "full_run_id": 40164653857,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40169516720,
+        "full_run_id": 40169516646,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40170520038,
+        "full_run_id": 40170520028,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40171049388,
+        "full_run_id": 40171049356,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40173957887,
+        "full_run_id": 40173957813,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40174725767,
+        "full_run_id": 40174725816,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40175898273,
+        "full_run_id": 40175898200,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40176054487,
+        "full_run_id": 40176054502,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40176537941,
+        "full_run_id": 40176537938,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40178745442,
+        "full_run_id": 40178745423,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40179538600,
+        "full_run_id": 40179538601,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40181328962,
+        "full_run_id": 40181328926,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40182629234,
+        "full_run_id": 40182629219,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40183344477,
+        "full_run_id": 40183344492,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40186271473,
+        "full_run_id": 40186271431,
+        "state": "draft"
+      },
+      {
+        "pr_run_id": 40196545647,
+        "full_run_id": 40196545646,
+        "state": "ready"
+      },
+      {
+        "pr_run_id": 40199756879,
+        "full_run_id": 40199756947,
+        "state": "unknown"
+      },
+      {
+        "pr_run_id": 40200012839,
+        "full_run_id": 40200012907,
+        "state": "ready"
+      }
+    ],
+    "per_job_queue_median_minutes": 0.04166666666666667,
+    "per_job_queue_p90_minutes": 7.566666666666666,
+    "per_job_queue_count": 160
+  }
+}
