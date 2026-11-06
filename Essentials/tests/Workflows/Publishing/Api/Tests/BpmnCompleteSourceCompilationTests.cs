@@ -87,6 +87,22 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         Assert.Equal("work", Assert.Single(Assert.Single(nested.ChildSlots).Activities).AuthoredActivityId);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Workflow_compiler_cannot_hide_complete_source_by_relabeling_it_as_legacy(bool nested, bool canStart)
+    {
+        var owner = Process(canStart: canStart, taskAttributes: " implementation=\"urn:unqualified\"");
+        var source = owner.Structure!.Payload.GetRawText();
+        owner = owner with { Structure = new(owner.Structure.Kind, "1.0.0", owner.Structure.Payload) };
+        var error = await Record.ExceptionAsync(() => CompileWorkflow(nested ? Sequence("outer", owner) : owner));
+        Assert.NotNull(error);
+        Assert.Contains("documentXml", error.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(source, owner.Structure.Payload.GetRawText());
+    }
+
     private static async Task<WorkflowExecutable> CompileWorkflow(ActivityNode root, IEnumerable<ActivityDefinitionVersion>? overrideVersions = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();

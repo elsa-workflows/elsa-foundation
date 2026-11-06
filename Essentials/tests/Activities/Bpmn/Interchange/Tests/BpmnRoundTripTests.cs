@@ -38,6 +38,28 @@ public sealed class BpmnRoundTripTests
         Assert.Equal(raw.GetRawText(), unsupported.Structure!.Payload.GetRawText());
     }
 
+    [Theory]
+    [InlineData("documentXml")]
+    [InlineData("processId")]
+    [InlineData("bindings")]
+    [InlineData("scopeHeaders")]
+    public async Task Legacy_export_refuses_relabelled_complete_source_in_root_and_nested_bodies(string field)
+    {
+        foreach (var spelling in new[] { field, field.ToUpperInvariant() })
+        foreach (var nested in new[] { false, true })
+        {
+            var raw = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [spelling] = "retained source authority" });
+            var unsupported = new ActivityNode("raw-process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, raw));
+            var process = nested ? ProcessNode(new BpmnAuthoredStructure(
+                activities: [unsupported], elements: [new BpmnElement("sub", BpmnElementTypes.SubProcess, childNodeId: unsupported.NodeId)])) : unsupported;
+            var synchronous = Assert.Throws<BpmnInterchangeException>(() => _exporter.Export(process));
+            var asynchronous = await Assert.ThrowsAsync<BpmnInterchangeException>(() => _exporter.ExportAsync(process));
+            Assert.Contains(spelling, synchronous.Message, StringComparison.Ordinal);
+            Assert.Contains(spelling, asynchronous.Message, StringComparison.Ordinal);
+            Assert.Equal(raw.GetRawText(), unsupported.Structure!.Payload.GetRawText());
+        }
+    }
+
     [Fact]
     public void Export_AcceptsStudioIntrinsicAndConversionStrings()
     {

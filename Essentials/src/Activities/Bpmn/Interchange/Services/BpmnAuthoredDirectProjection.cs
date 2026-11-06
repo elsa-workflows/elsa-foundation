@@ -44,6 +44,7 @@ internal static class BpmnAuthoredDirectProjection
                 root.Inputs is null || root.Outputs is null || root.Inputs.Any() || root.Outputs.Any() ||
                 root.Structure is not { Kind: Process.StructureKind, SchemaVersion: Process.StructureSchemaVersion } structure)
                 throw new BpmnModelValidationException("Direct publication requires a supported root BpmnProcess without native arguments or placement overrides.");
+            BpmnLegacyStructureGuard.RejectCompleteSourceFields(structure.Payload);
             var authored = structure.Payload.Deserialize<BpmnAuthoredStructure>(Strict)
                 ?? throw new BpmnModelValidationException("The authored BPMN structure is missing.");
             if (authored.Activities.Count != 0 || authored.Pools.Count != 0 || authored.MessageFlows.Count != 0)

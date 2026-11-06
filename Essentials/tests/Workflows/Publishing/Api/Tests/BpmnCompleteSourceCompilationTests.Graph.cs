@@ -79,6 +79,21 @@ public sealed partial class BpmnCompleteSourceCompilationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task Actual_template_coordinator_refuses_complete_source_disguised_as_legacy_for_any_start_flag(bool canStart)
+    {
+        using var fixture = new GraphFixture();
+        var owner = Process(canStart: canStart, taskAttributes: " implementation=\"urn:unqualified\"");
+        var source = owner.Structure!.Payload.GetRawText();
+        owner = owner with { Structure = new(owner.Structure.Kind, "1.0.0", owner.Structure.Payload) };
+        var result = await fixture.Compile(owner);
+        Assert.False(result.IsSuccessful); Assert.Null(result.Template);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("documentXml", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(source, owner.Structure.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Actual_template_coordinator_compiles_native_body_variable_frames_inside_complete_source(bool standardScope)
     {
         using var fixture = new GraphFixture();

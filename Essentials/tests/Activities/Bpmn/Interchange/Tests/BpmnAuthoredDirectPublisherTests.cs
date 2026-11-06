@@ -26,6 +26,28 @@ public sealed class BpmnAuthoredDirectPublisherTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
+    [Theory]
+    [InlineData("documentXml")]
+    [InlineData("processId")]
+    [InlineData("bindings")]
+    [InlineData("scopeHeaders")]
+    public async Task Relabelled_complete_source_is_refused_before_direct_runtime_publication(string field)
+    {
+        foreach (var spelling in new[] { field, field.ToUpperInvariant() })
+        {
+            var fixture = new Fixture();
+            var state = JsonSerializer.SerializeToNode(fixture.Version.State, Web)!;
+            state["rootActivity"]!["structure"]!["payload"]![spelling] = "retained source authority";
+            fixture.Version.StateSource = state.ToJsonString();
+            var before = fixture.Version.StateSource;
+            var failure = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+            Assert.Contains(spelling, Assert.IsType<JsonException>(failure.InnerException).Message, StringComparison.Ordinal);
+            Assert.Equal(0, fixture.Publications);
+            Assert.DoesNotContain("publish", fixture.Calls);
+            Assert.Equal(before, fixture.Version.StateSource);
+        }
+    }
+
     [Fact]
     public async Task Publication_uses_the_immutable_version_and_presentation_without_mutating_authoring()
     {
